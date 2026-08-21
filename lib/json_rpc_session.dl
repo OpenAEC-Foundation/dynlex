@@ -524,6 +524,29 @@ local function the JSON-RPC response at {integer:index} from {a pointer to a JSO
         remove item index from responses
         return envelope
 
+local function the queued JSON-RPC response identified by {string:key} using {a pointer to a JSON-RPC session:state}:
+    execute:
+        if the pending JSON-RPC request index for key in state < 0:
+            return a failed JSON-RPC response with status the JSON-RPC protocol error status reporting "JSON-RPC request ID is not pending"
+        set index to the JSON-RPC response index for key in state
+        if index < 0:
+            return a failed JSON-RPC response with status the JSON-RPC queue empty status reporting "JSON-RPC response is not queued"
+        set envelope to the JSON-RPC response at index from state
+        return the finished JSON-RPC response envelope for key using state
+
+function the queued JSON-RPC response for {string:label} using {a pointer to a JSON-RPC session:state}:
+    execute:
+        set prefix to the string form of "s:"
+        set key to (prefix + label)
+        return the queued JSON-RPC response identified by key using state
+
+function the queued JSON-RPC response for {a pointer to a JSON value:identifier} using {a pointer to a JSON-RPC session:state}:
+    execute:
+        if identifier is an invalid JSON-RPC identifier:
+            return a failed JSON-RPC response with status the JSON-RPC protocol error status reporting "JSON-RPC request ID is invalid"
+        set key to the JSON-RPC key for identifier
+        return the queued JSON-RPC response identified by key using state
+
 local function the awaited JSON-RPC response for {string:key} using {a pointer to a JSON-RPC session:state} within {integer:timeout} milliseconds:
     execute:
         if the pending JSON-RPC request index for key in state < 0:

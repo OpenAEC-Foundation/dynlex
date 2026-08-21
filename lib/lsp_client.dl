@@ -507,6 +507,20 @@ function the LSP response for {a pointer to a JSON value:identifier} using {a po
         set session to state's session
         return the JSON-RPC response for identifier using session waiting up to timeout milliseconds
 
+function the queued LSP response for {string:identifier} using {a pointer to an LSP client:state}:
+    execute:
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+        set session to state's session
+        return the queued JSON-RPC response for identifier using session
+
+function the queued LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    execute:
+        if state's lifecycle != the LSP running lifecycle:
+            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+        set session to state's session
+        return the queued JSON-RPC response for identifier using session
+
 function the result of cancelling LSP request {string:identifier} using {a pointer to an LSP client:state}:
     execute:
         if state's lifecycle != the LSP running lifecycle:

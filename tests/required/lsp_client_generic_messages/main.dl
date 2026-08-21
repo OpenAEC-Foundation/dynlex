@@ -41,7 +41,13 @@ add JSON-RPC member "text" containing a new JSON-RPC text for "hello" to paramet
 set echoed to the result of sending an LSP request "custom/echo" with parameters using client
 free parameters
 print whether echoed succeeded as a line
-set echo to the LSP response for echoed's request identifier using client waiting up to 2000 milliseconds
+set unavailable to the queued LSP response for echoed's request identifier using client
+print whether unavailable failed as a line
+print whether (unavailable's status = the JSON-RPC queue empty status) as a line
+free unavailable
+set pumped to the result of pumping one LSP message using client waiting up to 2000 milliseconds
+print whether pumped succeeded as a line
+set echo to the queued LSP response for echoed's request identifier using client
 print whether echo succeeded as a line
 print whether (the JSON text named "text" in echo's result = "hello") as a line
 free echo
