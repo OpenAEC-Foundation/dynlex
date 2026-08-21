@@ -9,6 +9,7 @@ const paths = {
   html: path.join(webDir, "index.html"),
   homepage: path.join(webDir, "homepage.js"),
   challenge: path.join(webDir, "river-challenge.js"),
+  art: path.join(webDir, "river-character-art.js"),
   editor: path.join(webDir, "river-challenge-editor.js"),
   audio: path.join(webDir, "river-challenge-audio.js"),
   model: path.join(webDir, "river-challenge-model.js"),
@@ -37,7 +38,7 @@ for (const [name, filePath] of Object.entries(paths)) {
   assert.ok(fs.existsSync(filePath), `Missing river challenge ${name}: ${path.relative(projectDir, filePath)}`);
 }
 
-for (const filePath of [paths.challenge, paths.editor, paths.audio, paths.model, paths.styles, paths.library]) {
+for (const filePath of [paths.challenge, paths.art, paths.editor, paths.audio, paths.model, paths.styles, paths.library]) {
   const lineCount = fs.readFileSync(filePath, "utf8").split("\n").length;
   assert.ok(lineCount < 1000, `${path.relative(projectDir, filePath)} must stay under 1000 lines`);
 }
@@ -45,6 +46,7 @@ for (const filePath of [paths.challenge, paths.editor, paths.audio, paths.model,
 const html = fs.readFileSync(paths.html, "utf8");
 const homepage = fs.readFileSync(paths.homepage, "utf8");
 const challenge = fs.readFileSync(paths.challenge, "utf8");
+const art = fs.readFileSync(paths.art, "utf8");
 const editor = fs.readFileSync(paths.editor, "utf8");
 const audio = fs.readFileSync(paths.audio, "utf8");
 const styles = fs.readFileSync(paths.styles, "utf8");
@@ -89,6 +91,12 @@ assert.doesNotMatch(challenge, /renderer\.actors\.get\("FARMER"\)/);
 assert.match(challenge, /river-blink-layer/);
 assert.doesNotMatch(challenge, /river-eyelids/);
 assert.match(challenge, /river-sheep-mouth/);
+assert.match(challenge, /createWolfTongue/);
+assert.match(art, /river-wolf-tongue-shape/);
+assert.doesNotMatch(art, /river-wolf-tongue-(?:thick|thin)/);
+assert.match(art, /createWolfTongueLickSpecifications/);
+assert.match(challenge, /controller\.animate\(\s*createWolfTongueLickSpecifications/);
+assert.doesNotMatch(styles, /river-wolf-lick/);
 assert.match(editor, /# The official names are: sheep, wolf, and hay\./);
 assert.match(editor, /get the hay in the boat\\n"/);
 assert.match(editor, /row to the other side/);

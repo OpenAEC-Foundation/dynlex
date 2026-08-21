@@ -17,6 +17,7 @@ const previewAssets = [
 
 const runtimeAssets = [
   "/river-challenge.js",
+  "/river-character-art.js",
   "/river-challenge-editor.js",
   "/river-challenge-audio.js",
   "/river-challenge-model.js",
@@ -198,8 +199,10 @@ export async function runRiverChallengeBrowserTest({
   await captureScreenshot("homepage-challenge-preview");
   await evaluate(`(() => {
     window.__riverAudioStarts = [];
+    window.__riverTongueAnimations = [];
     const originalConnect = AudioBufferSourceNode.prototype.connect;
     const originalStart = AudioBufferSourceNode.prototype.start;
+    const originalAnimate = Element.prototype.animate;
     AudioBufferSourceNode.prototype.connect = function(destination, ...rest) {
       this.__riverCueVolume = destination?.gain?.value;
       return originalConnect.call(this, destination, ...rest);
@@ -212,6 +215,19 @@ export async function runRiverChallengeBrowserTest({
         volume: this.__riverCueVolume
       });
       return originalStart.apply(this, args);
+    };
+    Element.prototype.animate = function(keyframes, options) {
+      if (this.matches?.('.river-wolf-tongue')) {
+        const frames = Array.from(keyframes);
+        window.__riverTongueAnimations.push({
+          duration: options.duration,
+          iterations: options.iterations ?? 1,
+          firstLeft: Number.parseFloat(frames.at(0).left),
+          lastLeft: Number.parseFloat(frames.at(-1).left),
+          fighting: this.closest('.river-wolf').classList.contains('is-fighting')
+        });
+      }
+      return originalAnimate.call(this, keyframes, options);
     };
   })()`);
   await clickElement("[data-river-challenge-load]");
@@ -692,6 +708,20 @@ export async function runRiverChallengeBrowserTest({
   assert.equal(failure.failedLine, "3");
   assert.equal(failure.boatSide, "HOME");
   assert.equal(failure.playbackState, "failure");
+  const tongueAnimations = await evaluate("window.__riverTongueAnimations");
+  assert.equal(tongueAnimations.length, 1, "The wolf must lick exactly once after the fight");
+  assert.equal(tongueAnimations[0].iterations, 1);
+  assert.equal(tongueAnimations[0].duration, 850);
+  assert.equal(tongueAnimations[0].fighting, false, "The lick must start after the fight ends");
+  assert.ok(
+    tongueAnimations[0].firstLeft > tongueAnimations[0].lastLeft,
+    "The tongue must sweep from the right side of the mouth to the left"
+  );
+  assert.equal(
+    await evaluate("document.querySelector('.river-wolf').classList.contains('is-licking')"),
+    false,
+    "The wolf must retract its tongue after the one-shot lick"
+  );
   await new Promise((resolve) => setTimeout(resolve, 700));
   await captureScreenshot("homepage-challenge-failure");
 

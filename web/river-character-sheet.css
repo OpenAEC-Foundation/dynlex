@@ -1,0 +1,392 @@
+:root {
+    color-scheme: dark;
+    --sheet-ink: #f3f0df;
+    --sheet-muted: #91a198;
+    --sheet-line: rgba(196, 220, 202, 0.22);
+    --sheet-green: #c7ff38;
+    --sheet-blue: #85dcff;
+    --sheet-frame: #ffcf6e;
+    --sheet-final: #ff7f70;
+    --mono: "DM Mono", monospace;
+    --sans: "Manrope", sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background:
+        radial-gradient(circle at 12% 0, rgba(28, 93, 76, 0.28), transparent 32rem),
+        radial-gradient(circle at 88% 16%, rgba(37, 80, 111, 0.18), transparent 30rem),
+        #070b09;
+    color: var(--sheet-ink);
+    font-family: var(--sans);
+}
+
+button,
+input {
+    font: inherit;
+}
+
+.river-sheet {
+    width: min(1780px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 28px 0 52px;
+}
+
+.river-sheet-header {
+    display: grid;
+    grid-template-columns: minmax(300px, 1fr) auto;
+    gap: 24px;
+    align-items: end;
+    padding: 24px;
+    border: 1px solid var(--sheet-line);
+    background: rgba(8, 17, 14, 0.86);
+    box-shadow: 8px 8px 0 #12271f;
+}
+
+.river-sheet-header p {
+    margin: 0 0 9px;
+    color: var(--sheet-green);
+    font: 500 0.66rem/1 var(--mono);
+    letter-spacing: 0.12em;
+}
+
+.river-sheet-header h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 3.5vw, 3.7rem);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+}
+
+.river-sheet-header > div > span {
+    display: block;
+    margin-top: 13px;
+    color: var(--sheet-muted);
+    font: 400 0.72rem/1.5 var(--mono);
+}
+
+.river-sheet-controls {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 8px;
+    min-width: 360px;
+}
+
+.river-sheet-controls button,
+.river-sheet-box-toggle,
+.river-sheet-scrubber {
+    min-height: 40px;
+    border: 1px solid var(--sheet-line);
+    background: #0d1713;
+    color: #cbd5cd;
+    font: 500 0.59rem/1 var(--mono);
+    letter-spacing: 0.06em;
+}
+
+.river-sheet-controls button {
+    padding: 0 14px;
+    cursor: pointer;
+}
+
+.river-sheet-controls button:hover {
+    border-color: var(--sheet-blue);
+    color: var(--sheet-blue);
+}
+
+.river-sheet-scrubber {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: 86px 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 0 12px;
+}
+
+.river-sheet-scrubber span {
+    display: flex;
+    justify-content: space-between;
+}
+
+.river-sheet-scrubber output {
+    color: var(--sheet-blue);
+}
+
+.river-sheet-scrubber input {
+    width: 100%;
+    accent-color: var(--sheet-green);
+}
+
+.river-sheet-box-toggle {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 9px;
+    padding: 0 12px;
+    cursor: pointer;
+}
+
+.river-sheet-box-toggle input {
+    accent-color: var(--sheet-blue);
+}
+
+.river-sheet-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+    padding: 23px 2px 15px;
+    color: var(--sheet-muted);
+    font: 500 0.58rem/1 var(--mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.river-sheet-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.river-sheet-legend i,
+.river-sheet-mode::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+
+.river-sheet-legend .is-live,
+.river-sheet-mode.is-live {
+    color: var(--sheet-green);
+}
+
+.river-sheet-legend .is-frame,
+.river-sheet-mode.is-frame {
+    color: var(--sheet-frame);
+}
+
+.river-sheet-legend .is-final,
+.river-sheet-mode.is-final {
+    color: var(--sheet-final);
+}
+
+.river-sheet-layer-key {
+    margin-left: auto;
+    color: #68766e;
+}
+
+.river-sheet-cast {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+.river-sheet-character-group {
+    min-width: 0;
+    border: 1px solid var(--sheet-line);
+    background: rgba(9, 15, 12, 0.82);
+}
+
+.river-sheet-character-group > header {
+    min-height: 90px;
+    padding: 17px 17px 14px;
+    border-bottom: 1px solid var(--sheet-line);
+}
+
+.river-sheet-character-group h2 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+}
+
+.river-sheet-character-group p {
+    margin: 0;
+    color: var(--sheet-muted);
+    font: 400 0.58rem/1.45 var(--mono);
+}
+
+.river-sheet-state-list {
+    display: grid;
+    gap: 1px;
+    background: var(--sheet-line);
+}
+
+.river-sheet-card {
+    min-width: 0;
+    background: #09100d;
+}
+
+.river-sheet-viewport {
+    --river-animation-play-state: running;
+    --river-character-size: 42cqw;
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 2.35 / 1;
+    background:
+        linear-gradient(rgba(133, 220, 255, 0.12) 1px, transparent 1px) 50% 50% / 100% 50%,
+        linear-gradient(90deg, rgba(133, 220, 255, 0.12) 1px, transparent 1px) 50% 50% / 50% 100%,
+        repeating-conic-gradient(#13231d 0 25%, #0e1b16 0 50%) 0 0 / 18px 18px;
+}
+
+.river-sheet-viewport::after {
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.52);
+}
+
+.river-sheet-viewport .river-character,
+.river-sheet-viewport .river-boat {
+    top: 50%;
+    left: 50%;
+}
+
+.river-sheet-viewport .river-character {
+    width: min(42cqw, 132px);
+}
+
+.river-sheet-viewport .river-boat {
+    width: min(55%, 180px);
+}
+
+.river-sheet-frame-blink .river-blink-layer {
+    opacity: 1;
+    animation: none !important;
+}
+
+.river-sheet-isolated-eyelid .river-character {
+    width: min(72cqw, 220px);
+    background-image: none;
+    filter: none;
+}
+
+.river-sheet-card[data-state="left-eyelid"] .river-wolf-blink::after,
+.river-sheet-card[data-state="right-eyelid"] .river-wolf-blink::before {
+    display: none;
+}
+
+.river-sheet-card[data-state="bellowing"] .river-sheep-mouth {
+    transition: none;
+}
+
+.river-wolf-mouth-line {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.river-wolf-mouth-line path {
+    fill: none;
+    stroke: var(--sheet-green);
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 4px #07140e);
+}
+
+.river-sheet-card[data-state="eaten"] .river-character {
+    transition: none;
+}
+
+.river-sheet-final-label {
+    position: absolute;
+    z-index: 21;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    color: var(--sheet-final);
+    font: 500 0.55rem/1 var(--mono);
+    white-space: nowrap;
+}
+
+.river-sheet-caption {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 5px 10px;
+    min-height: 54px;
+    padding: 9px 11px 10px;
+}
+
+.river-sheet-caption strong {
+    overflow: hidden;
+    font-size: 0.72rem;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.river-sheet-caption code {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: #6f7d74;
+    font: 400 0.52rem/1.2 var(--mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.river-sheet-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font: 500 0.48rem/1 var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.river-sheet-mode::before {
+    width: 5px;
+    height: 5px;
+}
+
+.river-sheet[data-overlay-boxes="true"] .river-blink-layer {
+    outline: 1px dashed #58e8ff;
+    outline-offset: -1px;
+}
+
+.river-sheet[data-overlay-boxes="true"] .river-sheep-mouth,
+.river-sheet[data-overlay-boxes="true"] .river-wolf-tongue {
+    outline: 2px solid #ff5cba;
+    outline-offset: 1px;
+}
+
+@media (max-width: 1050px) {
+    .river-sheet-cast {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .river-sheet-header {
+        grid-template-columns: 1fr;
+    }
+
+    .river-sheet-controls {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 580px) {
+    .river-sheet {
+        width: min(100% - 20px, 1780px);
+        padding-top: 10px;
+    }
+
+    .river-sheet-header {
+        padding: 18px;
+    }
+
+    .river-sheet-cast {
+        grid-template-columns: 1fr;
+    }
+
+    .river-sheet-layer-key {
+        width: 100%;
+        margin-left: 0;
+    }
+}

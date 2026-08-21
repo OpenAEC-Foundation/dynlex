@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#08110e">
+    <link rel="icon" type="image/svg+xml" href="icons/dynlex-icon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="river-challenge.css">
+    <link rel="stylesheet" href="river-character-sheet.css">
+    <title>River character animation sheet</title>
+</head>
+<body>
+    <main class="river-sheet" data-river-character-sheet data-overlay-boxes="false">
+        <header class="river-sheet-header">
+            <div>
+                <p>RIVER CHALLENGE / PRODUCTION ASSETS</p>
+                <h1>Character animation sheet</h1>
+                <span>Forced frames stay visible. The timeline controls affect live loops.</span>
+            </div>
+            <div class="river-sheet-controls" aria-label="Animation inspection controls">
+                <button type="button" data-river-sheet-playback aria-pressed="false">PAUSE LOOPS</button>
+                <button type="button" data-river-sheet-restart>RESTART</button>
+                <label class="river-sheet-scrubber">
+                    <span>FRAME <output data-river-sheet-progress>50%</output></span>
+                    <input type="range" min="0" max="100" value="50" data-river-sheet-scrubber>
+                </label>
+                <label class="river-sheet-box-toggle">
+                    <input type="checkbox" data-river-sheet-boxes>
+                    <span>SHOW OVERLAY BOUNDS</span>
+                </label>
+            </div>
+        </header>
+        <div class="river-sheet-legend" aria-label="Animation legend">
+            <span><i class="is-live"></i> live loop</span>
+            <span><i class="is-frame"></i> forced inspection frame</span>
+            <span><i class="is-final"></i> final state</span>
+            <span class="river-sheet-layer-key">cyan = blink layer / pink = mouth or tongue</span>
+        </div>
+        <div class="river-sheet-cast" data-river-sheet-cast></div>
+    </main>
+    <script type="module" src="river-character-sheet.js"></script>
+</body>
+</html>
