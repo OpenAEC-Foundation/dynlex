@@ -732,6 +732,12 @@ function the LSP standard error from {a pointer to an LSP client:state}:
         set connection to session's connection
         return connection's standard error
 
+function take the LSP standard error from {a pointer to an LSP client:state}:
+    execute:
+        set session to state's session
+        set connection to session's connection
+        return take the JSON-RPC standard error from connection
+
 function the result of shutting down {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
     execute:
         if state's lifecycle != the LSP running lifecycle:
