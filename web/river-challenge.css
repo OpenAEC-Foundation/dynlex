@@ -524,17 +524,44 @@
 }
 
 .river-sheep-blink {
-    background-image: url("media/river-challenge/sheep-blink.webp");
-    mask-image: radial-gradient(ellipse 29% 20% at 50% 43%, #000 55%, transparent 78%);
     animation-delay: -2.1s;
     animation-duration: 6.4s;
 }
-
 .river-wolf-blink {
-    background-image: url("media/river-challenge/wolf-blink.webp");
-    mask-image: radial-gradient(ellipse 27% 19% at 50% 44%, #000 55%, transparent 78%);
     animation-delay: -4.6s;
     animation-duration: 8.1s;
+}
+.river-sheep-blink::before,
+.river-sheep-blink::after,
+.river-wolf-blink::before,
+.river-wolf-blink::after {
+    position: absolute;
+    inset: 0;
+    background: 0 0 / 100% 100% no-repeat;
+    content: "";
+    transform-origin: top left;
+}
+.river-sheep-blink::before,
+.river-sheep-blink::after {
+    background-image: url("media/river-challenge/sheep-blink.webp");
+    transform: translateY(-3%);
+}
+.river-sheep-blink::before {
+    mask-image: radial-gradient(ellipse 9% 9% at 45.5% 44%, #000 80%, transparent 100%);
+}
+.river-sheep-blink::after {
+    mask-image: radial-gradient(ellipse 9% 9% at 68% 44%, #000 80%, transparent 100%);
+}
+.river-wolf-blink::before,
+.river-wolf-blink::after {
+    background-image: url("media/river-challenge/wolf-blink.webp");
+}
+.river-wolf-blink::before {
+    mask-image: radial-gradient(ellipse 8% 7.5% at 36.4% 50.4%, #000 82%, transparent 100%);
+}
+.river-wolf-blink::after {
+    mask-image: radial-gradient(ellipse 8% 7.5% at 55.9% 49%, #000 82%, transparent 100%);
+    transform: translate(-1.8%, 1.2%);
 }
 
 .river-sheep-mouth {
@@ -574,33 +601,40 @@
     animation: river-character-scuffle 150ms ease-in-out infinite alternate;
     animation-play-state: var(--river-animation-play-state, running);
 }
-
 .river-character.is-eaten {
     opacity: 0;
     filter: blur(5px);
 }
-
 .river-wolf-tongue {
     position: absolute;
-    right: 24%;
-    bottom: 19%;
-    width: 12%;
-    height: 18%;
-    transform: rotate(-18deg) scaleY(0);
-    transform-origin: top;
-    border: 2px solid #6d2633;
-    border-radius: 0 0 50% 50%;
-    background: #f27086;
-    opacity: 0;
     z-index: 2;
+    top: 65.687%;
+    left: 62.152%;
+    width: 5.2%;
+    aspect-ratio: 39 / 40;
+    transform: translate(-50%, -50%) rotate(29.745deg);
+    opacity: 0;
+    pointer-events: none;
+    will-change: top, left, transform;
 }
-
+.river-wolf-tongue svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 0 1px #6d2633);
+    transform: scaleX(0);
+    transform-box: fill-box;
+    transform-origin: left center;
+    opacity: 0;
+    will-change: transform, opacity;
+}
+.river-wolf-tongue-shape {
+    fill: #f27086;
+}
 .river-wolf.is-licking .river-wolf-tongue {
-    animation: river-wolf-lick 650ms ease-in-out infinite;
-    animation-play-state: var(--river-animation-play-state, running);
     opacity: 1;
 }
-
 .river-dust {
     z-index: 12;
     top: 61%;
@@ -609,15 +643,12 @@
     width: 15%;
     aspect-ratio: 1.5;
 }
-
 .river-stage[data-danger-side="FAR"] .river-dust {
     left: 75%;
 }
-
 .river-dust.is-active {
     display: block;
 }
-
 .river-dust i {
     position: absolute;
     width: 42%;
@@ -818,11 +849,6 @@
 @keyframes river-character-blink {
     0%, 91%, 95%, 100% { opacity: 0; }
     92%, 94% { opacity: 1; }
-}
-
-@keyframes river-wolf-lick {
-    0%, 100% { transform: rotate(-18deg) scaleY(0.18); }
-    50% { transform: rotate(-18deg) scaleY(1); }
 }
 
 @keyframes river-dust-pop {

@@ -23,6 +23,11 @@ import {
   setRiverLineState
 } from "./river-challenge-editor.js";
 import { createRiverChallengeAudio } from "./river-challenge-audio.js";
+import {
+  createWolfTongue,
+  createWolfTongueLickSpecifications,
+  WOLF_TONGUE_LICK_DURATION
+} from "./river-character-art.js";
 
 const LANDSCAPE_URL = new URL("./media/river-challenge/painted-river.webp", import.meta.url).href;
 const BOAT_URL = new URL("./media/river-challenge/boat.webp", import.meta.url).href;
@@ -114,7 +119,7 @@ function riverMarkup() {
               <i class="river-blink-layer river-boat-farmer-blink" data-river-boat-farmer aria-hidden="true"></i>
             </div>
             <div class="river-character river-sheep" data-river-character="SHEEP" role="img" aria-label="Sheep"><i class="river-blink-layer river-sheep-blink" aria-hidden="true"></i><i class="river-sheep-mouth" aria-hidden="true"></i></div>
-            <div class="river-character river-wolf" data-river-character="WOLF" role="img" aria-label="Wolf"><i class="river-blink-layer river-wolf-blink" aria-hidden="true"></i><i class="river-wolf-tongue" aria-hidden="true"></i></div>
+            <div class="river-character river-wolf" data-river-character="WOLF" role="img" aria-label="Wolf"><i class="river-blink-layer river-wolf-blink" aria-hidden="true"></i></div>
             <div class="river-character river-hay" data-river-character="HAY" role="img" aria-label="Hay"></div>
             <div class="river-boat-hull" data-river-boat-hull aria-hidden="true">
               <img src="${BOAT_URL}" alt="">
@@ -359,7 +364,6 @@ function createSceneRenderer(game) {
       const side = scene[scene.danger.predator.toLowerCase()];
       stage.dataset.dangerSide = side;
       dust.classList.add("is-active");
-      predator.classList.add("is-licking");
       prey.classList.add("is-eaten");
     }
     stage.dataset.boatSide = scene.boat;
@@ -429,6 +433,7 @@ export async function initializeRiverChallenge(section, {
   const mount = required("[data-river-challenge-mount]", section);
   mount.innerHTML = riverMarkup();
   const game = required("[data-river-game]", mount);
+  required('[data-river-character="WOLF"]', game).append(createWolfTongue());
   const source = required("[data-river-source]", game);
   const highlight = required("[data-river-source-highlight]", game);
   const sourceCode = required("[data-river-source-code]", game);
@@ -601,7 +606,16 @@ export async function initializeRiverChallenge(section, {
     prey.classList.remove("is-fighting");
     prey.classList.add("is-eaten");
     predator.classList.add("is-licking");
-    await controller.wait(350, signal);
+    const tongue = required(".river-wolf-tongue", predator);
+    try {
+      await controller.animate(
+        createWolfTongueLickSpecifications(tongue),
+        WOLF_TONGUE_LICK_DURATION,
+        signal
+      );
+    } finally {
+      predator.classList.remove("is-licking");
+    }
   }
 
   async function playTrace(trace, callRanges) {
