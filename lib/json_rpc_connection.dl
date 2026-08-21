@@ -130,6 +130,12 @@ function the result of opening a JSON-RPC connection using {process command:comm
         set limits to the default JSON-RPC limit configuration
         return the result of opening a JSON-RPC connection using command under limits
 
+function take the JSON-RPC standard error from {a pointer to a JSON-RPC connection:connection}:
+    execute:
+        set contents to connection's standard error
+        set connection's standard error to the string form of ""
+        return contents
+
 local function the result of breaking {a pointer to a JSON-RPC connection:connection} with status {integer:code} reporting {string:message}:
     execute:
         if connection's state != the JSON-RPC broken state:
