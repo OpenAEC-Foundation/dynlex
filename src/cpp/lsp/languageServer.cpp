@@ -3,11 +3,12 @@
 #ifndef DYNLEX_WEB
 #include "tcpTransport.h"
 #endif
+#include <cerrno>
 #include <chrono>
-#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <system_error>
 
 namespace lsp {
 
@@ -180,7 +181,7 @@ void LanguageServer::sendMessage(const Json &message) {
 	while (totalSent < fullMessage.size() && transport->isConnected()) {
 		TransferSize n = transport->write(fullMessage.c_str() + totalSent, fullMessage.size() - totalSent);
 		if (n <= 0) {
-			logError("Failed to send message: " + std::string(strerror(errno)));
+			logError("Failed to send message: " + std::error_code(errno, std::generic_category()).message());
 			return;
 		}
 		totalSent += n;
