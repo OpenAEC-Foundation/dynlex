@@ -497,6 +497,10 @@ bool emitNativeExecutable(ParseContext &context) {
 	commandStorage.push_back(linkerProgram);
 #ifdef _WIN32
 	commandStorage.push_back("--target=" DYNLEX_WINDOWS_TARGET_TRIPLE);
+	commandStorage.push_back("-rtlib=compiler-rt");
+	commandStorage.push_back("-unwindlib=libunwind");
+	commandStorage.push_back("-stdlib=libc++");
+	commandStorage.push_back("-fuse-ld=lld");
 	commandStorage.push_back("-L" + toolchain.targetLibraries.string());
 	commandStorage.push_back("-L" + toolchain.dependencyLibraries.string());
 #elif defined(__APPLE__)

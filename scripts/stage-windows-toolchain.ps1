@@ -47,8 +47,6 @@ New-Item -ItemType Directory -Path $destinationRuntime, $destinationVcpkgLicense
 foreach ($fileName in @(
     "cc.exe",
     "clang-$LlvmVersion.exe",
-    "mingw32-common.cfg",
-    "$TargetArchitecture-w64-windows-gnu.cfg",
     "ld.lld.exe",
     "libLLVM-$LlvmVersion.dll",
     "libclang-cpp.dll",
