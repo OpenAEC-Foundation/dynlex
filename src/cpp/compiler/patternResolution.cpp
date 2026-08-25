@@ -10,9 +10,9 @@
 #include "transformedPattern.h"
 #include "type.h"
 #include "variable.h"
+#include "llvm/Support/Process.h"
 #include <algorithm>
 #include <climits>
-#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <list>
@@ -258,11 +258,10 @@ static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition
 
 static bool resolutionTraceEnabled() {
 	static const bool enabled = []() {
-		const char *env = std::getenv("DYNLEX_TRACE_RESOLUTION");
+		const auto env = llvm::sys::Process::GetEnv("DYNLEX_TRACE_RESOLUTION");
 		if (!env)
 			return false;
-		std::string value(env);
-		return value == "1" || value == "true" || value == "TRUE" || value == "yes" || value == "YES";
+		return *env == "1" || *env == "true" || *env == "TRUE" || *env == "yes" || *env == "YES";
 	}();
 	return enabled;
 }
