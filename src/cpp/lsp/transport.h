@@ -1,7 +1,9 @@
 #pragma once
-#include <sys/types.h>
+#include <cstddef>
 
 namespace lsp {
+
+using TransferSize = std::ptrdiff_t;
 
 // Abstract transport interface for LSP communication
 class Transport {
@@ -9,10 +11,10 @@ class Transport {
 	virtual ~Transport() = default;
 
 	// Read exactly `count` bytes into buffer. Returns bytes read, or <= 0 on error/EOF.
-	virtual ssize_t read(char *buffer, size_t count) = 0;
+	virtual TransferSize read(char *buffer, std::size_t count) = 0;
 
 	// Write exactly `count` bytes from buffer. Returns bytes written, or <= 0 on error.
-	virtual ssize_t write(const char *buffer, size_t count) = 0;
+	virtual TransferSize write(const char *buffer, std::size_t count) = 0;
 
 	// Check if the transport is still connected/valid
 	virtual bool isConnected() const = 0;

@@ -62,7 +62,7 @@ std::string DapServer::readMessage() {
 	int consecutiveNewlines = 0;
 
 	while (running && transport->isConnected()) {
-		ssize_t n = transport->read(&c, 1);
+		lsp::TransferSize n = transport->read(&c, 1);
 		if (n <= 0)
 			return "";
 		headers += c;
@@ -93,7 +93,7 @@ std::string DapServer::readMessage() {
 	std::string body(contentLength, '\0');
 	size_t totalRead = 0;
 	while (totalRead < contentLength && running && transport->isConnected()) {
-		ssize_t n = transport->read(&body[totalRead], contentLength - totalRead);
+		lsp::TransferSize n = transport->read(&body[totalRead], contentLength - totalRead);
 		if (n <= 0)
 			return "";
 		totalRead += n;
@@ -113,7 +113,7 @@ void DapServer::sendJson(const Json &msg) {
 
 	size_t totalSent = 0;
 	while (totalSent < full.size() && transport->isConnected()) {
-		ssize_t n = transport->write(full.c_str() + totalSent, full.size() - totalSent);
+		lsp::TransferSize n = transport->write(full.c_str() + totalSent, full.size() - totalSent);
 		if (n <= 0)
 			break;
 		totalSent += n;

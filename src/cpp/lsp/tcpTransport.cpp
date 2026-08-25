@@ -35,22 +35,22 @@ TcpTransport::TcpTransport(SocketHandle socketHandle) : socketHandle(socketHandl
 
 TcpTransport::~TcpTransport() { close(); }
 
-ssize_t TcpTransport::read(char *buffer, size_t count) {
+TransferSize TcpTransport::read(char *buffer, std::size_t count) {
 	if (socketHandle == invalidSocketHandle)
 		return -1;
 #ifdef _WIN32
-	const int socketCount = static_cast<int>(std::min(count, static_cast<size_t>(std::numeric_limits<int>::max())));
+	const int socketCount = static_cast<int>(std::min(count, static_cast<std::size_t>(std::numeric_limits<int>::max())));
 	return recv(socketHandle, buffer, socketCount, 0);
 #else
 	return recv(socketHandle, buffer, count, 0);
 #endif
 }
 
-ssize_t TcpTransport::write(const char *buffer, size_t count) {
+TransferSize TcpTransport::write(const char *buffer, std::size_t count) {
 	if (socketHandle == invalidSocketHandle)
 		return -1;
 #ifdef _WIN32
-	const int socketCount = static_cast<int>(std::min(count, static_cast<size_t>(std::numeric_limits<int>::max())));
+	const int socketCount = static_cast<int>(std::min(count, static_cast<std::size_t>(std::numeric_limits<int>::max())));
 	return send(socketHandle, buffer, socketCount, 0);
 #else
 	return send(socketHandle, buffer, count, 0);
@@ -128,7 +128,11 @@ bool TcpServer::setup() {
 
 std::unique_ptr<TcpTransport> TcpServer::acceptConnection() {
 	struct sockaddr_in clientAddr;
+#ifdef _WIN32
+	int clientLen = sizeof(clientAddr);
+#else
 	socklen_t clientLen = sizeof(clientAddr);
+#endif
 
 	SocketHandle clientSocket = accept(serverSocket, reinterpret_cast<struct sockaddr *>(&clientAddr), &clientLen);
 	if (clientSocket == invalidSocketHandle) {

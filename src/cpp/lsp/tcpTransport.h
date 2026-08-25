@@ -24,8 +24,8 @@ class TcpTransport : public Transport {
 	TcpTransport(const TcpTransport &) = delete;
 	TcpTransport &operator=(const TcpTransport &) = delete;
 
-	ssize_t read(char *buffer, size_t count) override;
-	ssize_t write(const char *buffer, size_t count) override;
+	TransferSize read(char *buffer, std::size_t count) override;
+	TransferSize write(const char *buffer, std::size_t count) override;
 	bool isConnected() const override;
 	void close() override;
 
