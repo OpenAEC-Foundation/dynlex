@@ -14,7 +14,7 @@ loop while position < length:
 set command to a process command for the communication error test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
-add "import os,sys; print('before close'); print('input rejected', file=sys.stderr); os.close(0); sys.exit(9)" as an argument to command
+add "import os,sys; sys.stdout.buffer.write(b'before close\\n'); sys.stdout.buffer.flush(); sys.stderr.buffer.write(b'input rejected\\n'); sys.stderr.buffer.flush(); os.close(0); sys.exit(9)" as an argument to command
 run command using input and set result to it
 
 print whether result was launched as a line

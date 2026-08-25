@@ -3,6 +3,7 @@
 #include "runtimeError.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <io.h>
 #include <limits.h>
 #include <stdint.h>
@@ -152,20 +153,52 @@ FILE *dynlex_platform_filesystem_open_file(const char *path, size_t path_length,
 	if (prepared == NULL)
 		return NULL;
 	trim_trailing_separators(prepared);
-	const wchar_t *mode_text = mode == DYNLEX_FILESYSTEM_OPEN_READ	   ? L"rb"
-							   : mode == DYNLEX_FILESYSTEM_OPEN_WRITE  ? L"wb"
-							   : mode == DYNLEX_FILESYSTEM_OPEN_APPEND ? L"ab"
-																	   : NULL;
-	if (mode_text == NULL) {
+	const char *mode_text = NULL;
+	DWORD access = 0;
+	DWORD creation = 0;
+	int descriptor_flags = O_BINARY;
+	if (mode == DYNLEX_FILESYSTEM_OPEN_READ) {
+		mode_text = "rb";
+		access = GENERIC_READ;
+		creation = OPEN_EXISTING;
+		descriptor_flags |= O_RDONLY;
+	} else if (mode == DYNLEX_FILESYSTEM_OPEN_WRITE) {
+		mode_text = "wb";
+		access = GENERIC_WRITE;
+		creation = CREATE_ALWAYS;
+		descriptor_flags |= O_WRONLY;
+	} else if (mode == DYNLEX_FILESYSTEM_OPEN_APPEND) {
+		mode_text = "ab";
+		access = GENERIC_WRITE;
+		creation = OPEN_ALWAYS;
+		descriptor_flags |= O_WRONLY | O_APPEND;
+	} else {
 		free(prepared);
 		dynlex_runtime_set_error("Invalid filesystem open mode");
 		return NULL;
 	}
-	FILE *file = NULL;
-	errno_t open_result = _wfopen_s(&file, prepared, mode_text);
+	HANDLE handle = CreateFileW(
+		prepared, access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, creation, FILE_ATTRIBUTE_NORMAL, NULL
+	);
 	free(prepared);
-	if (open_result != 0 || file == NULL)
-		dynlex_runtime_set_errno_error("Could not open file", open_result == 0 ? EIO : open_result);
+	if (handle == INVALID_HANDLE_VALUE) {
+		dynlex_runtime_set_windows_error("Could not open file", GetLastError());
+		return NULL;
+	}
+	int descriptor = _open_osfhandle((intptr_t)handle, descriptor_flags);
+	if (descriptor == -1) {
+		int error_number = errno;
+		CloseHandle(handle);
+		dynlex_runtime_set_errno_error("Could not create file descriptor", error_number);
+		return NULL;
+	}
+	FILE *file = _fdopen(descriptor, mode_text);
+	if (file == NULL) {
+		int error_number = errno;
+		_close(descriptor);
+		dynlex_runtime_set_errno_error("Could not create file stream", error_number);
+		return NULL;
+	}
 	return file;
 }
 

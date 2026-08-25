@@ -109,6 +109,14 @@ normalize_diagnostics() {
     printf "%s" "$1" | python3 -B "$SCRIPT_DIR/diagnostic_expectations.py" "${arguments[@]}"
 }
 
+render_output_difference() {
+    diff -u \
+        --label expected \
+        --label actual \
+        <(printf "%s\n" "$1") \
+        <(printf "%s\n" "$2") | head -n 40 || true
+}
+
 run_with_timeout() {
     local seconds="$1"
     shift
@@ -274,6 +282,8 @@ if process.returncode < 0:
     sys.exit(125)
 if process.returncode > 255:
     status = process.returncode & 0xFFFFFFFF
+    if status == 0xC0000409:
+        sys.exit(134)
     sys.stderr.write(f"Process terminated with Windows status 0x{status:08X}\n")
     sys.exit(125)
 sys.exit(process.returncode)
@@ -467,7 +477,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         case "$expected_runtime_failure" in
         abort)
             if [[ "$is_windows" == "true" ]]; then
-                expected_run_exit=3
+                expected_run_exit=134
             else
                 expected_run_exit=$(python3 -c 'import signal; print(128 + signal.SIGABRT)')
             fi
@@ -519,8 +529,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     else
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "output mismatch" "$test_elapsed_ms"
-        test_output+="  Expected: $(head -c 200 <<< "$expected_output")\n"
-        test_output+="  Actual:   $(head -c 200 <<< "$actual_output")\n"
+        test_output+="$(render_output_difference "$expected_output" "$normalized_actual_output")\n"
         ((failed++))
         failures+=("$test_name")
     fi

@@ -24,7 +24,7 @@ clean up child and set cleanup to it
 
 set verification to a process command for the descendant process test interpreter
 add "-c" as an argument to verification
-add "import os,time; time.sleep(1); finished=os.path.exists('descendant-finished.tmp'); print(finished); os.remove('descendant-finished.tmp') if finished else None" as an argument to verification
+add "import os,sys,time; time.sleep(1); finished=os.path.exists('descendant-finished.tmp'); sys.stdout.buffer.write(b'True\\n' if finished else b'False\\n'); os.remove('descendant-finished.tmp') if finished else None" as an argument to verification
 use "tests/required/process_descendant_output" as the working directory of verification
 run verification and set check to it
 

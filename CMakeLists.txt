@@ -480,7 +480,7 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
     dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
     if(WIN32)
-        target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 shell32 ole32)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 shell32 ole32 uuid)
     endif()
     set_target_properties (${PROJECT_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
@@ -513,6 +513,7 @@ if(NOT EMSCRIPTEN)
     add_executable(
         dynlex_native_target_test EXCLUDE_FROM_ALL
         tests/cpp/nativeTargetTest.cpp
+        src/cpp/compiler/codegen/nativeLibraries.cpp
         src/cpp/compiler/codegen/nativeTarget.cpp
     )
     target_include_directories(dynlex_native_target_test PRIVATE src/cpp)
