@@ -326,11 +326,16 @@ static int split_target(
 	return -1;
 }
 
+static void release_parent_guard(DynlexWindowsStaging *staging) {
+	if (staging->parent != INVALID_HANDLE_VALUE)
+		CloseHandle(staging->parent);
+	staging->parent = INVALID_HANDLE_VALUE;
+}
+
 static void destroy_staging(DynlexWindowsStaging *staging) {
 	if (staging->staging != INVALID_HANDLE_VALUE)
 		CloseHandle(staging->staging);
-	if (staging->parent != INVALID_HANDLE_VALUE)
-		CloseHandle(staging->parent);
+	release_parent_guard(staging);
 	free(staging->parent_path);
 	free(staging->destination_name);
 	free(staging->destination_path);
@@ -485,6 +490,7 @@ static int delete_stage(DynlexWindowsStaging *staging, int32_t failure_operation
 	CloseHandle(staging->staging);
 	staging->staging = INVALID_HANDLE_VALUE;
 	staging->stage_name_present = false;
+	release_parent_guard(staging);
 	return 0;
 }
 
@@ -751,6 +757,7 @@ int dynlex_filesystem_staging_commit(
 		staging->state = DYNLEX_FILESYSTEM_STAGING_CLEANUP_FAILED;
 		return -1;
 	}
+	release_parent_guard(staging);
 	*cleanup_succeeded = 1;
 	staging->state = DYNLEX_FILESYSTEM_STAGING_COMMITTED;
 	return 0;

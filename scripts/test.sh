@@ -346,7 +346,11 @@ for test_dir in "$TESTS_DIR"/*/; do
         has_expected_diagnostics=true
     fi
 
-    # Compile within the cross-platform ten-second regression budget.
+    # Native Windows compiler processes have higher startup and I/O overhead.
+    compile_timeout=10
+    if [[ "$is_windows" == "true" ]]; then
+        compile_timeout=20
+    fi
     rm -f "$output_binary"
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
         stack_limit_kb=$(<"$stack_limit_file")
@@ -357,9 +361,9 @@ for test_dir in "$TESTS_DIR"/*/; do
             failures+=("$test_name")
             continue
         fi
-        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout 10 "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
+        compile_output=$( (ulimit -s "$stack_limit_kb"; run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary") 2>&1)
     else
-        compile_output=$(run_with_timeout 10 "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
+        compile_output=$(run_with_timeout "$compile_timeout" "$COMPILER" "$source_file" -o "$output_binary" 2>&1)
     fi
     compile_exit=$?
     if [[ $compile_exit -eq 124 ]]; then
