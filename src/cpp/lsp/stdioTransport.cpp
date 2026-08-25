@@ -1,12 +1,15 @@
 #include "stdioTransport.h"
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <system_error>
-#include <unistd.h>
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace lsp {
@@ -32,16 +35,28 @@ StdioTransport::StdioTransport() {
 #endif
 }
 
-ssize_t StdioTransport::read(char *buffer, size_t count) {
+TransferSize StdioTransport::read(char *buffer, std::size_t count) {
 	if (closed)
 		return -1;
+#ifdef _WIN32
+	const unsigned int transferCount =
+		static_cast<unsigned int>(std::min(count, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+	return _read(_fileno(stdin), buffer, transferCount);
+#else
 	return ::read(STDIN_FILENO, buffer, count);
+#endif
 }
 
-ssize_t StdioTransport::write(const char *buffer, size_t count) {
+TransferSize StdioTransport::write(const char *buffer, std::size_t count) {
 	if (closed)
 		return -1;
+#ifdef _WIN32
+	const unsigned int transferCount =
+		static_cast<unsigned int>(std::min(count, static_cast<std::size_t>(std::numeric_limits<int>::max())));
+	return _write(_fileno(stdout), buffer, transferCount);
+#else
 	return ::write(STDOUT_FILENO, buffer, count);
+#endif
 }
 
 bool StdioTransport::isConnected() const { return !closed; }

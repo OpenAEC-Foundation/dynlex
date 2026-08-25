@@ -19,7 +19,6 @@
 #include <string_view>
 #include <system_error>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 
 #ifndef DYNLEX_VERSION

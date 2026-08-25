@@ -54,14 +54,14 @@ struct CompilerLogEntry {
 
 class WebMessageTransport final : public lsp::Transport {
   public:
-	ssize_t read(char * /*buffer*/, size_t /*count*/) override { return 0; }
+	lsp::TransferSize read(char * /*buffer*/, std::size_t /*count*/) override { return 0; }
 
-	ssize_t write(const char *buffer, size_t count) override {
+	lsp::TransferSize write(const char *buffer, std::size_t count) override {
 		if (!connected)
 			return -1;
 		pending.append(buffer, count);
 		extractMessages();
-		return static_cast<ssize_t>(count);
+		return static_cast<lsp::TransferSize>(count);
 	}
 
 	bool isConnected() const override { return connected; }
