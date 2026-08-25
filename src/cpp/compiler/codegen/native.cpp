@@ -1,4 +1,5 @@
 #include "native.h"
+#include "nativeLibraries.h"
 #include "nativeTarget.h"
 #include "targetOptions.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -32,11 +33,6 @@
 #include <vector>
 
 namespace {
-
-struct LibraryNameMapping {
-	llvm::StringLiteral portableName;
-	llvm::StringLiteral linkerName;
-};
 
 struct ProgramExecutionResult {
 	int exitCode = 0;
@@ -227,32 +223,6 @@ executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef
 	}
 	result.output = std::move(*stdoutContents) + std::move(*stderrContents);
 	return result;
-}
-
-std::vector<std::string> nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library) {
-	if (library == "dynlex_runtime") {
-		std::vector<std::string> arguments = {runtimeLibraryPath().string()};
-		if (!targetTriple.isOSWindows())
-			arguments.push_back("-pthread");
-		return arguments;
-	}
-	if (targetTriple.isOSDarwin() && library == "GL")
-		return {"-framework", "OpenGL"};
-
-	if (targetTriple.isOSWindows()) {
-		static constexpr std::array windowsLibraryNames = {
-			LibraryNameMapping{"GL", "opengl32"},
-			LibraryNameMapping{"glfw", "glfw3dll"},
-		};
-		for (const LibraryNameMapping &mapping : windowsLibraryNames) {
-			if (library == mapping.portableName) {
-				library = mapping.linkerName;
-				break;
-			}
-		}
-	}
-
-	return {"-l" + library.str()};
 }
 
 bool requiresExternalRuntimeLibraries(const std::unordered_set<std::string> &libraries) {
@@ -515,7 +485,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandStorage.push_back("-g");
 
 	for (const std::string &lib : context.requiredLibraries) {
-		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib);
+		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string());
 		commandStorage.insert(
 			commandStorage.end(), std::make_move_iterator(arguments.begin()), std::make_move_iterator(arguments.end())
 		);
@@ -546,7 +516,9 @@ bool emitNativeExecutable(ParseContext &context) {
 		// Check which libraries are actually missing
 		std::vector<std::string> missingLibs;
 		for (const std::string &lib : context.requiredLibraries) {
-			if (linkerReportsMissingLibrary(linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib))) {
+			if (linkerReportsMissingLibrary(
+					linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string())
+				)) {
 				missingLibs.push_back(lib);
 			}
 		}

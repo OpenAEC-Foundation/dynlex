@@ -3,9 +3,11 @@ import lib/filesystem.dl
 function read and print {fixed integer:choice}:
     execute:
         if choice = 1:
-            read the file at "/tmp/dynlex-subject-branch.txt"
+            read the file at "tests/required/subject_selected_branch_lifetime/value.tmp"
         print (the contents of it) as a line
 
-write the string form of "hello" to the file at "/tmp/dynlex-subject-branch.txt"
+set path to "tests/required/subject_selected_branch_lifetime/value.tmp"
+delete the filesystem entry at path
+write the string form of "hello" to the file at path
 read and print 1
-delete the filesystem entry at "/tmp/dynlex-subject-branch.txt"
+delete the filesystem entry at path

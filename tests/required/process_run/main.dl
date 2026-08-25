@@ -14,7 +14,7 @@ print whether found succeeded as a line
 
 set command to a process command for interpreter
 add "-c" as an argument to command
-add "import os,sys; data=sys.stdin.read(); ascii_case=os.environ.get('DYNLEX_MIXED_CASE') == 'third' and os.environ.get('dynlex_mixed_case') == ('third' if os.name == 'nt' else 'second'); unicode_case=os.environ.get('DYNLEX_Ä') == 'third' and os.environ.get('dynlex_ä') == ('third' if os.name == 'nt' else 'second'); print(sys.argv[1] + '|' + data + '|' + os.path.basename(os.getcwd()) + '|' + os.environ['DYNLEX_PROCESS_VALUE'] + '|' + str(os.environ.get('PATH') == 'dynlex-overridden-path') + '|' + str('DYNLEX_REMOVED' in os.environ) + '|' + str(sys.argv[2] == '') + '|' + str(sys.argv[3] == 'trailing' + chr(92)) + '|' + str(ascii_case) + '|' + str(unicode_case)); print('separate error', file=sys.stderr); sys.exit(7)" as an argument to command
+add "import os,sys; data=sys.stdin.read(); ascii_case=os.environ.get('DYNLEX_MIXED_CASE') == 'third' and os.environ.get('dynlex_mixed_case') == ('third' if os.name == 'nt' else 'second'); unicode_case=os.environ.get('DYNLEX_Ä') == 'third' and os.environ.get('dynlex_ä') == ('third' if os.name == 'nt' else 'second'); output=sys.argv[1] + '|' + data + '|' + os.path.basename(os.getcwd()) + '|' + os.environ['DYNLEX_PROCESS_VALUE'] + '|' + str(os.environ.get('PATH') == 'dynlex-overridden-path') + '|' + str('DYNLEX_REMOVED' in os.environ) + '|' + str(sys.argv[2] == '') + '|' + str(sys.argv[3] == 'trailing' + chr(92)) + '|' + str(ascii_case) + '|' + str(unicode_case) + '\\n'; sys.stdout.buffer.write(output.encode()); sys.stderr.buffer.write(b'separate error\\n'); sys.exit(7)" as an argument to command
 add "literal $HOME ; * \"quoted\"" as an argument to command
 add "" as an argument to command
 set trailing to a new string buffer containing 9 bytes
@@ -43,7 +43,7 @@ print whether (result's error message = "") as a line
 
 set unset to a process command for interpreter
 add "-c" as an argument to unset
-add "import os; print('PATH' in os.environ)" as an argument to unset
+add "import os,sys; sys.stdout.buffer.write(b'True\\n' if 'PATH' in os.environ else b'False\\n')" as an argument to unset
 unset environment variable "PATH" of unset
 run unset and set cleared to it
 
@@ -52,7 +52,7 @@ print whether (cleared's standard output = "False\n") as a line
 
 set isolated to a process command for interpreter
 add "-c" as an argument to isolated
-add "import os; print(os.environ.get('DYNLEX_ONLY', 'missing') + '|' + str('PATH' in os.environ))" as an argument to isolated
+add "import os,sys; value=os.environ.get('DYNLEX_ONLY', 'missing') + '|' + str('PATH' in os.environ) + '\\n'; sys.stdout.buffer.write(value.encode())" as an argument to isolated
 do not inherit the environment in isolated
 set environment variable "DYNLEX_ONLY" of isolated to "present"
 run isolated and set separation to it

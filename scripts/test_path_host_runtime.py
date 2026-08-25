@@ -70,7 +70,7 @@ def verify_windows_cache_directory(project: Path) -> None:
     missing_source = [text for text in required_source if text not in source]
     if missing_source:
         raise RuntimeError(f"Windows user cache directory API is incomplete: {missing_source}")
-    required_libraries = ("shell32", "ole32")
+    required_libraries = ("shell32", "ole32", "uuid")
     missing_libraries = [library for library in required_libraries if library not in cmake]
     if missing_libraries:
         raise RuntimeError(f"Windows user cache directory libraries are not linked: {missing_libraries}")

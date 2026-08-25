@@ -7,7 +7,7 @@ function the live process test interpreter:
 set command to a process command for the live process test interpreter
 add "-u" as an argument to command
 add "-c" as an argument to command
-add "import sys\nfor line in sys.stdin:\n sys.stdout.write('out:' + line); sys.stdout.flush()\n sys.stderr.write('err:' + line); sys.stderr.flush()" as an argument to command
+add "import sys\nfor line in sys.stdin.buffer:\n sys.stdout.buffer.write(b'out:' + line); sys.stdout.buffer.flush()\n sys.stderr.buffer.write(b'err:' + line); sys.stderr.buffer.flush()" as an argument to command
 launch command and set child to it
 
 print whether child was launched as a line

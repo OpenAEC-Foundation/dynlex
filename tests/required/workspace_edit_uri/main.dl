@@ -1,4 +1,5 @@
 import lib/workspace_edit.dl
+import lib/process.dl
 
 create a temporary directory and set temporary to it
 if temporary failed:
@@ -40,17 +41,24 @@ set network to the normalized workspace file URI for "file://server/share/a%20b"
 print whether network succeeded as a line
 print network's path as a line
 
-set target to root joined with "target.txt" using native's value
-set link to root joined with "alias.txt" using native's value
-set status to @intrinsic(
-    "call",
-    "libc",
-    "symlink",
-    an integer,
-    the data of target's value,
-    the data of link's value
-)
-print status as a line
+set target to root joined with "target" using native's value
+set link to root joined with "alias" using native's value
+create a directory tree at target's value
+if the process platform is Windows:
+    set command to a process command for "cmd"
+    add "/d" as an argument to command
+    add "/c" as an argument to command
+    add "mklink" as an argument to command
+    add "/J" as an argument to command
+    add link's value as an argument to command
+    add target's value as an argument to command
+else:
+    set command to a process command for "ln"
+    add "-s" as an argument to command
+    add target's value as an argument to command
+    add link's value as an argument to command
+run command and set creation to it
+print creation's exit code as a line
 set uri to the file URI for link's value interpreted as a native path
 set linked to the normalized workspace file URI for uri's value inside root
 print whether linked succeeded as a line

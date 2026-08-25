@@ -29,7 +29,7 @@ set abandoned to whether an abandoned process launches using interpreter
 
 set verification to a process command for interpreter
 add "-c" as an argument to verification
-add "import os,time; time.sleep(1); existed=os.path.exists('sentinel.tmp'); print(existed); os.remove('sentinel.tmp') if existed else None" as an argument to verification
+add "import os,sys,time; time.sleep(1); existed=os.path.exists('sentinel.tmp'); sys.stdout.buffer.write(b'True\\n' if existed else b'False\\n'); os.remove('sentinel.tmp') if existed else None" as an argument to verification
 use "tests/required/process_lifecycle_cleanup" as the working directory of verification
 run verification and set check to it
 
