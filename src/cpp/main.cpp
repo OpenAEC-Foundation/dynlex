@@ -11,6 +11,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include <algorithm>
 #include <filesystem>
@@ -407,7 +408,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	}
 
 	if (waitDebugger) {
-		std::cerr << "Waiting for debugger to attach (PID: " << getpid() << ")..." << std::endl;
+		std::cerr << "Waiting for debugger to attach (PID: " << llvm::sys::Process::getProcessId() << ")..." << std::endl;
 		std::this_thread::sleep_for(std::chrono::seconds(10));
 		std::cerr << "Continuing..." << std::endl;
 	}
