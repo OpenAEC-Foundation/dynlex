@@ -116,10 +116,10 @@ foreach ($architecture in @("x64", "arm64")) {
             "cmake\vcpkg-triplets\$architecture-windows-static-crt.cmake"
     ) -Raw
     if (
-        $triplet -notmatch "set\\(VCPKG_TARGET_ARCHITECTURE $architecture\\)" -or
-        $triplet -notmatch "set\\(VCPKG_CRT_LINKAGE static\\)" -or
-        $triplet -notmatch "set\\(VCPKG_LIBRARY_LINKAGE dynamic\\)" -or
-        $triplet -notmatch "set\\(VCPKG_BUILD_TYPE release\\)"
+        -not $triplet.Contains("set(VCPKG_TARGET_ARCHITECTURE $architecture)") -or
+        -not $triplet.Contains("set(VCPKG_CRT_LINKAGE static)") -or
+        -not $triplet.Contains("set(VCPKG_LIBRARY_LINKAGE dynamic)") -or
+        -not $triplet.Contains("set(VCPKG_BUILD_TYPE release)")
     ) {
         throw "The $architecture Windows dependency triplet does not build release DLLs with a static CRT."
     }

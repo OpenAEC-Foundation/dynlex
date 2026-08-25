@@ -1,4 +1,5 @@
 #include "native.h"
+#include "nativeTarget.h"
 #include "targetOptions.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallString.h"
@@ -357,9 +358,9 @@ std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &con
 	llvm::InitializeNativeTargetAsmParser();
 
 #ifdef _WIN32
-	llvm::Triple targetTriple(DYNLEX_WINDOWS_TARGET_TRIPLE);
+	llvm::Triple targetTriple = normalizedNativeTargetTriple(DYNLEX_WINDOWS_TARGET_TRIPLE);
 #else
-	llvm::Triple targetTriple(llvm::sys::getDefaultTargetTriple());
+	llvm::Triple targetTriple = normalizedNativeTargetTriple(llvm::sys::getDefaultTargetTriple());
 #endif
 	context.llvmModule->setTargetTriple(targetTriple);
 	const llvm::Target *target = llvm::TargetRegistry::lookupTarget(targetTriple, errorMessage);

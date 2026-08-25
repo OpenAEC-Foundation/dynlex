@@ -20,6 +20,18 @@ if not Path(BASH_EXECUTABLE).is_file():
     raise RuntimeError(f"DYNLEX_TEST_BASH does not name a file: {BASH_EXECUTABLE}")
 
 
+def native_path(shell_path: str) -> Path:
+    if os.name != "nt":
+        return Path(shell_path)
+    completed = subprocess.run(
+        [BASH_EXECUTABLE, "-c", 'cygpath -w "$1"', BASH_EXECUTABLE, shell_path],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return Path(completed.stdout.strip())
+
+
 class LlvmToolchainTests(unittest.TestCase):
     def test_windows_checkout_keeps_shell_inputs_lf_terminated(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-lf-checkout-") as temporary_directory:
@@ -116,7 +128,7 @@ class LlvmToolchainTests(unittest.TestCase):
                     text=True,
                 )
                 self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-                resolved_caches.append(Path(completed.stdout.strip()))
+                resolved_caches.append(native_path(completed.stdout.strip()))
 
             expected_cache = primary.resolve() / ".cache" / "llvm-toolchain"
             self.assertEqual(resolved_caches, [expected_cache, expected_cache])
@@ -149,15 +161,14 @@ printf '%s\\n' \
             )
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             cache_directory = Path(temporary_directory)
+            output = completed.stdout.splitlines()
+            self.assertEqual(output[:3], [PINNED_REPOSITORY, PINNED_REVISION, "23"])
             self.assertEqual(
-                completed.stdout.splitlines(),
+                [native_path(path) for path in output[3:]],
                 [
-                    PINNED_REPOSITORY,
-                    PINNED_REVISION,
-                    "23",
-                    str(cache_directory / "source"),
-                    str(cache_directory / "native" / "install"),
-                    str(cache_directory / "web" / "install"),
+                    cache_directory / "source",
+                    cache_directory / "native" / "install",
+                    cache_directory / "web" / "install",
                 ],
             )
 
@@ -308,10 +319,10 @@ printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
             )
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertEqual(
-                completed.stdout.splitlines(),
+                [native_path(path) for path in completed.stdout.splitlines()],
                 [
-                    str(configured_directory / "clang.exe"),
-                    str(configured_directory / "clang++.exe"),
+                    configured_directory / "clang.exe",
+                    configured_directory / "clang++.exe",
                 ],
             )
 
