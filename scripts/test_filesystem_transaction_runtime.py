@@ -70,13 +70,19 @@ def main() -> int:
             raise RuntimeError("Windows builds must consistently target Windows 10 or newer")
         windows_target_version = version_match.group(1)
         normal_target_definitions = re.search(
-            r"add_compile_definitions\(\s*"
-            r"_WIN32_WINNT=\$\{DYNLEX_WINDOWS_TARGET_VERSION\}\s*"
-            r"WINVER=\$\{DYNLEX_WINDOWS_TARGET_VERSION\}\s*\)",
+            r"if\(WIN32\).*?add_compile_definitions\((.*?)\).*?endif\(\)",
             cmake_text,
+            re.DOTALL,
         )
-        if normal_target_definitions is None:
-            raise RuntimeError("Normal Windows targets do not use the configured Windows API version")
+        required_normal_definitions = {
+            "NOMINMAX",
+            "_WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}",
+            "WINVER=${DYNLEX_WINDOWS_TARGET_VERSION}",
+        }
+        if normal_target_definitions is None or not required_normal_definitions.issubset(
+            normal_target_definitions.group(1).split()
+        ):
+            raise RuntimeError("Normal Windows targets do not use the required platform definitions")
         for definition in (
             '"-D_WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}"',
             '"-DWINVER=${DYNLEX_WINDOWS_TARGET_VERSION}"',

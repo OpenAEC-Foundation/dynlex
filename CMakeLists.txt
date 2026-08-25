@@ -19,6 +19,7 @@ if(WIN32)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     set(DYNLEX_WINDOWS_TARGET_VERSION 0x0A00)
     add_compile_definitions(
+        NOMINMAX
         _WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}
         WINVER=${DYNLEX_WINDOWS_TARGET_VERSION}
     )
