@@ -277,6 +277,7 @@ endfunction()
 set(DYNLEX_LLVM_COMMON_COMPONENTS
     core
     support
+    SupportLSP
     irreader
     passes
     WebAssemblyCodeGen
@@ -495,6 +496,17 @@ if(NOT EMSCRIPTEN)
     target_include_directories(dynlex_class_layout_test PRIVATE src/cpp)
     dynlex_link_llvm(dynlex_class_layout_test core support)
     set_target_properties(dynlex_class_layout_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+
+    add_executable(
+        dynlex_path_utils_test EXCLUDE_FROM_ALL
+        tests/cpp/pathUtilsTest.cpp
+        src/cpp/pathUtils.cpp
+    )
+    target_include_directories(dynlex_path_utils_test PRIVATE src/cpp)
+    dynlex_link_llvm(dynlex_path_utils_test support SupportLSP)
+    set_target_properties(dynlex_path_utils_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 
