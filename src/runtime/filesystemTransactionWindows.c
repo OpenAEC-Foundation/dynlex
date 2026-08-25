@@ -12,6 +12,7 @@
 #include <wchar.h>
 #include <windows.h>
 
+#define DYNLEX_FILE_RENAME_INFO_CLASS ((FILE_INFO_BY_HANDLE_CLASS)3)
 #define DYNLEX_FILE_RENAME_INFO_EX_CLASS ((FILE_INFO_BY_HANDLE_CLASS)22)
 #define DYNLEX_FILE_DISPOSITION_INFO_EX_CLASS ((FILE_INFO_BY_HANDLE_CLASS)21)
 #define DYNLEX_FILE_RENAME_REPLACE_IF_EXISTS 0x00000001UL
@@ -25,7 +26,7 @@ typedef struct {
 	HANDLE root_directory;
 	DWORD file_name_length;
 	WCHAR file_name[1];
-} DynlexFileRenameInfoEx;
+} DynlexFileRenameInfo;
 
 typedef struct {
 	DWORD flags;
@@ -424,7 +425,7 @@ void *dynlex_filesystem_staging_create(const char *target, size_t target_length)
 	}
 	staging->parent = CreateFileW(
 		staging->parent_path, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
-		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL
+		FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL
 	);
 	if (staging->parent == INVALID_HANDLE_VALUE) {
 		dynlex_runtime_set_windows_error("Could not open filesystem transaction parent directory", GetLastError());
@@ -713,23 +714,23 @@ int dynlex_filesystem_staging_commit(
 		dynlex_runtime_set_windows_error("Could not commit filesystem staging transaction", GetLastError());
 		return cleanup_failed_commit(staging, cleanup_succeeded, -1);
 	}
-	size_t name_bytes = wcslen(staging->destination_name) * sizeof(wchar_t);
-	if (name_bytes > MAXDWORD || name_bytes > SIZE_MAX - sizeof(DynlexFileRenameInfoEx)) {
+	size_t name_bytes = wcslen(staging->destination_path) * sizeof(wchar_t);
+	if (name_bytes > MAXDWORD || name_bytes > SIZE_MAX - sizeof(DynlexFileRenameInfo)) {
 		dynlex_runtime_set_error("Filesystem transaction destination is too large");
 		return cleanup_failed_commit(staging, cleanup_succeeded, -1);
 	}
-	size_t information_size = offsetof(DynlexFileRenameInfoEx, file_name) + name_bytes;
-	DynlexFileRenameInfoEx *information = calloc(1, information_size);
+	size_t information_size = offsetof(DynlexFileRenameInfo, file_name) + name_bytes;
+	DynlexFileRenameInfo *information = calloc(1, information_size);
 	if (information == NULL) {
 		dynlex_runtime_set_errno_error("Could not allocate filesystem rename information", ENOMEM);
 		return cleanup_failed_commit(staging, cleanup_succeeded, -1);
 	}
 	information->flags = overwrite ? DYNLEX_FILE_RENAME_REPLACE_IF_EXISTS | DYNLEX_FILE_RENAME_POSIX_SEMANTICS : 0;
-	information->root_directory = staging->parent;
+	information->root_directory = NULL;
 	information->file_name_length = (DWORD)name_bytes;
-	memcpy(information->file_name, staging->destination_name, name_bytes);
-	BOOL renamed =
-		SetFileInformationByHandle(staging->staging, DYNLEX_FILE_RENAME_INFO_EX_CLASS, information, (DWORD)information_size);
+	memcpy(information->file_name, staging->destination_path, name_bytes);
+	FILE_INFO_BY_HANDLE_CLASS rename_class = overwrite ? DYNLEX_FILE_RENAME_INFO_EX_CLASS : DYNLEX_FILE_RENAME_INFO_CLASS;
+	BOOL renamed = SetFileInformationByHandle(staging->staging, rename_class, information, (DWORD)information_size);
 	DWORD error_number = GetLastError();
 	free(information);
 	if (!renamed) {

@@ -35,6 +35,8 @@ print whether original's identity is available as a line
 if windows:
     print whether original's mode is unsupported as a line
     print whether original's Windows attributes are supported as a line
+    print whether original's Windows attributes >= 0 as a line
+    print whether original's Windows attributes <= 4294967295 as a line
 else:
     print whether original's mode is supported as a line
     print whether original's Windows attributes are unsupported as a line
@@ -79,6 +81,8 @@ restore metadata from original to second and set restored to it
 print whether restored is supported as a line
 print whether restored succeeded as a line
 commit restored where overwriting is true and durability is false and set committed to it
+if committed failed:
+    print committed's error message as a line
 print whether committed is supported as a line
 print whether committed succeeded as a line
 print whether committed's commit outcome is known as a line
@@ -114,6 +118,8 @@ set replacement to the string form of "new"
 create a staging file beside copy and set temporary to it
 write replacement to temporary and set temporary to it
 commit temporary where overwriting is false and durability is false and set publication to it
+if publication failed:
+    print publication's error message as a line
 print whether publication succeeded as a line
 print whether publication was committed as a line
 print whether publication's cleanup succeeded as a line
@@ -132,6 +138,7 @@ if windows:
 else:
     print whether commit is supported as a line
     print whether commit succeeded as a line
+    print whether commit's commit outcome is known as a line
     print whether commit is durable as a line
     print whether commit's cleanup succeeded as a line
 
