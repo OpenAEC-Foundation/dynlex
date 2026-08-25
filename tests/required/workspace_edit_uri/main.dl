@@ -45,19 +45,22 @@ set target to root joined with "target" using native's value
 set link to root joined with "alias" using native's value
 create a directory tree at target's value
 if the process platform is Windows:
-    set command to a process command for "cmd"
-    add "/d" as an argument to command
-    add "/c" as an argument to command
-    add "mklink" as an argument to command
-    add "/J" as an argument to command
-    add link's value as an argument to command
-    add target's value as an argument to command
+    set command to a process command for "powershell.exe"
+    add "-NoLogo" as an argument to command
+    add "-NoProfile" as an argument to command
+    add "-NonInteractive" as an argument to command
+    add "-Command" as an argument to command
+    add "$ErrorActionPreference = 'Stop'; New-Item -ItemType Junction -Path $env:DYNLEX_LINK -Target $env:DYNLEX_TARGET | Out-Null" as an argument to command
+    set environment variable "DYNLEX_LINK" of command to link's value
+    set environment variable "DYNLEX_TARGET" of command to target's value
 else:
     set command to a process command for "ln"
     add "-s" as an argument to command
     add target's value as an argument to command
     add link's value as an argument to command
 run command and set creation to it
+if creation failed:
+    print creation's standard error as a line
 print creation's exit code as a line
 set uri to the file URI for link's value interpreted as a native path
 set linked to the normalized workspace file URI for uri's value inside root
