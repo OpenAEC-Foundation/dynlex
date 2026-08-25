@@ -20,6 +20,19 @@ case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
     *mingw*|*msys*|*cygwin*) is_windows=true ;;
 esac
 
+if ! DYNLEX_TEST_BASH="$(command -v bash)" || [[ ! -f "$DYNLEX_TEST_BASH" ]]; then
+    echo "The test suite requires Bash." >&2
+    exit 1
+fi
+if [[ "$is_windows" == "true" ]]; then
+    if ! command -v cygpath >/dev/null 2>&1; then
+        echo "The Windows test suite requires Git Bash's cygpath." >&2
+        exit 1
+    fi
+    DYNLEX_TEST_BASH="$(cygpath -w "$DYNLEX_TEST_BASH")"
+fi
+export DYNLEX_TEST_BASH
+
 COMPILER="$PROJECT_DIR/build/dynlex"
 if [[ "$is_windows" == "true" ]]; then
     COMPILER+=".exe"

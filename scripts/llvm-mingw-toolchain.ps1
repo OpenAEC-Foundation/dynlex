@@ -40,7 +40,7 @@ function Read-LlvmMingwMetadata {
     if ($metadata.release -notmatch '^[0-9]{8}$' -or $metadata.llvm -notmatch '^[0-9]+$') {
         throw "LLVM MinGW release and LLVM version fields are invalid."
     }
-    if ($metadata.crt -ne "ucrt" -or $metadata.schema -ne "2") {
+    if ($metadata.crt -ne "ucrt" -or $metadata.schema -ne "3") {
         throw "LLVM MinGW CRT or metadata schema is unsupported."
     }
     foreach ($checksumField in "x64_sha256", "arm64_sha256") {
@@ -102,6 +102,8 @@ function Assert-LlvmMingwLayout {
         "LICENSE.TXT",
         "bin\cc.exe",
         "bin\clang-$LlvmVersion.exe",
+        "bin\mingw32-common.cfg",
+        "bin\$TargetArchitecture-w64-windows-gnu.cfg",
         "bin\llvm-ar.exe",
         "bin\ld.lld.exe",
         "bin\libLLVM-$LlvmVersion.dll",
@@ -142,27 +144,24 @@ function Install-LlvmMingwToolchain {
     $archivePath = Join-Path $archiveDirectory $assetName
     $toolchainRoot = Join-Path $cacheRoot "$($metadata.release)-$($metadata.crt)-$($hostConfiguration.AssetArchitecture)"
     $markerPath = Join-Path $toolchainRoot ".dynlex-llvm-mingw"
-    $markerContents = @(
-        "schema=$($metadata.schema)",
+    $markerFields = @(
         "release=$($metadata.release)",
         "sha256=$expectedChecksum",
         "host=$($hostConfiguration.AssetArchitecture)",
         "target=$($hostConfiguration.TargetTriple)"
-    ) -join "`n"
-    $schemaOneMarkerContents = @(
-        "schema=1",
-        "release=$($metadata.release)",
-        "sha256=$expectedChecksum",
-        "host=$($hostConfiguration.AssetArchitecture)",
-        "target=$($hostConfiguration.TargetTriple)"
-    ) -join "`n"
+    )
+    $markerContents = (@("schema=$($metadata.schema)") + $markerFields) -join "`n"
+    $previousMarkerContents = @(
+        (@("schema=1") + $markerFields) -join "`n"
+        (@("schema=2") + $markerFields) -join "`n"
+    )
 
     if (Test-Path $toolchainRoot) {
         if (-not (Test-Path -PathType Leaf $markerPath)) {
             throw "LLVM MinGW cache directory exists without its integrity marker: $toolchainRoot"
         }
         $actualMarkerContents = (Get-Content $markerPath -Raw).TrimEnd()
-        if ($actualMarkerContents -eq $schemaOneMarkerContents) {
+        if ($previousMarkerContents -contains $actualMarkerContents) {
             Remove-Item -Recurse -Force $toolchainRoot
         } elseif ($actualMarkerContents -ne $markerContents) {
             throw "LLVM MinGW cache integrity marker does not match the pinned toolchain."
@@ -210,6 +209,8 @@ function Install-LlvmMingwToolchain {
             foreach ($fileName in @(
                 "cc.exe",
                 "clang-$($metadata.llvm).exe",
+                "mingw32-common.cfg",
+                "$($hostConfiguration.TargetArchitecture)-w64-windows-gnu.cfg",
                 "llvm-ar.exe",
                 "ld.lld.exe",
                 "libLLVM-$($metadata.llvm).dll",
