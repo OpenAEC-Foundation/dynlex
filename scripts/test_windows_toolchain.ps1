@@ -129,7 +129,7 @@ $llvmMingwMetadata = Read-LlvmMingwMetadata -ProjectRoot $projectRoot
 if (
     $llvmMingwMetadata.release -ne "20260616" -or
     $llvmMingwMetadata.llvm -ne "22" -or
-    $llvmMingwMetadata.schema -ne "2" -or
+    $llvmMingwMetadata.schema -ne "3" -or
     $llvmMingwMetadata.x64_sha256 -ne "b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35" -or
     $llvmMingwMetadata.arm64_sha256 -ne "312593669435bd0bfc1a43ac3fba23c8b27e0610bade88b2738e5a01702a99ba"
 ) {
@@ -169,6 +169,8 @@ try {
         "LICENSE.TXT",
         "bin\cc.exe",
         "bin\clang-22.exe",
+        "bin\mingw32-common.cfg",
+        "bin\x86_64-w64-windows-gnu.cfg",
         "bin\llvm-ar.exe",
         "bin\ld.lld.exe",
         "bin\libLLVM-22.dll",
@@ -213,6 +215,8 @@ try {
         -DependencyRoot $dependencyRoot
     foreach ($relativePath in @(
         "lib\dynlex\toolchain\bin\cc.exe",
+        "lib\dynlex\toolchain\bin\mingw32-common.cfg",
+        "lib\dynlex\toolchain\bin\x86_64-w64-windows-gnu.cfg",
         "lib\dynlex\toolchain\lib\clang\22\include\stdbool.h",
         "lib\dynlex\toolchain\lib\clang\22\include\stddef.h",
         "lib\dynlex\toolchain\lib\clang\22\include\x86intrin.h",

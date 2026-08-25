@@ -13,6 +13,11 @@ SCRIPTS_DIR = PROJECT_DIR / "scripts"
 PINNED_REPOSITORY = "https://github.com/OpenAEC-Foundation/llvm-project.git"
 PINNED_REVISION = "102332db2c124acd59d44b3463d12d9c2da218a7"
 PINNED_SCHEMA = "2"
+BASH_EXECUTABLE = os.environ.get("DYNLEX_TEST_BASH")
+if not BASH_EXECUTABLE:
+    raise RuntimeError("DYNLEX_TEST_BASH must name the Bash executable selected by scripts/test.sh")
+if not Path(BASH_EXECUTABLE).is_file():
+    raise RuntimeError(f"DYNLEX_TEST_BASH does not name a file: {BASH_EXECUTABLE}")
 
 
 class LlvmToolchainTests(unittest.TestCase):
@@ -100,10 +105,10 @@ class LlvmToolchainTests(unittest.TestCase):
             for checkout in (primary, linked):
                 completed = subprocess.run(
                     [
-                        "bash",
+                        BASH_EXECUTABLE,
                         "-c",
                         '. "$1"; printf "%s\\n" "$DYNLEX_LLVM_CACHE_DIR"',
-                        "bash",
+                        BASH_EXECUTABLE,
                         str(checkout / "scripts" / "llvm_toolchain.sh"),
                     ],
                     capture_output=True,
@@ -122,7 +127,7 @@ class LlvmToolchainTests(unittest.TestCase):
             environment["DYNLEX_LLVM_CACHE_DIR"] = temporary_directory
             completed = subprocess.run(
                 [
-                    "bash",
+                    BASH_EXECUTABLE,
                     "-c",
                     """
 set -euo pipefail
@@ -135,7 +140,7 @@ printf '%s\\n' \
     "$DYNLEX_LLVM_NATIVE_INSTALL_DIR" \
     "$DYNLEX_LLVM_WEB_INSTALL_DIR"
 """,
-                    "bash",
+                    BASH_EXECUTABLE,
                     str(SCRIPTS_DIR / "llvm_toolchain.sh"),
                 ],
                 capture_output=True,
@@ -198,7 +203,7 @@ printf '%s\\n' \
             environment["DYNLEX_LLVM_CACHE_DIR"] = temporary_directory
             completed = subprocess.run(
                 [
-                    "bash",
+                    BASH_EXECUTABLE,
                     "-c",
                     """
 set -euo pipefail
@@ -214,7 +219,7 @@ dynlex_llvm_marker_contents native
 dynlex_llvm_marker_contents web
 dynlex_native_llvm_cmake_arguments
 """,
-                    "bash",
+                    BASH_EXECUTABLE,
                     str(SCRIPTS_DIR / "llvm_toolchain.sh"),
                 ],
                 capture_output=True,
@@ -237,7 +242,7 @@ dynlex_native_llvm_cmake_arguments
             compiler.write_text("fixture\n", encoding="utf-8")
             completed = subprocess.run(
                 [
-                    "bash",
+                    BASH_EXECUTABLE,
                     "-c",
                     """
 set -euo pipefail
@@ -245,7 +250,7 @@ set -euo pipefail
 DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=.exe
 dynlex_complete_host_executable_path "$2"
 """,
-                    "bash",
+                    BASH_EXECUTABLE,
                     str(SCRIPTS_DIR / "llvm_toolchain.sh"),
                     str(compiler.with_suffix("")),
                 ],
@@ -285,7 +290,7 @@ dynlex_complete_host_executable_path "$2"
             )
             completed = subprocess.run(
                 [
-                    "bash",
+                    BASH_EXECUTABLE,
                     "-c",
                     """
 set -euo pipefail
@@ -294,7 +299,7 @@ DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX=.exe
 dynlex_resolve_bootstrap_compilers
 printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
 """,
-                    "bash",
+                    BASH_EXECUTABLE,
                     str(SCRIPTS_DIR / "llvm_toolchain.sh"),
                 ],
                 capture_output=True,
@@ -316,10 +321,10 @@ printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
         environment.pop("DYNLEX_LLVM_BOOTSTRAP_CXX", None)
         completed = subprocess.run(
             [
-                "bash",
+                BASH_EXECUTABLE,
                 "-c",
                 '. "$1"; dynlex_resolve_bootstrap_compilers',
-                "bash",
+                BASH_EXECUTABLE,
                 str(SCRIPTS_DIR / "llvm_toolchain.sh"),
             ],
             capture_output=True,
