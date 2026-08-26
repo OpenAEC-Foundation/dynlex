@@ -245,13 +245,9 @@
     }
 
     .workbench-code {
+        --snippet-frame-height: 330px;
         border-right: 0;
         border-bottom: 1px solid var(--line);
-    }
-
-    .hero-snippet-editor-shell {
-        --snippet-frame-height: 330px;
-        height: var(--snippet-frame-height);
     }
 
     .hero-snippet-editor {
@@ -330,18 +326,13 @@
     }
 
     .lab-panel {
+        --snippet-frame-height: 270px;
         min-height: 290px;
         padding: 30px 22px;
     }
 
-    .language-snippet-editor-shell {
-        --snippet-frame-height: 270px;
-        height: var(--snippet-frame-height);
+    .lab-panel > :is(.snippet-editor-shell, .snippet-editor) {
         margin-top: 24px;
-    }
-
-    .snippet-editor-shell > textarea.snippet-editor {
-        height: var(--snippet-frame-height);
     }
 
     .language-snippet-editor {
@@ -375,7 +366,11 @@
     }
 
     .studio-code {
-        overflow: hidden;
+        min-height: 270px;
+    }
+
+    .studio-snippet-editor {
+        padding: 25px 20px;
         font-size: 0.6rem;
     }
 

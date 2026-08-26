@@ -25,12 +25,12 @@ assert.ok(Number.isInteger(nanoTimeBinding), "The volumetric shader must reflect
 
 await navigate("/");
 await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]').length === 2",
+  "document.querySelectorAll('[data-runnable-sketch]').length === 3",
   "the runnable homepage sketches"
 );
 await waitFor("document.fonts.status === 'loaded'", "the homepage fonts");
 await waitFor(
-  "document.querySelectorAll('.snippet-editor-shell[data-highlight-state=\"cached\"]').length === 4",
+  "document.querySelectorAll('.snippet-editor-shell[data-highlight-state=\"cached\"]').length === 5",
   "cached syntax highlighting on every homepage editor"
 );
 await waitFor(
@@ -186,6 +186,7 @@ assert.equal(
 );
 assert.match(preparedThought.clipPath, /thought-cloud-mask-[01]/);
 assert.notEqual(preparedThought.filter, "none", "The revealing thought cloud must retain its glow");
+await verifyOffscreenRevealReturn(incomingTimeBinding);
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
     + " && Number(getComputedStyle(document.querySelector('.shader-laptop')).opacity) > 0.75",
@@ -242,7 +243,6 @@ assert.equal(
   "The expanding cloud must cover its connector circles"
 );
 await captureScreenshot("homepage-next-shader-code");
-await verifyOffscreenRevealReturn(incomingTimeBinding);
 await captureScreenshot("homepage-overlapping-thoughts");
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
@@ -564,6 +564,24 @@ assert.equal(
   "Homepage edits and runs must reuse one compiler worker"
 );
 
+await evaluate(sourceEditExpression(2, `import lib/std.dl
+
+print 27 as a line`));
+await evaluate("document.querySelectorAll('[data-snippet-run]')[2].click()");
+await waitFor(
+  "document.querySelectorAll('[data-runnable-sketch]')[2].dataset.runState === 'done'",
+  "the studio sketch to run"
+);
+assert.equal(
+  await evaluate("document.querySelectorAll('[data-snippet-output]')[2].textContent.trim()"),
+  "27"
+);
+assert.equal(
+  requestedUrls.filter((url) => url.endsWith("/compiler/compiler-worker.js")).length,
+  1,
+  "The studio sketch must reuse the homepage compiler worker"
+);
+
 await runRiverChallengeBrowserTest({
   captureScreenshot,
   clickElement,
@@ -761,6 +779,12 @@ await waitFor(
   "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print 8 squared as a line')",
   "returning from a definition to render the preserved editable source model"
 );
+await dispatchKey(" ", "Space", 32, 2);
+await waitFor(
+  "document.querySelector('.suggest-widget.visible .monaco-list-row')",
+  "Ctrl+Space to display DynLex language-server completions"
+);
+await dispatchKey("Escape", "Escape", 27);
 await captureScreenshot("ide-finished");
 await command("Emulation.setDeviceMetricsOverride", {
   width: 2560,
@@ -924,7 +948,14 @@ assert.equal(documentationMenu.background, "rgb(8, 10, 9)");
 assert.equal(documentationMenu.current, "Docs");
 assert.deepEqual(
   documentationMenu.paths,
-  ["/index.html#challenges", "/index.html#language", "/index.html#studio", "/wiki/index.html", "/ide/index.html"]
+  [
+    "/index.html#challenges",
+    "/index.html#language",
+    "/index.html#studio",
+    "/download.html",
+    "/wiki/index.html",
+    "/ide/index.html"
+  ]
 );
 assert.equal(
   documentationMenu.styledCardBackground,
@@ -935,6 +966,16 @@ await evaluate("document.querySelector('[data-primary-nav] a[aria-current=\"page
 await waitFor("window.location.pathname === '/wiki/index.html'", "documentation navigation to reach the docs home");
 await captureScreenshot("documentation-mobile");
 await command("Emulation.clearDeviceMetricsOverride");
+await command("Emulation.setScriptExecutionDisabled", { value: true });
+await navigate("/");
+assert.equal(
+  await evaluate(`[...document.querySelectorAll('[data-snippet-source]')]
+    .filter((source) => source.parentElement.getBoundingClientRect().height > 0)
+    .every((source) => source.getBoundingClientRect().height
+      >= source.parentElement.getBoundingClientRect().height * 0.65)`),
+  true,
+  "Raw snippet editors must fill their containers before JavaScript enhancement"
+);
 assert.deepEqual(
   runtimeExceptions,
   [],

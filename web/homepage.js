@@ -371,12 +371,6 @@ async function installSnippetHighlighter(source) {
 
   const shell = document.createElement("div");
   shell.className = "snippet-editor-shell";
-  if (source.classList.contains("hero-snippet-editor")) {
-    shell.classList.add("hero-snippet-editor-shell");
-  }
-  if (source.classList.contains("language-snippet-editor")) {
-    shell.classList.add("language-snippet-editor-shell");
-  }
 
   const highlight = document.createElement("pre");
   highlight.className = `${source.className} snippet-highlight`;
@@ -448,14 +442,7 @@ function renderSnippetDiagnostics(sketch, diagnostics) {
 function renderSnippetOutput(sketch, stdout) {
   const output = required("[data-snippet-output]", sketch);
   const text = stdout.replace(/\r\n/g, "\n").replace(/\n$/, "");
-  const mode = sketch.dataset.outputMode;
-
-  if (mode === "number" || mode === "language") {
-    output.textContent = text || "(no output)";
-    return;
-  }
-
-  throw new Error(`Unknown snippet output mode: ${mode}`);
+  output.textContent = text || "(no output)";
 }
 
 function renderCompilationTime(milliseconds) {

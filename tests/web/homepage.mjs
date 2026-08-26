@@ -54,11 +54,16 @@ assert.match(html, /data-river-preview/);
 assert.match(html, /data-river-challenge-load/);
 assert.doesNotMatch(html, /challenge-door(?:-|\b)/, "The retired river trailer must be removed");
 assert.doesNotMatch(html, /#sketches/, "Retired sketch links must be removed");
-assert.equal((html.match(/data-runnable-sketch/g) ?? []).length, 2, "Homepage needs its focused runnable sketches");
-assert.equal((html.match(/data-snippet-source/g) ?? []).length, 4, "Runnable sketches need editable source fields");
-assert.equal((html.match(/data-snippet-run/g) ?? []).length, 2, "Runnable sketches need run controls");
-assert.equal((html.match(/data-snippet-output/g) ?? []).length, 2, "Runnable sketches need inline output");
+assert.equal((html.match(/data-runnable-sketch/g) ?? []).length, 3, "Homepage needs its focused runnable sketches");
+assert.equal((html.match(/data-snippet-source/g) ?? []).length, 5, "Runnable sketches need editable source fields");
+assert.equal((html.match(/data-snippet-run/g) ?? []).length, 3, "Runnable sketches need run controls");
+assert.equal((html.match(/data-snippet-output/g) ?? []).length, 3, "Runnable sketches need inline output");
 assert.match(html, /<textarea[^>]+data-snippet-source/);
+assert.doesNotMatch(
+  html,
+  /class="studio-window[^"]*"[^>]*aria-hidden="true"/,
+  "The studio sketch must be interactive and exposed to assistive technology"
+);
 assert.match(
   navigation,
   /href="\/download\.html"/,
@@ -96,6 +101,11 @@ assert.match(homepageJavascript, /initializeSiteNavigation\(\)/);
 assert.doesNotMatch(homepageJavascript, /function setMenu\(/);
 assert.doesNotMatch(homepageJavascript, /function decodeSemanticTokenRanges/);
 assert.doesNotMatch(homepageJavascript, /function semanticLegendsMatch/);
+assert.doesNotMatch(
+  homepageJavascript,
+  /classList\.contains\("(?:hero|language|studio)-snippet-editor"\)/,
+  "Snippet initialization must not branch for individual homepage editors"
+);
 
 const highlightCache = fs.readFileSync(files.highlightCache, "utf8");
 assert.match(highlightCache, /semanticHighlightCache/);

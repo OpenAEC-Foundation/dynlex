@@ -443,6 +443,7 @@ code {
 }
 
 .workbench-code {
+    --snippet-frame-height: 426px;
     border-right: 1px solid var(--line);
 }
 
@@ -496,6 +497,10 @@ code {
     min-height: 0;
     overflow: hidden;
     color: var(--snippet-default);
+}
+
+:is(.workbench-code, .lab-panel) > :is(.snippet-editor-shell, .snippet-editor) {
+    height: var(--snippet-frame-height);
 }
 
 .snippet-editor-shell > textarea.snippet-editor {
@@ -578,10 +583,6 @@ code {
 .snippet-editor:focus {
     background: rgba(133, 220, 255, 0.035);
     box-shadow: inset 0 0 0 1px var(--sky);
-}
-
-.hero-snippet-editor-shell {
-    height: 426px;
 }
 
 .hero-snippet-editor {

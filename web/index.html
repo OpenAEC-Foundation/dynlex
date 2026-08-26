@@ -93,7 +93,7 @@
                     </div>
                 </div>
 
-                <div class="workbench-window" data-runnable-sketch data-output-mode="number" aria-label="An editable DynLex sketch and its result">
+                <div class="workbench-window" data-runnable-sketch aria-label="An editable DynLex sketch and its result">
                     <div class="workbench-bar">
                         <div class="workbench-identity">
                             <span>SKETCH_00</span>
@@ -195,7 +195,7 @@ print square 8 as a line</textarea>
                     <span>Useful words do not stay trapped in comments or conventions. They can become callable phrases.</span>
                 </div>
 
-                <div class="language-board reveal" data-runnable-sketch data-output-mode="language">
+                <div class="language-board reveal" data-runnable-sketch>
                     <div class="lab-tabs" role="tablist" aria-label="Phrase variations">
                         <button id="tab-define" type="button" role="tab" aria-selected="true" aria-controls="panel-define" data-lab-tab="define">DEFINE</button>
                         <button id="tab-use" type="button" role="tab" aria-selected="false" aria-controls="panel-use" data-lab-tab="use" tabindex="-1">CALL</button>
@@ -249,24 +249,25 @@ announce "The sketch is alive."</textarea>
 
         <section class="studio-section" id="studio" aria-labelledby="studio-title">
             <div class="page-shell studio-shell">
-                <div class="studio-window reveal" aria-hidden="true">
+                <div class="studio-window reveal" data-runnable-sketch aria-label="An editable DynLex studio sketch and its output">
                     <div class="studio-bar">
                         <span><img src="icons/dynlex-icon.svg" alt=""> DYNLEX IDE</span>
                         <i>main.dl</i>
-                        <b>RUN ▶</b>
+                        <button type="button" data-snippet-run>RUN ▶</button>
                     </div>
                     <div class="studio-body">
                         <div class="studio-files"><span>FILES</span><strong>● main.dl</strong></div>
                         <div class="studio-code">
-                            <span><i>1</i><b>import</b> lib/std.dl</span>
-                            <span><i>2</i></span>
-                            <span><i>3</i><em>function</em> double value:</span>
-                            <span><i>4</i>&nbsp;&nbsp;&nbsp;&nbsp;<em>replacement</em>:</span>
-                            <span><i>5</i>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value * 2</span>
-                            <span><i>6</i></span>
-                            <span><i>7</i><b>print</b> double 21 <b>as a line</b></span>
+                            <textarea class="snippet-editor studio-snippet-editor" data-snippet-source aria-label="Studio DynLex source" spellcheck="false" wrap="off" autocapitalize="off" autocomplete="off">import lib/std.dl
+
+function double value:
+    replacement:
+        value * 2
+
+print double 21 as a line</textarea>
+                            <div class="snippet-diagnostics studio-diagnostics" data-snippet-diagnostics hidden></div>
                         </div>
-                        <div class="studio-output"><span>OUTPUT</span><strong>42</strong><small>Finished</small></div>
+                        <div class="studio-output"><span>OUTPUT</span><strong data-snippet-output aria-live="polite">42</strong><small data-snippet-status>READY</small></div>
                     </div>
                 </div>
 

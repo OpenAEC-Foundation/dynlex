@@ -10,9 +10,11 @@ const files = {
   html: path.join(ideDir, "index.html"),
   css: path.join(ideDir, "src/styles.css"),
   javascript: path.join(ideDir, "src/main.js"),
+  packageJson: path.join(ideDir, "package.json"),
   lspClient: path.join(projectDir, "web/lsp-client.js"),
   lspIntegration: path.join(ideDir, "src/lspIntegration.js"),
   lspProtocol: path.join(ideDir, "src/lspProtocol.js"),
+  browserDriver: path.join(projectDir, "tests/web/browser_test_driver.mjs"),
   compilerWorker: path.join(ideDir, "public/compiler/compiler-worker.js")
 };
 
@@ -24,29 +26,53 @@ for (const filePath of Object.values(files)) {
 
 const html = fs.readFileSync(files.html, "utf8");
 const javascript = fs.readFileSync(files.javascript, "utf8");
+const packageJson = JSON.parse(fs.readFileSync(files.packageJson, "utf8"));
 const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
 const lspClient = fs.readFileSync(files.lspClient, "utf8");
 const languageJavascript = `${javascript}\n${lspIntegration}`;
 const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
+const browserDriver = fs.readFileSync(files.browserDriver, "utf8");
+assert.equal(packageJson.dependencies["monaco-editor"], "^0.56.0");
+assert.equal(packageJson.devDependencies.vite, "^8.2.2");
+assert.equal(packageJson.overrides["monaco-editor"].dompurify, "3.4.14");
 assert.match(html, /<a[^>]+class="ide-brand"[^>]+href="\/"/);
 assert.match(html, /<img[^>]+class="ide-logo"[^>]+src="\/icons\/dynlex-icon\.svg"/);
 assert.doesNotMatch(html, /LLVM|WebAssembly|WASM|compiler runs/i);
 assert.doesNotMatch(html, /\sstyle="/i, "IDE presentation belongs in styles.css");
-assert.match(javascript, /monaco-editor\/esm\/vs\/editor\/editor\.api\.js/);
+assert.match(javascript, /from "monaco-editor\/editor"/);
 for (const contribution of [
-  "codeAction/browser/codeActionContributions.js",
-  "documentSymbols/browser/documentSymbols.js",
-  "gotoSymbol/browser/goToCommands.js",
-  "gotoSymbol/browser/link/goToDefinitionAtPosition.js",
-  "hover/browser/hoverContribution.js",
-  "semanticTokens/browser/documentSemanticTokens.js",
-  "semanticTokens/browser/viewportSemanticTokens.js",
-  "suggest/browser/suggestController.js"
+  "clipboard",
+  "codeAction",
+  "codicon",
+  "contextmenu",
+  "documentSymbols",
+  "find",
+  "gotoSymbol",
+  "hover",
+  "readOnlyMessage",
+  "semanticTokens"
 ]) {
-  assert.match(javascript, new RegExp(contribution.replaceAll(".", "\\.")));
+  assert.match(javascript, new RegExp(`monaco-editor/features/${contribution}/register`));
 }
+assert.match(javascript, /monaco-editor\/editor\/editor\.worker\.js/);
+assert.match(
+  javascript,
+  /monaco-editor\/editor\/contrib\/semanticTokens\/browser\/documentSemanticTokens/
+);
+assert.match(
+  javascript,
+  /monaco-editor\/editor\/contrib\/suggest\/browser\/suggestController/
+);
+assert.doesNotMatch(javascript, /monaco-editor\/features\/suggest\/register/);
+assert.doesNotMatch(
+  javascript,
+  /monaco-editor\/esm\/vs\//,
+  "IDE imports must use Monaco's supported tree-shakeable entry points"
+);
 assert.doesNotMatch(javascript, /editor\.all\.js|wordHighlighter/);
 assert.doesNotMatch(javascript, /from "monaco-editor"/, "IDE must not bundle Monaco's unused language catalog");
+assert.match(browserDriver, /\.native-edit-context/);
+assert.doesNotMatch(browserDriver, /textarea\.(?:inputarea|ime-text-area)/);
 assert.doesNotMatch(
   languageJavascript,
   /setMonarchTokensProvider/,

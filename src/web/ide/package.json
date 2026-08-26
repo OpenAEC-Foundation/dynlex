@@ -8,9 +8,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "monaco-editor": "^0.52.2"
+    "monaco-editor": "^0.56.0"
   },
   "devDependencies": {
-    "vite": "^8.1.4"
+    "vite": "^8.2.2"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.14"
+    }
   }
 }

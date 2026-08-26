@@ -165,9 +165,6 @@ export class DynLexLanguageFeatures {
       text: model.getValue()
     });
     const contentListener = model.onDidChangeContent((event) => {
-      const position = this.editor.getModel() === model
-        ? positionToLsp(this.editor.getPosition())
-        : undefined;
       this.#runDocumentOperation(
         document.applyChanges(
           event.changes.map((change) => ({
@@ -177,8 +174,7 @@ export class DynLexLanguageFeatures {
           })),
           {
             version: model.getVersionId(),
-            text: model.getValue(),
-            position
+            text: model.getValue()
           }
         )
       );

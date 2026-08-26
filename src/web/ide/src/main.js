@@ -1,17 +1,16 @@
-import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
-import "monaco-editor/esm/vs/base/browser/ui/codicons/codiconStyles.js";
-import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js";
-import "monaco-editor/esm/vs/editor/contrib/codeAction/browser/codeActionContributions.js";
-import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu.js";
-import "monaco-editor/esm/vs/editor/contrib/documentSymbols/browser/documentSymbols.js";
-import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
-import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands.js";
-import "monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition.js";
-import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution.js";
-import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution.js";
-import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/documentSemanticTokens.js";
-import "monaco-editor/esm/vs/editor/contrib/semanticTokens/browser/viewportSemanticTokens.js";
-import "monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController.js";
+import * as monaco from "monaco-editor/editor";
+import "monaco-editor/features/clipboard/register";
+import "monaco-editor/features/codeAction/register";
+import "monaco-editor/features/codicon/register";
+import "monaco-editor/features/contextmenu/register";
+import "monaco-editor/features/documentSymbols/register";
+import "monaco-editor/features/find/register";
+import "monaco-editor/features/gotoSymbol/register";
+import "monaco-editor/features/hover/register";
+import "monaco-editor/features/readOnlyMessage/register";
+import "monaco-editor/features/semanticTokens/register";
+import "monaco-editor/editor/contrib/semanticTokens/browser/documentSemanticTokens";
+import "monaco-editor/editor/contrib/suggest/browser/suggestController";
 import {
   createShaderPreview,
   validateShaderGeometryDescriptor
@@ -22,7 +21,7 @@ import "./styles.css";
 
 self.MonacoEnvironment = {
   getWorker() {
-    return new Worker(new URL("monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url), {
+    return new Worker(new URL("monaco-editor/editor/editor.worker.js", import.meta.url), {
       type: "module"
     });
   }

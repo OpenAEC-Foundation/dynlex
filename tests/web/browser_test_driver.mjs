@@ -137,7 +137,7 @@ export function sourceEditExpression(sketchIndex, sourceText) {
 export async function replaceMonacoSource(sourceText) {
   await command("Page.bringToFront");
   await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor textarea.inputarea');
+    const input = document.querySelector('.monaco-editor .native-edit-context');
     if (!input) throw new Error('Monaco input is missing');
     input.focus();
   })()`);
@@ -196,7 +196,7 @@ export async function findMonacoText(text, occurrence = 0) {
     throw new TypeError("Monaco search occurrence must be a non-negative integer");
   }
   await evaluate(`(() => {
-    const input = document.querySelector('.monaco-editor textarea.inputarea');
+    const input = document.querySelector('.monaco-editor .native-edit-context');
     if (!input) throw new Error('Monaco input is missing');
     input.focus();
   })()`);
