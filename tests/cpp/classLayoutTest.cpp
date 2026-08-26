@@ -31,9 +31,8 @@ int main() {
 
 	llvm::DataLayout aggregateAlignedLayout("e-p:32:32-i64:64-n8:16:32-a:32:32-S32");
 	llvm::StructType *byteClass = llvm::StructType::create(context, "byte_class");
-	LLVMClassLayout byteLayout = layoutLLVMClass(
-		context, aggregateAlignedLayout, *byteClass, {llvm::Type::getInt8Ty(context)}, {0}, 0
-	);
+	LLVMClassLayout byteLayout =
+		layoutLLVMClass(context, aggregateAlignedLayout, *byteClass, {llvm::Type::getInt8Ty(context)}, {0}, 0);
 	expect(byteLayout.abiAlignment == 4, "aggregate ABI alignment was not preserved");
 	expect(byteLayout.allocationSize == 4, "aggregate allocation padding was not preserved");
 	expect(byteLayout.fieldOffsets == std::vector<uint64_t>{0}, "byte class field offset changed");
@@ -48,9 +47,8 @@ int main() {
 	expect(nestedLayout.fieldOffsets == std::vector<uint64_t>({0, 4}), "nested class field offset is incorrect");
 
 	llvm::StructType *explicitlyAlignedClass = llvm::StructType::create(context, "explicitly_aligned_class");
-	LLVMClassLayout explicitlyAlignedLayout = layoutLLVMClass(
-		context, aggregateAlignedLayout, *explicitlyAlignedClass, {llvm::Type::getInt8Ty(context)}, {0}, 8
-	);
+	LLVMClassLayout explicitlyAlignedLayout =
+		layoutLLVMClass(context, aggregateAlignedLayout, *explicitlyAlignedClass, {llvm::Type::getInt8Ty(context)}, {0}, 8);
 	expect(explicitlyAlignedLayout.abiAlignment == 8, "explicit class alignment was not preserved");
 	expect(explicitlyAlignedLayout.allocationSize == 8, "explicit class tail padding was not materialized");
 	return 0;
