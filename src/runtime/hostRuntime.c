@@ -145,3 +145,74 @@ int dynlex_host_read_standard_input(char **contents, size_t *length, int32_t *en
 	*contents = buffer;
 	return 0;
 }
+
+typedef int (*DynlexHostLookupProvider)(const char *, size_t, char **, size_t *, int32_t *);
+
+static int host_lookup(
+	const char *name, size_t name_length, char *output, size_t capacity, size_t *output_length, int32_t *found,
+	int32_t *supported, DynlexHostLookupProvider provider
+) {
+	dynlex_runtime_clear_error();
+	if (name == NULL || output_length == NULL || found == NULL || supported == NULL || (output == NULL && capacity != 0)) {
+		dynlex_runtime_set_errno_error("Invalid host lookup arguments", EINVAL);
+		return -1;
+	}
+	*supported = 1;
+	char *value = NULL;
+	size_t length = 0;
+	if (provider(name, name_length, &value, &length, found) != 0)
+		return -1;
+	int result = write_host_output(value, length, output, capacity, output_length);
+	free(value);
+	return result;
+}
+
+int dynlex_host_environment_value(
+	const char *name, size_t name_length, char *output, size_t capacity, size_t *output_length, int32_t *found,
+	int32_t *supported
+) {
+	return host_lookup(name, name_length, output, capacity, output_length, found, supported, dynlex_platform_environment_value);
+}
+
+int dynlex_host_find_executable(
+	const char *name, size_t name_length, char *output, size_t capacity, size_t *output_length, int32_t *found,
+	int32_t *supported
+) {
+	return host_lookup(name, name_length, output, capacity, output_length, found, supported, dynlex_platform_find_executable);
+}
+
+int dynlex_host_platform_name(char *output, size_t capacity, size_t *output_length) {
+	dynlex_runtime_clear_error();
+	const char *name = dynlex_platform_name();
+	return write_host_output(name, strlen(name), output, capacity, output_length);
+}
+
+int dynlex_host_is_administrator(int32_t *administrator, int32_t *supported) {
+	dynlex_runtime_clear_error();
+	if (administrator == NULL || supported == NULL) {
+		dynlex_runtime_set_errno_error("Invalid administrator result argument", EINVAL);
+		return -1;
+	}
+	*supported = 1;
+	return dynlex_platform_is_administrator(administrator);
+}
+
+int dynlex_host_write_standard_error(const char *contents, size_t length, int32_t *supported) {
+	dynlex_runtime_clear_error();
+	if ((contents == NULL && length != 0) || supported == NULL) {
+		dynlex_runtime_set_errno_error("Invalid standard error contents", EINVAL);
+		return -1;
+	}
+	*supported = 1;
+	if (length != 0 && fwrite(contents, 1, length, stderr) != length) {
+		dynlex_runtime_set_errno_error("Could not write standard error", errno == 0 ? EIO : errno);
+		return -1;
+	}
+	if (fflush(stderr) != 0) {
+		dynlex_runtime_set_errno_error("Could not flush standard error", errno == 0 ? EIO : errno);
+		return -1;
+	}
+	return 0;
+}
+
+void dynlex_host_exit(int32_t status) { exit(status); }

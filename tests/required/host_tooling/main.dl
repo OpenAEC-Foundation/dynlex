@@ -1,0 +1,29 @@
+import lib/host.dl
+
+set path to the environment variable named "PATH"
+set absent to the environment variable named "DYNLEX_HOST_TEST_VARIABLE_THAT_DOES_NOT_EXIST_41C467DB"
+set empty to the environment variable named "DYNLEX_HOST_TEST_EMPTY"
+set platform to the host platform name
+set administrator to whether the process has administrator privileges
+set candidate to "sh"
+if platform's value = "Windows":
+    set candidate to "cmd"
+set executable to the executable named candidate
+
+print path succeeded as a line
+print path was found as a line
+print path's value is not empty as a line
+print absent succeeded as a line
+print absent was absent as a line
+print absent's value is empty as a line
+print empty succeeded as a line
+print empty was found as a line
+print empty's value is empty as a line
+print platform succeeded as a line
+print platform's value is not empty as a line
+print administrator succeeded as a line
+print executable succeeded as a line
+print executable was found as a line
+print executable's value is not empty as a line
+write "standard error works\n" to standard error
+print whether it succeeded as a line

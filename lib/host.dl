@@ -22,6 +22,16 @@ class:
 
 class:
     patterns:
+        [a|] host lookup result
+    members:
+        success as a boolean
+        support as a boolean
+        found as a boolean
+        value as a string
+        error message as a string
+
+class:
+    patterns:
         [a|] standard input chunk result
     members:
         success as a boolean
@@ -61,6 +71,30 @@ function {host truth result:result} is supported:
 function {host truth result:result} is unsupported:
     replacement:
         the inverse of result's support
+
+function {host lookup result:result} succeeded:
+    replacement:
+        result's success
+
+function {host lookup result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {host lookup result:result} is supported:
+    replacement:
+        result's support
+
+function {host lookup result:result} is unsupported:
+    replacement:
+        the inverse of result's support
+
+function {host lookup result:result} was found:
+    replacement:
+        result's found
+
+function {host lookup result:result} was absent:
+    replacement:
+        the inverse of result's found
 
 function {standard input chunk result:reading} succeeded:
     replacement:
@@ -273,6 +307,111 @@ function the running executable directory:
 function the user cache directory:
     execute:
         return the host path value of kind 3
+
+local function the host lookup for {string:name} of kind {integer:kind}:
+    execute:
+        set length to 0 as a word sized integer
+        set found to 0 as an integer
+        set supported to 0 as an integer
+        set outcome to 0
+        if kind = 1:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_environment_value",
+                an integer,
+                the data of name,
+                name's length as a word sized integer,
+                0 as a pointer to a byte,
+                0 as a word sized integer,
+                the address of length,
+                the address of found,
+                the address of supported
+            )
+        else:
+            set outcome to @intrinsic(
+                "call",
+                "dynlex_runtime",
+                "dynlex_host_find_executable",
+                an integer,
+                the data of name,
+                name's length as a word sized integer,
+                0 as a pointer to a byte,
+                0 as a word sized integer,
+                the address of length,
+                the address of found,
+                the address of supported
+            )
+        if outcome != 0:
+            return @intrinsic("construct", a host lookup result, false, supported != 0, false, an empty host string, the current host error message)
+        if supported = 0:
+            return @intrinsic("construct", a host lookup result, false, false, false, an empty host string, the current host error message)
+        set value to a new string buffer containing (length as an integer) bytes
+        if found != 0:
+            if kind = 1:
+                set outcome to @intrinsic(
+                    "call", "dynlex_runtime", "dynlex_host_environment_value", an integer,
+                    the data of name, name's length as a word sized integer,
+                    the data of value, length, the address of length, the address of found, the address of supported
+                )
+            else:
+                set outcome to @intrinsic(
+                    "call", "dynlex_runtime", "dynlex_host_find_executable", an integer,
+                    the data of name, name's length as a word sized integer,
+                    the data of value, length, the address of length, the address of found, the address of supported
+                )
+        if outcome != 0:
+            return @intrinsic("construct", a host lookup result, false, supported != 0, false, an empty host string, the current host error message)
+        return @intrinsic("construct", a host lookup result, true, true, found != 0, value, an empty host string)
+
+function the environment variable named name:
+    execute:
+        return the host lookup for the string form of name of kind 1
+
+function the executable named name:
+    execute:
+        return the host lookup for the string form of name of kind 2
+
+function the host platform name:
+    execute:
+        set length to 0 as a word sized integer
+        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, 0 as a pointer to a byte, 0 as a word sized integer, the address of length)
+        if outcome != 0:
+            return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
+        set value to a new string buffer containing (length as an integer) bytes
+        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, the data of value, length, the address of length)
+        if outcome != 0:
+            return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
+        return @intrinsic("construct", a host text result, true, true, value, an empty host string)
+
+function whether the process has administrator privileges:
+    execute:
+        set flag to 0 as an integer
+        set supported to 0 as an integer
+        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_is_administrator", an integer, the address of flag, the address of supported)
+        if outcome != 0:
+            return @intrinsic("construct", a host truth result, false, supported != 0, false, the current host error message)
+        if supported = 0:
+            return @intrinsic("construct", a host truth result, false, false, false, the current host error message)
+        return @intrinsic("construct", a host truth result, true, true, flag != 0, an empty host string)
+
+local function the result of writing {string:message} to standard error:
+    execute:
+        set supported to 0 as an integer
+        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_write_standard_error", an integer, the data of message, message's length as a word sized integer, the address of supported)
+        if outcome != 0:
+            return @intrinsic("construct", a host truth result, false, supported != 0, false, the current host error message)
+        if supported = 0:
+            return @intrinsic("construct", a host truth result, false, false, false, the current host error message)
+        return @intrinsic("construct", a host truth result, true, true, true, an empty host string)
+
+flex function write message to standard error:
+    replacement:
+        set the subject to the result of writing the string form of message to standard error
+
+function exit the program with status {integer:status}:
+    execute:
+        @intrinsic("call", "dynlex_runtime", "dynlex_host_exit", nothing, status)
 
 local function the chunk read from the standard input:
     execute:

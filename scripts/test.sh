@@ -32,6 +32,7 @@ if [[ "$is_windows" == "true" ]]; then
     DYNLEX_TEST_BASH="$(cygpath -w "$DYNLEX_TEST_BASH")"
 fi
 export DYNLEX_TEST_BASH
+export DYNLEX_HOST_TEST_EMPTY=""
 
 COMPILER="$PROJECT_DIR/build/dynlex"
 if [[ "$is_windows" == "true" ]]; then
@@ -486,6 +487,16 @@ for test_dir in "$TESTS_DIR"/*/; do
                 expected_run_exit=$(python3 -c 'import signal; print(128 + signal.SIGABRT)')
             fi
             ;;
+        exit:[0-9]*)
+            expected_run_exit="${expected_runtime_failure#exit:}"
+            if [[ "$expected_run_exit" -gt 255 ]]; then
+                test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+                append_test_result "FAIL" "$RED" "$test_name" "invalid exit status: $expected_run_exit" "$test_elapsed_ms"
+                ((failed++))
+                failures+=("$test_name")
+                continue
+            fi
+            ;;
         *)
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
             append_test_result \
@@ -498,13 +509,13 @@ for test_dir in "$TESTS_DIR"/*/; do
         esac
         if [[ $run_exit -eq $expected_run_exit ]]; then
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
-            append_test_result "PASS" "$GREEN" "$test_name" "expected abort" "$test_elapsed_ms"
+            append_test_result "PASS" "$GREEN" "$test_name" "expected runtime failure" "$test_elapsed_ms"
             ((passed++))
         else
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
             append_test_result \
                 "FAIL" "$RED" "$test_name" \
-                "expected abort exit $expected_run_exit, got $run_exit" "$test_elapsed_ms"
+                "expected runtime failure exit $expected_run_exit, got $run_exit" "$test_elapsed_ms"
             [[ -n "$actual_output" ]] && test_output+="  $actual_output\n"
             ((failed++))
             failures+=("$test_name")

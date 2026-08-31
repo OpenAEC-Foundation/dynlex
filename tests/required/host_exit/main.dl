@@ -1,0 +1,3 @@
+import lib/host.dl
+
+exit the program with status 7

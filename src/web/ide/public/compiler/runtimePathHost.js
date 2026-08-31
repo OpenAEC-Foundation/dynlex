@@ -791,6 +791,62 @@ export function createHostImports(memory) {
       void capacity;
       return unsupportedText(outputLength, supported);
     },
+    dynlex_host_environment_value(name, nameLength, output, capacity, outputLength, found, supported) {
+      void name; void nameLength; void output; void capacity;
+      lastError = "Environment variables are not available in the browser";
+      const lengthRange = range(memory, outputLength, 4);
+      const foundRange = range(memory, found, 4);
+      const supportedRange = range(memory, supported, 4);
+      if (!lengthRange || !foundRange || !supportedRange) throw new WebAssembly.RuntimeError("Host result is outside program memory");
+      const view = new DataView(memory.buffer);
+      view.setUint32(lengthRange.start, 0, true);
+      view.setInt32(foundRange.start, 0, true);
+      view.setInt32(supportedRange.start, 0, true);
+      return 0;
+    },
+    dynlex_host_find_executable(name, nameLength, output, capacity, outputLength, found, supported) {
+      void name; void nameLength; void output; void capacity;
+      lastError = "Executable discovery is not available in the browser";
+      const lengthRange = range(memory, outputLength, 4);
+      const foundRange = range(memory, found, 4);
+      const supportedRange = range(memory, supported, 4);
+      if (!lengthRange || !foundRange || !supportedRange) throw new WebAssembly.RuntimeError("Host result is outside program memory");
+      const view = new DataView(memory.buffer);
+      view.setUint32(lengthRange.start, 0, true);
+      view.setInt32(foundRange.start, 0, true);
+      view.setInt32(supportedRange.start, 0, true);
+      return 0;
+    },
+    dynlex_host_platform_name(output, capacity, outputLength) {
+      const bytes = new TextEncoder().encode("Browser");
+      const lengthRange = range(memory, outputLength, 4);
+      if (!lengthRange) throw new WebAssembly.RuntimeError("Host result is outside program memory");
+      new DataView(memory.buffer).setUint32(lengthRange.start, bytes.length, true);
+      if (output === 0) return 0;
+      const outputRange = range(memory, output, capacity);
+      if (!outputRange || capacity < bytes.length) return -1;
+      new Uint8Array(memory.buffer, outputRange.start, bytes.length).set(bytes);
+      return 0;
+    },
+    dynlex_host_is_administrator(administrator, supported) {
+      const result = range(memory, administrator, 4);
+      const supportedRange = range(memory, supported, 4);
+      if (!result || !supportedRange) throw new WebAssembly.RuntimeError("Host result is outside program memory");
+      new DataView(memory.buffer).setInt32(result.start, 0, true);
+      new DataView(memory.buffer).setInt32(supportedRange.start, 0, true);
+      return 0;
+    },
+    dynlex_host_write_standard_error(contents, length, supported) {
+      void contents; void length;
+      lastError = "Standard error is not available in the browser";
+      const supportedRange = range(memory, supported, 4);
+      if (!supportedRange) throw new WebAssembly.RuntimeError("Host result is outside program memory");
+      new DataView(memory.buffer).setInt32(supportedRange.start, 0, true);
+      return 0;
+    },
+    dynlex_host_exit(status) {
+      throw new WebAssembly.RuntimeError(`Program exited with status ${status}`);
+    },
     dynlex_host_user_cache_directory(output, capacity, outputLength, supported) {
       void output;
       void capacity;

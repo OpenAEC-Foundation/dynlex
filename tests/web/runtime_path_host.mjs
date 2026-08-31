@@ -11,8 +11,14 @@ const importNames = [
   "dynlex_host_user_cache_directory",
   "dynlex_host_executable_directory",
   "dynlex_host_executable_path",
+  "dynlex_host_environment_value",
+  "dynlex_host_find_executable",
+  "dynlex_host_exit",
+  "dynlex_host_is_administrator",
+  "dynlex_host_platform_name",
   "dynlex_host_platform_is_windows",
   "dynlex_host_read_standard_input",
+  "dynlex_host_write_standard_error",
   "dynlex_path_binary",
   "dynlex_path_error_message",
   "dynlex_path_file_uri",
@@ -190,6 +196,26 @@ assert.equal(new DataView(memory.buffer).getInt32(8024, true), 0);
 assert.match(errorMessage("dynlex_host_error_message"), /browser/i);
 
 const view = new DataView(memory.buffer);
+const hostNameLength = 8050;
+assert.equal(env.dynlex_host_platform_name(0, 0, hostNameLength), 0);
+assert.equal(view.getUint32(hostNameLength, true), 7);
+assert.equal(env.dynlex_host_platform_name(8060, 7, hostNameLength), 0);
+assert.equal(decoder.decode(new Uint8Array(memory.buffer).subarray(8060, 8067)), "Browser");
+assert.equal(env.dynlex_host_is_administrator(8070, 8078), 0);
+assert.equal(view.getInt32(8070, true), 0);
+assert.equal(view.getInt32(8078, true), 0);
+const lookup = writeInput("PATH");
+assert.equal(env.dynlex_host_environment_value(lookup.pointer, lookup.length, 0, 0, 8074, 8078, 8082), 0);
+assert.equal(view.getUint32(8074, true), 0);
+assert.equal(view.getInt32(8078, true), 0);
+assert.equal(view.getInt32(8082, true), 0);
+assert.match(errorMessage("dynlex_host_error_message"), /environment/i);
+assert.equal(env.dynlex_host_find_executable(lookup.pointer, lookup.length, 0, 0, 8074, 8078, 8082), 0);
+assert.match(errorMessage("dynlex_host_error_message"), /executable/i);
+assert.equal(env.dynlex_host_write_standard_error(lookup.pointer, lookup.length, 8082), 0);
+assert.match(errorMessage("dynlex_host_error_message"), /standard error/i);
+assert.throws(() => env.dynlex_host_exit(7), /status 7/i);
+
 view.setUint32(8030, 99, true);
 view.setUint32(8034, 99, true);
 view.setInt32(8038, 99, true);
