@@ -1,4 +1,5 @@
 #pragma once
+#include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -207,6 +208,65 @@ struct CompletionList {
 inline void to_json(Json &j, const CompletionList &list) {
 	j = Json{{"isIncomplete", list.isIncomplete}, {"items", list.items}};
 }
+
+struct PatternFrontierTransition {
+	std::string kind;
+	std::string text;
+};
+
+inline void to_json(Json &j, const PatternFrontierTransition &transition) {
+	j = Json{{"kind", transition.kind}};
+	if (!transition.text.empty())
+		j["text"] = transition.text;
+}
+
+struct PatternFrontier {
+	std::string patternKind;
+	bool canComplete = false;
+	std::vector<PatternFrontierTransition> transitions;
+};
+
+inline void to_json(Json &j, const PatternFrontier &frontier) {
+	j = Json{
+		{"patternKind", frontier.patternKind},
+		{"canComplete", frontier.canComplete},
+		{"transitions", frontier.transitions},
+	};
+}
+
+struct PatternFrontierList {
+	std::vector<PatternFrontier> frontiers;
+};
+
+inline void to_json(Json &j, const PatternFrontierList &list) { j = Json{{"frontiers", list.frontiers}}; }
+
+struct FilterContinuationsParams : TextDocumentPositionParams {
+	std::vector<std::string> continuations;
+};
+
+inline void from_json(const Json &j, FilterContinuationsParams &p) {
+	from_json(j, static_cast<TextDocumentPositionParams &>(p));
+	for (const Json &continuation : j.at("continuations")) {
+		if (continuation.is_string()) {
+			p.continuations.push_back(continuation.get<std::string>());
+			continue;
+		}
+		std::string bytes;
+		for (const Json &byte : continuation) {
+			unsigned int value = byte.get<unsigned int>();
+			if (value > std::numeric_limits<unsigned char>::max())
+				throw Json::out_of_range::create(401, "continuation byte is outside the byte range", &byte);
+			bytes += static_cast<char>(value);
+		}
+		p.continuations.push_back(std::move(bytes));
+	}
+}
+
+struct FilterContinuationsResult {
+	std::vector<size_t> accepted;
+};
+
+inline void to_json(Json &j, const FilterContinuationsResult &result) { j = Json{{"accepted", result.accepted}}; }
 
 // Content change event for incremental sync
 struct TextDocumentContentChangeEvent {

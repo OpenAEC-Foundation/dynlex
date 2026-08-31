@@ -525,6 +525,47 @@ CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &para
 	);
 }
 
+PatternFrontierList DynLexServer::onPatternFrontier(const TextDocumentPositionParams &params) {
+	auto docIt = documents.find(params.textDocument.uri);
+	if (docIt == documents.end() || isConfigDocumentUri(params.textDocument.uri))
+		return {};
+
+	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
+	std::string_view line = docIt->second->getLine(params.position.line);
+	size_t character = std::min<size_t>(params.position.character, line.size());
+	return collectPatternFrontiers(
+		CompletionContext{
+			.parseContext = completionContext,
+			.uri = params.textDocument.uri,
+			.linePrefix = std::string(line.substr(0, character)),
+			.workspaceRootPath = workspaceRootPath,
+			.line = params.position.line,
+			.character = static_cast<int>(character),
+		}
+	);
+}
+
+FilterContinuationsResult DynLexServer::onFilterContinuations(const FilterContinuationsParams &params) {
+	auto docIt = documents.find(params.textDocument.uri);
+	if (docIt == documents.end() || isConfigDocumentUri(params.textDocument.uri))
+		return {};
+
+	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
+	std::string_view line = docIt->second->getLine(params.position.line);
+	size_t character = std::min<size_t>(params.position.character, line.size());
+	return filterPatternContinuations(
+		CompletionContext{
+			.parseContext = completionContext,
+			.uri = params.textDocument.uri,
+			.linePrefix = std::string(line.substr(0, character)),
+			.workspaceRootPath = workspaceRootPath,
+			.line = params.position.line,
+			.character = static_cast<int>(character),
+		},
+		params.continuations
+	);
+}
+
 // Find the deepest expression containing the cursor position.
 // Depth-first: child expressions take priority over parents,
 // matching the semantic tokenizer's slicing behavior.

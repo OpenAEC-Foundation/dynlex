@@ -11,6 +11,7 @@
 #include "variable.h"
 #include <algorithm>
 #include <cctype>
+#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -211,6 +212,18 @@ bool subtreeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &source
 	return false;
 }
 
+bool nodeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &sourceFile) {
+	if (!node)
+		return false;
+	return std::any_of(
+		node->matchingDefinitions.begin(), node->matchingDefinitions.end(),
+		[&](const PatternDefinition *definition) {
+		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
+		return isPatternDefinitionVisibleFromSource(*definition, sourceFile);
+	}
+	);
+}
+
 std::set<std::string> visibleVariableNames(const CompletionContext &context) {
 	SourceFile *sourceFile = completionSourceFile(context);
 	Section *scope = context.parseContext->mainSection;
@@ -341,17 +354,18 @@ struct MatcherFrontier {
 	std::set<std::string> acceptedVariables;
 };
 
-std::optional<MatcherFrontier>
-collectMatcherFrontier(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
-	struct Candidate {
-		MatcherFrontier frontier;
-		size_t variableCount{};
-		size_t parentDepth{};
-		size_t completedSubmatchCount{};
-	};
-	std::vector<Candidate> candidates;
+struct MatcherFrontierCandidate {
+	MatcherFrontier frontier;
+	size_t variableCount{};
+	size_t parentDepth{};
+	size_t completedSubmatchCount{};
+};
+
+std::vector<MatcherFrontierCandidate>
+collectMatcherFrontierCandidates(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
+	std::vector<MatcherFrontierCandidate> candidates;
 	if (!context.parseContext || !context.parseContext->patternTrees[(int)sectionType])
-		return std::nullopt;
+		return candidates;
 
 	std::string normalizedPrefix = normalizeCompletionPatternPrefix(linePrefix);
 	Expression expr;
@@ -360,6 +374,15 @@ collectMatcherFrontier(const CompletionContext &context, SectionType sectionType
 	expr.range.line = &syntheticLine;
 	PatternReference reference(&expr, sectionType);
 	reference.patternElements = getPatternElements(reference.pattern.text);
+	std::deque<Expression> syntheticArguments;
+	for (const PatternElement &element : reference.patternElements) {
+		if (element.type != PatternElement::Type::Variable)
+			continue;
+		Expression &argument = syntheticArguments.emplace_back();
+		argument.kind = Expression::Kind::TypedPlaceholder;
+		argument.range.line = &syntheticLine;
+		expr.arguments.push_back(&argument);
+	}
 
 	MatchStorage storage;
 	std::vector<MatchProgress> queue = {MatchProgress(context.parseContext, &reference)};
@@ -423,13 +446,21 @@ collectMatcherFrontier(const CompletionContext &context, SectionType sectionType
 			std::make_move_iterator(matchStep.nextMatches.end())
 		);
 	}
+	return candidates;
+}
+
+std::optional<MatcherFrontier>
+collectMatcherFrontier(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
+	std::vector<MatcherFrontierCandidate> candidates = collectMatcherFrontierCandidates(context, sectionType, linePrefix);
 	if (candidates.empty())
 		return std::nullopt;
-	const Candidate &best =
-		*std::min_element(candidates.begin(), candidates.end(), [](const Candidate &left, const Candidate &right) {
+	const MatcherFrontierCandidate &best = *std::min_element(
+		candidates.begin(), candidates.end(),
+		[](const MatcherFrontierCandidate &left, const MatcherFrontierCandidate &right) {
 		return std::tie(left.variableCount, left.parentDepth, left.completedSubmatchCount) <
 			   std::tie(right.variableCount, right.parentDepth, right.completedSubmatchCount);
-	});
+	}
+	);
 	return best.frontier;
 }
 
@@ -607,6 +638,73 @@ struct PartialMatches {
 	}
 };
 
+PatternFrontier describePatternFrontier(
+	const MatcherFrontier &matcherFrontier, SectionType sectionType, const SourceFile &sourceFile,
+	std::optional<std::string_view> partial
+) {
+	PatternFrontier result;
+	result.patternKind = sectionTypeToString(sectionType);
+	result.canComplete = !partial && nodeHasVisibleDefinition(matcherFrontier.node, sourceFile);
+
+	if (matcherFrontier.node) {
+		for (const auto &[literal, child] : matcherFrontier.node->literalChildren) {
+			if (partial && !literal.starts_with(*partial))
+				continue;
+			std::string remaining = literal.substr(partial ? partial->size() : 0);
+			if (!remaining.empty() && subtreeHasVisibleDefinition(child, sourceFile))
+				result.transitions.push_back({"literal", std::move(remaining)});
+		}
+		if (!partial && nodeAcceptsArgument(matcherFrontier.node, sourceFile))
+			result.transitions.push_back({"argument", {}});
+		if (matcherFrontier.node->wordChild && subtreeHasVisibleDefinition(matcherFrontier.node->wordChild, sourceFile)) {
+			result.transitions.push_back({"word", {}});
+		}
+	}
+
+	std::sort(
+		result.transitions.begin(), result.transitions.end(),
+		[](const PatternFrontierTransition &left, const PatternFrontierTransition &right) {
+		return std::tie(left.kind, left.text) < std::tie(right.kind, right.text);
+	}
+	);
+	return result;
+}
+
+std::string patternFrontierKey(const PatternFrontier &frontier) {
+	std::string key = frontier.patternKind;
+	key += frontier.canComplete ? "\1" : "\0";
+	for (const PatternFrontierTransition &transition : frontier.transitions) {
+		key += transition.kind;
+		key += '\0';
+		key += transition.text;
+		key += '\1';
+	}
+	return key;
+}
+
+void appendPatternFrontiers(
+	const CompletionContext &context, SectionType sectionType, const CompletionPrefix &prefix,
+	std::vector<PatternFrontier> &frontiers, std::set<std::string> &seen
+) {
+	SourceFile *sourceFile = completionSourceFile(context);
+	auto append = [&](const std::vector<MatcherFrontierCandidate> &candidates, std::optional<std::string_view> partial) {
+		for (const MatcherFrontierCandidate &candidate : candidates) {
+			PatternFrontier frontier = describePatternFrontier(candidate.frontier, sectionType, *sourceFile, partial);
+			if (!frontier.canComplete && frontier.transitions.empty())
+				continue;
+			if (seen.insert(patternFrontierKey(frontier)).second)
+				frontiers.push_back(std::move(frontier));
+		}
+	};
+
+	append(
+		collectMatcherFrontierCandidates(context, sectionType, prefix.committed),
+		prefix.partial ? std::optional<std::string_view>(prefix.partial->text) : std::nullopt
+	);
+	if (prefix.partial)
+		append(collectMatcherFrontierCandidates(context, sectionType, prefix.normalized), std::nullopt);
+}
+
 PartialMatches collectPartialLiteralSuggestions(
 	PatternTreeNode *node, std::string_view partial, std::vector<CompletionItem> &items, std::set<std::string> &seen,
 	std::string_view detailPrefix, std::string_view sortPrefix, const SourceFile &sourceFile, const CompletionContext &context
@@ -766,6 +864,58 @@ CompletionList collectCompletions(const CompletionContext &context) {
 	collectMatcherFrontierCompletions(SectionType::Section, "section pattern", context, matchPrefix, items, seenLabels);
 
 	result.items = std::move(items);
+	return result;
+}
+
+PatternFrontierList collectPatternFrontiers(const CompletionContext &context) {
+	PatternFrontierList result;
+	if (!hasCompilationStage(context.parseContext, ParseContext::CompilationStage::ResolvedPatterns))
+		return result;
+
+	std::string matchPrefix = normalizeCompletionWhitespace(trimLeft(context.linePrefix));
+	CompletionPrefix prefix = splitCompletionPrefix(matchPrefix);
+	std::set<std::string> seen;
+	appendPatternFrontiers(context, SectionType::Function, prefix, result.frontiers, seen);
+	appendPatternFrontiers(context, SectionType::Section, prefix, result.frontiers, seen);
+	return result;
+}
+
+bool patternLineCanTerminate(const CompletionContext &context) {
+	if (normalizeCompletionWhitespace(trimLeft(context.linePrefix)).empty())
+		return true;
+	PatternFrontierList frontiers = collectPatternFrontiers(context);
+	return std::any_of(frontiers.frontiers.begin(), frontiers.frontiers.end(), [](const PatternFrontier &frontier) {
+		return frontier.canComplete;
+	});
+}
+
+bool canContinuePatternSource(const CompletionContext &context, std::string_view continuation) {
+	CompletionContext candidateContext = context;
+	size_t segmentStart = 0;
+	while (true) {
+		size_t newline = continuation.find('\n', segmentStart);
+		candidateContext.linePrefix.append(continuation.substr(segmentStart, newline - segmentStart));
+		candidateContext.character = static_cast<int>(candidateContext.linePrefix.size());
+		if (newline == std::string_view::npos)
+			return !collectPatternFrontiers(candidateContext).frontiers.empty();
+		if (!patternLineCanTerminate(candidateContext))
+			return false;
+		candidateContext.linePrefix.clear();
+		candidateContext.line++;
+		candidateContext.character = 0;
+		segmentStart = newline + 1;
+	}
+}
+
+FilterContinuationsResult
+filterPatternContinuations(const CompletionContext &context, const std::vector<std::string> &continuations) {
+	FilterContinuationsResult result;
+	if (!hasCompilationStage(context.parseContext, ParseContext::CompilationStage::ResolvedPatterns))
+		return result;
+	for (size_t index = 0; index < continuations.size(); index++) {
+		if (canContinuePatternSource(context, continuations[index]))
+			result.accepted.push_back(index);
+	}
 	return result;
 }
 

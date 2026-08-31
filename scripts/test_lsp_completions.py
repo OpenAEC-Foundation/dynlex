@@ -35,6 +35,48 @@ def completion_labels(
     }
 
 
+def pattern_frontiers(
+    session: LspSession,
+    uri: str,
+    prefix: str,
+    edit_line: int = EDIT_LINE,
+) -> list[dict]:
+    result = session.request(
+        "dynlex/patternFrontier",
+        {
+            "textDocument": {"uri": uri},
+            "position": {"line": edit_line, "character": len(prefix)},
+        },
+    )
+    return result["frontiers"]
+
+
+def frontier_transitions(frontiers: list[dict]) -> set[tuple[str, str]]:
+    return {
+        (transition["kind"], transition.get("text", ""))
+        for frontier in frontiers
+        for transition in frontier["transitions"]
+    }
+
+
+def accepted_continuations(
+    session: LspSession,
+    uri: str,
+    continuations: list[str],
+    prefix: str,
+    edit_line: int = EDIT_LINE,
+) -> set[int]:
+    result = session.request(
+        "dynlex/filterContinuations",
+        {
+            "textDocument": {"uri": uri},
+            "position": {"line": edit_line, "character": len(prefix)},
+            "continuations": continuations,
+        },
+    )
+    return set(result["accepted"])
+
+
 def replace_line(
     session: LspSession,
     uri: str,
@@ -160,6 +202,53 @@ def test_substitution_completions(root: pathlib.Path) -> None:
         session.close()
 
 
+def test_numeric_pattern_frontier(root: pathlib.Path) -> None:
+    document = root / "tests" / "lsp" / "pattern_frontier_numeric" / "main.dl"
+    uri = to_file_uri(document)
+    source = document.read_text()
+    line_index = 4
+    line = source.splitlines()[line_index]
+    session = LspSession(default_server_path(root), root, False, False)
+    try:
+        initialize_session(session, root)
+        session.notify(
+            "textDocument/didOpen",
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "dynlex",
+                    "version": 1,
+                    "text": source,
+                }
+            },
+        )
+        frontiers = pattern_frontiers(session, uri, line, line_index)
+        if not any(frontier["canComplete"] for frontier in frontiers):
+            raise AssertionError(
+                "a complete pattern ending in a numeric argument was not reported "
+                f"as complete: {frontiers!r}"
+            )
+
+        prefix = "set x to"
+        continuations = [
+            " 1\n",
+            " 1\nset y to ",
+            " 1 junk\n",
+            list(b" nonsense words\n"),
+        ]
+        accepted = accepted_continuations(
+            session, uri, continuations, prefix, line_index
+        )
+        expected_accepted = {0, 1}
+        if accepted != expected_accepted:
+            raise AssertionError(
+                "batch continuation filtering did not validate complete and partial "
+                f"lines: expected {sorted(expected_accepted)!r}, got {sorted(accepted)!r}"
+            )
+    finally:
+        session.close()
+
+
 def main() -> int:
     root = pathlib.Path(__file__).resolve().parent.parent
     document = root / "tests" / "lsp" / "completions" / "main.dl"
@@ -224,6 +313,51 @@ def main() -> int:
                 f"row completion leaked argument-first patterns: {sorted(row_labels)!r}"
             )
 
+        row_frontiers = pattern_frontiers(session, uri, "row ")
+        row_transitions = frontier_transitions(row_frontiers)
+        expected_row_transitions = {
+            ("literal", "across"),
+            ("literal", "back"),
+            ("literal", "to"),
+        }
+        if not expected_row_transitions.issubset(row_transitions):
+            raise AssertionError(
+                "pattern frontier omitted viable literal pattern-tree edges: "
+                f"{sorted(row_transitions)!r}"
+            )
+        if any(frontier["canComplete"] for frontier in row_frontiers):
+            raise AssertionError("incomplete 'row ' pattern was reported as complete")
+
+        edit("row a")
+        partial_row_transitions = frontier_transitions(pattern_frontiers(session, uri, "row a"))
+        if ("literal", "cross") not in partial_row_transitions:
+            raise AssertionError(
+                "pattern frontier did not consume the generated literal prefix: "
+                f"{sorted(partial_row_transitions)!r}"
+            )
+        if ("literal", "across") in partial_row_transitions:
+            raise AssertionError(
+                "pattern frontier returned an already partially consumed literal"
+            )
+        if ("literal", "") in partial_row_transitions:
+            raise AssertionError("pattern frontier returned an empty literal transition")
+
+        edit("row")
+        continuations = [
+            " across",
+            " back",
+            " sideways",
+            " acrossx\n",
+        ]
+        accepted = accepted_continuations(session, uri, continuations, "row")
+        expected_accepted = {0, 1, 2}
+        if accepted != expected_accepted:
+            raise AssertionError(
+                "batch continuation filtering did not follow recursive matcher paths "
+                f"across token and line boundaries: expected {sorted(expected_accepted)!r}, "
+                f"got {sorted(accepted)!r}"
+            )
+
         unknown_labels = edit("x ")
         if not {"*", "= "}.issubset(unknown_labels):
             raise AssertionError(
@@ -246,6 +380,12 @@ def main() -> int:
         if any(label.startswith("<") and label.endswith(">") for label in introduced_labels):
             raise AssertionError(
                 f"completion invented placeholder names: {sorted(introduced_labels)!r}"
+            )
+
+        introduced_frontiers = pattern_frontiers(session, uri, "set x to ")
+        if ("argument", "") not in frontier_transitions(introduced_frontiers):
+            raise AssertionError(
+                "pattern frontier did not expose the recursive argument edge"
             )
 
         existing_labels = edit("set ")
@@ -283,6 +423,7 @@ def main() -> int:
         session.close()
 
     test_substitution_completions(root)
+    test_numeric_pattern_frontier(root)
     print("Completions follow literal specificity and only suggest known names")
     return 0
 

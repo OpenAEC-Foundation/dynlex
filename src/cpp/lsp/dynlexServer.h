@@ -24,6 +24,8 @@ class DynLexServer : public LanguageServer {
 	void onDidClose(const DidCloseTextDocumentParams &params) override;
 	void onActiveCursorChanged(const ActiveCursorParams &params) override;
 	CompletionList onCompletion(const TextDocumentPositionParams &params) override;
+	PatternFrontierList onPatternFrontier(const TextDocumentPositionParams &params) override;
+	FilterContinuationsResult onFilterContinuations(const FilterContinuationsParams &params) override;
 	std::optional<Location> onDefinition(const TextDocumentPositionParams &params) override;
 	std::optional<Hover> onHover(const TextDocumentPositionParams &params) override;
 	SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params) override;

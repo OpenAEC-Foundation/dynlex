@@ -16,6 +16,9 @@ struct CompletionContext {
 };
 
 CompletionList collectCompletions(const CompletionContext &context);
+PatternFrontierList collectPatternFrontiers(const CompletionContext &context);
+FilterContinuationsResult
+filterPatternContinuations(const CompletionContext &context, const std::vector<std::string> &continuations);
 
 std::string
 renderCompletionDebugReport(ParseContext &context, const std::string &path, int zeroBasedLine, int zeroBasedCharacter);

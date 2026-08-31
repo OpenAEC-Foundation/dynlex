@@ -215,6 +215,12 @@ void LanguageServer::handleRequest(const Json &message) {
 		} else if (method == "textDocument/completion") {
 			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
 			sendResponse(id, onCompletion(p));
+		} else if (method == "dynlex/patternFrontier") {
+			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
+			sendResponse(id, onPatternFrontier(p));
+		} else if (method == "dynlex/filterContinuations") {
+			FilterContinuationsParams p = params.get<FilterContinuationsParams>();
+			sendResponse(id, onFilterContinuations(p));
 		} else if (method == "textDocument/definition") {
 			TextDocumentPositionParams p = params.get<TextDocumentPositionParams>();
 			auto result = onDefinition(p);
@@ -378,6 +384,10 @@ std::optional<Location> LanguageServer::onDefinition(const TextDocumentPositionP
 std::optional<Hover> LanguageServer::onHover(const TextDocumentPositionParams & /*params*/) { return std::nullopt; }
 
 CompletionList LanguageServer::onCompletion(const TextDocumentPositionParams & /*params*/) { return {}; }
+
+PatternFrontierList LanguageServer::onPatternFrontier(const TextDocumentPositionParams & /*params*/) { return {}; }
+
+FilterContinuationsResult LanguageServer::onFilterContinuations(const FilterContinuationsParams & /*params*/) { return {}; }
 
 SemanticTokens LanguageServer::onSemanticTokensFull(const SemanticTokensParams & /*params*/) { return SemanticTokens{}; }
 

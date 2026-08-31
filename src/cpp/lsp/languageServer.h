@@ -64,6 +64,8 @@ class LanguageServer {
 
 	// Called for completion requests
 	virtual CompletionList onCompletion(const TextDocumentPositionParams &params);
+	virtual PatternFrontierList onPatternFrontier(const TextDocumentPositionParams &params);
+	virtual FilterContinuationsResult onFilterContinuations(const FilterContinuationsParams &params);
 
 	// Called for semantic tokens request
 	virtual SemanticTokens onSemanticTokensFull(const SemanticTokensParams &params);

@@ -1,0 +1,5 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+set x to 1
