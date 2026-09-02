@@ -8,6 +8,7 @@ A natural-language-like programming language that compiles to native code via LL
 - Compiles to native executables via LLVM
 - Static typing with full type inference
 - Standard library written in DynLex itself
+- Named compile-time values via zero-argument replacement functions (see [`docs/named_compile_time_values.md`](./docs/named_compile_time_values.md))
 - VS Code extension with LSP support
 
 ## Build
