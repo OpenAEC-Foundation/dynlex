@@ -670,6 +670,10 @@ jobs:
             -o "$SMOKE_ROOT/mouse-input"
           xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
             "$SMOKE_ROOT/mouse-input"
+          "$DYNLEX_BIN" tests/release/graphics_scroll_callback_smoke.dl \
+            -o "$SMOKE_ROOT/graphics-scroll-callback"
+          xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
+            "$SMOKE_ROOT/graphics-scroll-callback"
 
   smoke-windows:
     needs: [package-windows]

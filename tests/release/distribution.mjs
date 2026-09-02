@@ -326,6 +326,10 @@ assert.match(
   releaseWorkflow,
   /smoke-linux:[\s\S]*sudo apt-get install --yes xvfb[\s\S]*mouse_input_smoke\.dl[\s\S]*xvfb-run[\s\S]*mouse-input/,
 );
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*graphics_scroll_callback_smoke\.dl[\s\S]*xvfb-run[\s\S]*graphics-scroll-callback/,
+);
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
 assert.match(releaseWorkflow, /prepare-release-assets\.sh/);
 assert.match(releaseWorkflow, /workflow_dispatch:/);

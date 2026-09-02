@@ -213,6 +213,14 @@ function register the graphics viewport resize callback [of|for] window:
 	execute:
 		ignore @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer to a byte, window, the function named "resize the graphics viewport of $ to $ and $")
 
+# Registering the same window again replaces its existing scroll callback, as
+# specified by GLFW. The callback name is fixed at compile time so its exposed
+# function can be compiled with the exact GLFWscrollfun ABI: a window pointer
+# followed by two C doubles (DynLex floating-point numbers).
+flex function register the graphics scroll callback named {fixed C string:callback} [of|for] window:
+	replacement:
+		ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, the function named callback)
+
 function a new window with width {integer:width} and height {integer:height}:
 	execute:
 		set initialized to @intrinsic("call", "glfw", "glfwInit", an integer)

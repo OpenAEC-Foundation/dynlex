@@ -1,0 +1,8 @@
+import lib/graphics.dl
+
+exposed function record the graphics scroll of {C string:window} with horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
+    execute:
+        print x as a line
+        print y as a line
+
+record the graphics scroll of 0 as a pointer to a byte with horizontal offset 1.25 and vertical offset (0.0 - 2.5)
