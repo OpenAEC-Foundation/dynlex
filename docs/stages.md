@@ -47,9 +47,14 @@ We discover what is a variable based on these principles:
 - Words authored as `[word]` or `{literal:word}` are always literal and are never eligible for implicit parameter promotion.
 - A single word as an argument to an intrinsic is always a variable, unless it references a single-word function. Since functions are parsed before references to them, we are guaranteed that single-word functions exist from the start.
 - Alphanumeric strings in argument positions of pattern calls are variables.
+- `{name}` explicitly introduces or references a variable. The name can contain multiple words separated by spaces.
+- `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
+- After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
+
+Capture names are type-agnostic unless a type expression appears before the colon. There is no lexical word-capture type; finite concepts such as shader stages are represented by literal patterns, and text values use an ordinary string type constraint.
 
 We use this logic to determine what is a variable and what is not, all the way from the simplest intrinsics to the most complex functions.
 

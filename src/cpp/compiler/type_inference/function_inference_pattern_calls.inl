@@ -383,7 +383,7 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	}
 
 	// Build argument types for overload selection.
-	// Arguments are sorted by source position and include both Variable and Word captures.
+	// Arguments are sorted by source position and include captured variables.
 	std::vector<DataType> argTypesForOverload;
 	std::vector<bool> argCompileTimeKnown;
 	std::vector<CompileTimeValue> argCompileTimeValues;

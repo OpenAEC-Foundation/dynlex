@@ -26,7 +26,11 @@ function whether shared support [before the check|after the check] is {boolean:s
     execute:
         return support
 
-function the label named {word:label}:
+function label value:
+    replacement:
+        @intrinsic("type", "string")
+
+function the label named {label value:label}:
     execute:
         return label
 
@@ -50,7 +54,7 @@ ignore whether support is available before the check when @intrinsic("equal", 1,
 ignore whether @intrinsic("equal", 1, 1) means support is available after the check
 ignore whether shared support before the check is @intrinsic("equal", 1, 1)
 ignore whether shared support after the check is @intrinsic("equal", 1, 1)
-ignore the label named token
+ignore the label named "token"
 ignore the selected value is @intrinsic("equal", 1, 1)
 ignore @intrinsic("equal", 1, 1) is the selected value
 ignore the implicitly selected @intrinsic("equal", 1, 1)

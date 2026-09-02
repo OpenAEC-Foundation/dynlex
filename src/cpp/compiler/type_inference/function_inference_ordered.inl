@@ -268,6 +268,8 @@ static void inferOrderedExpression(
 				markCurrentInstantiationImpure(context);
 			if (var->type.isDeduced())
 				expr->type = var->type;
+			else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
+				expr->type = var->declaredType;
 		}
 		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
 		break;

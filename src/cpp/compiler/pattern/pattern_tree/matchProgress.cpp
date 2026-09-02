@@ -44,6 +44,46 @@ struct RemainingPatternElement {
 	std::string_view text;
 };
 
+struct ExplicitVariableCandidate {
+	std::string name;
+	size_t elementCount{};
+	size_t textLength{};
+};
+
+static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidates(const MatchProgress &progress) {
+	std::vector<ExplicitVariableCandidate> result;
+	if (!progress.patternReference || progress.sourceCharIndex != 0 || !progress.patternReference->range().line)
+		return result;
+	const std::vector<PatternElement> &sourceElements = progress.patternReference->patternElements;
+	std::unordered_set<std::string> shadowedNames;
+	for (Section *section = progress.patternReference->range().section(); section; section = section->parent) {
+		for (const std::string &name : section->explicitVariableNames) {
+			if (!shadowedNames.insert(name).second || name.find(' ') == std::string::npos)
+				continue;
+			std::vector<PatternElement> nameElements = getPatternElements(name);
+			if (nameElements.empty() || progress.sourceElementIndex + nameElements.size() > sourceElements.size())
+				continue;
+			bool matches = true;
+			for (size_t index = 0; index < nameElements.size(); index++) {
+				const PatternElement &source = sourceElements[progress.sourceElementIndex + index];
+				const PatternElement &expected = nameElements[index];
+				if (source.type != expected.type || source.text != expected.text) {
+					matches = false;
+					break;
+				}
+			}
+			if (matches)
+				result.push_back({name, nameElements.size(), name.size()});
+		}
+	}
+	std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
+		if (left.elementCount != right.elementCount)
+			return left.elementCount < right.elementCount;
+		return left.name < right.name;
+	});
+	return result;
+}
+
 static RemainingPatternElement
 remainingPatternElement(const PatternReference *reference, size_t elementIndex, size_t charIndex) {
 	if (!reference || elementIndex >= reference->patternElements.size())
@@ -117,8 +157,6 @@ void collectMatchDependencies(const MatchControlState &state, MatchDependencies 
 
 	if (!state.currentNode->argumentChild)
 		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.currentNode, 0, {}});
-	if (element.type == PatternElement::Type::VariableLike && !state.currentNode->wordChild)
-		dependencies.push_back({MatchDependency::Kind::WordChild, state.currentNode, 0, {}});
 	if (element.type == PatternElement::Type::Variable) {
 		if (std::optional<std::string> numericSpelling =
 				numericSourceSpelling(state.patternReference, state.sourceArgumentIndex);
@@ -399,6 +437,26 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				nextMatches.push_back(std::move(substituteStep));
 			};
 
+			auto pushExplicitMultiWordCaptures = [&]() {
+				for (const ExplicitVariableCandidate &candidate : explicitMultiWordVariableCandidates(*this)) {
+					MatchProgress substituteStep = *this;
+					substituteStep.currentNode = currentNode->argumentChild;
+					storage.append(substituteStep.match.nodesPassed, substituteStep.currentNode);
+					substituteStep.sourceElementIndex += candidate.elementCount;
+					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
+					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + candidate.textLength);
+					size_t variableIndex = substituteStep.match.discoveredVariables.size();
+					storage.append(substituteStep.match.discoveredVariables, VariableMatch{candidate.name, lineStart, lineEnd});
+					storage.append(
+						substituteStep.match.orderedArguments,
+						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
+					);
+					substituteStep.matchedArgumentIndex++;
+					substituteStep.patternPos += candidate.textLength;
+					nextMatches.push_back(std::move(substituteStep));
+				}
+			};
+
 			auto pushSubmatch = [&]() {
 				if (!canStartSubmatch())
 					return;
@@ -418,25 +476,8 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			};
 
 			pushArgumentCapture();
+			pushExplicitMultiWordCaptures();
 			pushSubmatch();
-		}
-		// word capture: matches a single VariableLike token as a string literal
-		if (currentNode->wordChild && elementType == PatternElement::Type::VariableLike) {
-			MatchProgress wordStep = *this;
-			wordStep.currentNode = currentNode->wordChild;
-			storage.append(wordStep.match.nodesPassed, wordStep.currentNode);
-			wordStep.sourceElementIndex++;
-			size_t lineStart = patternReference->pattern.getLinePos(patternPos);
-			size_t lineEnd = patternReference->pattern.getLinePos(patternPos + elementText.size());
-			size_t wordIndex = wordStep.match.discoveredWords.size();
-			storage.append(wordStep.match.discoveredWords, WordMatch{std::string(elementText), lineStart, lineEnd});
-			storage.append(
-				wordStep.match.orderedArguments,
-				{wordStep.matchedArgumentIndex, MatchedArgument::Kind::Word, nullptr, wordIndex}
-			);
-			wordStep.matchedArgumentIndex++;
-			wordStep.patternPos += elementText.size();
-			nextMatches.push_back(std::move(wordStep));
 		}
 		// most priority: text match
 		if (fullLiteralMatch != currentNode->literalChildren.end()) {
@@ -513,7 +554,6 @@ MatchProgress::materializeMatch(const MatchStorage &storage, const std::vector<P
 	result.lineEndPos = patternReference->pattern.getLinePos(patternPos);
 	result.nodesPassed = materializeSequence(match.nodesPassed, storage.matchedNodes);
 	result.discoveredVariables = materializeSequence(match.discoveredVariables, storage.matchedVariables);
-	result.discoveredWords = materializeSequence(match.discoveredWords, storage.matchedWords);
 	result.acceptedLiterals = materializeSequence(match.acceptedLiterals, storage.acceptedLiterals);
 	result.subMatches = materializeSubMatches(match.subMatches, storage.subMatches);
 	result.orderedArguments = materializeSequence(match.orderedArguments, storage.orderedArguments);
@@ -557,10 +597,6 @@ void MatchStorage::append(MatchSequence<PatternTreeNode *> &sequence, PatternTre
 
 void MatchStorage::append(MatchSequence<VariableMatch> &sequence, VariableMatch value) {
 	appendSequence(matchedVariables, sequence, std::move(value));
-}
-
-void MatchStorage::append(MatchSequence<WordMatch> &sequence, WordMatch value) {
-	appendSequence(matchedWords, sequence, std::move(value));
 }
 
 void MatchStorage::append(MatchSequence<AcceptedLiteralMatch> &sequence, AcceptedLiteralMatch value) {

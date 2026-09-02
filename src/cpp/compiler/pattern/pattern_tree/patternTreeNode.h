@@ -27,8 +27,6 @@ struct PatternTreeNode : public PatternElement {
 	std::unordered_map<std::string, PatternTreeNode *, PatternLiteralHash, std::equal_to<>> literalChildren{};
 	// this child node accepts a variable or the result of an expression
 	PatternTreeNode *argumentChild{};
-	// this child node captures a single word as a string literal ({word:name} syntax)
-	PatternTreeNode *wordChild{};
 	// Every canonical-path occurrence that reaches this node. A definition can
 	// reach the same trie node more than once through converging choice
 	// alternatives, so source metadata is necessarily one-to-many.
@@ -41,6 +39,6 @@ struct PatternTreeNode : public PatternElement {
 	// Assert that the definition snapshot, endpoints, and all trie metadata agree.
 	void requirePatternDefinitionIndexed(const PatternDefinition *definition) const;
 	// Find definitions already in the tree that are less specific than the given definition.
-	// A definition is less specific if it has an argument/word slot where the new definition has a literal/word.
+	// A definition is less specific if it has an argument slot where the new definition has a literal.
 	std::vector<PatternDefinition *> findLessSpecificDefinitions(std::vector<DefinitionPatternElement> &elements);
 };

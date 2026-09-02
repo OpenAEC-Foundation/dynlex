@@ -1,0 +1,3 @@
+import lib/std.dl
+
+print {integer:unset value} as a line

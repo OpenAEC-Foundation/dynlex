@@ -223,6 +223,9 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Explicit source captures are parsed before pattern definitions. Register
+	// their references after definition parameters have been indexed.
+	std::vector<VariableReference *> pendingExplicitVariableReferences;
 	// Compilation-lifetime arena for every expression allocated by an instance or
 	// flex clone. Ownership is independent of mutable grouping-tree topology.
 	std::vector<Expression *> ownedClonedExpressions;
@@ -298,7 +301,7 @@ inline void forEachPatternParameterName(
 	requireCompilerInvariant(elements.size() == nodes.size(), "indexed pattern path metadata has the wrong size");
 	for (size_t elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
 		const PatternElement &element = elements[elementIndex];
-		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+		if (element.type != PatternElement::Type::Variable)
 			continue;
 		onPatternParameterName(element.text, nodes[elementIndex], element.startPos);
 	}

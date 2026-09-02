@@ -25,8 +25,7 @@ static const DefinitionPatternElement *findDefinitionParameterElementAt(
 			}
 			continue;
 		}
-		if ((element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word) &&
-			element.text == parameterName && element.startPos == startPos)
+		if (element.type == PatternElement::Type::Variable && element.text == parameterName && element.startPos == startPos)
 			return &element;
 	}
 	return nullptr;
@@ -53,7 +52,7 @@ static bool equivalentSelectedPath(
 	std::vector<std::pair<std::string, size_t>> rightParameters;
 	auto collectParameters = [](const auto &path, auto &parameters) {
 		for (const PatternElement &element : path) {
-			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
+			if (element.type == PatternElement::Type::Variable)
 				parameters.emplace_back(element.text, element.startPos);
 		}
 	};
@@ -82,8 +81,7 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 		requireCompilerInvariant(bindingIndex < argTypes.size(), "matched pattern has more parameters than call arguments");
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(parameterElement != nullptr, "matched pattern parameter has no definition element");
-		if (argTypes[bindingIndex].isMetaType() || parameterElement->type == PatternElement::Type::Word ||
-			argumentConstraints[bindingIndex].requiresCompileTimeValue)
+		if (argTypes[bindingIndex].isMetaType() || argumentConstraints[bindingIndex].requiresCompileTimeValue)
 			requiredParameters.insert(parameterName);
 		bindingIndex++;
 	}
@@ -114,10 +112,8 @@ resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex,
 																					  : TypeConstraint::any();
 	const bool acceptsNothing = !parameterElement->typeConstraintName.empty() && constraint.explicitlyAcceptsNothing();
 	return ResolvedPatternConstraint{
-		std::move(constraint),
-		parameterElement->type == PatternElement::Type::Word ||
-			parameterElement->resolvedTypeConstraint.requiresCompileTimeValue,
-		untypedParameter, acceptsNothing
+		std::move(constraint), parameterElement->resolvedTypeConstraint.requiresCompileTimeValue, untypedParameter,
+		acceptsNothing
 	};
 }
 

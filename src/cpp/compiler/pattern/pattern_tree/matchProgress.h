@@ -31,7 +31,6 @@ template <typename T> struct MatchSequence {
 struct MatchState {
 	MatchSequence<PatternTreeNode *> nodesPassed;
 	MatchSequence<VariableMatch> discoveredVariables;
-	MatchSequence<WordMatch> discoveredWords;
 	MatchSequence<AcceptedLiteralMatch> acceptedLiterals;
 	MatchSequence<const PatternMatch *> subMatches;
 	MatchSequence<MatchedArgument> orderedArguments;
@@ -160,7 +159,6 @@ struct MatchStorage {
 	std::deque<PatternMatch> completedMatches;
 	std::vector<MatchSequenceNode<PatternTreeNode *>> matchedNodes;
 	std::vector<MatchSequenceNode<VariableMatch>> matchedVariables;
-	std::vector<MatchSequenceNode<WordMatch>> matchedWords;
 	std::vector<MatchSequenceNode<AcceptedLiteralMatch>> acceptedLiterals;
 	std::vector<MatchSequenceNode<const PatternMatch *>> subMatches;
 	std::vector<MatchSequenceNode<MatchedArgument>> orderedArguments;
@@ -170,7 +168,6 @@ struct MatchStorage {
 	const PatternMatch *storeCompletedMatch(PatternMatch match);
 	void append(MatchSequence<PatternTreeNode *> &sequence, PatternTreeNode *value);
 	void append(MatchSequence<VariableMatch> &sequence, VariableMatch value);
-	void append(MatchSequence<WordMatch> &sequence, WordMatch value);
 	void append(MatchSequence<AcceptedLiteralMatch> &sequence, AcceptedLiteralMatch value);
 	void append(MatchSequence<const PatternMatch *> &sequence, const PatternMatch *value);
 	void append(MatchSequence<MatchedArgument> &sequence, MatchedArgument value);

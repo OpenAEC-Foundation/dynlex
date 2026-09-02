@@ -4,7 +4,7 @@
 #include <cstddef>
 
 struct MatchDependency {
-	enum class Kind { Endpoint, ArgumentChild, WordChild, LiteralChild };
+	enum class Kind { Endpoint, ArgumentChild, LiteralChild };
 
 	Kind kind;
 	const PatternTreeNode *node;
@@ -24,7 +24,7 @@ struct AcceptedLiteralMatch {
 };
 
 struct MatchedArgument {
-	enum class Kind { Expression, SubMatch, Variable, Word };
+	enum class Kind { Expression, SubMatch, Variable };
 
 	size_t argumentIndex{};
 	Kind kind{};
@@ -39,7 +39,6 @@ struct PatternMatch {
 	size_t lineEndPos;
 	std::vector<PatternTreeNode *> nodesPassed{};
 	std::vector<VariableMatch> discoveredVariables{};
-	std::vector<WordMatch> discoveredWords{};
 	std::vector<AcceptedLiteralMatch> acceptedLiterals{};
 	std::vector<PatternMatch> subMatches{};
 	std::vector<MatchedArgument> orderedArguments{};

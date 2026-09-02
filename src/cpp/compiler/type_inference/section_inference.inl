@@ -473,23 +473,10 @@ static bool inferSection(
 	return inferSectionLineRange(section, body, openingExpression, context, bindingFrameStack, 0, true, fallsThrough);
 }
 
-struct PatternTypeConstraintWorkItem {
-	PatternDefinition *definition{};
-	DefinitionPatternElement *element{};
-	Expression *expression{};
-	std::optional<Diagnostic> failureDiagnostic;
-};
+#include "declared_type_constraint_work_item.inl"
 
-enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
-
-static bool readPatternTypeConstraintValue(
-	Expression *expression, InferenceContext &context, TypeConstraint &outConstraint, DataType &outParameterType
-) {
-	CompileTimeValue value = resolveStoredCompileTimeValue(expression, {}, &context);
-	return expression && readTypeConstraintValue(value, expression->type, outConstraint, outParameterType);
-}
-
-static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+static PatternTypeConstraintProbe
+probeDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
 	item.failureDiagnostic.reset();
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
 	resetExpressionTypes(item.expression);
@@ -521,7 +508,7 @@ static PatternTypeConstraintProbe probePatternTypeConstraint(PatternTypeConstrai
 	return pure ? PatternTypeConstraintProbe::Ready : PatternTypeConstraintProbe::Impure;
 }
 
-static void commitPatternTypeConstraint(PatternTypeConstraintWorkItem &item, ParseContext &parseContext) {
+static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
 	InferenceContext context(parseContext);
 	Instantiation signatureInstantiation;
 	context.currentInstantiation = &signatureInstantiation;
@@ -545,8 +532,16 @@ static void commitPatternTypeConstraint(PatternTypeConstraintWorkItem &item, Par
 		"pattern type-constraint probe and committed result type disagreed"
 	);
 	item.expression = expression;
-	item.element->resolvedTypeConstraint = std::move(constraint);
-	item.element->resolvedParameterType = std::move(parameterType);
+	if (item.element) {
+		item.element->resolvedTypeConstraint = std::move(constraint);
+		item.element->resolvedParameterType = std::move(parameterType);
+	} else {
+		requireCompilerInvariant(
+			item.variable && item.variableReference, "declared variable type-constraint work item has no target"
+		);
+		item.variableReference->declaredTypeConstraint = std::move(constraint);
+		item.variableReference->declaredType = std::move(parameterType);
+	}
 }
 
 static bool classifyPatternTypeConstraintDependencies(
@@ -565,8 +560,8 @@ static bool classifyPatternTypeConstraintDependencies(
 	return true;
 }
 
-static bool collectPatternTypeConstraintWorkItems(
-	ParseContext &parseContext, Section *section, std::vector<PatternTypeConstraintWorkItem> &items
+static bool collectDeclaredTypeConstraintWorkItems(
+	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items
 ) {
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		bool definitionValid = true;
@@ -594,66 +589,63 @@ static bool collectPatternTypeConstraintWorkItems(
 					destroyTypeConstraintExpression(expression);
 					continue;
 				}
-				items.push_back({definition, &element, expression, std::nullopt});
+				items.push_back(
+					{definition, &element, nullptr, nullptr, definition->range, element.typeConstraintName, expression,
+					 std::nullopt}
+				);
 			}
 		};
 		collectElements(definition->patternElements);
 		if (!definitionValid)
 			return false;
 	}
+	for (auto &[name, variable] : section->variables) {
+		(void)name;
+		if (!variable || !variable->hasDeclaredTypeConstraint())
+			continue;
+		for (VariableReference *reference : variable->declaredTypeConstraintReferences) {
+			requireCompilerInvariant(
+				reference && !reference->declaredTypeConstraintName.empty(),
+				"variable constraint declaration has no source constraint"
+			);
+			Expression *expression =
+				createTypeConstraintExpression(parseContext, section, reference->declaredTypeConstraintRange);
+			items.push_back(
+				{nullptr, nullptr, variable, reference, reference->declaredTypeConstraintRange,
+				 reference->declaredTypeConstraintName, expression, std::nullopt}
+			);
+		}
+	}
 	for (Section *child : section->children) {
-		if (!collectPatternTypeConstraintWorkItems(parseContext, child, items))
+		if (!collectDeclaredTypeConstraintWorkItems(parseContext, child, items))
 			return false;
 	}
 	return true;
 }
 
 #include "dependent_constraint_compilation.inl"
+#include "variable_type_constraint_materialization.inl"
 
-static void materializeExplicitPatternParameterDefinitions(ParseContext &parseContext) {
-	std::function<void(Section *)> visit = [&](Section *section) {
-		std::unordered_set<std::string> materializedNames;
-		for (PatternDefinition *definition : section->patternDefinitions) {
-			for (const auto &path : definition->indexedPaths) {
-				for (const PatternElement &element : path) {
-					if ((element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word) ||
-						!materializedNames.insert(element.text).second)
-						continue;
-					int sourceStart = definition->range.start() + static_cast<int>(element.startPos);
-					Range sourceRange(definition->range.line, sourceStart, sourceStart + static_cast<int>(element.text.size()));
-					requireCompilerInvariant(
-						section->resolvePatternParameterBinding(parseContext, element.text, sourceRange),
-						"indexed explicit pattern parameter has no binding definition"
-					);
-				}
-			}
-		}
-		for (Section *child : section->children)
-			visit(child);
-	};
-	visit(parseContext.mainSection);
-}
-
-static bool inferPatternTypeConstraints(ParseContext &parseContext) {
+static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	materializeExplicitPatternParameterDefinitions(parseContext);
-	std::vector<PatternTypeConstraintWorkItem> items;
+	std::vector<DeclaredTypeConstraintWorkItem> items;
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
-	if (!collectPatternTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
+	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
 		return false;
 	auto destroyExpressions = [&]() {
-		for (PatternTypeConstraintWorkItem &item : items) {
+		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
 				continue;
 			destroyTypeConstraintExpression(item.expression);
 			item.expression = nullptr;
 		}
 	};
-	for (const PatternTypeConstraintWorkItem &item : items) {
+	for (const DeclaredTypeConstraintWorkItem &item : items) {
 		if (item.expression)
 			continue;
 		if (parseContext.diagnostics.size() == diagnosticsBeforeParsing) {
 			parseContext.diagnostics.push_back(
-				unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+				unknownTypeConstraintDiagnostic(parseContext, item.diagnosticRange, item.typeConstraintName)
 			);
 		}
 		destroyExpressions();
@@ -663,14 +655,14 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 	size_t unresolvedCount = items.size();
 	while (unresolvedCount > 0) {
 		bool madeProgress = false;
-		for (PatternTypeConstraintWorkItem &item : items) {
+		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
 				continue;
-			if (!item.definition || !item.element) {
+			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference)) {
 				destroyExpressions();
-				crashCompilerBug("pattern type-constraint work item lost its source definition");
+				crashCompilerBug("declared type-constraint work item lost its target");
 			}
-			PatternTypeConstraintProbe probe = probePatternTypeConstraint(item, parseContext);
+			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, parseContext);
 			if (probe == PatternTypeConstraintProbe::Deferred)
 				continue;
 			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
@@ -678,18 +670,18 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
 				} else if (probe == PatternTypeConstraintProbe::Invalid) {
 					parseContext.diagnostics.push_back(
-						unknownTypeConstraintDiagnostic(parseContext, item.definition->range, item.element->typeConstraintName)
+						unknownTypeConstraintDiagnostic(parseContext, item.diagnosticRange, item.typeConstraintName)
 					);
 				} else {
 					parseContext.diagnostics.push_back(Diagnostic(
-						parseContext, Diagnostic::Level::Error, "impure type constraint", item.definition->range,
-						"type_constraint", item.element->typeConstraintName
+						parseContext, Diagnostic::Level::Error, "impure type constraint", item.diagnosticRange,
+						"type_constraint", item.typeConstraintName
 					));
 				}
 				destroyExpressions();
 				return false;
 			}
-			commitPatternTypeConstraint(item, parseContext);
+			commitDeclaredTypeConstraint(item, parseContext);
 			destroyTypeConstraintExpression(item.expression);
 			item.expression = nullptr;
 			unresolvedCount--;
@@ -697,18 +689,19 @@ static bool inferPatternTypeConstraints(ParseContext &parseContext) {
 		}
 		if (madeProgress)
 			continue;
-		auto unresolved = std::find_if(items.begin(), items.end(), [](const PatternTypeConstraintWorkItem &item) {
+		auto unresolved = std::find_if(items.begin(), items.end(), [](const DeclaredTypeConstraintWorkItem &item) {
 			return item.expression != nullptr;
 		});
 		requireCompilerInvariant(unresolved != items.end(), "type-constraint worklist lost its unresolved item");
 		parseContext.diagnostics.push_back(Diagnostic(
-			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->definition->range, "type_constraint",
-			unresolved->element->typeConstraintName
+			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->diagnosticRange, "type_constraint",
+			unresolved->typeConstraintName
 		));
 		destroyExpressions();
 		return false;
 	}
-	return compileDependentPatternSignatures(parseContext);
+	return finalizeVariableTypeConstraints(parseContext) && validatePatternParameterVariableConstraints(parseContext) &&
+		   compileDependentPatternSignatures(parseContext);
 }
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
@@ -817,7 +810,7 @@ static void materializeInferredConversionCalls(ParseContext &parseContext) {
 
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
-	if (!inferPatternTypeConstraints(parseContext))
+	if (!inferDeclaredTypeConstraints(parseContext))
 		return false;
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;

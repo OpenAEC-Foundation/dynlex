@@ -7,6 +7,30 @@
 #include <unordered_set>
 using namespace std::literals;
 
+CaptureElementParts splitCaptureElement(std::string_view content) {
+	size_t colonPos = content.find(':');
+	if (colonPos == std::string_view::npos)
+		return CaptureElementParts{{}, content, 0};
+	return CaptureElementParts{content.substr(0, colonPos), content.substr(colonPos + 1), colonPos + 1};
+}
+
+bool isValidVariableName(std::string_view name) {
+	if (name.empty())
+		return false;
+	bool expectsWordCharacter = true;
+	for (char character : name) {
+		const bool wordCharacter = std::isalnum(static_cast<unsigned char>(character)) != 0 || character == '_';
+		if (wordCharacter) {
+			expectsWordCharacter = false;
+			continue;
+		}
+		if (character != ' ' || expectsWordCharacter)
+			return false;
+		expectsWordCharacter = true;
+	}
+	return !expectsWordCharacter;
+}
+
 std::vector<PatternElement> getPatternElements(std::string_view patternString) {
 	std::vector<PatternElement> elements{};
 
@@ -392,9 +416,11 @@ bool parsePatternElements(
 		std::string_view content = patternString.substr(bracketStart + 1, i - bracketStart - 2);
 
 		if (isCurly) {
-			// {type:name} — capture element; {literal:text} — explicit literal
-			size_t colonPos = content.find(':');
-			if (colonPos == std::string_view::npos) {
+			// {name} or {type:name} — capture element; {literal:text} — explicit literal
+			CaptureElementParts capture = splitCaptureElement(content);
+			const bool explicitLiteral = capture.typeConstraint == "literal";
+			if (capture.name.empty() || (!explicitLiteral && (!isValidVariableName(capture.name) ||
+															  (content.contains(':') && capture.typeConstraint.empty())))) {
 				size_t diagnosticEnd = std::min(bracketStart + offset + 1, patternRange.subString.size());
 				return emitPatternParseFailure(
 					context, Diagnostic(
@@ -403,17 +429,14 @@ bool parsePatternElements(
 							 )
 				);
 			}
-			std::string_view captureType = content.substr(0, colonPos);
-			std::string name(content.substr(colonPos + 1));
-			size_t namePos = bracketStart + 1 + colonPos + 1 + offset;
-			if (captureType == "literal") {
+			std::string name(capture.name);
+			size_t namePos = bracketStart + 1 + capture.nameOffset + offset;
+			if (explicitLiteral) {
 				appendExplicitLiteralElements(result, name, namePos);
-			} else if (captureType == "word") {
-				result.push_back(DefinitionPatternElement(PatternElement::Type::Word, name, namePos));
 			} else {
-				// Typed argument constraint: emit a Variable element with the type constraint
+				// Argument capture, optionally with a type constraint.
 				DefinitionPatternElement elem(PatternElement::Type::Variable, name, namePos);
-				elem.typeConstraintName = std::string(captureType);
+				elem.typeConstraintName = std::string(capture.typeConstraint);
 				result.push_back(std::move(elem));
 			}
 		} else {

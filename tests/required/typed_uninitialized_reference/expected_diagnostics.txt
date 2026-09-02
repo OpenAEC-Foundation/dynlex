@@ -1,0 +1,3 @@
+tests/required/typed_uninitialized_reference/main.dl:1-27: Error: No overload matches call 'print {integer:unset value' for argument types [an unresolved value]. Available overloads: 'print message'
+  note: while inferring call 'print {integer:unset value' with arguments [an unresolved value] -> an unresolved value tests/required/typed_uninitialized_reference/main.dl:1-27
+  note: while inferring call 'print {integer:unset value} as a line' with arguments [an unresolved value] -> an unresolved value tests/required/typed_uninitialized_reference/main.dl:1-38

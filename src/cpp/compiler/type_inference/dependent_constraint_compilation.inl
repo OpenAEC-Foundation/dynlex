@@ -454,7 +454,7 @@ signatureElement(PatternDefinition &definition, size_t pathIndex, size_t paramet
 	size_t currentParameter = 0;
 	const PatternElement *pathElement = nullptr;
 	for (const PatternElement &element : definition.indexedPaths[pathIndex]) {
-		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+		if (element.type != PatternElement::Type::Variable)
 			continue;
 		if (currentParameter++ == parameterIndex) {
 			pathElement = &element;
@@ -475,7 +475,7 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 				size_t parameterIndex = 0;
 				forEachPatternParameterName(
 					definition, pathIndex,
-					[&](const std::string &, PatternTreeNode *, size_t startPos) {
+					[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 					const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, parameterIndex++);
 					if (!element) {
 						valid = false;
@@ -483,15 +483,20 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 					}
 					PatternParameterSignature signature;
 					signature.elementStartPos = startPos;
+					Variable *parameterVariable = section->findVariable(name);
+					bool variableHasConstraint = parameterVariable && parameterVariable->declaredTypeConstraint.isResolved();
+					bool elementHasConstraint = element->resolvedTypeConstraint.isResolved();
 					signature.constraint = TypeConstraintTemplate::constant(
-						element->resolvedTypeConstraint.isResolved() ? element->resolvedTypeConstraint : TypeConstraint::any()
+						elementHasConstraint
+							? element->resolvedTypeConstraint
+							: (variableHasConstraint ? parameterVariable->declaredTypeConstraint : TypeConstraint::any())
 					);
-					signature.staticParameterType = element->resolvedParameterType;
-					signature.requiresCompileTimeValue = element->type == PatternElement::Type::Word ||
-														 signature.constraint.constantPart.requiresCompileTimeValue;
-					signature.acceptsUnresolvedType =
-						element->typeConstraintName.empty() && !element->resolvedTypeConstraint.isResolved();
-					signature.hasExplicitTypeConstraint = !element->typeConstraintName.empty();
+					signature.staticParameterType =
+						elementHasConstraint ? element->resolvedParameterType
+											 : (variableHasConstraint ? parameterVariable->declaredType : DataType{});
+					signature.requiresCompileTimeValue = signature.constraint.constantPart.requiresCompileTimeValue;
+					signature.acceptsUnresolvedType = !elementHasConstraint && !variableHasConstraint;
+					signature.hasExplicitTypeConstraint = !element->typeConstraintName.empty() || variableHasConstraint;
 					definition->signaturePaths[pathIndex].parameters.push_back(std::move(signature));
 				}
 				);

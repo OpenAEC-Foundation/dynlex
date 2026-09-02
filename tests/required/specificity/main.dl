@@ -71,24 +71,3 @@ function show a new message:
 
 # Expected: 99 (specific "show a new message" calls "show 99",
 # not generic "show message" with message=77)
-
-# ==========================================================
-# Test 3: Specificity with word capture vs literal
-# ==========================================================
-# {word:name} captures a single word as a string. A literal at the same
-# position is more specific. The overlap detector must recognize that
-# a word capture is less specific than a literal.
-function the {word:prop} of item:
-    execute:
-        # word capture version: just return the item
-        return item
-
-function the name of item:
-    execute:
-        # literal "name" is more specific than {word:prop}
-        return item + 1
-
-# The reference should match the specific "name" pattern
-print the name of 50
-
-# Expected: 51 (specific "name" pattern: 50+1=51, not word capture: 50)

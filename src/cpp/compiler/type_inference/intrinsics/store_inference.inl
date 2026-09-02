@@ -72,6 +72,46 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
 		}
+		if (variable->hasDeclaredTypeConstraint()) {
+			VariableReference *constraintReference = variable->firstDeclaredTypeConstraintReference();
+			requireCompilerInvariant(constraintReference, "typed variable has no constraint source reference");
+			requireCompilerInvariant(
+				variable->declaredTypeConstraint.isResolved(), "typed variable reached assignment with an unresolved constraint"
+			);
+			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
+			bool accepted = variable->declaredTypeConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+			if (!accepted && variable->declaredType.isDeduced() &&
+				tryApplyUserConversion(valueExpr, variable->declaredType, true, context, valueBindingFrameStack)) {
+				valueType = effectiveInferredExpressionType(valueExpr);
+				assignedValue = context.lookupExpressionValue(valueExpr);
+				accepted = variable->declaredTypeConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+			}
+			if (!accepted) {
+				if (!context.typesValid)
+					return;
+				Range diagnosticRange = valueExpr->range;
+				const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
+				std::string detail = renderConfiguredMessage(
+					syntax, "variable type constraint mismatch", "message",
+					{{"name", variable->name},
+					 {"constraint", constraintReference->declaredTypeConstraintName},
+					 {"actual_type", typeToUserName(valueType)}}
+				);
+				context.setTypeFailure(detail);
+				if (!context.trial) {
+					Diagnostic diagnostic = buildFailureDetailDiagnostic(diagnosticRange, detail);
+					diagnostic.relatedInfo.push_back(
+						{renderConfiguredMessage(
+							 syntax, "variable type constraint mismatch", "related declaration",
+							 {{"name", variable->name}, {"constraint", constraintReference->declaredTypeConstraintName}}
+						 ),
+						 constraintReference->declaredTypeConstraintRange}
+					);
+					context.addDiagnosticWithCurrentTrace(std::move(diagnostic));
+				}
+				return;
+			}
+		}
 
 		DataType mergedVariableType = valueType;
 		if (variable->type.isDeduced() && !mergeVariableAssignmentType(variable->type, valueType, mergedVariableType) &&

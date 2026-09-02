@@ -930,7 +930,7 @@ static std::vector<DataType> argumentTypesForDefinition(const Expression *expr, 
 	(void)matchingPatternPathIndices(expr->patternMatch->nodesPassed, definition);
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		if (node->type != PatternElement::Type::Variable && node->type != PatternElement::Type::Word)
+		if (node->type != PatternElement::Type::Variable)
 			continue;
 		if (argIndex >= sortedArgs.size())
 			break;

@@ -1,8 +1,12 @@
 import lib/std.dl
 
-function this is not a {word:stage} shader:
+function this is not a fragment shader:
     replacement:
-        the inverse of @intrinsic("shader stage is", stage)
+        the inverse of @intrinsic("shader stage is", "fragment")
+
+function this is not a vertex shader:
+    replacement:
+        the inverse of @intrinsic("shader stage is", "vertex")
 
 set native to (1 if the build target is CPU, else 0)
 set ordinary to 1 if (this is not a fragment shader) and (this is not a vertex shader), else 0

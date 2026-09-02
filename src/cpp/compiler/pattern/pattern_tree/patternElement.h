@@ -9,6 +9,17 @@
 struct ParseContext;
 struct VariableReference;
 
+struct CaptureElementParts {
+	std::string_view typeConstraint;
+	std::string_view name;
+	size_t nameOffset{};
+};
+
+// Split the contents between braces. The caller decides whether a named type
+// such as `literal` has special meaning in its grammar.
+CaptureElementParts splitCaptureElement(std::string_view content);
+bool isValidVariableName(std::string_view name);
+
 struct PatternElement {
 	enum Type {
 		// anything not in [A-Za-z0-9]+
@@ -19,8 +30,6 @@ struct PatternElement {
 		VariableLike,
 		// a variable
 		Variable,
-		// {word:name} — matches a single word, captured as a string literal (not a variable)
-		Word,
 		// [alternative1|alternative2|...] — each alternative is a sequence of elements
 		Choice,
 		Count
@@ -70,8 +79,8 @@ struct DefinitionPatternElement : public PatternElement {
 // Parse plain text (no brackets) into pattern elements
 std::vector<PatternElement> getPatternElements(std::string_view patternString);
 
-// Parse pattern text with [literal], [choice|alternatives], {literal:text}, and
-// {type:name} captures into definition elements.
+// Parse pattern text with [literal], [choice|alternatives], {literal:text},
+// {name}, and {type:name} captures into definition elements.
 // Returns false and emits a diagnostic on the first parse error.
 bool parsePatternElements(
 	ParseContext &context, Range patternRange, std::string_view patternString, std::vector<DefinitionPatternElement> &elements,

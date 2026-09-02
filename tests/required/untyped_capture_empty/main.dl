@@ -1,0 +1,3 @@
+function consume {}:
+    replacement:
+        @intrinsic("discard", 1)

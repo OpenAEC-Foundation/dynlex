@@ -1,4 +1,5 @@
 #include "section.h"
+#include "bindingResolution.h"
 #include "classSection.h"
 #include "expression.h"
 #include "functionSection.h"
@@ -227,6 +228,10 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			push();
 			break;
 		}
+		case '{': {
+			push();
+			break;
+		}
 		case ')': {
 			if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
@@ -242,6 +247,11 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 				nodeStack.pop();
 			}
 			if (!tryPop('['))
+				return nullptr;
+			break;
+		}
+		case '}': {
+			if (!tryPop('{'))
 				return nullptr;
 			break;
 		}
@@ -531,6 +541,44 @@ Expression *Section::detectPatternsRecursively(
 		} else if (child->character == '"') {
 			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
+		} else if (child->character == '{') {
+			std::string_view content = range.subString.substr(child->start, child->end - child->start);
+			CaptureElementParts capture = splitCaptureElement(content);
+			if (capture.name.empty() || !isValidVariableName(capture.name) ||
+				(content.find(':') != std::string_view::npos && capture.typeConstraint.empty())) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "invalid pattern parse capture format",
+					range.subRange(child->start - 1, child->start)
+				));
+				delete reference;
+				delete expr;
+				return nullptr;
+			}
+
+			Range nameRange =
+				range.subRange(child->start + capture.nameOffset, child->start + capture.nameOffset + capture.name.size());
+			VariableReference *variableReference = context.createVariableReference(nameRange, std::string(capture.name));
+			if (!capture.typeConstraint.empty()) {
+				variableReference->declaredTypeConstraintName = std::string(capture.typeConstraint);
+				variableReference->declaredTypeConstraintRange =
+					range.subRange(child->start, child->start + capture.typeConstraint.size());
+			}
+			if (registerPatternReferences) {
+				registerExplicitVariableName(variableReference->name);
+				context.pendingExplicitVariableReferences.push_back(variableReference);
+			} else {
+				auto definition = variableDefinitions.find(variableReference->name);
+				if (definition != variableDefinitions.end())
+					variableReference->definition = normalizeBindingReference(definition->second);
+			}
+
+			Expression *variableExpression = new Expression();
+			variableExpression->range = nameRange;
+			variableExpression->kind = Expression::Kind::Variable;
+			variableExpression->variable = variableReference;
+			expr->arguments.push_back(variableExpression);
+			context.addSourceToken(nameRange, ParseContext::SourceTokenKind::Variable);
+			reference->pattern.replaceLine(child->start - 1, child->end + 1);
 		}
 	}
 
@@ -703,6 +751,10 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 void Section::indexExplicitParameters(PatternDefinition &definition) {
 	requireCompilerInvariant(definition.section == this, "explicit parameter candidate belongs to another section");
 	explicitParameterIndex.addDefinition(definition);
+	forEachLeafElement(definition.patternElements, [&](const DefinitionPatternElement &element) {
+		if (element.type == PatternElement::Type::Variable)
+			registerExplicitVariableName(element.text);
+	});
 }
 
 bool Section::canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const {
@@ -775,7 +827,7 @@ Section::resolvePatternParameterBinding(ParseContext &context, const std::string
 				"explicit parameter index contains a candidate for another section"
 			);
 			requireCompilerInvariant(
-				candidate.captureType == PatternElement::Type::Variable || candidate.captureType == PatternElement::Type::Word,
+				candidate.captureType == PatternElement::Type::Variable,
 				"explicit parameter index contains a non-capture element"
 			);
 			definitionsWithExplicitParameter.insert(candidate.definition);
@@ -818,6 +870,14 @@ Section::resolvePatternParameterBinding(ParseContext &context, const std::string
 void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
 	if (VariableReference *definitionReference = resolvePatternParameterBinding(context, reference->name, reference->range)) {
 		reference->definition = definitionReference;
+		if (!reference->declaredTypeConstraintName.empty()) {
+			auto variable = variables.find(reference->name);
+			requireCompilerInvariant(
+				variable != variables.end() && variable->second,
+				"resolved pattern parameter binding has no materialized variable"
+			);
+			variable->second->addDeclaredTypeConstraintReference(reference);
+		}
 		return;
 	}
 	if (parent) {

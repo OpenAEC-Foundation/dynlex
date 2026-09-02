@@ -423,7 +423,7 @@ struct PatternDomainAutomaton {
 		for (size_t i = 0; i < elements.size(); i++) {
 			size_t next = i + 1 == elements.size() ? end : addState();
 			Transition transition{next, elements[i]};
-			if (elements[i].type == PatternElement::Type::Variable || elements[i].type == PatternElement::Type::Word) {
+			if (elements[i].type == PatternElement::Type::Variable) {
 				requireCompilerInvariant(
 					parameterIndex < signature.parameters.size(),
 					"compiled signature has fewer parameters than its pattern path"
@@ -465,8 +465,6 @@ patternTransitionsOverlap(const PatternDomainAutomaton::Transition &left, const 
 		return false;
 	if (left.element.type == PatternElement::Type::Variable)
 		return left.constraint.structurallyOverlaps(right.constraint);
-	if (left.element.type == PatternElement::Type::Word)
-		return true;
 	return left.element.text == right.element.text;
 }
 
@@ -501,8 +499,7 @@ definitionsHaveAmbiguousTypeDomainOverlap(const PatternDefinition &leftDefinitio
 					continue;
 				bool leftCanBeMoreSpecific = current.leftCanBeMoreSpecific;
 				bool rightCanBeMoreSpecific = current.rightCanBeMoreSpecific;
-				if (leftTransition.element.type == PatternElement::Type::Variable ||
-					leftTransition.element.type == PatternElement::Type::Word) {
+				if (leftTransition.element.type == PatternElement::Type::Variable) {
 					switch (leftTransition.constraint.compareSpecificity(rightTransition.constraint)) {
 					case ConstraintSpecificity::Equivalent:
 						break;

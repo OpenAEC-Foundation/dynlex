@@ -194,9 +194,13 @@ function an aggregate of {fixed integer:count} {type:kind} values:
             return @intrinsic("vector", count, kind)
         return @intrinsic("array", count, kind)
 
-function this is a {word:stage} shader:
+function this is a fragment shader:
     replacement:
-        @intrinsic("shader stage is", stage)
+        @intrinsic("shader stage is", "fragment")
+
+function this is a vertex shader:
+    replacement:
+        @intrinsic("shader stage is", "vertex")
 
 function the size of kind:
     replacement:

@@ -6,7 +6,7 @@ void ExplicitParameterIndex::addDefinition(PatternDefinition &definition) {
 	if (!indexedDefinitions.insert(&definition).second)
 		return;
 	forEachLeafElement(definition.patternElements, [&](const DefinitionPatternElement &element) {
-		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+		if (element.type != PatternElement::Type::Variable)
 			return;
 		int sourceStart = definition.range.start() + static_cast<int>(element.startPos);
 		Range sourceRange(definition.range.line, sourceStart, sourceStart + static_cast<int>(element.text.length()));

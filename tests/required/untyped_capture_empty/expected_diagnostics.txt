@@ -1,0 +1,1 @@
+tests/required/untyped_capture_empty/main.dl:18-19: Error: Capture element must have format {name} or {type:name}

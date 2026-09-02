@@ -587,7 +587,7 @@ if (kind == IntrinsicKind::Construct) {
 }
 
 if (kind == IntrinsicKind::Property) {
-	// Format: args[1]=instance, args[2]=fieldname (string literal from {word:} capture)
+	// Format: args[1]=instance, args[2]=fieldname (a compile-time property-name string)
 	Expression *ownerExpr = args[1];
 	DataType ownerType = finalizedExpressionType(context, ownerExpr);
 	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;

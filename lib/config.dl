@@ -61,7 +61,7 @@ dynlex options:
         precedence target not found: "Precedence target not found: {target}"
         precedence cycle detected: "Cycle detected in precedence declarations"
         invalid pattern parse unmatched bracket: "Unmatched '{character}' in pattern"
-        invalid pattern parse capture format: "Capture element must have format {type:name}"
+        invalid pattern parse capture format: "Capture element must have format {name} or {type:name}"
         listing section cannot create sections: "you can't create sections in a listing section"
         patterns section cannot create sections: "you can't create sections in a {section_type} section"
         unmatched closing character: "unmatched closing character found: '{character}'"
@@ -93,6 +93,10 @@ dynlex options:
             message: "Variable '{name}' cannot change type from {from_type} to {to_type}"
             related origin: "Variable '{name}' first became {type} here"
             quick fix floating-point number literal: "Change '{original}' to '{replacement}'"
+        conflicting variable type constraints: "Variable '{name}' cannot use both {first_type} and {second_type} constraints"
+        variable type constraint mismatch:
+            message: "Variable '{name}' requires {constraint}, but this value is {actual_type}"
+            related declaration: "Variable '{name}' was constrained as {constraint} here"
         expression type inference failed:
             message: "Expression '{expression}' parses successfully without types, but not with types"
             with detail: "Expression '{expression}' parses successfully without types, but not with types: {detail}"

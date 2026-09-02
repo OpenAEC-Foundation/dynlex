@@ -511,10 +511,11 @@ static void resetSectionLocalVariableTypes(Section *section) {
 	if (!section)
 		return;
 	for (auto &[name, variable] : section->variables) {
+		(void)name;
 		if (!variable || variable->isGlobal)
 			continue;
-		variable->type = {};
-		variable->typeOriginRange = {};
+		variable->type = DataType{};
+		variable->typeOriginRange = Range{};
 		variable->typeOriginFloatLiteralReplacement.clear();
 	}
 }

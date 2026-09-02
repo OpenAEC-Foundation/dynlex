@@ -1,0 +1,2 @@
+tests/required/conflicting_existing_binding_constraint/main.dl:17-40: Error: Variable 'value' cannot use both integer and a floating-point number constraints
+  note: Variable 'value' was first constrained here tests/required/conflicting_existing_binding_constraint/main.dl:39-46

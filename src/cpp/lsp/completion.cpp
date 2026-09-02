@@ -207,7 +207,6 @@ bool subtreeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &source
 			pending.push_back(child);
 		}
 		pending.push_back(current->argumentChild);
-		pending.push_back(current->wordChild);
 	}
 	return false;
 }
@@ -277,8 +276,8 @@ void addCompletionItem(
 
 std::string extendLiteralSuggestion(std::string literal, PatternTreeNode *node) {
 	PatternTreeNode *current = node;
-	while (current && current->literalChildren.size() == 1 && !current->argumentChild && !current->wordChild &&
-		   current->matchingDefinitions.empty() && literal.size() < 64) {
+	while (current && current->literalChildren.size() == 1 && !current->argumentChild && current->matchingDefinitions.empty() &&
+		   literal.size() < 64) {
 		const auto &[nextLiteral, nextNode] = *current->literalChildren.begin();
 		literal += nextLiteral;
 		current = nextNode;
@@ -656,9 +655,6 @@ PatternFrontier describePatternFrontier(
 		}
 		if (!partial && nodeAcceptsArgument(matcherFrontier.node, sourceFile))
 			result.transitions.push_back({"argument", {}});
-		if (matcherFrontier.node->wordChild && subtreeHasVisibleDefinition(matcherFrontier.node->wordChild, sourceFile)) {
-			result.transitions.push_back({"word", {}});
-		}
 	}
 
 	std::sort(
