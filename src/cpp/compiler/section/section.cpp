@@ -420,6 +420,7 @@ Expression *Section::detectPatternsRecursively(
 
 	// Create a PatternReference for pattern matching
 	PatternReference *reference = new PatternReference(expr, patternType);
+	reference->matchingScope = this;
 	expr->patternReference = reference;
 
 	// Process children to find arguments

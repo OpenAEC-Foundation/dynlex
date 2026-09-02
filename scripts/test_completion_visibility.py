@@ -50,6 +50,10 @@ def main() -> int:
     if "half width" not in before_declaration:
         raise AssertionError("completion hid a multi-word variable declared on an earlier line")
 
+    after_same_line_declaration = completion_labels(compiler, multi_word_source, "28:41")
+    if "same line value" not in after_same_line_declaration:
+        raise AssertionError("completion hid a multi-word variable declared earlier on the cursor line")
+
     return 0
 
 

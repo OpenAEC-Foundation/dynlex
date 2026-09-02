@@ -610,8 +610,8 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			);
 			Expression *expression =
 				createTypeConstraintExpression(parseContext, section, reference->declaredTypeConstraintRange);
-			if (expression && sectionVariableIsPatternParameter(section, variable->name) &&
-				expressionReferencesSectionPatternParameter(section, expression)) {
+			Section *definitionSection = enclosingPatternDefinitionSection(section);
+			if (expression && definitionSection && expressionReferencesSectionPatternParameter(definitionSection, expression)) {
 				reference->hasDependentTypeConstraint = true;
 				destroyTypeConstraintExpression(expression);
 				continue;
@@ -706,7 +706,8 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 		destroyExpressions();
 		return false;
 	}
-	return finalizeVariableTypeConstraints(parseContext) && compileDependentPatternSignatures(parseContext);
+	return finalizeVariableTypeConstraints(parseContext) && compileDependentPatternSignatures(parseContext) &&
+		   compileDependentLocalVariableConstraints(parseContext);
 }
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {

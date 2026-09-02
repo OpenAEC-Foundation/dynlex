@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function inspect local array for {fixed integer:item count}:
+    execute:
+        set {an array of item count items:values} to [1, 2]
+        return {an array of 3 items:values}
+
+ignore inspect local array for 2

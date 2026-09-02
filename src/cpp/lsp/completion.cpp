@@ -105,6 +105,15 @@ std::string normalizeCompletionPatternPrefix(std::string_view prefix) {
 			break;
 		}
 
+		if (c == '{') {
+			size_t close = prefix.find('}', i + 1);
+			normalized += argumentChar;
+			if (close == std::string_view::npos)
+				break;
+			i = close + 1;
+			continue;
+		}
+
 		if (c == '(') {
 			size_t depth = 1;
 			size_t j = i + 1;
@@ -240,7 +249,9 @@ std::set<std::string> visibleVariableNames(const CompletionContext &context) {
 			requireCompilerInvariant(variable->definition != nullptr, "completion variable has no definition");
 			requireCompilerInvariant(variable->definition->range.line != nullptr, "completion variable definition has no line");
 			SourceLocation definition = variable->definition->range.sourceStart();
-			if (definition.sourceFile == sourceFile && definition.sourceFileLineIndex >= context.line)
+			if (definition.sourceFile == sourceFile &&
+				(definition.sourceFileLineIndex > context.line ||
+				 (definition.sourceFileLineIndex == context.line && definition.column >= context.character)))
 				continue;
 			names.insert(name);
 		}

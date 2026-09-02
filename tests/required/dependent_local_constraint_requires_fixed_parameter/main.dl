@@ -1,0 +1,8 @@
+import lib/random.dl
+
+function create local array for {integer:item count}:
+    execute:
+        set {an array of item count items:values} to [1, 2]
+
+set {runtime count} to a random number
+create local array for runtime count

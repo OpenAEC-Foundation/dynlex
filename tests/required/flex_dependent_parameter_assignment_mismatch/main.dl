@@ -1,0 +1,8 @@
+import lib/std.dl
+
+flex function overwrite {fixed integer:item count} values {an array of item count items:values}:
+    replacement:
+        set values to [1, 2, 3]
+
+set target to [1, 2]
+overwrite 2 values target

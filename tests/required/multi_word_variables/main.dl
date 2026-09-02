@@ -28,6 +28,13 @@ print half width as a line
 set {same line value} to 1 and add 2 to same line value
 print same line value as a line
 
+set {player 2 score} to 5
+add 3 to player 2 score
+print player 2 score as a line
+
+set {player 20 score} to 9
+print player 20 score as a line
+
 print the sum of 3 and 5 as a line
 
 set {long double:val} to 2

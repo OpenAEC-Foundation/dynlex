@@ -16,8 +16,16 @@ inline const VariableReference *normalizeBindingReference(const VariableReferenc
 }
 
 struct BindingFrame {
+	struct ParameterConstraint {
+		TypeConstraint constraint;
+		std::string parameterName;
+		std::string sourceConstraintName;
+		Range sourceRange;
+	};
+
 	BindingMap bindings;
 	ParameterBindingMap parameterBindings;
+	std::unordered_map<VariableReference *, ParameterConstraint> parameterConstraints;
 
 	BindingFrame() = default;
 	explicit BindingFrame(BindingMap frameBindings) : bindings(std::move(frameBindings)) {}
@@ -25,7 +33,7 @@ struct BindingFrame {
 	BindingFrame(BindingMap frameBindings, ParameterBindingMap frameParameterBindings)
 		: bindings(std::move(frameBindings)), parameterBindings(std::move(frameParameterBindings)) {}
 
-	bool empty() const { return bindings.empty() && parameterBindings.empty(); }
+	bool empty() const { return bindings.empty() && parameterBindings.empty() && parameterConstraints.empty(); }
 };
 
 struct BindingFrameStack {
@@ -78,6 +86,18 @@ struct BindingFrameStack {
 			auto binding = frame.parameterBindings.find(bindingKey);
 			return binding == frame.parameterBindings.end() ? nullptr : binding->second;
 		});
+	}
+
+	const BindingFrame::ParameterConstraint *lookupParameterConstraint(VariableReference *bindingReference) const {
+		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
+		if (!bindingKey)
+			return nullptr;
+		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
+			auto constraint = frames[frameIndex - 1].parameterConstraints.find(bindingKey);
+			if (constraint != frames[frameIndex - 1].parameterConstraints.end())
+				return &constraint->second;
+		}
+		return nullptr;
 	}
 
 	Expression *lookupWithCallerScope(

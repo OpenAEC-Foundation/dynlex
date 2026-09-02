@@ -22,6 +22,81 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 	context.fail(buildFailureDetailDiagnostic(destinationExpr->range, std::move(detail)));
 }
 
+struct ActiveConstraintPath {
+	std::vector<DataType> argumentTypes;
+	std::vector<CompileTimeValue> argumentValues;
+	std::optional<size_t> constrainedParameterIndex;
+};
+
+static std::optional<ActiveConstraintPath> activeConstraintPath(
+	PatternDefinition *definition, size_t pathIndex, const Instantiation &instantiation,
+	std::string_view constrainedParameter = {}
+) {
+	const PatternPathSignature &signature = definition->signaturePaths[pathIndex];
+	if (signature.parameters.size() != instantiation.argumentTypes.size())
+		return std::nullopt;
+	ActiveConstraintPath result;
+	result.argumentTypes = instantiation.argumentTypes;
+	result.argumentValues.reserve(signature.parameters.size());
+	bool matches = true;
+	size_t parameterIndex = 0;
+	forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
+		if (!matches || parameterIndex >= instantiation.argumentTypes.size()) {
+			matches = false;
+			parameterIndex++;
+			return;
+		}
+		auto parameterType = instantiation.parameterTypesByName.find(name);
+		if (parameterType == instantiation.parameterTypesByName.end() ||
+			parameterType->second != instantiation.argumentTypes[parameterIndex]) {
+			matches = false;
+		}
+		auto constantValue = instantiation.constantParameterValues.find(name);
+		result.argumentValues.push_back(
+			constantValue == instantiation.constantParameterValues.end() ? CompileTimeValue{} : constantValue->second
+		);
+		if (name == constrainedParameter)
+			result.constrainedParameterIndex = parameterIndex;
+		parameterIndex++;
+	});
+	if (!matches || parameterIndex != instantiation.argumentTypes.size() ||
+		(!constrainedParameter.empty() && !result.constrainedParameterIndex)) {
+		return std::nullopt;
+	}
+	return result;
+}
+
+static std::optional<ActiveConstraintPath> activeFlexConstraintPath(
+	PatternDefinition *definition, size_t pathIndex, const BindingFrameStack &bindingFrameStack, InferenceContext &context
+) {
+	ActiveConstraintPath result;
+	result.argumentTypes.reserve(definition->signaturePaths[pathIndex].parameters.size());
+	result.argumentValues.reserve(definition->signaturePaths[pathIndex].parameters.size());
+	bool matches = true;
+	forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
+		if (!matches)
+			return;
+		VariableReference *parameterDefinition = findPatternParameterDefinition(definition, name);
+		requireCompilerInvariant(parameterDefinition, "dependent flex local constraint has no parameter definition");
+		ResolvedBindingLayers bound = resolveBindingReferenceWithCallerScope(parameterDefinition, nullptr, bindingFrameStack);
+		if (!bound.expression) {
+			matches = false;
+			return;
+		}
+		Expression *argument = bound.expression;
+		DataType argumentType = ensureExpressionTypeWithCurrentGrouping(argument, context, bound.bindingFrameStack);
+		if (!argumentType.isDeduced()) {
+			matches = false;
+			return;
+		}
+		result.argumentTypes.push_back(argumentType);
+		result.argumentValues.push_back(resolveStoredCompileTimeValue(argument, bound.bindingFrameStack, &context));
+	});
+	if (!matches || result.argumentTypes.size() != definition->signaturePaths[pathIndex].parameters.size())
+		return std::nullopt;
+	return result;
+}
+
 static TypeConstraint materializeDependentParameterConstraint(Section *section, Variable *variable, InferenceContext &context) {
 	requireCompilerInvariant(section && variable, "dependent variable constraint has no section variable");
 	while (section) {
@@ -42,39 +117,12 @@ static TypeConstraint materializeDependentParameterConstraint(Section *section, 
 	std::optional<TypeConstraint> materializedConstraint;
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		for (size_t pathIndex = 0; pathIndex < definition->signaturePaths.size(); pathIndex++) {
-			const PatternPathSignature &signature = definition->signaturePaths[pathIndex];
-			if (signature.parameters.size() != instantiation.argumentTypes.size())
+			std::optional<ActiveConstraintPath> path =
+				activeConstraintPath(definition, pathIndex, instantiation, variable->name);
+			if (!path)
 				continue;
-			std::vector<CompileTimeValue> argumentValues;
-			argumentValues.reserve(signature.parameters.size());
-			std::optional<size_t> constrainedParameterIndex;
-			bool pathMatchesInstantiation = true;
-			size_t parameterIndex = 0;
-			forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
-				if (!pathMatchesInstantiation || parameterIndex >= instantiation.argumentTypes.size()) {
-					pathMatchesInstantiation = false;
-					parameterIndex++;
-					return;
-				}
-				auto parameterType = instantiation.parameterTypesByName.find(name);
-				if (parameterType == instantiation.parameterTypesByName.end() ||
-					parameterType->second != instantiation.argumentTypes[parameterIndex]) {
-					pathMatchesInstantiation = false;
-				}
-				auto constantValue = instantiation.constantParameterValues.find(name);
-				argumentValues.push_back(
-					constantValue == instantiation.constantParameterValues.end() ? CompileTimeValue{} : constantValue->second
-				);
-				if (name == variable->name)
-					constrainedParameterIndex = parameterIndex;
-				parameterIndex++;
-			});
-			if (!pathMatchesInstantiation || parameterIndex != instantiation.argumentTypes.size() ||
-				!constrainedParameterIndex) {
-				continue;
-			}
 			auto resolved = resolveCompiledPatternConstraint(
-				definition, pathIndex, *constrainedParameterIndex, instantiation.argumentTypes, argumentValues
+				definition, pathIndex, *path->constrainedParameterIndex, path->argumentTypes, path->argumentValues
 			);
 			requireCompilerInvariant(
 				resolved.has_value(), "active instantiation could not materialize its variable constraint"
@@ -92,6 +140,112 @@ static TypeConstraint materializeDependentParameterConstraint(Section *section, 
 	}
 	requireCompilerInvariant(materializedConstraint.has_value(), "dependent variable constraint has no active parameter path");
 	return std::move(*materializedConstraint);
+}
+
+static TypeConstraint materializeDependentLocalConstraint(
+	VariableReference *reference, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack
+) {
+	requireCompilerInvariant(reference, "dependent local variable constraint has no source reference");
+	std::optional<TypeConstraint> materializedConstraint;
+	for (const DependentVariableTypeConstraint &compiled : reference->dependentTypeConstraints) {
+		std::optional<ActiveConstraintPath> path;
+		if (compiled.definition->section->isFlex) {
+			path = activeFlexConstraintPath(compiled.definition, compiled.pathIndex, flexBindingFrameStack, context);
+		} else {
+			requireCompilerInvariant(
+				context.currentInstantiation,
+				"dependent local variable constraint reached a non-flex store without an active instantiation"
+			);
+			path = activeConstraintPath(compiled.definition, compiled.pathIndex, *context.currentInstantiation);
+		}
+		if (!path)
+			continue;
+		std::optional<TypeConstraint> candidate = compiled.constraint.materialize(path->argumentTypes, path->argumentValues);
+		requireCompilerInvariant(candidate.has_value(), "active instantiation could not materialize a local constraint");
+		if (!materializedConstraint) {
+			materializedConstraint = std::move(*candidate);
+		} else {
+			requireCompilerInvariant(
+				materializedConstraint->equivalentTo(*candidate),
+				"active instantiation paths disagree on a local variable constraint"
+			);
+		}
+	}
+	requireCompilerInvariant(
+		materializedConstraint.has_value(), "dependent local variable constraint has no active signature path"
+	);
+	return std::move(*materializedConstraint);
+}
+
+static bool validateStoreConstraint(
+	const std::string &variableName, const std::string &sourceConstraintName, const Range &sourceConstraintRange,
+	const TypeConstraint &constraint, const DataType &conversionType, Expression *valueExpr, DataType &valueType,
+	InferenceContext &context, const BindingFrameStack &valueBindingFrameStack
+) {
+	CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
+	bool accepted = constraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+	if (!accepted && conversionType.isDeduced() &&
+		tryApplyUserConversion(valueExpr, conversionType, true, context, valueBindingFrameStack)) {
+		valueType = effectiveInferredExpressionType(valueExpr);
+		assignedValue = context.lookupExpressionValue(valueExpr);
+		accepted = constraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+	}
+	if (accepted)
+		return true;
+	if (!context.typesValid)
+		return false;
+	Range diagnosticRange = valueExpr->range;
+	const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
+	std::string detail = renderConfiguredMessage(
+		syntax, "variable type constraint mismatch", "message",
+		{{"name", variableName}, {"constraint", sourceConstraintName}, {"actual_type", typeToUserName(valueType)}}
+	);
+	context.setTypeFailure(detail);
+	if (!context.trial) {
+		Diagnostic diagnostic = buildFailureDetailDiagnostic(diagnosticRange, detail);
+		diagnostic.relatedInfo.push_back(
+			{renderConfiguredMessage(
+				 syntax, "variable type constraint mismatch", "related declaration",
+				 {{"name", variableName}, {"constraint", sourceConstraintName}}
+			 ),
+			 sourceConstraintRange}
+		);
+		context.addDiagnosticWithCurrentTrace(std::move(diagnostic));
+	}
+	return false;
+}
+
+static bool validateBoundParameterStoreConstraints(
+	Expression *destination, BindingFrameStack bindingFrameStack, Expression *valueExpr, DataType &valueType,
+	InferenceContext &context, const BindingFrameStack &valueBindingFrameStack
+) {
+	std::unordered_set<VariableReference *> validatedParameters;
+	while (destination) {
+		if (destination->kind == Expression::Kind::Variable && destination->variable) {
+			VariableReference *parameterDefinition = normalizeBindingReference(destination->variable);
+			const BindingFrame::ParameterConstraint *constraint =
+				bindingFrameStack.lookupParameterConstraint(parameterDefinition);
+			if (constraint && validatedParameters.insert(parameterDefinition).second) {
+				Section *section = destination->range.line ? destination->range.line->section : nullptr;
+				Variable *variable = section ? section->findVariable(destination->variable->name) : nullptr;
+				DataType conversionType = variable && variable->declaredType.isDeduced()
+											  ? variable->declaredType
+											  : (variable ? variable->type : destination->type);
+				if (!validateStoreConstraint(
+						constraint->parameterName, constraint->sourceConstraintName, constraint->sourceRange,
+						constraint->constraint, conversionType, valueExpr, valueType, context, valueBindingFrameStack
+					)) {
+					return false;
+				}
+			}
+		}
+		ResolvedBindingLayers bound = resolveExpressionBindingWithCallerScope(destination, bindingFrameStack);
+		if (bound.expression == destination)
+			break;
+		destination = bound.expression;
+		bindingFrameStack = std::move(bound.bindingFrameStack);
+	}
+	return true;
 }
 
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
@@ -136,6 +290,11 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		));
 		return;
 	}
+	if (!validateBoundParameterStoreConstraints(
+			expr->arguments[1], flexBindingFrameStack, valueExpr, valueType, context, valueBindingFrameStack
+		)) {
+		return;
+	}
 
 	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable) {
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
@@ -147,41 +306,18 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		if (variable->hasDeclaredTypeConstraint()) {
 			VariableReference *constraintReference = variable->firstDeclaredTypeConstraintReference();
 			requireCompilerInvariant(constraintReference, "typed variable has no constraint source reference");
-			TypeConstraint assignmentConstraint = variable->declaredTypeConstraint.isResolved()
-													  ? variable->declaredTypeConstraint
-													  : materializeDependentParameterConstraint(section, variable, context);
-			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
-			bool accepted = assignmentConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+			TypeConstraint assignmentConstraint =
+				variable->declaredTypeConstraint.isResolved()
+					? variable->declaredTypeConstraint
+					: (!constraintReference->dependentTypeConstraints.empty()
+						   ? materializeDependentLocalConstraint(constraintReference, context, flexBindingFrameStack)
+						   : materializeDependentParameterConstraint(section, variable, context));
 			DataType assignmentType = variable->declaredType.isDeduced() ? variable->declaredType : variable->type;
-			if (!accepted && assignmentType.isDeduced() &&
-				tryApplyUserConversion(valueExpr, assignmentType, true, context, valueBindingFrameStack)) {
-				valueType = effectiveInferredExpressionType(valueExpr);
-				assignedValue = context.lookupExpressionValue(valueExpr);
-				accepted = assignmentConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
-			}
-			if (!accepted) {
-				if (!context.typesValid)
-					return;
-				Range diagnosticRange = valueExpr->range;
-				const SyntaxConfig &syntax = syntaxConfigForRange(context.parseContext, diagnosticRange);
-				std::string detail = renderConfiguredMessage(
-					syntax, "variable type constraint mismatch", "message",
-					{{"name", variable->name},
-					 {"constraint", constraintReference->declaredTypeConstraintName},
-					 {"actual_type", typeToUserName(valueType)}}
-				);
-				context.setTypeFailure(detail);
-				if (!context.trial) {
-					Diagnostic diagnostic = buildFailureDetailDiagnostic(diagnosticRange, detail);
-					diagnostic.relatedInfo.push_back(
-						{renderConfiguredMessage(
-							 syntax, "variable type constraint mismatch", "related declaration",
-							 {{"name", variable->name}, {"constraint", constraintReference->declaredTypeConstraintName}}
-						 ),
-						 constraintReference->declaredTypeConstraintRange}
-					);
-					context.addDiagnosticWithCurrentTrace(std::move(diagnostic));
-				}
+			if (!validateStoreConstraint(
+					variable->name, constraintReference->declaredTypeConstraintName,
+					constraintReference->declaredTypeConstraintRange, assignmentConstraint, assignmentType, valueExpr,
+					valueType, context, valueBindingFrameStack
+				)) {
 				return;
 			}
 		}

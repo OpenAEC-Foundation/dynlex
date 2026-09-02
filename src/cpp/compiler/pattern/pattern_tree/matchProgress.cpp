@@ -47,8 +47,11 @@ struct RemainingPatternElement {
 struct ExplicitVariableCandidate {
 	std::string name;
 	size_t elementCount{};
-	size_t textLength{};
+	size_t patternLength{};
+	size_t sourceArgumentCount{};
 };
+
+static std::optional<std::string> numericSourceSpelling(const PatternReference *reference, size_t sourceArgumentIndex);
 
 static bool
 explicitVariableDeclarationPrecedes(const Range &declaration, const PatternReference &reference, size_t sourceElementIndex) {
@@ -67,7 +70,9 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 		return result;
 	const std::vector<PatternElement> &sourceElements = progress.patternReference->patternElements;
 	std::unordered_set<std::string> shadowedNames;
-	for (Section *section = progress.patternReference->range().section(); section; section = section->parent) {
+	Section *candidateScope = progress.patternReference->matchingScope ? progress.patternReference->matchingScope
+																	   : progress.patternReference->range().section();
+	for (Section *section = candidateScope; section; section = section->parent) {
 		for (const auto &[name, declaration] : section->explicitVariableDeclarations) {
 			if (!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
 				continue;
@@ -77,16 +82,29 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 			if (nameElements.empty() || progress.sourceElementIndex + nameElements.size() > sourceElements.size())
 				continue;
 			bool matches = true;
+			size_t sourceArgumentIndex = progress.sourceArgumentIndex;
+			size_t sourceArgumentCount = 0;
+			size_t patternLength = 0;
 			for (size_t index = 0; index < nameElements.size(); index++) {
 				const PatternElement &source = sourceElements[progress.sourceElementIndex + index];
 				const PatternElement &expected = nameElements[index];
-				if (source.type != expected.type || source.text != expected.text) {
+				bool exact = source.type == expected.type && source.text == expected.text;
+				bool numericWord = false;
+				if (source.type == PatternElement::Type::Variable) {
+					std::optional<std::string> numericSpelling =
+						numericSourceSpelling(progress.patternReference, sourceArgumentIndex++);
+					sourceArgumentCount++;
+					numericWord = expected.type == PatternElement::Type::VariableLike && numericSpelling &&
+								  *numericSpelling == expected.text;
+				}
+				if (!exact && !numericWord) {
 					matches = false;
 					break;
 				}
+				patternLength += source.text.size();
 			}
 			if (matches)
-				result.push_back({name, nameElements.size(), name.size()});
+				result.push_back({name, nameElements.size(), patternLength, sourceArgumentCount});
 		}
 	}
 	std::sort(result.begin(), result.end(), [](const auto &left, const auto &right) {
@@ -456,8 +474,9 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					substituteStep.currentNode = currentNode->argumentChild;
 					storage.append(substituteStep.match.nodesPassed, substituteStep.currentNode);
 					substituteStep.sourceElementIndex += candidate.elementCount;
+					substituteStep.sourceArgumentIndex += candidate.sourceArgumentCount;
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
-					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + candidate.textLength);
+					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + candidate.patternLength);
 					size_t variableIndex = substituteStep.match.discoveredVariables.size();
 					storage.append(substituteStep.match.discoveredVariables, VariableMatch{candidate.name, lineStart, lineEnd});
 					storage.append(
@@ -465,7 +484,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
 					substituteStep.matchedArgumentIndex++;
-					substituteStep.patternPos += candidate.textLength;
+					substituteStep.patternPos += candidate.patternLength;
 					nextMatches.push_back(std::move(substituteStep));
 				}
 			};

@@ -1,0 +1,9 @@
+import lib/std.dl
+
+function the local length for {fixed integer:item count}:
+    execute:
+        set {an array of item count items:values} to [1, 2]
+        ignore {an array of item count items:values}
+        return the length of values
+
+print the local length for 2 as a line

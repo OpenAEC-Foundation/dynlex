@@ -689,3 +689,87 @@ static bool compileDependentPatternSignatures(ParseContext &parseContext) {
 	};
 	return visit(parseContext.mainSection);
 }
+
+static bool compileDependentLocalVariableConstraints(ParseContext &parseContext) {
+	std::function<bool(Section *)> visit = [&](Section *section) {
+		Section *definitionSection = enclosingPatternDefinitionSection(section);
+		for (auto &[name, variable] : section->variables) {
+			(void)name;
+			if (!variable || !definitionSection)
+				continue;
+			bool parameterVariable =
+				section == definitionSection && sectionVariableIsPatternParameter(definitionSection, variable->name);
+			if (parameterVariable)
+				continue;
+			bool hasDependentConstraint = false;
+			for (VariableReference *reference : variable->declaredTypeConstraintReferences) {
+				if (!reference || !reference->hasDependentTypeConstraint)
+					continue;
+				hasDependentConstraint = true;
+				reference->dependentTypeConstraints.clear();
+				for (PatternDefinition *definition : definitionSection->patternDefinitions) {
+					for (size_t pathIndex = 0; pathIndex < definition->signaturePaths.size(); pathIndex++) {
+						auto &parameters = definition->signaturePaths[pathIndex].parameters;
+						auto constraint = compileDependentParameterConstraint(
+							parseContext, *definition, pathIndex, parameters.size(), parameters,
+							reference->declaredTypeConstraintRange, reference->declaredTypeConstraintName
+						);
+						if (!constraint)
+							return false;
+						reference->dependentTypeConstraints.push_back({definition, pathIndex, std::move(*constraint)});
+					}
+				}
+				requireCompilerInvariant(
+					!reference->dependentTypeConstraints.empty(),
+					"dependent local variable constraint has no enclosing signature path"
+				);
+			}
+			if (!hasDependentConstraint || variable->declaredTypeConstraintReferences.size() < 2)
+				continue;
+			auto constraintForPath = [](VariableReference *reference, PatternDefinition *definition, size_t pathIndex) {
+				if (!reference->hasDependentTypeConstraint)
+					return TypeConstraintTemplate::constant(reference->declaredTypeConstraint);
+				auto compiled = std::find_if(
+					reference->dependentTypeConstraints.begin(), reference->dependentTypeConstraints.end(),
+					[&](const DependentVariableTypeConstraint &candidate) {
+					return candidate.definition == definition && candidate.pathIndex == pathIndex;
+				}
+				);
+				requireCompilerInvariant(
+					compiled != reference->dependentTypeConstraints.end(),
+					"dependent local constraint is missing an enclosing signature path"
+				);
+				return compiled->constraint;
+			};
+			VariableReference *first = variable->declaredTypeConstraintReferences.front();
+			for (size_t referenceIndex = 1; referenceIndex < variable->declaredTypeConstraintReferences.size();
+				 referenceIndex++) {
+				VariableReference *current = variable->declaredTypeConstraintReferences[referenceIndex];
+				for (PatternDefinition *definition : definitionSection->patternDefinitions) {
+					for (size_t pathIndex = 0; pathIndex < definition->signaturePaths.size(); pathIndex++) {
+						if (constraintForPath(first, definition, pathIndex) ==
+							constraintForPath(current, definition, pathIndex)) {
+							continue;
+						}
+						Diagnostic diagnostic(
+							parseContext, Diagnostic::Level::Error, "conflicting variable type constraints",
+							current->declaredTypeConstraintRange, "name", variable->name, "first_type",
+							first->declaredTypeConstraintName, "second_type", current->declaredTypeConstraintName
+						);
+						diagnostic.relatedInfo.push_back(
+							{"Variable '" + variable->name + "' was first constrained here", first->declaredTypeConstraintRange}
+						);
+						parseContext.addDiagnostic(std::move(diagnostic));
+						return false;
+					}
+				}
+			}
+		}
+		for (Section *child : section->children) {
+			if (!visit(child))
+				return false;
+		}
+		return true;
+	};
+	return visit(parseContext.mainSection);
+}

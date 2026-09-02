@@ -11,6 +11,14 @@ struct DeclaredTypeConstraintWorkItem {
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
 
+static Section *enclosingPatternDefinitionSection(Section *section) {
+	for (Section *current = section; current; current = current->parent) {
+		if (!current->patternDefinitions.empty())
+			return current;
+	}
+	return nullptr;
+}
+
 static bool sectionVariableIsPatternParameter(Section *section, const std::string &name) {
 	if (!section)
 		return false;
