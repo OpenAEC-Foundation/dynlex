@@ -9,13 +9,18 @@ static bool inferPatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
 );
 
+static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstraint(
+	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
+	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
+);
+
 static std::optional<ResolvedPatternConstraint> resolvePatternConstraintForInference(
 	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
 	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
 ) {
 	if (context.unresolvedPatternConstraintSignal) {
 		std::optional<ResolvedPatternConstraint> constraint =
-			resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+			resolveProvisionalPatternConstraint(context, definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
 		if (!constraint)
 			*context.unresolvedPatternConstraintSignal = true;
 		return constraint;

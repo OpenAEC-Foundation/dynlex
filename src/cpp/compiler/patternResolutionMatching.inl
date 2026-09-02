@@ -924,21 +924,29 @@ bool resolvePatterns(ParseContext &context) {
 		auto &references = refsIt->second;
 		bool isGlobal = context.declaredGlobalVariables.contains(name);
 
-		std::unordered_map<Section *, VariableReference *> earliestSectionReferences;
+		std::unordered_map<VariableReference *, Section *> referenceOwners;
+		std::unordered_map<Section *, VariableReference *> earliestImplicitSectionReferences;
 		for (VariableReference *ref : references) {
 			Section *sec = ref->range.section();
-			auto [existing, inserted] = earliestSectionReferences.emplace(sec, ref);
+			if (Section *explicitSection = visibleExplicitVariableSection(sec, name, ref)) {
+				referenceOwners[ref] = explicitSection;
+				continue;
+			}
+			auto [existing, inserted] = earliestImplicitSectionReferences.emplace(sec, ref);
 			if (!inserted && variableReferenceSourcePosition(ref) < variableReferenceSourcePosition(existing->second))
 				existing->second = ref;
 		}
-		std::unordered_map<Section *, Section *> sectionToHighest;
-		for (const auto &[sec, earliestReference] : earliestSectionReferences) {
-			sectionToHighest[sec] =
-				highestVariableReferenceSection(sec, name, earliestReference, isGlobal, earliestSectionReferences);
+		std::unordered_map<Section *, Section *> implicitSectionOwners;
+		for (const auto &[sec, _] : earliestImplicitSectionReferences) {
+			implicitSectionOwners[sec] = highestImplicitVariableSection(sec, name, earliestImplicitSectionReferences);
 		}
 		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-		for (VariableReference *ref : references)
-			groups[sectionToHighest[ref->range.section()]].push_back(ref);
+		for (VariableReference *ref : references) {
+			auto explicitOwner = referenceOwners.find(ref);
+			Section *owner =
+				explicitOwner != referenceOwners.end() ? explicitOwner->second : implicitSectionOwners.at(ref->range.section());
+			groups[owner].push_back(ref);
+		}
 		std::vector<Section *> orderedGroupSections;
 		orderedGroupSections.reserve(groups.size());
 		for (auto &[highestSection, _] : groups)

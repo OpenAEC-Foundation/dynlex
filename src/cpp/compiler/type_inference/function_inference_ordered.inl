@@ -252,7 +252,7 @@ static void inferOrderedExpression(
 			}
 			// Look up variable in scope
 			Section *sec = expr->range.line ? expr->range.line->section : nullptr;
-			Variable *var = sec ? sec->findVariable(varName) : nullptr;
+			Variable *var = sec ? sec->findVariable(expr->variable) : nullptr;
 			if (!var) {
 				context.typesValid = false;
 				context.setTypeFailure(renderConfiguredMessage(

@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function constrained type of {fixed integer:item count} and {value}:
+    replacement:
+        the type of {an array of item count items:value}
+
+set {constrained type of 2 and [1, 2, 3]:item} to [1, 2, 3]

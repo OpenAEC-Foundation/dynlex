@@ -938,3 +938,15 @@ Variable *Section::findVariable(const std::string &name) {
 	}
 	return nullptr;
 }
+
+Variable *Section::findVariable(const VariableReference *reference) {
+	if (!reference)
+		return nullptr;
+	const VariableReference *definition = reference->definition ? reference->definition : reference;
+	for (Section *section = this; section; section = section->parent) {
+		auto variable = section->variables.find(definition->name);
+		if (variable != section->variables.end() && variable->second && variable->second->definition == definition)
+			return variable->second;
+	}
+	return nullptr;
+}

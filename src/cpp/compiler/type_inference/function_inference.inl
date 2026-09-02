@@ -229,8 +229,7 @@ runScopedInstantiationInferencePass(InferenceContext &context, Instantiation &in
 static Variable *findVariableForExpression(Expression *expression) {
 	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable || !expression->range.line)
 		return nullptr;
-	return expression->range.line->section ? expression->range.line->section->findVariable(expression->variable->name)
-										   : nullptr;
+	return expression->range.line->section ? expression->range.line->section->findVariable(expression->variable) : nullptr;
 }
 
 static bool variableIsCurrentInstantiationParameter(const InferenceContext &context, Variable *variable) {

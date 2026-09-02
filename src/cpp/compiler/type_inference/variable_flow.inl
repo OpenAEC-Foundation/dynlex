@@ -103,7 +103,7 @@ static bool refineStorageExpressionType(
 
 	if (storage->kind == Expression::Kind::Variable && storage->variable) {
 		Section *section = storage->range.line ? storage->range.line->section : nullptr;
-		Variable *variable = section ? section->findVariable(storage->variable->name) : nullptr;
+		Variable *variable = section ? section->findVariable(storage->variable) : nullptr;
 		if (!variable || !variable->type.isDeduced())
 			return false;
 		DataType refinedType;

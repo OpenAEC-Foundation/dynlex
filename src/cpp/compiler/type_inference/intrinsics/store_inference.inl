@@ -101,12 +101,8 @@ static TypeConstraint materializeDependentParameterConstraint(Section *section, 
 	requireCompilerInvariant(section && variable, "dependent variable constraint has no section variable");
 	while (section) {
 		auto candidate = section->variables.find(variable->name);
-		if (candidate != section->variables.end()) {
-			requireCompilerInvariant(
-				candidate->second == variable, "dependent variable constraint resolved to a shadowed variable"
-			);
+		if (candidate != section->variables.end() && candidate->second == variable)
 			break;
-		}
 		section = section->parent;
 	}
 	requireCompilerInvariant(section, "dependent variable constraint has no owning section");
@@ -227,7 +223,7 @@ static bool validateBoundParameterStoreConstraints(
 				bindingFrameStack.lookupParameterConstraint(parameterDefinition);
 			if (constraint && validatedParameters.insert(parameterDefinition).second) {
 				Section *section = destination->range.line ? destination->range.line->section : nullptr;
-				Variable *variable = section ? section->findVariable(destination->variable->name) : nullptr;
+				Variable *variable = section ? section->findVariable(destination->variable) : nullptr;
 				DataType conversionType = variable && variable->declaredType.isDeduced()
 											  ? variable->declaredType
 											  : (variable ? variable->type : destination->type);
@@ -298,7 +294,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 
 	if (destinationExpr->kind == Expression::Kind::Variable && destinationExpr->variable) {
 		Section *section = destinationExpr->range.line ? destinationExpr->range.line->section : nullptr;
-		Variable *variable = section ? section->findVariable(destinationExpr->variable->name) : nullptr;
+		Variable *variable = section ? section->findVariable(destinationExpr->variable) : nullptr;
 		if (!variable) {
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
 			return;
@@ -468,7 +464,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			return;
 		if (ownerExpr && ownerExpr->kind == Expression::Kind::Variable && ownerExpr->variable) {
 			Section *ownerSection = ownerExpr->range.line ? ownerExpr->range.line->section : nullptr;
-			Variable *ownerVariable = ownerSection ? ownerSection->findVariable(ownerExpr->variable->name) : nullptr;
+			Variable *ownerVariable = ownerSection ? ownerSection->findVariable(ownerExpr->variable) : nullptr;
 			if (ownerVariable && ownerVariable->type.kind == DataType::Kind::Class &&
 				ownerVariable->type.classDefinition == classDefinition) {
 				if (context.trial && context.trialJournal)

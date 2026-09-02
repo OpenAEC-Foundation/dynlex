@@ -200,6 +200,8 @@ struct Section {
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);
+	// Find the variable with this exact resolved binding identity.
+	Variable *findVariable(const VariableReference *reference);
 
 	// The line that opens this section (e.g. "loop 10 times:")
 	CodeLine *openingLine{};

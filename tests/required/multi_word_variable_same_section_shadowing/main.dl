@@ -1,0 +1,6 @@
+import lib/std.dl
+
+set {integer:shared value} to 1
+if true:
+    print shared value as a line
+    set {a floating-point number:shared value} to 2.0

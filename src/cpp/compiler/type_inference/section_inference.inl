@@ -660,6 +660,10 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 
 	size_t unresolvedCount = items.size();
 	while (unresolvedCount > 0) {
+		if (!initializePatternPathSignatures(parseContext)) {
+			destroyExpressions();
+			return false;
+		}
 		bool madeProgress = false;
 		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)

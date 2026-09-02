@@ -204,12 +204,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 	}
 	if (resolved->kind == Expression::Kind::Variable && resolved->variable) {
 		VariableReference *varRef = resolved->variable;
-		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-		Section *sec = definition->range.line ? definition->range.line->section : nullptr;
-		Variable *var = sec ? sec->findVariable(definition->name) : nullptr;
-		if (!var && resolved->range.line)
-			var =
-				resolved->range.line->section ? resolved->range.line->section->findVariable(resolved->variable->name) : nullptr;
+		Section *sec = resolved->range.line ? resolved->range.line->section : nullptr;
+		Variable *var = sec ? sec->findVariable(varRef) : nullptr;
 		if (var && var->type.isDeduced())
 			return var->type;
 		if (std::optional<DataType> numericTokenType = parseNumericTokenType(

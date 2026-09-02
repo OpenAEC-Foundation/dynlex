@@ -42,23 +42,7 @@ static std::pair<int, int> variableReferenceSourcePosition(const VariableReferen
 	return {reference->range.line->mergedLineIndex, reference->range.start()};
 }
 
-static bool
-sectionHasVariableReferenceBefore(const Section *section, const std::string &name, const VariableReference *reference) {
-	auto found = section->variableReferences.find(name);
-	if (found == section->variableReferences.end())
-		return false;
-	const std::pair<int, int> referencePosition = variableReferenceSourcePosition(reference);
-	return std::ranges::any_of(found->second, [&](const VariableReference *candidate) {
-		return variableReferenceSourcePosition(candidate) < referencePosition;
-	});
-}
-
-static Section *highestVariableReferenceSection(
-	Section *section, const std::string &name, VariableReference *earliestReference, bool isGlobal,
-	const std::unordered_map<Section *, VariableReference *> &earliestSectionReferences
-) {
-	Section *highest = section;
-	const bool implicitlyShared = !section->explicitVariableDeclarations.contains(name);
+static Section *enclosingVariableFunctionScope(Section *section) {
 	Section *functionScope = nullptr;
 	for (Section *ancestor = section; ancestor; ancestor = ancestor->parent) {
 		if (ancestor->type == SectionType::Function && !ancestor->isFlex) {
@@ -66,22 +50,45 @@ static Section *highestVariableReferenceSection(
 			break;
 		}
 	}
-	bool declaredGlobalHere = false;
-	if (functionScope) {
-		declaredGlobalHere = std::ranges::find(functionScope->globalVariables, name) != functionScope->globalVariables.end();
+	return functionScope;
+}
+
+static bool functionDeclaresGlobalName(const Section *functionScope, const std::string &name) {
+	return functionScope && std::ranges::find(functionScope->globalVariables, name) != functionScope->globalVariables.end();
+}
+
+static Section *visibleExplicitVariableSection(Section *section, const std::string &name, const VariableReference *reference) {
+	Section *functionScope = enclosingVariableFunctionScope(section);
+	bool declaredGlobalHere = functionDeclaresGlobalName(functionScope, name);
+	const std::pair<int, int> referencePosition = variableReferenceSourcePosition(reference);
+	for (Section *current = section; current; current = current->parent) {
+		auto declaration = current->explicitVariableDeclarations.find(name);
+		if (declaration != current->explicitVariableDeclarations.end()) {
+			const Range &range = declaration->second;
+			if (std::pair(range.line->mergedLineIndex, range.start()) <= referencePosition)
+				return current;
+		}
+		if (!declaredGlobalHere && current == functionScope)
+			break;
 	}
+	return nullptr;
+}
+
+static Section *highestImplicitVariableSection(
+	Section *section, const std::string &name,
+	const std::unordered_map<Section *, VariableReference *> &earliestImplicitSectionReferences
+) {
+	Section *highest = section;
+	Section *functionScope = enclosingVariableFunctionScope(section);
+	bool declaredGlobalHere = false;
+	if (functionScope)
+		declaredGlobalHere = functionDeclaresGlobalName(functionScope, name);
 	for (Section *ancestor = section->parent; ancestor; ancestor = ancestor->parent) {
 		if (!declaredGlobalHere && ancestor == functionScope)
 			break;
-		auto ancestorReference = earliestSectionReferences.find(ancestor);
-		if (ancestorReference == earliestSectionReferences.end())
+		if (!earliestImplicitSectionReferences.contains(ancestor))
 			continue;
-		if (!isGlobal && !implicitlyShared && !sectionHasVariableReferenceBefore(ancestor, name, earliestReference)) {
-			continue;
-		}
 		highest = ancestor;
-		if (!implicitlyShared)
-			earliestReference = ancestorReference->second;
 	}
 	return highest;
 }

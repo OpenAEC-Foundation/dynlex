@@ -942,7 +942,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 		if (!isCompileTimeKnown(computedValue) && boundExpression->kind == Expression::Kind::Variable &&
 			boundExpression->variable) {
 			Section *boundSection = boundExpression->range.line ? boundExpression->range.line->section : nullptr;
-			Variable *boundVariable = boundSection ? boundSection->findVariable(boundExpression->variable->name) : nullptr;
+			Variable *boundVariable = boundSection ? boundSection->findVariable(boundExpression->variable) : nullptr;
 			if (!boundVariable) {
 				computedValue = boundExpression->variable->name;
 				context.setExpressionValue(boundExpression, computedValue);
