@@ -65,3 +65,13 @@ int CodeLine::mapSourceToOffset(const std::string &uri, int lineIndex, int colum
 bool CodeLine::containsSourceLocation(const std::string &uri, int lineIndex, int column) const {
 	return mapSourceToOffset(uri, lineIndex, column) >= 0;
 }
+
+bool CodeLine::hasIdentitySourceMapping() const {
+	if (sourceSlices.empty())
+		return true;
+	if (sourceSlices.size() != 1)
+		return false;
+	const SourceSlice &slice = sourceSlices.front();
+	return slice.transformedStart == 0 && slice.transformedEnd == static_cast<int>(fullText.size()) &&
+		   slice.sourceFile == sourceFile && slice.sourceFileLineIndex == sourceFileLineIndex && slice.sourceColumnStart == 0;
+}

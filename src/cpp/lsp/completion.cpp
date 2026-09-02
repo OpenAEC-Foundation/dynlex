@@ -236,7 +236,10 @@ std::set<std::string> visibleVariableNames(const CompletionContext &context) {
 	SourceFile *sourceFile = completionSourceFile(context);
 	Section *scope = context.parseContext->mainSection;
 	for (CodeLine *line : context.parseContext->codeLines) {
-		if (line && line->sourceFile == sourceFile && line->sourceFileLineIndex == context.line && line->section) {
+		bool matchingSource = line && line->hasIdentitySourceMapping()
+								  ? line->sourceFile == sourceFile && line->sourceFileLineIndex == context.line
+								  : line && line->containsSourceLocation(context.uri, context.line, context.character);
+		if (matchingSource && line->section) {
 			scope = line->section;
 			break;
 		}
@@ -835,6 +838,28 @@ std::string getLinePrefixFromFile(const std::string &path, int zeroBasedLine, in
 
 } // namespace
 
+CompletionContext makeCompletionContext(
+	ParseContext *parseContext, std::string uri, std::string_view sourceLine, std::string workspaceRootPath,
+	int sourceLineIndex, int sourceCharacter
+) {
+	CompletionContext result{
+		parseContext,	 std::move(uri), std::string(sourceLine.substr(0, sourceCharacter)), std::move(workspaceRootPath),
+		sourceLineIndex, sourceCharacter
+	};
+	if (!parseContext)
+		return result;
+	for (CodeLine *line : parseContext->codeLines) {
+		if (!line || line->hasIdentitySourceMapping())
+			continue;
+		int localOffset = line->mapSourceToOffset(result.uri, sourceLineIndex, sourceCharacter);
+		if (localOffset < 0)
+			continue;
+		result.linePrefix = line->fullText.substr(0, localOffset);
+		break;
+	}
+	return result;
+}
+
 CompletionList collectCompletions(const CompletionContext &context) {
 	const SyntaxConfig &syntax =
 		context.parseContext ? syntaxConfigForSourcePath(*context.parseContext, context.uri) : SyntaxConfig{};
@@ -915,14 +940,11 @@ filterPatternContinuations(const CompletionContext &context, const std::vector<s
 
 std::string
 renderCompletionDebugReport(ParseContext &context, const std::string &path, int zeroBasedLine, int zeroBasedCharacter) {
-	CompletionContext completionContext{
-		.parseContext = &context,
-		.uri = pathutil::toAbsoluteUri(path),
-		.linePrefix = getLinePrefixFromFile(path, zeroBasedLine, zeroBasedCharacter),
-		.workspaceRootPath = std::filesystem::current_path().string(),
-		.line = zeroBasedLine,
-		.character = zeroBasedCharacter,
-	};
+	std::string sourcePrefix = getLinePrefixFromFile(path, zeroBasedLine, zeroBasedCharacter);
+	CompletionContext completionContext = makeCompletionContext(
+		&context, pathutil::toAbsoluteUri(path), sourcePrefix, std::filesystem::current_path().string(), zeroBasedLine,
+		zeroBasedCharacter
+	);
 
 	CompletionList completions = collectCompletions(completionContext);
 

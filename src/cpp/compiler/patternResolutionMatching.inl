@@ -376,7 +376,10 @@ bool resolvePatterns(ParseContext &context) {
 		return false;
 	for (VariableReference *reference : context.pendingExplicitVariableReferences) {
 		requireCompilerInvariant(reference && reference->range.section(), "explicit variable reference has no source section");
-		reference->range.section()->addVariableReference(context, reference);
+		Section *section = reference->range.section();
+		section->addVariableReference(context, reference);
+		if (!reference->declaredTypeConstraintName.empty() && !reference->definition)
+			section->registerExplicitVariableName(reference->name, reference->range);
 	}
 	context.pendingExplicitVariableReferences.clear();
 	for (Section *section : unResolvedSections) {

@@ -1,6 +1,7 @@
 #pragma once
 #include "lspProtocol.h"
 #include <string>
+#include <string_view>
 
 struct ParseContext;
 
@@ -15,6 +16,10 @@ struct CompletionContext {
 	int character = 0;
 };
 
+CompletionContext makeCompletionContext(
+	ParseContext *parseContext, std::string uri, std::string_view sourceLine, std::string workspaceRootPath,
+	int sourceLineIndex, int sourceCharacter
+);
 CompletionList collectCompletions(const CompletionContext &context);
 PatternFrontierList collectPatternFrontiers(const CompletionContext &context);
 FilterContinuationsResult

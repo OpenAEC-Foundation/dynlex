@@ -90,4 +90,5 @@ struct CodeLine {
 	SourceLocation mapOffsetToSource(int offset, bool preferNextAtBoundary = false) const;
 	int mapSourceToOffset(const std::string &uri, int sourceLineIndex, int column) const;
 	bool containsSourceLocation(const std::string &uri, int sourceLineIndex, int column) const;
+	bool hasIdentitySourceMapping() const;
 };

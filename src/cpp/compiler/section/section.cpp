@@ -583,7 +583,8 @@ Expression *Section::detectPatternsRecursively(
 					range.subRange(child->start, child->start + capture.typeConstraint.size());
 			}
 			if (registerPatternReferences) {
-				registerExplicitVariableName(variableReference->name, variableReference->range);
+				if (variableReference->declaredTypeConstraintName.empty())
+					registerExplicitVariableName(variableReference->name, variableReference->range);
 				context.pendingExplicitVariableReferences.push_back(variableReference);
 			} else {
 				auto definition = variableDefinitions.find(variableReference->name);
@@ -766,7 +767,7 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 	requireCompilerInvariant(reference && reference->range.line, "variable reference has no source position");
 	variableReferences[reference->name].push_back(reference);
 	auto explicitDeclaration = explicitVariableDeclarations.find(reference->name);
-	if (reference->declaredTypeConstraintName.empty() && explicitDeclaration != explicitVariableDeclarations.end() &&
+	if (explicitDeclaration != explicitVariableDeclarations.end() &&
 		std::pair(explicitDeclaration->second.line->mergedLineIndex, explicitDeclaration->second.start()) <=
 			std::pair(reference->range.line->mergedLineIndex, reference->range.start())) {
 		context.unresolvedVariableReferences[reference->name].push_back(reference);

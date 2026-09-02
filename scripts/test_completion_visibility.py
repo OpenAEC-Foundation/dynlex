@@ -74,6 +74,13 @@ def main() -> int:
     ):
         raise AssertionError("completion duplicated a multi-word variable prefix before the cursor")
 
+    shorthand_source = (
+        project_dir / "tests" / "required" / "declaration_shorthand_source_mapping" / "main.dl"
+    )
+    shorthand_body_labels = completion_labels(compiler, shorthand_source, "4:30")
+    if "value" not in shorthand_body_labels:
+        raise AssertionError("completion hid an inline shorthand parameter from its transformed body")
+
     return 0
 
 

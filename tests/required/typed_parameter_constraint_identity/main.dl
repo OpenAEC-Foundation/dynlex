@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function echo {input value}:
+    execute:
+        print {integer:input value} as a line
+        return input value
+
+print echo 7 as a line

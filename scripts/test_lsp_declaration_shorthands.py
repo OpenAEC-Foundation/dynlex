@@ -25,6 +25,31 @@ def tagged_tokens(root: pathlib.Path, document: pathlib.Path) -> str:
         session.close()
 
 
+def completion_labels(root: pathlib.Path, document: pathlib.Path, line: int, character: int) -> set[str]:
+    uri = to_file_uri(document)
+    session = LspSession(default_server_path(root), root, False, False)
+    try:
+        initialize_session(session, root)
+        session.notify(
+            "textDocument/didOpen",
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "dynlex",
+                    "version": 1,
+                    "text": document.read_text(encoding="utf-8"),
+                }
+            },
+        )
+        result = session.request(
+            "textDocument/completion",
+            {"textDocument": {"uri": uri}, "position": {"line": line, "character": character}},
+        )
+        return {item["label"] for item in result["items"]}
+    finally:
+        session.close()
+
+
 def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
     declaration_document = root / "tests" / "required" / "declaration_shorthands" / "main.dl"
@@ -48,6 +73,8 @@ def main() -> None:
     for fragment in expected_fragments:
         if fragment not in mapping_tokens:
             raise AssertionError(f"missing mapped shorthand token fragment: {fragment!r}\n{mapping_tokens}")
+    if "value" not in completion_labels(root, mapping_document, 3, 29):
+        raise AssertionError("completion hid an inline shorthand parameter from its transformed body")
 
 
 if __name__ == "__main__":
