@@ -22,9 +22,7 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 	context.fail(buildFailureDetailDiagnostic(destinationExpr->range, std::move(detail)));
 }
 
-static TypeConstraint materializeDependentParameterConstraint(
-	Section *section, Variable *variable, InferenceContext &context
-) {
+static TypeConstraint materializeDependentParameterConstraint(Section *section, Variable *variable, InferenceContext &context) {
 	requireCompilerInvariant(section && variable, "dependent variable constraint has no section variable");
 	while (section) {
 		auto candidate = section->variables.find(variable->name);
@@ -52,27 +50,25 @@ static TypeConstraint materializeDependentParameterConstraint(
 			std::optional<size_t> constrainedParameterIndex;
 			bool pathMatchesInstantiation = true;
 			size_t parameterIndex = 0;
-			forEachPatternParameterName(
-				definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
-					if (!pathMatchesInstantiation || parameterIndex >= instantiation.argumentTypes.size()) {
-						pathMatchesInstantiation = false;
-						parameterIndex++;
-						return;
-					}
-					auto parameterType = instantiation.parameterTypesByName.find(name);
-					if (parameterType == instantiation.parameterTypesByName.end() ||
-						parameterType->second != instantiation.argumentTypes[parameterIndex]) {
-						pathMatchesInstantiation = false;
-					}
-					auto constantValue = instantiation.constantParameterValues.find(name);
-					argumentValues.push_back(
-						constantValue == instantiation.constantParameterValues.end() ? CompileTimeValue{} : constantValue->second
-					);
-					if (name == variable->name)
-						constrainedParameterIndex = parameterIndex;
+			forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
+				if (!pathMatchesInstantiation || parameterIndex >= instantiation.argumentTypes.size()) {
+					pathMatchesInstantiation = false;
 					parameterIndex++;
+					return;
 				}
-			);
+				auto parameterType = instantiation.parameterTypesByName.find(name);
+				if (parameterType == instantiation.parameterTypesByName.end() ||
+					parameterType->second != instantiation.argumentTypes[parameterIndex]) {
+					pathMatchesInstantiation = false;
+				}
+				auto constantValue = instantiation.constantParameterValues.find(name);
+				argumentValues.push_back(
+					constantValue == instantiation.constantParameterValues.end() ? CompileTimeValue{} : constantValue->second
+				);
+				if (name == variable->name)
+					constrainedParameterIndex = parameterIndex;
+				parameterIndex++;
+			});
 			if (!pathMatchesInstantiation || parameterIndex != instantiation.argumentTypes.size() ||
 				!constrainedParameterIndex) {
 				continue;
@@ -94,9 +90,7 @@ static TypeConstraint materializeDependentParameterConstraint(
 			}
 		}
 	}
-	requireCompilerInvariant(
-		materializedConstraint.has_value(), "dependent variable constraint has no active parameter path"
-	);
+	requireCompilerInvariant(materializedConstraint.has_value(), "dependent variable constraint has no active parameter path");
 	return std::move(*materializedConstraint);
 }
 
@@ -154,8 +148,8 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			VariableReference *constraintReference = variable->firstDeclaredTypeConstraintReference();
 			requireCompilerInvariant(constraintReference, "typed variable has no constraint source reference");
 			TypeConstraint assignmentConstraint = variable->declaredTypeConstraint.isResolved()
-											  ? variable->declaredTypeConstraint
-											  : materializeDependentParameterConstraint(section, variable, context);
+													  ? variable->declaredTypeConstraint
+													  : materializeDependentParameterConstraint(section, variable, context);
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
 			bool accepted = assignmentConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
 			DataType assignmentType = variable->declaredType.isDeduced() ? variable->declaredType : variable->type;
