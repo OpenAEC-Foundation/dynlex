@@ -209,6 +209,18 @@ Expression *ParseContext::cloneExpressionTree(Expression *expression, bool prese
 	return cloneExpressionTreeImpl(*this, expression, preserveInferenceMetadata);
 }
 
+CodeLine *ParseContext::createCodeLine(
+	lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
+) {
+	auto line = std::make_unique<CodeLine>(std::string_view{}, sourceFile);
+	line->sourceFileLineIndex = sourceFileLineIndex;
+	line->setOwnedText(std::move(text));
+	line->sourceSlices = std::move(sourceSlices);
+	CodeLine *result = line.get();
+	ownedCodeLines.push_back(std::move(line));
+	return result;
+}
+
 std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata) {
 	if (!section)
 		return {};

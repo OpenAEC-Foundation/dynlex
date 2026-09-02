@@ -1,0 +1,5 @@
+import lib/std.dl
+
+announce means: print "announcement"
+
+announce

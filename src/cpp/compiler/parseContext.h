@@ -251,6 +251,9 @@ struct ParseContext {
 	~ParseContext();
 	bool hasCompleted(CompilationStage stage) const { return compilationStage >= stage; }
 	void addDiagnostic(Diagnostic diagnostic) { diagnostics.push_back(std::move(diagnostic)); }
+	CodeLine *createCodeLine(
+		lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string text, std::vector<SourceSlice> sourceSlices
+	);
 	void addSourceToken(Range range, SourceTokenKind kind, SectionType referencedPatternType = SectionType::Function) {
 		sourceTokenAnnotations.push_back({range, kind, referencedPatternType});
 	}

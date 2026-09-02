@@ -1,0 +1,1 @@
+tests/required/action_shorthand_requires_pattern/main.dl:1-3: Error: Definition shorthand 'to' requires a pattern

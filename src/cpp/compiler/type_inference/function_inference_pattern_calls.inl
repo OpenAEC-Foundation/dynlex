@@ -735,8 +735,11 @@ static void inferFlexPatternCall(
 		expr->sectionBodyFallsThrough = context.sectionFlexBodyFrames[frameIndex].bodyFallsThrough;
 	}
 	DataType resolvedType = matchedSection->type == SectionType::Section ? DataType{DataType::Kind::Void} : bodyExpr->type;
-	if (resolvedType.isDeduced())
+	if (resolvedType.isDeduced()) {
 		expr->type = resolvedType;
+		if (!validateDefinitionReturnContract(matchedSection, def, resolvedType, context))
+			return;
+	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(bodyExpr));
 }
 
@@ -945,6 +948,8 @@ static bool inferNonFlexPatternCall(
 	if (!inst.inferring && !inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any) {
 		inst.returnType = {DataType::Kind::Void};
 	}
+	if (!validateDefinitionReturnContract(matchedSection, def, inst.returnType, context))
+		return true;
 	CompileTimeEvaluation inferredReturnValue{};
 	if (inst.returnType.isDeduced()) {
 		expr->type = inst.returnType;

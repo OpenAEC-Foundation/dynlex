@@ -1,0 +1,6 @@
+import lib/std.dl
+
+if true:
+    to bad value:
+        return value
+    bad 1

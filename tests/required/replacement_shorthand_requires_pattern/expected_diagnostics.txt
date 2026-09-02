@@ -1,0 +1,1 @@
+tests/required/replacement_shorthand_requires_pattern/main.dl:1-6: Error: Definition shorthand 'means' requires a pattern

@@ -25,6 +25,8 @@
             <div class="step-label">TL;DR</div>
             <ul class="tldr-list">
                 <li>A function is a reusable named pattern.</li>
+                <li>Use <code>to</code> for actions and <code>to get</code> for multi-line value functions.</li>
+                <li>Use <code>means:</code> for a value defined by one replacement expression.</li>
                 <li>Plain pattern words used in the body become variables.</li>
                 <li>Call the function by writing the same pattern words.</li>
             </ul>
@@ -34,14 +36,28 @@
             <article class="doc-card">
                 <div class="step-label">Pattern</div>
                 <div class="pattern-box">
-<pre><code>function pattern:
-    execute:
-        ...</code></pre>
+<pre><code>to action pattern:
+    ...
+
+to get value pattern:
+    return ...
+
+value pattern means: expression</code></pre>
                 </div>
                 <p>
-                    The first line contains the function
+                    The declaration line contains the function
                     <a class="inline-link" href="../terms.html#pattern">pattern</a>. Names inside that pattern can be
                     <a class="inline-link" href="../terms.html#parameter">parameters</a>.
+                </p>
+                <p>
+                    <code>to</code> declares an action and implicitly opens its <code>execute:</code> body. An action
+                    must return nothing. <code>to get</code> also opens an implicit <code>execute:</code> body, but it
+                    must return a value on every reachable path.
+                </p>
+                <p>
+                    <code>means:</code> declares a flex replacement that produces a value. Its expression is required
+                    on the same line. Use the full <code>function pattern:</code> form when the declaration needs
+                    metadata child sections such as <code>patterns:</code>, <code>before:</code>, or <code>after:</code>.
                 </p>
                 <p>
                     For plain words, DynLex detects parameters by usage. If the function body uses a plain pattern
@@ -54,9 +70,8 @@
                 <div class="code-block">
 <pre><code>import lib/std.dl
 
-function value squared:
-    execute:
-        return value * value
+to get value squared:
+    return value * value
 
 print 5 squared as a line</code></pre>
                 </div>

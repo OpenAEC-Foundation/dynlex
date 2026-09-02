@@ -1,0 +1,1 @@
+tests/required/value_shorthand_return_nothing/main.dl:8-21: Error: Value function 'missing value' must return a value

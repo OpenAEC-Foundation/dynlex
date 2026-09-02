@@ -125,37 +125,55 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	bool isExposed = false;
 	bool isImplicit = false;
 
-	// Parse keywords until we hit a section type keyword (function, section)
-	while (!remaining.empty()) {
-		std::size_t spaceIndex = remaining.find(' ');
-		std::string_view current = (spaceIndex != std::string::npos) ? remaining.substr(0, spaceIndex) : remaining;
-		remaining = (spaceIndex != std::string::npos) ? remaining.substr(spaceIndex + 1) : std::string_view{};
-
-		if (current == syntax.flexName) {
+	if (line->definitionShorthand != DefinitionShorthand::None) {
+		newSection = new FunctionSection(this);
+		switch (line->definitionShorthand) {
+		case DefinitionShorthand::Action:
+			newSection->returnContract = DefinitionReturnContract::Nothing;
+			break;
+		case DefinitionShorthand::Value:
+			newSection->returnContract = DefinitionReturnContract::Value;
+			break;
+		case DefinitionShorthand::Replacement:
+			newSection->returnContract = DefinitionReturnContract::ReplacementValue;
 			isFlex = true;
-		} else if (current == syntax.localName) {
-			isLocal = true;
-		} else if (current == syntax.exposedName) {
-			isExposed = true;
-		} else if (current == syntax.implicitName) {
-			isImplicit = true;
-		} else if (current == syntax.functionName) {
-			newSection = new FunctionSection(this);
 			break;
-		} else if (current == syntax.conversionName) {
-			newSection = new FunctionSection(this);
-			newSection->isConversion = true;
-			newSection->isImplicitConversion = isImplicit;
-			break;
-		} else if (current == syntax.sectionName) {
-			newSection = new SectionSection(this);
-			break;
-		} else if (current == syntax.className) {
-			newSection = new ClassSection(this);
-			break;
-		} else {
-			// Unknown keyword - not a section definition
-			break;
+		case DefinitionShorthand::None:
+			crashCompilerBug("missing definition shorthand kind");
+		}
+	} else {
+		// Parse keywords until we hit a section type keyword (function, section)
+		while (!remaining.empty()) {
+			std::size_t spaceIndex = remaining.find(' ');
+			std::string_view current = (spaceIndex != std::string::npos) ? remaining.substr(0, spaceIndex) : remaining;
+			remaining = (spaceIndex != std::string::npos) ? remaining.substr(spaceIndex + 1) : std::string_view{};
+
+			if (current == syntax.flexName) {
+				isFlex = true;
+			} else if (current == syntax.localName) {
+				isLocal = true;
+			} else if (current == syntax.exposedName) {
+				isExposed = true;
+			} else if (current == syntax.implicitName) {
+				isImplicit = true;
+			} else if (current == syntax.functionName) {
+				newSection = new FunctionSection(this);
+				break;
+			} else if (current == syntax.conversionName) {
+				newSection = new FunctionSection(this);
+				newSection->isConversion = true;
+				newSection->isImplicitConversion = isImplicit;
+				break;
+			} else if (current == syntax.sectionName) {
+				newSection = new SectionSection(this);
+				break;
+			} else if (current == syntax.className) {
+				newSection = new ClassSection(this);
+				break;
+			} else {
+				// Unknown keyword - not a section definition
+				break;
+			}
 		}
 	}
 

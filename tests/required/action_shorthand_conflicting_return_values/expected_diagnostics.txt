@@ -1,0 +1,1 @@
+tests/required/action_shorthand_conflicting_return_values/main.dl:4-17: Error: Action 'bad condition' must return nothing

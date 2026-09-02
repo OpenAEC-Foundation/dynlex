@@ -1,5 +1,37 @@
 #pragma once
 
+static std::string_view definitionReturnContractViolation(const Section *section, const DataType &returnType) {
+	if (!section || !returnType.isDeduced())
+		return {};
+	switch (section->returnContract) {
+	case DefinitionReturnContract::Inferred:
+		return {};
+	case DefinitionReturnContract::Nothing:
+		return returnType.kind == DataType::Kind::Void ? std::string_view{} : "action shorthand returns value";
+	case DefinitionReturnContract::Value:
+		return returnType.kind != DataType::Kind::Void ? std::string_view{} : "value shorthand returns nothing";
+	case DefinitionReturnContract::ReplacementValue:
+		return returnType.kind != DataType::Kind::Void ? std::string_view{} : "replacement shorthand returns nothing";
+	}
+	crashCompilerBug("unknown definition return contract");
+}
+
+static bool validateDefinitionReturnContract(
+	Section *section, PatternDefinition *definition, const DataType &returnType, InferenceContext &context
+) {
+	std::string_view message = definitionReturnContractViolation(section, returnType);
+	if (message.empty())
+		return true;
+	context.fail(
+		Diagnostic(
+			context.parseContext, Diagnostic::Level::Error, message, definition->range, "function",
+			std::string(definition->range.subString)
+		),
+		2, false
+	);
+	return false;
+}
+
 static std::optional<std::string> returnTypeReferenceSource(const DataType &type) {
 	if (!type.isDeduced() || type.kind == DataType::Kind::Void || type.isMetaType())
 		return std::nullopt;
@@ -111,6 +143,27 @@ static bool reconcileFunctionReturnType(
 		return true;
 	Instantiation &instantiation = *context.currentInstantiation;
 	Range returnRange = returnValueExpression ? returnValueExpression->range : returnExpression->range;
+	Section *definitionSection = instantiation.body ? instantiation.body->sourceSection : nullptr;
+	bool existingContractViolation = !definitionReturnContractViolation(definitionSection, instantiation.returnType).empty();
+	bool returnedValueFromAction = definitionSection &&
+								   definitionSection->returnContract == DefinitionReturnContract::Nothing &&
+								   returnType.kind != DataType::Kind::Void;
+	bool returnedNothingFromValue = definitionSection && definitionSection->returnContract == DefinitionReturnContract::Value &&
+									returnType.kind == DataType::Kind::Void;
+	if (existingContractViolation || returnedValueFromAction || returnedNothingFromValue) {
+		DataType violationType = definitionSection->returnContract == DefinitionReturnContract::Value
+									 ? DataType{DataType::Kind::Void}
+									 : (existingContractViolation ? instantiation.returnType : returnType);
+		if (instantiation.returnType != violationType) {
+			if (context.trial) {
+				requireCompilerInvariant(context.trialJournal, "trial return-type mutation requires a rollback journal");
+				context.trialJournal->recordInstantiationWrite(&instantiation);
+			}
+			instantiation.returnType = violationType;
+			instantiation.returnTypeOriginRange = returnRange;
+		}
+		return true;
+	}
 	if (!instantiation.returnType.isDeduced()) {
 		if (context.trial) {
 			requireCompilerInvariant(context.trialJournal, "trial return-type mutation requires a rollback journal");

@@ -1,0 +1,5 @@
+outer action sibling
+6
+inner
+prefix
+reset inner

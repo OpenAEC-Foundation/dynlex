@@ -20,6 +20,11 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 - What patterns does each section have?
 - We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.
 
+Function declaration shorthands are normalized before section analysis. An action declaration using `to` and a value
+declaration using `to get` become ordinary function and `execute` sections. A one-line declaration using `means:` becomes
+an ordinary flex function and `replacement` section. Logical indentation and source slices preserve the authored nesting
+and diagnostic locations; later stages do not have a separate shorthand execution path.
+
 Integer literals are parsed exactly rather than through floating-point storage.
 Magnitudes through `2^63` are retained so unary negation can form the signed
 64-bit minimum; larger magnitudes are rejected here. The boundary magnitude is
@@ -91,6 +96,10 @@ We sort all expression arguments by their source position, since they did not ge
 Before type resolution starts, the compiler initializes the selected target's LLVM data layout. This does not generate or
 reorder code. It supplies the target ABI facts needed by compile-time operations such as `size of`; later code generation uses
 the same module and layout.
+
+Declaration return contracts are checked on the inferred result of the ordinary function body: `to` requires `nothing`,
+while `to get` and `means:` require a value. The check participates in operand-grouping trials so the declaration error wins
+over a secondary error at the call site.
 
 We loop over the code like it would get executed.
 

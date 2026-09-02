@@ -1,0 +1,18 @@
+import lib/std.dl
+
+value doubled means: value * 2 # replacement shorthand comment
+
+to print doubled value: print value doubled as a line # action shorthand comment
+
+to get value quadrupled: # value shorthand comment
+    if value = 0:
+        return 0
+    return (value doubled) * 2
+
+function value still means:
+    execute:
+        return value + 1
+
+print doubled 6
+print 5 quadrupled as a line
+print 9 still means as a line
