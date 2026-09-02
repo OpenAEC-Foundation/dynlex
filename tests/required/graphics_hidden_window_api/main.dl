@@ -10,5 +10,5 @@ if false:
 	if visible != 0:
 		close hidden
 		return 1
-	set visible_window to a new window with width 1 and height 1
-	set fullscreen_window to a new fullscreen window
+	set {visible window} to a new window with width 1 and height 1
+	set {fullscreen window} to a new fullscreen window
