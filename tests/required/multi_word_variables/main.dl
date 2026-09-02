@@ -31,6 +31,9 @@ print same line value as a line
 set {player 2 score} to 5
 add 3 to player 2 score
 print player 2 score as a line
+@intrinsic("discard", player 2 score)
+ignore (player 2 score)
+ignore [player 2 score]
 
 set {player 20 score} to 9
 print player 20 score as a line

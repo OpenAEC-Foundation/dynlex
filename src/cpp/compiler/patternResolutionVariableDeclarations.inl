@@ -1,8 +1,32 @@
+static std::optional<std::string> explicitWholeVariableSourceName(const PatternReference *reference) {
+	if (!reference)
+		return std::nullopt;
+	const std::vector<PatternElement> elements =
+		reference->patternElements.empty() ? getPatternElements(reference->pattern.text) : reference->patternElements;
+	std::string result;
+	size_t argumentIndex = 0;
+	for (const PatternElement &element : elements) {
+		if (element.type != PatternElement::Type::Variable) {
+			result += element.text;
+			continue;
+		}
+		std::optional<std::string> numericSpelling = numericPatternArgumentSpelling(reference, argumentIndex++);
+		if (!numericSpelling)
+			return std::nullopt;
+		result += *numericSpelling;
+	}
+	return result;
+}
+
 static const std::string *findVisibleExplicitWholeVariableName(const PatternReference *reference) {
-	if (!reference || !reference->range().line || reference->pattern.text.find(' ') == std::string::npos)
+	if (!reference || !reference->range().line)
 		return nullptr;
-	for (Section *section = reference->range().section(); section; section = section->parent) {
-		auto declaration = section->explicitVariableDeclarations.find(reference->pattern.text);
+	std::optional<std::string> sourceName = explicitWholeVariableSourceName(reference);
+	if (!sourceName || sourceName->find(' ') == std::string::npos)
+		return nullptr;
+	Section *sourceScope = reference->matchingScope ? reference->matchingScope : reference->range().section();
+	for (Section *section = sourceScope; section; section = section->parent) {
+		auto declaration = section->explicitVariableDeclarations.find(*sourceName);
 		if (declaration == section->explicitVariableDeclarations.end())
 			continue;
 		const Range &declarationRange = declaration->second;

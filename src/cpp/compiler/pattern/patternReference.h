@@ -4,6 +4,7 @@
 #include "range.h"
 #include "sectionType.h"
 #include "transformedPattern.h"
+#include <optional>
 struct Section;
 struct PatternReference {
 	enum class Purpose {
@@ -30,3 +31,5 @@ struct PatternReference {
 	void resolve(PatternMatch *matchResult = nullptr);
 	const Range &range() const { return sourceRange; }
 };
+
+std::optional<std::string> numericPatternArgumentSpelling(const PatternReference *reference, size_t argumentIndex);

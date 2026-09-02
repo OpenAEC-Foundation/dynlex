@@ -333,7 +333,8 @@ bool nodeAcceptsArgument(PatternTreeNode *node, const SourceFile &sourceFile) {
 
 void collectVariableSuggestions(
 	PatternTreeNode *node, const std::set<std::string> &variableNames, std::vector<CompletionItem> &items,
-	std::set<std::string> &seen, const SourceFile &sourceFile, const CompletionContext &context, std::string_view partial = {}
+	std::set<std::string> &seen, const SourceFile &sourceFile, const CompletionContext &context, std::string_view partial = {},
+	std::optional<size_t> replacementLength = std::nullopt
 ) {
 	if (!nodeAcceptsArgument(node, sourceFile))
 		return;
@@ -341,7 +342,8 @@ void collectVariableSuggestions(
 		if (!name.starts_with(partial))
 			continue;
 		TextEdit textEdit;
-		textEdit.range = makeRange(context.line, context.character - static_cast<int>(partial.size()), context.character);
+		size_t replacedCharacters = replacementLength.value_or(partial.size());
+		textEdit.range = makeRange(context.line, context.character - static_cast<int>(replacedCharacters), context.character);
 		textEdit.newText = name;
 		addCompletionItem(items, seen, name, CompletionItemKind::Variable, "variable", name, "2_" + name, std::move(textEdit));
 	}
@@ -616,27 +618,7 @@ void addKeywordCompletions(
 	}
 }
 
-struct CompletionPrefix {
-	std::string normalized;
-	std::string committed;
-	std::optional<PatternElement> partial;
-};
-
-CompletionPrefix splitCompletionPrefix(const std::string &linePrefix) {
-	CompletionPrefix result;
-	result.normalized = normalizeCompletionPatternPrefix(linePrefix);
-	result.committed = result.normalized;
-	std::vector<PatternElement> elements = getPatternElements(result.normalized);
-	if (result.normalized.empty() || std::isspace(static_cast<unsigned char>(result.normalized.back())) || elements.empty())
-		return result;
-
-	const PatternElement &last = elements.back();
-	if (last.type != PatternElement::Type::VariableLike && last.type != PatternElement::Type::Other)
-		return result;
-	result.partial = last;
-	result.committed = result.normalized.substr(0, last.startPos);
-	return result;
-}
+#include "completion_prefix.inl"
 
 struct PartialMatches {
 	bool any = false;
@@ -693,6 +675,8 @@ void appendPatternFrontiers(
 	const CompletionContext &context, SectionType sectionType, const CompletionPrefix &prefix,
 	std::vector<PatternFrontier> &frontiers, std::set<std::string> &seen
 ) {
+	CompletionPrefix effectivePrefix = prefix;
+	expandMultiWordVariableCompletionPrefix(context, sectionType, visibleVariableNames(context), effectivePrefix);
 	SourceFile *sourceFile = completionSourceFile(context);
 	auto append = [&](const std::vector<MatcherFrontierCandidate> &candidates, std::optional<std::string_view> partial) {
 		for (const MatcherFrontierCandidate &candidate : candidates) {
@@ -705,11 +689,11 @@ void appendPatternFrontiers(
 	};
 
 	append(
-		collectMatcherFrontierCandidates(context, sectionType, prefix.committed),
-		prefix.partial ? std::optional<std::string_view>(prefix.partial->text) : std::nullopt
+		collectMatcherFrontierCandidates(context, sectionType, effectivePrefix.committed),
+		effectivePrefix.partial ? std::optional<std::string_view>(effectivePrefix.partial->text) : std::nullopt
 	);
-	if (prefix.partial)
-		append(collectMatcherFrontierCandidates(context, sectionType, prefix.normalized), std::nullopt);
+	if (effectivePrefix.partial)
+		append(collectMatcherFrontierCandidates(context, sectionType, effectivePrefix.normalized), std::nullopt);
 }
 
 PartialMatches collectPartialLiteralSuggestions(
@@ -761,7 +745,9 @@ PartialMatches collectPartialVariableSuggestions(
 		matches.any = true;
 		matches.exact = matches.exact || name.size() == partial.size();
 	}
-	collectVariableSuggestions(node, variableNames, items, seen, sourceFile, context, partial);
+	collectVariableSuggestions(
+		node, variableNames, items, seen, sourceFile, context, partial, completionSourceSuffixLength(context, partial)
+	);
 	return matches;
 }
 
@@ -795,6 +781,8 @@ void collectMatcherFrontierCompletions(
 	std::vector<CompletionItem> &items, std::set<std::string> &seenLabels
 ) {
 	CompletionPrefix prefix = splitCompletionPrefix(linePrefix);
+	std::set<std::string> variableNames = visibleVariableNames(context);
+	expandMultiWordVariableCompletionPrefix(context, sectionType, variableNames, prefix);
 	std::optional<MatcherFrontier> committedFrontier = collectMatcherFrontier(context, sectionType, prefix.committed);
 	if (!committedFrontier)
 		return;
@@ -809,7 +797,6 @@ void collectMatcherFrontierCompletions(
 		committedFrontier->node, prefix.partial->text, items, seenLabels, std::string(detailPrefix) + " token", "0_",
 		*sourceFile, context
 	);
-	std::set<std::string> variableNames = visibleVariableNames(context);
 	variableNames.insert(committedFrontier->acceptedVariables.begin(), committedFrontier->acceptedVariables.end());
 	if (nodeAcceptsArgument(committedFrontier->node, *sourceFile)) {
 		PatternTreeNode *functionRoot = context.parseContext->patternTrees[(int)SectionType::Function];
