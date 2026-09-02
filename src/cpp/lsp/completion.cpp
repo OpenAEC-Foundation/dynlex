@@ -234,16 +234,8 @@ bool nodeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &sourceFil
 
 std::set<std::string> visibleVariableNames(const CompletionContext &context) {
 	SourceFile *sourceFile = completionSourceFile(context);
-	Section *scope = context.parseContext->mainSection;
-	for (CodeLine *line : context.parseContext->codeLines) {
-		bool matchingSource = line && line->hasIdentitySourceMapping()
-								  ? line->sourceFile == sourceFile && line->sourceFileLineIndex == context.line
-								  : line && line->containsSourceLocation(context.uri, context.line, context.character);
-		if (matchingSource && line->section) {
-			scope = line->section;
-			break;
-		}
-	}
+	Section *scope =
+		context.logicalLine && context.logicalLine->section ? context.logicalLine->section : context.parseContext->mainSection;
 
 	std::set<std::string> names;
 	for (Section *section = scope; section; section = section->parent) {
@@ -837,28 +829,6 @@ std::string getLinePrefixFromFile(const std::string &path, int zeroBasedLine, in
 }
 
 } // namespace
-
-CompletionContext makeCompletionContext(
-	ParseContext *parseContext, std::string uri, std::string_view sourceLine, std::string workspaceRootPath,
-	int sourceLineIndex, int sourceCharacter
-) {
-	CompletionContext result{
-		parseContext,	 std::move(uri), std::string(sourceLine.substr(0, sourceCharacter)), std::move(workspaceRootPath),
-		sourceLineIndex, sourceCharacter
-	};
-	if (!parseContext)
-		return result;
-	for (CodeLine *line : parseContext->codeLines) {
-		if (!line || line->hasIdentitySourceMapping())
-			continue;
-		int localOffset = line->mapSourceToOffset(result.uri, sourceLineIndex, sourceCharacter);
-		if (localOffset < 0)
-			continue;
-		result.linePrefix = line->fullText.substr(0, localOffset);
-		break;
-	}
-	return result;
-}
 
 CompletionList collectCompletions(const CompletionContext &context) {
 	const SyntaxConfig &syntax =

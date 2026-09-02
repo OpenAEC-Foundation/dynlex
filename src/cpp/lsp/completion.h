@@ -4,6 +4,7 @@
 #include <string_view>
 
 struct ParseContext;
+struct CodeLine;
 
 namespace lsp {
 
@@ -14,6 +15,7 @@ struct CompletionContext {
 	std::string workspaceRootPath;
 	int line = 0;
 	int character = 0;
+	CodeLine *logicalLine{};
 };
 
 CompletionContext makeCompletionContext(
