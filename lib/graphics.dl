@@ -2,16 +2,145 @@
 
 import lib/std.dl
 
-# GL constants
-# GL_COLOR_BUFFER_BIT = 0x4000 = 16384
-# GL_PROJECTION = 0x1701 = 5889
-# GL_MODELVIEW = 0x1700 = 5888
-# GLFW_PRESS = 1
-# GLFW_KEY_ESCAPE = 256
-# GLFW_KEY_RIGHT = 262
-# GLFW_KEY_LEFT = 263
-# GLFW_KEY_DOWN = 264
-# GLFW_KEY_UP = 265
+# External GLFW and OpenGL constants are named compile-time values. Keeping
+# their ABI values in one place makes intrinsic calls readable and prevents
+# callers from having to repeat external enum numbers.
+
+function the GLFW press status:
+	replacement:
+		1
+
+function the GLFW release status:
+	replacement:
+		0
+
+function the GLFW escape key:
+	replacement:
+		256
+
+function the GLFW A key:
+	replacement:
+		65
+
+function the GLFW D key:
+	replacement:
+		68
+
+function the GLFW E key:
+	replacement:
+		69
+
+function the GLFW Q key:
+	replacement:
+		81
+
+function the GLFW S key:
+	replacement:
+		83
+
+function the GLFW W key:
+	replacement:
+		87
+
+function the GLFW right key:
+	replacement:
+		262
+
+function the GLFW left key:
+	replacement:
+		263
+
+function the GLFW down key:
+	replacement:
+		264
+
+function the GLFW up key:
+	replacement:
+		265
+
+function the GLFW first mouse button:
+	replacement:
+		0
+
+function the GLFW second mouse button:
+	replacement:
+		1
+
+function the GLFW third mouse button:
+	replacement:
+		2
+
+function the GLFW cursor input mode:
+	replacement:
+		208897
+
+function the GLFW normal cursor mode:
+	replacement:
+		212993
+
+function the GLFW disabled cursor mode:
+	replacement:
+		212995
+
+function the GLFW context version major hint:
+	replacement:
+		139266
+
+function the GLFW context version minor hint:
+	replacement:
+		139267
+
+function the GLFW OpenGL profile hint:
+	replacement:
+		139272
+
+function the GLFW OpenGL compatibility profile:
+	replacement:
+		204802
+
+function the GL color buffer bit:
+	replacement:
+		16384
+
+function the GL projection matrix mode:
+	replacement:
+		5889
+
+function the GL modelview matrix mode:
+	replacement:
+		5888
+
+function the GL fragment shader type:
+	replacement:
+		35632
+
+function the GL vertex shader type:
+	replacement:
+		35633
+
+function the GL SPIR-V shader binary format:
+	replacement:
+		38225
+
+function the GL compile status:
+	replacement:
+		35713
+
+function the GL link status:
+	replacement:
+		35714
+
+function the GL uniform buffer target:
+	replacement:
+		35345
+
+function the GL dynamic draw usage:
+	replacement:
+		35048
+
+function the GL triangle strip primitive:
+	replacement:
+		5
 
 class:
 	patterns:
@@ -39,13 +168,9 @@ function a new window with width {integer:width} and height {integer:height}:
 			print "failed to initialize GLFW" as a line
 			return 0 as a pointer to a byte
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
-		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
-		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
-		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
-		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139266, 4)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139267, 6)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139272, 204802)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version major hint, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version minor hint, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW OpenGL profile hint, the GLFW OpenGL compatibility profile)
 		set handle to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, width, height, "DynLex", 0 as a pointer to a byte, 0 as a pointer to a byte)
 		if handle = 0 as a pointer to a byte:
 			print "failed to create GLFW window with OpenGL 4.6 compatibility profile" as a line
@@ -54,13 +179,13 @@ function a new window with width {integer:width} and height {integer:height}:
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", nothing, handle)
 		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
 		register the graphics viewport resize callback of handle
-		@intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
+		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL projection matrix mode)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		set horizontal to width as a floating-point number
 		set vertical to height as a floating-point number
 		set negative to (0.0 - 1.0)
 		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
-		@intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
+		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL modelview matrix mode)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		return handle
 
@@ -81,13 +206,13 @@ function a new fullscreen window:
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", nothing, handle)
 		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
 		register the graphics viewport resize callback of handle
-		@intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
+		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL projection matrix mode)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		set horizontal to width as a floating-point number
 		set vertical to height as a floating-point number
 		set negative to (0.0 - 1.0)
 		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
-		@intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
+		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL modelview matrix mode)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
 		return handle
 
@@ -98,13 +223,9 @@ local function the result of initializing fullscreen window hints:
 			print "failed to initialize GLFW" as a line
 			return false
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
-		# GLFW_CONTEXT_VERSION_MAJOR = 0x00022002 = 139266
-		# GLFW_CONTEXT_VERSION_MINOR = 0x00022003 = 139267
-		# GLFW_OPENGL_PROFILE = 0x00022008 = 139272
-		# GLFW_OPENGL_COMPAT_PROFILE = 0x00032002 = 204802
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139266, 4)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139267, 6)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, 139272, 204802)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version major hint, 4)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version minor hint, 6)
+		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW OpenGL profile hint, the GLFW OpenGL compatibility profile)
 		return true
 
 flex function initialize the fullscreen window hints:
@@ -125,7 +246,7 @@ function the primary video mode of monitor:
 
 function clear the screen:
 	execute:
-		@intrinsic("call", "GL", "glClear", nothing, 16384)
+		@intrinsic("call", "GL", "glClear", nothing, the GL color buffer bit)
 
 function [display|show] the frame [of|in] window:
 	execute:
@@ -139,15 +260,15 @@ function draw a rectangle at x {a value:horizontal} and y {a value:vertical} wit
 
 function the [last|] pressed key [of|in] window:
 	execute:
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 265) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW up key) = the GLFW press status:
 			return 1
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 262) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW right key) = the GLFW press status:
 			return 2
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 264) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW down key) = the GLFW press status:
 			return 3
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 263) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW left key) = the GLFW press status:
 			return 4
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, 256) = 1:
+		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW escape key) = the GLFW press status:
 			return 5
 		return 0
 
@@ -184,15 +305,9 @@ function close the window:
 
 # --- Shader support (OpenGL 4.6 / SPIR-V) ---
 
-# GL_FRAGMENT_SHADER = 0x8B30 = 35632
-# GL_VERTEX_SHADER = 0x8B31 = 35633
-# GL_SHADER_BINARY_FORMAT_SPIR_V = 0x9551 = 38225
-# GL_COMPILE_STATUS = 0x8B81 = 35713
-# GL_LINK_STATUS = 0x8B82 = 35714
-
 function a fragment shader from path:
 	execute:
-		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, 35632)
+		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, the GL fragment shader type)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
 		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 2)
 		set length to @intrinsic("call", "libc", "ftell", a C long integer, data)
@@ -201,14 +316,14 @@ function a fragment shader from path:
 		set buffer to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
 		ignore @intrinsic("call", "libc", "fread", a word sized integer, buffer, 1 as a word sized integer, size, data)
 		ignore @intrinsic("call", "libc", "fclose", an integer, data)
-		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, 38225, buffer, size as an integer)
+		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, the GL SPIR-V shader binary format, buffer, size as an integer)
 		@intrinsic("call", "GL", "glSpecializeShader", nothing, handle, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
 		@intrinsic("call", "libc", "free", nothing, buffer)
 		return handle
 
 function a vertex shader from path:
 	execute:
-		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, 35633)
+		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, the GL vertex shader type)
 		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
 		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 2)
 		set length to @intrinsic("call", "libc", "ftell", a C long integer, data)
@@ -217,7 +332,7 @@ function a vertex shader from path:
 		set buffer to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
 		ignore @intrinsic("call", "libc", "fread", a word sized integer, buffer, 1 as a word sized integer, size, data)
 		ignore @intrinsic("call", "libc", "fclose", an integer, data)
-		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, 38225, buffer, size as an integer)
+		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, the GL SPIR-V shader binary format, buffer, size as an integer)
 		@intrinsic("call", "GL", "glSpecializeShader", nothing, handle, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
 		@intrinsic("call", "libc", "free", nothing, buffer)
 		return handle
@@ -248,8 +363,6 @@ function set the uniform at location to value:
 		@intrinsic("call", "GL", "glUniform1f", nothing, location, value as a 32 bit floating-point number)
 
 # --- UBO (Uniform Buffer Object) support for SPIR-V shaders ---
-# GL_UNIFORM_BUFFER = 0x8A11 = 35345
-# GL_DYNAMIC_DRAW = 0x88E8 = 35048
 
 class:
 	patterns:
@@ -261,19 +374,19 @@ function a new uniform buffer:
 	execute:
 		set handle to 0
 		@intrinsic("call", "GL", "glGenBuffers", nothing, 1, the address of handle)
-		@intrinsic("call", "GL", "glBindBuffer", nothing, 35345, handle)
-		@intrinsic("call", "GL", "glBufferData", nothing, 35345, 4 as a 64 bit integer, 0 as a pointer to a byte, 35048)
+		@intrinsic("call", "GL", "glBindBuffer", nothing, the GL uniform buffer target, handle)
+		@intrinsic("call", "GL", "glBufferData", nothing, the GL uniform buffer target, 4 as a 64 bit integer, 0 as a pointer to a byte, the GL dynamic draw usage)
 		return @intrinsic("construct", a uniform buffer, handle)
 
 function bind {uniform buffer:buffer} to binding {integer:binding}:
 	execute:
-		@intrinsic("call", "GL", "glBindBufferBase", nothing, 35345, binding, buffer's handle)
+		@intrinsic("call", "GL", "glBindBufferBase", nothing, the GL uniform buffer target, binding, buffer's handle)
 
 function update {uniform buffer:buffer} with value:
 	execute:
 		set number to value as a 32 bit floating-point number
-		@intrinsic("call", "GL", "glBindBuffer", nothing, 35345, buffer's handle)
-		@intrinsic("call", "GL", "glBufferSubData", nothing, 35345, 0 as a 64 bit integer, 4 as a 64 bit integer, the address of number)
+		@intrinsic("call", "GL", "glBindBuffer", nothing, the GL uniform buffer target, buffer's handle)
+		@intrinsic("call", "GL", "glBufferSubData", nothing, the GL uniform buffer target, 0 as a 64 bit integer, 4 as a 64 bit integer, the address of number)
 
 function delete {uniform buffer:buffer}:
 	execute:
@@ -283,9 +396,8 @@ function delete {uniform buffer:buffer}:
 function draw a fullscreen quad:
 	execute:
 		# Draw a fullscreen triangle strip (covers screen with 2D quad)
-		# GL_TRIANGLE_STRIP = 0x0005 = 5
 		# Use glVertex2d (takes double) since DynLex floating-point numbers use 64 bits
-		@intrinsic("call", "GL", "glBegin", nothing, 5)
+		@intrinsic("call", "GL", "glBegin", nothing, the GL triangle strip primitive)
 		@intrinsic("call", "GL", "glVertex2d", nothing, 0.0 - 1.0, 0.0 - 1.0)
 		@intrinsic("call", "GL", "glVertex2d", nothing, 1.0, 0.0 - 1.0)
 		@intrinsic("call", "GL", "glVertex2d", nothing, 0.0 - 1.0, 1.0)
