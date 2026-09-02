@@ -1,0 +1,8 @@
+import lib/graphics.dl
+
+function the selected value for {fixed integer:value}:
+    execute:
+        return value
+
+print the selected value for the GL color buffer bit as a line
+print the selected value for the GLFW cursor input mode as a line
