@@ -53,6 +53,39 @@ sectionHasVariableReferenceBefore(const Section *section, const std::string &nam
 	});
 }
 
+static Section *highestVariableReferenceSection(
+	Section *section, const std::string &name, VariableReference *earliestReference, bool isGlobal,
+	const std::unordered_map<Section *, VariableReference *> &earliestSectionReferences
+) {
+	Section *highest = section;
+	const bool implicitlyShared = !section->explicitVariableDeclarations.contains(name);
+	Section *functionScope = nullptr;
+	for (Section *ancestor = section; ancestor; ancestor = ancestor->parent) {
+		if (ancestor->type == SectionType::Function && !ancestor->isFlex) {
+			functionScope = ancestor;
+			break;
+		}
+	}
+	bool declaredGlobalHere = false;
+	if (functionScope) {
+		declaredGlobalHere = std::ranges::find(functionScope->globalVariables, name) != functionScope->globalVariables.end();
+	}
+	for (Section *ancestor = section->parent; ancestor; ancestor = ancestor->parent) {
+		if (!declaredGlobalHere && ancestor == functionScope)
+			break;
+		auto ancestorReference = earliestSectionReferences.find(ancestor);
+		if (ancestorReference == earliestSectionReferences.end())
+			continue;
+		if (!isGlobal && !implicitlyShared && !sectionHasVariableReferenceBefore(ancestor, name, earliestReference)) {
+			continue;
+		}
+		highest = ancestor;
+		if (!implicitlyShared)
+			earliestReference = ancestorReference->second;
+	}
+	return highest;
+}
+
 static void materializeVariableGroup(
 	const std::string &name, Section *highestSection, std::vector<VariableReference *> &groupReferences, bool isGlobal
 ) {

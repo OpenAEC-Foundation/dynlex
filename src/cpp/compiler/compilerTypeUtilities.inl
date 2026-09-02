@@ -90,31 +90,48 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	return requiredParameters;
 }
 
-ResolvedPatternConstraint
+std::optional<ResolvedPatternConstraint>
 resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex) {
 	requireCompilerInvariant(definition != nullptr, "initial pattern constraint resolution requires a definition");
 	requireCompilerInvariant(
 		pathIndex < definition->indexedPaths.size(), "initial pattern constraint path is absent from its definition"
 	);
 	const DefinitionPatternElement *parameterElement = nullptr;
+	std::string parameterName;
 	size_t currentArgument = 0;
 	forEachPatternParameterName(definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
-		if (currentArgument++ == argumentIndex)
+		if (currentArgument++ == argumentIndex) {
 			parameterElement = matchedPatternParameterElement(definition, name, startPos);
+			parameterName = name;
+		}
 	});
 	requireCompilerInvariant(parameterElement != nullptr, "initial pattern constraint argument is absent from its path");
-	const bool untypedParameter = parameterElement->typeConstraintName.empty();
-	requireCompilerInvariant(
-		parameterElement->resolvedTypeConstraint.isResolved() || untypedParameter,
-		"initial pattern constraint resolution encountered an unresolved dependency"
-	);
-	TypeConstraint constraint = parameterElement->resolvedTypeConstraint.isResolved() ? parameterElement->resolvedTypeConstraint
-																					  : TypeConstraint::any();
-	const bool acceptsNothing = !parameterElement->typeConstraintName.empty() && constraint.explicitlyAcceptsNothing();
-	return ResolvedPatternConstraint{
-		std::move(constraint), parameterElement->resolvedTypeConstraint.requiresCompileTimeValue, untypedParameter,
-		acceptsNothing
-	};
+	bool hasAuthoredConstraint = !parameterElement->typeConstraintName.empty();
+	const TypeConstraint *selectedConstraint = nullptr;
+	bool requiresCompileTimeValue = false;
+	if (hasAuthoredConstraint) {
+		if (!parameterElement->resolvedTypeConstraint.isResolved())
+			return std::nullopt;
+		selectedConstraint = &parameterElement->resolvedTypeConstraint;
+		requiresCompileTimeValue = parameterElement->resolvedTypeConstraint.requiresCompileTimeValue;
+	}
+	Variable *parameterVariable = definition->section->findVariable(parameterName);
+	if (parameterVariable) {
+		for (VariableReference *reference : parameterVariable->declaredTypeConstraintReferences) {
+			requireCompilerInvariant(reference, "parameter constraint reference is null");
+			hasAuthoredConstraint = true;
+			if (reference->hasDependentTypeConstraint)
+				continue;
+			if (!reference->declaredTypeConstraint.isResolved())
+				return std::nullopt;
+			if (!selectedConstraint)
+				selectedConstraint = &reference->declaredTypeConstraint;
+			requiresCompileTimeValue = requiresCompileTimeValue || reference->declaredTypeConstraint.requiresCompileTimeValue;
+		}
+	}
+	TypeConstraint constraint = selectedConstraint ? *selectedConstraint : TypeConstraint::any();
+	const bool acceptsNothing = hasAuthoredConstraint && constraint.explicitlyAcceptsNothing();
+	return ResolvedPatternConstraint{std::move(constraint), requiresCompileTimeValue, !hasAuthoredConstraint, acceptsNothing};
 }
 
 std::optional<ResolvedPatternConstraint> resolveCompiledPatternConstraint(

@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function constrained type of {value}:
+    replacement:
+        the type of {integer:value}
+
+set {constrained type of "text":item} to "ok"
+print item as a line

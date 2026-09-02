@@ -306,13 +306,29 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		if (variable->hasDeclaredTypeConstraint()) {
 			VariableReference *constraintReference = variable->firstDeclaredTypeConstraintReference();
 			requireCompilerInvariant(constraintReference, "typed variable has no constraint source reference");
-			TypeConstraint assignmentConstraint =
-				variable->declaredTypeConstraint.isResolved()
-					? variable->declaredTypeConstraint
-					: (!constraintReference->dependentTypeConstraints.empty()
-						   ? materializeDependentLocalConstraint(constraintReference, context, flexBindingFrameStack)
-						   : materializeDependentParameterConstraint(section, variable, context));
-			DataType assignmentType = variable->declaredType.isDeduced() ? variable->declaredType : variable->type;
+			TypeConstraint assignmentConstraint;
+			DataType assignmentType;
+			if (variable->declaredTypeConstraint.isResolved()) {
+				assignmentConstraint = variable->declaredTypeConstraint;
+				assignmentType = variable->declaredType;
+			} else if (!constraintReference->hasDependentTypeConstraint) {
+				if (!constraintReference->declaredTypeConstraint.isResolved()) {
+					requireCompilerInvariant(
+						context.unresolvedPatternConstraintSignal != nullptr,
+						"unresolved fixed variable constraint reached committed inference"
+					);
+					*context.unresolvedPatternConstraintSignal = true;
+					return;
+				}
+				assignmentConstraint = constraintReference->declaredTypeConstraint;
+				assignmentType = constraintReference->declaredType;
+			} else if (!constraintReference->dependentTypeConstraints.empty()) {
+				assignmentConstraint = materializeDependentLocalConstraint(constraintReference, context, flexBindingFrameStack);
+			} else {
+				assignmentConstraint = materializeDependentParameterConstraint(section, variable, context);
+			}
+			if (!assignmentType.isDeduced())
+				assignmentType = variable->type;
 			if (!validateStoreConstraint(
 					variable->name, constraintReference->declaredTypeConstraintName,
 					constraintReference->declaredTypeConstraintRange, assignmentConstraint, assignmentType, valueExpr,

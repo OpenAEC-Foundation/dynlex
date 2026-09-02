@@ -1,0 +1,2 @@
+tests/required/body_parameter_constraint_during_type_constraint/main.dl:6-32: Error: No overload matches call 'constrained type of "text"' for argument types [a pointer to a byte]. Available overloads: 'constrained type of {value}'
+  note: while inferring call 'constrained type of "text"' with arguments [a pointer to a byte] -> an unresolved value tests/required/body_parameter_constraint_during_type_constraint/main.dl:6-32

@@ -3,6 +3,7 @@ struct CompletionPartial {
 };
 
 struct CompletionPrefix {
+	std::string source;
 	std::string normalized;
 	std::string committed;
 	std::optional<CompletionPartial> partial;
@@ -10,6 +11,7 @@ struct CompletionPrefix {
 
 CompletionPrefix splitCompletionPrefix(const std::string &linePrefix) {
 	CompletionPrefix result;
+	result.source = linePrefix;
 	result.normalized = normalizeCompletionPatternPrefix(linePrefix);
 	result.committed = result.normalized;
 	std::vector<PatternElement> elements = getPatternElements(result.normalized);
@@ -33,20 +35,20 @@ void expandMultiWordVariableCompletionPrefix(
 	for (const std::string &name : variableNames) {
 		if (name.find(' ') == std::string::npos)
 			continue;
-		for (size_t start = 0; start < prefix.normalized.size(); start++) {
-			if (std::isspace(static_cast<unsigned char>(prefix.normalized[start])) ||
-				(start > 0 && !std::isspace(static_cast<unsigned char>(prefix.normalized[start - 1])))) {
+		for (size_t start = 0; start < prefix.source.size(); start++) {
+			if (std::isspace(static_cast<unsigned char>(prefix.source[start])) ||
+				(start > 0 && !std::isspace(static_cast<unsigned char>(prefix.source[start - 1])))) {
 				continue;
 			}
-			std::string_view entered = std::string_view(prefix.normalized).substr(start);
+			std::string_view entered = std::string_view(prefix.source).substr(start);
 			if (entered.size() <= longestPrefix || !name.starts_with(entered))
 				continue;
-			std::optional<MatcherFrontier> frontier =
-				collectMatcherFrontier(context, sectionType, prefix.normalized.substr(0, start));
+			std::string committed = normalizeCompletionPatternPrefix(std::string_view(prefix.source).substr(0, start));
+			std::optional<MatcherFrontier> frontier = collectMatcherFrontier(context, sectionType, committed);
 			if (!frontier || !nodeAcceptsArgument(frontier->node, *sourceFile))
 				continue;
 			longestPrefix = entered.size();
-			prefix.committed = prefix.normalized.substr(0, start);
+			prefix.committed = std::move(committed);
 			prefix.partial = CompletionPartial{std::string(entered)};
 		}
 	}

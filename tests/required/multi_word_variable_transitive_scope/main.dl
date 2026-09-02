@@ -1,0 +1,7 @@
+import lib/std.dl
+
+if true:
+    set {integer:shared value} to 1
+    if true:
+        set {integer:shared value} to 2
+set {a floating-point number:shared value} to 3.0

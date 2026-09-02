@@ -933,42 +933,8 @@ bool resolvePatterns(ParseContext &context) {
 		}
 		std::unordered_map<Section *, Section *> sectionToHighest;
 		for (const auto &[sec, earliestReference] : earliestSectionReferences) {
-			Section *highest = sec;
-			bool joinedAncestorVariable = !sec->explicitVariableDeclarations.contains(name);
-
-			// Find the enclosing function (Function/Effect section)
-			Section *functionScope = nullptr;
-			for (Section *a = sec; a; a = a->parent) {
-				if (a->type == SectionType::Function && !a->isFlex) {
-					functionScope = a;
-					break;
-				}
-			}
-
-			// Check if THIS function declares the variable as global
-			bool declaredGlobalHere = false;
-			if (functionScope) {
-				for (const std::string &globalVar : functionScope->globalVariables) {
-					if (globalVar == name) {
-						declaredGlobalHere = true;
-						break;
-					}
-				}
-			}
-
-			for (Section *a = sec->parent; a; a = a->parent) {
-				// Stop at function boundary unless this function declares it as global
-				if (!declaredGlobalHere && a == functionScope) {
-					break;
-				}
-				if (!a->variableReferences.contains(name))
-					continue;
-				if (isGlobal || joinedAncestorVariable || sectionHasVariableReferenceBefore(a, name, earliestReference)) {
-					highest = a;
-					joinedAncestorVariable = true;
-				}
-			}
-			sectionToHighest[sec] = highest;
+			sectionToHighest[sec] =
+				highestVariableReferenceSection(sec, name, earliestReference, isGlobal, earliestSectionReferences);
 		}
 		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
 		for (VariableReference *ref : references)

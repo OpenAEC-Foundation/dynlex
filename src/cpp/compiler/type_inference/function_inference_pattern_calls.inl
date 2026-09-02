@@ -13,8 +13,13 @@ static std::optional<ResolvedPatternConstraint> resolvePatternConstraintForInfer
 	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
 	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
 ) {
-	if (context.unresolvedPatternConstraintSignal)
-		return resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+	if (context.unresolvedPatternConstraintSignal) {
+		std::optional<ResolvedPatternConstraint> constraint =
+			resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+		if (!constraint)
+			*context.unresolvedPatternConstraintSignal = true;
+		return constraint;
+	}
 	return resolveCompiledPatternConstraint(definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
 }
 

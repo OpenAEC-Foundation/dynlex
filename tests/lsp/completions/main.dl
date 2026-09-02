@@ -1,4 +1,5 @@
 import lib/river_challenge.dl
 
 set existing to 5
+set {player 2 score} to 5
 set previous to 5
