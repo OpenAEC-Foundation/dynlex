@@ -330,6 +330,14 @@ assert.match(
   releaseWorkflow,
   /smoke-linux:[\s\S]*graphics_scroll_callback_smoke\.dl[\s\S]*xvfb-run[\s\S]*graphics-scroll-callback/,
 );
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*graphics_keyboard_state_smoke\.dl[\s\S]*xvfb-run[\s\S]*graphics-keyboard-state/,
+);
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*graphics_window_application_state_smoke\.dl[\s\S]*xvfb-run[\s\S]*graphics-window-application-state/,
+);
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
 assert.match(releaseWorkflow, /prepare-release-assets\.sh/);
 assert.match(releaseWorkflow, /workflow_dispatch:/);

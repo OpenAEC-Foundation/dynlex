@@ -1,0 +1,43 @@
+import lib/graphics.dl
+
+exposed function inspect the application state during graphics scroll for {C string:window} with horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
+    execute:
+        ignore x
+        ignore y
+        set application_pointer to the application state of window
+        if application_pointer = 0 as a pointer to a byte:
+            return 1
+        set marker to application_pointer as a pointer to an integer
+        print @intrinsic("dereference", marker) as a line
+        return 0
+
+set window to a new window with width 128 and height 64
+if window = 0 as a pointer to a byte:
+    return 1
+
+set marker to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+if marker = 0 as a pointer to an integer:
+    close the window
+    return 1
+@intrinsic("store at", marker, 37)
+set application_pointer to marker as a pointer to a byte
+set the application state of window to application_pointer
+register the graphics scroll callback named "inspect the application state during graphics scroll for $ with horizontal offset $ and vertical offset $" for window
+
+set callback_status to inspect the application state during graphics scroll for window with horizontal offset 0.0 and vertical offset 0.0
+set retrieved to the application state of window
+if (callback_status != 0) or (retrieved != application_pointer):
+    set the application state of window to 0 as a pointer to a byte
+    @intrinsic("call", "libc", "free", nothing, marker)
+    close the window
+    return 1
+
+set the application state of window to 0 as a pointer to a byte
+if the application state of window != 0 as a pointer to a byte:
+    @intrinsic("call", "libc", "free", nothing, marker)
+    close the window
+    return 1
+
+@intrinsic("call", "libc", "free", nothing, marker)
+close the window
+return 0

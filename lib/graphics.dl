@@ -42,6 +42,46 @@ function the GLFW W key:
 	replacement:
 		87
 
+function the GLFW 0 key:
+	replacement:
+		48
+
+function the GLFW 1 key:
+	replacement:
+		49
+
+function the GLFW 2 key:
+	replacement:
+		50
+
+function the GLFW 3 key:
+	replacement:
+		51
+
+function the GLFW 4 key:
+	replacement:
+		52
+
+function the GLFW 5 key:
+	replacement:
+		53
+
+function the GLFW 6 key:
+	replacement:
+		54
+
+function the GLFW 7 key:
+	replacement:
+		55
+
+function the GLFW 8 key:
+	replacement:
+		56
+
+function the GLFW 9 key:
+	replacement:
+		57
+
 function the GLFW right key:
 	replacement:
 		262
@@ -205,6 +245,17 @@ function release the mouse cursor in {C string:window}:
 	execute:
 		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW normal cursor mode)
 
+# GLFW stores one caller-owned void pointer on every window. These wrappers
+# keep that pointer available to callbacks without exposing GLFW's raw ABI to
+# application code. The pointer is borrowed; callers own its lifetime.
+function set the application state of {C string:window} to {pointer:data}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, window, data)
+
+function the application state of {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to a byte, window)
+
 exposed function resize the graphics viewport of {C string:window} to {integer:width} and {integer:height}:
 	execute:
 		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
@@ -318,19 +369,13 @@ function draw a rectangle at x {a value:horizontal} and y {a value:vertical} wit
 		@intrinsic("call", "GL", "glColor3ub", nothing, red, green, blue)
 		@intrinsic("call", "GL", "glRecti", nothing, horizontal, vertical, horizontal + width, vertical + height)
 
-function the [last|] pressed key [of|in] window:
+function key {integer:number} is down in {C string:window}:
 	execute:
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW up key) = the GLFW press status:
-			return 1
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW right key) = the GLFW press status:
-			return 2
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW down key) = the GLFW press status:
-			return 3
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW left key) = the GLFW press status:
-			return 4
-		if @intrinsic("call", "glfw", "glfwGetKey", an integer, window, the GLFW escape key) = the GLFW press status:
-			return 5
-		return 0
+		return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = the GLFW press status
+
+function key {integer:number} is up in {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = the GLFW release status
 
 function the window should close:
 	execute:
