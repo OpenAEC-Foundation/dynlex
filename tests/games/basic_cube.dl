@@ -88,16 +88,15 @@ set the clear color to (a color with red 20, green 26 and blue 36)
 set view to a camera at (a position with x 0.0, y 1.5 and z 8.0) facing 0.0 degrees with speed 0.2 and turn rate 2.0
 
 while the window remains open:
-    set key to the pressed key of window
-    if key = 1:
+    if key (the GLFW up key) is down in window:
         decrease the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
         decrease the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key = 3:
+    if key (the GLFW down key) is down in window:
         increase the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
         increase the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key = 2:
+    if key (the GLFW right key) is down in window:
         add view's turning to view's yaw
-    if key = 4:
+    if key (the GLFW left key) is down in window:
         subtract view's turning from view's yaw
 
     clear the three-dimensional screen

@@ -67,7 +67,3 @@ function a camera at {spatial position:position} facing {floating-point number:y
 function a bounding box from {spatial position:minimum} to {spatial position:maximum}:
     replacement:
         @intrinsic("construct", a spatial bounding box, minimum, maximum)
-
-function key {integer:number} is down in {C string:window}:
-    execute:
-        return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = 1

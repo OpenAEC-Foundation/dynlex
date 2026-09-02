@@ -1,0 +1,34 @@
+import lib/graphics.dl
+
+print the GLFW escape key as a line
+print the GLFW A key as a line
+print the GLFW D key as a line
+print the GLFW E key as a line
+print the GLFW Q key as a line
+print the GLFW S key as a line
+print the GLFW W key as a line
+print the GLFW 0 key as a line
+print the GLFW 1 key as a line
+print the GLFW 9 key as a line
+print the GLFW right key as a line
+print the GLFW left key as a line
+print the GLFW down key as a line
+print the GLFW up key as a line
+
+set initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
+if initialized != 0:
+	set window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, 1, 1, "DynLex keyboard state test", 0 as a pointer to a byte, 0 as a pointer to a byte)
+	if window != 0 as a pointer to a byte:
+		set failed to false
+		if key (the GLFW W key) is down in window:
+			set failed to true
+		set released to key (the GLFW W key) is up in window
+		if released = false:
+			set failed to true
+		set digit to key (the GLFW 1 key) is up in window
+		if digit = false:
+			set failed to true
+		@intrinsic("call", "glfw", "glfwDestroyWindow", nothing, window)
+		@intrinsic("call", "glfw", "glfwTerminate", nothing)
+		if failed:
+			return 1

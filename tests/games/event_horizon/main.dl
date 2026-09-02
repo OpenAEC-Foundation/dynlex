@@ -118,10 +118,10 @@ while the window remains open:
     clamp elapsed between 0.0 and 0.1
     set movement to (elapsed * view's movement)
 
-    set left to key 65 is down in window or key 263 is down in window
-    set right to key 68 is down in window or key 262 is down in window
-    set up to key 87 is down in window or key 265 is down in window
-    set down to key 83 is down in window or key 264 is down in window
+    set left to key (the GLFW A key) is down in window or key (the GLFW left key) is down in window
+    set right to key (the GLFW D key) is down in window or key (the GLFW right key) is down in window
+    set up to key (the GLFW W key) is down in window or key (the GLFW up key) is down in window
+    set down to key (the GLFW S key) is down in window or key (the GLFW down key) is down in window
     if left:
         decrease the x coordinate of view's position by movement
     if right:
@@ -150,7 +150,7 @@ while the window remains open:
     else:
         set ready to true
 
-    if key 256 is down in window:
+    if key (the GLFW escape key) is down in window:
         request that window close
 
     update resources's buffers's time with time
