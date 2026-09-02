@@ -95,14 +95,20 @@ add_mapping() {
 
 glfw_source="$(brew --prefix glfw)/lib/libglfw.3.dylib"
 freetype_source="$(brew --prefix freetype)/lib/libfreetype.6.dylib"
-for source_path in "$glfw_source" "$freetype_source"; do
+vulkan_source="$(brew --prefix vulkan-loader)/lib/libvulkan.1.dylib"
+moltenvk_prefix="$(brew --prefix molten-vk)"
+moltenvk_source="$moltenvk_prefix/lib/libMoltenVK.dylib"
+moltenvk_manifest_source="$moltenvk_prefix/etc/vulkan/icd.d/MoltenVK_icd.json"
+for source_path in "$glfw_source" "$freetype_source" "$vulkan_source" "$moltenvk_source" "$moltenvk_manifest_source"; do
     if [[ ! -f "$source_path" ]]; then
-        echo "Error: required Homebrew library is missing: $source_path" >&2
+        echo "Error: required Homebrew artifact is missing: $source_path" >&2
         exit 1
     fi
 done
 add_mapping "$glfw_source" "libglfw.dylib"
 add_mapping "$freetype_source" "libfreetype.dylib"
+add_mapping "$vulkan_source" "libvulkan.dylib"
+add_mapping "$moltenvk_source" "libMoltenVK.dylib"
 
 index=1
 while :; do
@@ -127,7 +133,7 @@ while :; do
         if ! mapping_destination "$dependency" >/dev/null 2>&1; then
             add_mapping "$dependency" "$(basename "$dependency")"
         fi
-    done < <(otool -L "$source_path" | tail -n +2 | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/')
+    done < <(otool -L "$source_path" | tail -n +3 | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/')
     index=$((index + 1))
 done
 
@@ -145,17 +151,37 @@ while IFS=$'\t' read -r source_path destination_name; do
                 -change "$dependency" "@loader_path/$replacement_name" \
                 "$destination_path"
         fi
-    done < <(otool -L "$source_path" | tail -n +2 | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/')
+    done < <(otool -L "$source_path" | tail -n +3 | sed -E 's/^[[:space:]]*([^[:space:]]+).*/\1/')
 done < "$mapping_file"
 
-while IFS=$'\t' read -r source_path destination_name; do
+record_artifact_metadata() {
+    local source_path="$1"
+    local destination_name="$2"
+    local source_directory
+    local resolved_source
+    local formula_root
+    local formula_name
+    local formula_version
+    local formula_files="$bookkeeping/formula-files.txt"
+    local formula_file
+    local formula_sha256
+    local source_relative
+    local license_paths="$bookkeeping/license-paths.txt"
+    local license_path
+    local license_destination
+
     source_directory="$(cd -P "$(dirname "$source_path")" && pwd)"
     resolved_source="$source_directory/$(basename "$source_path")"
-    formula_root="$(dirname "$source_directory")"
+    formula_root="$source_directory"
+    while [[ "$formula_root" != "/" && ! -d "$formula_root/.brew" ]]; do
+        formula_root="$(dirname "$formula_root")"
+    done
+    if [[ ! -d "$formula_root/.brew" ]]; then
+        echo "Error: Homebrew artifact has no owning formula root: $resolved_source" >&2
+        exit 1
+    fi
     formula_name="$(basename "$(dirname "$formula_root")")"
     formula_version="$(basename "$formula_root")"
-    formula_files="$bookkeeping/formula-files.txt"
-    license_paths="$bookkeeping/license-paths.txt"
 
     validate_field "$formula_name" "Homebrew formula name"
     validate_field "$formula_version" "Homebrew formula version"
@@ -183,7 +209,7 @@ while IFS=$'\t' read -r source_path destination_name; do
         "$formula_sha256" >> "$manifest_entries"
 
     if grep -Fqx "$formula_name" "$licensed_formulae"; then
-        continue
+        return
     fi
     find "$formula_root" -maxdepth 3 -type f \
         \( -iname 'license*' -o -iname 'copying*' \) -print \
@@ -201,11 +227,29 @@ while IFS=$'\t' read -r source_path destination_name; do
         cp "$license_path" "$license_destination"
     done < "$license_paths"
     printf '%s\n' "$formula_name" >> "$licensed_formulae"
+}
+
+while IFS=$'\t' read -r source_path destination_name; do
+    record_artifact_metadata "$source_path" "$destination_name"
 done < "$mapping_file"
 
+if [[ "$(grep -Ec '\"library_path\"[[:space:]]*:[[:space:]]*\"[^\"]+\"' "$moltenvk_manifest_source")" != "1" ]]; then
+    echo "Error: MoltenVK ICD manifest must contain exactly one library_path field." >&2
+    exit 1
+fi
+sed -E \
+    's#("library_path"[[:space:]]*:[[:space:]]*)"[^"]+"#\1"./libMoltenVK.dylib"#' \
+    "$moltenvk_manifest_source" > "$destination/MoltenVK_icd.json"
+if ! grep -Eq '\"library_path\"[[:space:]]*:[[:space:]]*\"\./libMoltenVK\.dylib\"' \
+    "$destination/MoltenVK_icd.json"; then
+    echo "Error: failed to make the staged MoltenVK ICD manifest relocatable." >&2
+    exit 1
+fi
+record_artifact_metadata "$moltenvk_manifest_source" "MoltenVK_icd.json"
+
 {
-    printf 'schema 1\n'
-    printf 'fields library formula version source formula_sha256\n'
+    printf 'schema 2\n'
+    printf 'fields artifact formula version source formula_sha256\n'
     LC_ALL=C sort -u "$manifest_entries"
 } > "$destination/dependency-manifest.txt"
 

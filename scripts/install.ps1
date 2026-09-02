@@ -342,7 +342,7 @@ function Ensure-Vcpkg {
     $manifestDependencies = @($manifest.dependencies | ForEach-Object {
         if ($_ -is [string]) { $_ } else { $_.name }
     })
-    foreach ($dependency in @("freetype", "glfw3", "nlohmann-json")) {
+    foreach ($dependency in @("freetype", "glfw3", "nlohmann-json", "vulkan")) {
         if ($dependency -notin $manifestDependencies) {
             throw "vcpkg.json is missing required dependency '$dependency'."
         }
@@ -432,13 +432,19 @@ function Install-VcpkgDependencies {
         Select-Object -First 1
     $freetypeRuntime = Get-ChildItem -Path $nativeBinDir -Filter "*freetype*.dll" -File -ErrorAction SilentlyContinue |
         Select-Object -First 1
+    $vulkanImportLibrary = Get-ChildItem -Path $nativeLibraryDir -Filter "vulkan-1.lib" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    $vulkanRuntime = Get-ChildItem -Path $nativeBinDir -Filter "vulkan-1.dll" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     if (
         -not $glfwImportLibrary -or
         -not $freetypeImportLibrary -or
         -not $glfwRuntime -or
-        -not $freetypeRuntime
+        -not $freetypeRuntime -or
+        -not $vulkanImportLibrary -or
+        -not $vulkanRuntime
     ) {
-        throw "vcpkg reported success but the native GLFW or FreeType artifacts are incomplete in $windowsRoot."
+        throw "vcpkg reported success but the native GLFW, FreeType, or Vulkan artifacts are incomplete in $windowsRoot."
     }
 
     $nlohmannJsonDirUnix = $nlohmannJsonDir -replace '\\', '/'
@@ -502,6 +508,32 @@ Ensure-Package "Git.Git" "git"
 Ensure-Package "Python.Python.3" "python"
 Ensure-Package "OpenJS.NodeJS.LTS" "node"
 Ensure-Package "GoLang.Go" "go"
+Ensure-Package "Rustlang.Rustup" "rustup"
+
+$rustupBin = Resolve-ToolDirectory -CommandName "rustup" -CandidateDirectories @(
+    (Join-Path ${env:USERPROFILE} ".cargo\bin")
+)
+$rustup = Join-Path $rustupBin "rustup.exe"
+$env:PATH = "$rustupBin;$env:PATH"
+$rustToolchainFile = Join-Path $PSScriptRoot "..\tools\wgsl-translator\rust-toolchain.toml"
+$rustToolchain = Get-Content -LiteralPath $rustToolchainFile -Raw
+$rustVersionMatch = [regex]::Matches($rustToolchain, '(?m)^channel = "([^"]+)"$')
+$rustProfileMatch = [regex]::Matches($rustToolchain, '(?m)^profile = "([^"]+)"$')
+$rustTargetMatch = [regex]::Matches($rustToolchain, '(?m)^targets = \["([^"]+)"\]$')
+if (
+    $rustVersionMatch.Count -ne 1 -or
+    $rustProfileMatch.Count -ne 1 -or
+    $rustTargetMatch.Count -ne 1
+) {
+    throw "WebGPU translator toolchain definition must contain one channel, profile, and target."
+}
+$rustVersion = $rustVersionMatch[0].Groups[1].Value
+$rustProfile = $rustProfileMatch[0].Groups[1].Value
+$rustTarget = $rustTargetMatch[0].Groups[1].Value
+& $rustup toolchain install $rustVersion --profile $rustProfile --target $rustTarget
+if ($LASTEXITCODE -ne 0) {
+    throw "rustup failed to install Rust $rustVersion with the $rustTarget target."
+}
 
 $env:PATH = "$clangBin;$env:PATH"
 $env:DYNLEX_LLVM_BOOTSTRAP_CC = Join-Path $clangBin "clang.exe"
@@ -511,6 +543,7 @@ Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "CMake\bin")
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Git\bin")
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "nodejs")
 Add-GitHubPathIfPresent -PathValue (Join-Path ${env:ProgramFiles} "Go\bin")
+Add-GitHubPathIfPresent -PathValue $rustupBin
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $dependencyArchitecture = switch ($hostArchitecture) {
@@ -545,6 +578,7 @@ Write-Host "Installation complete." -ForegroundColor Green
 Write-Host "The pinned LLVM fork is compiled and cached by scripts/build.sh."
 Write-Host "Use these environment variables when building in this shell:"
 Write-Host ('$env:PATH="' + $clangBin + ';$env:PATH"')
+Write-Host ('$env:PATH="' + $rustupBin + ';$env:PATH"')
 Write-Host ('$env:DYNLEX_LLVM_BOOTSTRAP_CC="' + $env:DYNLEX_LLVM_BOOTSTRAP_CC + '"')
 Write-Host ('$env:DYNLEX_LLVM_BOOTSTRAP_CXX="' + $env:DYNLEX_LLVM_BOOTSTRAP_CXX + '"')
 Write-Host ('$env:NLOHMANN_JSON_DIR="' + $vcpkgDependencies.NlohmannJsonDir + '"')

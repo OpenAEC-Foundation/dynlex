@@ -5,6 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/llvm_toolchain.sh"
 
 CLANG_VERSION="$DYNLEX_LLVM_BOOTSTRAP_CLANG_VERSION"
+RUST_TOOLCHAIN_FILE="$SCRIPT_DIR/../tools/wgsl-translator/rust-toolchain.toml"
+if [[ ! -f "$RUST_TOOLCHAIN_FILE" ]]; then
+    echo "Error: WebGPU translator toolchain definition is missing: $RUST_TOOLCHAIN_FILE" >&2
+    exit 1
+fi
+RUST_VERSION="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' "$RUST_TOOLCHAIN_FILE")"
+RUST_PROFILE="$(sed -n 's/^profile = "\([^"]*\)"$/\1/p' "$RUST_TOOLCHAIN_FILE")"
+RUST_WASM_TARGET="$(sed -n 's/^targets = \["\([^"]*\)"\]$/\1/p' "$RUST_TOOLCHAIN_FILE")"
+for rust_setting in "$RUST_VERSION" "$RUST_PROFILE" "$RUST_WASM_TARGET"; do
+    if [[ -z "$rust_setting" || "$rust_setting" == *$'\n'* ]]; then
+        echo "Error: WebGPU translator toolchain definition has missing or duplicate settings." >&2
+        exit 1
+    fi
+done
 
 if [ "$#" -ne 0 ]; then
     echo "Usage: $0" >&2
@@ -27,6 +41,32 @@ install_optional_mcp_server() {
     fi
 }
 
+install_webgpu_rust_toolchain() {
+    local rustup_command
+    if command -v rustup >/dev/null 2>&1; then
+        rustup_command="$(command -v rustup)"
+    elif command -v rustup-init >/dev/null 2>&1; then
+        rustup-init -y --no-modify-path --profile minimal --default-toolchain none
+        rustup_command="${CARGO_HOME:-$HOME/.cargo}/bin/rustup"
+        if [[ ! -x "$rustup_command" ]]; then
+            echo "Error: rustup-init did not install rustup at $rustup_command" >&2
+            exit 1
+        fi
+    else
+        echo "Error: rustup is required to install the pinned WebGPU translator toolchain." >&2
+        exit 1
+    fi
+
+    "$rustup_command" toolchain install "$RUST_VERSION" \
+        --profile "$RUST_PROFILE" \
+        --target "$RUST_WASM_TARGET"
+    local rustup_bin
+    rustup_bin="$(dirname "$rustup_command")"
+    if [[ -n "${GITHUB_PATH:-}" ]]; then
+        printf '%s\n' "$rustup_bin" >> "$GITHUB_PATH"
+    fi
+}
+
 install_linux_deps() {
     if command -v apt-get >/dev/null 2>&1; then
         require_sudo
@@ -38,9 +78,10 @@ install_linux_deps() {
             "clang-tidy-$CLANG_VERSION" \
             binutils \
             libfreetype-dev \
-            libgl-dev \
             libglfw3-dev \
+            libvulkan-dev \
             nlohmann-json3-dev \
+            rustup \
             ccache \
             cmake \
             ninja-build \
@@ -61,7 +102,8 @@ install_linux_deps() {
             freetype-devel \
             glfw-devel \
             json-devel \
-            mesa-libGL-devel \
+            vulkan-loader-devel \
+            rustup \
             ccache \
             cmake \
             ninja-build \
@@ -80,9 +122,11 @@ install_linux_deps() {
             clang \
             freetype2 \
             glfw \
-            libglvnd \
+            vulkan-headers \
+            vulkan-icd-loader \
             binutils \
             nlohmann-json \
+            rustup \
             ccache \
             cmake \
             ninja \
@@ -103,8 +147,9 @@ install_linux_deps() {
             binutils \
             freetype2-devel \
             libglfw-devel \
-            Mesa-libGL-devel \
+            vulkan-devel \
             nlohmann_json-devel \
+            rustup \
             ccache \
             cmake \
             ninja \
@@ -135,7 +180,7 @@ install_macos_deps() {
 
     local missing_formulas=()
     local formula
-    for formula in "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw; do
+    for formula in "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw vulkan-loader molten-vk rustup; do
         if ! brew list --formula --versions "$formula" >/dev/null 2>&1; then
             missing_formulas+=("$formula")
         fi
@@ -163,8 +208,10 @@ install_macos_deps() {
         HOMEBREW_NO_INSTALL_UPGRADE=1 brew install "${missing_formulas[@]}"
     fi
     BREW_LLVM_PREFIX="$(brew --prefix "$BREW_LLVM_FORMULA")"
+    BREW_RUSTUP_PREFIX="$(brew --prefix rustup)"
+    export PATH="$BREW_RUSTUP_PREFIX/bin:$PATH"
 
-    BREW_LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+    BREW_LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix vulkan-loader)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
     export LIBRARY_PATH="$BREW_LIBRARY_PATH"
     if [ -n "${GITHUB_PATH:-}" ]; then
         printf '%s\n' "$BREW_LLVM_PREFIX/bin" >> "$GITHUB_PATH"
@@ -174,8 +221,8 @@ install_macos_deps() {
     fi
 
     echo ""
-    echo "Add LLVM tools to PATH for this shell before building:"
-    echo "  export PATH=\"$BREW_LLVM_PREFIX/bin:\$PATH\""
+    echo "Add LLVM and Rust tools to PATH for this shell before building:"
+    echo "  export PATH=\"$BREW_LLVM_PREFIX/bin:$BREW_RUSTUP_PREFIX/bin:\$PATH\""
     echo "  export LIBRARY_PATH=\"$BREW_LIBRARY_PATH\""
     echo ""
     echo "Or add it permanently in your shell rc file."
@@ -198,6 +245,7 @@ main() {
         ;;
     esac
 
+    install_webgpu_rust_toolchain
     install_optional_mcp_server
 
     echo ""

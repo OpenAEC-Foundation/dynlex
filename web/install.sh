@@ -42,7 +42,7 @@ linux_compile_dependencies_ready() {
     command -v cc >/dev/null 2>&1 || return 1
     command -v objcopy >/dev/null 2>&1 || return 1
     printf 'int main(void) { return 0; }\n' |
-        cc -x c - -lglfw -lfreetype -lGL \
+        cc -x c - -lglfw -lfreetype -lvulkan \
             -o "$TEMPORARY_DIRECTORY/dynlex-linker-probe" >/dev/null 2>&1
 }
 
@@ -57,18 +57,18 @@ ensure_linux_compile_dependencies() {
         run_privileged apt-get update
         run_privileged apt-get install -y \
             binutils build-essential clang libc6-dev \
-            libfreetype-dev libgl-dev libglfw3-dev
+            libfreetype-dev libglfw3-dev libvulkan-dev
     elif command -v dnf >/dev/null 2>&1; then
         run_privileged dnf install -y \
-            binutils clang freetype-devel gcc glfw-devel glibc-devel mesa-libGL-devel
+            binutils clang freetype-devel gcc glfw-devel glibc-devel vulkan-loader-devel
     elif command -v pacman >/dev/null 2>&1; then
         echo "Arch Linux requires a full system upgrade before installing DynLex dependencies."
         run_privileged pacman -Syu --needed --noconfirm \
-            binutils clang freetype2 gcc glfw glibc libglvnd
+            binutils clang freetype2 gcc glfw glibc vulkan-headers vulkan-icd-loader
     elif command -v zypper >/dev/null 2>&1; then
         run_privileged zypper --non-interactive refresh
         run_privileged zypper --non-interactive install \
-            binutils clang freetype2-devel gcc glibc-devel libglfw-devel Mesa-libGL-devel
+            binutils clang freetype2-devel gcc glibc-devel libglfw-devel vulkan-devel
     else
         echo "Error: no supported package manager can install DynLex compiler dependencies." >&2
         exit 1

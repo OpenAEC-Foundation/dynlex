@@ -659,7 +659,7 @@ set(CPACK_PACKAGE_VENDOR "DynLex")
 set(CPACK_PACKAGE_HOMEPAGE_URL "https://dynlex.com")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
-    "binutils, build-essential, clang, libc6-dev, libfreetype-dev, libgl-dev, libglfw3-dev"
+    "binutils, build-essential, clang, libc6-dev, libfreetype-dev, libglfw3-dev, libvulkan-dev"
 )
 set(CPACK_DEBIAN_PACKAGE_SECTION "devel")
 include(CPack)

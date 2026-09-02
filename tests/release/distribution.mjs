@@ -22,6 +22,10 @@ const releaseWorkflow = fs.readFileSync(
   path.join(projectDirectory, ".github/workflows/release.yml"),
   "utf8",
 );
+const continuousIntegrationWorkflow = fs.readFileSync(
+  path.join(projectDirectory, ".github/workflows/ci.yml"),
+  "utf8",
+);
 const cmakeConfiguration = fs.readFileSync(
   path.join(projectDirectory, "CMakeLists.txt"),
   "utf8",
@@ -48,6 +52,10 @@ const buildDependencyInstaller = fs.readFileSync(
 );
 const windowsDependencyInstaller = fs.readFileSync(
   path.join(projectDirectory, "scripts/install.ps1"),
+  "utf8",
+);
+const windowsToolchainStager = fs.readFileSync(
+  path.join(projectDirectory, "scripts/stage-windows-toolchain.ps1"),
   "utf8",
 );
 const llvmToolchain = fs.readFileSync(
@@ -285,6 +293,13 @@ assert.match(
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
 assert.match(releaseWorkflow, /stage-macos-dependencies\.sh/);
+for (const macosRuntimeArtifact of [
+  "libvulkan.dylib",
+  "libMoltenVK.dylib",
+  "MoltenVK_icd.json",
+]) {
+  assert.match(releaseWorkflow, new RegExp(macosRuntimeArtifact.replace(".", "\\.")));
+}
 assert.match(
   releaseWorkflow,
   /cmp[\s\S]*dependencies\/dependency-manifest\.txt[\s\S]*dependencies\/dependency-manifest\.txt/,
@@ -370,11 +385,23 @@ assert.match(textureLibrary, /function a loaded graphics texture from PPM file a
 assert.match(cmakeConfiguration, /CPACK_DEBIAN_PACKAGE_DEPENDS/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 assert.match(linuxInstaller, /linux_compile_dependencies_ready/);
-assert.match(linuxInstaller, /cc -x c - -lglfw -lfreetype -lGL/);
+assert.match(linuxInstaller, /cc -x c - -lglfw -lfreetype -lvulkan/);
+assert.doesNotMatch(linuxInstaller, /(?:^|[-_])l?GL(?:\s|$)|OpenGL/i);
 assert.match(linuxInstaller, /pacman -Syu --needed --noconfirm/);
 assert.doesNotMatch(linuxInstaller, /pacman -Sy(?:\s|$)/);
 assert.match(buildDependencyInstaller, /pacman -Syu --needed --noconfirm/);
 assert.doesNotMatch(buildDependencyInstaller, /pacman -Sy(?:\s|$)/);
+for (const vulkanPackage of [
+  "libvulkan-dev",
+  "vulkan-loader-devel",
+  "vulkan-headers",
+  "vulkan-icd-loader",
+  "vulkan-devel",
+]) {
+  assert.match(buildDependencyInstaller, new RegExp(vulkanPackage));
+  assert.match(linuxInstaller, new RegExp(vulkanPackage));
+}
+assert.doesNotMatch(buildDependencyInstaller, /libgl-dev|libglvnd|mesa-libGL/i);
 for (const packageManager of ["apt-get", "dnf", "pacman", "zypper"]) {
   assert.match(linuxInstaller, new RegExp(`command -v ${packageManager}`));
 }
@@ -384,7 +411,7 @@ assert.equal(
 );
 assert.deepEqual(
   [...vcpkgManifest.dependencies].sort(),
-  ["freetype", "glfw3", "nlohmann-json"],
+  ["freetype", "glfw3", "nlohmann-json", "vulkan"],
 );
 assert.match(windowsDependencyInstaller, /metadata\\VCPKG_TOOLCHAIN/);
 assert.match(windowsDependencyInstaller, /--branch \$metadata\.release/);
@@ -423,6 +450,19 @@ assert.match(
 );
 assert.match(windowsDependencyInstaller, /Find-WindowsSdk/);
 assert.match(windowsDependencyInstaller, /windows-static-crt/);
+assert.match(windowsDependencyInstaller, /Rustlang\.Rustup/);
+assert.match(
+  windowsDependencyInstaller,
+  /wgsl-translator\\rust-toolchain\.toml/,
+);
+assert.match(windowsDependencyInstaller, /rustup toolchain install \$rustVersion/);
+assert.match(buildDependencyInstaller, /wgsl-translator\/rust-toolchain\.toml/);
+assert.match(
+  continuousIntegrationWorkflow,
+  /web-build-smoke:[\s\S]*rustup toolchain install "\$RUST_VERSION"[\s\S]*--profile "\$RUST_PROFILE"[\s\S]*--target "\$RUST_TARGET"/,
+);
+assert.match(windowsToolchainStager, /libvulkan-1\.a/);
+assert.match(windowsToolchainStager, /vulkan-1\.lib/);
 for (const triplet of windowsVcpkgTriplets) {
   assert.match(triplet, /VCPKG_CRT_LINKAGE static/);
   assert.match(triplet, /VCPKG_LIBRARY_LINKAGE dynamic/);
@@ -460,6 +500,8 @@ assert.match(macosDependencyStager, /^#!\/bin\/bash/);
 assert.doesNotMatch(macosDependencyStager, /\b(?:declare -A|mapfile)\b/);
 assert.match(macosDependencyStager, /dependency-manifest\.txt/);
 assert.match(macosDependencyStager, /formula_sha256/);
+assert.match(macosDependencyStager, /schema 2/);
+assert.match(macosDependencyStager, /\.\/libMoltenVK\.dylib/);
 assert.match(nativeCodegen, /DYNLEX_WINDOWS_TARGET_TRIPLE/);
 assert.match(nativeCodegen, /DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR/);
 assert.match(nativeCodegen, /copyRuntimeLibraries/);

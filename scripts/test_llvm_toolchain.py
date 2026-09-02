@@ -392,10 +392,11 @@ printf '%s\n%s\n' "$DYNLEX_LLVM_BOOTSTRAP_CC" "$DYNLEX_LLVM_BOOTSTRAP_CXX"
             "clang",
             "libc6-dev",
             "libfreetype-dev",
-            "libgl-dev",
             "libglfw3-dev",
+            "libvulkan-dev",
         ):
             self.assertIn(package, cmake)
+        self.assertNotIn("libgl-dev", cmake)
         self.assertNotIn("zlib1.dll", cmake)
 
     def test_launchpad_package_bundles_and_builds_the_pinned_source(self) -> None:

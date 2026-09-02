@@ -123,13 +123,17 @@ if brew info llvm@20 >/dev/null 2>&1; then
 else
   export PATH="$(brew --prefix llvm)/bin:$PATH"
 fi
-export LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
+export PATH="$(brew --prefix rustup)/bin:$PATH"
+export LIBRARY_PATH="$(brew --prefix glfw)/lib:$(brew --prefix freetype)/lib:$(brew --prefix vulkan-loader)/lib:$(brew --prefix)/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 ```
 
 The installer reuses tools already available on `PATH` and installs missing
 Homebrew formulae without upgrading unrelated installed packages. The Homebrew
 LLVM formula supplies the bootstrap Clang only; DynLex links the pinned fork
-built by `scripts/build_llvm.sh`.
+built by `scripts/build_llvm.sh`. Native graphics use the Vulkan loader on
+Linux and Windows and the Vulkan loader with MoltenVK on macOS. The installer
+also installs the pinned Rust 1.87.0 `wasm32-unknown-unknown` toolchain used to
+build the browser's SPIR-V-to-WGSL translator.
 
 Windows (winget):
 
@@ -137,8 +141,9 @@ Windows (winget):
 .\scripts\install.ps1
 ```
 
-The Windows installer also installs `nlohmann_json` through vcpkg and exports
-the package paths used by `scripts/build.sh`.
+The Windows installer also installs `nlohmann_json`, GLFW, FreeType, and the
+Vulkan loader through the pinned vcpkg manifest, then exports the package paths
+used by `scripts/build.sh`.
 
 ## Usage
 

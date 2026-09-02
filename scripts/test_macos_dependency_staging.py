@@ -38,6 +38,8 @@ class MacOSDependencyStagingTests(unittest.TestCase):
                 "glfw": ("3.4", "libglfw.3.dylib"),
                 "freetype": ("2.14.3", "libfreetype.6.dylib"),
                 "libpng": ("1.6.50", "libpng16.16.dylib"),
+                "vulkan-loader": ("1.4.357.0", "libvulkan.1.dylib"),
+                "molten-vk": ("1.4.2", "libMoltenVK.dylib"),
             }
             expected_formula_hashes: dict[str, str] = {}
             for formula, (version, library) in formulas.items():
@@ -62,6 +64,27 @@ class MacOSDependencyStagingTests(unittest.TestCase):
                 opt_link = homebrew / "opt" / formula
                 opt_link.parent.mkdir(exist_ok=True)
                 opt_link.symlink_to(formula_root)
+
+            molten_manifest = (
+                homebrew
+                / "Cellar"
+                / "molten-vk"
+                / formulas["molten-vk"][0]
+                / "etc/vulkan/icd.d/MoltenVK_icd.json"
+            )
+            molten_manifest.parent.mkdir(parents=True)
+            molten_manifest.write_text(
+                """{
+    "file_format_version": "1.0.0",
+    "ICD": {
+        "library_path": "../../../lib/libMoltenVK.dylib",
+        "api_version": "1.4.0",
+        "is_portability_driver": true
+    }
+}
+""",
+                encoding="utf-8",
+            )
 
             write_executable(
                 mock_bin / "brew",
@@ -121,11 +144,35 @@ printf '%s\\n' "$*" >> "$INSTALL_NAME_TOOL_LOG"
             )
             self.assertEqual(
                 sorted(path.name for path in destination.glob("*.dylib")),
-                ["libfreetype.dylib", "libglfw.dylib", "libpng16.16.dylib"],
+                [
+                    "libMoltenVK.dylib",
+                    "libfreetype.dylib",
+                    "libglfw.dylib",
+                    "libpng16.16.dylib",
+                    "libvulkan.dylib",
+                ],
             )
             self.assertEqual(
                 sorted(path.name for path in (destination / "licenses").iterdir()),
-                ["freetype-LICENSE", "glfw-LICENSE", "libpng-LICENSE"],
+                [
+                    "freetype-LICENSE",
+                    "glfw-LICENSE",
+                    "libpng-LICENSE",
+                    "molten-vk-LICENSE",
+                    "vulkan-loader-LICENSE",
+                ],
+            )
+            self.assertEqual(
+                (destination / "MoltenVK_icd.json").read_text(encoding="utf-8"),
+                """{
+    "file_format_version": "1.0.0",
+    "ICD": {
+        "library_path": "./libMoltenVK.dylib",
+        "api_version": "1.4.0",
+        "is_portability_driver": true
+    }
+}
+""",
             )
             expected_manifest_lines = {
                 (
@@ -140,13 +187,28 @@ printf '%s\\n' "$*" >> "$INSTALL_NAME_TOOL_LOG"
                     "libpng16.16.dylib\tlibpng\t1.6.50\t"
                     f"lib/libpng16.16.dylib\t{expected_formula_hashes['libpng']}"
                 ),
+                (
+                    "libvulkan.dylib\tvulkan-loader\t1.4.357.0\t"
+                    "lib/libvulkan.1.dylib\t"
+                    f"{expected_formula_hashes['vulkan-loader']}"
+                ),
+                (
+                    "libMoltenVK.dylib\tmolten-vk\t1.4.2\t"
+                    "lib/libMoltenVK.dylib\t"
+                    f"{expected_formula_hashes['molten-vk']}"
+                ),
+                (
+                    "MoltenVK_icd.json\tmolten-vk\t1.4.2\t"
+                    "etc/vulkan/icd.d/MoltenVK_icd.json\t"
+                    f"{expected_formula_hashes['molten-vk']}"
+                ),
             }
             manifest_lines = (
                 destination / "dependency-manifest.txt"
             ).read_text(encoding="utf-8").splitlines()
             self.assertEqual(manifest_lines[:2], [
-                "schema 1",
-                "fields library formula version source formula_sha256",
+                "schema 2",
+                "fields artifact formula version source formula_sha256",
             ])
             self.assertEqual(set(manifest_lines[2:]), expected_manifest_lines)
             self.assertIn(

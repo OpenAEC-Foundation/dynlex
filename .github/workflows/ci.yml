@@ -142,6 +142,17 @@ jobs:
         with:
           version: 6.0.3
 
+      - name: Install pinned WebGPU translator toolchain
+        working-directory: tools/wgsl-translator
+        run: |
+          RUST_VERSION="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' rust-toolchain.toml)"
+          RUST_PROFILE="$(sed -n 's/^profile = "\([^"]*\)"$/\1/p' rust-toolchain.toml)"
+          RUST_TARGET="$(sed -n 's/^targets = \["\([^"]*\)"\]$/\1/p' rust-toolchain.toml)"
+          test -n "$RUST_VERSION"
+          test -n "$RUST_PROFILE"
+          test -n "$RUST_TARGET"
+          rustup toolchain install "$RUST_VERSION" --profile "$RUST_PROFILE" --target "$RUST_TARGET"
+
       - name: Restore pinned LLVM toolchain
         uses: actions/cache@v6
         with:

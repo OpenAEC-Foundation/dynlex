@@ -354,6 +354,9 @@ jobs:
           test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_runtime.a
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libglfw.dylib
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libfreetype.dylib
+          test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libvulkan.dylib
+          test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libMoltenVK.dylib
+          test -f build/macos-stage/usr/local/lib/dynlex/dependencies/MoltenVK_icd.json
           tar -czf "build/dynlex-macos-${{ matrix.architecture }}-payload.tar.gz" \
             -C build/macos-stage .
 
@@ -807,6 +810,9 @@ jobs:
           if (@(Get-ChildItem -Path $smokeRoot -Filter "*.dll" -File).Count -eq 0) {
             throw "DynLex did not deploy the graphics runtime DLLs beside its output."
           }
+          if (-not (Test-Path (Join-Path $smokeRoot "vulkan-1.dll") -PathType Leaf)) {
+            throw "DynLex did not deploy the Vulkan loader beside its output."
+          }
           $deployedRuntimeLibraries = @(
             Get-ChildItem -Path $smokeRoot -Filter "*.dll" -File
           )
@@ -912,6 +918,9 @@ jobs:
               -o "$SMOKE_ROOT/graphics"
           test -f "$SMOKE_ROOT/libglfw.dylib"
           test -f "$SMOKE_ROOT/libfreetype.dylib"
+          test -f "$SMOKE_ROOT/libvulkan.dylib"
+          test -f "$SMOKE_ROOT/libMoltenVK.dylib"
+          test -f "$SMOKE_ROOT/MoltenVK_icd.json"
           "$SMOKE_ROOT/graphics"
           env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
             "$DYNLEX_BIN" tests/release/graphics_hidden_window_smoke.dl \

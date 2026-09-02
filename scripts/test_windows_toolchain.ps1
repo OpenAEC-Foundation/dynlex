@@ -105,7 +105,7 @@ if (
     $vcpkgManifest.'builtin-baseline' -ne $vcpkgMetadata.commit -or
     (Compare-Object `
         @($vcpkgManifest.dependencies | Sort-Object) `
-        @("freetype", "glfw3", "nlohmann-json"))
+        @("freetype", "glfw3", "nlohmann-json", "vulkan"))
 ) {
     throw "The vcpkg toolchain and manifest do not match the pinned dependency baseline."
 }
@@ -161,6 +161,8 @@ try {
         (Join-Path $dependencyRoot "bin"),
         (Join-Path $dependencyRoot "share\glfw3"),
         (Join-Path $dependencyRoot "share\freetype"),
+        (Join-Path $dependencyRoot "share\vulkan"),
+        (Join-Path $dependencyRoot "share\vulkan-loader"),
         $installationRoot
     )) {
         New-Item -ItemType Directory -Path $directory | Out-Null
@@ -198,11 +200,15 @@ try {
     foreach ($relativePath in @(
         "lib\glfw3dll.lib",
         "lib\freetype.lib",
+        "lib\vulkan-1.lib",
         "bin\glfw3.dll",
         "bin\freetype.dll",
+        "bin\vulkan-1.dll",
         "bin\libpng16.dll",
         "share\glfw3\copyright",
-        "share\freetype\copyright"
+        "share\freetype\copyright",
+        "share\vulkan\copyright",
+        "share\vulkan-loader\copyright"
     )) {
         Set-Content -Path (Join-Path $dependencyRoot $relativePath) -Value $relativePath
     }
@@ -223,11 +229,15 @@ try {
         "lib\dynlex\toolchain\x86_64-w64-mingw32\lib\libkernel32.a",
         "lib\dynlex\toolchain\dependencies\lib\libglfw3dll.a",
         "lib\dynlex\toolchain\dependencies\lib\libfreetype.a",
+        "lib\dynlex\toolchain\dependencies\lib\libvulkan-1.a",
         "lib\dynlex\toolchain\runtime\glfw3.dll",
         "lib\dynlex\toolchain\runtime\freetype.dll",
+        "lib\dynlex\toolchain\runtime\vulkan-1.dll",
         "lib\dynlex\toolchain\runtime\libpng16.dll",
         "lib\dynlex\toolchain\licenses\vcpkg\glfw3.txt",
-        "lib\dynlex\toolchain\licenses\vcpkg\freetype.txt"
+        "lib\dynlex\toolchain\licenses\vcpkg\freetype.txt",
+        "lib\dynlex\toolchain\licenses\vcpkg\vulkan.txt",
+        "lib\dynlex\toolchain\licenses\vcpkg\vulkan-loader.txt"
     )) {
         if (-not (Test-Path -PathType Leaf (Join-Path $installationRoot $relativePath))) {
             throw "Windows toolchain staging omitted $relativePath."

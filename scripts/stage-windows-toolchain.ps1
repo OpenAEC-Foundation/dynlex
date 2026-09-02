@@ -72,11 +72,17 @@ $dependencyLibraryDirectory = Join-Path $DependencyRoot "lib"
 $dependencyBinaryDirectory = Join-Path $DependencyRoot "bin"
 $glfwImportLibraries = @(Get-ChildItem -Path $dependencyLibraryDirectory -Filter "*glfw3*dll.lib" -File)
 $freetypeImportLibraries = @(Get-ChildItem -Path $dependencyLibraryDirectory -Filter "freetype.lib" -File)
-if ($glfwImportLibraries.Count -ne 1 -or $freetypeImportLibraries.Count -ne 1) {
-    throw "Expected exactly one dynamic GLFW and FreeType import library in $dependencyLibraryDirectory."
+$vulkanImportLibraries = @(Get-ChildItem -Path $dependencyLibraryDirectory -Filter "vulkan-1.lib" -File)
+if (
+    $glfwImportLibraries.Count -ne 1 -or
+    $freetypeImportLibraries.Count -ne 1 -or
+    $vulkanImportLibraries.Count -ne 1
+) {
+    throw "Expected exactly one dynamic GLFW, FreeType, and Vulkan import library in $dependencyLibraryDirectory."
 }
 Copy-Item $glfwImportLibraries[0].FullName (Join-Path $destinationDependencyLib "libglfw3dll.a")
 Copy-Item $freetypeImportLibraries[0].FullName (Join-Path $destinationDependencyLib "libfreetype.a")
+Copy-Item $vulkanImportLibraries[0].FullName (Join-Path $destinationDependencyLib "libvulkan-1.a")
 
 $runtimeLibraries = @(Get-ChildItem -Path $dependencyBinaryDirectory -Filter "*.dll" -File)
 if ($runtimeLibraries.Count -eq 0) {
