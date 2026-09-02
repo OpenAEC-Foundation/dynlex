@@ -5,6 +5,14 @@ if window = 0 as a pointer to a byte:
 	return 1
 
 set failed to false
+@intrinsic("call", "glfw", "glfwShowWindow", nothing, window)
+@intrinsic("call", "glfw", "glfwPollEvents", nothing)
+@intrinsic("call", "glfw", "glfwFocusWindow", nothing, window)
+@intrinsic("call", "glfw", "glfwWaitEventsTimeout", nothing, 0.25)
+@intrinsic("call", "glfw", "glfwPollEvents", nothing)
+set focused to @intrinsic("call", "glfw", "glfwGetWindowAttrib", an integer, window, 131073)
+if focused = 0:
+	set failed to true
 @intrinsic("call", "glfw", "glfwSetCursorPos", nothing, window, 37.0, 19.0)
 set position to the cursor position of window
 if (position's x != 37.0) or (position's y != 19.0):
