@@ -11,11 +11,11 @@ class:
     patterns:
         [an|] FT face
     members:
-        face count as a word sized integer
-        face index as a word sized integer
-        face flags as a word sized integer
-        style flags as a word sized integer
-        glyph count as a word sized integer
+        face count as a C long integer
+        face index as a C long integer
+        face flags as a C long integer
+        style flags as a C long integer
+        glyph count as a C long integer
         family name as a pointer
         style name as a pointer
         fixed size count as an integer
@@ -24,17 +24,22 @@ class:
         charmaps as a pointer
         generic data as a pointer
         generic finalizer as a pointer
-        bounding box minimum x as a word sized integer
-        bounding box minimum y as a word sized integer
-        bounding box maximum x as a word sized integer
-        bounding box maximum y as a word sized integer
-        padding:
-            16
+        bounding box minimum x as a C long integer
+        bounding box minimum y as a C long integer
+        bounding box maximum x as a C long integer
+        bounding box maximum y as a C long integer
+        units per EM as a 16 bit integer
+        ascender as a 16 bit integer
+        descender as a 16 bit integer
+        height as a 16 bit integer
+        maximum horizontal advance as a 16 bit integer
+        maximum vertical advance as a 16 bit integer
+        underline position as a 16 bit integer
+        underline thickness as a 16 bit integer
         glyph as a pointer
 
 # FT_GlyphSlotRec — rendered glyph data
 # Mirrors the C struct field-by-field up to 'bitmap_top'
-# Uses padding: 8 before bitmap fields because FT_Bitmap is 8-byte aligned in C
 class:
     patterns:
         [an|] FT glyph slot
@@ -45,18 +50,18 @@ class:
         glyph index as an integer
         generic data as a pointer
         generic finalizer as a pointer
-        metrics width as a word sized integer
-        metrics height as a word sized integer
-        horizontal bearing x as a word sized integer
-        horizontal bearing y as a word sized integer
-        horizontal advance as a word sized integer
-        vertical bearing x as a word sized integer
-        vertical bearing y as a word sized integer
-        vertical advance as a word sized integer
-        linear horizontal advance as a word sized integer
-        linear vertical advance as a word sized integer
-        advance x as a word sized integer
-        advance y as a word sized integer
+        metrics width as a C long integer
+        metrics height as a C long integer
+        horizontal bearing x as a C long integer
+        horizontal bearing y as a C long integer
+        horizontal advance as a C long integer
+        vertical bearing x as a C long integer
+        vertical bearing y as a C long integer
+        vertical advance as a C long integer
+        linear horizontal advance as a C long integer
+        linear vertical advance as a C long integer
+        advance x as a C long integer
+        advance y as a C long integer
         format as an integer
         padding:
             8
@@ -64,7 +69,9 @@ class:
         bitmap width as an integer
         bitmap pitch as an integer
         bitmap buffer as a pointer
-        bitmap description as an integer
+        bitmap number of gray levels as a 16 bit integer
+        bitmap pixel mode as a byte
+        bitmap palette mode as a byte
         bitmap palette as a pointer
         bitmap left as an integer
         bitmap top as an integer
@@ -102,7 +109,7 @@ function a loaded font from path at size {a value:size}:
 
         # Load font face
         set face to 0 as a pointer to a byte
-        ignore @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a 64 bit integer, the address of face)
+        ignore @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a C long integer, the address of face)
 
         # Set pixel size
         ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
@@ -127,7 +134,7 @@ local function the horizontal position after rendering character {a value:code} 
         set texture to the texture of typeface
 
         # Load and render the glyph
-        ignore @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a 64 bit integer, 4)
+        ignore @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a C long integer, 4)
 
         # Read glyph slot from the face after loading the character
         set metadata to face as a pointer to an FT face
