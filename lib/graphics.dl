@@ -38,7 +38,7 @@ function register the graphics viewport resize callback [of|for] window:
 # followed by two C doubles (DynLex floating-point numbers).
 flex function register the graphics scroll callback named {fixed C string:callback} [of|for] window:
 	replacement:
-		ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, @intrinsic("function", callback))
+		ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, the function named callback)
 
 function a new window with width {integer:width} and height {integer:height}:
 	execute:
