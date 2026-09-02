@@ -153,6 +153,58 @@ class:
 		blue bits as an integer
 		refresh rate as an integer
 
+class:
+	patterns:
+		[a|] cursor position
+	members:
+		x as a floating-point number
+		y as a floating-point number
+
+class:
+	patterns:
+		[a|] mouse button
+	members:
+		number as an integer
+
+function the left mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, the GLFW first mouse button)
+
+function the right mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, the GLFW second mouse button)
+
+function the middle mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, the GLFW third mouse button)
+
+function a mouse button numbered {integer:number}:
+	execute:
+		return @intrinsic("construct", a mouse button, number)
+
+function the cursor position of {C string:window}:
+	execute:
+		set x to 0.0 as a floating-point number
+		set y to 0.0 as a floating-point number
+		@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, window, the address of x, the address of y)
+		return @intrinsic("construct", a cursor position, x, y)
+
+function {mouse button:button} is pressed in {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = the GLFW press status
+
+function {mouse button:button} is released in {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = the GLFW release status
+
+function capture the mouse cursor in {C string:window}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW disabled cursor mode)
+
+function release the mouse cursor in {C string:window}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW normal cursor mode)
+
 exposed function resize the graphics viewport of {C string:window} to {integer:width} and {integer:height}:
 	execute:
 		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
