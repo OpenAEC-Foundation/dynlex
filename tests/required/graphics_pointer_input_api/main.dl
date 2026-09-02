@@ -11,7 +11,7 @@ print middle's number as a line
 set invalid to false
 set initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
 if initialized != 0:
-	set window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, 1, 1, "DynLex pointer input test", 0 as a pointer to a byte, 0 as a pointer to a byte)
+	set window to a new hidden window with width 1 and height 1
 	if window != 0 as a pointer to a byte:
 		set position to the cursor position of window
 		set pressed to left is pressed in window
@@ -19,7 +19,6 @@ if initialized != 0:
 		set invalid to pressed = released
 		capture the mouse cursor in window
 		release the mouse cursor in window
-		@intrinsic("call", "glfw", "glfwDestroyWindow", nothing, window)
-	@intrinsic("call", "glfw", "glfwTerminate", nothing)
+		close the window
 	if invalid:
 		return 1

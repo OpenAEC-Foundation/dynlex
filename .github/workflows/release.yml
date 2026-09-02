@@ -686,6 +686,10 @@ jobs:
             -o "$SMOKE_ROOT/graphics-window-application-state"
           xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
             "$SMOKE_ROOT/graphics-window-application-state"
+          "$DYNLEX_BIN" tests/release/graphics_hidden_window_smoke.dl \
+            -o "$SMOKE_ROOT/graphics-hidden-window"
+          xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
+            "$SMOKE_ROOT/graphics-hidden-window"
 
   smoke-windows:
     needs: [package-windows]
@@ -817,6 +821,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "The graphics executable could not load its deployed runtime libraries."
           }
+          $hiddenGraphicsExecutable = Join-Path $smokeRoot "graphics-hidden-window.exe"
+          & $dynlex.FullName `
+            "tests/release/graphics_hidden_window_smoke.dl" `
+            -o $hiddenGraphicsExecutable 2>&1 |
+            Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-hidden-graphics.log"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $hiddenGraphicsExecutable)) {
+            Get-Content "$env:TEMP\\dynlex-smoke-windows-hidden-graphics.log" | Write-Host
+            throw "Installed DynLex could not produce a hidden graphics executable."
+          }
+          & $hiddenGraphicsExecutable
+          if ($LASTEXITCODE -ne 0) {
+            throw "The hidden graphics executable could not create an invisible window."
+          }
           $fontExecutable = Join-Path $smokeRoot "font-link.exe"
           & $dynlex.FullName `
             "tests/release/font_link_smoke.dl" `
@@ -896,6 +913,10 @@ jobs:
           test -f "$SMOKE_ROOT/libglfw.dylib"
           test -f "$SMOKE_ROOT/libfreetype.dylib"
           "$SMOKE_ROOT/graphics"
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            "$DYNLEX_BIN" tests/release/graphics_hidden_window_smoke.dl \
+              -o "$SMOKE_ROOT/graphics-hidden-window"
+          "$SMOKE_ROOT/graphics-hidden-window"
           env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
             "$DYNLEX_BIN" tests/release/font_link_smoke.dl \
               -o "$SMOKE_ROOT/font-link"
