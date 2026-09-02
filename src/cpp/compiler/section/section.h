@@ -46,6 +46,13 @@ enum class InstantiationPurity {
 	Impure,
 };
 
+enum class DefinitionReturnContract {
+	Inferred,
+	Nothing,
+	Value,
+	ReplacementValue,
+};
+
 struct InstantiationKey {
 	std::vector<DataType> argumentTypes;
 	std::vector<std::pair<std::string, CompileTimeValue>> compileTimeParameters;
@@ -157,6 +164,7 @@ struct Section {
 	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a flex (inlined at call site instead of function call)
 	bool isFlex = false;
+	DefinitionReturnContract returnContract = DefinitionReturnContract::Inferred;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
 	// whether this function must be emitted through a stable callable wrapper

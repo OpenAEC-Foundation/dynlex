@@ -1,0 +1,8 @@
+import lib/std.dl
+
+to bad condition:
+    if condition:
+        return 1
+    return "different"
+
+bad true

@@ -13,6 +13,10 @@ dynlex options:
         padding: "padding"
     flex: "flex"
     local: "local"
+    shorthand definitions:
+        action: "to"
+        value: "to get"
+        replacement: "means"
     child sections:
         execute: "execute"
         replacement: "replacement"
@@ -82,6 +86,12 @@ dynlex options:
         function has missing return path: "Function '{function}' does not return a value on every reachable path"
         conversion requires one parameter: "A conversion must contain exactly one parameter and no other pattern text"
         implicit modifier requires conversion: "The '{modifier}' modifier can only be used with '{conversion}'"
+        shorthand definition requires pattern: "Definition shorthand '{keyword}' requires a pattern"
+        replacement shorthand requires inline body: "'{keyword}' requires an expression on the same line"
+        value shorthand requires multiline body: "'{keyword}' requires an indented body on following lines"
+        action shorthand returns value: "Action '{function}' must return nothing"
+        value shorthand returns nothing: "Value function '{function}' must return a value"
+        replacement shorthand returns nothing: "Replacement '{function}' must return a value"
         ambiguous conversion: "More than one conversion from {from_type} to {to_type} is equally specific"
         multiple reachable return types: "Function has multiple reachable return types: {first_type} and {second_type}"
         program return value invalid: "Program return value must be convertible to a 32-bit integer, got {value_type}"

@@ -4,4 +4,13 @@ functie verdubbel waarde:
     doe:
         return waarde + waarde
 
-print verdubbel 21
+waarde verdrievoudigd betekent: (waarde + waarde) + waarde
+
+om toon waarde: print waarde as a line
+
+om te krijgen verviervoudig waarde:
+    return (waarde + waarde) + (waarde + waarde)
+
+toon verdubbel 21
+toon 7 verdrievoudigd
+print verviervoudig 11

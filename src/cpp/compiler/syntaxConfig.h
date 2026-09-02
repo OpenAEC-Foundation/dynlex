@@ -34,6 +34,9 @@ struct SyntaxConfig {
 	std::string flexName = "flex";
 	std::string localName = "local";
 	std::string exposedName = "exposed";
+	std::string actionShorthand = "to";
+	std::string valueShorthand = "to get";
+	std::string replacementShorthand = "means";
 
 	std::string executeSectionName = "execute";
 	std::string replacementSectionName = "replacement";
@@ -49,6 +52,7 @@ struct SyntaxConfig {
 	std::string paddingName = "padding";
 };
 
+std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &config);
 bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath);
 const SyntaxConfig &syntaxConfigForSourcePath(const ParseContext &context, std::string_view path);
 const SyntaxConfig &syntaxConfigForSourceFile(const ParseContext &context, const lsp::SourceFile *sourceFile);

@@ -1,0 +1,1 @@
+<unknown location>: Error: syntax config tests/required/syntax_config_shorthand_collision/config.dl:3: shorthand definition phrase 'perform' conflicts with structural keyword 'perform'

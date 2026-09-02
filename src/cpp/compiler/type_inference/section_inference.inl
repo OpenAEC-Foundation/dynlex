@@ -892,6 +892,15 @@ bool inferTypes(ParseContext &parseContext) {
 				(void)argTypes;
 				if (!inst.valid)
 					continue;
+				std::string_view contractViolation = definitionReturnContractViolation(section, inst.returnType);
+				if (!contractViolation.empty()) {
+					parseContext.diagnostics.push_back(Diagnostic(
+						parseContext, Diagnostic::Level::Error, contractViolation, definition->range, "function",
+						std::string(definition->range.subString)
+					));
+					valid = false;
+					break;
+				}
 				if (!inst.returnType.isDeduced()) {
 					parseContext.diagnostics.push_back(Diagnostic(
 						parseContext, Diagnostic::Level::Error, "function has no deduced return type", definition->range,

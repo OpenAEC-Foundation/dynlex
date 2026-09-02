@@ -1,0 +1,4 @@
+dynlex options:
+    function: "perform"
+    shorthand definitions:
+        action: "perform"

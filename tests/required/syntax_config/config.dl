@@ -1,5 +1,9 @@
 dynlex options:
     import: "importeer"
     function: "functie"
+    shorthand definitions:
+        action: "om"
+        value: "om te krijgen"
+        replacement: "betekent"
     child sections:
         execute: "doe"

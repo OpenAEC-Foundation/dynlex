@@ -1,0 +1,1 @@
+tests/required/indented_action_shorthand_return_value/main.dl:8-17: Error: Action 'bad value' must return nothing

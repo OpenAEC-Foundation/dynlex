@@ -25,7 +25,7 @@ int Range::start() const { return subString.begin() - line->fullText.begin(); }
 
 int Range::end() const { return subString.end() - line->fullText.begin(); }
 
-SourceLocation Range::sourceStart() const { return line ? line->mapOffsetToSource(start()) : SourceLocation{}; }
+SourceLocation Range::sourceStart() const { return line ? line->mapOffsetToSource(start(), true) : SourceLocation{}; }
 
 SourceLocation Range::sourceEnd() const { return line ? line->mapOffsetToSource(end()) : SourceLocation{}; }
 
