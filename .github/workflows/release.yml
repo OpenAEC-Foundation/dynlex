@@ -660,6 +660,12 @@ jobs:
           "$DYNLEX_BIN" tests/release/font_link_smoke.dl \
             -o "$SMOKE_ROOT/font-link"
           "$SMOKE_ROOT/font-link"
+          sudo apt-get update
+          sudo apt-get install --yes xvfb
+          "$DYNLEX_BIN" tests/release/font_render_smoke.dl \
+            -o "$SMOKE_ROOT/font-render"
+          xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
+            "$SMOKE_ROOT/font-render"
 
   smoke-windows:
     needs: [package-windows]

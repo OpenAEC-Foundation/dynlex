@@ -318,6 +318,10 @@ for (const smokeJob of ["smoke-linux", "smoke-windows", "smoke-macos"]) {
     new RegExp(`${smokeJob}:[\\s\\S]*font_link_smoke\\.dl`),
   );
 }
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*font_render_smoke\.dl[\s\S]*xvfb-run[\s\S]*font-render/,
+);
 assert.match(releaseWorkflow, /CPACK_WIX_ARCHITECTURE/);
 assert.match(releaseWorkflow, /prepare-release-assets\.sh/);
 assert.match(releaseWorkflow, /workflow_dispatch:/);
