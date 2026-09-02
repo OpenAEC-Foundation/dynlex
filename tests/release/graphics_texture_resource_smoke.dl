@@ -8,7 +8,7 @@ set sentinel to 0
 @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of sentinel)
 @intrinsic("call", "GL", "glBindTexture", nothing, 3553, sentinel)
 @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, 8)
-set enabled_before to @intrinsic("call", "GL", "glIsEnabled", an integer, 3553)
+set {enabled before} to @intrinsic("call", "GL", "glIsEnabled", an integer, 3553)
 
 set texture to a loaded graphics texture from PPM file at "tests/release/texture_comments_crlf.ppm"
 if texture's handle = 0:
@@ -23,11 +23,11 @@ if (texture's width != 3) or (texture's height != 2):
 
 set current to 0
 set alignment to 0
-set enabled_after to 0
+set {enabled after} to 0
 @intrinsic("call", "GL", "glGetIntegerv", nothing, 32873, the address of current)
 @intrinsic("call", "GL", "glGetIntegerv", nothing, 3317, the address of alignment)
-set enabled_after to @intrinsic("call", "GL", "glIsEnabled", an integer, 3553)
-if (current != sentinel) or ((alignment != 8) or (enabled_after != enabled_before)):
+set enabled after to @intrinsic("call", "GL", "glIsEnabled", an integer, 3553)
+if (current != sentinel) or ((alignment != 8) or (enabled after != enabled before)):
     release texture
     @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of sentinel)
     close the window
