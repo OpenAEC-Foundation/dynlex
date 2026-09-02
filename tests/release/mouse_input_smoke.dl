@@ -1,0 +1,26 @@
+import lib/graphics.dl
+
+set window to a new window with width 128 and height 64
+if window = 0 as a pointer to a byte:
+	return 1
+
+set failed to false
+@intrinsic("call", "glfw", "glfwSetCursorPos", nothing, window, 37.0, 19.0)
+set position to the cursor position of window
+if (position's x != 37.0) or (position's y != 19.0):
+	set failed to true
+
+capture the mouse cursor in window
+set mode to @intrinsic("call", "glfw", "glfwGetInputMode", an integer, window, 208897)
+if mode != 212995:
+	set failed to true
+
+release the mouse cursor in window
+set mode to @intrinsic("call", "glfw", "glfwGetInputMode", an integer, window, 208897)
+if mode != 212993:
+	set failed to true
+
+close the window
+if failed:
+	return 1
+return 0
