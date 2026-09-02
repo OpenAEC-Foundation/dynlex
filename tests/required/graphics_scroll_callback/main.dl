@@ -6,8 +6,3 @@ exposed function record the graphics scroll of {C string:window} with horizontal
         print y as a line
 
 record the graphics scroll of 0 as a pointer to a byte with horizontal offset 1.25 and vertical offset (0.0 - 2.5)
-
-# Keep the registration compile-only in the required suite. A real GLFW window
-# is not headless-safe, while this still checks the public call syntax.
-if false:
-    register the graphics scroll callback named "record the graphics scroll of $ with horizontal offset $ and vertical offset $" for 0 as a pointer to a byte
