@@ -1,0 +1,29 @@
+import lib/graphics.dl
+
+set texture to an empty graphics texture
+if texture is loaded:
+    return 1
+if (texture's handle != 0) or ((texture's width != 0) or (texture's height != 0)):
+    return 1
+
+set constructed to a new graphics texture with handle 0, width 4 and height 3
+if constructed is loaded or ((the OpenGL texture handle of constructed != 0) or ((constructed's width != 4) or (constructed's height != 3))):
+    return 1
+release constructed
+if (constructed is loaded) or ((constructed's width != 0) or (constructed's height != 0)):
+    return 1
+
+set missing to a loaded graphics texture from PPM file at "tests/release/does-not-exist.ppm"
+if missing is loaded:
+    return 1
+set invalid to a loaded graphics texture from PPM file at "tests/release/texture_invalid.ppm"
+if invalid is loaded or ((invalid's width != 0) or (invalid's height != 0)):
+    return 1
+set overflow to a loaded graphics texture from PPM file at "tests/release/texture_overflow.ppm"
+if overflow is loaded or ((overflow's width != 0) or (overflow's height != 0)):
+    return 1
+set truncated to a loaded graphics texture from PPM file at "tests/release/texture_truncated_extreme.ppm"
+if truncated is loaded or ((truncated's width != 0) or (truncated's height != 0)):
+    return 1
+print "graphics texture resource API is available" as a line
+return 0

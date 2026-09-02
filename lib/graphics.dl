@@ -1,6 +1,7 @@
 # DynLex Graphics Library (GLFW + OpenGL)
 
 import lib/std.dl
+import lib/texture.dl
 
 # External GLFW and OpenGL constants are named compile-time values. Keeping
 # their ABI values in one place makes intrinsic calls readable and prevents

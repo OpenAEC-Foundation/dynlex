@@ -1,0 +1,206 @@
+# DynLex graphics texture resources.
+#
+# A texture owns one OpenGL 2D texture name. Loading accepts the PPM P6
+# format used by the model assets. The caller owns the returned resource and
+# must release it while its OpenGL context is still current. Loading restores
+# the current 2D binding and unpack alignment; it does not enable texturing.
+# Binding is an explicit operation for the draw that uses the texture.
+
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] graphics texture
+    members:
+        handle as an integer
+        width as an integer
+        height as an integer
+
+function a new graphics texture with handle {a value:handle}, width {a value:width} and height {a value:height}:
+    replacement:
+        @intrinsic("construct", a graphics texture, handle, width, height)
+
+function an empty graphics texture:
+    execute:
+        return a new graphics texture with handle 0, width 0 and height 0
+
+local function skip PPM header whitespace and comments in {pointer:stream}:
+    execute:
+        set done to false
+        set found to false
+        while done = false:
+            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+            if character = -1:
+                set done to true
+            else:
+                if (character = 9) or ((character = 10) or ((character = 11) or ((character = 12) or ((character = 13) or (character = 32))))):
+                    ignore character
+                else:
+                    if character = 35:
+                        set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+                        while (character != -1) and ((character != 10) and (character != 13)):
+                            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+                    else:
+                        ignore @intrinsic("call", "libc", "ungetc", an integer, character, stream)
+                        set found to true
+                        set done to true
+        return found
+
+local function the PPM magic token is valid in {pointer:stream}:
+    execute:
+        set first to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        set second to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        set separator to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        if (first != 80) or ((second != 54) or (separator = -1)):
+            return false
+        if (separator != 9) and ((separator != 10) and ((separator != 11) and ((separator != 12) and ((separator != 13) and (separator != 32))))):
+            return false
+        ignore @intrinsic("call", "libc", "ungetc", an integer, separator, stream)
+        return true
+
+local function a PPM integer token from {pointer:stream}:
+    execute:
+        if skip PPM header whitespace and comments in stream = false:
+            return -1
+
+        set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        if (character < 48) or (character > 57):
+            return -1
+
+        set value to 0
+        while (character >= 48) and (character <= 57):
+            set digit to character - 48
+            if (value > 214748364) or ((value = 214748364) and (digit > 7)):
+                return -1
+            set value to (value * 10) + digit
+            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+
+        if character = -1:
+            return -1
+        if (character != 9) and ((character != 10) and ((character != 11) and ((character != 12) and ((character != 13) and (character != 32))))):
+            return -1
+        ignore @intrinsic("call", "libc", "ungetc", an integer, character, stream)
+        return value
+
+local function consume the PPM pixel separator in {pointer:stream}:
+    execute:
+        set delimiter to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        if delimiter = -1:
+            return false
+        if (delimiter != 9) and ((delimiter != 10) and ((delimiter != 11) and ((delimiter != 12) and ((delimiter != 13) and (delimiter != 32))))):
+            return false
+        if delimiter = 13:
+            set following to @intrinsic("call", "libc", "fgetc", an integer, stream)
+            if following != 10 and following != -1:
+                ignore @intrinsic("call", "libc", "ungetc", an integer, following, stream)
+        return true
+
+function a loaded graphics texture from PPM file at path:
+    execute:
+        set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+        if stream = 0 as a pointer to a byte:
+            return an empty graphics texture
+
+        if the PPM magic token is valid in stream = false:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+
+        set width to a PPM integer token from stream
+        set height to a PPM integer token from stream
+        set maximum to a PPM integer token from stream
+        if (width <= 0) or ((height <= 0) or (maximum != 255)):
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        if consume the PPM pixel separator in stream = false:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+
+        set count to width as a word sized integer
+        set vertical to height as a word sized integer
+        if count > (9223372036854775807 / vertical):
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        multiply count by vertical
+        if count > (9223372036854775807 / 3):
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        multiply count by 3
+
+        set position to @intrinsic("call", "libc", "ftell", a C long integer, stream)
+        if position < 0 as a C long integer:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        set status to @intrinsic("call", "libc", "fseek", an integer, stream, 0 as a C long integer, 2)
+        if status != 0:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        set finish to @intrinsic("call", "libc", "ftell", a C long integer, stream)
+        set status to @intrinsic("call", "libc", "fseek", an integer, stream, position, 0)
+        if (status != 0) or (finish < position):
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+        set available to (finish - position) as a word sized integer
+        if available < count:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+
+        set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
+        if pixels = 0 as a pointer to a byte:
+            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+            return an empty graphics texture
+
+        set received to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, count as a word sized integer, stream)
+        ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+
+        if received != count as a word sized integer:
+            @intrinsic("call", "libc", "free", nothing, pixels)
+            return an empty graphics texture
+
+        set binding to 0
+        set alignment to 4
+        @intrinsic("call", "GL", "glGetIntegerv", nothing, 32873, the address of binding)
+        @intrinsic("call", "GL", "glGetIntegerv", nothing, 3317, the address of alignment)
+        set identifier to 0 as an integer
+        @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of identifier)
+        if identifier = 0:
+            @intrinsic("call", "libc", "free", nothing, pixels)
+            return an empty graphics texture
+        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, identifier)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 10497)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 10497)
+        @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, 1)
+        @intrinsic("call", "GL", "glTexImage2D", nothing, 3553, 0, 6407, width, height, 0, 6407, 5121, pixels)
+        @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, alignment)
+        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, binding)
+
+        @intrinsic("call", "libc", "free", nothing, pixels)
+        return a new graphics texture with handle identifier, width width and height height
+
+function the OpenGL texture handle of {graphics texture:texture}:
+    replacement:
+        texture's handle
+
+function {graphics texture:texture} is loaded:
+    execute:
+        return texture's handle > 0
+
+function bind {graphics texture:texture}:
+    execute:
+        if texture is loaded:
+            @intrinsic("call", "GL", "glEnable", nothing, 3553)
+            @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture's handle as a 32 bit integer)
+
+function unbind graphics textures:
+    execute:
+        @intrinsic("call", "GL", "glDisable", nothing, 3553)
+
+flex function release {graphics texture:texture}:
+    replacement:
+        if texture is loaded:
+            set identifier to texture's handle as a 32 bit integer
+            @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of identifier)
+        set texture's handle to 0
+        set texture's width to 0
+        set texture's height to 0

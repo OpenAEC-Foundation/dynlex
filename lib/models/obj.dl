@@ -4,6 +4,7 @@
 # materials, and PPM P6 texture bindings.
 
 import lib/std.dl
+import lib/texture.dl
 
 class:
     patterns:
@@ -54,7 +55,7 @@ class:
         name as a pointer to a byte
         color as an OBJ color
         texture path as a pointer to a byte
-        texture as an integer
+        texture as a graphics texture
 
 class:
     patterns:
@@ -114,7 +115,7 @@ function a new OBJ triangle from {OBJ face reference:first}, {OBJ face reference
     replacement:
         @intrinsic("construct", an OBJ triangle, first, second, third, material)
 
-function a new OBJ material named {a value:name} with {OBJ color:color}, texture path {a value:path} and texture {a value:texture}:
+function a new OBJ material named {a value:name} with {OBJ color:color}, texture path {a value:path} and texture {graphics texture:texture}:
     replacement:
         @intrinsic("construct", an OBJ material, name, color, path, texture)
 
@@ -151,48 +152,6 @@ function a duplicated OBJ C string from source:
 
         ignore @intrinsic("call", "libc", "memcpy", a pointer to a byte, copy, source, length + 1)
         return copy
-
-function a loaded OBJ texture from PPM file at path:
-    execute:
-        set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
-        if stream = 0 as a pointer to a byte:
-            return 0
-
-        set width to 0
-        set height to 0
-        set maximum to 0
-        set fields to @intrinsic("variadic call", "libc", "fscanf", an integer, 2, stream, "P6 %d %d %d", the address of width, the address of height, the address of maximum)
-        if (fields != 3) or ((width <= 0) or ((height <= 0) or (maximum != 255))):
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return 0
-
-        ignore @intrinsic("call", "libc", "fgetc", an integer, stream)
-
-        set count to (width * height)
-        multiply count by 3
-        set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
-        if pixels = 0 as a pointer to a byte:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return 0
-
-        set received to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, count as a word sized integer, stream)
-        ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-
-        if received != count as a word sized integer:
-            @intrinsic("call", "libc", "free", nothing, pixels)
-            return 0
-
-        set identifier to 0 as an integer
-        @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of identifier)
-        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, identifier)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 10497)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 10497)
-        @intrinsic("call", "GL", "glTexImage2D", nothing, 3553, 0, 6407, width, height, 0, 6407, 5121, pixels)
-
-        @intrinsic("call", "libc", "free", nothing, pixels)
-        return identifier as an integer
 
 function the index of OBJ material named {a value:name} in {a value:materials} with count {a value:count}:
     execute:
@@ -248,7 +207,8 @@ function a loaded OBJ material set from path:
                     set materials to @intrinsic("call", "libc", "realloc", a pointer to an OBJ material, materials, (capacity * the size of an OBJ material) as a word sized integer)
 
                 set copy to a duplicated OBJ C string from name
-                set entry to a new OBJ material named copy with (a new OBJ color from 0.8, 0.8 and 0.8), texture path (0 as a pointer to a byte) and texture 0
+                set blank to an empty graphics texture
+                set entry to a new OBJ material named copy with (a new OBJ color from 0.8, 0.8 and 0.8), texture path (0 as a pointer to a byte) and texture blank
                 store entry into materials at count
                 set current to count
                 increment count
@@ -262,10 +222,11 @@ function a loaded OBJ material set from path:
                     if (current >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "map_Kd %2047s", texture) = 1):
                         set existing to the item at current in materials
                         set reference to a duplicated OBJ C string from texture
-                        set identifier to a loaded OBJ texture from PPM file at reference
+                        set identifier to a loaded graphics texture from PPM file at reference
 
                         if existing's texture path != 0 as a pointer to a byte:
                             @intrinsic("call", "libc", "free", nothing, existing's texture path)
+                        release existing's texture
 
                         set updated to a new OBJ material named existing's name with existing's color, texture path reference and texture identifier
                         store updated into materials at current
@@ -552,7 +513,7 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
             set base to color
             set index to 0
             set active to -2147483647
-            set texture to 0
+            set texture to an empty graphics texture
             set fallback to base
             set drawing to false
 
@@ -564,7 +525,7 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
                         @intrinsic("call", "GL", "glEnd", nothing)
 
                     set active to triangle's material
-                    set texture to 0
+                    set texture to an empty graphics texture
                     set fallback to base
 
                     if (active >= 0) and (active < mesh's material count):
@@ -573,9 +534,8 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
                         set texture to material's texture
 
                         if mode = 0:
-                            if texture > 0:
-                                @intrinsic("call", "GL", "glEnable", nothing, 3553)
-                                @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture as a 32 bit integer)
+                            if texture is loaded:
+                                bind texture
                                 @intrinsic("call", "GL", "glColor3ub", nothing, 255, 255, 255)
                             else:
                                 @intrinsic("call", "GL", "glDisable", nothing, 3553)
@@ -613,12 +573,12 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
                     set shade to 1.0
 
                 if mode = 0:
-                    if texture > 0:
+                    if texture is loaded:
                         use a grayscale OBJ color with brightness shade as the current OBJ color
                     else:
                         use fallback scaled by shade as the current OBJ color
 
-                    if texture > 0 and triangle has usable texture coordinates for mesh:
+                    if texture is loaded and triangle has usable texture coordinates for mesh:
                         set start to the item at (triangle's first's texture coordinate) in coordinates
                         set middle to the item at (triangle's second's texture coordinate) in coordinates
                         set end to the item at (triangle's third's texture coordinate) in coordinates
@@ -653,7 +613,7 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
             if drawing:
                 @intrinsic("call", "GL", "glEnd", nothing)
 
-            @intrinsic("call", "GL", "glDisable", nothing, 3553)
+            unbind graphics textures
             @intrinsic("call", "GL", "glPopMatrix", nothing)
 
 function free {OBJ mesh:mesh}:
@@ -678,9 +638,7 @@ function free {OBJ mesh:mesh}:
                 if entry's texture path != 0 as a pointer to a byte:
                     @intrinsic("call", "libc", "free", nothing, entry's texture path)
 
-                if entry's texture > 0:
-                    set identifier to entry's texture as a 32 bit integer
-                    @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of identifier)
+                release entry's texture
 
                 increment cursor
 
