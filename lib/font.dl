@@ -123,6 +123,11 @@ function a loaded font from path at size {a value:size}:
         @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture)
         @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
         @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
+        # Linear filtering samples half a texel beyond a glyph bitmap at the
+        # quad edge. Use OpenGL's transparent default border there instead of
+        # repeating the opposite glyph edge around its rectangular quad.
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 33069)
+        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 33069)
 
         return a new font using face and texture
 

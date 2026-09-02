@@ -6,6 +6,11 @@ if window = 0 as a pointer to a byte:
     return 1
 
 set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32
+@intrinsic("call", "GL", "glBindTexture", nothing, 3553, typeface's texture)
+set horizontal_wrap to 0
+set vertical_wrap to 0
+@intrinsic("call", "GL", "glGetTexParameteriv", nothing, 3553, 10242, the address of horizontal_wrap)
+@intrinsic("call", "GL", "glGetTexParameteriv", nothing, 3553, 10243, the address of vertical_wrap)
 clear the screen
 draw "A A" as text at x 16 and y 48 using typeface in color red 255, green 255 and blue 255
 set error to @intrinsic("call", "GL", "glGetError", an integer)
@@ -24,6 +29,6 @@ loop while position < bytes:
 @intrinsic("call", "libc", "free", nothing, pixels)
 close the window
 
-if (error != 0) or (lit <= 10):
+if ((error != 0) or (lit <= 10)) or ((horizontal_wrap != 33069) or (vertical_wrap != 33069)):
     return 1
 return 0
