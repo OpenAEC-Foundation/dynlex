@@ -24,6 +24,13 @@ struct SourceSlice {
 	int sourceColumnStart{};
 };
 
+enum class DefinitionShorthand {
+	None,
+	Action,
+	Value,
+	Replacement,
+};
+
 struct CodeLine {
 	CodeLine(std::string_view fullText, lsp::SourceFile *sourceFile) : sourceFile(sourceFile), fullText(fullText) {}
 
@@ -50,6 +57,12 @@ struct CodeLine {
 	std::string_view patternText{};
 	// extra logical indentation levels injected by preprocessing for one-line sections
 	int logicalIndentOffset = 0;
+	// the next logical line is the body introduced by this line's section opener
+	bool inlineBodyFollows = false;
+	// declaration syntax normalized into an ordinary function section
+	DefinitionShorthand definitionShorthand = DefinitionShorthand::None;
+	// generated structural lines do not represent authored source tokens
+	bool synthetic = false;
 	// whether this logical line reuses a physical indent prefix from another source line
 	bool hasIndentOverride = false;
 	std::string indentOverride{};
@@ -74,7 +87,7 @@ struct CodeLine {
 	bool isPatternDefinition() const;
 	bool isPatternReference() const;
 	void setOwnedText(std::string text);
-	SourceLocation mapOffsetToSource(int offset) const;
+	SourceLocation mapOffsetToSource(int offset, bool preferNextAtBoundary = false) const;
 	int mapSourceToOffset(const std::string &uri, int sourceLineIndex, int column) const;
 	bool containsSourceLocation(const std::string &uri, int sourceLineIndex, int column) const;
 };

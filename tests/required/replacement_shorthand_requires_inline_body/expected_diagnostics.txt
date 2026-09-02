@@ -1,0 +1,1 @@
+tests/required/replacement_shorthand_requires_inline_body/main.dl:15-20: Error: 'means' requires an expression on the same line

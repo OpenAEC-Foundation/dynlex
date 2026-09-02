@@ -115,9 +115,8 @@ print total as a line</code></pre>
                 <div class="code-block">
 <pre><code>import lib/std.dl
 
-function value squared:
-    execute:
-        return value * value
+to get value squared:
+    return value * value
 
 print 5 squared as a line</code></pre>
                 </div>
@@ -131,9 +130,9 @@ print 5 squared as a line</code></pre>
                     in the body, that word becomes a variable.
                 </p>
                 <p>
-                    The <code>execute:</code> line opens a
-                    <a class="inline-link" href="terms.html#section">section</a>. The code inside that section is
-                    indented one level deeper.
+                    <code>to get</code> implicitly opens the function's <code>execute:</code>
+                    <a class="inline-link" href="terms.html#section">section</a>. Its indented body must return a
+                    value on every reachable path.
                 </p>
                 <div class="try-card">
                     <h3>Try yourself</h3>

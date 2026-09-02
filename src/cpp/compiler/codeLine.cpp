@@ -21,7 +21,7 @@ void CodeLine::setOwnedText(std::string text) {
 	fullText = ownedText;
 }
 
-SourceLocation CodeLine::mapOffsetToSource(int offset) const {
+SourceLocation CodeLine::mapOffsetToSource(int offset, bool preferNextAtBoundary) const {
 	if (offset < 0)
 		offset = 0;
 	if (offset > static_cast<int>(fullText.size()))
@@ -29,10 +29,13 @@ SourceLocation CodeLine::mapOffsetToSource(int offset) const {
 	if (sourceSlices.empty())
 		return {sourceFile, sourceFileLineIndex, offset};
 
-	for (const SourceSlice &slice : sourceSlices) {
+	for (size_t index = 0; index < sourceSlices.size(); index++) {
+		const SourceSlice &slice = sourceSlices[index];
 		if (offset < slice.transformedStart)
 			return {slice.sourceFile, slice.sourceFileLineIndex, slice.sourceColumnStart};
-		if (offset <= slice.transformedEnd) {
+		bool nextStartsAtBoundary = index + 1 < sourceSlices.size() && sourceSlices[index + 1].transformedStart == offset;
+		if (offset < slice.transformedEnd ||
+			(offset == slice.transformedEnd && (!preferNextAtBoundary || !nextStartsAtBoundary))) {
 			int localOffset = std::clamp(offset - slice.transformedStart, 0, slice.transformedEnd - slice.transformedStart);
 			return {slice.sourceFile, slice.sourceFileLineIndex, slice.sourceColumnStart + localOffset};
 		}

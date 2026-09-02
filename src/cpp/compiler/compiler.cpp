@@ -15,6 +15,7 @@
 #include "pattern/pattern_tree/patternMatch.h"
 #include "pattern/pattern_tree/patternTreeNode.h"
 #include "pattern/transformedPattern.h"
+#include "sourceTransform.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
 #include "type.h"
@@ -237,24 +238,10 @@ static void updateLineTrimming(CodeLine *line, const SyntaxConfig &syntax) {
 	line->rightTrimmedText = withoutComment.substr(0, trimmedEnd);
 }
 
-static CodeLine *createMappedLine(
-	ParseContext &context, lsp::SourceFile *primarySourceFile, int primarySourceLineIndex, std::string text,
-	std::vector<SourceSlice> sourceSlices
-) {
-	auto line = std::make_unique<CodeLine>(std::string_view{}, primarySourceFile);
-	line->sourceFile = primarySourceFile;
-	line->sourceFileLineIndex = primarySourceLineIndex;
-	line->setOwnedText(std::move(text));
-	line->sourceSlices = std::move(sourceSlices);
-	CodeLine *result = line.get();
-	context.ownedCodeLines.push_back(std::move(line));
-	return result;
-}
-
 static CodeLine *
 createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceFileLineIndex, std::string_view text) {
-	CodeLine *line = createMappedLine(
-		context, sourceFile, sourceFileLineIndex, std::string(text),
+	CodeLine *line = context.createCodeLine(
+		sourceFile, sourceFileLineIndex, std::string(text),
 		{{0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0}}
 	);
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, sourceFile);
@@ -309,82 +296,15 @@ static std::string extractLeadingIndent(std::string_view text) {
 }
 
 static std::optional<InlineBodySplit> findTopLevelInlineBodySplit(std::string_view text, const SyntaxConfig &syntax) {
-	if (syntax.sectionOpener.empty())
+	std::optional<TopLevelSectionOpener> opener = findTopLevelSectionOpener(text, syntax.sectionOpener);
+	if (!opener || opener->bodyOffset >= text.size())
 		return std::nullopt;
-
-	int parentheses = 0;
-	int brackets = 0;
-	int braces = 0;
-	bool inString = false;
-	bool escaped = false;
-	for (size_t index = 0; index + syntax.sectionOpener.size() <= text.size(); index++) {
-		char character = text[index];
-		if (inString) {
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (character == '\\') {
-				escaped = true;
-			} else if (character == '"') {
-				inString = false;
-			}
-			continue;
-		}
-
-		if (character == '"') {
-			inString = true;
-			continue;
-		}
-		if (character == '(') {
-			parentheses++;
-			continue;
-		}
-		if (character == ')' && parentheses > 0) {
-			parentheses--;
-			continue;
-		}
-		if (character == '[') {
-			brackets++;
-			continue;
-		}
-		if (character == ']' && brackets > 0) {
-			brackets--;
-			continue;
-		}
-		if (character == '{') {
-			braces++;
-			continue;
-		}
-		if (character == '}' && braces > 0) {
-			braces--;
-			continue;
-		}
-
-		if (parentheses != 0 || brackets != 0 || braces != 0)
-			continue;
-		if (text.substr(index, syntax.sectionOpener.size()) != syntax.sectionOpener)
-			continue;
-
-		size_t patternEnd = text.substr(0, index).find_last_not_of(" \t");
-		if (patternEnd == std::string_view::npos)
-			continue;
-
-		size_t bodyOffset = index + syntax.sectionOpener.size();
-		while (bodyOffset < text.size() && std::isspace(static_cast<unsigned char>(text[bodyOffset])))
-			bodyOffset++;
-		if (bodyOffset >= text.size())
-			return std::nullopt;
-
-		return InlineBodySplit{index, bodyOffset};
-	}
-
-	return std::nullopt;
+	return InlineBodySplit{opener->offset, opener->bodyOffset};
 }
 
 static CodeLine *createLogicalInlineLine(
 	ParseContext &context, CodeLine *sourceLine, std::string_view indent, std::string_view text, int sourceColumnStart,
-	int logicalIndentOffset
+	int logicalIndentOffset, bool inlineBodyFollows
 ) {
 	std::string logicalText;
 	logicalText.reserve(indent.size() + text.size());
@@ -396,19 +316,21 @@ static CodeLine *createLogicalInlineLine(
 		sourceSlices.push_back({0, static_cast<int>(indent.size()), sourceLine->sourceFile, sourceLine->sourceFileLineIndex, 0}
 		);
 	}
+	SourceLocation mappedStart = sourceLine->mapOffsetToSource(sourceColumnStart, true);
 	sourceSlices.push_back({
 		static_cast<int>(indent.size()),
 		static_cast<int>(indent.size() + text.size()),
-		sourceLine->sourceFile,
-		sourceLine->sourceFileLineIndex,
-		sourceColumnStart,
+		mappedStart.sourceFile,
+		mappedStart.sourceFileLineIndex,
+		mappedStart.column,
 	});
 
-	CodeLine *logicalLine = createMappedLine(
-		context, sourceLine->sourceFile, sourceLine->sourceFileLineIndex, std::move(logicalText), std::move(sourceSlices)
+	CodeLine *logicalLine = context.createCodeLine(
+		sourceLine->sourceFile, sourceLine->sourceFileLineIndex, std::move(logicalText), std::move(sourceSlices)
 	);
 	logicalLine->rightTrimmedText = logicalLine->fullText;
 	logicalLine->logicalIndentOffset = logicalIndentOffset;
+	logicalLine->inlineBodyFollows = inlineBodyFollows;
 	logicalLine->hasIndentOverride = !indent.empty();
 	logicalLine->indentOverride = std::string(indent);
 	return logicalLine;
@@ -428,14 +350,14 @@ static void expandOneLineSections(ParseContext &context) {
 		std::string indent = extractLeadingIndent(line->rightTrimmedText);
 		std::string_view remaining = line->rightTrimmedText.substr(indent.size());
 		size_t remainingSourceColumn = indent.size();
-		int logicalIndentOffset = 0;
+		int logicalIndentOffset = line->logicalIndentOffset;
 		bool expanded = false;
 
 		while (std::optional<InlineBodySplit> split = findTopLevelInlineBodySplit(remaining, syntax)) {
 			size_t openerEnd = split->openerOffset + syntax.sectionOpener.size();
 			transformedLines.push_back(createLogicalInlineLine(
 				context, line, indent, remaining.substr(0, openerEnd), static_cast<int>(remainingSourceColumn),
-				logicalIndentOffset
+				logicalIndentOffset, true
 			));
 			remainingSourceColumn += split->bodyOffset;
 			remaining = remaining.substr(split->bodyOffset);
@@ -449,7 +371,7 @@ static void expandOneLineSections(ParseContext &context) {
 		}
 
 		transformedLines.push_back(createLogicalInlineLine(
-			context, line, indent, remaining, static_cast<int>(remainingSourceColumn), logicalIndentOffset
+			context, line, indent, remaining, static_cast<int>(remainingSourceColumn), logicalIndentOffset, false
 		));
 	}
 
@@ -531,8 +453,8 @@ static CodeLine *mergeContinuationLines(ParseContext &context, const std::vector
 		});
 	}
 
-	CodeLine *merged = createMappedLine(
-		context, lines.front()->sourceFile, lines.front()->sourceFileLineIndex, std::move(mergedText), std::move(slices)
+	CodeLine *merged = context.createCodeLine(
+		lines.front()->sourceFile, lines.front()->sourceFileLineIndex, std::move(mergedText), std::move(slices)
 	);
 	merged->rightTrimmedText = merged->fullText;
 	return merged;
@@ -670,6 +592,8 @@ bool compile(const std::string &path, ParseContext &context) {
 		return false;
 	applyBracketContinuations(context);
 	expandOneLineSections(context);
+	if (!expandDefinitionShorthands(context))
+		return false;
 	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
 
 	if (!analyzeSections(context))
@@ -811,11 +735,8 @@ bool analyzeSections(ParseContext &context) {
 				indentLength++;
 			indentString = std::string(line->rightTrimmedText.substr(0, indentLength));
 		}
-		int physicalIndentLevel = 0;
-		if (data.indentString.empty()) {
-			data.indentString = indentString;
-			physicalIndentLevel = !indentString.empty();
-		} else if (indentString.length() % data.indentString.length() != 0) {
+		IndentMeasurement indentation = measureIndent(data, indentString);
+		if (!indentation.validAmount) {
 			// check amount of indents
 			context.addDiagnostic(Diagnostic(
 				context, Diagnostic::Level::Error, "invalid indentation amount", Range(line, 0, indentString.length()),
@@ -824,25 +745,17 @@ bool analyzeSections(ParseContext &context) {
 				"found", std::to_string(indentString.length())
 			));
 		}
-		// check type of indent. indentation is only important for section
-		// exits, since colons determine section starts.
-		if (indentString.length()) {
+		if (indentation.invalidCharacterIndex != std::string::npos) {
+			// check type of indent. indentation is only important for section
+			// exits, since colons determine section starts.
 			char expectedIndentChar = data.indentString[0];
-			size_t invalidCharIndex = indentString.find_first_not_of(expectedIndentChar);
-			if (invalidCharIndex != std::string::npos) {
-				context.addDiagnostic(Diagnostic(
-					context, Diagnostic::Level::Error, "invalid indentation character",
-					Range(line, invalidCharIndex, indentString.length()), "expected", charName(expectedIndentChar) + "s",
-					"found", "a " + charName(indentString[invalidCharIndex])
-				));
-			} else {
-				physicalIndentLevel = indentString.length() / data.indentString.length();
-			}
-		} else {
-			data.indentString = "";
-			physicalIndentLevel = 0;
+			context.addDiagnostic(Diagnostic(
+				context, Diagnostic::Level::Error, "invalid indentation character",
+				Range(line, indentation.invalidCharacterIndex, indentString.length()), "expected",
+				charName(expectedIndentChar) + "s", "found", "a " + charName(indentString[indentation.invalidCharacterIndex])
+			));
 		}
-		data.indentLevel = physicalIndentLevel + line->logicalIndentOffset;
+		data.indentLevel = indentation.physicalIndentLevel + line->logicalIndentOffset;
 
 		if (data.indentLevel != oldIndentLevel) {
 			// section change

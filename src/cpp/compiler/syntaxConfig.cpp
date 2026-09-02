@@ -221,7 +221,7 @@ const ConfigNode *findChild(const ConfigNode &node, std::string_view key) {
 
 bool assignNameValue(
 	ParseContext &context, std::string_view path, const ConfigNode &node, std::string &target, bool allowChildren = false,
-	bool requireValue = true
+	bool requireValue = true, bool allowWhitespace = false
 ) {
 	const ConfigNode *nameChild = findChild(node, "name");
 	if (node.value && nameChild) {
@@ -238,9 +238,22 @@ bool assignNameValue(
 		addConfigError(context, path, node.lineNumber, "config entry '" + nodePath(node) + "' is missing a name");
 		return false;
 	}
-	if (hasWhitespace(*value)) {
+	if (!allowWhitespace && hasWhitespace(*value)) {
 		addConfigError(context, path, node.lineNumber, "config entry '" + nodePath(node) + "' must be a single token");
 		return false;
+	}
+	if (allowWhitespace) {
+		bool invalidSpacing = value->empty() || value->front() == ' ' || value->back() == ' ' || value->contains("  ") ||
+							  std::any_of(value->begin(), value->end(), [](unsigned char character) {
+			return std::isspace(character) && character != ' ';
+		});
+		if (invalidSpacing) {
+			addConfigError(
+				context, path, node.lineNumber,
+				"config entry '" + nodePath(node) + "' must contain tokens separated by single spaces"
+			);
+			return false;
+		}
 	}
 	target = *value;
 	if (!allowChildren) {
@@ -297,6 +310,30 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	}
 	if (node.key == "exposed") {
 		return assignNameValue(context, path, node, config.exposedName);
+	}
+	if (node.key == "shorthand definitions") {
+		if (node.value) {
+			addConfigError(context, path, node.lineNumber, "config entry 'shorthand definitions' cannot define a value");
+			return false;
+		}
+		for (const auto &child : node.children) {
+			std::string *target = nullptr;
+			if (child->key == "action")
+				target = &config.actionShorthand;
+			else if (child->key == "value")
+				target = &config.valueShorthand;
+			else if (child->key == "replacement")
+				target = &config.replacementShorthand;
+			else {
+				addConfigError(
+					context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'shorthand definitions'"
+				);
+				return false;
+			}
+			if (!assignNameValue(context, path, *child, *target, false, true, true))
+				return false;
+		}
+		return true;
 	}
 	if (node.key == "class") {
 		if (!assignNameValue(context, path, node, config.className, true, false))
@@ -409,6 +446,11 @@ bool loadSyntaxConfigFile(ParseContext &context, const std::string &path, Syntax
 		if (!applySyntaxNode(context, path, *child, config))
 			return false;
 	}
+	if (std::optional<std::string> error = definitionShorthandSyntaxError(config)) {
+		const ConfigNode *shorthandNode = findChild(*root.children[0], "shorthand definitions");
+		addConfigError(context, path, shorthandNode ? shorthandNode->lineNumber : root.children[0]->lineNumber, *error);
+		return false;
+	}
 	return true;
 }
 
@@ -426,6 +468,44 @@ std::string findProjectSyntaxConfigPath(ParseContext &context, const std::string
 }
 
 } // namespace
+
+std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &config) {
+	if (config.actionShorthand == config.valueShorthand || config.actionShorthand == config.replacementShorthand ||
+		config.valueShorthand == config.replacementShorthand)
+		return "shorthand definition phrases must be distinct";
+
+	auto firstToken = [](std::string_view phrase) {
+		return phrase.substr(0, phrase.find(' '));
+	};
+	const std::vector<std::string_view> definitionLeadingKeywords = {
+		config.functionName, config.conversionName, config.sectionName, config.className,
+		config.flexName,	 config.localName,		config.exposedName, config.implicitName,
+	};
+	const std::vector<std::string_view> childSectionKeywords = {
+		config.executeSectionName, config.replacementSectionName, config.patternsSectionName, config.globalsSectionName,
+		config.beforeSectionName,  config.afterSectionName,		  config.membersSectionName,  config.retainSectionName,
+		config.releaseSectionName, config.alignmentName,		  config.paddingName,
+	};
+	auto conflictMessage = [](std::string_view phrase, std::string_view keyword) {
+		return "shorthand definition phrase '" + std::string(phrase) + "' conflicts with structural keyword '" +
+			   std::string(keyword) + "'";
+	};
+	for (std::string_view phrase : {std::string_view(config.actionShorthand), std::string_view(config.valueShorthand)}) {
+		for (std::string_view keyword : definitionLeadingKeywords) {
+			if (firstToken(phrase) == keyword)
+				return conflictMessage(phrase, keyword);
+		}
+		for (std::string_view keyword : childSectionKeywords) {
+			if (phrase == keyword)
+				return conflictMessage(phrase, keyword);
+		}
+	}
+	for (std::string_view keyword : childSectionKeywords) {
+		if (config.replacementShorthand == keyword)
+			return conflictMessage(config.replacementShorthand, keyword);
+	}
+	return std::nullopt;
+}
 
 bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath) {
 	context.builtinSyntax = {};
@@ -536,6 +616,12 @@ SyntaxConfig::Messages::Messages() {
 	set("conversion requires one parameter", "message",
 		"A conversion must contain exactly one parameter and no other pattern text");
 	set("implicit modifier requires conversion", "message", "The '{modifier}' modifier can only be used with '{conversion}'");
+	set("shorthand definition requires pattern", "message", "Definition shorthand '{keyword}' requires a pattern");
+	set("replacement shorthand requires inline body", "message", "'{keyword}' requires an expression on the same line");
+	set("value shorthand requires multiline body", "message", "'{keyword}' requires an indented body on following lines");
+	set("action shorthand returns value", "message", "Action '{function}' must return nothing");
+	set("value shorthand returns nothing", "message", "Value function '{function}' must return a value");
+	set("replacement shorthand returns nothing", "message", "Replacement '{function}' must return a value");
 	set("ambiguous conversion", "message", "More than one conversion from {from_type} to {to_type} is equally specific");
 	set("address of requires addressable value", "message", "address of requires an addressable value");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");

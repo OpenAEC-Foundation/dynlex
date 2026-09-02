@@ -257,7 +257,8 @@ const ConfigNode *findChild(const ConfigNode &node, std::string_view key) {
 }
 
 bool validateNameNode(
-	const ConfigNode &node, std::vector<Diagnostic> &diagnostics, bool allowChildren = false, bool requireValue = true
+	const ConfigNode &node, std::vector<Diagnostic> &diagnostics, bool allowChildren = false, bool requireValue = true,
+	bool allowWhitespace = false
 ) {
 	const ConfigNode *nameChild = findChild(node, "name");
 	if (!node.entry.value.empty() && nameChild) {
@@ -280,7 +281,7 @@ bool validateNameNode(
 		);
 		return false;
 	}
-	if (hasWhitespace(value)) {
+	if (!allowWhitespace && hasWhitespace(value)) {
 		int start = !node.entry.value.empty() ? node.entry.valueStart : nameChild->entry.valueStart;
 		int end = !node.entry.value.empty() ? node.entry.valueEnd : nameChild->entry.valueEnd;
 		addDiagnostic(
@@ -288,6 +289,21 @@ bool validateNameNode(
 			"config entry '" + nodePath(node) + "' must be a single token"
 		);
 		return false;
+	}
+	if (allowWhitespace) {
+		bool invalidSpacing = value.front() == ' ' || value.back() == ' ' || value.contains("  ") ||
+							  std::any_of(value.begin(), value.end(), [](unsigned char character) {
+			return std::isspace(character) && character != ' ';
+		});
+		if (invalidSpacing) {
+			int start = !node.entry.value.empty() ? node.entry.valueStart : nameChild->entry.valueStart;
+			int end = !node.entry.value.empty() ? node.entry.valueEnd : nameChild->entry.valueEnd;
+			addDiagnostic(
+				diagnostics, !node.entry.value.empty() ? node.entry.line : nameChild->entry.line, start, end,
+				"config entry '" + nodePath(node) + "' must contain tokens separated by single spaces"
+			);
+			return false;
+		}
 	}
 	if (!allowChildren) {
 		for (const auto &child : node.children) {
@@ -312,6 +328,8 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 		return false;
 	}
 
+	SyntaxConfig syntax;
+	const ConfigNode *shorthandNode = nullptr;
 	for (const auto &child : roots[0]->children) {
 		const ConfigNode &node = *child;
 		if (node.entry.key == "import" || node.entry.key == "comment" || node.entry.key == "open section" ||
@@ -319,18 +337,36 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 			node.entry.key == "local") {
 			if (!validateNameNode(node, diagnostics))
 				return false;
+			const ConfigNode *nameChild = findChild(node, "name");
+			std::string_view configuredName =
+				!node.entry.value.empty() ? std::string_view(node.entry.value) : std::string_view(nameChild->entry.value);
+			if (node.entry.key == "section")
+				syntax.sectionName = configuredName;
+			else if (node.entry.key == "function")
+				syntax.functionName = configuredName;
+			else if (node.entry.key == "flex")
+				syntax.flexName = configuredName;
+			else if (node.entry.key == "local")
+				syntax.localName = configuredName;
 			continue;
 		}
 		if (node.entry.key == "class") {
 			if (!validateNameNode(node, diagnostics, true, false))
 				return false;
 			const ConfigNode *nameChild = findChild(node, "name");
+			if (!node.entry.value.empty())
+				syntax.className = node.entry.value;
+			else if (nameChild)
+				syntax.className = nameChild->entry.value;
 			for (const auto &grandChild : node.children) {
 				if (grandChild.get() == nameChild)
 					continue;
 				if (grandChild->entry.key == "members") {
 					if (!validateNameNode(*grandChild, diagnostics))
 						return false;
+					const ConfigNode *nestedName = findChild(*grandChild, "name");
+					syntax.membersSectionName =
+						!grandChild->entry.value.empty() ? grandChild->entry.value : nestedName->entry.value;
 					continue;
 				}
 				addDiagnostic(
@@ -338,6 +374,37 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 					"unknown config key '" + grandChild->entry.key + "' under 'class'"
 				);
 				return false;
+			}
+			continue;
+		}
+		if (node.entry.key == "shorthand definitions") {
+			shorthandNode = &node;
+			if (!node.entry.value.empty()) {
+				addDiagnostic(
+					diagnostics, node.entry.line, node.entry.valueStart, node.entry.valueEnd,
+					"config entry 'shorthand definitions' cannot define a value"
+				);
+				return false;
+			}
+			for (const auto &grandChild : node.children) {
+				std::string *target = nullptr;
+				if (grandChild->entry.key == "action")
+					target = &syntax.actionShorthand;
+				else if (grandChild->entry.key == "value")
+					target = &syntax.valueShorthand;
+				else if (grandChild->entry.key == "replacement")
+					target = &syntax.replacementShorthand;
+				else {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"unknown config key '" + grandChild->entry.key + "' under 'shorthand definitions'"
+					);
+					return false;
+				}
+				if (!validateNameNode(*grandChild, diagnostics, false, true, true))
+					return false;
+				const ConfigNode *nameChild = findChild(*grandChild, "name");
+				*target = !grandChild->entry.value.empty() ? grandChild->entry.value : nameChild->entry.value;
 			}
 			continue;
 		}
@@ -351,6 +418,12 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 				"missing body section",
 				"unknown section",
 				"unexpected class line",
+				"shorthand definition requires pattern",
+				"replacement shorthand requires inline body",
+				"value shorthand requires multiline body",
+				"action shorthand returns value",
+				"value shorthand returns nothing",
+				"replacement shorthand returns nothing",
 			};
 			for (const auto &grandChild : node.children) {
 				if (!allowed.contains(grandChild->entry.key)) {
@@ -383,6 +456,21 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 				}
 				if (!validateNameNode(*grandChild, diagnostics))
 					return false;
+				const ConfigNode *nameChild = findChild(*grandChild, "name");
+				std::string configuredName =
+					!grandChild->entry.value.empty() ? grandChild->entry.value : nameChild->entry.value;
+				if (grandChild->entry.key == "execute")
+					syntax.executeSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "replacement")
+					syntax.replacementSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "patterns")
+					syntax.patternsSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "globals")
+					syntax.globalsSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "before")
+					syntax.beforeSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "after")
+					syntax.afterSectionName = std::move(configuredName);
 			}
 			continue;
 		}
@@ -392,6 +480,13 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 		return false;
 	}
 
+	if (std::optional<std::string> error = definitionShorthandSyntaxError(syntax)) {
+		const ConfigNode &diagnosticNode = shorthandNode ? *shorthandNode : *roots[0];
+		addDiagnostic(
+			diagnostics, diagnosticNode.entry.line, diagnosticNode.entry.keyStart, diagnosticNode.entry.keyEnd, *error
+		);
+		return false;
+	}
 	return true;
 }
 
@@ -500,8 +595,19 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			{"class:", "class settings"},
 			{"flex: \"flex\"", "flex keyword"},
 			{"local: \"local\"", "local keyword"},
+			{"shorthand definitions:", "function declaration shorthands"},
 			{"child sections:", "child section keywords"},
 			{"messages:", "message overrides"},
+		};
+		for (const auto &[replacement, detail] : suggestions) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
+	} else if (parent == "shorthand definitions") {
+		const std::vector<std::pair<std::string, std::string>> suggestions = {
+			{"action: \"to\"", "action declaration phrase"},
+			{"value: \"to get\"", "value function declaration phrase"},
+			{"replacement: \"means\"", "one-line replacement declaration phrase"},
 		};
 		for (const auto &[replacement, detail] : suggestions) {
 			if (startsLike(replacement))
@@ -542,6 +648,17 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			{"missing body section: \"Code without body section\"", "missing body section message"},
 			{"unknown section: \"Unknown section: {section}\"", "unknown section message"},
 			{"unexpected class line: \"unexpected line in class definition\"", "class line message"},
+			{"shorthand definition requires pattern: \"Definition shorthand '{keyword}' requires a pattern\"",
+			 "missing shorthand pattern message"},
+			{"replacement shorthand requires inline body: \"'{keyword}' requires an expression on the same line\"",
+			 "missing inline replacement body message"},
+			{"value shorthand requires multiline body: \"'{keyword}' requires an indented body on following lines\"",
+			 "inline value body message"},
+			{"action shorthand returns value: \"Action '{function}' must return nothing\"", "action return contract message"},
+			{"value shorthand returns nothing: \"Value function '{function}' must return a value\"",
+			 "value return contract message"},
+			{"replacement shorthand returns nothing: \"Replacement '{function}' must return a value\"",
+			 "replacement return contract message"},
 		};
 		for (const auto &[replacement, detail] : suggestions) {
 			if (startsLike(replacement))

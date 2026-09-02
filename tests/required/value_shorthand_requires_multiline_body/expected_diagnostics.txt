@@ -1,0 +1,1 @@
+tests/required/value_shorthand_requires_multiline_body/main.dl:1-7: Error: 'to get' requires an indented body on following lines

@@ -1,0 +1,1 @@
+tests/required/replacement_shorthand_return_nothing/main.dl:1-9: Error: Replacement 'announce' must return a value

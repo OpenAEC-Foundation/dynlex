@@ -1,0 +1,1 @@
+tests/required/action_shorthand_return_value/main.dl:4-16: Error: Action 'expose value' must return nothing

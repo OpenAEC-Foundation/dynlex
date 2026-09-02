@@ -346,6 +346,8 @@ std::vector<SemanticToken> collectLiveLineSemanticTokens(
 	return tokens;
 }
 
+static std::vector<std::string_view> splitLines(std::string_view text);
+
 std::vector<std::vector<SemanticToken>>
 collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors) {
 	if (!context.hasCompleted(ParseContext::CompilationStage::AnalyzedSections))
@@ -486,24 +488,31 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	tokenizePatternDefinitions(context.mainSection);
 
 	for (CodeLine *line : context.codeLines) {
-		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening || line->synthetic)
 			continue;
 		addToken(::Range(line, line->rightTrimmedText), SemanticTokenType::Section, false);
 	}
 
+	lsp::SourceFile *authoredSource = nullptr;
 	for (CodeLine *line : context.codeLines) {
-		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri)
-			continue;
-		const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
-		size_t commentPos = findCommentStart(line->fullText, syntax.commentPrefix);
+		if (line->sourceFile && pathutil::toAbsoluteUri(line->sourceFile->uri) == uri) {
+			authoredSource = line->sourceFile;
+			break;
+		}
+	}
+	if (!authoredSource)
+		return builder.tokenLines();
+	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, authoredSource);
+	std::vector<std::string_view> authoredLines = splitLines(authoredSource->content);
+	for (int lineIndex = 0; lineIndex < lineCount && lineIndex < static_cast<int>(authoredLines.size()); lineIndex++) {
+		std::string_view line = authoredLines[static_cast<size_t>(lineIndex)];
+		size_t commentPos = findCommentStart(line, syntax.commentPrefix);
 		if (commentPos == std::string_view::npos)
 			continue;
-		size_t endPos = line->fullText.find_first_of("\r\n", commentPos);
+		size_t endPos = line.find_first_of("\r\n", commentPos);
 		if (endPos == std::string_view::npos)
-			endPos = line->fullText.length();
-		builder.add(
-			line->sourceFileLineIndex, {static_cast<int>(commentPos), static_cast<int>(endPos), SemanticTokenType::Comment, 0}
-		);
+			endPos = line.length();
+		builder.add(lineIndex, {static_cast<int>(commentPos), static_cast<int>(endPos), SemanticTokenType::Comment, 0});
 	}
 
 	return builder.tokenLines();
