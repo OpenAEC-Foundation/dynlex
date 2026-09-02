@@ -279,46 +279,47 @@ flex function register the graphics scroll callback named {fixed C string:callba
 
 function a new window with width {integer:width} and height {integer:height}:
 	execute:
-		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte and visibility 1 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
+		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte in fullscreen state false with visibility 1 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
 
 function a new hidden window with width {integer:width} and height {integer:height}:
 	execute:
-		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte and visibility 0 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
+		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte in fullscreen state false with visibility 0 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
 
 function a new fullscreen window:
 	execute:
-		set initialized to the result of initializing GLFW
-		if initialized = false:
-			return 0 as a pointer to a byte
-		set monitor to the primary monitor
-		set mode to the primary video mode of monitor
-		set width to the width of mode
-		set height to the height of mode
-		return the result of creating a graphics window with width width and height height on monitor monitor and visibility 1 and failure message "failed to create fullscreen GLFW window with OpenGL 4.6 compatibility profile"
+		return the result of creating a graphics window with width 0 and height 0 on monitor 0 as a pointer to a byte in fullscreen state true with visibility 1 and failure message "failed to create fullscreen GLFW window with OpenGL 4.6 compatibility profile"
 
-local function the result of creating a graphics window with width {integer:width} and height {integer:height} on monitor {pointer:monitor} and visibility {integer:visibility} and failure message {C string:failure}:
+local function the result of creating a graphics window with width {integer:width} and height {integer:height} on monitor {pointer:monitor} in fullscreen state {boolean:fullscreen} with visibility {integer:visibility} and failure message {C string:failure}:
 	execute:
 		set initialized to the result of initializing GLFW
 		if initialized = false:
 			return 0 as a pointer to a byte
+		set actual_monitor to monitor
+		set actual_width to width
+		set actual_height to height
+		if fullscreen:
+			set actual_monitor to the primary monitor
+			set mode to the primary video mode of actual_monitor
+			set actual_width to the width of mode
+			set actual_height to the height of mode
 		@intrinsic("call", "glfw", "glfwDefaultWindowHints", nothing)
 		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
 		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version major hint, 4)
 		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version minor hint, 6)
 		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW OpenGL profile hint, the GLFW OpenGL compatibility profile)
 		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW visible window hint, visibility)
-		set handle to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, width, height, "DynLex", monitor, 0 as a pointer to a byte)
+		set handle to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, actual_width, actual_height, "DynLex", actual_monitor, 0 as a pointer to a byte)
 		if handle = 0 as a pointer to a byte:
 			print failure as a line
 			@intrinsic("call", "glfw", "glfwTerminate", nothing)
 			return 0 as a pointer to a byte
 		@intrinsic("call", "glfw", "glfwMakeContextCurrent", nothing, handle)
-		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
+		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, actual_width, actual_height)
 		register the graphics viewport resize callback of handle
 		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL projection matrix mode)
 		@intrinsic("call", "GL", "glLoadIdentity", nothing)
-		set horizontal to width as a floating-point number
-		set vertical to height as a floating-point number
+		set horizontal to actual_width as a floating-point number
+		set vertical to actual_height as a floating-point number
 		set negative to (0.0 - 1.0)
 		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
 		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL modelview matrix mode)
@@ -389,7 +390,7 @@ function sleep for duration milliseconds:
 	execute:
 		@intrinsic("call", "libc", "usleep", nothing, duration * 1000)
 
-function close the window:
+function close [the|] {C string:window}:
 	execute:
 		@intrinsic("call", "glfw", "glfwDestroyWindow", nothing, window)
 		@intrinsic("call", "glfw", "glfwTerminate", nothing)
