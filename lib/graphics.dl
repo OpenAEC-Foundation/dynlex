@@ -6,12 +6,22 @@ import lib/std.dl
 # GL_COLOR_BUFFER_BIT = 0x4000 = 16384
 # GL_PROJECTION = 0x1701 = 5889
 # GL_MODELVIEW = 0x1700 = 5888
-# GLFW_PRESS = 1
 # GLFW_KEY_ESCAPE = 256
 # GLFW_KEY_RIGHT = 262
 # GLFW_KEY_LEFT = 263
 # GLFW_KEY_DOWN = 264
 # GLFW_KEY_UP = 265
+# GLFW_PRESS = 1
+# GLFW_RELEASE = 0
+# GLFW_MOUSE_BUTTON_1 = 0
+# GLFW_MOUSE_BUTTON_2 = 1
+# GLFW_MOUSE_BUTTON_3 = 2
+# GLFW_MOUSE_BUTTON_LEFT = GLFW_MOUSE_BUTTON_1 = 0
+# GLFW_MOUSE_BUTTON_RIGHT = GLFW_MOUSE_BUTTON_2 = 1
+# GLFW_MOUSE_BUTTON_MIDDLE = GLFW_MOUSE_BUTTON_3 = 2
+# GLFW_CURSOR = 0x00033001 = 208897
+# GLFW_CURSOR_NORMAL = 0x00034001 = 212993
+# GLFW_CURSOR_DISABLED = 0x00034003 = 212995
 
 class:
 	patterns:
@@ -23,6 +33,58 @@ class:
 		green bits as an integer
 		blue bits as an integer
 		refresh rate as an integer
+
+class:
+	patterns:
+		[a|] cursor position
+	members:
+		x as a floating-point number
+		y as a floating-point number
+
+class:
+	patterns:
+		[a|] mouse button
+	members:
+		number as an integer
+
+function the left mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, 0)
+
+function the right mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, 1)
+
+function the middle mouse button:
+	execute:
+		return @intrinsic("construct", a mouse button, 2)
+
+function a mouse button numbered {integer:number}:
+	execute:
+		return @intrinsic("construct", a mouse button, number)
+
+function the cursor position of {C string:window}:
+	execute:
+		set x to 0.0 as a floating-point number
+		set y to 0.0 as a floating-point number
+		@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, window, the address of x, the address of y)
+		return @intrinsic("construct", a cursor position, x, y)
+
+function {mouse button:button} is pressed in {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = 1
+
+function {mouse button:button} is released in {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = 0
+
+function capture the mouse cursor in {C string:window}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, 208897, 212995)
+
+function release the mouse cursor in {C string:window}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, 208897, 212993)
 
 exposed function resize the graphics viewport of {C string:window} to {integer:width} and {integer:height}:
 	execute:

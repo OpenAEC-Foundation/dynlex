@@ -1,0 +1,25 @@
+import lib/graphics.dl
+
+set left to the left mouse button
+set right to the right mouse button
+set middle to the middle mouse button
+
+print left's number as a line
+print right's number as a line
+print middle's number as a line
+
+set invalid to false
+set initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
+if initialized != 0:
+	set window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, 1, 1, "DynLex pointer input test", 0 as a pointer to a byte, 0 as a pointer to a byte)
+	if window != 0 as a pointer to a byte:
+		set position to the cursor position of window
+		set pressed to left is pressed in window
+		set released to left is released in window
+		set invalid to pressed = released
+		capture the mouse cursor in window
+		release the mouse cursor in window
+		@intrinsic("call", "glfw", "glfwDestroyWindow", nothing, window)
+	@intrinsic("call", "glfw", "glfwTerminate", nothing)
+	if invalid:
+		return 1
