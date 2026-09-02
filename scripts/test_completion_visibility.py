@@ -42,6 +42,14 @@ def main() -> int:
                 f"completion invented parameter names in {source.name}: {placeholders}"
             )
 
+    multi_word_source = project_dir / "tests" / "required" / "multi_word_variables" / "main.dl"
+    before_declaration = completion_labels(compiler, multi_word_source, "26:7")
+    for future_name in ["same line value", "val", "numeric value"]:
+        if future_name in before_declaration:
+            raise AssertionError(f"completion exposed '{future_name}' before its declaration")
+    if "half width" not in before_declaration:
+        raise AssertionError("completion hid a multi-word variable declared on an earlier line")
+
     return 0
 
 

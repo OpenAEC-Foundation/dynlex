@@ -2,8 +2,7 @@ import lib/std.dl
 
 function accept {fixed integer:count} values {values}:
     execute:
-        set values to [3, 4]
+        set values to [1, 2, 3]
         return {an array of count items:values}
 
 ignore accept 2 values [1, 2]
-print "dependent body accepted" as a line

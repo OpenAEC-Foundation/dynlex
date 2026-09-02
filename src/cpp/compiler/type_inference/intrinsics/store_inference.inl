@@ -22,6 +22,84 @@ static void setInvalidStoreDestinationFailure(Expression *destinationExpr, Infer
 	context.fail(buildFailureDetailDiagnostic(destinationExpr->range, std::move(detail)));
 }
 
+static TypeConstraint materializeDependentParameterConstraint(
+	Section *section, Variable *variable, InferenceContext &context
+) {
+	requireCompilerInvariant(section && variable, "dependent variable constraint has no section variable");
+	while (section) {
+		auto candidate = section->variables.find(variable->name);
+		if (candidate != section->variables.end()) {
+			requireCompilerInvariant(
+				candidate->second == variable, "dependent variable constraint resolved to a shadowed variable"
+			);
+			break;
+		}
+		section = section->parent;
+	}
+	requireCompilerInvariant(section, "dependent variable constraint has no owning section");
+	requireCompilerInvariant(
+		context.currentInstantiation, "dependent variable constraint reached a store without an active instantiation"
+	);
+	Instantiation &instantiation = *context.currentInstantiation;
+	std::optional<TypeConstraint> materializedConstraint;
+	for (PatternDefinition *definition : section->patternDefinitions) {
+		for (size_t pathIndex = 0; pathIndex < definition->signaturePaths.size(); pathIndex++) {
+			const PatternPathSignature &signature = definition->signaturePaths[pathIndex];
+			if (signature.parameters.size() != instantiation.argumentTypes.size())
+				continue;
+			std::vector<CompileTimeValue> argumentValues;
+			argumentValues.reserve(signature.parameters.size());
+			std::optional<size_t> constrainedParameterIndex;
+			bool pathMatchesInstantiation = true;
+			size_t parameterIndex = 0;
+			forEachPatternParameterName(
+				definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t) {
+					if (!pathMatchesInstantiation || parameterIndex >= instantiation.argumentTypes.size()) {
+						pathMatchesInstantiation = false;
+						parameterIndex++;
+						return;
+					}
+					auto parameterType = instantiation.parameterTypesByName.find(name);
+					if (parameterType == instantiation.parameterTypesByName.end() ||
+						parameterType->second != instantiation.argumentTypes[parameterIndex]) {
+						pathMatchesInstantiation = false;
+					}
+					auto constantValue = instantiation.constantParameterValues.find(name);
+					argumentValues.push_back(
+						constantValue == instantiation.constantParameterValues.end() ? CompileTimeValue{} : constantValue->second
+					);
+					if (name == variable->name)
+						constrainedParameterIndex = parameterIndex;
+					parameterIndex++;
+				}
+			);
+			if (!pathMatchesInstantiation || parameterIndex != instantiation.argumentTypes.size() ||
+				!constrainedParameterIndex) {
+				continue;
+			}
+			auto resolved = resolveCompiledPatternConstraint(
+				definition, pathIndex, *constrainedParameterIndex, instantiation.argumentTypes, argumentValues
+			);
+			requireCompilerInvariant(
+				resolved.has_value(), "active instantiation could not materialize its variable constraint"
+			);
+			TypeConstraint candidate = resolved->effectiveConstraint();
+			if (!materializedConstraint) {
+				materializedConstraint = std::move(candidate);
+			} else {
+				requireCompilerInvariant(
+					materializedConstraint->equivalentTo(candidate),
+					"active instantiation paths disagree on a body-authored variable constraint"
+				);
+			}
+		}
+	}
+	requireCompilerInvariant(
+		materializedConstraint.has_value(), "dependent variable constraint has no active parameter path"
+	);
+	return std::move(*materializedConstraint);
+}
+
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	Expression *destinationSourceExpr =
 		resolveExpressionBindingWithCallerScope(expr->arguments[1], flexBindingFrameStack).expression;
@@ -75,16 +153,17 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		if (variable->hasDeclaredTypeConstraint()) {
 			VariableReference *constraintReference = variable->firstDeclaredTypeConstraintReference();
 			requireCompilerInvariant(constraintReference, "typed variable has no constraint source reference");
-			requireCompilerInvariant(
-				variable->declaredTypeConstraint.isResolved(), "typed variable reached assignment with an unresolved constraint"
-			);
+			TypeConstraint assignmentConstraint = variable->declaredTypeConstraint.isResolved()
+											  ? variable->declaredTypeConstraint
+											  : materializeDependentParameterConstraint(section, variable, context);
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
-			bool accepted = variable->declaredTypeConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
-			if (!accepted && variable->declaredType.isDeduced() &&
-				tryApplyUserConversion(valueExpr, variable->declaredType, true, context, valueBindingFrameStack)) {
+			bool accepted = assignmentConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+			DataType assignmentType = variable->declaredType.isDeduced() ? variable->declaredType : variable->type;
+			if (!accepted && assignmentType.isDeduced() &&
+				tryApplyUserConversion(valueExpr, assignmentType, true, context, valueBindingFrameStack)) {
 				valueType = effectiveInferredExpressionType(valueExpr);
 				assignedValue = context.lookupExpressionValue(valueExpr);
-				accepted = variable->declaredTypeConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
+				accepted = assignmentConstraint.accepts(valueType, isCompileTimeKnown(assignedValue));
 			}
 			if (!accepted) {
 				if (!context.typesValid)

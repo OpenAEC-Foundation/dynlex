@@ -240,7 +240,7 @@ std::set<std::string> visibleVariableNames(const CompletionContext &context) {
 			requireCompilerInvariant(variable->definition != nullptr, "completion variable has no definition");
 			requireCompilerInvariant(variable->definition->range.line != nullptr, "completion variable definition has no line");
 			SourceLocation definition = variable->definition->range.sourceStart();
-			if (definition.sourceFile == sourceFile && definition.sourceFileLineIndex == context.line)
+			if (definition.sourceFile == sourceFile && definition.sourceFileLineIndex >= context.line)
 				continue;
 			names.insert(name);
 		}
