@@ -301,8 +301,6 @@ static bool resolveReferences(
 			if (activeMatch)
 				*activeMatch = nullptr;
 		} else if (const std::string *explicitVariableName = findVisibleExplicitWholeVariableName(reference)) {
-			if (!isArgumentExpressionReference(reference))
-				return false;
 			failedMatchDependencies.erase(reference);
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
@@ -926,12 +924,17 @@ bool resolvePatterns(ParseContext &context) {
 		auto &references = refsIt->second;
 		bool isGlobal = context.declaredGlobalVariables.contains(name);
 
-		std::unordered_map<Section *, Section *> sectionToHighest;
+		std::unordered_map<Section *, VariableReference *> earliestSectionReferences;
 		for (VariableReference *ref : references) {
 			Section *sec = ref->range.section();
-			if (sectionToHighest.contains(sec))
-				continue;
+			auto [existing, inserted] = earliestSectionReferences.emplace(sec, ref);
+			if (!inserted && variableReferenceSourcePosition(ref) < variableReferenceSourcePosition(existing->second))
+				existing->second = ref;
+		}
+		std::unordered_map<Section *, Section *> sectionToHighest;
+		for (const auto &[sec, earliestReference] : earliestSectionReferences) {
 			Section *highest = sec;
+			bool joinedAncestorVariable = !sec->explicitVariableDeclarations.contains(name);
 
 			// Find the enclosing function (Function/Effect section)
 			Section *functionScope = nullptr;
@@ -958,8 +961,12 @@ bool resolvePatterns(ParseContext &context) {
 				if (!declaredGlobalHere && a == functionScope) {
 					break;
 				}
-				if (a->variableReferences.contains(name))
+				if (!a->variableReferences.contains(name))
+					continue;
+				if (isGlobal || joinedAncestorVariable || sectionHasVariableReferenceBefore(a, name, earliestReference)) {
 					highest = a;
+					joinedAncestorVariable = true;
+				}
 			}
 			sectionToHighest[sec] = highest;
 		}

@@ -37,12 +37,28 @@ static const std::string *findVisibleExplicitWholeVariableName(const PatternRefe
 	return nullptr;
 }
 
+static std::pair<int, int> variableReferenceSourcePosition(const VariableReference *reference) {
+	requireCompilerInvariant(reference && reference->range.line, "variable reference has no source position");
+	return {reference->range.line->mergedLineIndex, reference->range.start()};
+}
+
+static bool
+sectionHasVariableReferenceBefore(const Section *section, const std::string &name, const VariableReference *reference) {
+	auto found = section->variableReferences.find(name);
+	if (found == section->variableReferences.end())
+		return false;
+	const std::pair<int, int> referencePosition = variableReferenceSourcePosition(reference);
+	return std::ranges::any_of(found->second, [&](const VariableReference *candidate) {
+		return variableReferenceSourcePosition(candidate) < referencePosition;
+	});
+}
+
 static void materializeVariableGroup(
 	const std::string &name, Section *highestSection, std::vector<VariableReference *> &groupReferences, bool isGlobal
 ) {
 	VariableReference *definition =
 		*std::min_element(groupReferences.begin(), groupReferences.end(), [](auto *left, auto *right) {
-		return left->range.line->mergedLineIndex < right->range.line->mergedLineIndex;
+		return variableReferenceSourcePosition(left) < variableReferenceSourcePosition(right);
 	});
 	bool groupIsGlobal = isGlobal;
 	if (groupIsGlobal) {

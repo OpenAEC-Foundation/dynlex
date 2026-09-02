@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function the identity of {multi word}:
+    replacement:
+        multi word
+
+print (the identity of 7) as a line
