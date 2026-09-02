@@ -76,6 +76,11 @@ assert.match(
   /https:\/\/marketplace\.visualstudio\.com\/items\?itemName=impertio\.dynlex-language/,
 );
 assert.match(html, /https:\/\/open-vsx\.org\/extension\/open-aec\/dynlex-language/);
+assert.match(
+  html,
+  /<a[^>]+href="https:\/\/discord\.gg\/aBmgCAYKke"[^>]+target="_blank"[^>]+rel="noopener noreferrer"[^>]*>Discord ↗<\/a>/,
+  "Footer navigation must expose the DynLex Discord community",
+);
 
 const homepageJavascript = fs.readFileSync(files.javascript, "utf8");
 const lspClientJavascript = fs.readFileSync(files.lspClient, "utf8");
