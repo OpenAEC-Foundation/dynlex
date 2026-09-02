@@ -678,6 +678,10 @@ jobs:
             -o "$SMOKE_ROOT/graphics-keyboard-state"
           xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
             "$SMOKE_ROOT/graphics-keyboard-state"
+          "$DYNLEX_BIN" tests/release/graphics_window_application_state_smoke.dl \
+            -o "$SMOKE_ROOT/graphics-window-application-state"
+          xvfb-run --auto-servernum --server-args="-screen 0 128x64x24" \
+            "$SMOKE_ROOT/graphics-window-application-state"
 
   smoke-windows:
     needs: [package-windows]

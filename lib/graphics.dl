@@ -245,6 +245,17 @@ function release the mouse cursor in {C string:window}:
 	execute:
 		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW normal cursor mode)
 
+# GLFW stores one caller-owned void pointer on every window. These wrappers
+# keep that pointer available to callbacks without exposing GLFW's raw ABI to
+# application code. The pointer is borrowed; callers own its lifetime.
+function set the application state of {C string:window} to {pointer:data}:
+	execute:
+		@intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, window, data)
+
+function the application state of {C string:window}:
+	execute:
+		return @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to a byte, window)
+
 exposed function resize the graphics viewport of {C string:window} to {integer:width} and {integer:height}:
 	execute:
 		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)

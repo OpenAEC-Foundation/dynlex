@@ -1,0 +1,11 @@
+import lib/graphics.dl
+
+exposed function exercise the application state API for {C string:window}:
+    execute:
+        set application_pointer to 0 as a pointer to a byte
+        set the application state of window to application_pointer
+        set retrieved to the application state of window
+        ignore retrieved
+
+print "window application state is readable" as a line
+return 0
