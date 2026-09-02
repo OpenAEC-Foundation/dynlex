@@ -952,7 +952,8 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 	if (!isCompileTimeKnown(computedValue))
 		computedValue = context.lookupKnownConstant(expr->variable);
 	if (!isCompileTimeKnown(computedValue) && context.currentInstantiation) {
-		if (context.currentInstantiation->requiredCompileTimeParameters.contains(expr->variable->name)) {
+		if (variableReferenceIsCurrentInstantiationParameter(context, expr->variable) &&
+			context.currentInstantiation->requiredCompileTimeParameters.contains(expr->variable->name)) {
 			auto it = context.currentInstantiation->constantParameterValues.find(expr->variable->name);
 			if (it != context.currentInstantiation->constantParameterValues.end())
 				computedValue = it->second;

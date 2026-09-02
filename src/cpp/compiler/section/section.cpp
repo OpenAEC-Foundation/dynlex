@@ -745,7 +745,15 @@ Expression *Section::detectPatternsRecursively(
 }
 
 void Section::addVariableReference(ParseContext &context, VariableReference *reference) {
+	requireCompilerInvariant(reference && reference->range.line, "variable reference has no source position");
 	variableReferences[reference->name].push_back(reference);
+	auto explicitDeclaration = explicitVariableDeclarations.find(reference->name);
+	if (reference->declaredTypeConstraintName.empty() && explicitDeclaration != explicitVariableDeclarations.end() &&
+		std::pair(explicitDeclaration->second.line->mergedLineIndex, explicitDeclaration->second.start()) <=
+			std::pair(reference->range.line->mergedLineIndex, reference->range.start())) {
+		context.unresolvedVariableReferences[reference->name].push_back(reference);
+		return;
+	}
 	searchParentPatterns(context, reference);
 }
 
@@ -935,6 +943,25 @@ Variable *Section::findVariable(const std::string &name) {
 		if (it != sec->variables.end())
 			return it->second;
 		sec = sec->parent;
+	}
+	return nullptr;
+}
+
+Variable *Section::findVariable(const std::string &name, const Range &useRange) {
+	requireCompilerInvariant(useRange.line != nullptr, "source-position variable lookup has no source line");
+	const std::pair<int, int> usePosition{useRange.line->mergedLineIndex, useRange.start()};
+	for (Section *section = this; section; section = section->parent) {
+		auto variable = section->variables.find(name);
+		if (variable == section->variables.end())
+			continue;
+		requireCompilerInvariant(variable->second != nullptr, "section variable metadata contains a null variable");
+		auto declaration = section->explicitVariableDeclarations.find(name);
+		if (declaration == section->explicitVariableDeclarations.end())
+			return variable->second;
+		const Range &declarationRange = declaration->second;
+		requireCompilerInvariant(declarationRange.line != nullptr, "explicit variable declaration has no source position");
+		if (std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <= usePosition)
+			return variable->second;
 	}
 	return nullptr;
 }

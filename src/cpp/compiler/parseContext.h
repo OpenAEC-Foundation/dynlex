@@ -148,10 +148,11 @@ struct ParseContext {
 	std::unordered_map<std::string, llvm::DIFile *> diFiles;
 	llvm::DIScope *currentDebugScope{};
 
-	// Temporary codegen bindings (pushed/popped during generation)
-	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
-	std::unordered_map<std::string, llvm::Value *> patternBindings;
-	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
+	// Temporary codegen bindings (pushed/popped during generation).
+	// Function parameters use declaration identity so local shadows cannot alias them.
+	std::unordered_map<VariableReference *, llvm::Value *> codegenParameterBindings;
+	std::unordered_set<VariableReference *> codegenParameterDefinitions;
+	llvm::Value *managedLifecycleValueBinding{};
 	// Flex binding stack for flex expansion and variable resolution across nested flex scopes.
 	BindingFrameStack flexBindingFrames;
 	// Current body section for flex expansion (used by loop intrinsics to store loop info)

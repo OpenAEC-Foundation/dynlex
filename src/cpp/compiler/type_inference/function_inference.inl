@@ -233,8 +233,7 @@ static Variable *findVariableForExpression(Expression *expression) {
 }
 
 static bool variableIsCurrentInstantiationParameter(const InferenceContext &context, Variable *variable) {
-	return context.currentInstantiation && variable &&
-		   context.currentInstantiation->parameterTypesByName.contains(variable->name);
+	return variable && variableReferenceIsCurrentInstantiationParameter(context, variable->definition);
 }
 
 static InstantiationPurity classifyPropertyIntrinsicPurity(

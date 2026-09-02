@@ -346,12 +346,13 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		DataType varType = finalizedType.value_or(var->type);
 		if (varType.isDeduced())
 			context.finalizedVariableTypes[normalizeBindingReference(varDef)] = varType;
+		VariableReference *normalizedDefinition = normalizeBindingReference(varDef);
 		// Call-bound parameters already have storage behind their argument
 		// pointer; variable resolution finds them there first. Parameters the
 		// active match did not bind (their choice alternative was not taken)
 		// fall through and get local storage like any other variable.
-		if (context.patternBindings.contains(name) ||
-			(context.currentCodegenInstantiation &&
+		if (context.codegenParameterBindings.contains(normalizedDefinition) ||
+			(context.currentCodegenInstantiation && context.codegenParameterDefinitions.contains(normalizedDefinition) &&
 			 context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)))
 			continue;
 		// Compile-time-only parameters (fixed values, type and constraint
@@ -428,10 +429,10 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 
 	if (expr->kind == Expression::Kind::Variable && expr->variable) {
 		std::string varName = expr->variable->name;
-		auto bindingIt = context.patternBindings.find(varName);
-		if (bindingIt != context.patternBindings.end())
-			return {bindingIt->second, LValueAddressStatus::Addressable};
 		VariableReference *definition = normalizeBindingReference(expr->variable);
+		auto bindingIt = context.codegenParameterBindings.find(definition);
+		if (bindingIt != context.codegenParameterBindings.end())
+			return {bindingIt->second, LValueAddressStatus::Addressable};
 		if (definition && definition->alloca)
 			return {definition->alloca, LValueAddressStatus::Addressable};
 		return {};

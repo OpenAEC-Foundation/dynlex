@@ -200,6 +200,8 @@ struct Section {
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);
+	// Find the variable visible by name at a source position, before later explicit declarations take effect.
+	Variable *findVariable(const std::string &name, const Range &useRange);
 	// Find the variable with this exact resolved binding identity.
 	Variable *findVariable(const VariableReference *reference);
 

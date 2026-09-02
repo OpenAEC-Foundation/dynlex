@@ -597,6 +597,28 @@ static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContex
 #include "type_resolution_diagnostics.inl"
 #include "type_resolution_overloads.inl"
 
+static VariableReference *
+currentInstantiationParameterDefinition(const InferenceContext &context, const std::string &parameterName) {
+	if (!context.currentInstantiation || !context.currentInstantiation->body ||
+		!context.currentInstantiation->parameterTypesByName.contains(parameterName))
+		return nullptr;
+	Section *ownerSection = context.currentInstantiation->body->sourceSection;
+	requireCompilerInvariant(ownerSection != nullptr, "instantiated function body has no source section");
+	auto definition = ownerSection->variableDefinitions.find(parameterName);
+	requireCompilerInvariant(
+		definition != ownerSection->variableDefinitions.end() && definition->second,
+		"instantiation parameter has no declaration identity"
+	);
+	return normalizeBindingReference(definition->second);
+}
+
+static bool variableReferenceIsCurrentInstantiationParameter(const InferenceContext &context, VariableReference *reference) {
+	if (!reference)
+		return false;
+	VariableReference *parameterDefinition = currentInstantiationParameterDefinition(context, reference->name);
+	return parameterDefinition && normalizeBindingReference(reference) == parameterDefinition;
+}
+
 static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range) {
 	requireCompilerInvariant(inferenceContext != nullptr, "type-constraint failure requires an inference context");
 	inferenceContext->fail(unknownTypeConstraintDiagnostic(parseContext, range, range.subString), 1, false);

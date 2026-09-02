@@ -234,7 +234,9 @@ bool generateSpecializedFunction(
 	llvm::BasicBlock *savedBlock = builder.GetInsertBlock();
 	llvm::BasicBlock::iterator savedPoint = builder.GetInsertPoint();
 	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
-	auto savedPatternBindings = context.patternBindings;
+	auto savedCodegenParameterBindings = context.codegenParameterBindings;
+	auto savedCodegenParameterDefinitions = context.codegenParameterDefinitions;
+	llvm::Value *savedManagedLifecycleValueBinding = context.managedLifecycleValueBinding;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
 	std::vector<ParseContext::ManagedStorageState> savedManagedLocalStorage = std::move(context.managedLocalStorage);
@@ -247,13 +249,39 @@ bool generateSpecializedFunction(
 
 	builder.SetInsertPoint(entry);
 
-	// Set up bindings: map parameter names to LLVM values and their types
-	context.patternBindings.clear();
+	// Set up parameter bindings by declaration identity.
+	context.codegenParameterBindings.clear();
+	context.codegenParameterDefinitions.clear();
+	context.managedLifecycleValueBinding = nullptr;
 	requireCompilerInvariant(activeInst.argumentTypes == argTypes, "Codegen argTypes diverged from instantiation signature");
+	std::vector<VariableReference *> parameterDefinitions(paramBindings.size());
+	for (size_t parameterIndex = 0; parameterIndex < paramBindings.size(); parameterIndex++) {
+		const std::string &parameterName = paramBindings[parameterIndex].first;
+		if (parameterName == managedLifecycleParameterName)
+			continue;
+		auto definition = section->variableDefinitions.find(parameterName);
+		requireCompilerInvariant(
+			definition != section->variableDefinitions.end() && definition->second,
+			"function parameter has no declaration identity"
+		);
+		parameterDefinitions[parameterIndex] = normalizeBindingReference(definition->second);
+		context.codegenParameterDefinitions.insert(parameterDefinitions[parameterIndex]);
+	}
 	argIdx = 0;
 	for (auto &arg : func->args()) {
 		size_t parameterIndex = runtimeParameterIndices[argIdx];
-		context.patternBindings[paramBindings[parameterIndex].first] = &arg;
+		const std::string &parameterName = paramBindings[parameterIndex].first;
+		if (parameterName == managedLifecycleParameterName) {
+			requireCompilerInvariant(
+				context.managedLifecycleValueBinding == nullptr, "managed lifecycle function has multiple value parameters"
+			);
+			context.managedLifecycleValueBinding = &arg;
+		} else {
+			requireCompilerInvariant(
+				parameterDefinitions[parameterIndex] != nullptr, "runtime function parameter has no declaration identity"
+			);
+			context.codegenParameterBindings[parameterDefinitions[parameterIndex]] = &arg;
+		}
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
@@ -265,7 +293,7 @@ bool generateSpecializedFunction(
 	);
 	// Parameters this call's match did not bind (their choice alternative was
 	// not taken) live as locals of this instantiation and need storage here;
-	// bound parameters are skipped because they resolve through patternBindings.
+	// Bound parameters are skipped because they resolve through codegenParameterBindings.
 	bool ownerVariablesAllocated = false;
 	bool bodySucceeded = true;
 	section->forEachDefinitionBodySection([&](Section *bodySection) {
@@ -290,7 +318,9 @@ bool generateSpecializedFunction(
 	// Restore all codegen state
 	context.flexBindingFrames = savedFlexBindingFrames;
 	context.flexCallSiteRangeStack = std::move(savedFlexCallSiteRanges);
-	context.patternBindings = savedPatternBindings;
+	context.codegenParameterBindings = std::move(savedCodegenParameterBindings);
+	context.codegenParameterDefinitions = std::move(savedCodegenParameterDefinitions);
+	context.managedLifecycleValueBinding = savedManagedLifecycleValueBinding;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
 	context.managedLocalStorage = std::move(savedManagedLocalStorage);
@@ -500,10 +530,11 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		requireCompilerInvariant(expr->variable != nullptr, "Variable expression reached codegen without a resolved variable");
 		std::string varName = expr->variable->name;
+		VariableReference *definition = normalizeBindingReference(expr->variable);
 
 		// Determine this variable's type for loading
 		DataType varType = finalizedExpressionType(context, expr);
-		if (context.currentCodegenInstantiation &&
+		if (context.currentCodegenInstantiation && context.codegenParameterDefinitions.contains(definition) &&
 			context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(varName)) {
 			auto valueIt = context.currentCodegenInstantiation->constantParameterValues.find(varName);
 			requireCompilerInvariant(
@@ -521,14 +552,12 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			return value;
 		};
 
-		// Pattern parameter: load from generated function parameter pointer
-		auto bindingIt = context.patternBindings.find(varName);
-		if (bindingIt != context.patternBindings.end())
+		// Pattern parameter: load from generated function parameter pointer.
+		auto bindingIt = context.codegenParameterBindings.find(definition);
+		if (bindingIt != context.codegenParameterBindings.end())
 			return loadOwnedValue(bindingIt->second, varName + "_val");
 
 		// Local variable: load from alloca
-		VariableReference *varRef = expr->variable;
-		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
 		if (definition->alloca)
 			return loadOwnedValue(definition->alloca, varName + "_val");
 

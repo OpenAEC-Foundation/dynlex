@@ -73,6 +73,7 @@ static bool isStructurallyCompileTimeConstant(
 		return true;
 	if (expression->kind == Expression::Kind::Variable && expression->variable) {
 		return context.currentInstantiation &&
+			   variableReferenceIsCurrentInstantiationParameter(context, expression->variable) &&
 			   context.currentInstantiation->requiredCompileTimeParameters.contains(expression->variable->name) &&
 			   context.currentInstantiation->constantParameterValues.contains(expression->variable->name);
 	}
