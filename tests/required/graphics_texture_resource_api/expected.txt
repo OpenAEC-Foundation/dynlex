@@ -1,0 +1,1 @@
+graphics texture resource API is available

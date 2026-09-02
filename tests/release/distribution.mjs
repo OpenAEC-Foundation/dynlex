@@ -26,6 +26,10 @@ const cmakeConfiguration = fs.readFileSync(
   path.join(projectDirectory, "CMakeLists.txt"),
   "utf8",
 );
+const textureLibrary = fs.readFileSync(
+  path.join(projectDirectory, "lib/texture.dl"),
+  "utf8",
+);
 const linuxInstaller = fs.readFileSync(
   path.join(projectDirectory, "web/install.sh"),
   "utf8",
@@ -312,6 +316,10 @@ assert.match(
   releaseWorkflow,
   /smoke-linux:[\s\S]*graphics_window_should_close_boolean/,
 );
+assert.match(
+  releaseWorkflow,
+  /smoke-linux:[\s\S]*graphics_texture_resource_smoke\.dl[\s\S]*graphics-texture-resource/,
+);
 for (const smokeJob of ["smoke-linux", "smoke-windows", "smoke-macos"]) {
   assert.match(
     releaseWorkflow,
@@ -354,6 +362,11 @@ assert.match(releaseWorkflow, /gh release create[\s\S]*--draft/);
 assert.match(releaseWorkflow, /gh release edit[\s\S]*--draft=false/);
 assert.match(releaseWorkflow, /--jq \.immutable/);
 assert.match(cmakeConfiguration, /CPACK_PACKAGE_HOMEPAGE_URL "https:\/\/dynlex\.com"/);
+assert.match(
+  cmakeConfiguration,
+  /install\(DIRECTORY \$\{CMAKE_SOURCE_DIR\}\/lib\/ DESTINATION \$\{CMAKE_INSTALL_DATADIR\}\/dynlex\/lib FILES_MATCHING PATTERN "\*\.dl"\)/,
+);
+assert.match(textureLibrary, /function a loaded graphics texture from PPM file at path/);
 assert.match(cmakeConfiguration, /CPACK_DEBIAN_PACKAGE_DEPENDS/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 assert.match(linuxInstaller, /linux_compile_dependencies_ready/);
