@@ -50,6 +50,17 @@ struct ExplicitVariableCandidate {
 	size_t textLength{};
 };
 
+static bool
+explicitVariableDeclarationPrecedes(const Range &declaration, const PatternReference &reference, size_t sourceElementIndex) {
+	requireCompilerInvariant(
+		declaration.line && reference.range().line && sourceElementIndex < reference.patternElements.size(),
+		"explicit variable visibility check has no source position"
+	);
+	int useStart = reference.range().start() + static_cast<int>(reference.patternElements[sourceElementIndex].startPos);
+	return std::pair(declaration.line->mergedLineIndex, declaration.start()) <
+		   std::pair(reference.range().line->mergedLineIndex, useStart);
+}
+
 static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidates(const MatchProgress &progress) {
 	std::vector<ExplicitVariableCandidate> result;
 	if (!progress.patternReference || progress.sourceCharIndex != 0 || !progress.patternReference->range().line)
@@ -57,7 +68,9 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 	const std::vector<PatternElement> &sourceElements = progress.patternReference->patternElements;
 	std::unordered_set<std::string> shadowedNames;
 	for (Section *section = progress.patternReference->range().section(); section; section = section->parent) {
-		for (const std::string &name : section->explicitVariableNames) {
+		for (const auto &[name, declaration] : section->explicitVariableDeclarations) {
+			if (!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
+				continue;
 			if (!shadowedNames.insert(name).second || name.find(' ') == std::string::npos)
 				continue;
 			std::vector<PatternElement> nameElements = getPatternElements(name);

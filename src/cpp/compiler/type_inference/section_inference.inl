@@ -610,6 +610,12 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			);
 			Expression *expression =
 				createTypeConstraintExpression(parseContext, section, reference->declaredTypeConstraintRange);
+			if (expression && sectionVariableIsPatternParameter(section, variable->name) &&
+				expressionReferencesSectionPatternParameter(section, expression)) {
+				reference->hasDependentTypeConstraint = true;
+				destroyTypeConstraintExpression(expression);
+				continue;
+			}
 			items.push_back(
 				{nullptr, nullptr, variable, reference, reference->declaredTypeConstraintRange,
 				 reference->declaredTypeConstraintName, expression, std::nullopt}
@@ -700,8 +706,7 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 		destroyExpressions();
 		return false;
 	}
-	return finalizeVariableTypeConstraints(parseContext) && validatePatternParameterVariableConstraints(parseContext) &&
-		   compileDependentPatternSignatures(parseContext);
+	return finalizeVariableTypeConstraints(parseContext) && compileDependentPatternSignatures(parseContext);
 }
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {

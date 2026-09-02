@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function inspect {fixed integer:count} values {an array of count items:values}:
+    execute:
+        return {integer:values}
+
+ignore inspect 2 values [1, 2]

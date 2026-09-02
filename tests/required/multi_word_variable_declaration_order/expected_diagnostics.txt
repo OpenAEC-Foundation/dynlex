@@ -1,0 +1,1 @@
+tests/required/multi_word_variable_declaration_order/main.dl:1-20: Error: This pattern couldn't be resolved

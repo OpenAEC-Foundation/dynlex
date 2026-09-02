@@ -16,6 +16,7 @@ struct VariableReference {
 	Range declaredTypeConstraintRange;
 	TypeConstraint declaredTypeConstraint;
 	DataType declaredType;
+	bool hasDependentTypeConstraint = false;
 	VariableReference *definition{};
 	// stack allocation for this variable (set during codegen, only for definitions)
 	llvm::AllocaInst *alloca{};

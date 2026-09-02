@@ -564,7 +564,7 @@ Expression *Section::detectPatternsRecursively(
 					range.subRange(child->start, child->start + capture.typeConstraint.size());
 			}
 			if (registerPatternReferences) {
-				registerExplicitVariableName(variableReference->name);
+				registerExplicitVariableName(variableReference->name, variableReference->range);
 				context.pendingExplicitVariableReferences.push_back(variableReference);
 			} else {
 				auto definition = variableDefinitions.find(variableReference->name);
@@ -573,7 +573,7 @@ Expression *Section::detectPatternsRecursively(
 			}
 
 			Expression *variableExpression = new Expression();
-			variableExpression->range = nameRange;
+			variableExpression->range = range.subRange(child->start - 1, child->end + 1);
 			variableExpression->kind = Expression::Kind::Variable;
 			variableExpression->variable = variableReference;
 			expr->arguments.push_back(variableExpression);
@@ -748,12 +748,25 @@ void Section::addVariableReference(ParseContext &context, VariableReference *ref
 	searchParentPatterns(context, reference);
 }
 
+void Section::registerExplicitVariableName(const std::string &name, const Range &declarationRange) {
+	requireCompilerInvariant(declarationRange.line, "explicit variable declaration has no source line");
+	auto existing = explicitVariableDeclarations.find(name);
+	if (existing == explicitVariableDeclarations.end() ||
+		std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <
+			std::pair(existing->second.line->mergedLineIndex, existing->second.start()))
+		explicitVariableDeclarations[name] = declarationRange;
+}
+
 void Section::indexExplicitParameters(PatternDefinition &definition) {
 	requireCompilerInvariant(definition.section == this, "explicit parameter candidate belongs to another section");
 	explicitParameterIndex.addDefinition(definition);
 	forEachLeafElement(definition.patternElements, [&](const DefinitionPatternElement &element) {
-		if (element.type == PatternElement::Type::Variable)
-			registerExplicitVariableName(element.text);
+		if (element.type == PatternElement::Type::Variable) {
+			int sourceStart = definition.range.start() + static_cast<int>(element.startPos);
+			registerExplicitVariableName(
+				element.text, Range(definition.range.line, sourceStart, sourceStart + static_cast<int>(element.text.size()))
+			);
+		}
 	});
 }
 

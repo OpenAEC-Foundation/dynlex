@@ -137,8 +137,8 @@ struct Section {
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;
 	std::unordered_map<std::string, VariableReference *> variableDefinitions;
-	// Names introduced with explicit capture syntax in this lexical scope.
-	std::unordered_set<std::string> explicitVariableNames;
+	// First source declaration for names introduced with explicit capture syntax in this lexical scope.
+	std::unordered_map<std::string, Range> explicitVariableDeclarations;
 	ExplicitParameterIndex explicitParameterIndex;
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
@@ -185,7 +185,7 @@ struct Section {
 		bool registerPatternReferences = true
 	);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
-	void registerExplicitVariableName(const std::string &name) { explicitVariableNames.insert(name); }
+	void registerExplicitVariableName(const std::string &name, const Range &declarationRange);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void indexExplicitParameters(PatternDefinition &definition);
 	bool canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const;

@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set half width to 1
+set {half width} to 2

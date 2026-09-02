@@ -37,12 +37,19 @@ static bool finalizeVariableTypeConstraints(ParseContext &parseContext) {
 				return std::pair(left->range.line->mergedLineIndex, left->range.start()) <
 					   std::pair(right->range.line->mergedLineIndex, right->range.start());
 			});
-			VariableReference *first = references.front();
+			auto firstFixed = std::find_if(references.begin(), references.end(), [](VariableReference *reference) {
+				return !reference->hasDependentTypeConstraint;
+			});
+			if (firstFixed == references.end())
+				continue;
+			VariableReference *first = *firstFixed;
 			requireCompilerInvariant(first->declaredTypeConstraint.isResolved(), "variable type constraint was not resolved");
 			variable->declaredTypeConstraint = first->declaredTypeConstraint;
 			variable->declaredType = first->declaredType;
 			for (size_t index = 1; index < references.size(); index++) {
 				VariableReference *reference = references[index];
+				if (reference->hasDependentTypeConstraint || reference == first)
+					continue;
 				requireCompilerInvariant(
 					reference->declaredTypeConstraint.isResolved(), "variable type constraint was not resolved"
 				);
@@ -60,41 +67,6 @@ static bool finalizeVariableTypeConstraints(ParseContext &parseContext) {
 				valid = false;
 				break;
 			}
-		}
-		for (Section *child : section->children)
-			visit(child);
-	};
-	visit(parseContext.mainSection);
-	return valid;
-}
-
-static bool validatePatternParameterVariableConstraints(ParseContext &parseContext) {
-	bool valid = true;
-	std::function<void(Section *)> visit = [&](Section *section) {
-		for (PatternDefinition *definition : section->patternDefinitions) {
-			forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-				if (!valid || element.type != PatternElement::Type::Variable || element.typeConstraintName.empty() ||
-					element.hasDependentTypeConstraint)
-					return;
-				auto variable = section->variables.find(element.text);
-				if (variable == section->variables.end() || !variable->second ||
-					!variable->second->declaredTypeConstraint.isResolved())
-					return;
-				Variable *parameter = variable->second;
-				if (element.resolvedTypeConstraint.equivalentTo(parameter->declaredTypeConstraint))
-					return;
-				VariableReference *second = parameter->firstDeclaredTypeConstraintReference();
-				requireCompilerInvariant(second, "constrained pattern parameter has no variable constraint source");
-				Range firstRange = patternElementTypeConstraintRange(*definition, element);
-				Diagnostic diagnostic(
-					parseContext, Diagnostic::Level::Error, "conflicting variable type constraints",
-					second->declaredTypeConstraintRange, "name", parameter->name, "first_type", element.typeConstraintName,
-					"second_type", second->declaredTypeConstraintName
-				);
-				diagnostic.relatedInfo.push_back({"Variable '" + parameter->name + "' was first constrained here", firstRange});
-				parseContext.addDiagnostic(std::move(diagnostic));
-				valid = false;
-			});
 		}
 		for (Section *child : section->children)
 			visit(child);

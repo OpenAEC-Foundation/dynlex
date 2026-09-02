@@ -2,9 +2,13 @@ static const std::string *findVisibleExplicitWholeVariableName(const PatternRefe
 	if (!reference || !reference->range().line || reference->pattern.text.find(' ') == std::string::npos)
 		return nullptr;
 	for (Section *section = reference->range().section(); section; section = section->parent) {
-		auto name = section->explicitVariableNames.find(reference->pattern.text);
-		if (name != section->explicitVariableNames.end())
-			return &*name;
+		auto declaration = section->explicitVariableDeclarations.find(reference->pattern.text);
+		if (declaration == section->explicitVariableDeclarations.end())
+			continue;
+		const Range &declarationRange = declaration->second;
+		if (std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <
+			std::pair(reference->range().line->mergedLineIndex, reference->range().start()))
+			return &declaration->first;
 	}
 	return nullptr;
 }

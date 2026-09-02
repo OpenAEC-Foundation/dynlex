@@ -4,10 +4,10 @@ exposed function inspect the application state during graphics scroll for {C str
     execute:
         ignore x
         ignore y
-        set application_pointer to the application state of window
-        if application_pointer = 0 as a pointer to a byte:
+        set {application pointer} to the application state of window
+        if application pointer = 0 as a pointer to a byte:
             return 1
-        set marker to application_pointer as a pointer to an integer
+        set marker to application pointer as a pointer to an integer
         print @intrinsic("dereference", marker) as a line
         return 0
 
@@ -20,13 +20,13 @@ if marker = 0 as a pointer to an integer:
     close the window
     return 1
 @intrinsic("store at", marker, 37)
-set application_pointer to marker as a pointer to a byte
-set the application state of window to application_pointer
+set {application pointer} to marker as a pointer to a byte
+set the application state of window to application pointer
 register the graphics scroll callback named "inspect the application state during graphics scroll for $ with horizontal offset $ and vertical offset $" for window
 
-set callback_status to inspect the application state during graphics scroll for window with horizontal offset 0.0 and vertical offset 0.0
+set {callback status} to inspect the application state during graphics scroll for window with horizontal offset 0.0 and vertical offset 0.0
 set retrieved to the application state of window
-if (callback_status != 0) or (retrieved != application_pointer):
+if (callback status != 0) or (retrieved != application pointer):
     set the application state of window to 0 as a pointer to a byte
     @intrinsic("call", "libc", "free", nothing, marker)
     close the window

@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function accept {fixed integer:count} values {values}:
+    execute:
+        return {an array of count items:values}
+
+ignore accept 2 values [1, 2, 3]

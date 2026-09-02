@@ -465,6 +465,77 @@ signatureElement(PatternDefinition &definition, size_t pathIndex, size_t paramet
 	return matchedPatternParameterElement(&definition, pathElement->text, pathElement->startPos);
 }
 
+static std::optional<TypeConstraintTemplate> compileDependentParameterConstraint(
+	ParseContext &parseContext, PatternDefinition &definition, size_t pathIndex, size_t parameterIndex,
+	std::vector<PatternParameterSignature> &parameters, const Range &constraintRange, const std::string &typeConstraintName
+) {
+	Expression *expression = createTypeConstraintExpression(parseContext, definition.section, constraintRange);
+	if (!expression) {
+		parseContext.diagnostics.push_back(unknownTypeConstraintDiagnostic(parseContext, constraintRange, typeConstraintName));
+		return std::nullopt;
+	}
+	SymbolicSignatureBindings bindings;
+	for (size_t earlierIndex = 0; earlierIndex < parameterIndex; earlierIndex++) {
+		const DefinitionPatternElement *earlierElement = signatureElement(definition, pathIndex, earlierIndex);
+		VariableReference *parameterDefinition = findPatternParameterDefinition(&definition, earlierElement->text);
+		requireCompilerInvariant(parameterDefinition, "dependent signature parameter has no definition identity");
+		if (bindings.contains(parameterDefinition)) {
+			parseContext.diagnostics.push_back(Diagnostic(
+				parseContext, Diagnostic::Level::Error, "dependent type constraint parameter ambiguous", constraintRange,
+				"parameter", earlierElement->text
+			));
+			destroyTypeConstraintExpression(expression);
+			return std::nullopt;
+		}
+		SymbolicSignatureValue value;
+		value.type = parameters[earlierIndex].staticParameterType;
+		value.domain = parameters[earlierIndex].constraint.structuralEnvelope();
+		value.sourceArgumentIndex = earlierIndex;
+		if (value.domain.kind && *value.domain.kind == DataType::Kind::Int)
+			value.integerTerm = ConstraintIntegerTerm::fixedArgument(earlierIndex);
+		bindings.emplace(parameterDefinition, std::move(value));
+	}
+	for (size_t laterIndex = parameterIndex; laterIndex < parameters.size(); laterIndex++) {
+		const DefinitionPatternElement *laterElement = signatureElement(definition, pathIndex, laterIndex);
+		VariableReference *laterDefinition = findPatternParameterDefinition(&definition, laterElement->text);
+		if (!laterDefinition)
+			continue;
+		bool referenced = visitExpressionTree(expression, [&](Expression *current) {
+			return current->kind == Expression::Kind::Variable && current->variable &&
+				   normalizeBindingReference(current->variable) == laterDefinition;
+		});
+		if (!referenced)
+			continue;
+		parseContext.diagnostics.push_back(Diagnostic(
+			parseContext, Diagnostic::Level::Error, "type constraint references later parameter", constraintRange,
+			"type_constraint", typeConstraintName, "parameter", laterElement->text
+		));
+		destroyTypeConstraintExpression(expression);
+		return std::nullopt;
+	}
+	SymbolicConstraintCompiler compiler{parseContext, definition, pathIndex, parameterIndex, parameters};
+	SymbolicSignatureValue result = compiler.evaluate(expression, bindings);
+	destroyTypeConstraintExpression(expression);
+	if (!result.valid() || !result.constraint) {
+		parseContext.diagnostics.push_back(Diagnostic(
+			parseContext, Diagnostic::Level::Error, "dependent type constraint not representable", constraintRange,
+			"type_constraint", typeConstraintName, "reason",
+			compiler.failure.empty() ? "it does not produce a type or constraint" : compiler.failure
+		));
+		return std::nullopt;
+	}
+	result.constraint->collectDependencies();
+	for (const ConstraintDependency &dependency : result.constraint->dependencies) {
+		if (dependency.sourceArgumentIndex >= parameterIndex)
+			crashCompilerBug("dependent constraint template references a non-earlier argument");
+		if (dependency.access == ConstraintAccess::CompileTimeValue) {
+			parameters[dependency.sourceArgumentIndex].requiresCompileTimeValue = true;
+			parameters[dependency.sourceArgumentIndex].constraint.constantPart.requiresCompileTimeValue = true;
+		}
+	}
+	return std::move(*result.constraint);
+}
+
 static bool initializePatternPathSignatures(ParseContext &parseContext) {
 	bool valid = true;
 	std::function<void(Section *)> visit = [&](Section *section) {
@@ -484,19 +555,23 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 					PatternParameterSignature signature;
 					signature.elementStartPos = startPos;
 					Variable *parameterVariable = section->findVariable(name);
-					bool variableHasConstraint = parameterVariable && parameterVariable->declaredTypeConstraint.isResolved();
-					bool elementHasConstraint = element->resolvedTypeConstraint.isResolved();
+					bool variableHasFixedConstraint =
+						parameterVariable && parameterVariable->declaredTypeConstraint.isResolved();
+					bool elementHasFixedConstraint =
+						element->resolvedTypeConstraint.isResolved() && !element->hasDependentTypeConstraint;
 					signature.constraint = TypeConstraintTemplate::constant(
-						elementHasConstraint
+						elementHasFixedConstraint
 							? element->resolvedTypeConstraint
-							: (variableHasConstraint ? parameterVariable->declaredTypeConstraint : TypeConstraint::any())
+							: (variableHasFixedConstraint ? parameterVariable->declaredTypeConstraint : TypeConstraint::any())
 					);
 					signature.staticParameterType =
-						elementHasConstraint ? element->resolvedParameterType
-											 : (variableHasConstraint ? parameterVariable->declaredType : DataType{});
+						elementHasFixedConstraint ? element->resolvedParameterType
+												  : (variableHasFixedConstraint ? parameterVariable->declaredType : DataType{});
 					signature.requiresCompileTimeValue = signature.constraint.constantPart.requiresCompileTimeValue;
-					signature.acceptsUnresolvedType = !elementHasConstraint && !variableHasConstraint;
-					signature.hasExplicitTypeConstraint = !element->typeConstraintName.empty() || variableHasConstraint;
+					bool hasAuthoredConstraint = !element->typeConstraintName.empty() ||
+												 (parameterVariable && parameterVariable->hasDeclaredTypeConstraint());
+					signature.acceptsUnresolvedType = !hasAuthoredConstraint;
+					signature.hasExplicitTypeConstraint = hasAuthoredConstraint;
 					definition->signaturePaths[pathIndex].parameters.push_back(std::move(signature));
 				}
 				);
@@ -512,87 +587,97 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 static bool compileDependentPatternSignatures(ParseContext &parseContext) {
 	if (!initializePatternPathSignatures(parseContext))
 		return false;
+	struct AuthoredParameterConstraint {
+		Range range;
+		std::string name;
+		TypeConstraintTemplate constraint;
+		DataType staticType;
+	};
 	std::function<bool(Section *)> visit = [&](Section *section) {
 		for (PatternDefinition *definition : section->patternDefinitions) {
 			for (size_t pathIndex = 0; pathIndex < definition->signaturePaths.size(); pathIndex++) {
 				auto &parameters = definition->signaturePaths[pathIndex].parameters;
 				for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
 					const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, parameterIndex);
-					if (!element->hasDependentTypeConstraint)
+					Variable *parameterVariable = section->findVariable(element->text);
+					std::vector<AuthoredParameterConstraint> authored;
+					if (!element->typeConstraintName.empty()) {
+						Range range = patternElementTypeConstraintRange(*definition, *element);
+						if (element->hasDependentTypeConstraint) {
+							auto constraint = compileDependentParameterConstraint(
+								parseContext, *definition, pathIndex, parameterIndex, parameters, range,
+								element->typeConstraintName
+							);
+							if (!constraint)
+								return false;
+							authored.push_back({range, element->typeConstraintName, std::move(*constraint), {}});
+						} else {
+							requireCompilerInvariant(
+								element->resolvedTypeConstraint.isResolved(), "fixed pattern constraint was not resolved"
+							);
+							authored.push_back(
+								{range, element->typeConstraintName,
+								 TypeConstraintTemplate::constant(element->resolvedTypeConstraint),
+								 element->resolvedParameterType}
+							);
+						}
+					}
+					if (parameterVariable) {
+						for (VariableReference *reference : parameterVariable->declaredTypeConstraintReferences) {
+							requireCompilerInvariant(reference, "parameter constraint reference is null");
+							if (reference->hasDependentTypeConstraint) {
+								auto constraint = compileDependentParameterConstraint(
+									parseContext, *definition, pathIndex, parameterIndex, parameters,
+									reference->declaredTypeConstraintRange, reference->declaredTypeConstraintName
+								);
+								if (!constraint)
+									return false;
+								authored.push_back(
+									{reference->declaredTypeConstraintRange,
+									 reference->declaredTypeConstraintName,
+									 std::move(*constraint),
+									 {}}
+								);
+							} else {
+								requireCompilerInvariant(
+									reference->declaredTypeConstraint.isResolved(), "fixed body constraint was not resolved"
+								);
+								authored.push_back(
+									{reference->declaredTypeConstraintRange, reference->declaredTypeConstraintName,
+									 TypeConstraintTemplate::constant(reference->declaredTypeConstraint),
+									 reference->declaredType}
+								);
+							}
+						}
+					}
+					if (authored.empty())
 						continue;
-					Range constraintRange = patternElementTypeConstraintRange(*definition, *element);
-					Expression *expression = createTypeConstraintExpression(parseContext, definition->section, constraintRange);
-					if (!expression) {
-						parseContext.diagnostics.push_back(
-							unknownTypeConstraintDiagnostic(parseContext, constraintRange, element->typeConstraintName)
-						);
-						return false;
-					}
-					SymbolicSignatureBindings bindings;
-					for (size_t earlierIndex = 0; earlierIndex < parameterIndex; earlierIndex++) {
-						const DefinitionPatternElement *earlierElement = signatureElement(*definition, pathIndex, earlierIndex);
-						VariableReference *parameterDefinition =
-							findPatternParameterDefinition(definition, earlierElement->text);
+					std::stable_sort(authored.begin(), authored.end(), [](const auto &left, const auto &right) {
 						requireCompilerInvariant(
-							parameterDefinition, "dependent signature parameter has no definition identity"
+							left.range.line && right.range.line, "parameter constraint has no source location"
 						);
-						if (bindings.contains(parameterDefinition)) {
-							parseContext.diagnostics.push_back(Diagnostic(
-								parseContext, Diagnostic::Level::Error, "dependent type constraint parameter ambiguous",
-								constraintRange, "parameter", earlierElement->text
-							));
-							destroyTypeConstraintExpression(expression);
-							return false;
-						}
-						SymbolicSignatureValue value;
-						value.type = parameters[earlierIndex].staticParameterType;
-						value.domain = parameters[earlierIndex].constraint.structuralEnvelope();
-						value.sourceArgumentIndex = earlierIndex;
-						if (value.domain.kind && *value.domain.kind == DataType::Kind::Int) {
-							value.integerTerm = ConstraintIntegerTerm::fixedArgument(earlierIndex);
-						}
-						bindings.emplace(parameterDefinition, std::move(value));
-					}
-					for (size_t laterIndex = parameterIndex; laterIndex < parameters.size(); laterIndex++) {
-						const DefinitionPatternElement *laterElement = signatureElement(*definition, pathIndex, laterIndex);
-						VariableReference *laterDefinition = findPatternParameterDefinition(definition, laterElement->text);
-						if (!laterDefinition)
+						return std::pair(left.range.line->mergedLineIndex, left.range.start()) <
+							   std::pair(right.range.line->mergedLineIndex, right.range.start());
+					});
+					for (size_t sourceIndex = 1; sourceIndex < authored.size(); sourceIndex++) {
+						if (authored.front().constraint == authored[sourceIndex].constraint)
 							continue;
-						bool referenced = visitExpressionTree(expression, [&](Expression *current) {
-							return current->kind == Expression::Kind::Variable && current->variable &&
-								   normalizeBindingReference(current->variable) == laterDefinition;
-						});
-						if (!referenced)
-							continue;
-						parseContext.diagnostics.push_back(Diagnostic(
-							parseContext, Diagnostic::Level::Error, "type constraint references later parameter",
-							constraintRange, "type_constraint", element->typeConstraintName, "parameter", laterElement->text
-						));
-						destroyTypeConstraintExpression(expression);
+						Diagnostic diagnostic(
+							parseContext, Diagnostic::Level::Error, "conflicting variable type constraints",
+							authored[sourceIndex].range, "name", element->text, "first_type", authored.front().name,
+							"second_type", authored[sourceIndex].name
+						);
+						diagnostic.relatedInfo.push_back(
+							{"Variable '" + element->text + "' was first constrained here", authored.front().range}
+						);
+						parseContext.addDiagnostic(std::move(diagnostic));
 						return false;
 					}
-					SymbolicConstraintCompiler compiler{parseContext, *definition, pathIndex, parameterIndex, parameters};
-					SymbolicSignatureValue result = compiler.evaluate(expression, bindings);
-					destroyTypeConstraintExpression(expression);
-					if (!result.valid() || !result.constraint) {
-						parseContext.diagnostics.push_back(Diagnostic(
-							parseContext, Diagnostic::Level::Error, "dependent type constraint not representable",
-							constraintRange, "type_constraint", element->typeConstraintName, "reason",
-							compiler.failure.empty() ? "it does not produce a type or constraint" : compiler.failure
-						));
-						return false;
-					}
-					result.constraint->collectDependencies();
-					for (const ConstraintDependency &dependency : result.constraint->dependencies) {
-						if (dependency.sourceArgumentIndex >= parameterIndex)
-							crashCompilerBug("dependent constraint template references a non-earlier argument");
-						if (dependency.access == ConstraintAccess::CompileTimeValue) {
-							parameters[dependency.sourceArgumentIndex].requiresCompileTimeValue = true;
-							parameters[dependency.sourceArgumentIndex].constraint.constantPart.requiresCompileTimeValue = true;
-						}
-					}
-					parameters[parameterIndex].constraint = std::move(*result.constraint);
-					parameters[parameterIndex].staticParameterType = {};
+					parameters[parameterIndex].constraint = authored.front().constraint;
+					parameters[parameterIndex].staticParameterType =
+						authored.front().constraint.isDependent() ? DataType{} : authored.front().staticType;
+					parameters[parameterIndex].requiresCompileTimeValue =
+						parameters[parameterIndex].constraint.constantPart.requiresCompileTimeValue;
 				}
 			}
 		}
