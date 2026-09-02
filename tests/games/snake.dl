@@ -78,18 +78,16 @@ set game to a snake game with body moving rightward toward (a grid position at x
 
 # Main game loop
 loop while the window remains open:
-	set key to the pressed key of window
-
 	# Update direction
-	if key = 1:
+	if key (the GLFW up key) is down in window:
 		set game's direction to upward
-	else if key = 2:
+	else if key (the GLFW right key) is down in window:
 		set game's direction to rightward
-	else if key = 3:
+	else if key (the GLFW down key) is down in window:
 		set game's direction to downward
-	else if key = 4:
+	else if key (the GLFW left key) is down in window:
 		set game's direction to leftward
-	else if key = 5:
+	else if key (the GLFW escape key) is down in window:
 		set game's running to false
 
 	if game is running:

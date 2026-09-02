@@ -27,8 +27,7 @@ set reference to a route follower tracking (a runner at height the player's grou
 set scroll to 0
 
 loop while the window remains open:
-	set key to the pressed key of window
-	if key = 1 and player's y >= the player's ground height:
+	if key (the GLFW up key) is down in window and player's y >= the player's ground height:
 		start a jump for player
 
 	apply gravity to player

@@ -169,41 +169,41 @@ else:
         set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
         set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
 
-        if key 87 is down in window:
+        if key (the GLFW W key) is down in window:
             increase the x coordinate of view's position by forward's x * view's movement
             increase the z coordinate of view's position by forward's z * view's movement
-        if key 83 is down in window:
+        if key (the GLFW S key) is down in window:
             decrease the x coordinate of view's position by forward's x * view's movement
             decrease the z coordinate of view's position by forward's z * view's movement
 
         # Requested mapping: A moves right, D moves left
-        if key 65 is down in window:
+        if key (the GLFW A key) is down in window:
             increase the x coordinate of view's position by rightward's x * view's movement
             increase the z coordinate of view's position by rightward's z * view's movement
-        if key 68 is down in window:
+        if key (the GLFW D key) is down in window:
             decrease the x coordinate of view's position by rightward's x * view's movement
             decrease the z coordinate of view's position by rightward's z * view's movement
 
-        if key 81 is down in window:
+        if key (the GLFW Q key) is down in window:
             decrease the y coordinate of view's position by 1.1
-        if key 69 is down in window:
+        if key (the GLFW E key) is down in window:
             increase the y coordinate of view's position by 1.1
 
         # Left rotates left, right rotates right
-        if key 263 is down in window:
+        if key (the GLFW left key) is down in window:
             add view's turning to view's yaw
-        if key 262 is down in window:
+        if key (the GLFW right key) is down in window:
             subtract view's turning from view's yaw
 
-        if key 49 is down in window:
+        if key (the GLFW 1 key) is down in window:
             if mode != 0:
                 set mode to 0
                 print "render mode: textured/material" as a line
-        if key 50 is down in window:
+        if key (the GLFW 2 key) is down in window:
             if mode != 1:
                 set mode to 1
                 print "render mode: uv debug" as a line
-        if key 51 is down in window:
+        if key (the GLFW 3 key) is down in window:
             if mode != 2:
                 set mode to 2
                 print "render mode: vertex colors" as a line

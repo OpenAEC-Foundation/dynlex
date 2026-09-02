@@ -1,0 +1,28 @@
+import lib/graphics.dl
+
+set window to a new window with width 128 and height 64
+if window = 0 as a pointer to a byte:
+	return 1
+
+set failed to false
+if key (the GLFW W key) is down in window:
+	set failed to true
+if key (the GLFW A key) is down in window:
+	set failed to true
+if key (the GLFW up key) is down in window:
+	set failed to true
+if key (the GLFW left key) is down in window:
+	set failed to true
+if key (the GLFW 1 key) is down in window:
+	set failed to true
+if key (the GLFW escape key) is down in window:
+	set failed to true
+
+if key (the GLFW W key) is up in window = false:
+	set failed to true
+if key (the GLFW 1 key) is up in window = false:
+	set failed to true
+
+close the window
+if failed:
+	return 1

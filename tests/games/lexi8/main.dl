@@ -37,21 +37,17 @@ function a console display at scale {integer:scale} with playfield {integer:play
 allocate 2048 slots of 0.0 and set phosphor to it
 set panel to a console display at scale 16 with playfield (32 * 16) and status area height 48, backed by phosphor
 
-function the key code {integer:number} is down in {C string:window}:
-	execute:
-		return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = 1
-
 function feed the pad from {C string:window}:
 	execute:
 		set left to 0
-		if the key code 263 is down in window:
+		if key (the GLFW left key) is down in window:
 			set left to 1
-		if the key code 65 is down in window:
+		if key (the GLFW A key) is down in window:
 			set left to 1
 		set right to 0
-		if the key code 262 is down in window:
+		if key (the GLFW right key) is down in window:
 			set right to 1
-		if the key code 68 is down in window:
+		if key (the GLFW D key) is down in window:
 			set right to 1
 		set machine key 4 to left
 		set machine key 6 to right
@@ -109,9 +105,9 @@ set window to a new window with width (64 * (panel's scale)) and height ((panel'
 set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
 
 loop while the window remains open:
-	if the key code 256 is down in window:
+	if key (the GLFW escape key) is down in window:
 		request that window close
-	if the key code 82 is down in window:
+	if key 82 is down in window:
 		initialize the machine
 		load the assembled program into the machine
 
