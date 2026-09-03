@@ -689,6 +689,15 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		// Non-flex pattern: emit the exact monomorphized function selected by inference.
 		Instantiation *inst = expr->selectedInstantiation;
 		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
+		if (inst->returnType.isMetaType()) {
+			if (inst->purity == InstantiationPurity::Pure &&
+				isCompileTimeKnown(resolveStoredCompileTimeValue(expr, context.flexBindingFrames)))
+				return nullptr;
+			context.diagnostics.push_back(
+				Diagnostic(context, Diagnostic::Level::Error, "compile time type value used at runtime", expr->range)
+			);
+			return CodegenResult::failure();
+		}
 		const std::vector<DataType> &argTypes = inst->argumentTypes;
 		requireCompilerInvariant(
 			argTypes.size() == paramBindings.size(), "selected instantiation argument count diverged from the call"

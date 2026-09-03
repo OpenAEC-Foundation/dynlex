@@ -839,12 +839,26 @@ case Expression::Kind::IntrinsicCall: {
 					constructionArgumentTypes.push_back(argumentType);
 				}
 				DataType typeRefType;
+				const std::vector<DataType> *constructionTypesForResolution =
+					allConstructionArgumentsDeduced && !constructionArgumentTypes.empty() ? &constructionArgumentTypes
+																						  : nullptr;
 				if (!resolveCompileTimeTypeReference(
 						context.parseContext, expr->arguments[1], flexBindingFrameStack, typeRefType, &context,
-						allConstructionArgumentsDeduced ? &constructionArgumentTypes : nullptr
+						constructionTypesForResolution
 					) ||
 					typeRefType.kind != DataType::Kind::Type) {
 					setConfiguredTypeFailure(expr->range, "construct requires compile-time type reference");
+					break;
+				}
+				if (expr->arguments.size() == 2) {
+					DataType targetType = typeRefType.toReferencedType();
+					if (!targetType.isConcrete() || !targetType.isRuntimeValueType()) {
+						setConfiguredTypeFailure(
+							expr->range, "type cannot be constructed", "message", {{"type", typeToUserName(targetType)}}
+						);
+						break;
+					}
+					expr->type = targetType;
 					break;
 				}
 				if (typeRefType.referencedKind == DataType::Kind::Array) {

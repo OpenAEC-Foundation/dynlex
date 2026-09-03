@@ -1,0 +1,19 @@
+import lib/std.dl
+import lib/matrix.dl
+
+class:
+    patterns:
+        [a|] car
+    members:
+        speed as an integer
+
+set vehicle_type to a car
+set vehicle to a new car
+set transform_type to a 3 by 3 matrix
+set transform to a new 3 by 3 matrix
+
+print the speed of vehicle as a line
+print the item at 0 in the values of transform as a line
+print the size of transform_type as a line
+ignore @intrinsic("size of", vehicle_type)
+ignore @intrinsic("size of", transform_type)

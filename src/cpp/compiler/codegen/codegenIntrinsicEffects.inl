@@ -503,6 +503,13 @@ if (kind == IntrinsicKind::AddPointerDepth) {
 }
 
 if (kind == IntrinsicKind::Construct) {
+	if (args.size() == 2) {
+		requireCompilerInvariant(
+			resultType.isConcrete() && resultType.isRuntimeValueType(),
+			"value initialization reached codegen without a concrete runtime type"
+		);
+		return llvm::Constant::getNullValue(getLLVMType(context, resultType));
+	}
 	if (resultType.kind == DataType::Kind::Array) {
 		llvm::Type *arrayType = getLLVMType(context, resultType);
 		llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);

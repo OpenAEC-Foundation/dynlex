@@ -523,6 +523,11 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			}
 		} else if (kind == IntrinsicKind::Construct) {
 			DataType typeRefType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (resolved->arguments.size() == 2 && typeRefType.kind == DataType::Kind::Type) {
+				DataType targetType = typeRefType.toReferencedType();
+				if (targetType.isConcrete() && targetType.isRuntimeValueType())
+					return targetType;
+			}
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
 				DataType arrayType = typeRefType.toReferencedType();
 				if (arrayType.arraySize == static_cast<int>(resolved->arguments.size()) - 2) {

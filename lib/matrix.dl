@@ -4,15 +4,19 @@ class:
 	patterns:
 		[a|] CPU {fixed integer:rows} by {fixed integer:columns} matrix
 	members:
-		values as an array of rows * columns items
+		values as rows * columns a 32 bit floating-point number array
 
-function a GPU {fixed integer:rows} by {fixed integer:columns} matrix:
+function [a|] GPU {fixed integer:rows} by {fixed integer:columns} matrix:
 	replacement:
 		@intrinsic("matrix", rows, columns)
 
-function a {fixed integer:rows} by {fixed integer:columns} matrix:
+function [a|] {fixed integer:rows} by {fixed integer:columns} matrix:
 	replacement:
 		a GPU rows by columns matrix if the build target is GPU, else a CPU rows by columns matrix
+
+function a new {fixed integer:rows} by {fixed integer:columns} matrix:
+	replacement:
+		@intrinsic("construct", a rows by columns matrix)
 
 function a new {fixed integer:rows} by {fixed integer:columns} matrix from value:
 	replacement:
