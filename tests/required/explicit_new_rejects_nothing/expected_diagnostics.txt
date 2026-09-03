@@ -1,0 +1,4 @@
+lib/std.dl:9-38: Error: Type 'nothing' cannot be constructed
+  note: while inferring intrinsic 'construct' in '@intrinsic("construct", kind)' with arguments [a type] -> an unresolved value lib/std.dl:9-38
+  note: while inferring call 'set impossible to a new nothing' with arguments [a type] -> an unresolved value tests/required/explicit_new_rejects_nothing/main.dl:19-32
+  note: while inferring call 'set impossible to a new nothing' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/explicit_new_rejects_nothing/main.dl:1-32

@@ -482,6 +482,8 @@ CodegenResult generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Store) {
 		DataType valType = finalizedExpressionType(context, args[2]);
+		if (valType.isMetaType())
+			return nullptr;
 		CodegenResult generatedValue = generateExpressionCode(context, args[2]);
 		if (!generatedValue)
 			return generatedValue;

@@ -258,7 +258,8 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 	bool valueDependsOnInProgressInstantiation = valueObservation.observed();
 
-	if (valueType.isMetaType()) {
+	if (valueType.isMetaType() && (!isCompileTimeKnown(context.lookupExpressionValue(valueExpr)) ||
+								   destinationExpr->kind != Expression::Kind::Variable || !destinationExpr->variable)) {
 		context.setTypeFailure("compile time type value used at runtime");
 		return;
 	}
@@ -278,7 +279,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		context.insertTypeFailureCause(std::move(unboundParameterInfo));
 		return;
 	}
-	if (!valueType.isRuntimeValueType()) {
+	if (!valueType.isRuntimeValueType() && !valueType.isMetaType()) {
 		std::string valueText = storeValueText(valueExpr);
 		context.setTypeFailure(renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, valueExpr ? valueExpr->range : expr->range), "store value not runtime",

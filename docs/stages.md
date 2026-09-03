@@ -186,6 +186,8 @@ When processing a function call, we infer that function right away so we can kno
 
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
 
+Type phrases describe types. Direct value construction is explicit: `a new {type}` value-initializes a concrete runtime type, while `a new {type} from ...` supplies constructor values. `nothing` is not constructible. `return nothing` is the sole natural-language exception: it is a valueless return, whereas `return the type nothing` returns the compile-time type value.
+
 `(print value) as a line` is incorrect, since `nothing` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `nothing`.
 
 We know this because we instantiate `print value` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.

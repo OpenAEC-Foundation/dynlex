@@ -4,6 +4,10 @@ import lib/string.dl
 
 # --- Basic patterns ---
 
+function return [nothing]:
+    replacement:
+        @intrinsic("return")
+
 function return value:
     replacement:
         @intrinsic("return", value)
@@ -11,6 +15,10 @@ function return value:
 function a new {type:kind} from value:
 	replacement:
 		@intrinsic("construct", kind, value)
+
+function a new {type:kind}:
+    replacement:
+        @intrinsic("construct", kind)
 
 # --- Variables ---
 
@@ -89,6 +97,10 @@ function [a|] {fixed integer:bits} bit value:
         @intrinsic("type", "any", bits)
 
 function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+
+function the type [nothing]:
     replacement:
         @intrinsic("type", "nothing")
 

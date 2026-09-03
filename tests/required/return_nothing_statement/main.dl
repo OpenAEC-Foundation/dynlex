@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function stop early:
+    execute:
+        return nothing
+
+stop early
+print "unreachable" as a line

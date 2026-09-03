@@ -141,6 +141,7 @@ dynlex options:
         spirv patch failed: "{error}"
         array literal element type mismatch: "Array literal elements must have matching or compatible numeric types"
         compile time type value used at runtime: "compile-time type values cannot be used as runtime values"
+        type cannot be constructed: "Type '{type}' cannot be constructed"
         min max requires arithmetic operands: "min/max operands must be arithmetic-compatible"
         address of requires addressable value: "address of requires an addressable value"
         store at requires pointer: "store at requires a pointer argument"
