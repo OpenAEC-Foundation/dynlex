@@ -37,6 +37,14 @@ Patterns are matched. Here we identify:
 - What is a variable
 - What is an argument
 
+Pattern resolution commits explicit validity boundaries. Definitions and all
+references inside their bodies become valid together before top-level references
+are attempted. Top-level references become valid at the next boundary, followed
+by the precedence graph. Expression expansion and variable binding complete the
+full resolved-pattern stage. Language tooling may consume only data guaranteed by
+the latest completed boundary; failed later work does not make its partial state
+observable.
+
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.

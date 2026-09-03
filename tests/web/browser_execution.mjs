@@ -786,6 +786,42 @@ await waitFor(
 );
 await dispatchKey("Escape", "Escape", 27);
 await captureScreenshot("ide-finished");
+
+async function replaceActiveLine(text) {
+  await dispatchKey("Home", "Home", 36);
+  await dispatchKey("End", "End", 35, 8);
+  await command("Input.insertText", { text });
+}
+
+await replaceMonacoSource(`import lib/std.dl
+
+print 1 as a line`);
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the diagnostic regression source");
+await findMonacoText("print 1 as a line");
+await replaceActiveLine("add 2 to x");
+await waitFor("document.querySelector('#status-text')?.textContent === 'Build failed'", "the active invalid line build");
+assert.equal(await evaluate("document.querySelector('#diagnostics-count').textContent"), "0");
+await dispatchKey("Escape", "Escape", 27);
+await dispatchKey("ArrowUp", "ArrowUp", 38);
+await waitFor(
+  "document.querySelector('#diagnostics-list')?.textContent.includes(\"the assigned value 'x' has no type\")",
+  "moving off an invalid line to reveal its imported-library diagnostic"
+);
+
+await navigate("/ide/");
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the IDE to reinitialize");
+await replaceMonacoSource(`import lib/std.dl
+
+print 1 as a line`);
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the explicit-run regression source");
+await findMonacoText("print 1 as a line");
+await replaceActiveLine("add 2 to x");
+await waitFor("!document.querySelector('#run-button').disabled", "Run to remain available after the invalid background build");
+await clickElement("#run-button");
+await waitFor(
+  "document.querySelector('#diagnostics-list')?.textContent.includes(\"the assigned value 'x' has no type\")",
+  "Run to commit the active invalid line and reveal its diagnostic"
+);
 await command("Emulation.setDeviceMetricsOverride", {
   width: 2560,
   height: 900,

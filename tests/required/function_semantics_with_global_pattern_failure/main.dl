@@ -1,0 +1,5 @@
+function value squared:
+    replacement:
+        @intrinsic("return", value)
+
+square x

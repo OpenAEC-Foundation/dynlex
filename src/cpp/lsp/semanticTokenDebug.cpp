@@ -256,6 +256,18 @@ static size_t trimRightIndex(std::string_view text) {
 	return end;
 }
 
+static bool isInsidePatternDefinition(const Section *section) {
+	for (const Section *current = section; current; current = current->parent) {
+		if (!current->patternDefinitions.empty())
+			return true;
+	}
+	return false;
+}
+
+static bool isInsidePatternDefinition(const CodeLine *line) {
+	return line && (isInsidePatternDefinition(line->section) || isInsidePatternDefinition(line->sectionOpening));
+}
+
 std::vector<SemanticToken> collectLiveLineSemanticTokens(
 	const ParseContext *context, const TextDocument &document, const std::string &uri, int lineIndex
 ) {
@@ -350,6 +362,8 @@ std::vector<std::vector<SemanticToken>>
 collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCount, bool suppressOnFileErrors) {
 	if (!context.hasCompleted(ParseContext::CompilationStage::AnalyzedSections))
 		return {};
+	const bool hasFunctionPatterns = context.hasCompleted(ParseContext::CompilationStage::ResolvedFunctionPatterns);
+	const bool hasAllPatterns = context.hasCompleted(ParseContext::CompilationStage::ResolvedPatterns);
 
 	if (suppressOnFileErrors) {
 		bool hasErrors = std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [&uri](const ::Diagnostic &d) {
@@ -386,26 +400,32 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		addTokenWithModifiers(range, type, semanticTokenModifiers(isDefinition, false));
 	};
 
-	std::function<void(Section *)> tokenizeVariables = [&](Section *section) {
-		for (auto &[name, refs] : section->variableReferences) {
-			(void)name;
-			for (VariableReference *ref : refs) {
-				std::optional<MappedRange> mappedRange = mappedRangeForUri(ref->range);
-				if (!mappedRange)
-					continue;
-				addMappedTokenWithModifiers(
-					*mappedRange, SemanticTokenType::Variable,
-					semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
-				);
+	std::function<void(Section *, bool)> tokenizeVariables = [&](Section *section, bool insideDefinition) {
+		const bool currentInsideDefinition = insideDefinition || !section->patternDefinitions.empty();
+		if (hasAllPatterns || (hasFunctionPatterns && currentInsideDefinition)) {
+			for (auto &[name, refs] : section->variableReferences) {
+				(void)name;
+				for (VariableReference *ref : refs) {
+					std::optional<MappedRange> mappedRange = mappedRangeForUri(ref->range);
+					if (!mappedRange)
+						continue;
+					addMappedTokenWithModifiers(
+						*mappedRange, SemanticTokenType::Variable,
+						semanticTokenModifiers(ref->isDefinition(), isCompileTimeVariableReference(context, ref))
+					);
+				}
 			}
 		}
 		for (Section *child : section->children)
-			tokenizeVariables(child);
+			tokenizeVariables(child, currentInsideDefinition);
 	};
-	tokenizeVariables(context.mainSection);
+	tokenizeVariables(context.mainSection, false);
 
 	for (const ParseContext::SourceTokenAnnotation &annotation : context.sourceTokenAnnotations) {
 		if (!mappedRangeForUri(annotation.range))
+			continue;
+		if (!hasAllPatterns &&
+			(!hasFunctionPatterns || !annotation.range.line || !isInsidePatternDefinition(annotation.range.line->section)))
 			continue;
 		switch (annotation.kind) {
 		case ParseContext::SourceTokenKind::Keyword:
@@ -462,7 +482,8 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	};
 
 	for (CodeLine *line : context.codeLines) {
-		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression)
+		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression ||
+			(!hasAllPatterns && (!hasFunctionPatterns || !isInsidePatternDefinition(line))))
 			continue;
 		tokenizeExpression(line->expression);
 	}
@@ -477,13 +498,15 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		addToken(::Range(line, *importPath), SemanticTokenType::String, false);
 	}
 
-	std::function<void(Section *)> tokenizePatternDefinitions = [&](Section *section) {
-		for (PatternDefinition *def : section->patternDefinitions)
-			addPatternDefinitionTokens(def->range, addToken);
-		for (Section *child : section->children)
-			tokenizePatternDefinitions(child);
-	};
-	tokenizePatternDefinitions(context.mainSection);
+	if (hasFunctionPatterns) {
+		std::function<void(Section *)> tokenizePatternDefinitions = [&](Section *section) {
+			for (PatternDefinition *def : section->patternDefinitions)
+				addPatternDefinitionTokens(def->range, addToken);
+			for (Section *child : section->children)
+				tokenizePatternDefinitions(child);
+		};
+		tokenizePatternDefinitions(context.mainSection);
+	}
 
 	for (CodeLine *line : context.codeLines) {
 		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->sectionOpening)

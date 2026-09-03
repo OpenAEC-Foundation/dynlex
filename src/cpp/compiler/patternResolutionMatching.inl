@@ -681,13 +681,12 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	};
 
-	// Phase 2 depends on fully-resolved definitions. If phase 1 hit max iterations
-	// and left unresolved sections, report them directly.
-	if (!unResolvedSections.empty()) {
+	// Commit phase 1 only after definitions and definition bodies are fully resolved.
+	if (!unResolvedSections.empty() || !bodyReferences.empty()) {
 		emitUnresolvedPatternDiagnostics();
 		return false;
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedFunctionPatterns;
 	// Phase 2: resolve global references (all definitions are now in the tree).
 	// Typed-domain conflicts are checked after signature inference, when every
 	// constraint has a concrete type.
@@ -700,11 +699,11 @@ bool resolvePatterns(ParseContext &context) {
 			break;
 	}
 
-	if (!bodyReferences.empty() || !globalReferences.empty()) {
+	if (!globalReferences.empty()) {
 		emitUnresolvedPatternDiagnostics();
 		return false;
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedGlobalPatterns;
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
@@ -884,7 +883,7 @@ bool resolvePatterns(ParseContext &context) {
 			// handles grouping selection using the resolved partial order.
 		}
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;
 	// All patterns resolved — expand expressions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
 		if (line->expression)
