@@ -949,7 +949,7 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 	for (ParseContext *context : contexts) {
 		if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections))
 			continue;
-		const auto contextTokens = collectSemanticTokens(*context, uri, docIt->second->lineCount(), true);
+		const auto contextTokens = collectSemanticTokens(*context, uri, docIt->second->lineCount(), false);
 		for (size_t lineIndex = 0; lineIndex < contextTokens.size(); ++lineIndex) {
 			for (const SemanticToken &token : contextTokens[lineIndex])
 				mergedTokens.add(static_cast<int>(lineIndex), token);

@@ -164,35 +164,49 @@ export class DynLexLanguageFeatures {
       version: model.getVersionId(),
       text: model.getValue()
     });
-    const contentListener = model.onDidChangeContent((event) => {
+    const contentListener = model.onDidChangeContent(() => {
       this.#runDocumentOperation(
-        document.applyChanges(
-          event.changes.map((change) => ({
-            range: rangeToLsp(change.range),
-            rangeLength: change.rangeLength,
-            text: change.text
-          })),
-          {
-            version: model.getVersionId(),
-            text: model.getValue()
-          }
-        )
+        document.replaceText(model.getValue(), {
+          version: model.getVersionId()
+        })
       );
     });
     this.openDocuments.set(uri, { model, document, contentListener });
     const diagnostics = this.diagnosticsByUri.get(uri);
-    if (diagnostics) {
-      this.#setModelMarkers(model, diagnostics);
+    if (diagnostics || this.#hasRelatedDiagnostics(uri)) {
+      this.#setModelMarkers(model, uri);
     }
     this.onDocumentsChanged?.([...this.openDocuments.values()].map((entry) => entry.model));
   }
 
   async showDocument(uri, selection) {
-    const entry = this.openDocuments.get(uri);
-    if (!entry) {
-      throw new Error(`DynLex document is not open: ${uri}`);
+    const model = await this.#modelForUri(uri);
+    await this.#activateModel(model, selection);
+  }
+
+  async commitActiveLine() {
+    await this.session.clearActiveCursor();
+    await this.#sendActiveCursor();
+  }
+
+  async #modelForUri(uri) {
+    const openEntry = this.openDocuments.get(uri);
+    if (openEntry) {
+      return openEntry.model;
     }
-    await this.#activateModel(entry.model, selection);
+    const resource = this.monaco.Uri.parse(uri);
+    const existingModel = this.monaco.editor.getModel(resource);
+    if (existingModel) {
+      await this.#openDocument(existingModel);
+      return existingModel;
+    }
+    const source = await this.#request("dynlex/readDocument", { uri });
+    if (typeof source !== "string") {
+      throw new Error(`DynLex document is unavailable: ${uri}`);
+    }
+    const model = this.monaco.editor.createModel(source, "dynlex", resource);
+    await this.#openDocument(model);
+    return model;
   }
 
   async #activateModel(targetModel, selection) {
@@ -425,21 +439,7 @@ export class DynLexLanguageFeatures {
     this.disposables.push(
       this.monaco.editor.registerEditorOpener({
         openCodeEditor: async (sourceEditor, resource, selection) => {
-          let targetModel = this.monaco.editor.getModel(resource);
-          let needsDidOpen = false;
-          if (!targetModel) {
-            const source = await this.#request("dynlex/readDocument", {
-              uri: resource.toString()
-            });
-            if (typeof source !== "string") {
-              return false;
-            }
-            targetModel = this.monaco.editor.createModel(source, "dynlex", resource);
-            needsDidOpen = true;
-          }
-          if (needsDidOpen) {
-            await this.#openDocument(targetModel);
-          }
+          const targetModel = await this.#modelForUri(resource.toString());
           await this.#activateModel(targetModel, selection);
           return true;
         }
@@ -467,7 +467,10 @@ export class DynLexLanguageFeatures {
     if (!entry) {
       throw new Error(`Active DynLex document is not open: ${model.uri.toString()}`);
     }
-    await entry.document.setActiveCursor(positionToLsp(position));
+    await entry.document.replaceText(model.getValue(), {
+      version: model.getVersionId(),
+      position: positionToLsp(position)
+    });
   }
 
   #publishDiagnostics(params) {
@@ -475,20 +478,42 @@ export class DynLexLanguageFeatures {
       throw new Error("DynLex language server published invalid diagnostics");
     }
     this.diagnosticsByUri.set(params.uri, params.diagnostics);
-    const model = this.monaco.editor.getModel(this.monaco.Uri.parse(params.uri));
-    if (model) {
-      this.#setModelMarkers(model, params.diagnostics);
+    for (const model of this.monaco.editor.getModels()) {
+      if (model.getLanguageId() === "dynlex") {
+        this.#setModelMarkers(model, model.uri.toString());
+      }
     }
     this.onDiagnostics?.(params.uri, params.diagnostics);
   }
 
-  #setModelMarkers(model, diagnostics) {
-    const markers = diagnostics.map((diagnostic) => ({
+  #hasRelatedDiagnostics(uri) {
+    return [...this.diagnosticsByUri.values()].some((diagnostics) => diagnostics.some((diagnostic) => (
+      diagnostic.relatedInformation?.some((related) => related.location.uri === uri)
+    )));
+  }
+
+  #setModelMarkers(model, uri) {
+    const markers = (this.diagnosticsByUri.get(uri) ?? []).map((diagnostic) => ({
       ...rangeFromLsp(diagnostic.range),
       severity: diagnosticSeverityFromLsp(diagnostic.severity, this.monaco.MarkerSeverity),
       message: diagnostic.message,
       source: diagnostic.source ?? "dynlex"
     }));
+    for (const diagnostics of this.diagnosticsByUri.values()) {
+      for (const diagnostic of diagnostics) {
+        for (const related of diagnostic.relatedInformation ?? []) {
+          if (related.location.uri !== uri) {
+            continue;
+          }
+          markers.push({
+            ...rangeFromLsp(related.location.range),
+            severity: diagnosticSeverityFromLsp(diagnostic.severity, this.monaco.MarkerSeverity),
+            message: related.message,
+            source: diagnostic.source ?? "dynlex"
+          });
+        }
+      }
+    }
     this.monaco.editor.setModelMarkers(model, "dynlex-lsp", markers);
   }
 

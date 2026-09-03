@@ -7,6 +7,16 @@ import {
 } from "./runtimeImports.js";
 
 const compilerBasePath = "/compiler/";
+const compilerRevision = new URL(self.location.href).searchParams.get("revision");
+if (!compilerRevision) {
+  throw new Error("Compiler worker requires an artifact revision");
+}
+
+function compilerAssetUrl(path) {
+  const url = new URL(`${compilerBasePath}${path}`, self.location.origin);
+  url.searchParams.set("revision", compilerRevision);
+  return url.href;
+}
 
 const state = {
   compilerModule: null,
@@ -75,7 +85,7 @@ async function ensureCompilerInitialized() {
     return;
   }
 
-  const imported = await import(/* @vite-ignore */ `${compilerBasePath}dynlex_web.js`);
+  const imported = await import(/* @vite-ignore */ compilerAssetUrl("dynlex_web.js"));
   const createModule = imported.default ?? imported;
   if (typeof createModule !== "function") {
     throw new Error("dynlex_web.js did not export a module factory.");
@@ -83,7 +93,7 @@ async function ensureCompilerInitialized() {
 
   state.compilerModule = await createModule({
     locateFile(path) {
-      return `${compilerBasePath}${path}`;
+      return compilerAssetUrl(path);
     }
   });
   state.compilerModule.ccall("dynlex_web_init", null, [], []);

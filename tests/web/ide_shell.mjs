@@ -40,6 +40,8 @@ assert.match(html, /<img[^>]+class="ide-logo"[^>]+src="\/icons\/dynlex-icon\.svg
 assert.doesNotMatch(html, /LLVM|WebAssembly|WASM|compiler runs/i);
 assert.doesNotMatch(html, /\sstyle="/i, "IDE presentation belongs in styles.css");
 assert.match(javascript, /from "monaco-editor\/editor"/);
+assert.match(javascript, /commitActiveLine/);
+assert.match(javascript, /diagnosticsByUri/);
 for (const contribution of [
   "clipboard",
   "codeAction",
@@ -106,6 +108,9 @@ for (const method of [
 }
 assert.match(compilerWorker, /"lsp\.exchange"/);
 assert.match(compilerWorker, /dynlex_web_lsp_exchange_json/);
+assert.match(compilerWorker, /compilerRevision/);
+assert.match(compilerWorker, /compilerAssetUrl/);
+assert.match(javascript, /__DYNLEX_COMPILER_REVISION__/);
 assert.doesNotMatch(compilerWorker, /dynlex_web_get_lsp_(?:hover|definition|semantic_tokens)_json/);
 assert.doesNotMatch(
   html,
@@ -114,8 +119,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(html, /class="start-guide"/, "The IDE must not prescribe a write-check-run sequence");
 assert.doesNotMatch(html, /id="compile-button"/, "Live analysis makes a separate check button redundant");
-assert.match(html, /<aside class="project-panel" aria-label="Project files">/);
-assert.match(javascript, /new Worker\("\/compiler\/compiler-worker\.js"/);
+assert.match(html, /<aside id="project-panel" class="project-panel" aria-label="Project files">/);
+assert.match(javascript, /new Worker\(compilerWorkerUrl/);
 assert.match(javascript, /URLSearchParams/);
 assert.match(javascript, /mode.*shader/);
 assert.match(javascript, /shaders\/manifest\.json/);
@@ -135,6 +140,11 @@ for (const requiredId of [
   "editor",
   "run-button",
   "theme-button",
+  "project-panel-button",
+  "tool-panel-button",
+  "workspace-panel-backdrop",
+  "project-panel",
+  "tool-panel",
   "status-pill",
   "diagnostics-empty",
   "diagnostics-list",

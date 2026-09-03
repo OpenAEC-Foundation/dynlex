@@ -74,6 +74,9 @@ struct ParseContext {
 	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.
 	// - ImportedFiles: importedFiles, mainSourceFile, codeLines, and diagnostics gathered during file loading are valid.
 	// - AnalyzedSections: mainSection exists and the section tree / CodeLine.section assignments are valid.
+	// - ResolvedFunctionPatterns: pattern definitions and references inside definition bodies are valid.
+	// - ResolvedGlobalPatterns: top-level pattern references are also valid.
+	// - ResolvedPatternPrecedence: the source-declared precedence graph is valid.
 	// - ResolvedPatterns: patternTrees, pattern definitions, variable references, and pattern matches are valid.
 	// - Validated: validation diagnostics that depend on resolved symbols have been emitted.
 	// - InferredTypes: inferred expression / variable / return types are valid for the compiled program.
@@ -81,6 +84,9 @@ struct ParseContext {
 		NotStarted,
 		ImportedFiles,
 		AnalyzedSections,
+		ResolvedFunctionPatterns,
+		ResolvedGlobalPatterns,
+		ResolvedPatternPrecedence,
 		ResolvedPatterns,
 		Validated,
 		InferredTypes,
