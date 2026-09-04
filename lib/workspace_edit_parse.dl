@@ -42,22 +42,14 @@ local function a new ordered name collection:
 
 local function append ordered name {string:value} to {a pointer to an ordered name collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a string,
-                the items of collection,
-                growth * the size of a string
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a string
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 local function the ordered name at {integer:position} in {a pointer to an ordered name collection:collection}:
     execute:

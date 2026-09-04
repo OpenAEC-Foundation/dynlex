@@ -69,26 +69,14 @@ local function a new YAML mapping node named {string:name} at source position {i
 
 local function add {a pointer to a YAML mapping node:child} to the YAML mapping {a pointer to a YAML mapping node:parent}:
     execute:
-        if the length of parent = the capacity of parent:
-            set capacity to the capacity of parent
-            if capacity < 4:
-                set capacity to 4
-            else:
-                set capacity to (capacity * 2)
-            set children to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a YAML mapping node,
-                the children of parent,
-                capacity * the size of a pointer to a YAML mapping node
-            )
-            if children = (0 as a pointer to a pointer to a YAML mapping node):
-                @intrinsic("call", "libc", "abort", nothing)
+        set required to the collection length after adding one item to the length of parent
+        set capacity to the collection capacity from the capacity of parent expanded to hold required items
+        if capacity > the capacity of parent:
+            set children to the checked allocation from ((the children of parent) as a pointer) resized to capacity items of a pointer to a YAML mapping node
             set the children of parent to children
             set the capacity of parent to capacity
         @intrinsic("initialize at", (the children of parent) + (the length of parent), child)
-        set the length of parent to ((the length of parent) + 1)
+        set the length of parent to required
 
 local function the YAML child index named {string:name} in {a pointer to a YAML mapping node:parent}:
     execute:

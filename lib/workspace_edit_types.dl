@@ -177,22 +177,14 @@ function a new workspace text edit collection:
 
 function append {a pointer to a workspace text edit:value} to workspace text edits {a pointer to a workspace text edit collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace text edit,
-                the items of collection,
-                growth * the size of a pointer to a workspace text edit
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace text edit
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the workspace text edit at index {integer:position} in {a pointer to a workspace text edit collection:collection}:
     execute:
@@ -214,22 +206,14 @@ function a new workspace annotation collection:
 
 function append {a pointer to a workspace change annotation:value} to workspace annotations {a pointer to a workspace annotation collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace change annotation,
-                the items of collection,
-                growth * the size of a pointer to a workspace change annotation
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace change annotation
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the workspace change annotation at index {integer:position} in {a pointer to a workspace annotation collection:collection}:
     execute:
@@ -251,22 +235,14 @@ function a new workspace change collection:
 
 function append {a pointer to a workspace edit change:value} to workspace changes {a pointer to a workspace change collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace edit change,
-                the items of collection,
-                growth * the size of a pointer to a workspace edit change
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace edit change
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the workspace change at index {integer:position} in {a pointer to a workspace change collection:collection}:
     execute:

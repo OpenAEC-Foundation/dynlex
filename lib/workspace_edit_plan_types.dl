@@ -129,22 +129,14 @@ local function a new workspace resource snapshot collection:
 
 function append workspace resource snapshot {a pointer to a workspace resource snapshot:value} to {a pointer to a workspace resource snapshot collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace resource snapshot,
-                the items of collection,
-                growth * the size of a pointer to a workspace resource snapshot
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace resource snapshot
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the workspace resource snapshot at {integer:position} in {a pointer to a workspace resource snapshot collection:collection}:
     execute:
@@ -166,22 +158,14 @@ local function a new normalized workspace change collection:
 
 function append normalized workspace change {a pointer to a normalized workspace change:value} to {a pointer to a normalized workspace change collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a normalized workspace change,
-                the items of collection,
-                growth * the size of a pointer to a normalized workspace change
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a normalized workspace change
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the normalized workspace change at {integer:position} in {a pointer to a normalized workspace change collection:collection}:
     execute:
@@ -203,22 +187,14 @@ local function a new planned workspace operation collection:
 
 function append planned workspace operation {a pointer to a planned workspace operation:value} to {a pointer to a planned workspace operation collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a planned workspace operation,
-                the items of collection,
-                growth * the size of a pointer to a planned workspace operation
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a planned workspace operation
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the planned workspace operation at {integer:position} in {a pointer to a planned workspace operation collection:collection}:
     execute:

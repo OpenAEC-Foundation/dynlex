@@ -1,0 +1,6 @@
+import list.dl
+
+set values to an empty list of an integer
+append 1 to values
+print the item at 0 in values as a line
+free values

@@ -244,6 +244,62 @@ function the item at index in address:
     replacement:
         @intrinsic("dereference", address + index)
 
+# --- Dynamic allocations ---
+
+local function stop because a collection allocation failed:
+    execute:
+        @intrinsic("call", "libc", "abort", nothing)
+
+local function the maximum collection capacity:
+    replacement:
+        2147483647
+
+local function the maximum allocation byte count:
+    execute:
+        if the build word size = 32:
+            return 2147483647 as a word sized integer
+        return 9223372036854775807 as a word sized integer
+
+function the expanded collection capacity after {integer:capacity}:
+    execute:
+        if capacity < 0 or capacity >= the maximum collection capacity:
+            stop because a collection allocation failed
+        if capacity < 4:
+            return 4
+        if capacity > the maximum collection capacity / 2:
+            return the maximum collection capacity
+        return capacity * 2
+
+function the collection length after adding one item to {integer:length}:
+    execute:
+        if length < 0 or length >= the maximum collection capacity:
+            stop because a collection allocation failed
+        return length + 1
+
+function the collection capacity from {integer:capacity} expanded to hold {integer:count} items:
+    execute:
+        if (capacity < 0) or ((count < 0) or (count > the maximum collection capacity)):
+            stop because a collection allocation failed
+        set limit to capacity
+        loop while limit < count:
+            set limit to the expanded collection capacity after limit
+        return limit
+
+function the checked allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
+    execute:
+        if count <= 0:
+            stop because a collection allocation failed
+        if the build word size = 32 and count > 2147483647:
+            stop because a collection allocation failed
+        set quantity to count as a word sized integer
+        set width to (the size of kind) as a word sized integer
+        if quantity > (the maximum allocation byte count / width):
+            stop because a collection allocation failed
+        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+        if replacement = 0 as a pointer to kind:
+            stop because a collection allocation failed
+        return replacement
+
 # --- Arithmetic (with precedence) ---
 
 # Precedence chain (lowest to highest):

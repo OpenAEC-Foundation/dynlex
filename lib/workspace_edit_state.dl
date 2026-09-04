@@ -118,22 +118,14 @@ local function a new workspace open document collection:
 
 local function append workspace open document {a pointer to a workspace open document:value} to {a pointer to a workspace open document collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace open document,
-                the items of collection,
-                growth * the size of a pointer to a workspace open document
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace open document
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 function the workspace open document at index {integer:position} in {a pointer to a workspace open document collection:collection}:
     execute:
@@ -165,22 +157,14 @@ local function a new workspace annotation decision collection:
 
 local function append {a pointer to a workspace annotation decision:value} to {a pointer to a workspace annotation decision collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace annotation decision,
-                the items of collection,
-                growth * the size of a pointer to a workspace annotation decision
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace annotation decision
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 local function the workspace annotation decision at {integer:position} in {a pointer to a workspace annotation decision collection:collection}:
     execute:

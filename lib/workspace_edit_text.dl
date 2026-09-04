@@ -141,22 +141,14 @@ local function a new prepared workspace text edit collection:
 
 local function append {prepared workspace text edit:value} to prepared workspace edits {a pointer to a prepared workspace text edit collection:collection}:
     execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a prepared workspace text edit,
-                the items of collection,
-                growth * the size of a prepared workspace text edit
-            )
+        set required to the collection length after adding one item to the length of collection
+        set growth to the collection capacity from the capacity of collection expanded to hold required items
+        if growth > the capacity of collection:
+            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a prepared workspace text edit
             set the items of collection to resized
             set the capacity of collection to growth
         @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+        set the length of collection to required
 
 local function the prepared workspace text edit at {integer:position} in {a pointer to a prepared workspace text edit collection:collection}:
     execute:
@@ -188,22 +180,14 @@ local function a new workspace edit index collection:
 
 local function append workspace edit index {integer:value} to {a pointer to a workspace edit index collection:sequence}:
     execute:
-        if the length of sequence = the capacity of sequence:
-            set growth to ((the capacity of sequence) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to an integer,
-                the items of sequence,
-                growth * the size of an integer
-            )
+        set required to the collection length after adding one item to the length of sequence
+        set growth to the collection capacity from the capacity of sequence expanded to hold required items
+        if growth > the capacity of sequence:
+            set resized to the checked allocation from ((the items of sequence) as a pointer) resized to growth items of an integer
             set the items of sequence to resized
             set the capacity of sequence to growth
         @intrinsic("initialize at", (the items of sequence) + (the length of sequence), value)
-        set the length of sequence to ((the length of sequence) + 1)
+        set the length of sequence to required
 
 local function the workspace edit index at {integer:position} in {a pointer to a workspace edit index collection:sequence}:
     execute:

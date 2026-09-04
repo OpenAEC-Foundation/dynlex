@@ -140,42 +140,13 @@ function an empty OBJ mesh:
         set quantities to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
         return a new OBJ mesh backed by (0 as a pointer to an OBJ vertex), (0 as a pointer to an OBJ texture coordinate), (0 as a pointer to an OBJ triangle) and (0 as a pointer to an OBJ material), sized according to quantities
 
-local function stop because an OBJ allocation failed:
-    execute:
-        @intrinsic("call", "libc", "abort", nothing)
-
-local function the maximum OBJ allocation byte count:
-    execute:
-        if the build word size = 32:
-            return 2147483647 as a word sized integer
-        return 9223372036854775807 as a word sized integer
-
-local function the OBJ allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
-    execute:
-        if count <= 0:
-            stop because an OBJ allocation failed
-        set quantity to count as a word sized integer
-        set width to (the size of kind) as a word sized integer
-        if quantity > (the maximum OBJ allocation byte count / width):
-            stop because an OBJ allocation failed
-        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
-        if replacement = 0 as a pointer to kind:
-            stop because an OBJ allocation failed
-        return replacement
-
-local function the expanded OBJ capacity after {integer:capacity}:
-    execute:
-        if capacity <= 0 or capacity > 1073741823:
-            stop because an OBJ allocation failed
-        return capacity * 2
-
 function a duplicated OBJ C string from source:
     execute:
         if source = 0 as a pointer to a byte:
             return 0 as a pointer to a byte
 
         set length to @intrinsic("call", "libc", "strlen", a word sized integer, source)
-        set copy to the OBJ allocation from (0 as a pointer to a byte) resized to (length + 1) items of a byte
+        set copy to the checked allocation from (0 as a pointer to a byte) resized to (length + 1) items of a byte
 
         ignore @intrinsic("call", "libc", "memcpy", a pointer to a byte, copy, source, length + 1)
         return copy
@@ -201,11 +172,11 @@ function a loaded OBJ material set from path for {pointer:window}:
 
         set capacity to 16
         set count to 0
-        set materials to the OBJ allocation from ((0 as a pointer to an OBJ material) as a pointer) resized to capacity items of an OBJ material
+        set materials to the checked allocation from ((0 as a pointer to an OBJ material) as a pointer) resized to capacity items of an OBJ material
 
-        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
-        set name to the OBJ allocation from (0 as a pointer to a byte) resized to 512 items of a byte
-        set texture to the OBJ allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
+        set line to the checked allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set name to the checked allocation from (0 as a pointer to a byte) resized to 512 items of a byte
+        set texture to the checked allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
 
         set current to -1
         set red to 0.8
@@ -216,8 +187,8 @@ function a loaded OBJ material set from path for {pointer:window}:
         while status != 0 as a pointer to a byte:
             if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "newmtl %511s", name) = 1:
                 if count >= capacity:
-                    set expanded to the expanded OBJ capacity after capacity
-                    set resized to the OBJ allocation from (materials as a pointer) resized to expanded items of an OBJ material
+                    set expanded to the expanded collection capacity after capacity
+                    set resized to the checked allocation from (materials as a pointer) resized to expanded items of an OBJ material
                     set materials to resized
                     set capacity to expanded
 
@@ -257,7 +228,7 @@ function a loaded OBJ material set from path for {pointer:window}:
             @intrinsic("call", "libc", "free", nothing, materials)
             set materials to (0 as a pointer to an OBJ material)
         else:
-            set materials to the OBJ allocation from (materials as a pointer) resized to count items of an OBJ material
+            set materials to the checked allocation from (materials as a pointer) resized to count items of an OBJ material
 
         return a new OBJ material set containing materials totalling count
 
@@ -277,8 +248,8 @@ function a loaded OBJ mesh from path for {pointer:window}:
         if scanner = 0 as a pointer to a byte:
             return an empty OBJ mesh
 
-        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
-        set library to the OBJ allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
+        set line to the checked allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set library to the checked allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
         set reference to 0 as a pointer to a byte
 
         set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
@@ -309,12 +280,12 @@ function a loaded OBJ mesh from path for {pointer:window}:
         set capacity to a new OBJ mesh quantities with vertices 1024, texture coordinates 1024, triangles 2048 and materials 0
         set count to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
 
-        set vertices to the OBJ allocation from ((0 as a pointer to an OBJ vertex) as a pointer) resized to capacity's vertices items of an OBJ vertex
-        set coordinates to the OBJ allocation from ((0 as a pointer to an OBJ texture coordinate) as a pointer) resized to capacity's texture coordinates items of an OBJ texture coordinate
-        set triangles to the OBJ allocation from ((0 as a pointer to an OBJ triangle) as a pointer) resized to capacity's triangles items of an OBJ triangle
+        set vertices to the checked allocation from ((0 as a pointer to an OBJ vertex) as a pointer) resized to capacity's vertices items of an OBJ vertex
+        set coordinates to the checked allocation from ((0 as a pointer to an OBJ texture coordinate) as a pointer) resized to capacity's texture coordinates items of an OBJ texture coordinate
+        set triangles to the checked allocation from ((0 as a pointer to an OBJ triangle) as a pointer) resized to capacity's triangles items of an OBJ triangle
 
-        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
-        set name to the OBJ allocation from (0 as a pointer to a byte) resized to 512 items of a byte
+        set line to the checked allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set name to the checked allocation from (0 as a pointer to a byte) resized to 512 items of a byte
         set current to -1
 
         set horizontal to 0.0
@@ -333,8 +304,8 @@ function a loaded OBJ mesh from path for {pointer:window}:
         while status != 0 as a pointer to a byte:
             if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth, the address of red, the address of green, the address of blue) = 6:
                 if count's vertices >= capacity's vertices:
-                    set expanded to the expanded OBJ capacity after capacity's vertices
-                    set resized to the OBJ allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
+                    set expanded to the expanded collection capacity after capacity's vertices
+                    set resized to the checked allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
                     set vertices to resized
                     set capacity's vertices to expanded
                 store a new colored OBJ vertex at x horizontal, y vertical and z depth in (a new OBJ color from red, green and blue) into vertices at count's vertices
@@ -342,8 +313,8 @@ function a loaded OBJ mesh from path for {pointer:window}:
             else:
                 if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth) = 3:
                     if count's vertices >= capacity's vertices:
-                        set expanded to the expanded OBJ capacity after capacity's vertices
-                        set resized to the OBJ allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
+                        set expanded to the expanded collection capacity after capacity's vertices
+                        set resized to the checked allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
                         set vertices to resized
                         set capacity's vertices to expanded
                     store a new OBJ vertex at x horizontal, y vertical and z depth into vertices at count's vertices
@@ -351,8 +322,8 @@ function a loaded OBJ mesh from path for {pointer:window}:
                 else:
                     if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "vt %lf %lf", the address of longitude, the address of latitude) = 2:
                         if count's texture coordinates >= capacity's texture coordinates:
-                            set expanded to the expanded OBJ capacity after capacity's texture coordinates
-                            set resized to the OBJ allocation from (coordinates as a pointer) resized to expanded items of an OBJ texture coordinate
+                            set expanded to the expanded collection capacity after capacity's texture coordinates
+                            set resized to the checked allocation from (coordinates as a pointer) resized to expanded items of an OBJ texture coordinate
                             set coordinates to resized
                             set capacity's texture coordinates to expanded
                         store a new OBJ texture coordinate with u longitude and v latitude into coordinates at count's texture coordinates
@@ -383,8 +354,8 @@ function a loaded OBJ mesh from path for {pointer:window}:
                                 set second to second converted to zero-based OBJ indices
                                 set third to third converted to zero-based OBJ indices
                                 if count's triangles >= capacity's triangles:
-                                    set expanded to the expanded OBJ capacity after capacity's triangles
-                                    set resized to the OBJ allocation from (triangles as a pointer) resized to expanded items of an OBJ triangle
+                                    set expanded to the expanded collection capacity after capacity's triangles
+                                    set resized to the checked allocation from (triangles as a pointer) resized to expanded items of an OBJ triangle
                                     set triangles to resized
                                     set capacity's triangles to expanded
                                 store a new OBJ triangle from first, second and third in material current into triangles at count's triangles
@@ -400,19 +371,19 @@ function a loaded OBJ mesh from path for {pointer:window}:
             @intrinsic("call", "libc", "free", nothing, vertices)
             set vertices to 0 as a pointer to an OBJ vertex
         else:
-            set vertices to the OBJ allocation from (vertices as a pointer) resized to count's vertices items of an OBJ vertex
+            set vertices to the checked allocation from (vertices as a pointer) resized to count's vertices items of an OBJ vertex
 
         if count's texture coordinates = 0:
             @intrinsic("call", "libc", "free", nothing, coordinates)
             set coordinates to 0 as a pointer to an OBJ texture coordinate
         else:
-            set coordinates to the OBJ allocation from (coordinates as a pointer) resized to count's texture coordinates items of an OBJ texture coordinate
+            set coordinates to the checked allocation from (coordinates as a pointer) resized to count's texture coordinates items of an OBJ texture coordinate
 
         if count's triangles = 0:
             @intrinsic("call", "libc", "free", nothing, triangles)
             set triangles to 0 as a pointer to an OBJ triangle
         else:
-            set triangles to the OBJ allocation from (triangles as a pointer) resized to count's triangles items of an OBJ triangle
+            set triangles to the checked allocation from (triangles as a pointer) resized to count's triangles items of an OBJ triangle
 
         set count's materials to total
         return a new OBJ mesh backed by vertices, coordinates, triangles and materials, sized according to count
