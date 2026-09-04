@@ -10,8 +10,7 @@ if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX"
 fi
 
 cleanup_test_output() {
-    rm -f "$TEST_OUTPUT_DIR/main.out" "$TEST_OUTPUT_DIR/main.exe"
-    rmdir "$TEST_OUTPUT_DIR"
+    rm -rf -- "$TEST_OUTPUT_DIR"
 }
 trap cleanup_test_output EXIT
 
