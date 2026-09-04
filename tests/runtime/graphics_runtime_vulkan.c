@@ -9,6 +9,14 @@ static int fail(const char *message) {
 	return 1;
 }
 
+static int fail_with_graphics_error(const char *message) {
+	char detail[512];
+	if (dynlex_graphics_error_message(detail, sizeof(detail)) == 0)
+		return fail(message);
+	fprintf(stderr, "%s: %s\n", message, detail);
+	return 1;
+}
+
 int main(int argument_count, char **arguments) {
 	if (argument_count != 1 && argument_count != 3)
 		return fail("usage: graphics_runtime_vulkan [vertex.spv fragment.spv]");
@@ -29,7 +37,7 @@ int main(int argument_count, char **arguments) {
 
 	DynlexGraphics *graphics = dynlex_graphics_create(64, 64, 0, 0, "DynLex Vulkan runtime test");
 	if (graphics == NULL)
-		return fail("graphics creation failed");
+		return fail_with_graphics_error("graphics creation failed");
 	if (dynlex_graphics_is_visible(graphics))
 		return fail("a hidden Vulkan window was reported visible");
 	if (dynlex_graphics_api_version(graphics) < 0x00403000u)
