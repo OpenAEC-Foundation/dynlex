@@ -4,18 +4,16 @@ import lib/font.dl
 
 set window to a new window with width 400 and height 300
 set {font loading} to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32
+set typeface to font loading's typeface
 if font loading failed:
+    set {font release} to the result of releasing (the address of typeface)
     close the window
     return 1
-set typeface to font loading's typeface
-enable text rendering
 set rendering to the result of drawing "Hello DynLex!" as text at x 20 and y 100 using typeface in color red 255, green 255 and blue 255
-disable text rendering
-if rendering failed:
-    return 1
-display the frame of window
-sleep for 3000 milliseconds
+if rendering succeeded:
+    display the frame of window
+    sleep for 3000 milliseconds
 set {font release} to the result of releasing (the address of typeface)
 close the window
-if font release failed:
+if rendering failed or font release failed:
     return 1

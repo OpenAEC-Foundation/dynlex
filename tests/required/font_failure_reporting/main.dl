@@ -6,6 +6,7 @@ set typeface to loading's typeface
 print loading failed as a line
 print loading status's operation as a line
 print (loading status's error code != 0) as a line
+print (typeface's library = 0 as a pointer to a byte) as a line
 
 set sizing to the result of setting typeface's pixel size to 16
 print sizing failed as a line
@@ -19,3 +20,6 @@ print (rendering's status's error code != 0) as a line
 
 set releasing to the result of releasing (the address of typeface)
 print releasing succeeded as a line
+print (typeface's library = 0 as a pointer to a byte) as a line
+print (typeface's face = 0 as a pointer to a byte) as a line
+print (typeface's texture = 0) as a line
