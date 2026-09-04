@@ -1,0 +1,21 @@
+import lib/font.dl
+
+set loading to the result of loading a font from "tests/required/font_failure_reporting/missing.ttf" at size 16
+set {loading status} to loading's status
+set typeface to loading's typeface
+print loading failed as a line
+print loading status's operation as a line
+print (loading status's error code != 0) as a line
+
+set sizing to the result of setting typeface's pixel size to 16
+print sizing failed as a line
+print sizing's operation as a line
+print (sizing's error code != 0) as a line
+
+render 65 at x 0 and y 0 using typeface in (a font color from 255, 255 and 255) and set rendering to it
+print rendering failed as a line
+print rendering's status's operation as a line
+print (rendering's status's error code != 0) as a line
+
+set releasing to the result of releasing (the address of typeface)
+print releasing succeeded as a line

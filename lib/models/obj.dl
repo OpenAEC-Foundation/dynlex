@@ -140,15 +140,42 @@ function an empty OBJ mesh:
         set quantities to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
         return a new OBJ mesh backed by (0 as a pointer to an OBJ vertex), (0 as a pointer to an OBJ texture coordinate), (0 as a pointer to an OBJ triangle) and (0 as a pointer to an OBJ material), sized according to quantities
 
+local function stop because an OBJ allocation failed:
+    execute:
+        @intrinsic("call", "libc", "abort", nothing)
+
+local function the maximum OBJ allocation byte count:
+    execute:
+        if the build word size = 32:
+            return 2147483647 as a word sized integer
+        return 9223372036854775807 as a word sized integer
+
+local function the OBJ allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
+    execute:
+        if count <= 0:
+            stop because an OBJ allocation failed
+        set quantity to count as a word sized integer
+        set width to (the size of kind) as a word sized integer
+        if quantity > (the maximum OBJ allocation byte count / width):
+            stop because an OBJ allocation failed
+        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+        if replacement = 0 as a pointer to kind:
+            stop because an OBJ allocation failed
+        return replacement
+
+local function the expanded OBJ capacity after {integer:capacity}:
+    execute:
+        if capacity <= 0 or capacity > 1073741823:
+            stop because an OBJ allocation failed
+        return capacity * 2
+
 function a duplicated OBJ C string from source:
     execute:
         if source = 0 as a pointer to a byte:
             return 0 as a pointer to a byte
 
         set length to @intrinsic("call", "libc", "strlen", a word sized integer, source)
-        set copy to @intrinsic("call", "libc", "malloc", a pointer to a byte, length + 1)
-        if copy = 0 as a pointer to a byte:
-            return 0 as a pointer to a byte
+        set copy to the OBJ allocation from (0 as a pointer to a byte) resized to (length + 1) items of a byte
 
         ignore @intrinsic("call", "libc", "memcpy", a pointer to a byte, copy, source, length + 1)
         return copy
@@ -174,25 +201,11 @@ function a loaded OBJ material set from path:
 
         set capacity to 16
         set count to 0
-        set materials to @intrinsic("call", "libc", "malloc", a pointer to an OBJ material, (capacity * the size of an OBJ material) as a word sized integer)
-        if materials = 0 as a pointer to an OBJ material:
-            ignore @intrinsic("call", "libc", "fclose", an integer, file)
-            return an empty OBJ material set
+        set materials to the OBJ allocation from ((0 as a pointer to an OBJ material) as a pointer) resized to capacity items of an OBJ material
 
-        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
-        set name to @intrinsic("call", "libc", "malloc", a pointer to a byte, 512 as a word sized integer)
-        set texture to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2048 as a word sized integer)
-
-        if (line = 0 as a pointer to a byte) or ((name = 0 as a pointer to a byte) or (texture = 0 as a pointer to a byte)):
-            if line != 0 as a pointer to a byte:
-                @intrinsic("call", "libc", "free", nothing, line)
-            if name != 0 as a pointer to a byte:
-                @intrinsic("call", "libc", "free", nothing, name)
-            if texture != 0 as a pointer to a byte:
-                @intrinsic("call", "libc", "free", nothing, texture)
-            @intrinsic("call", "libc", "free", nothing, materials)
-            ignore @intrinsic("call", "libc", "fclose", an integer, file)
-            return an empty OBJ material set
+        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set name to the OBJ allocation from (0 as a pointer to a byte) resized to 512 items of a byte
+        set texture to the OBJ allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
 
         set current to -1
         set red to 0.8
@@ -203,8 +216,10 @@ function a loaded OBJ material set from path:
         while status != 0 as a pointer to a byte:
             if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "newmtl %511s", name) = 1:
                 if count >= capacity:
-                    multiply capacity by 2
-                    set materials to @intrinsic("call", "libc", "realloc", a pointer to an OBJ material, materials, (capacity * the size of an OBJ material) as a word sized integer)
+                    set expanded to the expanded OBJ capacity after capacity
+                    set resized to the OBJ allocation from (materials as a pointer) resized to expanded items of an OBJ material
+                    set materials to resized
+                    set capacity to expanded
 
                 set copy to a duplicated OBJ C string from name
                 set blank to an empty graphics texture
@@ -242,7 +257,7 @@ function a loaded OBJ material set from path:
             @intrinsic("call", "libc", "free", nothing, materials)
             set materials to (0 as a pointer to an OBJ material)
         else:
-            set materials to @intrinsic("call", "libc", "realloc", a pointer to an OBJ material, materials, (count * the size of an OBJ material) as a word sized integer)
+            set materials to the OBJ allocation from (materials as a pointer) resized to count items of an OBJ material
 
         return a new OBJ material set containing materials totalling count
 
@@ -262,24 +277,21 @@ function a loaded OBJ mesh from path:
         if scanner = 0 as a pointer to a byte:
             return an empty OBJ mesh
 
-        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
-        set library to @intrinsic("call", "libc", "malloc", a pointer to a byte, 2048 as a word sized integer)
+        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set library to the OBJ allocation from (0 as a pointer to a byte) resized to 2048 items of a byte
         set reference to 0 as a pointer to a byte
 
-        if (line != 0 as a pointer to a byte) and (library != 0 as a pointer to a byte):
+        set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
+        while status != 0 as a pointer to a byte:
+            if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "mtllib %2047s", library) = 1:
+                if reference != 0 as a pointer to a byte:
+                    @intrinsic("call", "libc", "free", nothing, reference)
+                set reference to a duplicated OBJ C string from library
             set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
-            while status != 0 as a pointer to a byte:
-                if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "mtllib %2047s", library) = 1:
-                    if reference != 0 as a pointer to a byte:
-                        @intrinsic("call", "libc", "free", nothing, reference)
-                    set reference to a duplicated OBJ C string from library
-                set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
 
         ignore @intrinsic("call", "libc", "fclose", an integer, scanner)
-        if line != 0 as a pointer to a byte:
-            @intrinsic("call", "libc", "free", nothing, line)
-        if library != 0 as a pointer to a byte:
-            @intrinsic("call", "libc", "free", nothing, library)
+        @intrinsic("call", "libc", "free", nothing, line)
+        @intrinsic("call", "libc", "free", nothing, library)
 
         set catalogue to a loaded OBJ material set from reference
         if reference != 0 as a pointer to a byte:
@@ -297,12 +309,12 @@ function a loaded OBJ mesh from path:
         set capacity to a new OBJ mesh quantities with vertices 1024, texture coordinates 1024, triangles 2048 and materials 0
         set count to a new OBJ mesh quantities with vertices 0, texture coordinates 0, triangles 0 and materials 0
 
-        set vertices to @intrinsic("call", "libc", "malloc", a pointer to an OBJ vertex, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
-        set coordinates to @intrinsic("call", "libc", "malloc", a pointer to an OBJ texture coordinate, (capacity's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
-        set triangles to @intrinsic("call", "libc", "malloc", a pointer to an OBJ triangle, (capacity's triangles * the size of an OBJ triangle) as a word sized integer)
+        set vertices to the OBJ allocation from ((0 as a pointer to an OBJ vertex) as a pointer) resized to capacity's vertices items of an OBJ vertex
+        set coordinates to the OBJ allocation from ((0 as a pointer to an OBJ texture coordinate) as a pointer) resized to capacity's texture coordinates items of an OBJ texture coordinate
+        set triangles to the OBJ allocation from ((0 as a pointer to an OBJ triangle) as a pointer) resized to capacity's triangles items of an OBJ triangle
 
-        set line to @intrinsic("call", "libc", "malloc", a pointer to a byte, 4096 as a word sized integer)
-        set name to @intrinsic("call", "libc", "malloc", a pointer to a byte, 512 as a word sized integer)
+        set line to the OBJ allocation from (0 as a pointer to a byte) resized to 4096 items of a byte
+        set name to the OBJ allocation from (0 as a pointer to a byte) resized to 512 items of a byte
         set current to -1
 
         set horizontal to 0.0
@@ -321,22 +333,28 @@ function a loaded OBJ mesh from path:
         while status != 0 as a pointer to a byte:
             if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth, the address of red, the address of green, the address of blue) = 6:
                 if count's vertices >= capacity's vertices:
-                    multiply capacity's vertices by 2
-                    set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
+                    set expanded to the expanded OBJ capacity after capacity's vertices
+                    set resized to the OBJ allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
+                    set vertices to resized
+                    set capacity's vertices to expanded
                 store a new colored OBJ vertex at x horizontal, y vertical and z depth in (a new OBJ color from red, green and blue) into vertices at count's vertices
                 increment count's vertices
             else:
                 if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "v %lf %lf %lf", the address of horizontal, the address of vertical, the address of depth) = 3:
                     if count's vertices >= capacity's vertices:
-                        multiply capacity's vertices by 2
-                        set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (capacity's vertices * the size of an OBJ vertex) as a word sized integer)
+                        set expanded to the expanded OBJ capacity after capacity's vertices
+                        set resized to the OBJ allocation from (vertices as a pointer) resized to expanded items of an OBJ vertex
+                        set vertices to resized
+                        set capacity's vertices to expanded
                     store a new OBJ vertex at x horizontal, y vertical and z depth into vertices at count's vertices
                     increment count's vertices
                 else:
                     if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "vt %lf %lf", the address of longitude, the address of latitude) = 2:
                         if count's texture coordinates >= capacity's texture coordinates:
-                            multiply capacity's texture coordinates by 2
-                            set coordinates to @intrinsic("call", "libc", "realloc", a pointer to an OBJ texture coordinate, coordinates, (capacity's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
+                            set expanded to the expanded OBJ capacity after capacity's texture coordinates
+                            set resized to the OBJ allocation from (coordinates as a pointer) resized to expanded items of an OBJ texture coordinate
+                            set coordinates to resized
+                            set capacity's texture coordinates to expanded
                         store a new OBJ texture coordinate with u longitude and v latitude into coordinates at count's texture coordinates
                         increment count's texture coordinates
                     else:
@@ -365,8 +383,10 @@ function a loaded OBJ mesh from path:
                                 set second to second converted to zero-based OBJ indices
                                 set third to third converted to zero-based OBJ indices
                                 if count's triangles >= capacity's triangles:
-                                    multiply capacity's triangles by 2
-                                    set triangles to @intrinsic("call", "libc", "realloc", a pointer to an OBJ triangle, triangles, (capacity's triangles * the size of an OBJ triangle) as a word sized integer)
+                                    set expanded to the expanded OBJ capacity after capacity's triangles
+                                    set resized to the OBJ allocation from (triangles as a pointer) resized to expanded items of an OBJ triangle
+                                    set triangles to resized
+                                    set capacity's triangles to expanded
                                 store a new OBJ triangle from first, second and third in material current into triangles at count's triangles
                                 increment count's triangles
 
@@ -380,19 +400,19 @@ function a loaded OBJ mesh from path:
             @intrinsic("call", "libc", "free", nothing, vertices)
             set vertices to 0 as a pointer to an OBJ vertex
         else:
-            set vertices to @intrinsic("call", "libc", "realloc", a pointer to an OBJ vertex, vertices, (count's vertices * the size of an OBJ vertex) as a word sized integer)
+            set vertices to the OBJ allocation from (vertices as a pointer) resized to count's vertices items of an OBJ vertex
 
         if count's texture coordinates = 0:
             @intrinsic("call", "libc", "free", nothing, coordinates)
             set coordinates to 0 as a pointer to an OBJ texture coordinate
         else:
-            set coordinates to @intrinsic("call", "libc", "realloc", a pointer to an OBJ texture coordinate, coordinates, (count's texture coordinates * the size of an OBJ texture coordinate) as a word sized integer)
+            set coordinates to the OBJ allocation from (coordinates as a pointer) resized to count's texture coordinates items of an OBJ texture coordinate
 
         if count's triangles = 0:
             @intrinsic("call", "libc", "free", nothing, triangles)
             set triangles to 0 as a pointer to an OBJ triangle
         else:
-            set triangles to @intrinsic("call", "libc", "realloc", a pointer to an OBJ triangle, triangles, (count's triangles * the size of an OBJ triangle) as a word sized integer)
+            set triangles to the OBJ allocation from (triangles as a pointer) resized to count's triangles items of an OBJ triangle
 
         set count's materials to total
         return a new OBJ mesh backed by vertices, coordinates, triangles and materials, sized according to count

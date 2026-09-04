@@ -82,8 +82,30 @@ class:
     patterns:
         [a|] font
     members:
+        library as a pointer
         face as a pointer
         texture as an integer
+
+class:
+    patterns:
+        [a|] FreeType operation status
+    members:
+        error code as an integer
+        operation as a C string
+
+class:
+    patterns:
+        [a|] font load result
+    members:
+        typeface as a font
+        status as a FreeType operation status
+
+class:
+    patterns:
+        [a|] font rendering result
+    members:
+        horizontal position as an integer
+        status as a FreeType operation status
 
 class:
     patterns:
@@ -93,26 +115,96 @@ class:
         green as an integer
         blue as an integer
 
-function a new font using {pointer:face} and {integer:texture}:
+local function a new font using {pointer:library}, {pointer:face} and {integer:texture}:
     replacement:
-        @intrinsic("construct", a font, face, texture)
+        @intrinsic("construct", a font, library, face, texture)
+
+local function an empty font:
+    execute:
+        return a new font using (0 as a pointer to a byte), (0 as a pointer to a byte) and 0
+
+local function a successful FreeType operation status:
+    replacement:
+        @intrinsic("construct", a FreeType operation status, 0, "")
+
+local function a failed FreeType operation status for {C string:operation} with error code {integer:error}:
+    replacement:
+        @intrinsic("construct", a FreeType operation status, error, operation)
+
+function {FreeType operation status:status} succeeded:
+    replacement:
+        status's error code = 0
+
+function {FreeType operation status:status} failed:
+    replacement:
+        status's error code != 0
+
+local function a successful font load containing {font:typeface}:
+    replacement:
+        @intrinsic("construct", a font load result, typeface, a successful FreeType operation status)
+
+local function a failed font load in {C string:operation} with error code {integer:error}:
+    replacement:
+        @intrinsic("construct", a font load result, an empty font, (a failed FreeType operation status for operation with error code error))
+
+local function a failed font load containing {font:typeface} with {FreeType operation status:status}:
+    replacement:
+        @intrinsic("construct", a font load result, typeface, status)
+
+function {font load result:result} succeeded:
+    replacement:
+        result's status succeeded
+
+function {font load result:result} failed:
+    replacement:
+        result's status failed
+
+local function a successful font rendering at horizontal position {integer:horizontal}:
+    replacement:
+        @intrinsic("construct", a font rendering result, horizontal, a successful FreeType operation status)
+
+local function a failed font rendering at horizontal position {integer:horizontal} in {C string:operation} with error code {integer:error}:
+    replacement:
+        @intrinsic("construct", a font rendering result, horizontal, (a failed FreeType operation status for operation with error code error))
+
+function {font rendering result:result} succeeded:
+    replacement:
+        result's status succeeded
+
+function {font rendering result:result} failed:
+    replacement:
+        result's status failed
 
 function a font color from {a value:red}, {a value:green} and {a value:blue}:
     replacement:
         @intrinsic("construct", a font color, red, green, blue)
 
-function a loaded font from path at size {a value:size}:
+local function a failed font load after cleaning up {pointer:library} and {pointer:face} following {C string:operation} with error code {integer:error}:
+    execute:
+        set typeface to a new font using library, face and 0
+        set cleanup to the result of releasing (the address of typeface)
+        if cleanup failed:
+            return a failed font load containing typeface with cleanup
+        return a failed font load in operation with error code error
+
+function the result of loading a font from path at size {a value:size}:
     execute:
         # Initialize FreeType
         set library to 0 as a pointer to a byte
-        ignore @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
+        set error to @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
+        if error != 0:
+            return a failed font load in "FT_Init_FreeType" with error code error
 
         # Load font face
         set face to 0 as a pointer to a byte
-        ignore @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a C long integer, the address of face)
+        set error to @intrinsic("call", "freetype", "FT_New_Face", an integer, library, path, 0 as a C long integer, the address of face)
+        if error != 0:
+            return a failed font load after cleaning up library and face following "FT_New_Face" with error code error
 
         # Set pixel size
-        ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+        set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+        if error != 0:
+            return a failed font load after cleaning up library and face following "FT_Set_Pixel_Sizes" with error code error
 
         # Set up GL state for texture rendering
         @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, 1)
@@ -129,17 +221,19 @@ function a loaded font from path at size {a value:size}:
         @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 33069)
         @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 33069)
 
-        return a new font using face and texture
+        return a successful font load containing (a new font using library, face and texture)
 
 # --- Character rendering ---
 
-local function the horizontal position after rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
+local function the result of rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
     execute:
         set face to the face of typeface
         set texture to the texture of typeface
 
         # Load and render the glyph
-        ignore @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a C long integer, 4)
+        set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a C long integer, 4)
+        if error != 0:
+            return a failed font rendering at horizontal position horizontal in "FT_Load_Char" with error code error
 
         # Read glyph slot from the face after loading the character
         set metadata to face as a pointer to an FT face
@@ -181,11 +275,11 @@ local function the horizontal position after rendering character {a value:code} 
         @intrinsic("call", "GL", "glEnd", nothing)
 
         # Advance is in 26.6 fixed point, so divide it by 64.
-        return (horizontal + advance / 64) as an integer
+        return a successful font rendering at horizontal position ((horizontal + advance / 64) as an integer)
 
 flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
     replacement:
-        set the subject to the horizontal position after rendering character code at x horizontal and y vertical using typeface in color
+        set the subject to the result of rendering character code at x horizontal and y vertical using typeface in color
 
 # --- Text rendering helpers ---
 
@@ -202,39 +296,88 @@ function disable text rendering:
         @intrinsic("call", "GL", "glDisable", nothing, 3553)
 
 # Set font pixel size (call before rendering at a new size)
-function set {font:typeface}'s pixel size to {a value:size}:
+function the result of setting {font:typeface}'s pixel size to {a value:size}:
     execute:
         set face to the face of typeface
-        ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+        set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+        if error != 0:
+            return a failed FreeType operation status for "FT_Set_Pixel_Sizes" with error code error
+        return a successful FreeType operation status
 
 # --- Number rendering ---
 
-function draw {a value:number} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
+function the result of drawing {a value:number} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
     execute:
         enable text rendering
         set cursor to horizontal
         set ink to a font color from red, green and blue
         if number < 10:
-            render (number + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
         else if number < 100:
-            render (number / 10 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
-            render ((the remainder of number divided by 10) + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number / 10 + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
+            render ((the remainder of number divided by 10) + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
         else:
-            render (number / 100 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number / 100 + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
             set remaining to the remainder of number divided by 100
-            render (remaining / 10 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
-            render ((the remainder of remaining divided by 10) + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (remaining / 10 + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
+            render ((the remainder of remaining divided by 10) + 48) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
         disable text rendering
+        return a successful font rendering at horizontal position cursor
 
 # --- Text rendering ---
 
-function draw {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
+function the result of drawing {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
     execute:
         enable text rendering
         set cursor to horizontal
         set ink to a font color from red, green and blue
         set position to 0
         loop while position < the length of message:
-            render (the character at position in message) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (the character at position in message) at x cursor and y vertical using typeface in ink and set rendering to it
+            if rendering failed:
+                disable text rendering
+                return rendering
+            set cursor to rendering's horizontal position
             set position to (position + 1)
         disable text rendering
+        return a successful font rendering at horizontal position cursor
+
+function the result of releasing {a pointer to a font:typeface}:
+    execute:
+        set status to a successful FreeType operation status
+        if the library of typeface != 0 as a pointer to a byte:
+            set error to @intrinsic("call", "freetype", "FT_Done_FreeType", an integer, the library of typeface)
+            if error != 0:
+                set status to a failed FreeType operation status for "FT_Done_FreeType" with error code error
+            else:
+                if the texture of typeface != 0:
+                    set texture to the texture of typeface
+                    @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of texture)
+                set the library of typeface to 0 as a pointer to a byte
+                set the face of typeface to 0 as a pointer to a byte
+                set the texture of typeface to 0
+        return status

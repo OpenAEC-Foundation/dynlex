@@ -5,14 +5,18 @@ set window to a new window with width 128 and height 64
 if window = 0 as a pointer to a byte:
     return 1
 
-set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32
+set {font loading} to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 32
+if font loading failed:
+    close the window
+    return 1
+set typeface to font loading's typeface
 @intrinsic("call", "GL", "glBindTexture", nothing, 3553, typeface's texture)
 set {horizontal wrap} to 0
 set {vertical wrap} to 0
 @intrinsic("call", "GL", "glGetTexParameteriv", nothing, 3553, 10242, the address of horizontal wrap)
 @intrinsic("call", "GL", "glGetTexParameteriv", nothing, 3553, 10243, the address of vertical wrap)
 clear the screen
-draw "A A" as text at x 16 and y 48 using typeface in color red 255, green 255 and blue 255
+set rendering to the result of drawing "A A" as text at x 16 and y 48 using typeface in color red 255, green 255 and blue 255
 set error to @intrinsic("call", "GL", "glGetError", an integer)
 
 set bytes to ((128 * 64) * 3) as a word sized integer
@@ -27,8 +31,11 @@ loop while position < bytes:
         increment lit
     increment position
 @intrinsic("call", "libc", "free", nothing, pixels)
+set {font release} to the result of releasing (the address of typeface)
 close the window
 
+if rendering failed or font release failed:
+    return 1
 if ((error != 0) or (lit <= 10)) or ((horizontal wrap != 33069) or (vertical wrap != 33069)):
     return 1
 return 0

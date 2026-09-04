@@ -1,17 +1,28 @@
 import lib/font.dl
 
 set library to 0 as a pointer to a byte
-ignore @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
+set error to @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
+if error != 0:
+    return 1
 set face to 0 as a pointer to a byte
-ignore @intrinsic(
+set error to @intrinsic(
     "call", "freetype", "FT_New_Face", an integer, library,
     "tests/games/fonts/LiberationMono-Regular.ttf", 0 as a C long integer, the address of face
 )
-ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0, 32)
-ignore @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, 65 as a C long integer, 4)
+if error != 0:
+    return 1
+set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0, 32)
+if error != 0:
+    return 1
+set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, 65 as a C long integer, 4)
+if error != 0:
+    return 1
 
 set metadata to face as a pointer to an FT face
 set glyph to metadata's glyph
 set slot to glyph as a pointer to an FT glyph slot
 print slot's bitmap width as a line
 print slot's bitmap rows as a line
+set error to @intrinsic("call", "freetype", "FT_Done_FreeType", an integer, library)
+if error != 0:
+    return 1

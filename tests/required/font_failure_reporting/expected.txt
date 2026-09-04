@@ -1,0 +1,10 @@
+true
+FT_New_Face
+true
+true
+FT_Set_Pixel_Sizes
+true
+true
+FT_Load_Char
+true
+true
