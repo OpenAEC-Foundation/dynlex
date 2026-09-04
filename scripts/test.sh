@@ -15,8 +15,13 @@ cleanup_test_output() {
 trap cleanup_test_output EXIT
 
 is_windows=false
+execution_timeout_scale=1
 case "$(uname -s | tr '[:upper:]' '[:lower:]')" in
-    *mingw*|*msys*|*cygwin*) is_windows=true ;;
+    *mingw*|*msys*|*cygwin*)
+        is_windows=true
+        # Process and on-demand tool startup is substantially slower and more variable under Git Bash.
+        execution_timeout_scale=3
+        ;;
 esac
 
 if ! DYNLEX_TEST_BASH="$(command -v bash)" || [[ ! -f "$DYNLEX_TEST_BASH" ]]; then
@@ -478,8 +483,8 @@ for test_dir in "$TESTS_DIR"/*/; do
         continue
     fi
 
-    # Run (5 second timeout)
-    run_command=(run_with_timeout 5)
+    # Run with the platform-scaled five-second base timeout.
+    run_command=(run_with_timeout $((5 * execution_timeout_scale)))
     if [[ -f "$arguments_file" ]]; then
         run_command+=(--arguments-file "$arguments_file")
     fi
@@ -587,7 +592,8 @@ done
 
 run_auxiliary_test() {
     local test_name="$1"
-    local timeout_seconds="$2"
+    local base_timeout_seconds="$2"
+    local timeout_seconds=$((base_timeout_seconds * execution_timeout_scale))
     shift 2
 
     local test_start_ms
