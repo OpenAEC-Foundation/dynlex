@@ -4,6 +4,7 @@
 #include "processRuntimeWindowsQuoting.h"
 
 #include "runtimeError.h"
+#include "windowsEnvironment.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -67,23 +68,6 @@ static wchar_t *utf8_to_wide(const char *text, size_t length, const char *operat
 	return wide;
 }
 
-static int
-compare_ordinal_case_insensitive(const wchar_t *left, size_t left_length, const wchar_t *right, size_t right_length) {
-	if (left_length > INT_MAX || right_length > INT_MAX)
-		abort();
-	int result = CompareStringOrdinal(left, (int)left_length, right, (int)right_length, TRUE);
-	if (result == 0)
-		abort();
-	return result - CSTR_EQUAL;
-}
-
-static bool wide_environment_name_matches(const wchar_t *entry, const wchar_t *name) {
-	const wchar_t *separator = wcschr(entry, L'=');
-	if (separator == NULL)
-		return false;
-	return compare_ordinal_case_insensitive(entry, (size_t)(separator - entry), name, wcslen(name)) == 0;
-}
-
 static void free_environment_overrides(DynlexWindowsEnvironmentOverride *overrides, size_t override_count) {
 	for (size_t index = 0; index < override_count; ++index) {
 		free(overrides[index].name);
@@ -139,7 +123,7 @@ build_environment_overrides(const DynlexProcessCommand *command, size_t *result_
 		free(value);
 		size_t destination = override_count;
 		for (size_t candidate = 0; candidate < override_count; ++candidate) {
-			if (compare_ordinal_case_insensitive(
+			if (dynlex_windows_compare_environment_text(
 					overrides[candidate].name, wcslen(overrides[candidate].name), converted.name, name_length
 				) == 0) {
 				destination = candidate;
@@ -168,7 +152,7 @@ static bool inherited_environment_is_overridden(
 	if (entry[0] == L'=')
 		return false;
 	for (size_t index = 0; index < override_count; ++index) {
-		if (wide_environment_name_matches(entry, overrides[index].name))
+		if (dynlex_windows_environment_name_matches(entry, overrides[index].name))
 			return true;
 	}
 	return false;
@@ -177,7 +161,7 @@ static bool inherited_environment_is_overridden(
 static int compare_environment_entries(const void *left, const void *right) {
 	const wchar_t *const *left_entry = left;
 	const wchar_t *const *right_entry = right;
-	return compare_ordinal_case_insensitive(*left_entry, wcslen(*left_entry), *right_entry, wcslen(*right_entry));
+	return dynlex_windows_compare_environment_text(*left_entry, wcslen(*left_entry), *right_entry, wcslen(*right_entry));
 }
 
 static wchar_t *build_environment_block(const DynlexProcessCommand *command) {
@@ -255,18 +239,6 @@ failure:
 	if (inherited != NULL)
 		FreeEnvironmentStringsW(inherited);
 	free_environment_overrides(overrides, configured_override_count);
-	return NULL;
-}
-
-static const wchar_t *environment_block_value(const wchar_t *environment, const wchar_t *name) {
-	size_t name_length = wcslen(name);
-	for (const wchar_t *entry = environment; *entry != L'\0'; entry += wcslen(entry) + 1) {
-		if (entry[0] == L'=')
-			continue;
-		const wchar_t *separator = wcschr(entry, L'=');
-		if (separator != NULL && compare_ordinal_case_insensitive(entry, (size_t)(separator - entry), name, name_length) == 0)
-			return separator + 1;
-	}
 	return NULL;
 }
 
@@ -472,7 +444,7 @@ resolve_executable(const DynlexProcessCommand *command, const wchar_t *working_d
 	}
 	bool has_separator = wcschr(executable, L'\\') != NULL || wcschr(executable, L'/') != NULL;
 	if (!has_separator) {
-		const wchar_t *path = environment_block_value(environment, L"PATH");
+		const wchar_t *path = dynlex_windows_environment_block_value(environment, L"PATH");
 		if (path == NULL) {
 			free(executable);
 			dynlex_runtime_set_error("Could not resolve process executable because PATH is not set");

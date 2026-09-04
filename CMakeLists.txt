@@ -328,6 +328,7 @@ if(NOT EMSCRIPTEN)
             src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
             src/runtime/processRuntimeWindowsQuoting.c
+            src/runtime/windowsEnvironment.c
         )
     else()
         list(APPEND DYNLEX_RUNTIME_SOURCES
@@ -351,6 +352,7 @@ if(NOT EMSCRIPTEN)
         src/runtime/processRuntimeWindowsQuoting.h
         src/runtime/runtimeError.h
         src/runtime/runtimeText.h
+        src/runtime/windowsEnvironment.h
     )
     set(DYNLEX_GRAPHICS_SOURCES
         src/runtime/graphicsRuntime.c
