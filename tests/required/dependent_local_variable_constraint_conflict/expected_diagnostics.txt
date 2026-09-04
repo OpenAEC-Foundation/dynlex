@@ -1,0 +1,2 @@
+tests/required/dependent_local_variable_constraint_conflict/main.dl:17-36: Error: Variable 'values' cannot use both an array of item count items and an array of 3 items constraints
+  note: Variable 'values' was first constrained here tests/required/dependent_local_variable_constraint_conflict/main.dl:14-42

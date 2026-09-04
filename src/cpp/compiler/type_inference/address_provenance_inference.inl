@@ -227,7 +227,7 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 static Variable *variableForAddressTarget(VariableReference *reference) {
 	if (!reference || !reference->range.line || !reference->range.line->section)
 		return nullptr;
-	return reference->range.line->section->findVariable(reference->name);
+	return reference->range.line->section->findVariable(reference);
 }
 
 static bool typeMayContainAddresses(const DataType &type) {

@@ -4,6 +4,10 @@ import lib/string.dl
 
 # --- Basic patterns ---
 
+function return [nothing]:
+    replacement:
+        @intrinsic("return")
+
 function return value:
     replacement:
         @intrinsic("return", value)
@@ -11,6 +15,10 @@ function return value:
 function a new {type:kind} from value:
 	replacement:
 		@intrinsic("construct", kind, value)
+
+function a new {type:kind}:
+    replacement:
+        @intrinsic("construct", kind)
 
 # --- Variables ---
 
@@ -89,6 +97,10 @@ function [a|] {fixed integer:bits} bit value:
         @intrinsic("type", "any", bits)
 
 function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+
+function the type [nothing]:
     replacement:
         @intrinsic("type", "nothing")
 
@@ -194,9 +206,13 @@ function an aggregate of {fixed integer:count} {type:kind} values:
             return @intrinsic("vector", count, kind)
         return @intrinsic("array", count, kind)
 
-function this is a {word:stage} shader:
+function this is a fragment shader:
     replacement:
-        @intrinsic("shader stage is", stage)
+        @intrinsic("shader stage is", "fragment")
+
+function this is a vertex shader:
+    replacement:
+        @intrinsic("shader stage is", "vertex")
 
 function the size of kind:
     replacement:

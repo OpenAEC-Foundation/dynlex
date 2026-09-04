@@ -16,7 +16,8 @@ const files = {
   lspIntegration: path.join(ideDir, "src/lspIntegration.js"),
   lspProtocol: path.join(ideDir, "src/lspProtocol.js"),
   browserDriver: path.join(projectDir, "tests/web/browser_test_driver.mjs"),
-  compilerWorker: path.join(ideDir, "public/compiler/compiler-worker.js")
+  compilerWorker: path.join(ideDir, "public/compiler/compiler-worker.js"),
+  runtimeImports: path.join(ideDir, "public/compiler/runtimeImports.js")
 };
 
 for (const filePath of Object.values(files)) {
@@ -32,7 +33,9 @@ const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
 const lspClient = fs.readFileSync(files.lspClient, "utf8");
 const languageJavascript = `${javascript}\n${lspIntegration}`;
 const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
+const runtimeImports = fs.readFileSync(files.runtimeImports, "utf8");
 const browserDriver = fs.readFileSync(files.browserDriver, "utf8");
+const viteConfig = fs.readFileSync(files.viteConfig, "utf8");
 assert.equal(packageJson.dependencies["monaco-editor"], "^0.56.0");
 assert.equal(packageJson.devDependencies.vite, "^8.2.2");
 assert.equal(packageJson.overrides["monaco-editor"].dompurify, "3.4.14");
@@ -41,6 +44,8 @@ assert.match(html, /<img[^>]+class="ide-logo"[^>]+src="\/icons\/dynlex-icon\.svg
 assert.doesNotMatch(html, /LLVM|WebAssembly|WASM|compiler runs/i);
 assert.doesNotMatch(html, /\sstyle="/i, "IDE presentation belongs in styles.css");
 assert.match(javascript, /from "monaco-editor\/editor"/);
+assert.match(javascript, /commitActiveLine/);
+assert.match(javascript, /diagnosticsByUri/);
 for (const contribution of [
   "clipboard",
   "codeAction",
@@ -107,6 +112,21 @@ for (const method of [
 }
 assert.match(compilerWorker, /"lsp\.exchange"/);
 assert.match(compilerWorker, /dynlex_web_lsp_exchange_json/);
+assert.match(compilerWorker, /compilerRevision/);
+assert.match(compilerWorker, /compilerAssetUrl/);
+assert.match(
+  compilerWorker,
+  /const runtimeImportsPromise = import\(\/\* @vite-ignore \*\/ compilerAssetUrl\("runtimeImports\.js"\)\)/
+);
+assert.doesNotMatch(compilerWorker, /await import\(\/\* @vite-ignore \*\/ compilerAssetUrl\("runtimeImports\.js"\)\)/);
+assert.match(compilerWorker, /versionedAssetUrl\("\/wgsl-translator\.js"\)/);
+assert.match(compilerWorker, /createWgslTranslator\(compilerAssetUrl\("dynlex_wgsl_translator\.wasm"\)\)/);
+assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeFilesystem\.js"\)/);
+assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimePathHost\.js"\)/);
+assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeLayout\.js"\)/);
+assert.match(javascript, /__DYNLEX_COMPILER_REVISION__/);
+assert.match(viteConfig, /fileName: "compiler\/manifest\.json"/);
+assert.match(viteConfig, /readdirSync\(compilerDirectory/);
 assert.doesNotMatch(compilerWorker, /dynlex_web_get_lsp_(?:hover|definition|semantic_tokens)_json/);
 assert.doesNotMatch(
   html,
@@ -115,8 +135,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(html, /class="start-guide"/, "The IDE must not prescribe a write-check-run sequence");
 assert.doesNotMatch(html, /id="compile-button"/, "Live analysis makes a separate check button redundant");
-assert.match(html, /<aside class="project-panel" aria-label="Project files">/);
-assert.match(javascript, /new Worker\("\/compiler\/compiler-worker\.js"/);
+assert.match(html, /<aside id="project-panel" class="project-panel" aria-label="Project files">/);
+assert.match(javascript, /new Worker\(compilerWorkerUrl/);
 assert.match(javascript, /URLSearchParams/);
 assert.match(javascript, /mode.*shader/);
 assert.match(javascript, /shaders\/manifest\.json/);
@@ -138,6 +158,11 @@ for (const requiredId of [
   "editor",
   "run-button",
   "theme-button",
+  "project-panel-button",
+  "tool-panel-button",
+  "workspace-panel-backdrop",
+  "project-panel",
+  "tool-panel",
   "status-pill",
   "diagnostics-empty",
   "diagnostics-list",

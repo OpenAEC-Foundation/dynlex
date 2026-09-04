@@ -513,16 +513,9 @@ CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &para
 	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
 	std::string_view line = docIt->second->getLine(params.position.line);
 	size_t character = std::min<size_t>(params.position.character, line.size());
-	return collectCompletions(
-		CompletionContext{
-			.parseContext = completionContext,
-			.uri = params.textDocument.uri,
-			.linePrefix = std::string(line.substr(0, character)),
-			.workspaceRootPath = workspaceRootPath,
-			.line = params.position.line,
-			.character = static_cast<int>(character),
-		}
-	);
+	return collectCompletions(makeCompletionContext(
+		completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line, static_cast<int>(character)
+	));
 }
 
 PatternFrontierList DynLexServer::onPatternFrontier(const TextDocumentPositionParams &params) {
@@ -533,16 +526,9 @@ PatternFrontierList DynLexServer::onPatternFrontier(const TextDocumentPositionPa
 	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
 	std::string_view line = docIt->second->getLine(params.position.line);
 	size_t character = std::min<size_t>(params.position.character, line.size());
-	return collectPatternFrontiers(
-		CompletionContext{
-			.parseContext = completionContext,
-			.uri = params.textDocument.uri,
-			.linePrefix = std::string(line.substr(0, character)),
-			.workspaceRootPath = workspaceRootPath,
-			.line = params.position.line,
-			.character = static_cast<int>(character),
-		}
-	);
+	return collectPatternFrontiers(makeCompletionContext(
+		completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line, static_cast<int>(character)
+	));
 }
 
 FilterContinuationsResult DynLexServer::onFilterContinuations(const FilterContinuationsParams &params) {
@@ -554,14 +540,10 @@ FilterContinuationsResult DynLexServer::onFilterContinuations(const FilterContin
 	std::string_view line = docIt->second->getLine(params.position.line);
 	size_t character = std::min<size_t>(params.position.character, line.size());
 	return filterPatternContinuations(
-		CompletionContext{
-			.parseContext = completionContext,
-			.uri = params.textDocument.uri,
-			.linePrefix = std::string(line.substr(0, character)),
-			.workspaceRootPath = workspaceRootPath,
-			.line = params.position.line,
-			.character = static_cast<int>(character),
-		},
+		makeCompletionContext(
+			completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line,
+			static_cast<int>(character)
+		),
 		params.continuations
 	);
 }
@@ -930,7 +912,7 @@ static std::vector<DataType> argumentTypesForDefinition(const Expression *expr, 
 	(void)matchingPatternPathIndices(expr->patternMatch->nodesPassed, definition);
 	size_t argIndex = 0;
 	for (PatternTreeNode *node : expr->patternMatch->nodesPassed) {
-		if (node->type != PatternElement::Type::Variable && node->type != PatternElement::Type::Word)
+		if (node->type != PatternElement::Type::Variable)
 			continue;
 		if (argIndex >= sortedArgs.size())
 			break;

@@ -85,9 +85,11 @@ inline BindingFrame sectionFlexCallerVariableBindings(
 	for (Section *scope = executionSection; scope && scope != definitionSection; scope = scope->parent)
 		activeScopes.push_back(scope);
 	std::ranges::reverse(activeScopes);
+	requireCompilerInvariant(callerBodySection->openingLine != nullptr, "section-flex caller body has no opening line");
+	Range callerOpeningRange(callerBodySection->openingLine, callerBodySection->openingLine->patternText);
 	for (Section *scope : activeScopes) {
 		for (const auto &[name, definitionReference] : scope->variableDefinitions) {
-			Variable *callerVariable = callerBodySection->findVariable(name);
+			Variable *callerVariable = callerBodySection->findVariable(name, callerOpeningRange);
 			Expression *definitionExpression = sectionFlexVariableExpression(definitionBody, definitionReference);
 			if (!callerVariable || !callerVariable->definition || !definitionExpression)
 				continue;

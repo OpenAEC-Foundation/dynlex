@@ -32,7 +32,6 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 	for (auto &[_, child] : node->literalChildren)
 		deletePatternTree(child, visited);
 	deletePatternTree(node->argumentChild, visited);
-	deletePatternTree(node->wordChild, visited);
 	delete node;
 }
 } // namespace

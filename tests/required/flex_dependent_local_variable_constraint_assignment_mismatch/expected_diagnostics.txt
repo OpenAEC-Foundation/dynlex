@@ -1,0 +1,4 @@
+lib/std.dl:9-45: Error: Variable 'values' requires an array of item count items, but this value is a fixed array containing 3 items whose type is a 32-bit integer
+  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [an unresolved value, a fixed array containing 3 items whose type is a 32-bit integer] -> an unresolved value lib/std.dl:9-45
+  note: while inferring call 'set {an array of item count items:values} to [1, 2, 3]' with arguments [an unresolved value, a fixed array containing 3 items whose type is a 32-bit integer] -> an unresolved value tests/required/flex_dependent_local_variable_constraint_assignment_mismatch/main.dl:9-63
+  note: while inferring call 'create flex local array for 2' with arguments [a 32-bit integer] -> an unresolved value tests/required/flex_dependent_local_variable_constraint_assignment_mismatch/main.dl:1-30

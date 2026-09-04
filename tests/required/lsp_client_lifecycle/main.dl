@@ -36,8 +36,8 @@ print whether (document's text = "final") as a line
 
 set published to the result of pumping one LSP message using client waiting up to 2000 milliseconds
 print whether published succeeded as a line
-set first_error to take the LSP standard error from client
-print whether (first_error = "first-server-stderr\n") as a line
+set {first error} to take the LSP standard error from client
+print whether (first error = "first-server-stderr\n") as a line
 print whether (the LSP standard error from client = "") as a line
 set report to the LSP diagnostics for uri "file:///workspace/main.dl" in client
 print whether report was found as a line

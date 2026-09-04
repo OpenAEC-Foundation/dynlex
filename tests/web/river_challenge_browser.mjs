@@ -975,7 +975,7 @@ get the sheep out of the boat`;
     `Victory speech vertical gap is ${success.speechVerticalGap}px for a ${success.boatHeight}px boat`
   );
   assert.equal(
-    requestedUrls.filter((url) => url.endsWith("/compiler/compiler-worker.js")).length,
+    requestedUrls.filter((url) => new URL(url).pathname === "/compiler/compiler-worker.js").length,
     1,
     "The river challenge must reuse the homepage compiler worker"
   );

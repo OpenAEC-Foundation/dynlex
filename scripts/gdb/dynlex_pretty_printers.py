@@ -5,16 +5,14 @@ _PATTERN_ELEMENT_TYPE_NAMES = {
     0: "Other",
     1: "VariableLike",
     2: "Variable",
-    3: "Word",
-    4: "Choice",
-    5: "Count",
+    3: "Choice",
+    4: "Count",
 }
 
 _MATCHED_ARGUMENT_KIND_NAMES = {
     0: "Expression",
     1: "SubMatch",
     2: "Variable",
-    3: "Word",
 }
 
 
@@ -187,8 +185,6 @@ class PatternTreeNodePrinter:
         text = _read_std_string(self.value["text"])
         if type_value == 2:
             return 'PatternTreeNode Argument "$"'
-        if type_value == 3:
-            return "PatternTreeNode WordCapture"
         if type_value == 1:
             return f'PatternTreeNode LiteralWord "{text}"'
         if type_value == 0:
@@ -203,10 +199,7 @@ class PatternTreeNodePrinter:
         yield ("literalChildren", self.value["literalChildren"])
         if not _pointer_is_null(self.value["argumentChild"]):
             yield ("argumentChild", self.value["argumentChild"])
-        if not _pointer_is_null(self.value["wordChild"]):
-            yield ("wordChild", self.value["wordChild"])
-        yield ("parameterNames", self.value["parameterNames"])
-        yield ("definitionStartPositions", self.value["definitionStartPositions"])
+        yield ("definitionOccurrences", self.value["definitionOccurrences"])
 
 
 class VariableMatchPrinter:
@@ -226,22 +219,6 @@ class VariableMatchPrinter:
         yield ("lineEndPos", self.value["lineEndPos"])
         if not _pointer_is_null(self.value["variableReference"]):
             yield ("variableReference", self.value["variableReference"])
-
-
-class WordMatchPrinter:
-    def __init__(self, value):
-        self.value = value
-
-    def to_string(self):
-        return (
-            f'WordMatch "{_read_std_string(self.value["text"])}" '
-            f'[{int(self.value["lineStartPos"])},{int(self.value["lineEndPos"])})'
-        )
-
-    def children(self):
-        yield ("text", self.value["text"])
-        yield ("lineStartPos", self.value["lineStartPos"])
-        yield ("lineEndPos", self.value["lineEndPos"])
 
 
 class AcceptedLiteralMatchPrinter:
@@ -273,8 +250,6 @@ class MatchedArgumentPrinter:
             return f"arg#{argument_index} SubMatch subMatches[{item_index}]"
         if kind == 2:
             return f"arg#{argument_index} Variable discoveredVariables[{item_index}]"
-        if kind == 3:
-            return f"arg#{argument_index} Word discoveredWords[{item_index}]"
         return f"arg#{argument_index} kind={_MATCHED_ARGUMENT_KIND_NAMES.get(kind, kind)} item={item_index}"
 
     def children(self):
@@ -294,7 +269,6 @@ class PatternMatchPrinter:
             f'PatternMatch "{_pattern_match_signature(self.value)}" '
             f'line=[{int(self.value["lineStartPos"])},{int(self.value["lineEndPos"])}) '
             f"vars={_vector_size(self.value['discoveredVariables'])} "
-            f"words={_vector_size(self.value['discoveredWords'])} "
             f"sub={_vector_size(self.value['subMatches'])} "
             f"args={_vector_size(self.value['orderedArguments'])}"
         )
@@ -306,13 +280,11 @@ class PatternMatchPrinter:
         yield ("lineStartPos", self.value["lineStartPos"])
         yield ("lineEndPos", self.value["lineEndPos"])
         yield ("captures.variables.count", _vector_size(self.value["discoveredVariables"]))
-        yield ("captures.words.count", _vector_size(self.value["discoveredWords"]))
         yield ("captures.acceptedLiterals.count", _vector_size(self.value["acceptedLiterals"]))
         yield ("captures.subMatches.count", _vector_size(self.value["subMatches"]))
         yield ("captures.orderedArguments.count", _vector_size(self.value["orderedArguments"]))
         yield ("nodesPassed", self.value["nodesPassed"])
         yield ("discoveredVariables", self.value["discoveredVariables"])
-        yield ("discoveredWords", self.value["discoveredWords"])
         yield ("acceptedLiterals", self.value["acceptedLiterals"])
         yield ("orderedArguments", self.value["orderedArguments"])
         yield ("subMatches", self.value["subMatches"])
@@ -400,7 +372,6 @@ class DynLexPrinterLookup:
         "PatternElement": PatternElementPrinter,
         "PatternTreeNode": PatternTreeNodePrinter,
         "VariableMatch": VariableMatchPrinter,
-        "WordMatch": WordMatchPrinter,
         "AcceptedLiteralMatch": AcceptedLiteralMatchPrinter,
         "MatchedArgument": MatchedArgumentPrinter,
         "PatternMatch": PatternMatchPrinter,

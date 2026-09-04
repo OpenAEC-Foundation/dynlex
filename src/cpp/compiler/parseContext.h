@@ -75,6 +75,9 @@ struct ParseContext {
 	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.
 	// - ImportedFiles: importedFiles, mainSourceFile, codeLines, and diagnostics gathered during file loading are valid.
 	// - AnalyzedSections: mainSection exists and the section tree / CodeLine.section assignments are valid.
+	// - ResolvedFunctionPatterns: pattern definitions and references inside definition bodies are valid.
+	// - ResolvedGlobalPatterns: top-level pattern references are also valid.
+	// - ResolvedPatternPrecedence: the source-declared precedence graph is valid.
 	// - ResolvedPatterns: patternTrees, pattern definitions, variable references, and pattern matches are valid.
 	// - Validated: validation diagnostics that depend on resolved symbols have been emitted.
 	// - InferredTypes: inferred expression / variable / return types are valid for the compiled program.
@@ -82,6 +85,9 @@ struct ParseContext {
 		NotStarted,
 		ImportedFiles,
 		AnalyzedSections,
+		ResolvedFunctionPatterns,
+		ResolvedGlobalPatterns,
+		ResolvedPatternPrecedence,
 		ResolvedPatterns,
 		Validated,
 		InferredTypes,
@@ -149,10 +155,11 @@ struct ParseContext {
 	std::unordered_map<std::string, llvm::DIFile *> diFiles;
 	llvm::DIScope *currentDebugScope{};
 
-	// Temporary codegen bindings (pushed/popped during generation)
-	// Pattern parameter bindings: maps variable name to LLVM value (for function parameters)
-	std::unordered_map<std::string, llvm::Value *> patternBindings;
-	// Pattern parameter types: maps parameter name to its type (for monomorphized functions)
+	// Temporary codegen bindings (pushed/popped during generation).
+	// Function parameters use declaration identity so local shadows cannot alias them.
+	std::unordered_map<VariableReference *, llvm::Value *> codegenParameterBindings;
+	std::unordered_set<VariableReference *> codegenParameterDefinitions;
+	llvm::Value *managedLifecycleValueBinding{};
 	// Flex binding stack for flex expansion and variable resolution across nested flex scopes.
 	BindingFrameStack flexBindingFrames;
 	// Current body section for flex expansion (used by loop intrinsics to store loop info)
@@ -222,6 +229,9 @@ struct ParseContext {
 	// Owns all VariableReference instances for this compilation.
 	// Other structures keep non-owning raw pointers into this arena.
 	std::vector<std::unique_ptr<VariableReference>> ownedVariableReferences;
+	// Explicit source captures are parsed before pattern definitions. Register
+	// their references after definition parameters have been indexed.
+	std::vector<VariableReference *> pendingExplicitVariableReferences;
 	// Compilation-lifetime arena for every expression allocated by an instance or
 	// flex clone. Ownership is independent of mutable grouping-tree topology.
 	std::vector<Expression *> ownedClonedExpressions;
@@ -299,7 +309,7 @@ inline void forEachPatternParameterName(
 	requireCompilerInvariant(elements.size() == nodes.size(), "indexed pattern path metadata has the wrong size");
 	for (size_t elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
 		const PatternElement &element = elements[elementIndex];
-		if (element.type != PatternElement::Type::Variable && element.type != PatternElement::Type::Word)
+		if (element.type != PatternElement::Type::Variable)
 			continue;
 		onPatternParameterName(element.text, nodes[elementIndex], element.startPos);
 	}

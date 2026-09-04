@@ -215,6 +215,11 @@ a:focus-visible {
   padding: 0 1rem;
 }
 
+.responsive-panel-actions,
+#workspace-panel-backdrop {
+  display: none;
+}
+
 .header-actions button {
   min-height: 38px;
   border: 1px solid #515650;
@@ -618,6 +623,10 @@ a:focus-visible {
   border-left-color: var(--warning);
 }
 
+#diagnostics-list li.diagnostic-frame {
+  margin-left: 1rem;
+}
+
 .diag-meta {
   display: block;
   margin-top: 0.45rem;
@@ -746,7 +755,8 @@ html[data-workspace-mode="shader"] .workspace {
   }
 
   .app-header {
-    grid-template-columns: auto 1fr;
+    z-index: 9;
+    grid-template-columns: auto 1fr auto;
   }
 
   .ide-brand {
@@ -764,16 +774,72 @@ html[data-workspace-mode="shader"] .workspace {
     padding: 0 0.65rem;
   }
 
+  .responsive-panel-actions {
+    justify-self: end;
+    display: flex;
+    gap: 0.35rem;
+  }
+
+  .responsive-panel-actions button {
+    min-height: 34px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid #515650;
+    background: transparent;
+    color: var(--header-text);
+    cursor: pointer;
+    font-size: 0.68rem;
+    font-weight: 700;
+  }
+
+  .responsive-panel-actions button[aria-expanded="true"] {
+    border-color: var(--lime);
+    color: var(--lime);
+  }
+
   .workspace {
-    grid-template-columns: minmax(340px, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   html[data-workspace-mode="shader"] .workspace {
-    grid-template-columns: minmax(340px, 1fr) minmax(340px, 46vw);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-panel,
+  .tool-panel {
+    position: fixed;
+    z-index: 8;
+    top: 64px;
+    bottom: 28px;
+    width: min(370px, calc(100vw - 48px));
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.36);
+    transition: transform 180ms ease;
   }
 
   .project-panel {
-    display: none;
+    left: 0;
+    transform: translateX(-105%);
+  }
+
+  .tool-panel {
+    right: 0;
+    transform: translateX(105%);
+  }
+
+  #app.project-panel-open .project-panel,
+  #app.tool-panel-open .tool-panel {
+    transform: translateX(0);
+  }
+
+  #app.project-panel-open #workspace-panel-backdrop,
+  #app.tool-panel-open #workspace-panel-backdrop {
+    position: fixed;
+    z-index: 7;
+    inset: 64px 0 28px;
+    display: block;
+    width: 100%;
+    border: 0;
+    background: rgba(5, 7, 5, 0.5);
+    cursor: default;
   }
 
   .workspace-footer {
@@ -804,7 +870,7 @@ html[data-workspace-mode="shader"] .workspace {
   .app-header {
     position: sticky;
     top: 0;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr auto;
     min-height: 62px;
   }
 
@@ -827,14 +893,10 @@ html[data-workspace-mode="shader"] .workspace {
     font-size: 0.67rem;
   }
 
-  .header-actions .icon-action {
-    display: none;
-  }
-
   .workspace {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(480px, 65vh) minmax(320px, auto);
+    grid-template-rows: minmax(480px, 65vh);
   }
 
   html[data-workspace-mode="shader"] .workspace {
@@ -846,8 +908,9 @@ html[data-workspace-mode="shader"] .workspace {
     border-bottom: 1px solid var(--line);
   }
 
+  .project-panel,
   .tool-panel {
-    min-height: 340px;
+    bottom: 30px;
   }
 
   .workspace-footer {

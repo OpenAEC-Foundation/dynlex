@@ -1,3 +1,5 @@
+#include "patternResolutionVariableDeclarations.inl"
+
 static void removeVariableReferencesFromMatch(
 	ParseContext &context, PatternReference *reference, PatternMatch &match, std::vector<Section *> &affectedSections,
 	bool revertImplicitPromotions
@@ -185,8 +187,6 @@ static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 			return dependency.node->endpointRevision != dependency.endpointRevision;
 		case MatchDependency::Kind::ArgumentChild:
 			return dependency.node->argumentChild != nullptr;
-		case MatchDependency::Kind::WordChild:
-			return dependency.node->wordChild != nullptr;
 		case MatchDependency::Kind::LiteralChild:
 			return dependency.node->literalChildren.contains(dependency.literal);
 		}
@@ -300,6 +300,22 @@ static bool resolveReferences(
 				*activeReference = nullptr;
 			if (activeMatch)
 				*activeMatch = nullptr;
+		} else if (const std::string *explicitVariableName = findVisibleExplicitWholeVariableName(reference)) {
+			failedMatchDependencies.erase(reference);
+			if (decrementCounts)
+				decrementVariableLikeCounts(reference);
+			size_t lineStart = reference->pattern.getLinePos(0);
+			size_t lineEnd = reference->pattern.getLinePos(reference->pattern.text.size());
+			Range variableRange(
+				reference->range().line, reference->range().start() + static_cast<int>(lineStart),
+				reference->range().start() + static_cast<int>(lineEnd)
+			);
+			reference->patternElements = {PatternElement(PatternElement::Type::Variable, *explicitVariableName, 0)};
+			reference->resolve();
+			reference->range().section()->addVariableReference(
+				context, context.createVariableReference(variableRange, *explicitVariableName)
+			);
+			traceResolution(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			const std::string &varName = reference->patternElements[0].text;
@@ -358,6 +374,14 @@ bool resolvePatterns(ParseContext &context) {
 	}
 	if (hadPatternParseError)
 		return false;
+	for (VariableReference *reference : context.pendingExplicitVariableReferences) {
+		requireCompilerInvariant(reference && reference->range.section(), "explicit variable reference has no source section");
+		Section *section = reference->range.section();
+		section->addVariableReference(context, reference);
+		if (!reference->declaredTypeConstraintName.empty() && !reference->definition)
+			section->registerExplicitVariableName(reference->name, reference->range);
+	}
+	context.pendingExplicitVariableReferences.clear();
 	for (Section *section : unResolvedSections) {
 		if (section->type == SectionType::Class)
 			populateClassPatternNames(section);
@@ -681,13 +705,12 @@ bool resolvePatterns(ParseContext &context) {
 		}
 	};
 
-	// Phase 2 depends on fully-resolved definitions. If phase 1 hit max iterations
-	// and left unresolved sections, report them directly.
-	if (!unResolvedSections.empty()) {
+	// Commit phase 1 only after definitions and definition bodies are fully resolved.
+	if (!unResolvedSections.empty() || !bodyReferences.empty()) {
 		emitUnresolvedPatternDiagnostics();
 		return false;
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedFunctionPatterns;
 	// Phase 2: resolve global references (all definitions are now in the tree).
 	// Typed-domain conflicts are checked after signature inference, when every
 	// constraint has a concrete type.
@@ -700,11 +723,11 @@ bool resolvePatterns(ParseContext &context) {
 			break;
 	}
 
-	if (!bodyReferences.empty() || !globalReferences.empty()) {
+	if (!globalReferences.empty()) {
 		emitUnresolvedPatternDiagnostics();
 		return false;
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedGlobalPatterns;
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
 
 	// Phase 3: Resolve precedence declarations and re-match affected references
@@ -883,7 +906,7 @@ bool resolvePatterns(ParseContext &context) {
 			// handles grouping selection using the resolved partial order.
 		}
 	}
-
+	context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;
 	// All patterns resolved — expand expressions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
 		if (line->expression)
@@ -902,46 +925,29 @@ bool resolvePatterns(ParseContext &context) {
 		auto &references = refsIt->second;
 		bool isGlobal = context.declaredGlobalVariables.contains(name);
 
-		std::unordered_map<Section *, Section *> sectionToHighest;
+		std::unordered_map<VariableReference *, Section *> referenceOwners;
+		std::unordered_map<Section *, VariableReference *> earliestImplicitSectionReferences;
 		for (VariableReference *ref : references) {
 			Section *sec = ref->range.section();
-			if (sectionToHighest.contains(sec))
+			if (Section *explicitSection = visibleExplicitVariableSection(sec, name, ref)) {
+				referenceOwners[ref] = explicitSection;
 				continue;
-			Section *highest = sec;
-
-			// Find the enclosing function (Function/Effect section)
-			Section *functionScope = nullptr;
-			for (Section *a = sec; a; a = a->parent) {
-				if (a->type == SectionType::Function && !a->isFlex) {
-					functionScope = a;
-					break;
-				}
 			}
-
-			// Check if THIS function declares the variable as global
-			bool declaredGlobalHere = false;
-			if (functionScope) {
-				for (const std::string &globalVar : functionScope->globalVariables) {
-					if (globalVar == name) {
-						declaredGlobalHere = true;
-						break;
-					}
-				}
-			}
-
-			for (Section *a = sec->parent; a; a = a->parent) {
-				// Stop at function boundary unless this function declares it as global
-				if (!declaredGlobalHere && a == functionScope) {
-					break;
-				}
-				if (a->variableReferences.contains(name))
-					highest = a;
-			}
-			sectionToHighest[sec] = highest;
+			auto [existing, inserted] = earliestImplicitSectionReferences.emplace(sec, ref);
+			if (!inserted && variableReferenceSourcePosition(ref) < variableReferenceSourcePosition(existing->second))
+				existing->second = ref;
+		}
+		std::unordered_map<Section *, Section *> implicitSectionOwners;
+		for (const auto &[sec, _] : earliestImplicitSectionReferences) {
+			implicitSectionOwners[sec] = highestImplicitVariableSection(sec, name, earliestImplicitSectionReferences);
 		}
 		std::unordered_map<Section *, std::vector<VariableReference *>> groups;
-		for (VariableReference *ref : references)
-			groups[sectionToHighest[ref->range.section()]].push_back(ref);
+		for (VariableReference *ref : references) {
+			auto explicitOwner = referenceOwners.find(ref);
+			Section *owner =
+				explicitOwner != referenceOwners.end() ? explicitOwner->second : implicitSectionOwners.at(ref->range.section());
+			groups[owner].push_back(ref);
+		}
 		std::vector<Section *> orderedGroupSections;
 		orderedGroupSections.reserve(groups.size());
 		for (auto &[highestSection, _] : groups)
@@ -952,47 +958,7 @@ bool resolvePatterns(ParseContext &context) {
 			auto groupIt = groups.find(highestSection);
 			if (groupIt == groups.end())
 				continue;
-			auto &groupRefs = groupIt->second;
-			VariableReference *definition = *std::min_element(groupRefs.begin(), groupRefs.end(), [](auto *a, auto *b) {
-				return a->range.line->mergedLineIndex < b->range.line->mergedLineIndex;
-			});
-
-			// This group is the global one if the variable is declared global and
-			// the group's highest section is at the top level (no enclosing function)
-			bool groupIsGlobal = false;
-			if (isGlobal) {
-				groupIsGlobal = true;
-				for (Section *a = highestSection; a; a = a->parent) {
-					if (a->type == SectionType::Function && !a->isFlex) {
-						groupIsGlobal = false;
-						break;
-					}
-				}
-			}
-
-			auto existingDefinition = highestSection->variableDefinitions.find(name);
-			if (existingDefinition != highestSection->variableDefinitions.end() && existingDefinition->second != definition) {
-				VariableReference *oldDefinition = existingDefinition->second;
-				auto refsIt = highestSection->variableReferences.find(name);
-				if (refsIt != highestSection->variableReferences.end()) {
-					auto &refs = refsIt->second;
-					refs.erase(std::remove(refs.begin(), refs.end(), oldDefinition), refs.end());
-					if (refs.empty())
-						highestSection->variableReferences.erase(refsIt);
-				}
-			}
-			highestSection->variableDefinitions[name] = definition;
-			auto variableIt = highestSection->variables.find(name);
-			if (variableIt == highestSection->variables.end()) {
-				highestSection->variables.emplace(name, new Variable(name, definition, groupIsGlobal));
-			} else {
-				requireCompilerInvariant(variableIt->second, "section variable map contains a null variable");
-				*variableIt->second = Variable(name, definition, groupIsGlobal);
-			}
-			for (VariableReference *ref : groupRefs) {
-				if (ref != definition)
-					ref->definition = definition;
-			}
+			materializeVariableGroup(name, highestSection, groupIt->second, isGlobal);
 		}
 	}
 	return true;

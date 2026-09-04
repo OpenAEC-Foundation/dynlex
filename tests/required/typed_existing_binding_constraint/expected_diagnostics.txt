@@ -1,0 +1,4 @@
+tests/required/typed_existing_binding_constraint/main.dl:7-38: Error: No overload matches call 'the constrained value of "text"' for argument types [a pointer to a byte]. Available overloads: 'the constrained value of {value}'
+  note: while inferring call 'the constrained value of "text"' with arguments [a pointer to a byte] -> an unresolved value tests/required/typed_existing_binding_constraint/main.dl:7-38
+  note: while inferring call 'print the constrained value of "text"' with arguments [an unresolved value] -> an unresolved value tests/required/typed_existing_binding_constraint/main.dl:1-38
+  note: while inferring call 'print the constrained value of "text" as a line' with arguments [an unresolved value] -> an unresolved value tests/required/typed_existing_binding_constraint/main.dl:1-48

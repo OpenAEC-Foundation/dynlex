@@ -1,0 +1,10 @@
+import lib/std.dl
+
+function update parent for {fixed integer:item count}:
+    execute:
+        set {an array of item count items:shared value} to [1, 2]
+        if true:
+            set shared value to [3, 4]
+            set {integer:shared value} to 1
+
+update parent for 2

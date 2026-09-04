@@ -4,18 +4,18 @@ function the LSP initialization options test interpreter:
     execute:
         return "python" if the process platform is Windows, else "python3"
 
-set accepting_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['params']['initializationOptions']=={'engine':{'path':'example-server'}};send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});assert read()['method']=='initialized';shutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});assert read()['method']=='exit'"
-set accepting_command to a process command for the LSP initialization options test interpreter
-add "-u" as an argument to accepting_command
-add "-c" as an argument to accepting_command
-add accepting_script as an argument to accepting_command
+set {accepting script} to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();assert init['params']['initializationOptions']=={'engine':{'path':'example-server'}};send({'jsonrpc':'2.0','id':init['id'],'result':{'capabilities':{}}});assert read()['method']=='initialized';shutdown=read();assert shutdown['method']=='shutdown';send({'jsonrpc':'2.0','id':shutdown['id'],'result':None});assert read()['method']=='exit'"
+set {accepting command} to a process command for the LSP initialization options test interpreter
+add "-u" as an argument to accepting command
+add "-c" as an argument to accepting command
+add accepting script as an argument to accepting command
 
 set engine to a new JSON-RPC object
 add JSON-RPC member "path" containing a new JSON-RPC text for "example-server" to engine
 set options to a new JSON-RPC object
 add JSON-RPC member "engine" containing engine to options
 set capabilities to the default LSP client capabilities
-set accepted to the result of starting an LSP client using accepting_command rooted at "file:///workspace" with capabilities and initialization options options waiting up to 2000 milliseconds
+set accepted to the result of starting an LSP client using accepting command rooted at "file:///workspace" with capabilities and initialization options options waiting up to 2000 milliseconds
 print whether accepted succeeded as a line
 set stopped to the result of shutting down accepted's client waiting up to 2000 milliseconds
 print whether stopped succeeded as a line
@@ -23,13 +23,13 @@ free accepted's client
 free capabilities
 free options
 
-set rejecting_script to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'error':{'code':-32603,'message':'initialization rejected'}})"
-set rejecting_command to a process command for the LSP initialization options test interpreter
-add "-u" as an argument to rejecting_command
-add "-c" as an argument to rejecting_command
-add rejecting_script as an argument to rejecting_command
+set {rejecting script} to "import json,sys\ndef read():\n h={}\n while True:\n  line=sys.stdin.buffer.readline()\n  if line==b'\\r\\n': break\n  n,v=line.decode('ascii').split(':',1);h[n.lower()]=v.strip()\n return json.loads(sys.stdin.buffer.read(int(h['content-length'])))\ndef send(m):\n p=json.dumps(m,separators=(',',':')).encode();sys.stdout.buffer.write(b'Content-Length: '+str(len(p)).encode()+b'\\r\\n\\r\\n'+p);sys.stdout.buffer.flush()\ninit=read();send({'jsonrpc':'2.0','id':init['id'],'error':{'code':-32603,'message':'initialization rejected'}})"
+set {rejecting command} to a process command for the LSP initialization options test interpreter
+add "-u" as an argument to rejecting command
+add "-c" as an argument to rejecting command
+add rejecting script as an argument to rejecting command
 
-set rejected to the result of starting an LSP client using rejecting_command waiting up to 2000 milliseconds
+set rejected to the result of starting an LSP client using rejecting command waiting up to 2000 milliseconds
 print whether rejected failed as a line
 print whether (rejected's status = the JSON-RPC remote error status) as a line
 print whether (rejected's error message = "initialization rejected") as a line

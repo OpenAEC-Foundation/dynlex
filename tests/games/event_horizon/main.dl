@@ -18,9 +18,9 @@ function a horizon resource set owning {shader program:program}:
 
 function read the cursor from {pointer:window} into {spatial position:position}:
     execute:
-        set pointer_position to the cursor position of window
-        set the x coordinate of position to pointer_position's x
-        set the y coordinate of position to pointer_position's y
+        set {pointer position} to the cursor position of window
+        set the x coordinate of position to pointer position's x
+        set the y coordinate of position to pointer position's y
 
 function mouse button {integer:number} is down in {pointer:window}:
     execute:

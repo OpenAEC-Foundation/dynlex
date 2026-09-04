@@ -6,6 +6,7 @@ import {
 } from "./browser_test_driver.mjs";
 import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
 import { verifyWebGpuStageUniformBindings } from "./webgpu_stage_uniform_browser.mjs";
+import { verifyHomepageUltrawideLayout } from "./homepage_ultrawide_browser.mjs";
 import {
   assertRiverChallengeLoadingBoundary,
   runRiverChallengeBrowserTest
@@ -511,8 +512,21 @@ await waitFor(
   "semantic highlighting for the edited hero sketch"
 );
 assert.ok(
-  requestedUrls.some((url) => url.endsWith("/compiler/compiler-worker.js")),
+  requestedUrls.some((url) => new URL(url).pathname === "/compiler/compiler-worker.js"),
   "Editing must lazily load the shared compiler worker"
+);
+const compilerWorkerRequest = requestedUrls.find(
+  (url) => new URL(url).pathname === "/compiler/compiler-worker.js"
+);
+const compilerRevision = new URL(compilerWorkerRequest).searchParams.get("revision");
+assert.match(
+  compilerRevision,
+  /^[0-9a-f]{64}$/,
+  "The homepage compiler worker must use the complete artifact revision"
+);
+assert.ok(
+  requestedUrls.some((url) => new URL(url).pathname === "/compiler/manifest.json"),
+  "The homepage must obtain the compiler artifact revision from its generated manifest"
 );
 assert.equal(
   await evaluate(`(() => {
@@ -537,7 +551,7 @@ assert.match(
   "The shader readout must report the compiler's measured duration"
 );
 assert.ok(
-  requestedUrls.some((url) => url.endsWith("/compiler/compiler-worker.js")),
+  requestedUrls.some((url) => new URL(url).pathname === "/compiler/compiler-worker.js"),
   "Running a homepage sketch must load the shared compiler worker"
 );
 
@@ -555,7 +569,7 @@ assert.equal(
   "Words become tools."
 );
 assert.equal(
-  requestedUrls.filter((url) => url.endsWith("/compiler/compiler-worker.js")).length,
+  requestedUrls.filter((url) => new URL(url).pathname === "/compiler/compiler-worker.js").length,
   1,
   "Homepage edits and runs must reuse one compiler worker"
 );
@@ -573,7 +587,7 @@ assert.equal(
   "27"
 );
 assert.equal(
-  requestedUrls.filter((url) => url.endsWith("/compiler/compiler-worker.js")).length,
+  requestedUrls.filter((url) => new URL(url).pathname === "/compiler/compiler-worker.js").length,
   1,
   "The studio sketch must reuse the homepage compiler worker"
 );
@@ -782,55 +796,43 @@ await waitFor(
 );
 await dispatchKey("Escape", "Escape", 27);
 await captureScreenshot("ide-finished");
-await command("Emulation.setDeviceMetricsOverride", {
-  width: 2560,
-  height: 900,
-  deviceScaleFactor: 1,
-  mobile: false
-});
-await navigate("/");
-await waitFor("document.querySelector('[data-live-shader-banner]')?.dataset.shaderPlaylistReady === 'true'", "the ultrawide shader banner");
-await waitFor("document.querySelector('[data-live-shader-banner]').dataset.preloadedShaderIndex === '1'", "the ultrawide terrain topology");
-const ultrawideThoughtLayout = await evaluate(`(() => {
-  const section = document.querySelector('[data-live-shader-banner]');
-  const codeRect = document.querySelector('[data-shader-code]').getBoundingClientRect();
-  const cloudGuide = document.querySelector('.thought-assembly');
-  const cloudRect = cloudGuide.getBoundingClientRect();
-  const terrainCanvas = section.querySelector('[data-layer-state="dormant"] canvas');
-  return {
-    cloudWidthInScreens: cloudRect.width / codeRect.width,
-    gapInScreens: (cloudRect.left - codeRect.right) / codeRect.width,
-    terrainVertices: Number(terrainCanvas.dataset.previewGeometryVertices),
-    terrainPixels: Number(terrainCanvas.dataset.previewGeometryHorizontalPixels),
-    sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1)),
-    guideIsTransparent: (
-      getComputedStyle(cloudGuide).backgroundImage === 'none'
-      && getComputedStyle(cloudGuide).backgroundColor === 'rgba(0, 0, 0, 0)'
-      && getComputedStyle(cloudGuide).clipPath === 'none'
-    )
-  };
-})()`);
-assert.equal(ultrawideThoughtLayout.terrainPixels, ultrawideThoughtLayout.sectionPixels);
-assert.ok(ultrawideThoughtLayout.terrainVertices > firstPreloadedShaderState.vertexCount);
-assert.ok(
-  ultrawideThoughtLayout.cloudWidthInScreens >= 0.74
-    && ultrawideThoughtLayout.cloudWidthInScreens <= 0.82,
-  "The thought cloud must scale from the code screen"
-);
-assert.ok(
-  ultrawideThoughtLayout.gapInScreens >= 0.02
-    && ultrawideThoughtLayout.gapInScreens <= 0.06,
-  "The thought cloud must stay attached to the code screen on ultrawide displays"
-);
-assert.equal(
-  ultrawideThoughtLayout.guideIsTransparent,
-  true,
-  "Only the live shader layer may paint the thought cloud"
-);
-if (screenshotDirectory) {
-  await captureScreenshot("homepage-ultrawide");
+
+async function replaceActiveLine(text) {
+  await dispatchKey("Home", "Home", 36);
+  await dispatchKey("End", "End", 35, 8);
+  await command("Input.insertText", { text });
 }
-await command("Emulation.clearDeviceMetricsOverride");
+
+await replaceMonacoSource(`import lib/std.dl
+
+print 1 as a line`);
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the diagnostic regression source");
+await findMonacoText("print 1 as a line");
+await replaceActiveLine("add 2 to x");
+await waitFor("document.querySelector('#status-text')?.textContent === 'Build failed'", "the active invalid line build");
+assert.equal(await evaluate("document.querySelector('#diagnostics-count').textContent"), "0");
+await dispatchKey("Escape", "Escape", 27);
+await dispatchKey("ArrowUp", "ArrowUp", 38);
+await waitFor(
+  "document.querySelector('#diagnostics-list')?.textContent.includes(\"the assigned value 'x' has no type\")",
+  "moving off an invalid line to reveal its imported-library diagnostic"
+);
+
+await navigate("/ide/");
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the IDE to reinitialize");
+await replaceMonacoSource(`import lib/std.dl
+
+print 1 as a line`);
+await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the explicit-run regression source");
+await findMonacoText("print 1 as a line");
+await replaceActiveLine("add 2 to x");
+await waitFor("!document.querySelector('#run-button').disabled", "Run to remain available after the invalid background build");
+await clickElement("#run-button");
+await waitFor(
+  "document.querySelector('#diagnostics-list')?.textContent.includes(\"the assigned value 'x' has no type\")",
+  "Run to commit the active invalid line and reveal its diagnostic"
+);
+await verifyHomepageUltrawideLayout(firstPreloadedShaderState.vertexCount);
 
 await command("Emulation.setDeviceMetricsOverride", {
   width: 390,

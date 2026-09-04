@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function the accepted length for {fixed integer:item count} values {an array of item count items:values}:
+    execute:
+        return the length of values
+
+print the accepted length for 2 values [1, 2] as a line

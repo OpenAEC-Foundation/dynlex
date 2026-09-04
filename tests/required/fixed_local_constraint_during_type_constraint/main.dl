@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function custom type:
+    execute:
+        set {integer:local value} to 1
+        return the type of local value
+
+set {custom type:item} to 2

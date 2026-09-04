@@ -1,0 +1,7 @@
+import lib/std.dl
+
+flex function create flex local array for {fixed integer:item count}:
+    replacement:
+        set {an array of item count items:values} to [1, 2, 3]
+
+create flex local array for 2

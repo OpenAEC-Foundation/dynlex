@@ -219,27 +219,32 @@ export async function findMonacoText(text, occurrence = 0) {
 export async function hoverMonacoText(text, occurrence = 0) {
   await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
   await new Promise((resolve) => setTimeout(resolve, 400));
-  const point = await evaluate(`(() => {
+  const locateText = `(() => {
     const walker = document.createTreeWalker(
       document.querySelector('.view-lines'),
       NodeFilter.SHOW_TEXT
     );
     let remaining = ${occurrence};
     while (walker.nextNode()) {
-      const index = walker.currentNode.data.indexOf(${JSON.stringify(text)});
-      if (index === -1) continue;
-      if (remaining > 0) {
+      let offset = 0;
+      while (offset < walker.currentNode.data.length) {
+        const index = walker.currentNode.data.indexOf(${JSON.stringify(text)}, offset);
+        if (index === -1) break;
+        if (remaining === 0) {
+          const range = document.createRange();
+          range.setStart(walker.currentNode, index);
+          range.setEnd(walker.currentNode, index + ${JSON.stringify(text)}.length);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        }
         remaining -= 1;
-        continue;
+        offset = index + ${JSON.stringify(text)}.length;
       }
-      const range = document.createRange();
-      range.setStart(walker.currentNode, index);
-      range.setEnd(walker.currentNode, index + ${JSON.stringify(text)}.length);
-      const rect = range.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     }
-    throw new Error(${JSON.stringify(`Monaco text is not visible: ${text}`)});
-  })()`);
+    return null;
+  })()`;
+  await waitFor(`(${locateText}) !== null`, `Monaco text to become visible: ${text}`, 10000);
+  const point = await evaluate(locateText);
   await command("Input.dispatchMouseEvent", {
     type: "mouseMoved",
     x: point.x,

@@ -1,0 +1,35 @@
+import lib/std.dl
+import lib/models/obj.dl
+
+set {material path} to "tests/required/obj_library_growth/growth.mtl"
+set {model path} to "tests/required/obj_library_growth/growth.obj"
+
+set {material file} to @intrinsic("call", "libc", "fopen", a pointer to a byte, material path, "wb")
+set index to 0
+while index < 17:
+    ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, material file, "newmtl material%d\n", index)
+    increment index
+ignore @intrinsic("call", "libc", "fclose", an integer, material file)
+
+set {model file} to @intrinsic("call", "libc", "fopen", a pointer to a byte, model path, "wb")
+ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, model file, "mtllib %s\n", material path)
+set index to 0
+while index < 1025:
+    ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, model file, "v %d 0 0\n", index)
+    ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, model file, "vt 0 0\n")
+    increment index
+set index to 0
+while index < 2049:
+    ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, model file, "f 1/1 2/2 3/3\n")
+    increment index
+ignore @intrinsic("call", "libc", "fclose", an integer, model file)
+
+set mesh to a loaded OBJ mesh from model path for 0 as a pointer to a byte
+print mesh's vertex count as a line
+print mesh's texture coordinate count as a line
+print mesh's triangle count as a line
+print mesh's material count as a line
+free mesh
+
+ignore @intrinsic("call", "libc", "remove", an integer, model path)
+ignore @intrinsic("call", "libc", "remove", an integer, material path)

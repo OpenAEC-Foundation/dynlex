@@ -227,7 +227,9 @@ for (const workspaceKind of document.querySelectorAll("[data-workspace-kind]")) 
   workspaceKind.textContent = shaderMode ? "SHADER" : workspaceKind.textContent;
 }
 
-const worker = new Worker("/compiler/compiler-worker.js", { type: "module" });
+const compilerWorkerUrl = new URL("/compiler/compiler-worker.js", window.location.origin);
+compilerWorkerUrl.searchParams.set("revision", __DYNLEX_COMPILER_REVISION__);
+const worker = new Worker(compilerWorkerUrl, { type: "module" });
 let nextRequestId = 1;
 const pendingRequests = new Map();
 
@@ -289,12 +291,46 @@ const shaderPreviewShell = requiredElement("shader-preview-shell");
 const shaderPreviewCanvas = requiredElement("shader-preview");
 const editorElement = requiredElement("editor");
 const projectFiles = requiredElement("project-files");
+const app = requiredElement("app");
+const projectPanelButton = requiredElement("project-panel-button");
+const toolPanelButton = requiredElement("tool-panel-button");
+const workspacePanelBackdrop = requiredElement("workspace-panel-backdrop");
+const projectPanel = requiredElement("project-panel");
+const toolPanel = requiredElement("tool-panel");
 const toolTabs = [...document.querySelectorAll("[data-tool-tab]")];
 const toolPanels = [...document.querySelectorAll("[data-tool-panel]")];
 
 if (toolTabs.length !== 3 || toolPanels.length !== 3) {
   throw new Error("The IDE tool switcher must contain exactly three tabs and panels");
 }
+
+function setResponsivePanel(panelName) {
+  const responsive = window.matchMedia("(max-width: 900px)").matches;
+  const projectOpen = panelName === "project";
+  const toolsOpen = panelName === "tools";
+  app.classList.toggle("project-panel-open", projectOpen);
+  app.classList.toggle("tool-panel-open", toolsOpen);
+  projectPanelButton.setAttribute("aria-expanded", String(projectOpen));
+  toolPanelButton.setAttribute("aria-expanded", String(toolsOpen));
+  projectPanel.inert = responsive && !projectOpen;
+  toolPanel.inert = responsive && !toolsOpen;
+}
+
+projectPanelButton.addEventListener("click", () => {
+  setResponsivePanel(app.classList.contains("project-panel-open") ? null : "project");
+});
+toolPanelButton.addEventListener("click", () => {
+  setResponsivePanel(app.classList.contains("tool-panel-open") ? null : "tools");
+});
+workspacePanelBackdrop.addEventListener("click", () => setResponsivePanel(null));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" &&
+      (app.classList.contains("project-panel-open") || app.classList.contains("tool-panel-open"))) {
+    setResponsivePanel(null);
+  }
+});
+window.matchMedia("(min-width: 901px)").addEventListener("change", () => setResponsivePanel(null));
+setResponsivePanel(null);
 
 function selectToolTab(name, focus = false) {
   const selectedTab = toolTabs.find((tab) => tab.dataset.toolTab === name);
@@ -397,27 +433,41 @@ function renderDiagnostics(diagnostics) {
   diagnosticsEmpty.hidden = hasDiagnostics;
   diagnosticsCount.textContent = String(diagnostics.length);
 
-  for (const diagnostic of diagnostics) {
+  const appendEntry = (diagnostic, uri, range, message, className = "") => {
     const severity = diagnosticLevel(diagnostic.severity);
     const item = document.createElement("li");
-    item.className = `severity-${severity}`;
-    item.textContent = diagnostic.message;
+    item.className = `severity-${severity} ${className}`.trim();
+    item.textContent = message;
 
-    const line = diagnostic.range.start.line + 1;
-    const column = diagnostic.range.start.character + 1;
+    const line = range.start.line + 1;
+    const column = range.start.character + 1;
     const meta = document.createElement("span");
     meta.className = "diag-meta";
     meta.textContent = `${severity} at ${line}:${column}`;
     item.appendChild(meta);
 
     item.addEventListener("click", async () => {
-      await languageFeatures.showDocument(model.uri.toString());
+      setResponsivePanel(null);
+      await languageFeatures.showDocument(uri);
       editor.revealPositionInCenter({ lineNumber: line, column });
       editor.setPosition({ lineNumber: line, column });
       editor.focus();
     });
 
     diagnosticsList.appendChild(item);
+  };
+
+  for (const diagnostic of diagnostics) {
+    appendEntry(diagnostic, diagnostic.uri, diagnostic.range, diagnostic.message);
+    for (const related of diagnostic.relatedInformation ?? []) {
+      appendEntry(
+        diagnostic,
+        related.location.uri,
+        related.location.range,
+        related.message,
+        "diagnostic-frame"
+      );
+    }
   }
 }
 
@@ -442,7 +492,8 @@ let compileTimer = null;
 let workerReady = false;
 let shaderPreview = null;
 let shaderRenderer = null;
-let latestMainDiagnostics = [];
+let latestDiagnostics = [];
+const diagnosticsByUri = new Map();
 let languageFeatures = null;
 let showingDiagnosticStatus = false;
 let openSourceModels = [];
@@ -474,6 +525,7 @@ function renderOpenFiles(openModels) {
 
     item.append(icon, label, state);
     item.addEventListener("click", () => {
+      setResponsivePanel(null);
       void languageFeatures.showDocument(openModel.uri.toString()).catch((error) => {
         console.error("Could not activate DynLex document", error);
       });
@@ -484,27 +536,30 @@ function renderOpenFiles(openModels) {
 }
 
 function showDiagnosticStatus() {
-  if (latestMainDiagnostics.length === 0) {
+  if (latestDiagnostics.length === 0) {
     setStatus("Ready");
     showingDiagnosticStatus = false;
     return;
   }
-  const hasErrors = latestMainDiagnostics.some((diagnostic) => diagnostic.severity === 1);
+  const hasErrors = latestDiagnostics.some((diagnostic) => diagnostic.severity === 1);
   if (hasErrors) {
     selectToolTab("feedback");
   }
   setStatus(
-    `${latestMainDiagnostics.length} ${latestMainDiagnostics.length === 1 ? "problem" : "problems"}`,
+    `${latestDiagnostics.length} ${latestDiagnostics.length === 1 ? "problem" : "problems"}`,
     hasErrors ? "error" : "ready"
   );
   showingDiagnosticStatus = true;
 }
 
-async function runCompile() {
+async function runCompile({ commitActiveLine = false } = {}) {
   if (!workerReady) {
-    return;
+    return false;
   }
 
+  if (commitActiveLine) {
+    await languageFeatures.commitActiveLine();
+  }
   const sourceVersion = model.getVersionId();
   runButton.disabled = true;
   setStatus("Analyzing…", "busy");
@@ -515,10 +570,9 @@ async function runCompile() {
       renderer: shaderRenderer !== null
     });
     if (sourceVersion !== model.getVersionId()) {
-      return;
+      return false;
     }
     renderCompilerLogMessages(result.compilerLog);
-    runButton.disabled = shaderMode ? false : !result.hasArtifact;
     if (result.status === 0) {
       if (shaderMode) {
         try {
@@ -544,20 +598,24 @@ async function runCompile() {
       }
       showDiagnosticStatus();
     } else {
-      if (latestMainDiagnostics.length === 0) {
+      if (latestDiagnostics.length === 0) {
         setStatus("Build failed", "error");
       } else {
         showDiagnosticStatus();
       }
     }
+    return result.status === 0;
   } catch (error) {
     if (sourceVersion !== model.getVersionId()) {
-      return;
+      return false;
     }
     console.error("Code analysis failed", error);
     renderCompilerLogMessages([{ level: "error", message: "An error occurred. Check the browser log." }]);
     selectToolTab("activity");
     setStatus("Analysis failed", "error");
+    return false;
+  } finally {
+    runButton.disabled = false;
   }
 }
 
@@ -578,22 +636,23 @@ async function runProgram() {
   }
 }
 
-runButton.addEventListener("click", () => {
-  if (shaderMode) {
-    runCompile();
-  } else {
-    runProgram();
+async function runCurrentSource() {
+  const compiled = await runCompile({ commitActiveLine: true });
+  if (compiled && !shaderMode) {
+    await runProgram();
   }
+}
+
+runButton.addEventListener("click", () => {
+  void runCurrentSource();
 });
 
 editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
   if (runButton.disabled) return;
-  if (shaderMode) runCompile();
-  else runProgram();
+  void runCurrentSource();
 });
 
 model.onDidChangeContent(() => {
-  runButton.disabled = true;
   if (compileTimer) {
     clearTimeout(compileTimer);
   }
@@ -629,15 +688,15 @@ model.onDidChangeContent(() => {
           ]
         : [{ target: "cpu" }],
       onDiagnostics(uri, diagnostics) {
-        if (uri !== model.uri.toString()) {
-          return;
-        }
-        latestMainDiagnostics = diagnostics;
-        renderDiagnostics(diagnostics);
+        diagnosticsByUri.set(uri, diagnostics);
+        latestDiagnostics = [...diagnosticsByUri.entries()].flatMap(([diagnosticUri, entries]) => (
+          entries.map((diagnostic) => ({ ...diagnostic, uri: diagnosticUri }))
+        ));
+        renderDiagnostics(latestDiagnostics);
         if (statusPill.dataset.tone === "busy") {
           return;
         }
-        if (diagnostics.length > 0) {
+        if (latestDiagnostics.length > 0) {
           showDiagnosticStatus();
         } else if (showingDiagnosticStatus) {
           showDiagnosticStatus();

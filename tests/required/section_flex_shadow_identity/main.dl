@@ -1,0 +1,19 @@
+function show {number}:
+    execute:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", number))
+
+flex function execute body:
+    replacement:
+        @intrinsic("execute body")
+
+flex section expose replacement value:
+    replacement:
+        @intrinsic("store", {shared value}, 10)
+        execute body
+        show shared value
+
+@intrinsic("store", {shared value}, 1)
+expose replacement value:
+    show shared value
+    @intrinsic("store", {shared value}, 20)
+    show shared value

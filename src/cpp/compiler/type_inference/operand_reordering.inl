@@ -553,7 +553,7 @@ static int countMatchedParameters(Expression *expression, PatternDefinition *def
 	(void)matchingPatternPathIndices(expression->patternMatch->nodesPassed, definition);
 	int count = 0;
 	for (PatternTreeNode *node : expression->patternMatch->nodesPassed) {
-		if (node->type == PatternElement::Type::Variable || node->type == PatternElement::Type::Word)
+		if (node->type == PatternElement::Type::Variable)
 			count++;
 	}
 	return count;

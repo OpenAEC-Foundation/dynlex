@@ -1,0 +1,8 @@
+import lib/random.dl
+
+flex function overwrite {fixed integer:value}:
+    replacement:
+        set value to a random number
+
+set target to 1
+overwrite target

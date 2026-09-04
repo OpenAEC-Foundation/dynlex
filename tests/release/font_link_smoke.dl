@@ -1,4 +1,4 @@
 import lib/font.dl
 
 if false:
-    set typeface to a font loaded from "" at size 1 for 0 as a pointer to a byte
+    set loading to the result of loading a font from "" at size 1 for 0 as a pointer to a byte

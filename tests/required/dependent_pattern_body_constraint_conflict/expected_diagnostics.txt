@@ -1,0 +1,2 @@
+tests/required/dependent_pattern_body_constraint_conflict/main.dl:17-24: Error: Variable 'values' cannot use both an array of count items and integer constraints
+  note: Variable 'values' was first constrained here tests/required/dependent_pattern_body_constraint_conflict/main.dl:48-71

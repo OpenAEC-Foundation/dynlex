@@ -4,7 +4,7 @@ import pathlib
 from lsp_tokens import LspSession, default_server_path, initialize_session, to_file_uri
 
 
-EDIT_LINE = 3
+EDIT_LINE = 4
 
 
 def completion_items(
@@ -410,6 +410,13 @@ def main() -> int:
         if "existing" not in root_prefix_labels:
             raise AssertionError(
                 f"partial existing variable was not completed: {sorted(root_prefix_labels)!r}"
+            )
+
+        numeric_multi_word_labels = edit("print player 2 s")
+        if "player 2 score" not in numeric_multi_word_labels:
+            raise AssertionError(
+                "numeric multi-word variable was not completed from its source spelling: "
+                f"{sorted(numeric_multi_word_labels)!r}"
             )
 
         river_argument_labels = edit("get ")

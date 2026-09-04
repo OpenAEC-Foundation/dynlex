@@ -4,7 +4,7 @@ function [a known value|a known value]:
     replacement:
         1
 
-function [the selection of {word:left} using alpha|the selection of {word:right} using beta]:
+function [the selection of {integer:left} using alpha|the selection of {integer:right} using beta]:
     execute:
         return 1
 
@@ -13,5 +13,5 @@ function [the recurrence of|the recurrence of] argument after marker:
         @intrinsic("discard", argument)
         the recurrence of marker after marker
 
-print (the selection of one using alpha) as a line
-print (the selection of two using beta) as a line
+print (the selection of 1 using alpha) as a line
+print (the selection of 2 using beta) as a line

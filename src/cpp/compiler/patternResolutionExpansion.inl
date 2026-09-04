@@ -53,17 +53,6 @@ materializeMatchedArgument(Expression *rootExpression, PatternMatch *match, cons
 		arg->range = varMatch.variableReference->range;
 		return arg;
 	}
-	case MatchedArgument::Kind::Word: {
-		const WordMatch &wordMatch = match->discoveredWords[argument.itemIndex];
-		Expression *arg = new Expression();
-		arg->kind = Expression::Kind::Literal;
-		arg->literalValue = wordMatch.text;
-		arg->range = Range(
-			rootExpression->range.line, rootExpression->range.start() + wordMatch.lineStartPos,
-			rootExpression->range.start() + wordMatch.lineEndPos
-		);
-		return arg;
-	}
 	}
 	return nullptr;
 }

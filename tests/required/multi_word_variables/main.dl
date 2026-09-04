@@ -1,0 +1,49 @@
+import lib/std.dl
+
+function the sum of {left value} and {right value}:
+    execute:
+        return left value + right value
+
+function long double:
+    replacement:
+        a floating-point number
+
+implicitly convert {integer:value}:
+    replacement:
+        value as a floating-point number
+
+function textual value:
+    replacement:
+        a value
+
+function the carried {textual value:text value}:
+    execute:
+        return text value
+
+set {width} to 20
+set {half width} to width / 2
+add 4 to half width
+print half width as a line
+
+set {same line value} to 1 and add 2 to same line value
+print same line value as a line
+
+set {player 2 score} to 5
+add 3 to player 2 score
+print player 2 score as a line
+@intrinsic("discard", player 2 score)
+ignore (player 2 score)
+ignore [player 2 score]
+
+set {player 20 score} to 9
+print player 20 score as a line
+
+print the sum of 3 and 5 as a line
+
+set {long double:val} to 2
+print whether val = 2.0 as a line
+
+set {a number:numeric value} to 7
+print numeric value as a line
+
+print (the carried "typed, not lexical") as a line

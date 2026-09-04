@@ -26,6 +26,11 @@
           <strong data-current-file>main.dl</strong>
         </div>
 
+        <div class="responsive-panel-actions" aria-label="Workspace panels">
+          <button id="project-panel-button" type="button" aria-controls="project-panel" aria-expanded="false">Files</button>
+          <button id="tool-panel-button" type="button" aria-controls="tool-panel" aria-expanded="false">Tools</button>
+        </div>
+
         <div class="header-actions">
           <span id="status-pill"><i aria-hidden="true"></i><span id="status-text">Initializing</span></span>
           <button id="theme-button" class="icon-action" type="button" aria-label="Switch color theme">Theme</button>
@@ -33,8 +38,10 @@
         </div>
       </header>
 
+      <button id="workspace-panel-backdrop" type="button" aria-label="Close workspace panel" tabindex="-1"></button>
+
       <main class="workspace">
-        <aside class="project-panel" aria-label="Project files">
+        <aside id="project-panel" class="project-panel" aria-label="Project files">
           <div class="file-group">
             <div class="project-title"><span data-workspace-kind>PLAYGROUND</span><strong>Files</strong></div>
             <div id="project-files" class="project-files" role="list"></div>
@@ -51,7 +58,7 @@
           <div id="editor"></div>
         </section>
 
-        <aside class="tool-panel" aria-label="Problems and output">
+        <aside id="tool-panel" class="tool-panel" aria-label="Problems and output">
           <div class="tool-tabs" role="tablist" aria-label="Workspace information">
             <button id="tool-tab-feedback" type="button" role="tab" aria-selected="true" aria-controls="tool-panel-feedback" data-tool-tab="feedback">Problems <span id="diagnostics-count">0</span></button>
             <button id="tool-tab-output" type="button" role="tab" aria-selected="false" aria-controls="tool-panel-output" data-tool-tab="output" tabindex="-1">Output</button>

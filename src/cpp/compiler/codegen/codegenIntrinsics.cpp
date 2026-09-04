@@ -419,10 +419,9 @@ CodegenResult generateIntrinsicCode(
 		return true;
 	};
 	if (kind == IntrinsicKind::LifecycleValue) {
-		auto value = context.patternBindings.find(std::string(managedLifecycleParameterName));
-		if (value == context.patternBindings.end() || !value->second)
+		if (!context.managedLifecycleValueBinding)
 			crashCompilerBug("lifecycle value reached codegen without its managed value binding");
-		return builder.CreateLoad(getLLVMType(context, resultType), value->second, "lifecycle_value");
+		return builder.CreateLoad(getLLVMType(context, resultType), context.managedLifecycleValueBinding, "lifecycle_value");
 	}
 	if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
 		llvm::GlobalVariable *global = kind == IntrinsicKind::CommandLineArgumentCount
@@ -483,6 +482,8 @@ CodegenResult generateIntrinsicCode(
 
 	if (kind == IntrinsicKind::Store) {
 		DataType valType = finalizedExpressionType(context, args[2]);
+		if (valType.isMetaType())
+			return nullptr;
 		CodegenResult generatedValue = generateExpressionCode(context, args[2]);
 		if (!generatedValue)
 			return generatedValue;

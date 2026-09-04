@@ -77,11 +77,13 @@ static int getRefinedClassInstantiationIndex(
 }
 
 static void recordParameterOutputType(InferenceContext &context, Variable *variable) {
-	if (!context.currentInstantiation || !variable)
+	if (!variableIsCurrentInstantiationParameter(context, variable))
 		return;
 	auto parameter = context.currentInstantiation->parameterTypesByName.find(variable->name);
-	if (parameter == context.currentInstantiation->parameterTypesByName.end())
-		return;
+	requireCompilerInvariant(
+		parameter != context.currentInstantiation->parameterTypesByName.end(),
+		"current instantiation parameter is missing its input type"
+	);
 	if (context.trial) {
 		requireCompilerInvariant(context.trialJournal, "trial parameter refinement requires a rollback journal");
 		context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
@@ -103,7 +105,7 @@ static bool refineStorageExpressionType(
 
 	if (storage->kind == Expression::Kind::Variable && storage->variable) {
 		Section *section = storage->range.line ? storage->range.line->section : nullptr;
-		Variable *variable = section ? section->findVariable(storage->variable->name) : nullptr;
+		Variable *variable = section ? section->findVariable(storage->variable) : nullptr;
 		if (!variable || !variable->type.isDeduced())
 			return false;
 		DataType refinedType;
@@ -216,8 +218,8 @@ pointerStorageParameterName(Expression *expression, InferenceContext &context, c
 		return std::nullopt;
 	if (pointerExpression->inferredPointerStorage)
 		return pointerStorageParameterName(pointerExpression->inferredPointerStorage, context, pointerBindingFrameStack);
-	if (pointerExpression->kind == Expression::Kind::Variable && pointerExpression->variable && context.currentInstantiation &&
-		context.currentInstantiation->parameterTypesByName.contains(pointerExpression->variable->name))
+	if (pointerExpression->kind == Expression::Kind::Variable &&
+		variableReferenceIsCurrentInstantiationParameter(context, pointerExpression->variable))
 		return pointerExpression->variable->name;
 	if (pointerExpression->kind != Expression::Kind::IntrinsicCall)
 		return std::nullopt;

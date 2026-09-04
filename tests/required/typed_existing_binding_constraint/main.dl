@@ -1,0 +1,7 @@
+import lib/std.dl
+
+function the constrained value of {value}:
+    execute:
+        return {integer:value}
+
+print the constrained value of "text" as a line

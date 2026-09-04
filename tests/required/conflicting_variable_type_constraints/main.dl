@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set {integer:value} to 1
+set {a floating-point number:value} to 2.0

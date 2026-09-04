@@ -1,0 +1,2 @@
+tests/required/conflicting_variable_type_constraints/main.dl:6-29: Error: Variable 'value' cannot use both integer and a floating-point number constraints
+  note: Variable 'value' was first constrained here tests/required/conflicting_variable_type_constraints/main.dl:6-13

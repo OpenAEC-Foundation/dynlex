@@ -1,4 +1,5 @@
 #include "section.h"
+#include "bindingResolution.h"
 #include "classSection.h"
 #include "expression.h"
 #include "functionSection.h"
@@ -245,6 +246,10 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 			push();
 			break;
 		}
+		case '{': {
+			push();
+			break;
+		}
 		case ')': {
 			if (nodeStack.top()->character == ',') {
 				nodeStack.top()->end = index;
@@ -260,6 +265,11 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 				nodeStack.pop();
 			}
 			if (!tryPop('['))
+				return nullptr;
+			break;
+		}
+		case '}': {
+			if (!tryPop('{'))
 				return nullptr;
 			break;
 		}
@@ -428,6 +438,7 @@ Expression *Section::detectPatternsRecursively(
 
 	// Create a PatternReference for pattern matching
 	PatternReference *reference = new PatternReference(expr, patternType);
+	reference->matchingScope = this;
 	expr->patternReference = reference;
 
 	// Process children to find arguments
@@ -548,6 +559,45 @@ Expression *Section::detectPatternsRecursively(
 		} else if (child->character == '"') {
 			expr->arguments.push_back(createStringLiteral(range, child));
 			reference->pattern.replaceLine(child->start - "\""sv.length(), child->end + "\""sv.length());
+		} else if (child->character == '{') {
+			std::string_view content = range.subString.substr(child->start, child->end - child->start);
+			CaptureElementParts capture = splitCaptureElement(content);
+			if (capture.name.empty() || !isValidVariableName(capture.name) ||
+				(content.find(':') != std::string_view::npos && capture.typeConstraint.empty())) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "invalid pattern parse capture format",
+					range.subRange(child->start - 1, child->start)
+				));
+				delete reference;
+				delete expr;
+				return nullptr;
+			}
+
+			Range nameRange =
+				range.subRange(child->start + capture.nameOffset, child->start + capture.nameOffset + capture.name.size());
+			VariableReference *variableReference = context.createVariableReference(nameRange, std::string(capture.name));
+			if (!capture.typeConstraint.empty()) {
+				variableReference->declaredTypeConstraintName = std::string(capture.typeConstraint);
+				variableReference->declaredTypeConstraintRange =
+					range.subRange(child->start, child->start + capture.typeConstraint.size());
+			}
+			if (registerPatternReferences) {
+				if (variableReference->declaredTypeConstraintName.empty())
+					registerExplicitVariableName(variableReference->name, variableReference->range);
+				context.pendingExplicitVariableReferences.push_back(variableReference);
+			} else {
+				auto definition = variableDefinitions.find(variableReference->name);
+				if (definition != variableDefinitions.end())
+					variableReference->definition = normalizeBindingReference(definition->second);
+			}
+
+			Expression *variableExpression = new Expression();
+			variableExpression->range = range.subRange(child->start - 1, child->end + 1);
+			variableExpression->kind = Expression::Kind::Variable;
+			variableExpression->variable = variableReference;
+			expr->arguments.push_back(variableExpression);
+			context.addSourceToken(nameRange, ParseContext::SourceTokenKind::Variable);
+			reference->pattern.replaceLine(child->start - 1, child->end + 1);
 		}
 	}
 
@@ -713,13 +763,38 @@ Expression *Section::detectPatternsRecursively(
 }
 
 void Section::addVariableReference(ParseContext &context, VariableReference *reference) {
+	requireCompilerInvariant(reference && reference->range.line, "variable reference has no source position");
 	variableReferences[reference->name].push_back(reference);
+	auto explicitDeclaration = explicitVariableDeclarations.find(reference->name);
+	if (explicitDeclaration != explicitVariableDeclarations.end() &&
+		std::pair(explicitDeclaration->second.line->mergedLineIndex, explicitDeclaration->second.start()) <=
+			std::pair(reference->range.line->mergedLineIndex, reference->range.start())) {
+		context.unresolvedVariableReferences[reference->name].push_back(reference);
+		return;
+	}
 	searchParentPatterns(context, reference);
+}
+
+void Section::registerExplicitVariableName(const std::string &name, const Range &declarationRange) {
+	requireCompilerInvariant(declarationRange.line, "explicit variable declaration has no source line");
+	auto existing = explicitVariableDeclarations.find(name);
+	if (existing == explicitVariableDeclarations.end() ||
+		std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <
+			std::pair(existing->second.line->mergedLineIndex, existing->second.start()))
+		explicitVariableDeclarations[name] = declarationRange;
 }
 
 void Section::indexExplicitParameters(PatternDefinition &definition) {
 	requireCompilerInvariant(definition.section == this, "explicit parameter candidate belongs to another section");
 	explicitParameterIndex.addDefinition(definition);
+	forEachLeafElement(definition.patternElements, [&](const DefinitionPatternElement &element) {
+		if (element.type == PatternElement::Type::Variable) {
+			int sourceStart = definition.range.start() + static_cast<int>(element.startPos);
+			registerExplicitVariableName(
+				element.text, Range(definition.range.line, sourceStart, sourceStart + static_cast<int>(element.text.size()))
+			);
+		}
+	});
 }
 
 bool Section::canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const {
@@ -792,7 +867,7 @@ Section::resolvePatternParameterBinding(ParseContext &context, const std::string
 				"explicit parameter index contains a candidate for another section"
 			);
 			requireCompilerInvariant(
-				candidate.captureType == PatternElement::Type::Variable || candidate.captureType == PatternElement::Type::Word,
+				candidate.captureType == PatternElement::Type::Variable,
 				"explicit parameter index contains a non-capture element"
 			);
 			definitionsWithExplicitParameter.insert(candidate.definition);
@@ -835,6 +910,14 @@ Section::resolvePatternParameterBinding(ParseContext &context, const std::string
 void Section::searchParentPatterns(ParseContext &context, VariableReference *reference) {
 	if (VariableReference *definitionReference = resolvePatternParameterBinding(context, reference->name, reference->range)) {
 		reference->definition = definitionReference;
+		if (!reference->declaredTypeConstraintName.empty()) {
+			auto variable = variables.find(reference->name);
+			requireCompilerInvariant(
+				variable != variables.end() && variable->second,
+				"resolved pattern parameter binding has no materialized variable"
+			);
+			variable->second->addDeclaredTypeConstraintReference(reference);
+		}
 		return;
 	}
 	if (parent) {
@@ -878,6 +961,37 @@ Variable *Section::findVariable(const std::string &name) {
 		if (it != sec->variables.end())
 			return it->second;
 		sec = sec->parent;
+	}
+	return nullptr;
+}
+
+Variable *Section::findVariable(const std::string &name, const Range &useRange) {
+	requireCompilerInvariant(useRange.line != nullptr, "source-position variable lookup has no source line");
+	const std::pair<int, int> usePosition{useRange.line->mergedLineIndex, useRange.start()};
+	for (Section *section = this; section; section = section->parent) {
+		auto variable = section->variables.find(name);
+		if (variable == section->variables.end())
+			continue;
+		requireCompilerInvariant(variable->second != nullptr, "section variable metadata contains a null variable");
+		auto declaration = section->explicitVariableDeclarations.find(name);
+		if (declaration == section->explicitVariableDeclarations.end())
+			return variable->second;
+		const Range &declarationRange = declaration->second;
+		requireCompilerInvariant(declarationRange.line != nullptr, "explicit variable declaration has no source position");
+		if (std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <= usePosition)
+			return variable->second;
+	}
+	return nullptr;
+}
+
+Variable *Section::findVariable(const VariableReference *reference) {
+	if (!reference)
+		return nullptr;
+	const VariableReference *definition = reference->definition ? reference->definition : reference;
+	for (Section *section = this; section; section = section->parent) {
+		auto variable = section->variables.find(definition->name);
+		if (variable != section->variables.end() && variable->second && variable->second->definition == definition)
+			return variable->second;
 	}
 	return nullptr;
 }

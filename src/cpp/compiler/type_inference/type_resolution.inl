@@ -204,12 +204,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 	}
 	if (resolved->kind == Expression::Kind::Variable && resolved->variable) {
 		VariableReference *varRef = resolved->variable;
-		VariableReference *definition = varRef->definition ? varRef->definition : varRef;
-		Section *sec = definition->range.line ? definition->range.line->section : nullptr;
-		Variable *var = sec ? sec->findVariable(definition->name) : nullptr;
-		if (!var && resolved->range.line)
-			var =
-				resolved->range.line->section ? resolved->range.line->section->findVariable(resolved->variable->name) : nullptr;
+		Section *sec = resolved->range.line ? resolved->range.line->section : nullptr;
+		Variable *var = sec ? sec->findVariable(varRef) : nullptr;
 		if (var && var->type.isDeduced())
 			return var->type;
 		if (std::optional<DataType> numericTokenType = parseNumericTokenType(
@@ -527,6 +523,11 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			}
 		} else if (kind == IntrinsicKind::Construct) {
 			DataType typeRefType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+			if (resolved->arguments.size() == 2 && typeRefType.kind == DataType::Kind::Type) {
+				DataType targetType = typeRefType.toReferencedType();
+				if (targetType.isConcrete() && targetType.isRuntimeValueType())
+					return targetType;
+			}
 			if (typeRefType.kind == DataType::Kind::Type && typeRefType.referencedKind == DataType::Kind::Array) {
 				DataType arrayType = typeRefType.toReferencedType();
 				if (arrayType.arraySize == static_cast<int>(resolved->arguments.size()) - 2) {
@@ -600,6 +601,28 @@ static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContex
 #include "type_resolution_class.inl"
 #include "type_resolution_diagnostics.inl"
 #include "type_resolution_overloads.inl"
+
+static VariableReference *
+currentInstantiationParameterDefinition(const InferenceContext &context, const std::string &parameterName) {
+	if (!context.currentInstantiation || !context.currentInstantiation->body ||
+		!context.currentInstantiation->parameterTypesByName.contains(parameterName))
+		return nullptr;
+	Section *ownerSection = context.currentInstantiation->body->sourceSection;
+	requireCompilerInvariant(ownerSection != nullptr, "instantiated function body has no source section");
+	auto definition = ownerSection->variableDefinitions.find(parameterName);
+	requireCompilerInvariant(
+		definition != ownerSection->variableDefinitions.end() && definition->second,
+		"instantiation parameter has no declaration identity"
+	);
+	return normalizeBindingReference(definition->second);
+}
+
+static bool variableReferenceIsCurrentInstantiationParameter(const InferenceContext &context, VariableReference *reference) {
+	if (!reference)
+		return false;
+	VariableReference *parameterDefinition = currentInstantiationParameterDefinition(context, reference->name);
+	return parameterDefinition && normalizeBindingReference(reference) == parameterDefinition;
+}
 
 static void recordUnknownTypeConstraintFailure(InferenceContext *inferenceContext, ParseContext &parseContext, Range range) {
 	requireCompilerInvariant(inferenceContext != nullptr, "type-constraint failure requires an inference context");

@@ -32,6 +32,14 @@ for (const resource of [
     `The Vite-served IDE must load ${resource}`
   );
 }
+const workerRequest = requestedUrls.find(
+  (url) => new URL(url).pathname === "/compiler/compiler-worker.js"
+);
+assert.match(
+  new URL(workerRequest).searchParams.get("revision"),
+  /^[0-9a-f]{64}$/,
+  "The Vite-served compiler worker must use the complete artifact revision"
+);
 assert.deepEqual(runtimeExceptions, [], "The Vite-served IDE must not raise browser exceptions");
 
 closeBrowserSession();

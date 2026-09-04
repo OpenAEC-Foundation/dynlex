@@ -19,12 +19,12 @@ function the argument count of {a pointer to backend:value}:
 
 set arguments to an empty list of string
 append the string form of "first" to arguments
-set selected_backend to a backend using arguments
+set {selected backend} to a backend using arguments
 set backends to an empty list of a pointer to backend
-append selected_backend to backends
+append selected backend to backends
 set selected to the item at 0 in backends
 set count to the argument count of selected
 free backends
 free arguments
-@intrinsic("call", "libc", "free", nothing, selected_backend)
+@intrinsic("call", "libc", "free", nothing, selected backend)
 @intrinsic("call", "libc", "exit", nothing, count - 1)

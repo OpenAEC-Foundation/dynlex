@@ -229,13 +229,11 @@ runScopedInstantiationInferencePass(InferenceContext &context, Instantiation &in
 static Variable *findVariableForExpression(Expression *expression) {
 	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable || !expression->range.line)
 		return nullptr;
-	return expression->range.line->section ? expression->range.line->section->findVariable(expression->variable->name)
-										   : nullptr;
+	return expression->range.line->section ? expression->range.line->section->findVariable(expression->variable) : nullptr;
 }
 
 static bool variableIsCurrentInstantiationParameter(const InferenceContext &context, Variable *variable) {
-	return context.currentInstantiation && variable &&
-		   context.currentInstantiation->parameterTypesByName.contains(variable->name);
+	return variable && variableReferenceIsCurrentInstantiationParameter(context, variable->definition);
 }
 
 static InstantiationPurity classifyPropertyIntrinsicPurity(
@@ -511,10 +509,11 @@ static void resetSectionLocalVariableTypes(Section *section) {
 	if (!section)
 		return;
 	for (auto &[name, variable] : section->variables) {
+		(void)name;
 		if (!variable || variable->isGlobal)
 			continue;
-		variable->type = {};
-		variable->typeOriginRange = {};
+		variable->type = DataType{};
+		variable->typeOriginRange = Range{};
 		variable->typeOriginFloatLiteralReplacement.clear();
 	}
 }

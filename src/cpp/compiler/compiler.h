@@ -102,7 +102,7 @@ struct ResolvedPatternConstraint {
 
 using PatternConstraintResolver = std::function<std::optional<ResolvedPatternConstraint>(PatternDefinition *, size_t, size_t)>;
 
-ResolvedPatternConstraint
+std::optional<ResolvedPatternConstraint>
 resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex, size_t argumentIndex);
 std::optional<ResolvedPatternConstraint> resolveCompiledPatternConstraint(
 	PatternDefinition *definition, size_t pathIndex, size_t argumentIndex, const std::vector<DataType> &argumentTypes,

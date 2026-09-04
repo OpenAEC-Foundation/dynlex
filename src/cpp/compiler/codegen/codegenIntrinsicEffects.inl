@@ -503,6 +503,13 @@ if (kind == IntrinsicKind::AddPointerDepth) {
 }
 
 if (kind == IntrinsicKind::Construct) {
+	if (args.size() == 2) {
+		requireCompilerInvariant(
+			resultType.isConcrete() && resultType.isRuntimeValueType(),
+			"value initialization reached codegen without a concrete runtime type"
+		);
+		return llvm::Constant::getNullValue(getLLVMType(context, resultType));
+	}
 	if (resultType.kind == DataType::Kind::Array) {
 		llvm::Type *arrayType = getLLVMType(context, resultType);
 		llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
@@ -587,7 +594,7 @@ if (kind == IntrinsicKind::Construct) {
 }
 
 if (kind == IntrinsicKind::Property) {
-	// Format: args[1]=instance, args[2]=fieldname (string literal from {word:} capture)
+	// Format: args[1]=instance, args[2]=fieldname (a compile-time property-name string)
 	Expression *ownerExpr = args[1];
 	DataType ownerType = finalizedExpressionType(context, ownerExpr);
 	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;

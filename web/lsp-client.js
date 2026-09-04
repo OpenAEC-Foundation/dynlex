@@ -409,8 +409,16 @@ class LspDocument {
   }
 }
 
+function createLspClientId() {
+  if (typeof globalThis.crypto?.getRandomValues !== "function") {
+    throw new TypeError("LSP session requires Web Crypto random values");
+  }
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  return `dynlex-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
 export class LspSession {
-  constructor(exchange, { clientId = globalThis.crypto?.randomUUID?.() } = {}) {
+  constructor(exchange, { clientId = createLspClientId() } = {}) {
     if (typeof clientId !== "string" || clientId.length === 0) {
       throw new TypeError("LSP session requires a client ID");
     }
@@ -480,10 +488,13 @@ export class LspSession {
     this.#requireOpenDocument(document);
     return this.#enqueue(async () => {
       const nextVersion = version ?? document.version + 1;
-      if (!Number.isInteger(nextVersion) || nextVersion <= document.version) {
-        throw new TypeError("LSP document version must increase");
+      if (!Number.isInteger(nextVersion) || nextVersion < document.version) {
+        throw new TypeError("LSP document version must not decrease");
       }
-      if (text === document.text) {
+      if (nextVersion === document.version) {
+        if (text !== document.text) {
+          throw new Error("One LSP document version cannot contain different text");
+        }
         if (position !== undefined) {
           await this.#notifyActiveCursor(document, position);
         }

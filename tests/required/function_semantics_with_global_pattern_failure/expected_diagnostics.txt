@@ -1,0 +1,1 @@
+tests/required/function_semantics_with_global_pattern_failure/main.dl:1-9: Error: This pattern couldn't be resolved

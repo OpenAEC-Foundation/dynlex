@@ -1,0 +1,15 @@
+import lib/std.dl
+
+function show {number}:
+    execute:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", number))
+
+function inspect fixed {fixed integer:value}:
+    execute:
+        if @intrinsic("equal", 1, 1):
+            show value
+            @intrinsic("store", {value}, 20)
+            show value
+        show value
+
+inspect fixed 10

@@ -1,0 +1,14 @@
+import lib/font.dl
+
+set loading to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 16 for 0 as a pointer to a byte
+set status to loading's status
+set typeface to loading's typeface
+print loading failed as a line
+print status's operation as a line
+print (status's error code != 0) as a line
+print (typeface's library = 0 as a pointer to a byte) as a line
+print (typeface's face = 0 as a pointer to a byte) as a line
+print (typeface's texture is loaded = false) as a line
+
+set releasing to the result of releasing (the address of typeface)
+print releasing succeeded as a line

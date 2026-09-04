@@ -8,8 +8,6 @@ static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &
 	PatternTreeNode *child = nullptr;
 	if (element.type == PatternElement::Type::Variable) {
 		child = parent->argumentChild;
-	} else if (element.type == PatternElement::Type::Word) {
-		child = parent->wordChild;
 	} else {
 		auto existing = parent->literalChildren.find(element.text);
 		if (existing != parent->literalChildren.end())
@@ -20,13 +18,11 @@ static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &
 		child = new PatternTreeNode(element.type, element.text);
 		if (element.type == PatternElement::Type::Variable)
 			parent->argumentChild = child;
-		else if (element.type == PatternElement::Type::Word)
-			parent->wordChild = child;
 		else
 			parent->literalChildren[element.text] = child;
 	}
 	std::string parameterName;
-	if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
+	if (element.type == PatternElement::Type::Variable)
 		parameterName = element.text;
 	child->definitionOccurrences[definition].push_back({element.startPos, std::move(parameterName)});
 	return child;
@@ -59,8 +55,6 @@ snapshotCanonicalPatternPaths(const std::vector<DefinitionPatternElement> &eleme
 static PatternTreeNode *findChild(PatternTreeNode *current, const PatternElement &element) {
 	if (element.type == PatternElement::Type::Variable)
 		return current->argumentChild;
-	if (element.type == PatternElement::Type::Word)
-		return current->wordChild;
 	auto existing = current->literalChildren.find(element.text);
 	return existing == current->literalChildren.end() ? nullptr : existing->second;
 }
@@ -84,8 +78,8 @@ pathsEqual(const std::vector<std::vector<PatternElement>> &left, const std::vect
 }
 
 // Walk elements through two parallel paths in the tree: the main (exact) path and
-// a "less specific" path that follows argument/word alternatives where the new definition
-// has a more specific element (literal or word). Any matchingDefinition found only on
+// a "less specific" path that follows argument alternatives where the new definition
+// has a more specific literal element. Any matchingDefinition found only on
 // the less-specific endpoints is a less-specific definition.
 static void walkForLessSpecific(
 	const std::vector<DefinitionPatternElement> &path, size_t index, std::vector<PatternTreeNode *> mainNodes,
@@ -110,14 +104,13 @@ static void walkForLessSpecific(
 		std::vector<PatternTreeNode *> nextMain, nextLess;
 
 		auto advanceNode = [&](PatternTreeNode *node, bool isMainPath) {
-			// Check if this node is an argument/word node that can absorb multiple elements.
+			// Check if this node is an argument node that can absorb multiple elements.
 			// An argument node in a less-specific pattern can match a sub-expression spanning
 			// multiple elements. Keep such nodes in nextLess so they continue absorbing.
-			bool isAbsorbingArgNode =
-				!isMainPath && (node->type == PatternElement::Type::Variable || node->type == PatternElement::Type::Word);
+			bool isAbsorbingArgNode = !isMainPath && node->type == PatternElement::Type::Variable;
 
 			if (isAbsorbingArgNode) {
-				// This argument/word node is on the less-specific path and can absorb this element.
+				// This argument node is on the less-specific path and can absorb this element.
 				// Keep it in nextLess (absorbs more elements) AND try advancing through its children
 				// (in case the argument ends here and the pattern continues).
 				nextLess.push_back(node); // continue absorbing
@@ -127,8 +120,6 @@ static void walkForLessSpecific(
 					nextLess.push_back(it->second);
 				if (node->argumentChild)
 					nextLess.push_back(node->argumentChild);
-				if (node->wordChild)
-					nextLess.push_back(node->wordChild);
 				return;
 			}
 
@@ -140,33 +131,16 @@ static void walkForLessSpecific(
 					else
 						nextLess.push_back(node->argumentChild);
 				}
-			} else if (elem.type == PatternElement::Type::Word) {
-				// Word: main follows wordChild; argumentChild is less specific
-				if (isMainPath) {
-					if (node->wordChild)
-						nextMain.push_back(node->wordChild);
-					// Fork: argumentChild is less specific than word
-					if (node->argumentChild)
-						nextLess.push_back(node->argumentChild);
-				} else {
-					// lessSpecific path continues through both word and argument
-					if (node->wordChild)
-						nextLess.push_back(node->wordChild);
-					if (node->argumentChild)
-						nextLess.push_back(node->argumentChild);
-				}
 			} else {
 				// Literal (Other/VariableLike text): main follows literalChildren;
-				// argumentChild and wordChild are less specific
+				// argumentChild is less specific
 				if (isMainPath) {
 					auto it = node->literalChildren.find(elem.text);
 					if (it != node->literalChildren.end())
 						nextMain.push_back(it->second);
-					// Fork: argument/word at this position is less specific
+					// Fork: an argument at this position is less specific
 					if (node->argumentChild)
 						nextLess.push_back(node->argumentChild);
-					if (node->wordChild)
-						nextLess.push_back(node->wordChild);
 				} else {
 					// lessSpecific path continues through all possible children
 					auto it = node->literalChildren.find(elem.text);
@@ -174,8 +148,6 @@ static void walkForLessSpecific(
 						nextLess.push_back(it->second);
 					if (node->argumentChild)
 						nextLess.push_back(node->argumentChild);
-					if (node->wordChild)
-						nextLess.push_back(node->wordChild);
 				}
 			}
 		};
@@ -368,7 +340,7 @@ void PatternTreeNode::requirePatternDefinitionIndexed(const PatternDefinition *d
 				storedNodePath[elementIndex] == current, "indexed pattern node path does not match its trie path"
 			);
 			std::string parameterName;
-			if (element.type == PatternElement::Type::Variable || element.type == PatternElement::Type::Word)
+			if (element.type == PatternElement::Type::Variable)
 				parameterName = element.text;
 			expectedOccurrences[current].push_back({element.startPos, std::move(parameterName)});
 		}

@@ -90,7 +90,9 @@ const homepageCss = [
   fs.readFileSync(files.sectionsCss, "utf8"),
   fs.readFileSync(files.responsiveCss, "utf8")
 ].join("\n");
-assert.match(homepageJavascript, /new Worker\("\/compiler\/compiler-worker\.js"/);
+assert.match(homepageJavascript, /fetch\("\/compiler\/manifest\.json", \{ cache: "no-store" \}\)/);
+assert.match(homepageJavascript, /workerUrl\.searchParams\.set\("revision", revision\)/);
+assert.match(homepageJavascript, /new Worker\(workerUrl/);
 assert.match(homepageJavascript, /from "\.\/snippet-highlights\.js"/);
 assert.match(homepageJavascript, /from "\.\/snippet-highlight-key\.js"/);
 assert.match(homepageJavascript, /from "\.\/semantic-highlighting\.js"/);

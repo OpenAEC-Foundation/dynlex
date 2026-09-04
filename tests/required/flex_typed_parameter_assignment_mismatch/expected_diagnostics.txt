@@ -1,0 +1,4 @@
+lib/std.dl:9-45: Error: Variable 'value' requires fixed integer, but this value is a 32-bit integer
+  note: while inferring intrinsic 'store' in '@intrinsic("store", variable, value)' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-45
+  note: while inferring call 'set value to a random number' with arguments [a 32-bit integer, a 32-bit integer] -> an unresolved value tests/required/flex_typed_parameter_assignment_mismatch/main.dl:9-37
+  note: while inferring call 'overwrite target' with arguments [a 32-bit integer] -> an unresolved value tests/required/flex_typed_parameter_assignment_mismatch/main.dl:1-17

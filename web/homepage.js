@@ -112,8 +112,19 @@ function setSketchState(sketch, state) {
   status.textContent = labels[state];
 }
 
-function createSnippetWorker() {
-  snippetWorker = new Worker("/compiler/compiler-worker.js", { type: "module" });
+async function createSnippetWorker() {
+  const response = await fetch("/compiler/manifest.json", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Compiler artifact manifest could not be loaded");
+  }
+  const manifest = await response.json();
+  const revision = manifest?.revision;
+  if (typeof revision !== "string" || !/^[0-9a-f]{64}$/.test(revision)) {
+    throw new Error("Compiler artifact manifest is invalid");
+  }
+  const workerUrl = new URL("/compiler/compiler-worker.js", window.location.origin);
+  workerUrl.searchParams.set("revision", revision);
+  snippetWorker = new Worker(workerUrl, { type: "module" });
   snippetWorker.addEventListener("message", (event) => {
     const message = event.data;
     if (!message || typeof message.id !== "number") {
@@ -148,8 +159,7 @@ function callSnippetWorker(type, payload = {}) {
 
 function ensureSnippetWorker() {
   if (!snippetWorkerReady) {
-    createSnippetWorker();
-    snippetWorkerReady = callSnippetWorker("init").then(async (result) => {
+    snippetWorkerReady = createSnippetWorker().then(() => callSnippetWorker("init")).then(async (result) => {
       snippetLsp = new LspSession((message) => callSnippetWorker("lsp.exchange", { message }));
       snippetLsp.onNotification("textDocument/publishDiagnostics", (params) => {
         if (params.uri !== snippetDocumentUri) {

@@ -1,0 +1,17 @@
+function show {number}:
+    execute:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d\n", number))
+
+flex section if {condition}:
+    replacement:
+        @intrinsic("if", condition)
+
+function inspect {value}:
+    execute:
+        if @intrinsic("equal", 1, 1):
+            show value
+            @intrinsic("store", {value}, 20)
+            show value
+        show value
+
+inspect 10

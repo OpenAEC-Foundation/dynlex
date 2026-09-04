@@ -9,12 +9,22 @@ static bool inferPatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
 );
 
+static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstraint(
+	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
+	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
+);
+
 static std::optional<ResolvedPatternConstraint> resolvePatternConstraintForInference(
 	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
 	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
 ) {
-	if (context.unresolvedPatternConstraintSignal)
-		return resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+	if (context.unresolvedPatternConstraintSignal) {
+		std::optional<ResolvedPatternConstraint> constraint =
+			resolveProvisionalPatternConstraint(context, definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
+		if (!constraint)
+			*context.unresolvedPatternConstraintSignal = true;
+		return constraint;
+	}
 	return resolveCompiledPatternConstraint(definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
 }
 
@@ -383,7 +393,7 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	}
 
 	// Build argument types for overload selection.
-	// Arguments are sorted by source position and include both Variable and Word captures.
+	// Arguments are sorted by source position and include captured variables.
 	std::vector<DataType> argTypesForOverload;
 	std::vector<bool> argCompileTimeKnown;
 	std::vector<CompileTimeValue> argCompileTimeValues;
@@ -550,6 +560,60 @@ static void inferClassPatternCall(
 		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 }
 
+static void pushResolvedFlexBindingScope(
+	BindingFrameStack &bindingFrameStack, Expression *expression, const PatternCallResolution &resolution
+) {
+	PatternDefinition *definition = resolution.definition;
+	requireCompilerInvariant(
+		expression && definition && resolution.argumentConstraints.size() == expression->arguments.size(),
+		"resolved flex bindings and constraints diverged"
+	);
+	BindingFrame frame;
+	size_t argumentIndex = 0;
+	forEachPatternParameterName(
+		definition, resolution.pathIndex,
+		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
+		Expression *argument = expression->arguments[argumentIndex];
+		frame.bindings[name] = argument;
+		VariableReference *parameterDefinition = findPatternParameterDefinition(definition, name);
+		requireCompilerInvariant(parameterDefinition, "flex parameter has no definition identity");
+		frame.parameterBindings[parameterDefinition] = argument;
+
+		const DefinitionPatternElement *element = matchedPatternParameterElement(definition, name, startPos);
+		requireCompilerInvariant(element, "flex parameter has no definition element");
+		std::string sourceConstraintName = element->typeConstraintName;
+		Range sourceRange = sourceConstraintName.empty() ? Range{} : patternElementTypeConstraintRange(*definition, *element);
+		auto parameter = definition->section->variables.find(name);
+		if (parameter != definition->section->variables.end() && parameter->second) {
+			for (VariableReference *reference : parameter->second->declaredTypeConstraintReferences) {
+				if (!reference || reference->declaredTypeConstraintName.empty())
+					continue;
+				bool earlier = !sourceRange.line || std::pair(
+														reference->declaredTypeConstraintRange.line->mergedLineIndex,
+														reference->declaredTypeConstraintRange.start()
+													) < std::pair(sourceRange.line->mergedLineIndex, sourceRange.start());
+				if (earlier) {
+					sourceConstraintName = reference->declaredTypeConstraintName;
+					sourceRange = reference->declaredTypeConstraintRange;
+				}
+			}
+		}
+		if (!sourceConstraintName.empty()) {
+			frame.parameterConstraints.emplace(
+				parameterDefinition,
+				BindingFrame::ParameterConstraint{
+					resolution.argumentConstraints[argumentIndex], name, std::move(sourceConstraintName), sourceRange
+				}
+			);
+		}
+		argumentIndex++;
+	}
+	);
+	requireCompilerInvariant(argumentIndex == expression->arguments.size(), "flex call has too many arguments");
+	pushBindingScope(bindingFrameStack, std::move(frame));
+}
+
 static void inferFlexPatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
 	const PatternCallResolution &resolution
@@ -618,7 +682,7 @@ static void inferFlexPatternCall(
 		}
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
-	pushPatternCallBindingScope(callBindingFrameStack, expr, def);
+	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
 	std::shared_ptr<InstantiatedSectionBody> flexBody = context.parseContext.cloneSectionBody(matchedSection);
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();

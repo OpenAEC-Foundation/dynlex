@@ -42,6 +42,14 @@ Patterns are matched. Here we identify:
 - What is a variable
 - What is an argument
 
+Pattern resolution commits explicit validity boundaries. Definitions and all
+references inside their bodies become valid together before top-level references
+are attempted. Top-level references become valid at the next boundary, followed
+by the precedence graph. Expression expansion and variable binding complete the
+full resolved-pattern stage. Language tooling may consume only data guaranteed by
+the latest completed boundary; failed later work does not make its partial state
+observable.
+
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
@@ -52,9 +60,14 @@ We discover what is a variable based on these principles:
 - Words authored as `[word]` or `{literal:word}` are always literal and are never eligible for implicit parameter promotion.
 - A single word as an argument to an intrinsic is always a variable, unless it references a single-word function. Since functions are parsed before references to them, we are guaranteed that single-word functions exist from the start.
 - Alphanumeric strings in argument positions of pattern calls are variables.
+- `{name}` explicitly introduces or references a variable. The name can contain multiple words separated by spaces.
+- `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
+- After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
+
+Capture names are type-agnostic unless a type expression appears before the colon. There is no lexical word-capture type; finite concepts such as shader stages are represented by literal patterns, and text values use an ordinary string type constraint.
 
 We use this logic to determine what is a variable and what is not, all the way from the simplest intrinsics to the most complex functions.
 
@@ -180,6 +193,8 @@ When we encounter a value that cannot be known at compile time, values that buil
 When processing a function call, we infer that function right away so we can know return types. We do the same with flexes. When a (flex) function fails on typing, we just reorder the expression that is calling it, since we are still inferring that one.
 
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
+
+Type phrases describe types. Direct value construction is explicit: `a new {type}` value-initializes a concrete runtime type, while `a new {type} from ...` supplies constructor values. `nothing` is not constructible. `return nothing` is the sole natural-language exception: it is a valueless return, whereas `return the type nothing` returns the compile-time type value.
 
 `(print value) as a line` is incorrect, since `nothing` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `nothing`.
 

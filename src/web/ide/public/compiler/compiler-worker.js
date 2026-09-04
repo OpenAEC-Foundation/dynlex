@@ -1,20 +1,28 @@
-import {
-  buildRuntimeImports,
-  createRuntimeFilesystem,
-  inspectRuntimeWasmLayout,
-  isSupportedRuntimeImport,
-  toNonNegativeInteger
-} from "./runtimeImports.js";
-import { createWgslTranslator } from "/wgsl-translator.js";
-
 const compilerBasePath = "/compiler/";
+const compilerRevision = new URL(self.location.href).searchParams.get("revision");
+if (!compilerRevision) {
+  throw new Error("Compiler worker requires an artifact revision");
+}
+
+function versionedAssetUrl(path) {
+  const url = new URL(path, self.location.origin);
+  url.searchParams.set("revision", compilerRevision);
+  return url.href;
+}
+
+function compilerAssetUrl(path) {
+  return versionedAssetUrl(`${compilerBasePath}${path}`);
+}
+
+const runtimeImportsPromise = import(/* @vite-ignore */ compilerAssetUrl("runtimeImports.js"));
+let runtimeImports = null;
 
 const state = {
   compilerModule: null,
   wgslTranslator: null,
   initialized: false,
   lastSuccessfulWasm: null,
-  runtimeFilesystem: createRuntimeFilesystem(),
+  runtimeFilesystem: null,
   artifactVersion: 0,
   syncedSource: "",
   syncedVersion: -1
@@ -48,8 +56,8 @@ function decodeBase64ToBytes(base64Text) {
 }
 
 function extractCompiledWasmBytes(module, wasmPointer, wasmLength) {
-  const pointer = toNonNegativeInteger(wasmPointer);
-  const length = toNonNegativeInteger(wasmLength);
+  const pointer = runtimeImports.toNonNegativeInteger(wasmPointer);
+  const length = runtimeImports.toNonNegativeInteger(wasmLength);
   if (length <= 0) {
     return new Uint8Array(0);
   }
@@ -77,21 +85,29 @@ async function ensureCompilerInitialized() {
     return;
   }
 
-  const [imported, wgslTranslator] = await Promise.all([
-    import(/* @vite-ignore */ `${compilerBasePath}dynlex_web.js`),
-    createWgslTranslator()
+  const [imported, translatorModule, importedRuntime] = await Promise.all([
+    import(/* @vite-ignore */ compilerAssetUrl("dynlex_web.js")),
+    import(/* @vite-ignore */ versionedAssetUrl("/wgsl-translator.js")),
+    runtimeImportsPromise
   ]);
+  runtimeImports = importedRuntime;
+  state.runtimeFilesystem = runtimeImports.createRuntimeFilesystem();
   const createModule = imported.default ?? imported;
   if (typeof createModule !== "function") {
     throw new Error("dynlex_web.js did not export a module factory.");
   }
+  if (typeof translatorModule.createWgslTranslator !== "function") {
+    throw new Error("wgsl-translator.js did not export a translator factory.");
+  }
 
-  state.compilerModule = await createModule({
-    locateFile(path) {
-      return `${compilerBasePath}${path}`;
-    }
-  });
-  state.wgslTranslator = wgslTranslator;
+  [state.compilerModule, state.wgslTranslator] = await Promise.all([
+    createModule({
+      locateFile(path) {
+        return compilerAssetUrl(path);
+      }
+    }),
+    translatorModule.createWgslTranslator(compilerAssetUrl("dynlex_wgsl_translator.wasm"))
+  ]);
   state.compilerModule.ccall("dynlex_web_init", null, [], []);
   state.initialized = true;
 }
@@ -256,7 +272,9 @@ async function runLastSuccessfulProgram() {
 
   const module = await WebAssembly.compile(state.lastSuccessfulWasm);
   const imports = WebAssembly.Module.imports(module);
-  const unsupportedImports = imports.filter((importSpec) => !isSupportedRuntimeImport(importSpec));
+  const unsupportedImports = imports.filter(
+    (importSpec) => !runtimeImports.isSupportedRuntimeImport(importSpec)
+  );
   if (unsupportedImports.length > 0) {
     const unsupportedNames = unsupportedImports
       .map((importSpec) => `${importSpec.module}.${importSpec.name}`)
@@ -269,16 +287,16 @@ async function runLastSuccessfulProgram() {
   }
 
   const stdoutChunks = [];
-  const runtimeImports = buildRuntimeImports(
+  const importsObject = runtimeImports.buildRuntimeImports(
     imports,
     stdoutChunks,
     state.runtimeFilesystem,
-    inspectRuntimeWasmLayout(state.lastSuccessfulWasm)
+    runtimeImports.inspectRuntimeWasmLayout(state.lastSuccessfulWasm)
   );
 
   let instance;
   try {
-    instance = await WebAssembly.instantiate(module, runtimeImports);
+    instance = await WebAssembly.instantiate(module, importsObject);
   } catch (error) {
     return {
       stdout: "",

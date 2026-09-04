@@ -144,6 +144,8 @@ struct Section {
 	std::vector<PatternReference *> patternReferences;
 	std::unordered_map<std::string, std::vector<VariableReference *>> variableReferences;
 	std::unordered_map<std::string, VariableReference *> variableDefinitions;
+	// First source declaration for names introduced with explicit capture syntax in this lexical scope.
+	std::unordered_map<std::string, Range> explicitVariableDeclarations;
 	ExplicitParameterIndex explicitParameterIndex;
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
@@ -191,6 +193,7 @@ struct Section {
 		bool registerPatternReferences = true
 	);
 	void addVariableReference(ParseContext &context, VariableReference *reference);
+	void registerExplicitVariableName(const std::string &name, const Range &declarationRange);
 	void searchParentPatterns(ParseContext &context, VariableReference *reference);
 	void indexExplicitParameters(PatternDefinition &definition);
 	bool canPromoteImplicitParameter(const PatternDefinition &definition, const DefinitionPatternElement &element) const;
@@ -205,6 +208,10 @@ struct Section {
 
 	// Find a Variable by name in this section or parent scopes
 	Variable *findVariable(const std::string &name);
+	// Find the variable visible by name at a source position, before later explicit declarations take effect.
+	Variable *findVariable(const std::string &name, const Range &useRange);
+	// Find the variable with this exact resolved binding identity.
+	Variable *findVariable(const VariableReference *reference);
 
 	// The line that opens this section (e.g. "loop 10 times:")
 	CodeLine *openingLine{};

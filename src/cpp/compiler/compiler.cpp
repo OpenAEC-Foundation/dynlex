@@ -15,6 +15,7 @@
 #include "pattern/pattern_tree/patternMatch.h"
 #include "pattern/pattern_tree/patternTreeNode.h"
 #include "pattern/transformedPattern.h"
+#include "section/variable.h"
 #include "sourceTransform.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
@@ -541,9 +542,15 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 			varMatch.variableReference = context.createVariableReference(
 				Range(reference->range().line, offset + varMatch.lineStartPos, offset + varMatch.lineEndPos), varMatch.name
 			);
-			auto definition = section->variableDefinitions.find(varMatch.name);
-			if (definition != section->variableDefinitions.end())
-				varMatch.variableReference->definition = normalizeBindingReference(definition->second);
+			Variable *variable = section->findVariable(varMatch.name, varMatch.variableReference->range);
+			for (Section *scope = section; !variable && scope; scope = scope->parent) {
+				VariableReference *parameter =
+					scope->resolvePatternParameterBinding(context, varMatch.name, varMatch.variableReference->range);
+				if (parameter)
+					variable = scope->findVariable(parameter);
+			}
+			if (variable && variable->definition)
+				varMatch.variableReference->definition = normalizeBindingReference(variable->definition);
 		}
 		for (PatternMatch &subMatch : match.subMatches)
 			self(reference, subMatch, self);

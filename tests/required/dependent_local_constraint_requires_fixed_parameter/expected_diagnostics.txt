@@ -1,0 +1,1 @@
+tests/required/dependent_local_constraint_requires_fixed_parameter/main.dl:14-42: Error: Dependent type constraint 'an array of item count items' cannot be represented statically: dependent constraint call has no overload valid for the complete symbolic domain

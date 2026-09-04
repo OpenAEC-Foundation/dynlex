@@ -252,7 +252,7 @@ static void inferOrderedExpression(
 			}
 			// Look up variable in scope
 			Section *sec = expr->range.line ? expr->range.line->section : nullptr;
-			Variable *var = sec ? sec->findVariable(varName) : nullptr;
+			Variable *var = sec ? sec->findVariable(expr->variable) : nullptr;
 			if (!var) {
 				context.typesValid = false;
 				context.setTypeFailure(renderConfiguredMessage(
@@ -268,6 +268,8 @@ static void inferOrderedExpression(
 				markCurrentInstantiationImpure(context);
 			if (var->type.isDeduced())
 				expr->type = var->type;
+			else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
+				expr->type = var->declaredType;
 		}
 		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
 		break;

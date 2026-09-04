@@ -7,13 +7,17 @@ from pathlib import Path
 
 
 def completion_labels(compiler: Path, source: Path, position: str = "1:1") -> set[str]:
+    return set(re.findall(r'^  - label="([^"]*)"', completion_output(compiler, source, position), re.MULTILINE))
+
+
+def completion_output(compiler: Path, source: Path, position: str) -> str:
     result = subprocess.run(
         [str(compiler), str(source), "--emit-completions", position],
         check=True,
         capture_output=True,
         text=True,
     )
-    return set(re.findall(r'^  - label="([^"]*)"', result.stdout, re.MULTILINE))
+    return result.stdout
 
 
 def main() -> int:
@@ -41,6 +45,41 @@ def main() -> int:
             raise AssertionError(
                 f"completion invented parameter names in {source.name}: {placeholders}"
             )
+
+    multi_word_source = project_dir / "tests" / "required" / "multi_word_variables" / "main.dl"
+    before_declaration = completion_labels(compiler, multi_word_source, "26:7")
+    for future_name in ["same line value", "val", "numeric value"]:
+        if future_name in before_declaration:
+            raise AssertionError(f"completion exposed '{future_name}' before its declaration")
+    if "half width" not in before_declaration:
+        raise AssertionError("completion hid a multi-word variable declared on an earlier line")
+
+    after_same_line_declaration = completion_labels(compiler, multi_word_source, "28:41")
+    if "same line value" not in after_same_line_declaration:
+        raise AssertionError("completion hid a multi-word variable declared earlier on the cursor line")
+
+    partial_multi_word = completion_output(compiler, multi_word_source, "26:13")
+    if not re.search(
+        r'^  - label="half width".* edit=\(26:7-26:13 -> half width\)$',
+        partial_multi_word,
+        re.MULTILINE,
+    ):
+        raise AssertionError("completion did not replace a partially entered multi-word variable")
+
+    trailing_space = completion_output(compiler, multi_word_source, "26:12")
+    if not re.search(
+        r'^  - label="half width".* edit=\(26:7-26:12 -> half width\)$',
+        trailing_space,
+        re.MULTILINE,
+    ):
+        raise AssertionError("completion duplicated a multi-word variable prefix before the cursor")
+
+    shorthand_source = (
+        project_dir / "tests" / "required" / "declaration_shorthand_source_mapping" / "main.dl"
+    )
+    shorthand_body_labels = completion_labels(compiler, shorthand_source, "4:30")
+    if "value" not in shorthand_body_labels:
+        raise AssertionError("completion hid an inline shorthand parameter from its transformed body")
 
     return 0
 

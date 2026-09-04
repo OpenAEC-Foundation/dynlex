@@ -1,10 +1,26 @@
-import {
+const runtimeRevision = new URL(import.meta.url).searchParams.get("revision");
+
+function runtimeDependencyUrl(path) {
+  const url = new URL(path, import.meta.url);
+  if (runtimeRevision) {
+    url.searchParams.set("revision", runtimeRevision);
+  }
+  return url.href;
+}
+
+const [filesystemModule, pathHostModule, layoutModule] = await Promise.all([
+  import(runtimeDependencyUrl("./runtimeFilesystem.js")),
+  import(runtimeDependencyUrl("./runtimePathHost.js")),
+  import(runtimeDependencyUrl("./runtimeLayout.js"))
+]);
+const {
   createFileImports,
   createRuntimeFilesystem,
   readCString,
   writeCString
-} from "./runtimeFilesystem.js";
-import { createHostImports, createPathImports } from "./runtimePathHost.js";
+} = filesystemModule;
+const { createHostImports, createPathImports } = pathHostModule;
+const { inspectRuntimeWasmLayout } = layoutModule;
 
 const supportedEnvImports = new Set([
   "__indirect_function_table",
@@ -100,8 +116,7 @@ const supportedEnvImports = new Set([
   "tmpfile"
 ]);
 
-export { inspectRuntimeWasmLayout } from "./runtimeLayout.js";
-export { createRuntimeFilesystem };
+export { createRuntimeFilesystem, inspectRuntimeWasmLayout };
 
 export function toNumber(value) {
   return Number(value);
