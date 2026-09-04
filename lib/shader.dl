@@ -76,8 +76,8 @@ function [the|] shader interpolant w named name:
 
 function the shader time:
     replacement:
-        @intrinsic("shader uniform", "time")
+        @intrinsic("shader uniform", "time", 0)
 
 function the shader render pass:
     replacement:
-        @intrinsic("shader uniform", "render_pass")
+        @intrinsic("shader uniform", "render_pass", 1)

@@ -27,6 +27,7 @@ src/web/ide/public/compiler/*
 !src/web/ide/public/compiler/.gitkeep
 !src/web/ide/public/compiler/dynlex_web.js
 !src/web/ide/public/compiler/dynlex_web.wasm
+!src/web/ide/public/compiler/dynlex_wgsl_translator.wasm
 !src/web/ide/public/compiler/compiler-worker.js
 !src/web/ide/public/compiler/runtimeFilesystem.js
 !src/web/ide/public/compiler/runtimeImports.js

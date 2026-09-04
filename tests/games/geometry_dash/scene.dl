@@ -21,13 +21,12 @@ function a screen color with red {integer:red}, green {integer:green} and blue {
 	replacement:
 		@intrinsic("construct", a screen color, red, green, blue)
 
-function draw the static world:
+function draw the static world in {graphics frame:frame}:
 	execute:
-		clear the screen
-		draw a rectangle at x 0 and y 0 with width the window width and height the world height in color red 18, green 18 and blue 24
-		draw a rectangle at x 0 and y 0 with width the window width and height the ceiling height in color red 92, green 58 and blue 34
-		draw a rectangle at x 0 and y the ground height with width the window width and height (the world height - the ground height) in color red 40, green 28 and blue 18
+		draw a rectangle at x 0 and y 0 with width the window width and height the world height in color red 18, green 18 and blue 24 in frame
+		draw a rectangle at x 0 and y 0 with width the window width and height the ceiling height in color red 92, green 58 and blue 34 in frame
+		draw a rectangle at x 0 and y the ground height with width the window width and height (the world height - the ground height) in color red 40, green 28 and blue 18 in frame
 
-function draw a runner at {screen position:position} with {screen color:color}:
+function draw a runner at {screen position:position} with {screen color:color} in {graphics frame:frame}:
 	execute:
-		draw a rectangle at x position's x and y position's y with width the player size and height the player size in color red color's red, green color's green and blue color's blue
+		draw a rectangle at x position's x and y position's y with width the player size and height the player size in color red color's red, green color's green and blue color's blue in frame

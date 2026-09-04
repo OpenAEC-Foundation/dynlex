@@ -1,28 +1,27 @@
 # DynLex graphics texture resources.
 #
-# A texture owns one OpenGL 2D texture name. Loading accepts the PPM P6
-# format used by the model assets. The caller owns the returned resource and
-# must release it while its OpenGL context is still current. Loading restores
-# the current 2D binding and unpack alignment; it does not enable texturing.
-# Binding is an explicit operation for the draw that uses the texture.
+# A texture owns one renderer resource. Loading accepts the PPM P6 format used
+# by the model assets. The caller owns the returned resource and must release
+# it before closing the graphics window that created it.
 
 import lib/std.dl
+import lib/graphics_error.dl
 
 class:
     patterns:
         [a|] graphics texture
     members:
-        handle as an integer
+        resource as a pointer
         width as an integer
         height as an integer
 
-function a new graphics texture with handle {a value:handle}, width {a value:width} and height {a value:height}:
+local function a new graphics texture with resource {pointer:resource}, width {integer:width} and height {integer:height}:
     replacement:
-        @intrinsic("construct", a graphics texture, handle, width, height)
+        @intrinsic("construct", a graphics texture, resource, width, height)
 
 function an empty graphics texture:
     execute:
-        return a new graphics texture with handle 0, width 0 and height 0
+        return a new graphics texture with resource (0 as a pointer to a byte), width 0 and height 0
 
 local function skip PPM header whitespace and comments in {pointer:stream}:
     execute:
@@ -95,7 +94,7 @@ local function consume the PPM pixel separator in {pointer:stream}:
                 ignore @intrinsic("call", "libc", "ungetc", an integer, following, stream)
         return true
 
-function a loaded graphics texture from PPM file at path:
+function a graphics texture loaded from PPM file at path for {pointer:window}:
     execute:
         set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
         if stream = 0 as a pointer to a byte:
@@ -156,51 +155,20 @@ function a loaded graphics texture from PPM file at path:
             @intrinsic("call", "libc", "free", nothing, pixels)
             return an empty graphics texture
 
-        set binding to 0
-        set alignment to 4
-        @intrinsic("call", "GL", "glGetIntegerv", nothing, 32873, the address of binding)
-        @intrinsic("call", "GL", "glGetIntegerv", nothing, 3317, the address of alignment)
-        set identifier to 0 as an integer
-        @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of identifier)
-        if identifier = 0:
-            @intrinsic("call", "libc", "free", nothing, pixels)
-            return an empty graphics texture
-        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, identifier)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 10497)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 10497)
-        @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, 1)
-        @intrinsic("call", "GL", "glTexImage2D", nothing, 3553, 0, 6407, width, height, 0, 6407, 5121, pixels)
-        @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, alignment)
-        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, binding)
-
+        set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_rgb8", a pointer to a byte, window, width, height, pixels)
         @intrinsic("call", "libc", "free", nothing, pixels)
-        return a new graphics texture with handle identifier, width width and height height
-
-function the OpenGL texture handle of {graphics texture:texture}:
-    replacement:
-        texture's handle
+        if resource = 0 as a pointer to a byte:
+            return an empty graphics texture
+        return a new graphics texture with resource resource, width width and height height
 
 function {graphics texture:texture} is loaded:
     execute:
-        return texture's handle > 0
-
-function bind {graphics texture:texture}:
-    execute:
-        if texture is loaded:
-            @intrinsic("call", "GL", "glEnable", nothing, 3553)
-            @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture's handle as a 32 bit integer)
-
-function unbind graphics textures:
-    execute:
-        @intrinsic("call", "GL", "glDisable", nothing, 3553)
+        return texture's resource != 0 as a pointer to a byte
 
 flex function release {graphics texture:texture}:
     replacement:
         if texture is loaded:
-            set identifier to texture's handle as a 32 bit integer
-            @intrinsic("call", "GL", "glDeleteTextures", nothing, 1, the address of identifier)
-        set texture's handle to 0
+            require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_destroy", an integer, texture's resource)
+        set texture's resource to 0 as a pointer to a byte
         set texture's width to 0
         set texture's height to 0

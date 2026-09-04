@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { evaluate, waitFor } from "./browser_test_driver.mjs";
 
-export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
+export async function verifyOffscreenRevealReturn() {
   const hiddenRevealProgress = await evaluate(`new Promise((resolve) => {
     const section = document.querySelector('[data-live-shader-banner]');
     const observer = new MutationObserver(() => {
@@ -44,18 +44,7 @@ export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
     const section = document.querySelector('[data-live-shader-banner]');
     const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
     const canvas = revealingLayer.querySelector('canvas');
-    const gl = canvas.getContext('webgl2');
-    const timeBuffer = gl.getIndexedParameter(
-      gl.UNIFORM_BUFFER_BINDING,
-      ${incomingTimeBinding}
-    );
-    if (!timeBuffer) throw new Error('The incoming shader time buffer is not bound');
-    const readTime = () => {
-      const value = new Float32Array(1);
-      gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
-      gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
-      return value[0];
-    };
+    const readTime = () => Number(canvas.dataset.previewElapsedSeconds);
     const first = readTime();
     window.scrollTo({ top: 0, behavior: 'instant' });
     await new Promise((resolve, reject) => {
@@ -104,7 +93,6 @@ export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
       backingHeight: canvas.height,
       requiredBackingWidth: Math.round(canvas.clientWidth * (window.devicePixelRatio || 1)),
       requiredBackingHeight: Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)),
-      viewport: [...gl.getParameter(gl.VIEWPORT)],
       shaderMoves: readTime() > first
     };
   })()`);
@@ -124,10 +112,6 @@ export async function verifyOffscreenRevealReturn(incomingTimeBinding) {
   assert.equal(returningRevealState.canvasMatchesLayer, true);
   assert.ok(returningRevealState.backingWidth >= returningRevealState.requiredBackingWidth);
   assert.ok(returningRevealState.backingHeight >= returningRevealState.requiredBackingHeight);
-  assert.deepEqual(
-    returningRevealState.viewport,
-    [0, 0, returningRevealState.backingWidth, returningRevealState.backingHeight]
-  );
   assert.equal(
     returningRevealState.shaderMoves,
     true,

@@ -1,7 +1,6 @@
 #include "parseContext.h"
 #include "compileTimeValue.h"
 #include "expression.h"
-#include "intrinsicInfo.h"
 #include "matchProgress.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
@@ -119,20 +118,8 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 	return nullptr;
 }
 
-void ParseContext::registerShaderUniformName(const std::string &uniformName, CodeLine *line, int column) {
-	if (uniformName.empty())
-		return;
-	if (line && line->mergedLineIndex >= 0 && column >= 0) {
-		ShaderUniformSourceOrder incomingOrder{line->mergedLineIndex, column};
-		auto it = shaderUniformSourceOrder.find(uniformName);
-		if (it == shaderUniformSourceOrder.end() || std::tie(incomingOrder.mergedLineIndex, incomingOrder.column) <
-														std::tie(it->second.mergedLineIndex, it->second.column))
-			shaderUniformSourceOrder[uniformName] = incomingOrder;
-		return;
-	}
-
-	if (std::find(shaderUniformNames.begin(), shaderUniformNames.end(), uniformName) == shaderUniformNames.end())
-		shaderUniformNames.push_back(uniformName);
+void ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range) {
+	shaderUniforms.push_back({std::move(uniformName), binding, std::move(range)});
 }
 
 void ParseContext::registerShaderInterpolantName(const std::string &interpolantName) {
@@ -141,16 +128,6 @@ void ParseContext::registerShaderInterpolantName(const std::string &interpolantN
 	if (std::find(shaderInterpolantNames.begin(), shaderInterpolantNames.end(), interpolantName) ==
 		shaderInterpolantNames.end())
 		shaderInterpolantNames.push_back(interpolantName);
-}
-
-void ParseContext::processEncounteredIntrinsic(Expression *intrinsicExpr) {
-	if (!intrinsicExpr)
-		return;
-
-	if (intrinsicKind(intrinsicExpr->intrinsicName) == IntrinsicKind::ShaderUniform && intrinsicExpr->arguments.size() > 1) {
-		if (auto *uniformName = std::get_if<std::string>(&intrinsicExpr->arguments[1]->literalValue))
-			registerShaderUniformName(*uniformName, intrinsicExpr->range.line, intrinsicExpr->range.start());
-	}
 }
 
 VariableReference *ParseContext::createVariableReference(Range range, const std::string &name) {

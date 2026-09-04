@@ -1,4 +1,4 @@
-# DynLex Font Library - TrueType rendering via FreeType + OpenGL
+# DynLex Font Library - TrueType rendering through the graphics renderer
 
 import lib/string.dl
 import lib/graphics.dl
@@ -82,8 +82,9 @@ class:
     patterns:
         [a|] font
     members:
+        library as a pointer
         face as a pointer
-        texture as an integer
+        texture as a graphics texture
 
 class:
     patterns:
@@ -93,15 +94,15 @@ class:
         green as an integer
         blue as an integer
 
-function a new font using {pointer:face} and {integer:texture}:
+local function a new font using {pointer:library}, {pointer:face} and {graphics texture:texture}:
     replacement:
-        @intrinsic("construct", a font, face, texture)
+        @intrinsic("construct", a font, library, face, texture)
 
 function a font color from {a value:red}, {a value:green} and {a value:blue}:
     replacement:
         @intrinsic("construct", a font color, red, green, blue)
 
-function a loaded font from path at size {a value:size}:
+function a font loaded from path at size {a value:size} for {pointer:window}:
     execute:
         # Initialize FreeType
         set library to 0 as a pointer to a byte
@@ -114,29 +115,18 @@ function a loaded font from path at size {a value:size}:
         # Set pixel size
         ignore @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
 
-        # Set up GL state for texture rendering
-        @intrinsic("call", "GL", "glPixelStorei", nothing, 3317, 1)
+        set blank to 0 as a byte
+        set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_red8", a pointer to a byte, window, 1, 1, the address of blank)
+        set texture to @intrinsic("construct", a graphics texture, resource, 1, 1)
 
-        # Create GL texture
-        set texture to 0 as an integer
-        @intrinsic("call", "GL", "glGenTextures", nothing, 1, the address of texture)
-        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10241, 9729)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10240, 9729)
-        # Linear filtering samples half a texel beyond a glyph bitmap at the
-        # quad edge. Use OpenGL's transparent default border there instead of
-        # repeating the opposite glyph edge around its rectangular quad.
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10242, 33069)
-        @intrinsic("call", "GL", "glTexParameteri", nothing, 3553, 10243, 33069)
-
-        return a new font using face and texture
+        return a new font using library, face and texture
 
 # --- Character rendering ---
 
-local function the horizontal position after rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
+local function the horizontal position after rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     execute:
         set face to the face of typeface
-        set texture to the texture of typeface
+        set texture to typeface's texture
 
         # Load and render the glyph
         ignore @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a C long integer, 4)
@@ -155,51 +145,24 @@ local function the horizontal position after rendering character {a value:code} 
         set top to the bitmap top of slot
         set advance to the advance x of slot
 
-        # Upload bitmap to GL texture
-        @intrinsic("call", "GL", "glBindTexture", nothing, 3553, texture)
-        @intrinsic("call", "GL", "glTexImage2D", nothing, 3553, 0, 6406, width, height, 0, 6406, 5121, buffer)
+        if (width > 0) and (height > 0):
+            set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_update", an integer, texture's resource, width, height, buffer)
+            if status = 0:
+                print (the current graphics error message) as a line
+                @intrinsic("call", "libc", "abort", nothing)
 
-        # Set text color
-        @intrinsic("call", "GL", "glColor3ub", nothing, color's red, color's green, color's blue)
-
-        # Calculate quad corners
-        set west to (horizontal + left)
-        set north to (vertical - top)
-        set east to (west + width)
-        set south to (north + height)
-
-        # Draw textured quad
-        @intrinsic("call", "GL", "glBegin", nothing, 7)
-        @intrinsic("call", "GL", "glTexCoord2d", nothing, 0.0, 0.0)
-        @intrinsic("call", "GL", "glVertex2i", nothing, west, north)
-        @intrinsic("call", "GL", "glTexCoord2d", nothing, 1.0, 0.0)
-        @intrinsic("call", "GL", "glVertex2i", nothing, east, north)
-        @intrinsic("call", "GL", "glTexCoord2d", nothing, 1.0, 1.0)
-        @intrinsic("call", "GL", "glVertex2i", nothing, east, south)
-        @intrinsic("call", "GL", "glTexCoord2d", nothing, 0.0, 1.0)
-        @intrinsic("call", "GL", "glVertex2i", nothing, west, south)
-        @intrinsic("call", "GL", "glEnd", nothing)
+            set west to (horizontal + left)
+            set north to (vertical - top)
+            set east to (west + width)
+            set south to (north + height)
+            draw texture from x west, y north to x east, y south in color red color's red, green color's green and blue color's blue in frame
 
         # Advance is in 26.6 fixed point, so divide it by 64.
         return (horizontal + advance / 64) as an integer
 
-flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color}:
+flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     replacement:
-        set the subject to the horizontal position after rendering character code at x horizontal and y vertical using typeface in color
-
-# --- Text rendering helpers ---
-
-# Enable GL texture state before drawing text
-function enable text rendering:
-    execute:
-        @intrinsic("call", "GL", "glEnable", nothing, 3553)
-        @intrinsic("call", "GL", "glEnable", nothing, 3042)
-        @intrinsic("call", "GL", "glBlendFunc", nothing, 770, 771)
-
-# Disable GL texture state after drawing text
-function disable text rendering:
-    execute:
-        @intrinsic("call", "GL", "glDisable", nothing, 3553)
+        set the subject to the horizontal position after rendering character code at x horizontal and y vertical using typeface in color in frame
 
 # Set font pixel size (call before rendering at a new size)
 function set {font:typeface}'s pixel size to {a value:size}:
@@ -209,32 +172,36 @@ function set {font:typeface}'s pixel size to {a value:size}:
 
 # --- Number rendering ---
 
-function draw {a value:number} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
+function draw {a value:number} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
     execute:
-        enable text rendering
         set cursor to horizontal
         set ink to a font color from red, green and blue
         if number < 10:
-            render (number + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
         else if number < 100:
-            render (number / 10 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
-            render ((the remainder of number divided by 10) + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number / 10 + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
+            render ((the remainder of number divided by 10) + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
         else:
-            render (number / 100 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (number / 100 + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
             set remaining to the remainder of number divided by 100
-            render (remaining / 10 + 48) at x cursor and y vertical using typeface in ink and set cursor to it
-            render ((the remainder of remaining divided by 10) + 48) at x cursor and y vertical using typeface in ink and set cursor to it
-        disable text rendering
+            render (remaining / 10 + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
+            render ((the remainder of remaining divided by 10) + 48) at x cursor and y vertical using typeface in ink in frame and set cursor to it
 
 # --- Text rendering ---
 
-function draw {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
+function draw {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
     execute:
-        enable text rendering
         set cursor to horizontal
         set ink to a font color from red, green and blue
         set position to 0
         loop while position < the length of message:
-            render (the character at position in message) at x cursor and y vertical using typeface in ink and set cursor to it
+            render (the character at position in message) at x cursor and y vertical using typeface in ink in frame and set cursor to it
             set position to (position + 1)
-        disable text rendering
+
+flex function release {font:typeface}:
+    replacement:
+        release typeface's texture
+        ignore @intrinsic("call", "freetype", "FT_Done_Face", an integer, typeface's face)
+        ignore @intrinsic("call", "freetype", "FT_Done_FreeType", an integer, typeface's library)
+        set typeface's face to 0 as a pointer to a byte
+        set typeface's library to 0 as a pointer to a byte

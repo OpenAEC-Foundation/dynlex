@@ -73,7 +73,7 @@ enum class IntrinsicPurityKind {
 	X(ShaderInput, "shader input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
-	X(ShaderUniform, "shader uniform", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)                       \
+	X(ShaderUniform, "shader uniform", 3, IntrinsicReturnKind::Float, 1, 2, IntrinsicPurityKind::Impure)                       \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                        \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \

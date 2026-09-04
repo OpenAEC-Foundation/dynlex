@@ -1,202 +1,99 @@
-# DynLex Graphics Library (GLFW + OpenGL)
+# DynLex cross-platform graphics library.
+#
+# Native executables use Vulkan on Windows and Linux and Vulkan through
+# MoltenVK on macOS. Browser shader previews use WebGPU. GLFW is an internal
+# native window and Vulkan-surface dependency; it is not part of this API.
 
 import lib/std.dl
 import lib/texture.dl
+import lib/graphics_error.dl
 
-# External GLFW and OpenGL constants are named compile-time values. Keeping
-# their ABI values in one place makes intrinsic calls readable and prevents
-# callers from having to repeat external enum numbers.
+# Key values follow the stable GLFW input ABI used inside the native runtime.
+# Naming them by user intent keeps the window-system implementation private.
 
-function the GLFW press status:
-	replacement:
-		1
-
-function the GLFW release status:
-	replacement:
-		0
-
-function the GLFW escape key:
+function the escape key:
 	replacement:
 		256
 
-function the GLFW A key:
+function the A key:
 	replacement:
 		65
 
-function the GLFW D key:
+function the D key:
 	replacement:
 		68
 
-function the GLFW E key:
+function the E key:
 	replacement:
 		69
 
-function the GLFW Q key:
+function the Q key:
 	replacement:
 		81
 
-function the GLFW S key:
+function the S key:
 	replacement:
 		83
 
-function the GLFW W key:
+function the W key:
 	replacement:
 		87
 
-function the GLFW 0 key:
+function the 0 key:
 	replacement:
 		48
 
-function the GLFW 1 key:
+function the 1 key:
 	replacement:
 		49
 
-function the GLFW 2 key:
+function the 2 key:
 	replacement:
 		50
 
-function the GLFW 3 key:
+function the 3 key:
 	replacement:
 		51
 
-function the GLFW 4 key:
+function the 4 key:
 	replacement:
 		52
 
-function the GLFW 5 key:
+function the 5 key:
 	replacement:
 		53
 
-function the GLFW 6 key:
+function the 6 key:
 	replacement:
 		54
 
-function the GLFW 7 key:
+function the 7 key:
 	replacement:
 		55
 
-function the GLFW 8 key:
+function the 8 key:
 	replacement:
 		56
 
-function the GLFW 9 key:
+function the 9 key:
 	replacement:
 		57
 
-function the GLFW right key:
+function the right arrow key:
 	replacement:
 		262
 
-function the GLFW left key:
+function the left arrow key:
 	replacement:
 		263
 
-function the GLFW down key:
+function the down arrow key:
 	replacement:
 		264
 
-function the GLFW up key:
+function the up arrow key:
 	replacement:
 		265
-
-function the GLFW first mouse button:
-	replacement:
-		0
-
-function the GLFW second mouse button:
-	replacement:
-		1
-
-function the GLFW third mouse button:
-	replacement:
-		2
-
-function the GLFW cursor input mode:
-	replacement:
-		208897
-
-function the GLFW normal cursor mode:
-	replacement:
-		212993
-
-function the GLFW disabled cursor mode:
-	replacement:
-		212995
-
-function the GLFW context version major hint:
-	replacement:
-		139266
-
-function the GLFW context version minor hint:
-	replacement:
-		139267
-
-function the GLFW OpenGL profile hint:
-	replacement:
-		139272
-
-function the GLFW OpenGL compatibility profile:
-	replacement:
-		204802
-
-function the GLFW visible window hint:
-	replacement:
-		131076
-
-function the GL color buffer bit:
-	replacement:
-		16384
-
-function the GL projection matrix mode:
-	replacement:
-		5889
-
-function the GL modelview matrix mode:
-	replacement:
-		5888
-
-function the GL fragment shader type:
-	replacement:
-		35632
-
-function the GL vertex shader type:
-	replacement:
-		35633
-
-function the GL SPIR-V shader binary format:
-	replacement:
-		38225
-
-function the GL compile status:
-	replacement:
-		35713
-
-function the GL link status:
-	replacement:
-		35714
-
-function the GL uniform buffer target:
-	replacement:
-		35345
-
-function the GL dynamic draw usage:
-	replacement:
-		35048
-
-function the GL triangle strip primitive:
-	replacement:
-		5
-
-class:
-	patterns:
-		[a|] GLFW video mode
-	members:
-		width as an integer
-		height as an integer
-		red bits as an integer
-		green bits as an integer
-		blue bits as an integer
-		refresh rate as an integer
 
 class:
 	patterns:
@@ -211,287 +108,317 @@ class:
 	members:
 		number as an integer
 
+class:
+	patterns:
+		[a|] graphics frame
+	members:
+		window as a pointer
+		drawable as a boolean
+
+class:
+	patterns:
+		[a|] shader program
+	members:
+		resource as a pointer
+
+local function a graphics frame for {pointer:window} in drawable state {boolean:drawable}:
+	replacement:
+		@intrinsic("construct", a graphics frame, window, drawable)
+
+local function a shader program with resource {pointer:resource}:
+	replacement:
+		@intrinsic("construct", a shader program, resource)
+
 function the left mouse button:
 	execute:
-		return @intrinsic("construct", a mouse button, the GLFW first mouse button)
+		return @intrinsic("construct", a mouse button, 0)
 
 function the right mouse button:
 	execute:
-		return @intrinsic("construct", a mouse button, the GLFW second mouse button)
+		return @intrinsic("construct", a mouse button, 1)
 
 function the middle mouse button:
 	execute:
-		return @intrinsic("construct", a mouse button, the GLFW third mouse button)
+		return @intrinsic("construct", a mouse button, 2)
 
 function a mouse button numbered {integer:number}:
 	execute:
 		return @intrinsic("construct", a mouse button, number)
 
-function the cursor position of {C string:window}:
-	execute:
-		set x to 0.0 as a floating-point number
-		set y to 0.0 as a floating-point number
-		@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, window, the address of x, the address of y)
-		return @intrinsic("construct", a cursor position, x, y)
-
-function {mouse button:button} is pressed in {C string:window}:
-	execute:
-		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = the GLFW press status
-
-function {mouse button:button} is released in {C string:window}:
-	execute:
-		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, window, button's number) = the GLFW release status
-
-function capture the mouse cursor in {C string:window}:
-	execute:
-		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW disabled cursor mode)
-
-function release the mouse cursor in {C string:window}:
-	execute:
-		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, window, the GLFW cursor input mode, the GLFW normal cursor mode)
-
-# GLFW stores one caller-owned void pointer on every window. These wrappers
-# keep that pointer available to callbacks without exposing GLFW's raw ABI to
-# application code. The pointer is borrowed; callers own its lifetime.
-function set the application state of {C string:window} to {pointer:data}:
-	execute:
-		@intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, window, data)
-
-function the application state of {C string:window}:
-	execute:
-		return @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to a byte, window)
-
-exposed function resize the graphics viewport of {C string:window} to {integer:width} and {integer:height}:
-	execute:
-		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, width, height)
-
-function register the graphics viewport resize callback [of|for] window:
-	execute:
-		ignore @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer to a byte, window, the function named "resize the graphics viewport of $ to $ and $")
-
-# Registering the same window again replaces its existing scroll callback, as
-# specified by GLFW. The callback name is fixed at compile time so its exposed
-# function can be compiled with the exact GLFWscrollfun ABI: a window pointer
-# followed by two C doubles (DynLex floating-point numbers).
-flex function register the graphics scroll callback named {fixed C string:callback} [of|for] window:
-	replacement:
-		ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, the function named callback)
-
 function a new window with width {integer:width} and height {integer:height}:
 	execute:
-		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte in fullscreen state false with visibility 1 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, width, height, 1, 0, "DynLex")
 
 function a new hidden window with width {integer:width} and height {integer:height}:
 	execute:
-		return the result of creating a graphics window with width width and height height on monitor 0 as a pointer to a byte in fullscreen state false with visibility 0 and failure message "failed to create GLFW window with OpenGL 4.6 compatibility profile"
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, width, height, 0, 0, "DynLex")
 
 function a new fullscreen window:
 	execute:
-		return the result of creating a graphics window with width 0 and height 0 on monitor 0 as a pointer to a byte in fullscreen state true with visibility 1 and failure message "failed to create fullscreen GLFW window with OpenGL 4.6 compatibility profile"
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, 0, 0, 1, 1, "DynLex")
 
-local function the result of creating a graphics window with width {integer:width} and height {integer:height} on monitor {pointer:monitor} in fullscreen state {boolean:fullscreen} with visibility {integer:visibility} and failure message {C string:failure}:
+function close [the|] {pointer:window}:
 	execute:
-		set initialized to the result of initializing GLFW
-		if initialized = false:
-			return 0 as a pointer to a byte
-		set actual_monitor to monitor
-		set actual_width to width
-		set actual_height to height
-		if fullscreen:
-			set actual_monitor to the primary monitor
-			set mode to the primary video mode of actual_monitor
-			set actual_width to the width of mode
-			set actual_height to the height of mode
-		@intrinsic("call", "glfw", "glfwDefaultWindowHints", nothing)
-		# Request OpenGL 4.6 compatibility profile (needed for SPIR-V shader support)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version major hint, 4)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW context version minor hint, 6)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW OpenGL profile hint, the GLFW OpenGL compatibility profile)
-		@intrinsic("call", "glfw", "glfwWindowHint", nothing, the GLFW visible window hint, visibility)
-		set handle to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer to a byte, actual_width, actual_height, "DynLex", actual_monitor, 0 as a pointer to a byte)
-		if handle = 0 as a pointer to a byte:
-			print failure as a line
-			@intrinsic("call", "glfw", "glfwTerminate", nothing)
-			return 0 as a pointer to a byte
-		@intrinsic("call", "glfw", "glfwMakeContextCurrent", nothing, handle)
-		@intrinsic("call", "GL", "glViewport", nothing, 0, 0, actual_width, actual_height)
-		register the graphics viewport resize callback of handle
-		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL projection matrix mode)
-		@intrinsic("call", "GL", "glLoadIdentity", nothing)
-		set horizontal to actual_width as a floating-point number
-		set vertical to actual_height as a floating-point number
-		set negative to (0.0 - 1.0)
-		@intrinsic("call", "GL", "glOrtho", nothing, 0.0, horizontal, vertical, 0.0, negative, 1.0)
-		@intrinsic("call", "GL", "glMatrixMode", nothing, the GL modelview matrix mode)
-		@intrinsic("call", "GL", "glLoadIdentity", nothing)
-		return handle
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_destroy", nothing, window)
 
-local function the result of initializing GLFW:
+function set the title of {pointer:window} to {C string:title}:
 	execute:
-		set initialized to @intrinsic("call", "glfw", "glfwInit", an integer)
-		if initialized = 0:
-			print "failed to initialize GLFW" as a line
-			return false
-		return true
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_title", an integer, window, title)
 
-function the primary monitor:
+function show {pointer:window}:
 	execute:
-		return @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer to a byte)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_visible", nothing, window, 1)
 
-function the primary video mode of monitor:
+function hide {pointer:window}:
+	execute:
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_visible", nothing, window, 0)
+
+function {pointer:window} is visible:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_is_visible", an integer, window) != 0
+
+function the cursor position of {pointer:window}:
+	execute:
+		set x to 0.0 as a floating-point number
+		set y to 0.0 as a floating-point number
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_cursor_position", nothing, window, the address of x, the address of y)
+		return @intrinsic("construct", a cursor position, x, y)
+
+function {mouse button:button} is pressed in {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_mouse_button_down", an integer, window, button's number) != 0
+
+function {mouse button:button} is released in {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_mouse_button_down", an integer, window, button's number) = 0
+
+function capture the mouse cursor in {pointer:window}:
+	execute:
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_cursor_captured", nothing, window, 1)
+
+function release the mouse cursor in {pointer:window}:
+	execute:
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_cursor_captured", nothing, window, 0)
+
+function preserve mouse clicks in {pointer:window}:
+	execute:
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_sticky_mouse_buttons", nothing, window, 1)
+
+function set the application state of {pointer:window} to {pointer:data}:
+	execute:
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_application_state", nothing, window, data)
+
+function the application state of {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_application_state", a pointer to a byte, window)
+
+flex function register the graphics scroll callback named {fixed C string:callback} [of|for] {pointer:window}:
 	replacement:
-		the value at (@intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to a byte, monitor) as a pointer to a GLFW video mode)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_scroll_callback", nothing, window, the function named callback)
 
-function clear the screen:
+function key {integer:number} is down in {pointer:window}:
 	execute:
-		@intrinsic("call", "GL", "glClear", nothing, the GL color buffer bit)
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_key_down", an integer, window, number) != 0
 
-function [display|show] the frame [of|in] window:
+function key {integer:number} is up in {pointer:window}:
 	execute:
-		@intrinsic("call", "glfw", "glfwSwapBuffers", nothing, window)
-		@intrinsic("call", "glfw", "glfwPollEvents", nothing)
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_key_down", an integer, window, number) = 0
 
-function draw a rectangle at x {a value:horizontal} and y {a value:vertical} with width {a value:width} and height {a value:height} in color red {a value:red}, green {a value:green} and blue {a value:blue}:
+function {pointer:window} should close:
 	execute:
-		@intrinsic("call", "GL", "glColor3ub", nothing, red, green, blue)
-		@intrinsic("call", "GL", "glRecti", nothing, horizontal, vertical, horizontal + width, vertical + height)
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_should_close", an integer, window) != 0
 
-function key {integer:number} is down in {C string:window}:
+function {pointer:window} remains open:
 	execute:
-		return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = the GLFW press status
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_should_close", an integer, window) = 0
 
-function key {integer:number} is up in {C string:window}:
+function request that {pointer:window} close:
 	execute:
-		return @intrinsic("call", "glfw", "glfwGetKey", an integer, window, number) = the GLFW release status
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_request_close", nothing, window)
 
-function the window should close:
-	execute:
-		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window) != 0
-
-function the window remains open:
-	execute:
-		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, window) = 0
-
-function the framebuffer width of {C string:window}:
+function the framebuffer width of {pointer:window}:
 	execute:
 		set horizontal to 0
 		set vertical to 0
-		@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, window, the address of horizontal, the address of vertical)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_framebuffer_size", nothing, window, the address of horizontal, the address of vertical)
 		return horizontal
 
-function the framebuffer height of {C string:window}:
+function the framebuffer height of {pointer:window}:
 	execute:
 		set horizontal to 0
 		set vertical to 0
-		@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, window, the address of horizontal, the address of vertical)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_framebuffer_size", nothing, window, the address of horizontal, the address of vertical)
 		return vertical
+
+function the time since start for {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_time_since_start", a floating-point number, window)
+
+function the Vulkan API version of {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_api_version", an integer, window)
+
+function Vulkan portability is enabled for {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_portability_enabled", an integer, window) != 0
+
+function the graphics device name of {pointer:window}:
+	execute:
+		set length to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_device_name", a word sized integer, window, 0 as a pointer to a byte, 0 as a word sized integer)
+		set result to a new string buffer containing (length as an integer) bytes
+		ignore @intrinsic("call", "dynlex_graphics", "dynlex_graphics_device_name", a word sized integer, window, the data of result, length + 1)
+		return result
 
 function sleep for duration milliseconds:
 	execute:
-		@intrinsic("call", "libc", "usleep", nothing, duration * 1000)
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_sleep_milliseconds", an integer, duration)
 
-function close [the|] {C string:window}:
+function a new graphics frame in {pointer:window}:
 	execute:
-		@intrinsic("call", "glfw", "glfwDestroyWindow", nothing, window)
-		@intrinsic("call", "glfw", "glfwTerminate", nothing)
+		return a new graphics frame in window with background red 0.0, green 0.0, blue 0.0 and alpha 1.0
 
-# --- Shader support (OpenGL 4.6 / SPIR-V) ---
-
-function a fragment shader from path:
+function a new graphics frame in {pointer:window} with background red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha}:
 	execute:
-		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, the GL fragment shader type)
-		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
-		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 2)
-		set length to @intrinsic("call", "libc", "ftell", a C long integer, data)
-		set size to length as a word sized integer
-		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 0)
-		set buffer to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
-		ignore @intrinsic("call", "libc", "fread", a word sized integer, buffer, 1 as a word sized integer, size, data)
-		ignore @intrinsic("call", "libc", "fclose", an integer, data)
-		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, the GL SPIR-V shader binary format, buffer, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", nothing, handle, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
-		@intrinsic("call", "libc", "free", nothing, buffer)
-		return handle
+		set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_frame", an integer, window, red, green, blue, alpha)
+		if status < 0:
+			print (the current graphics error message) as a line
+			@intrinsic("call", "libc", "abort", nothing)
+		return a graphics frame for window in drawable state (status = 1)
 
-function a vertex shader from path:
+flex function display {graphics frame:frame}:
+	replacement:
+		if frame's drawable:
+			set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_end_frame", an integer, frame's window)
+			if status < 0:
+				print (the current graphics error message) as a line
+				@intrinsic("call", "libc", "abort", nothing)
+		else:
+			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_poll_events", nothing)
+		set frame's drawable to false
+
+function use screen coordinates in {graphics frame:frame}:
 	execute:
-		set handle to @intrinsic("call", "GL", "glCreateShader", an integer, the GL vertex shader type)
-		set data to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
-		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 2)
-		set length to @intrinsic("call", "libc", "ftell", a C long integer, data)
-		set size to length as a word sized integer
-		ignore @intrinsic("call", "libc", "fseek", an integer, data, 0 as a C long integer, 0)
-		set buffer to @intrinsic("call", "libc", "malloc", a pointer to a byte, size)
-		ignore @intrinsic("call", "libc", "fread", a word sized integer, buffer, 1 as a word sized integer, size, data)
-		ignore @intrinsic("call", "libc", "fclose", an integer, data)
-		@intrinsic("call", "GL", "glShaderBinary", nothing, 1, the address of handle, the GL SPIR-V shader binary format, buffer, size as an integer)
-		@intrinsic("call", "GL", "glSpecializeShader", nothing, handle, "main", 0, 0 as a pointer to a byte, 0 as a pointer to a byte)
-		@intrinsic("call", "libc", "free", nothing, buffer)
-		return handle
+		if frame's drawable:
+			set width to the framebuffer width of frame's window
+			set height to the framebuffer height of frame's window
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_orthographic_projection", an integer, frame's window, 0.0, width as a floating-point number, 0.0, height as a floating-point number, 0.0 - 1.0, 1.0)
 
-function a shader program combining {a value:vertex} and {a value:fragment}:
+function use perspective with a vertical field of view of {floating-point number:angle} degrees, a near plane of {floating-point number:near} and a far plane of {floating-point number:far} in {graphics frame:frame}:
 	execute:
-		set handle to @intrinsic("call", "GL", "glCreateProgram", an integer)
-		@intrinsic("call", "GL", "glAttachShader", nothing, handle, vertex)
-		@intrinsic("call", "GL", "glAttachShader", nothing, handle, fragment)
-		@intrinsic("call", "GL", "glLinkProgram", nothing, handle)
-		return handle
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_perspective_projection", an integer, frame's window, angle, near, far)
 
-function use {integer:program} as the shader program:
+function enable depth testing in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "GL", "glUseProgram", nothing, program)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_depth_testing", nothing, frame's window, 1)
 
-function the time since start:
+function disable depth testing in {graphics frame:frame}:
 	execute:
-		return @intrinsic("call", "glfw", "glfwGetTime", a floating-point number)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_depth_testing", nothing, frame's window, 0)
 
-function set the uniform named name in program to value:
+function reset the camera in {graphics frame:frame}:
 	execute:
-		set location to @intrinsic("call", "GL", "glGetUniformLocation", an integer, program, name)
-		@intrinsic("call", "GL", "glUniform1f", nothing, location, value as a 32 bit floating-point number)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_reset_camera", nothing, frame's window)
 
-function set the uniform at location to value:
+function move the camera in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		@intrinsic("call", "GL", "glUniform1f", nothing, location, value as a 32 bit floating-point number)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_translate_camera", nothing, frame's window, horizontal, vertical, depth)
 
-# --- UBO (Uniform Buffer Object) support for SPIR-V shaders ---
-
-class:
-	patterns:
-		[a|] uniform buffer
-	members:
-		handle as an integer
-
-function a new uniform buffer:
+function rotate the camera in {graphics frame:frame} by {floating-point number:angle} degrees around x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		set handle to 0
-		@intrinsic("call", "GL", "glGenBuffers", nothing, 1, the address of handle)
-		@intrinsic("call", "GL", "glBindBuffer", nothing, the GL uniform buffer target, handle)
-		@intrinsic("call", "GL", "glBufferData", nothing, the GL uniform buffer target, 4 as a 64 bit integer, 0 as a pointer to a byte, the GL dynamic draw usage)
-		return @intrinsic("construct", a uniform buffer, handle)
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_rotate_camera", an integer, frame's window, angle, horizontal, vertical, depth)
 
-function bind {uniform buffer:buffer} to binding {integer:binding}:
+function reset the model in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "GL", "glBindBufferBase", nothing, the GL uniform buffer target, binding, buffer's handle)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_reset_model", nothing, frame's window)
 
-function update {uniform buffer:buffer} with value:
+function move the model in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		set number to value as a 32 bit floating-point number
-		@intrinsic("call", "GL", "glBindBuffer", nothing, the GL uniform buffer target, buffer's handle)
-		@intrinsic("call", "GL", "glBufferSubData", nothing, the GL uniform buffer target, 0 as a 64 bit integer, 4 as a 64 bit integer, the address of number)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_translate_model", nothing, frame's window, horizontal, vertical, depth)
 
-function delete {uniform buffer:buffer}:
+function scale the model in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		set handle to buffer's handle
-		@intrinsic("call", "GL", "glDeleteBuffers", nothing, 1, the address of handle)
+		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_scale_model", nothing, frame's window, horizontal, vertical, depth)
 
-function draw a fullscreen quad:
+function rotate the model in {graphics frame:frame} by {floating-point number:angle} degrees around x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		# Draw a fullscreen triangle strip (covers screen with 2D quad)
-		# Use glVertex2d (takes double) since DynLex floating-point numbers use 64 bits
-		@intrinsic("call", "GL", "glBegin", nothing, the GL triangle strip primitive)
-		@intrinsic("call", "GL", "glVertex2d", nothing, 0.0 - 1.0, 0.0 - 1.0)
-		@intrinsic("call", "GL", "glVertex2d", nothing, 1.0, 0.0 - 1.0)
-		@intrinsic("call", "GL", "glVertex2d", nothing, 0.0 - 1.0, 1.0)
-		@intrinsic("call", "GL", "glVertex2d", nothing, 1.0, 1.0)
-		@intrinsic("call", "GL", "glEnd", nothing)
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_rotate_model", an integer, frame's window, angle, horizontal, vertical, depth)
+
+function save the model transform in {graphics frame:frame}:
+	execute:
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_push_model", an integer, frame's window)
+
+function restore the model transform in {graphics frame:frame}:
+	execute:
+		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pop_model", an integer, frame's window)
+
+function draw a rectangle at x {a value:horizontal} and y {a value:vertical} with width {a value:width} and height {a value:height} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_rectangle", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number, width as a floating-point number, height as a floating-point number, red, green, blue, 255)
+
+function draw {graphics texture:texture} from x {a value:left}, y {a value:top} to x {a value:right}, y {a value:bottom} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_textured_rectangle", an integer, frame's window, texture's resource, left as a floating-point number, top as a floating-point number, right as a floating-point number, bottom as a floating-point number, red, green, blue, 255)
+
+function start triangles in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_triangles", an integer, frame's window, 0 as a pointer to a byte)
+
+function start triangles using {graphics texture:texture} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_triangles", an integer, frame's window, texture's resource)
+
+function use vertex color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_vertex_color", nothing, frame's window, red, green, blue, 255)
+
+function use texture coordinates x {floating-point number:horizontal} and y {floating-point number:vertical} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_texture_coordinates", nothing, frame's window, horizontal, vertical)
+
+function add a vertex at x {a value:horizontal} and y {a value:vertical} to {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_append_vertex_2d", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number)
+
+function add a vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} to {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_append_vertex_3d", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number, depth as a floating-point number)
+
+function finish triangles in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_finish_triangles", an integer, frame's window)
+
+function a shader program for {pointer:window} using vertex shader at {C string:vertex} and fragment shader at {C string:fragment}:
+	execute:
+		set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pipeline_create", a pointer to a byte, window, vertex, fragment)
+		return a shader program with resource resource
+
+function use {shader program:program} in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_use_pipeline", an integer, frame's window, program's resource)
+
+function set uniform binding {integer:binding} in {graphics frame:frame} to value:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_uniform_float", an integer, frame's window, binding, value)
+
+function draw a fullscreen surface in {graphics frame:frame}:
+	execute:
+		if frame's drawable:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_fullscreen", an integer, frame's window)
+
+flex function release {shader program:program}:
+	replacement:
+		if program's resource != 0 as a pointer to a byte:
+			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pipeline_destroy", an integer, program's resource)
+		set program's resource to 0 as a pointer to a byte

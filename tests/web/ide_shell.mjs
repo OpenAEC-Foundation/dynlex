@@ -11,6 +11,7 @@ const files = {
   css: path.join(ideDir, "src/styles.css"),
   javascript: path.join(ideDir, "src/main.js"),
   packageJson: path.join(ideDir, "package.json"),
+  viteConfig: path.join(ideDir, "vite.config.js"),
   lspClient: path.join(projectDir, "web/lsp-client.js"),
   lspIntegration: path.join(ideDir, "src/lspIntegration.js"),
   lspProtocol: path.join(ideDir, "src/lspProtocol.js"),
@@ -122,11 +123,13 @@ assert.match(javascript, /shaders\/manifest\.json/);
 assert.doesNotMatch(javascript, /renderer64/);
 assert.match(javascript, /from "\.\.\/\.\.\/\.\.\/\.\.\/web\/shader-renderer\.js"/);
 assert.match(compilerWorker, /compile\.shader/);
-assert.match(compilerWorker, /dynlex_web_compile_and_emit_shader_glsl/);
+assert.match(compilerWorker, /dynlex_web_compile_and_emit_shader_spirv/);
+assert.match(compilerWorker, /createWgslTranslator/);
 assert.match(compilerWorker, /compileShaderStage/);
 assert.match(compilerWorker, /"vertex"/);
 assert.match(compilerWorker, /"fragment"/);
-assert.match(compilerWorker, /dynlex_web_get_output_shader_glsl/);
+assert.match(compilerWorker, /dynlex_web_get_output_shader_spirv_base64/);
+assert.doesNotMatch(compilerWorker, /WebGL|webgl|glsl/i);
 assert.match(javascript, /scrollbarSlider\.background/);
 assert.match(javascript, /scrollbarSlider\.hoverBackground/);
 assert.match(javascript, /scrollbarSlider\.activeBackground/);

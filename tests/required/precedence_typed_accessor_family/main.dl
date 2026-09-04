@@ -1,0 +1,51 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function print number as a line:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", number))
+
+function left + right:
+    replacement:
+        @intrinsic("add", left, right)
+
+class:
+    patterns:
+        [a|] point
+    members:
+        coordinates as an integer
+
+class:
+    patterns:
+        [a|] cursor
+    members:
+        x as an integer
+        y as an integer
+
+function {a point:value}'s x:
+    before: $ + $
+    replacement:
+        value's coordinates
+
+function {a point:value}'s y:
+    before: $ + $
+    replacement:
+        value's coordinates
+
+set location to @intrinsic("construct", a point, 10)
+set mouse to @intrinsic("construct", a cursor, 20, 30)
+
+print location's x as a line
+print mouse's x as a line
+print mouse's y as a line
+print location's x + mouse's x as a line
+print location's y + mouse's y as a line

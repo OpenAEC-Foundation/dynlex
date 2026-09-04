@@ -1,1 +1,1 @@
-131076
+graphics window visibility is available

@@ -1,0 +1,20 @@
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %fragment_color %output_color
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %fragment_color Location 0
+OpDecorate %output_color Location 0
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%vec4 = OpTypeVector %float 4
+%input_vec4 = OpTypePointer Input %vec4
+%output_vec4 = OpTypePointer Output %vec4
+%fragment_color = OpVariable %input_vec4 Input
+%output_color = OpVariable %output_vec4 Output
+%main = OpFunction %void None %function
+%entry = OpLabel
+%loaded = OpLoad %vec4 %fragment_color
+OpStore %output_color %loaded
+OpReturn
+OpFunctionEnd

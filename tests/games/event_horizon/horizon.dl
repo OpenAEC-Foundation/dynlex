@@ -4,37 +4,37 @@ import tests/games/shader_values.dl
 # An interactive procedural black hole rendered entirely by DynLex.
 # DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 #
-# Uniform binding order is source-defined:
+# Uniform bindings are explicit:
 #   0 time, 1 width, 2 height, 3 mouse x, 4 mouse y, 5 pulse age,
 #   6 camera x, 7 camera y.
 
 function the shader width:
     replacement:
-        @intrinsic("shader uniform", "width")
+        @intrinsic("shader uniform", "width", 1)
 
 function the shader height:
     replacement:
-        @intrinsic("shader uniform", "height")
+        @intrinsic("shader uniform", "height", 2)
 
 function the shader mouse x:
     replacement:
-        @intrinsic("shader uniform", "mouse_x")
+        @intrinsic("shader uniform", "mouse_x", 3)
 
 function the shader mouse y:
     replacement:
-        @intrinsic("shader uniform", "mouse_y")
+        @intrinsic("shader uniform", "mouse_y", 4)
 
 function the shader pulse age:
     replacement:
-        @intrinsic("shader uniform", "pulse_age")
+        @intrinsic("shader uniform", "pulse_age", 5)
 
 function the shader camera x:
     replacement:
-        @intrinsic("shader uniform", "camera_x")
+        @intrinsic("shader uniform", "camera_x", 6)
 
 function the shader camera y:
     replacement:
-        @intrinsic("shader uniform", "camera_y")
+        @intrinsic("shader uniform", "camera_y", 7)
 
 function the fractional part of {floating-point number:number}:
     execute:

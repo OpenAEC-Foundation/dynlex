@@ -522,15 +522,17 @@ async function runCompile() {
     if (result.status === 0) {
       if (shaderMode) {
         try {
-          shaderPreview.replaceProgram({
+          await shaderPreview.replaceProgram({
             fragmentSource: result.fragmentSource,
+            fragmentUniforms: result.fragmentUniforms,
             ...(shaderRenderer
               ? {
                   vertexSource: result.vertexSource,
+                  vertexUniforms: result.vertexUniforms,
                   geometry: shaderRenderer.geometry
                 }
               : {})
-          }, result.uniforms);
+          });
           selectToolTab("output");
         } catch (error) {
           console.error("Live shader preview update failed", error);
@@ -609,7 +611,7 @@ model.onDidChangeContent(() => {
       requiredElement("run-button").querySelector("[data-run-label]").textContent = "Recompile";
       requiredElement("run-button").querySelector("[data-run-icon]").textContent = "↻";
       shaderRenderer = await loadShaderRenderer(shaderRendererConfig);
-      shaderPreview = createShaderPreview(shaderPreviewCanvas);
+      shaderPreview = await createShaderPreview(shaderPreviewCanvas);
     }
     await callWorker("init");
     workerReady = true;

@@ -781,19 +781,18 @@ bool resolvePatterns(ParseContext &context) {
 			return false;
 
 		std::vector<PatternDefinition *> precedenceTargets(involvedDefs.begin(), involvedDefs.end());
-		std::function<void(Section *)> placeGeneratedPropertyAccessors = [&](Section *section) {
-			for (PatternDefinition *definition : section->patternDefinitions) {
-				if (!definition->isGeneratedClassPropertyAccessor)
-					continue;
-				involvedDefs.insert(definition);
-				for (PatternDefinition *target : precedenceTargets)
+		std::unordered_set<PatternDefinition *> generatedPropertyAccessors;
+		std::unordered_set<PatternDefinition *> generatedPropertyAccessorFamilyDefinitions;
+		collectGeneratedPropertyAccessorFamilies(
+			context.mainSection, generatedPropertyAccessors, generatedPropertyAccessorFamilyDefinitions
+		);
+		for (PatternDefinition *definition : generatedPropertyAccessors) {
+			involvedDefs.insert(definition);
+			// Every syntax family containing a generated accessor has equal automatic precedence.
+			for (PatternDefinition *target : precedenceTargets)
+				if (!generatedPropertyAccessorFamilyDefinitions.contains(target))
 					edges.push_back({definition, target});
-			}
-			for (Section *child : section->children)
-				placeGeneratedPropertyAccessors(child);
-		};
-		placeGeneratedPropertyAccessors(context.mainSection);
-
+		}
 		auto patternFamily = [&](PatternDefinition *definition) {
 			return definition == &defaultSentinel ? std::vector<PatternDefinition *>{definition}
 												  : connectedPatternFamily(definition);

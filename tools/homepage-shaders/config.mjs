@@ -3,10 +3,10 @@ function scene(id, title, geometry = null) {
     id,
     title,
     source: `tools/homepage-shaders/shaders/${id}.dl`,
-    fragment: `web/shaders/generated/${id}.fragment.glsl`,
+    fragment: `web/shaders/generated/${id}.fragment.wgsl`,
     ...(geometry
       ? {
-          vertex: `web/shaders/generated/${id}.vertex.glsl`,
+          vertex: `web/shaders/generated/${id}.vertex.wgsl`,
           geometry: Object.freeze(geometry)
         }
       : {})

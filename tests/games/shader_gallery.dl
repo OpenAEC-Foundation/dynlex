@@ -14,51 +14,36 @@ import lib/graphics.dl
 
 set window to a new window with width 800 and height 600
 
-# Load vertex shader (shared by all programs)
-set vertex to a vertex shader from "tests/games/passthrough.spv"
-
-# Load all fragment shaders
-set fragments to [
-    a fragment shader from "tests/games/mandelbrot.spv",
-    a fragment shader from "tests/games/plasma.spv",
-    a fragment shader from "tests/games/julia.spv",
-    a fragment shader from "tests/games/rings.spv"
-]
-
-# Create shader programs
 set programs to [
-    a shader program combining vertex and (the item at 0 in fragments),
-    a shader program combining vertex and (the item at 1 in fragments),
-    a shader program combining vertex and (the item at 2 in fragments),
-    a shader program combining vertex and (the item at 3 in fragments)
+    a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/mandelbrot.spv",
+    a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/plasma.spv",
+    a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/julia.spv",
+    a shader program for window using vertex shader at "tests/games/passthrough.spv" and fragment shader at "tests/games/rings.spv"
 ]
-
-set timer to a new uniform buffer
-bind timer to binding 0
 
 set current to 0
 set ready to true
-use (the item at 0 in programs) as the shader program
 
-while the window remains open:
-    set pressed to key (the GLFW up key) is down in window or key (the GLFW right key) is down in window or key (the GLFW down key) is down in window or key (the GLFW left key) is down in window
+while window remains open:
+    set pressed to key (the up arrow key) is down in window or key (the right arrow key) is down in window or key (the down arrow key) is down in window or key (the left arrow key) is down in window
     if pressed:
         if ready:
             set current to (current + 1)
             if current > 3:
                 set current to 0
-            use (the item at current in programs) as the shader program
             set ready to false
     else:
         set ready to true
 
-    # Pass time uniform via UBO (required for SPIR-V shaders)
-    set time to the time since start
-    update timer with time
+    set time to the time since start for window
+    set frame to a new graphics frame in window
+    use (the item at current in programs) in frame
+    set uniform binding 0 in frame to time
+    draw a fullscreen surface in frame
+    display frame
 
-    clear the screen
-    draw a fullscreen quad
-    display the frame of window
-
-delete timer
+set index to 0
+while index < 4:
+    release the item at index in programs
+    increment index
 close the window

@@ -1,0 +1,50 @@
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %main "main" %position %color %fragment_color %per_vertex
+OpDecorate %position Location 0
+OpDecorate %color Location 1
+OpDecorate %fragment_color Location 0
+OpMemberDecorate %PerVertex 0 BuiltIn Position
+OpDecorate %PerVertex Block
+OpMemberDecorate %PushConstants 0 ColMajor
+OpMemberDecorate %PushConstants 0 Offset 0
+OpMemberDecorate %PushConstants 0 MatrixStride 16
+OpDecorate %PushConstants Block
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%vec3 = OpTypeVector %float 3
+%vec4 = OpTypeVector %float 4
+%mat4 = OpTypeMatrix %vec4 4
+%PerVertex = OpTypeStruct %vec4
+%PushConstants = OpTypeStruct %mat4
+%input_vec3 = OpTypePointer Input %vec3
+%input_vec4 = OpTypePointer Input %vec4
+%output_vec4 = OpTypePointer Output %vec4
+%output_per_vertex = OpTypePointer Output %PerVertex
+%push_constants = OpTypePointer PushConstant %PushConstants
+%push_mat4 = OpTypePointer PushConstant %mat4
+%int = OpTypeInt 32 1
+%zero = OpConstant %int 0
+%one = OpConstant %float 1
+%position = OpVariable %input_vec3 Input
+%color = OpVariable %input_vec4 Input
+%fragment_color = OpVariable %output_vec4 Output
+%per_vertex = OpVariable %output_per_vertex Output
+%constants = OpVariable %push_constants PushConstant
+%main = OpFunction %void None %function
+%entry = OpLabel
+%xyz = OpLoad %vec3 %position
+%x = OpCompositeExtract %float %xyz 0
+%y = OpCompositeExtract %float %xyz 1
+%z = OpCompositeExtract %float %xyz 2
+%homogeneous = OpCompositeConstruct %vec4 %x %y %z %one
+%matrix_pointer = OpAccessChain %push_mat4 %constants %zero
+%matrix = OpLoad %mat4 %matrix_pointer
+%transformed = OpMatrixTimesVector %vec4 %matrix %homogeneous
+%output_position = OpAccessChain %output_vec4 %per_vertex %zero
+OpStore %output_position %transformed
+%loaded_color = OpLoad %vec4 %color
+OpStore %fragment_color %loaded_color
+OpReturn
+OpFunctionEnd

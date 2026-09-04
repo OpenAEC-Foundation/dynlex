@@ -574,10 +574,45 @@ std::unique_ptr<llvm::TargetMachine> createSPIRVTargetMachine(ParseContext &cont
 	));
 }
 
+static bool collectShaderUniforms(ParseContext &context, std::vector<ParseContext::ShaderUniform> &uniforms) {
+	for (const ParseContext::ShaderUniform &uniform : context.shaderUniforms) {
+		bool exactDuplicate = false;
+		for (const ParseContext::ShaderUniform &previous : uniforms) {
+			if (previous.name == uniform.name) {
+				if (previous.binding != uniform.binding) {
+					context.addDiagnostic(Diagnostic(
+						context, Diagnostic::Level::Error, "shader uniform binding inconsistent", uniform.range, "name",
+						uniform.name, "first", std::to_string(previous.binding), "second", std::to_string(uniform.binding)
+					));
+					return false;
+				}
+				exactDuplicate = true;
+				break;
+			}
+			if (previous.binding == uniform.binding) {
+				context.addDiagnostic(Diagnostic(
+					context, Diagnostic::Level::Error, "shader uniform binding duplicate", uniform.range, "binding",
+					std::to_string(uniform.binding), "first", previous.name, "second", uniform.name
+				));
+				return false;
+			}
+		}
+		if (!exactDuplicate)
+			uniforms.push_back(uniform);
+	}
+	std::sort(uniforms.begin(), uniforms.end(), [](const auto &left, const auto &right) {
+		return left.binding < right.binding;
+	});
+	return true;
+}
+
 bool emitSPIRVModule(ParseContext &context) {
 	std::string outputPath = context.options.outputPath;
 	if (outputPath.empty())
 		outputPath = context.options.inputPath + ".spv";
+	std::vector<ParseContext::ShaderUniform> shaderUniforms;
+	if (!collectShaderUniforms(context, shaderUniforms))
+		return false;
 
 	requireCompilerInvariant(context.targetMachine != nullptr, "SPIR-V emission requires an initialized target machine");
 	llvm::TargetMachine &targetMachine = *context.targetMachine;
@@ -635,34 +670,15 @@ bool emitSPIRVModule(ParseContext &context) {
 		));
 	}
 
-	// Add uniform variables as UBOs (Uniform storage class with Block decoration)
-	// SPIR-V shaders in OpenGL require buffer-backed uniforms, not UniformConstant
-	uint32_t nextBinding = 0;
-	std::vector<std::string> orderedUniformNames = context.shaderUniformNames;
-	std::stable_sort(
-		orderedUniformNames.begin(), orderedUniformNames.end(),
-		[&](const std::string &left, const std::string &right) {
-		auto leftIt = context.shaderUniformSourceOrder.find(left);
-		auto rightIt = context.shaderUniformSourceOrder.find(right);
-		bool leftHasSource = leftIt != context.shaderUniformSourceOrder.end();
-		bool rightHasSource = rightIt != context.shaderUniformSourceOrder.end();
-		if (leftHasSource != rightHasSource)
-			return leftHasSource;
-		if (!leftHasSource)
-			return false;
-		return std::tie(leftIt->second.mergedLineIndex, leftIt->second.column) <
-			   std::tie(rightIt->second.mergedLineIndex, rightIt->second.column);
-	}
-	);
-	for (const auto &uniformName : orderedUniformNames) {
-		std::string globalName = "ubo_" + uniformName;
+	// Store shader parameters in descriptor-set-zero uniform buffers shared by Vulkan and WebGPU.
+	for (const ParseContext::ShaderUniform &uniform : shaderUniforms) {
 		ShaderIoVar uboVar;
-		uboVar.name = globalName;
+		uboVar.name = "ubo_" + uniform.name;
 		uboVar.storageClass = spvStorageClassUniform;
 		uboVar.isBuiltIn = false;
 		uboVar.decorationValue = 0;
 		uboVar.isUBO = true;
-		uboVar.binding = nextBinding++;
+		uboVar.binding = uniform.binding;
 		ioVars.push_back(uboVar);
 	}
 

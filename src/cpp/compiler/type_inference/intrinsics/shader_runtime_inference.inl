@@ -4,7 +4,8 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 	if (hasNamedShaderResource) {
 		CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
 		const std::string *name = std::get_if<std::string>(&nameValue);
-		if (!name || ((kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput) &&
+		if (!name || ((kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput ||
+					   kind == IntrinsicKind::ShaderUniform) &&
 					  name->empty())) {
 			std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
 											 : kind == IntrinsicKind::ShaderUniform
@@ -36,6 +37,19 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 					failWithDetail("shader input unavailable");
 					return false;
 				}
+			}
+		}
+		if (kind == IntrinsicKind::ShaderUniform) {
+			CompileTimeValue bindingValue = context.lookupExpressionValue(expr->arguments[2]);
+			std::optional<std::int64_t> binding = getCompileTimeIntegerValue(bindingValue);
+			if (!binding || *binding < 0 || static_cast<std::uint64_t>(*binding) > UINT32_MAX) {
+				std::string detail = renderConfiguredMessage(
+					syntaxConfigForRange(context.parseContext, expr->arguments[2]->range), "shader uniform binding invalid",
+					"message"
+				);
+				context.setTypeFailure(detail);
+				context.fail(buildFailureDetailDiagnostic(expr->arguments[2]->range, detail), 0);
+				return false;
 			}
 		}
 		if (context.parseContext.options.emitSPIRV &&

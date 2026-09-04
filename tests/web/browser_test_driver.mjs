@@ -141,7 +141,13 @@ export async function replaceMonacoSource(sourceText) {
     if (!input) throw new Error('Monaco input is missing');
     input.focus();
   })()`);
-  await evaluate(`navigator.clipboard.writeText(${JSON.stringify(sourceText)})`);
+  await evaluate(`Promise.race([
+    navigator.clipboard.writeText(${JSON.stringify(sourceText)}),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('Timed out writing the Monaco replacement to the clipboard')),
+      5000
+    ))
+  ])`);
   await dispatchKey("a", "KeyA", 65, 2);
   await dispatchKey("v", "KeyV", 86, 2);
 }

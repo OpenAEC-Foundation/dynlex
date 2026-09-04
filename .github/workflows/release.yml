@@ -352,6 +352,7 @@ jobs:
           ./scripts/stage-macos-dependencies.sh "$PWD/build/macos-stage"
           test -x build/macos-stage/usr/local/bin/dynlex
           test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_runtime.a
+          test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_graphics.a
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libglfw.dylib
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libfreetype.dylib
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libvulkan.dylib
@@ -466,6 +467,7 @@ jobs:
             case "$relative_path" in
               usr/local/bin/dynlex|\
               usr/local/lib/dynlex/libdynlex_runtime.a|\
+              usr/local/lib/dynlex/libdynlex_graphics.a|\
               usr/local/lib/dynlex/dependencies/*.dylib)
                 continue
                 ;;
@@ -482,6 +484,10 @@ jobs:
             "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             "$X64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
+          lipo -create \
+            "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a" \
+            "$X64_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a" \
+            -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a"
           while IFS= read -r arm64_library; do
             library_name="$(basename "$arm64_library")"
             x64_library="$X64_ROOT/usr/local/lib/dynlex/dependencies/$library_name"
@@ -494,6 +500,8 @@ jobs:
           lipo -verify_arch arm64 x86_64 "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
           lipo -verify_arch arm64 x86_64 \
             "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
+          lipo -verify_arch arm64 x86_64 \
+            "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a"
 
           while IFS= read -r library; do
             codesign \

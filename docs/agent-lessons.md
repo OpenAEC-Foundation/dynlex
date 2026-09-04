@@ -170,11 +170,11 @@ Act like a careful compiler debugger, not a patch bot.
 
 Find the real cause. Make a small repro. Use the right debugging tools. Be conservative with git. Verify that tests are genuinely meaningful. Improve diagnostics when they are weak. And follow the explicit workflow the user gave you, not the workflow you wish they had given you.
 
-For GLFW resize handling in `lib/graphics.dl`, wire `glfwSetFramebufferSizeCallback` to an exposed DynLex callback and call `glViewport` from that callback with framebuffer dimensions. Do not paper over viewport bugs by polling window size in draw code.
+For native framebuffer resizing, let the GLFW callback mark the Vulkan swapchain dirty and rebuild its dependent resources before the next drawable frame. Do not poll window size in draw code.
 
 When a plain pattern word like `width` is implicitly promoted into a parameter because the function body uses that name, failed calls should keep the normal call-site undeduced-argument error and add related info pointing at the first body use that caused the promotion. That distinguishes accidental implicit parameters from truly missing caller variables.
 
-SPIR-V shader uniform fallback bindings must be derived from parse-time source location order, not codegen use order. Reading a new uniform earlier in shader `main` must never renumber existing UBO bindings.
+SPIR-V shader uniform bindings must be explicit compile-time descriptor-set-zero locations supplied by the intrinsic. Independently compiled stages can then share stable resource locations without depending on source or code-generation order; reject one name at multiple bindings and multiple names at one binding.
 
 Repeated plain `VariableLike` words inside one pattern definition must be tracked per concrete pattern path, not by flat leaf order. Choice alternatives like `[a|] bits bit integer` contain parallel copies of the same parameter and must keep both promotable. Only later same-path occurrences should be forced to stay literal.
 

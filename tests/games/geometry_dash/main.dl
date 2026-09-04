@@ -26,8 +26,8 @@ set player to a runner at height the player's ground height moving with velocity
 set reference to a route follower tracking (a runner at height the player's ground height moving with velocity 0.0)
 set scroll to 0
 
-loop while the window remains open:
-	if key (the GLFW up key) is down in window and player's y >= the player's ground height:
+loop while window remains open:
+	if key (the up arrow key) is down in window and player's y >= the player's ground height:
 		start a jump for player
 
 	apply gravity to player
@@ -51,7 +51,9 @@ loop while the window remains open:
 				set reference's sliding to true
 				increment reference's step
 
-	draw the static world
+	set frame to a new graphics frame in window
+	use screen coordinates in frame
+	draw the static world in frame
 
 	set surface to the player's ground height
 	set distance to (the reference horizontal offset - scroll)
@@ -72,14 +74,14 @@ loop while the window remains open:
 		add 72 to span
 		set horizontal to (the player horizontal position + distance)
 		if clearance > 0:
-			draw a rectangle at x horizontal and y top with width span and height clearance in color red 210, green 120 and blue 50
+			draw a rectangle at x horizontal and y top with width span and height clearance in color red 210, green 120 and blue 50 in frame
 		set surface to landing's y
 		add the scroll speed * (slide + jump) / the frame time in milliseconds to distance
 		increment index
 
-	draw a runner at (a screen position with x the player horizontal position and y (player's y as an integer)) with (a screen color with red 80, green 220 and blue 255)
-	draw a runner at (a screen position with x (the player horizontal position + the reference horizontal offset) and y (reference's runner's y as an integer)) with (a screen color with red 255, green 220 and blue 80)
-	display the frame of window
+	draw a runner at (a screen position with x the player horizontal position and y (player's y as an integer)) with (a screen color with red 80, green 220 and blue 255) in frame
+	draw a runner at (a screen position with x (the player horizontal position + the reference horizontal offset) and y (reference's runner's y as an integer)) with (a screen color with red 255, green 220 and blue 80) in frame
+	display frame
 	set delay to the frame time in milliseconds
 	sleep for delay milliseconds
 

@@ -1,0 +1,34 @@
+OpCapability Shader
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %main "main" %fragment_color %fragment_coordinates %output_color
+OpExecutionMode %main OriginUpperLeft
+OpDecorate %fragment_color Location 0
+OpDecorate %fragment_coordinates Location 1
+OpDecorate %output_color Location 0
+OpDecorate %texture DescriptorSet 0
+OpDecorate %texture Binding 0
+%void = OpTypeVoid
+%function = OpTypeFunction %void
+%float = OpTypeFloat 32
+%vec2 = OpTypeVector %float 2
+%vec4 = OpTypeVector %float 4
+%image = OpTypeImage %float 2D 0 0 0 1 Unknown
+%sampled_image = OpTypeSampledImage %image
+%input_vec2 = OpTypePointer Input %vec2
+%input_vec4 = OpTypePointer Input %vec4
+%output_vec4 = OpTypePointer Output %vec4
+%uniform_sampled_image = OpTypePointer UniformConstant %sampled_image
+%fragment_color = OpVariable %input_vec4 Input
+%fragment_coordinates = OpVariable %input_vec2 Input
+%output_color = OpVariable %output_vec4 Output
+%texture = OpVariable %uniform_sampled_image UniformConstant
+%main = OpFunction %void None %function
+%entry = OpLabel
+%loaded_texture = OpLoad %sampled_image %texture
+%loaded_coordinates = OpLoad %vec2 %fragment_coordinates
+%sample = OpImageSampleImplicitLod %vec4 %loaded_texture %loaded_coordinates
+%loaded_color = OpLoad %vec4 %fragment_color
+%result = OpFMul %vec4 %sample %loaded_color
+OpStore %output_color %result
+OpReturn
+OpFunctionEnd

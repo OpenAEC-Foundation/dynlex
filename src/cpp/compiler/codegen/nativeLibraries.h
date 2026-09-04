@@ -5,5 +5,7 @@
 #include <string>
 #include <vector>
 
-std::vector<std::string>
-nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library, llvm::StringRef runtimeLibraryPath);
+std::vector<std::string> nativeLibraryArguments(
+	const llvm::Triple &targetTriple, llvm::StringRef library, llvm::StringRef runtimeLibraryPath,
+	llvm::StringRef graphicsLibraryPath
+);

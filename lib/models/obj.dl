@@ -4,7 +4,7 @@
 # materials, and PPM P6 texture bindings.
 
 import lib/std.dl
-import lib/texture.dl
+import lib/graphics.dl
 
 class:
     patterns:
@@ -163,7 +163,7 @@ function the index of OBJ material named {a value:name} in {a value:materials} w
             increment cursor
         return -1
 
-function a loaded OBJ material set from path:
+function a loaded OBJ material set from path for {pointer:window}:
     execute:
         if path = 0 as a pointer to a byte:
             return an empty OBJ material set
@@ -222,7 +222,7 @@ function a loaded OBJ material set from path:
                     if (current >= 0) and (@intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "map_Kd %2047s", texture) = 1):
                         set existing to the item at current in materials
                         set reference to a duplicated OBJ C string from texture
-                        set identifier to a loaded graphics texture from PPM file at reference
+                        set identifier to a graphics texture loaded from PPM file at reference for window
 
                         if existing's texture path != 0 as a pointer to a byte:
                             @intrinsic("call", "libc", "free", nothing, existing's texture path)
@@ -256,7 +256,7 @@ function {OBJ face reference:reference} converted to zero-based OBJ indices:
     execute:
         return a new OBJ face reference with vertex the zero-based OBJ index from reference's vertex, texture coordinate the zero-based OBJ index from reference's texture coordinate and normal the zero-based OBJ index from reference's normal
 
-function a loaded OBJ mesh from path:
+function a loaded OBJ mesh from path for {pointer:window}:
     execute:
         set scanner to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
         if scanner = 0 as a pointer to a byte:
@@ -281,7 +281,7 @@ function a loaded OBJ mesh from path:
         if library != 0 as a pointer to a byte:
             @intrinsic("call", "libc", "free", nothing, library)
 
-        set catalogue to a loaded OBJ material set from reference
+        set catalogue to a loaded OBJ material set from reference for window
         if reference != 0 as a pointer to a byte:
             @intrinsic("call", "libc", "free", nothing, reference)
 
@@ -433,11 +433,7 @@ function the diagnostic OBJ color of {OBJ texture coordinate:coordinate}:
         set vertical to the wrapped OBJ texture coordinate from coordinate's v
         return a new OBJ color from horizontal, vertical and (1.0 - ((horizontal + vertical) / 2.0))
 
-function use {OBJ color:color} as the current OBJ color:
-    execute:
-        @intrinsic("call", "GL", "glColor3d", nothing, color's red, color's green, color's blue)
-
-function use {OBJ color:color} as the current byte color:
+function use {OBJ color:color} as the vertex color in {graphics frame:frame}:
     execute:
         set red to (color's red * 255.0) as an integer
         set green to (color's green * 255.0) as an integer
@@ -454,32 +450,32 @@ function use {OBJ color:color} as the current byte color:
             set green to 255
         if blue > 255:
             set blue to 255
-        @intrinsic("call", "GL", "glColor3ub", nothing, red, green, blue)
+        use vertex color red red, green green and blue blue in frame
 
-function draw {OBJ vertex:vertex}:
+function add {OBJ vertex:vertex} to {graphics frame:frame}:
     execute:
-        @intrinsic("call", "GL", "glVertex3d", nothing, vertex's x, vertex's y, vertex's z)
+        add a vertex at x vertex's x, y vertex's y and z vertex's z to frame
 
-function draw {OBJ vertex:vertex} with {OBJ texture coordinate:coordinate}:
+function add {OBJ vertex:vertex} with {OBJ texture coordinate:coordinate} to {graphics frame:frame}:
     execute:
-        @intrinsic("call", "GL", "glTexCoord2d", nothing, coordinate's u, coordinate's v)
-        draw vertex
+        use texture coordinates x coordinate's u and y coordinate's v in frame
+        add vertex to frame
 
-function draw {OBJ vertex:vertex} in {OBJ color:color}:
+function add {OBJ vertex:vertex} in {OBJ color:color} to {graphics frame:frame}:
     execute:
-        use color as the current OBJ color
-        draw vertex
+        use color as the vertex color in frame
+        add vertex to frame
 
 function {OBJ vertex:vertex} has a color:
     execute:
         return vertex's color presence != 0
 
-function draw {OBJ vertex:vertex} in its color or {OBJ color:fallback}:
+function add {OBJ vertex:vertex} in its color or {OBJ color:fallback} to {graphics frame:frame}:
     execute:
         if vertex has a color:
-            draw vertex in vertex's color clamped
+            add vertex in vertex's color clamped to frame
         else:
-            draw vertex in fallback
+            add vertex in fallback to frame
 
 function {OBJ triangle:triangle} has usable texture coordinates for {OBJ mesh:mesh}:
     execute:
@@ -488,11 +484,11 @@ function {OBJ triangle:triangle} has usable texture coordinates for {OBJ mesh:me
         set third to triangle's third's texture coordinate
         return (first >= 0) and ((second >= 0) and ((third >= 0) and ((first < mesh's texture coordinate count) and ((second < mesh's texture coordinate count) and (third < mesh's texture coordinate count)))))
 
-function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color}:
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color} in {graphics frame:frame}:
     execute:
-        draw mesh at x horizontal, y vertical and z depth scaled by scale in color with 0 as its render mode
+        draw mesh at x horizontal, y vertical and z depth scaled by scale in color with 0 as its render mode in frame
 
-function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color} with {a value:requested} as its render mode:
+function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} scaled by {a value:scale} in {OBJ color:color} with {a value:requested} as its render mode in {graphics frame:frame}:
     execute:
         if mesh's triangle count > 0:
             set vertices to mesh's vertices
@@ -500,9 +496,9 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
             set triangles to mesh's triangles
             set materials to mesh's materials
 
-            @intrinsic("call", "GL", "glPushMatrix", nothing)
-            @intrinsic("call", "GL", "glTranslated", nothing, horizontal, vertical, depth)
-            @intrinsic("call", "GL", "glScaled", nothing, scale, scale, scale)
+            save the model transform in frame
+            move the model in frame by x horizontal, y vertical and z depth
+            scale the model in frame by x scale, y scale and z scale
 
             set mode to requested
             if mode < 0:
@@ -512,46 +508,17 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
 
             set base to color
             set index to 0
-            set active to -2147483647
-            set texture to an empty graphics texture
-            set fallback to base
+            set active_resource to 0 as a pointer to a byte
             set drawing to false
 
             while index < mesh's triangle count:
                 set triangle to the item at index in triangles
-
-                if triangle's material != active:
-                    if drawing:
-                        @intrinsic("call", "GL", "glEnd", nothing)
-
-                    set active to triangle's material
-                    set texture to an empty graphics texture
-                    set fallback to base
-
-                    if (active >= 0) and (active < mesh's material count):
-                        set material to the item at active in materials
-                        set fallback to (material's color clamped)
-                        set texture to material's texture
-
-                        if mode = 0:
-                            if texture is loaded:
-                                bind texture
-                                @intrinsic("call", "GL", "glColor3ub", nothing, 255, 255, 255)
-                            else:
-                                @intrinsic("call", "GL", "glDisable", nothing, 3553)
-                                use material's color as the current byte color
-                        else:
-                            @intrinsic("call", "GL", "glDisable", nothing, 3553)
-                            use fallback as the current OBJ color
-                    else:
-                        @intrinsic("call", "GL", "glDisable", nothing, 3553)
-                        if mode = 0:
-                            use base as the current byte color
-                        else:
-                            use fallback as the current OBJ color
-
-                    @intrinsic("call", "GL", "glBegin", nothing, 4)
-                    set drawing to true
+                set texture to an empty graphics texture
+                set fallback to base
+                if (triangle's material >= 0) and (triangle's material < mesh's material count):
+                    set material to the item at triangle's material in materials
+                    set fallback to material's color clamped
+                    set texture to material's texture
 
                 set first to the item at (triangle's first's vertex) in vertices
                 set second to the item at (triangle's second's vertex) in vertices
@@ -572,49 +539,60 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
                 if shade > 1.0:
                     set shade to 1.0
 
+                set selected_resource to 0 as a pointer to a byte
                 if mode = 0:
-                    if texture is loaded:
-                        use a grayscale OBJ color with brightness shade as the current OBJ color
-                    else:
-                        use fallback scaled by shade as the current OBJ color
-
                     if texture is loaded and triangle has usable texture coordinates for mesh:
+                        set selected_resource to texture's resource
+
+                if (drawing = false) or (selected_resource != active_resource):
+                    if drawing:
+                        finish triangles in frame
+                    if selected_resource = 0 as a pointer to a byte:
+                        start triangles in frame
+                    else:
+                        start triangles using texture in frame
+                    set active_resource to selected_resource
+                    set drawing to true
+
+                if mode = 0:
+                    if texture is loaded and triangle has usable texture coordinates for mesh:
+                        use a grayscale OBJ color with brightness shade as the vertex color in frame
                         set start to the item at (triangle's first's texture coordinate) in coordinates
                         set middle to the item at (triangle's second's texture coordinate) in coordinates
                         set end to the item at (triangle's third's texture coordinate) in coordinates
-                        draw first with start
-                        draw second with middle
-                        draw third with end
+                        add first with start to frame
+                        add second with middle to frame
+                        add third with end to frame
                     else:
-                        draw first
-                        draw second
-                        draw third
+                        use fallback scaled by shade as the vertex color in frame
+                        add first to frame
+                        add second to frame
+                        add third to frame
                 else:
                     if mode = 1:
                         if triangle has usable texture coordinates for mesh:
                             set start to the item at (triangle's first's texture coordinate) in coordinates
                             set middle to the item at (triangle's second's texture coordinate) in coordinates
                             set end to the item at (triangle's third's texture coordinate) in coordinates
-                            draw first in the diagnostic OBJ color of start
-                            draw second in the diagnostic OBJ color of middle
-                            draw third in the diagnostic OBJ color of end
+                            add first in the diagnostic OBJ color of start to frame
+                            add second in the diagnostic OBJ color of middle to frame
+                            add third in the diagnostic OBJ color of end to frame
                         else:
                             set missing to a new OBJ color from 1.0, 0.0 and 1.0
-                            draw first in missing
-                            draw second in missing
-                            draw third in missing
+                            add first in missing to frame
+                            add second in missing to frame
+                            add third in missing to frame
                     else:
-                        draw first in its color or fallback
-                        draw second in its color or fallback
-                        draw third in its color or fallback
+                        add first in its color or fallback to frame
+                        add second in its color or fallback to frame
+                        add third in its color or fallback to frame
 
                 increment index
 
             if drawing:
-                @intrinsic("call", "GL", "glEnd", nothing)
+                finish triangles in frame
 
-            unbind graphics textures
-            @intrinsic("call", "GL", "glPopMatrix", nothing)
+            restore the model transform in frame
 
 function free {OBJ mesh:mesh}:
     execute:

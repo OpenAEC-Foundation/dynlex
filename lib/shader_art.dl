@@ -29,11 +29,11 @@ function the dimensions measuring {floating-point number:width} by {floating-poi
 
 function the shader width:
     replacement:
-        @intrinsic("shader uniform", "width")
+        @intrinsic("shader uniform", "width", 2)
 
 function the shader height:
     replacement:
-        @intrinsic("shader uniform", "height")
+        @intrinsic("shader uniform", "height", 3)
 
 function the fractional part of number:
     execute:

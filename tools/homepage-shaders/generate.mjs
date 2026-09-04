@@ -212,28 +212,27 @@ for (const scene of shaderConfig.scenes) {
     throw new Error("Compiler returned inconsistent semantic-token legends");
   }
 
-  const fragmentGlsl = `${fragment.glsl.trimEnd()}\n`;
-  writeOrCheck(scene.fragment, fragmentGlsl);
+  const fragmentWgsl = `${fragment.wgsl.trimEnd()}\n`;
+  writeOrCheck(scene.fragment, fragmentWgsl);
   generatedShaderPaths.add(scene.fragment);
   const shaders = {
     fragment: {
       path: scene.fragment.replace(/^web\//, ""),
-      hash: sha256(fragmentGlsl)
+      hash: sha256(fragmentWgsl),
+      uniforms: fragment.uniforms
     }
   };
 
   if (scene.vertex) {
     const vertex = await compiler.compile(source, scene.source, "vertex");
     assertUniforms(vertex.uniforms, scene.source);
-    if (JSON.stringify(fragment.uniforms) !== JSON.stringify(vertex.uniforms)) {
-      throw new Error(`${scene.source} must expose identical uniforms in both shader stages`);
-    }
-    const vertexGlsl = `${vertex.glsl.trimEnd()}\n`;
-    writeOrCheck(scene.vertex, vertexGlsl);
+    const vertexWgsl = `${vertex.wgsl.trimEnd()}\n`;
+    writeOrCheck(scene.vertex, vertexWgsl);
     generatedShaderPaths.add(scene.vertex);
     shaders.vertex = {
       path: scene.vertex.replace(/^web\//, ""),
-      hash: sha256(vertexGlsl)
+      hash: sha256(vertexWgsl),
+      uniforms: vertex.uniforms
     };
   }
 
@@ -245,7 +244,6 @@ for (const scene of shaderConfig.scenes) {
     sourceHash: sha256(source),
     inputHash: inputHash(scene.source),
     shaders,
-    uniforms: fragment.uniforms,
     semanticTokens: fragment.semanticTokens
   };
 
@@ -258,7 +256,7 @@ for (const scene of shaderConfig.scenes) {
 await compiler.close();
 
 const manifest = `${JSON.stringify({
-  schemaVersion: 9,
+  schemaVersion: 11,
   semanticLegend,
   scenes: records
 }, null, 2)}\n`;

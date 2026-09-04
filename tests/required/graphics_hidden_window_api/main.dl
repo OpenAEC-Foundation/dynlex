@@ -1,14 +1,21 @@
 import lib/graphics.dl
 
-print the GLFW visible window hint as a line
+print "graphics window visibility is available" as a line
 
 # The creation call is intentionally unreachable: required API tests must not
 # need a display server, while still compiling the public hidden-window API.
 if false:
 	set hidden to a new hidden window with width 1 and height 1
-	set visible to @intrinsic("call", "glfw", "glfwGetWindowAttrib", an integer, hidden, the GLFW visible window hint)
-	if visible != 0:
+	if hidden is visible:
 		close hidden
 		return 1
 	set visible_window to a new window with width 1 and height 1
+	set version to the Vulkan API version of visible_window
+	set portability to Vulkan portability is enabled for visible_window
+	set device to the graphics device name of visible_window
+	set graphics_error to the current graphics error message
+	ignore version
+	ignore portability
+	ignore device
+	ignore graphics_error
 	set fullscreen_window to a new fullscreen window

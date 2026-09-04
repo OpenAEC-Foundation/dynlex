@@ -1,6 +1,8 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { LspSession } from "../../web/lsp-client.js";
+import { createWgslTranslator } from "../../web/wgsl-translator.js";
 
 function parseCompilerJson(text, label) {
   if (typeof text !== "string" || text.length === 0) {
@@ -30,6 +32,8 @@ function validateSemanticTokens(payload, legend) {
 export async function createHomepageShaderCompiler(projectDirectory) {
   const compilerDirectory = path.join(projectDirectory, "src/web/ide/public/compiler");
   const modulePath = path.join(compilerDirectory, "dynlex_web.js");
+  const translatorPath = path.join(compilerDirectory, "dynlex_wgsl_translator.wasm");
+  const translator = await createWgslTranslator(await fs.readFile(translatorPath));
   const imported = await import(pathToFileURL(modulePath).href);
   const createModule = imported.default ?? imported;
   if (typeof createModule !== "function") {
@@ -90,7 +94,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
       }
       compiler.ccall("dynlex_web_set_main_source", null, ["string"], [source]);
       const status = compiler.ccall(
-        "dynlex_web_compile_and_emit_shader_glsl",
+        "dynlex_web_compile_and_emit_shader_spirv",
         "number",
         ["string"],
         [stage]
@@ -103,21 +107,27 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         throw new Error(`${sourceName} does not compile: ${JSON.stringify(diagnostics)}`);
       }
 
-      const glsl = compiler.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+      const spirvBase64 = compiler.ccall(
+        "dynlex_web_get_output_shader_spirv_base64",
+        "string",
+        [],
+        []
+      );
       const uniformPayload = parseCompilerJson(
         compiler.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
         "shader-uniform"
       );
       const semanticTokens = await semanticTokensFor(source);
-      if (!glsl.startsWith("#version 300 es") || !glsl.includes("void main")) {
-        throw new Error(`${sourceName} produced invalid WebGL2 ${stage} source`);
+      const wgsl = translator.translate(Uint8Array.from(Buffer.from(spirvBase64, "base64")));
+      if (!wgsl.includes(`@${stage}`) || !wgsl.includes("fn main")) {
+        throw new Error(`${sourceName} produced invalid WebGPU ${stage} source`);
       }
       if (!Array.isArray(uniformPayload.uniforms)) {
         throw new Error(`${sourceName} produced invalid shader-uniform reflection`);
       }
 
       return Object.freeze({
-        glsl,
+        wgsl,
         uniforms: uniformPayload.uniforms,
         semanticTokens,
         semanticLegend

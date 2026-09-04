@@ -293,6 +293,14 @@ assert.match(
 assert.match(releaseWorkflow, /lipo -create/);
 assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
 assert.match(releaseWorkflow, /stage-macos-dependencies\.sh/);
+assert.match(
+  releaseWorkflow,
+  /test -f build\/macos-stage\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a/,
+);
+assert.match(
+  releaseWorkflow,
+  /usr\/local\/lib\/dynlex\/libdynlex_graphics\.a\|[\s\S]*lipo -create[\s\S]*ARM64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a[\s\S]*X64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a[\s\S]*lipo -verify_arch arm64 x86_64[\s\S]*UNIVERSAL_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a/,
+);
 for (const macosRuntimeArtifact of [
   "libvulkan.dylib",
   "libMoltenVK.dylib",
@@ -381,7 +389,7 @@ assert.match(
   cmakeConfiguration,
   /install\(DIRECTORY \$\{CMAKE_SOURCE_DIR\}\/lib\/ DESTINATION \$\{CMAKE_INSTALL_DATADIR\}\/dynlex\/lib FILES_MATCHING PATTERN "\*\.dl"\)/,
 );
-assert.match(textureLibrary, /function a loaded graphics texture from PPM file at path/);
+assert.match(textureLibrary, /function a graphics texture loaded from PPM file at path for \{pointer:window\}/);
 assert.match(cmakeConfiguration, /CPACK_DEBIAN_PACKAGE_DEPENDS/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 assert.match(linuxInstaller, /linux_compile_dependencies_ready/);
@@ -504,7 +512,8 @@ assert.match(macosDependencyStager, /schema 2/);
 assert.match(macosDependencyStager, /\.\/libMoltenVK\.dylib/);
 assert.match(nativeCodegen, /DYNLEX_WINDOWS_TARGET_TRIPLE/);
 assert.match(nativeCodegen, /DYNLEX_WINDOWS_TOOLCHAIN_INSTALL_DIR/);
-assert.match(nativeCodegen, /copyRuntimeLibraries/);
+assert.match(nativeCodegen, /copyRuntimeDependencies/);
+assert.match(nativeCodegen, /MoltenVK_icd\.json/);
 
 const queryScript = path.join(projectDirectory, "scripts/release-asset.sh");
 if (process.platform !== "win32") {

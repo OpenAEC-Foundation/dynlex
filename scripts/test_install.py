@@ -21,15 +21,39 @@ class LinuxDependencyInstallerTests(unittest.TestCase):
     @unittest.skipIf(os.name == "nt", "Linux installer requires a POSIX host")
     def test_native_dependencies_are_installed_by_every_supported_package_manager(self) -> None:
         expected_packages = {
-            "apt-get": {"binutils", "libvulkan-dev", "rustup"},
-            "dnf": {"binutils", "vulkan-loader-devel", "rustup"},
+            "apt-get": {
+                "binutils",
+                "libvulkan-dev",
+                "mesa-vulkan-drivers",
+                "rustup",
+                "spirv-tools",
+                "xvfb",
+            },
+            "dnf": {
+                "binutils",
+                "mesa-vulkan-drivers",
+                "rustup",
+                "spirv-tools",
+                "vulkan-loader-devel",
+                "xorg-x11-server-Xvfb",
+            },
             "pacman": {
                 "binutils",
                 "rustup",
+                "spirv-tools",
                 "vulkan-headers",
                 "vulkan-icd-loader",
+                "vulkan-swrast",
+                "xorg-server-xvfb",
             },
-            "zypper": {"binutils", "rustup", "vulkan-devel"},
+            "zypper": {
+                "binutils",
+                "libvulkan_lvp",
+                "rustup",
+                "spirv-tools",
+                "vulkan-devel",
+                "xorg-x11-server-Xvfb",
+            },
         }
         for package_manager, packages in expected_packages.items():
             with self.subTest(package_manager=package_manager):
@@ -236,7 +260,7 @@ esac
                 install_commands,
                 [
                     "install llvm@20 nlohmann-json glfw vulkan-loader "
-                    "molten-vk rustup ninja",
+                    "molten-vk rustup spirv-tools ninja",
                 ],
             )
             self.assertIn("install-upgrade=1", brew_commands)

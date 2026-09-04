@@ -1,107 +1,91 @@
 import lib/graphics.dl
 import tests/games/three_dimensional.dl
 
-function set the perspective with width {integer:width} and height {integer:height}:
+function position the camera from {spatial camera:view} in {graphics frame:frame}:
     execute:
-        @intrinsic("call", "GL", "glMatrixMode", nothing, 5889)
-        @intrinsic("call", "GL", "glLoadIdentity", nothing)
-        set aspect to ((width as a floating-point number) / (height as a floating-point number))
-        set near to 0.1
-        set far to 200.0
-        set top to 0.08
-        set bottom to (0.0 - top)
-        set right to (top * aspect)
-        set left to (0.0 - right)
-        @intrinsic("call", "GL", "glFrustum", nothing, left, right, bottom, top, near, far)
-        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
+        reset the camera in frame
+        rotate the camera in frame by (0.0 - view's yaw) degrees around x 0.0, y 1.0 and z 0.0
+        move the camera in frame by x (0.0 - view's position's x), y (0.0 - view's position's y) and z (0.0 - view's position's z)
 
-function clear the three-dimensional screen:
-    execute:
-        @intrinsic("call", "GL", "glClear", nothing, 16640)
-
-function enable the depth test:
-    execute:
-        @intrinsic("call", "GL", "glEnable", nothing, 2929)
-
-function set the clear color to {spatial color:color}:
-    execute:
-        @intrinsic("call", "GL", "glClearColor", nothing, color's red as a 32 bit floating-point number / 255.0, color's green as a 32 bit floating-point number / 255.0, color's blue as a 32 bit floating-point number / 255.0, 1.0 as a 32 bit floating-point number)
-
-function position the camera from {spatial camera:view}:
-    execute:
-        @intrinsic("call", "GL", "glMatrixMode", nothing, 5888)
-        @intrinsic("call", "GL", "glLoadIdentity", nothing)
-        @intrinsic("call", "GL", "glRotated", nothing, 0.0 - view's yaw, 0.0, 1.0, 0.0)
-        @intrinsic("call", "GL", "glTranslated", nothing, 0.0 - view's position's x, 0.0 - view's position's y, 0.0 - view's position's z)
-
-function draw a cube at {spatial position:position} with size {floating-point number:size}:
+function draw a cube at {spatial position:position} with size {floating-point number:size} in {graphics frame:frame}:
     execute:
         set half to (size / 2.0)
-        @intrinsic("call", "GL", "glPushMatrix", nothing)
-        @intrinsic("call", "GL", "glTranslated", nothing, position's x, position's y, position's z)
-        @intrinsic("call", "GL", "glBegin", nothing, 7)
+        save the model transform in frame
+        move the model in frame by x position's x, y position's y and z position's z
+        start triangles in frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 220, 80, 80)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, half)
+        use vertex color red 220, green 80 and blue 80 in frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
+        add a vertex at x half, y (0.0 - half) and z half to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x (0.0 - half), y half and z half to frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 80, 220, 80)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, 0.0 - half)
+        use vertex color red 80, green 220 and blue 80 in frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
+        add a vertex at x half, y half and z (0.0 - half) to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y half and z (0.0 - half) to frame
+        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 80, 80, 220)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, 0.0 - half)
+        use vertex color red 80, green 80 and blue 220 in frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
+        add a vertex at x (0.0 - half), y half and z half to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x (0.0 - half), y half and z half to frame
+        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 220, 220, 80)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, half)
+        use vertex color red 220, green 220 and blue 80 in frame
+        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y half and z (0.0 - half) to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x half, y (0.0 - half) and z half to frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 220, 80, 220)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, half, 0.0 - half)
+        use vertex color red 220, green 80 and blue 220 in frame
+        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
+        add a vertex at x (0.0 - half), y half and z half to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
+        add a vertex at x half, y half and z half to frame
+        add a vertex at x half, y half and z (0.0 - half) to frame
 
-        @intrinsic("call", "GL", "glColor3ub", nothing, 80, 220, 220)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, 0.0 - half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, half, 0.0 - half, half)
-        @intrinsic("call", "GL", "glVertex3d", nothing, 0.0 - half, 0.0 - half, half)
+        use vertex color red 80, green 220 and blue 220 in frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y (0.0 - half) and z half to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
+        add a vertex at x half, y (0.0 - half) and z half to frame
+        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
 
-        @intrinsic("call", "GL", "glEnd", nothing)
-        @intrinsic("call", "GL", "glPopMatrix", nothing)
+        finish triangles in frame
+        restore the model transform in frame
 
 set window to a new window with width 800 and height 600
-set the perspective with width 800 and height 600
-enable the depth test
-set the clear color to (a color with red 20, green 26 and blue 36)
 
 set view to a camera at (a position with x 0.0, y 1.5 and z 8.0) facing 0.0 degrees with speed 0.2 and turn rate 2.0
 
-while the window remains open:
-    if key (the GLFW up key) is down in window:
+while window remains open:
+    if key (the up arrow key) is down in window:
         decrease the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
         decrease the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key (the GLFW down key) is down in window:
+    if key (the down arrow key) is down in window:
         increase the x coordinate of view's position by ((the sine of (view's yaw * 0.0174533)) * view's movement)
         increase the z coordinate of view's position by ((the cosine of (view's yaw * 0.0174533)) * view's movement)
-    if key (the GLFW right key) is down in window:
+    if key (the right arrow key) is down in window:
         add view's turning to view's yaw
-    if key (the GLFW left key) is down in window:
+    if key (the left arrow key) is down in window:
         subtract view's turning from view's yaw
 
-    clear the three-dimensional screen
-    position the camera from view
-    draw a cube at (a position with x 0.0, y 0.0 and z 0.0) with size 2.0
-    display the frame of window
+    set frame to a new graphics frame in window with background red (20.0 / 255.0), green (26.0 / 255.0), blue (36.0 / 255.0) and alpha 1.0
+    use perspective with a vertical field of view of 77.3 degrees, a near plane of 0.1 and a far plane of 200.0 in frame
+    enable depth testing in frame
+    position the camera from view in frame
+    draw a cube at (a position with x 0.0, y 0.0 and z 0.0) with size 2.0 in frame
+    display frame
 
 close the window

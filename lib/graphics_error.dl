@@ -1,0 +1,17 @@
+# Shared native graphics error propagation.
+
+import lib/std.dl
+
+function the current graphics error message:
+	execute:
+		set length to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_error_message", a word sized integer, 0 as a pointer to a byte, 0 as a word sized integer)
+		set text to a new string buffer containing (length as an integer) bytes
+		if length > 0 as a word sized integer:
+			ignore @intrinsic("call", "dynlex_graphics", "dynlex_graphics_error_message", a word sized integer, the data of text, length + 1)
+		return text
+
+function require graphics operation status {integer:status}:
+	execute:
+		if status = 0:
+			print (the current graphics error message) as a line
+			@intrinsic("call", "libc", "abort", nothing)

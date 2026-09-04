@@ -5,6 +5,6 @@
 
 import lib/models/obj.dl
 
-function a loaded FBX mesh from path:
+function a loaded FBX mesh from path for {pointer:window}:
     execute:
-        return a loaded OBJ mesh from path
+        return a loaded OBJ mesh from path for window

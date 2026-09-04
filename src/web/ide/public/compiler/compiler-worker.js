@@ -5,11 +5,13 @@ import {
   isSupportedRuntimeImport,
   toNonNegativeInteger
 } from "./runtimeImports.js";
+import { createWgslTranslator } from "/wgsl-translator.js";
 
 const compilerBasePath = "/compiler/";
 
 const state = {
   compilerModule: null,
+  wgslTranslator: null,
   initialized: false,
   lastSuccessfulWasm: null,
   runtimeFilesystem: createRuntimeFilesystem(),
@@ -71,11 +73,14 @@ function extractCompiledWasmBytes(module, wasmPointer, wasmLength) {
 }
 
 async function ensureCompilerInitialized() {
-  if (state.initialized && state.compilerModule) {
+  if (state.initialized && state.compilerModule && state.wgslTranslator) {
     return;
   }
 
-  const imported = await import(/* @vite-ignore */ `${compilerBasePath}dynlex_web.js`);
+  const [imported, wgslTranslator] = await Promise.all([
+    import(/* @vite-ignore */ `${compilerBasePath}dynlex_web.js`),
+    createWgslTranslator()
+  ]);
   const createModule = imported.default ?? imported;
   if (typeof createModule !== "function") {
     throw new Error("dynlex_web.js did not export a module factory.");
@@ -86,6 +91,7 @@ async function ensureCompilerInitialized() {
       return `${compilerBasePath}${path}`;
     }
   });
+  state.wgslTranslator = wgslTranslator;
   state.compilerModule.ccall("dynlex_web_init", null, [], []);
   state.initialized = true;
 }
@@ -154,31 +160,39 @@ function compileShaderStage(source, version, stage) {
   syncCompilerSource(source, version);
   const compilationStartedAt = performance.now();
   const status = module.ccall(
-    "dynlex_web_compile_and_emit_shader_glsl",
+    "dynlex_web_compile_and_emit_shader_spirv",
     "number",
     ["string"],
     [stage]
   );
   const compilationMilliseconds = performance.now() - compilationStartedAt;
   const feedback = compilerFeedback(module);
-  const glslSource = module.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+  const spirvBase64 = module.ccall(
+    "dynlex_web_get_output_shader_spirv_base64",
+    "string",
+    [],
+    []
+  );
   const uniformPayload = parseCompilerJson(
     module.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []),
     "shader uniform"
   );
 
-  if (status === 0 && (typeof glslSource !== "string" || glslSource.length === 0)) {
-    throw new Error("Successful shader compilation returned no WebGL source");
+  if (status === 0 && (typeof spirvBase64 !== "string" || spirvBase64.length === 0)) {
+    throw new Error("Successful shader compilation returned no SPIR-V artifact");
   }
   if (!Array.isArray(uniformPayload.uniforms)) {
     throw new Error("Successful shader compilation returned invalid uniform reflection");
   }
 
+  const wgslSource = status === 0
+    ? state.wgslTranslator.translate(decodeBase64ToBytes(spirvBase64))
+    : "";
   return {
     status,
     ...feedback,
     compilationMilliseconds,
-    glslSource: status === 0 ? glslSource : "",
+    wgslSource,
     uniforms: status === 0 ? uniformPayload.uniforms : []
   };
 }
@@ -187,9 +201,14 @@ function compileShaderSource(source, version, compileVertexStage) {
   const fragment = compileShaderStage(source, version, "fragment");
   if (fragment.status !== 0 || !compileVertexStage) {
     return {
-      ...fragment,
-      fragmentSource: fragment.glslSource,
-      vertexSource: ""
+      status: fragment.status,
+      diagnostics: fragment.diagnostics,
+      compilerLog: fragment.compilerLog,
+      compilationMilliseconds: fragment.compilationMilliseconds,
+      fragmentSource: fragment.wgslSource,
+      fragmentUniforms: fragment.uniforms,
+      vertexSource: "",
+      vertexUniforms: []
     };
   }
 
@@ -199,10 +218,10 @@ function compileShaderSource(source, version, compileVertexStage) {
     diagnostics: vertex.diagnostics,
     compilerLog: [...fragment.compilerLog, ...vertex.compilerLog],
     compilationMilliseconds: fragment.compilationMilliseconds + vertex.compilationMilliseconds,
-    glslSource: fragment.glslSource,
-    fragmentSource: fragment.glslSource,
-    vertexSource: vertex.status === 0 ? vertex.glslSource : "",
-    uniforms: fragment.uniforms
+    fragmentSource: fragment.wgslSource,
+    fragmentUniforms: fragment.uniforms,
+    vertexSource: vertex.status === 0 ? vertex.wgslSource : "",
+    vertexUniforms: vertex.status === 0 ? vertex.uniforms : []
   };
 }
 

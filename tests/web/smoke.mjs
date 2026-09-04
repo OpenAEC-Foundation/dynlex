@@ -8,9 +8,13 @@ import {
   inspectRuntimeWasmLayout,
   isSupportedRuntimeImport
 } from "../../src/web/ide/public/compiler/runtimeImports.js";
+import { createWgslTranslator } from "../../web/wgsl-translator.js";
 
 const buildDir = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve("build-web");
 const modulePath = path.join(buildDir, "dynlex_web.js");
+const translator = await createWgslTranslator(
+  await readFile(path.join(buildDir, "dynlex_wgsl_translator.wasm"))
+);
 const moduleGlue = await readFile(modulePath, "utf8");
 if (!moduleGlue.includes("__cxa_begin_catch")) {
   throw new Error("Browser compiler was built without C++ exception catching");
@@ -312,25 +316,35 @@ set the fragment color with a red channel of pulse, a green channel of 0.2, a bl
 `
 ]);
 const shaderStatus = moduleInstance.ccall(
-  "dynlex_web_compile_and_emit_shader_glsl",
+  "dynlex_web_compile_and_emit_shader_spirv",
   "number",
   ["string"],
   ["fragment"]
 );
 const shaderDiagnosticsJson = moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], []);
-const shaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+const shaderSpirvBase64 = moduleInstance.ccall(
+  "dynlex_web_get_output_shader_spirv_base64",
+  "string",
+  [],
+  []
+);
 const shaderUniformsJson = moduleInstance.ccall("dynlex_web_get_shader_uniforms_json", "string", [], []);
 if (shaderStatus !== 0) {
   throw new Error(`Shader compile status ${shaderStatus}. Diagnostics: ${shaderDiagnosticsJson}`);
 }
-if (!shaderGlsl.startsWith("#version 300 es") || !shaderGlsl.includes("void main")) {
-  throw new Error(`Expected WebGL2 fragment source, got: ${shaderGlsl}`);
+const shaderWgsl = translator.translate(Uint8Array.from(Buffer.from(shaderSpirvBase64, "base64")));
+if (!shaderWgsl.includes("@fragment") || !shaderWgsl.includes("fn main")) {
+  throw new Error(`Expected WebGPU fragment source, got: ${shaderWgsl}`);
 }
 const shaderUniforms = JSON.parse(shaderUniformsJson);
 if (!Array.isArray(shaderUniforms.uniforms) || shaderUniforms.uniforms.length !== 1) {
   throw new Error(`Expected one reflected shader uniform, got: ${shaderUniformsJson}`);
 }
-if (shaderUniforms.uniforms[0].name !== "time" || shaderUniforms.uniforms[0].binding !== 0) {
+if (
+  shaderUniforms.uniforms[0].name !== "time"
+  || shaderUniforms.uniforms[0].group !== 0
+  || shaderUniforms.uniforms[0].binding !== 0
+) {
   throw new Error(`Unexpected reflected shader uniform: ${shaderUniformsJson}`);
 }
 
@@ -341,7 +355,7 @@ set the output position with x the vertex x, y the vertex y, z the vertex z and 
 `
 ]);
 const vertexShaderStatus = moduleInstance.ccall(
-  "dynlex_web_compile_and_emit_shader_glsl",
+  "dynlex_web_compile_and_emit_shader_spirv",
   "number",
   ["string"],
   ["vertex"]
@@ -352,14 +366,22 @@ const vertexShaderDiagnosticsJson = moduleInstance.ccall(
   [],
   []
 );
-const vertexShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+const vertexShaderSpirvBase64 = moduleInstance.ccall(
+  "dynlex_web_get_output_shader_spirv_base64",
+  "string",
+  [],
+  []
+);
 if (vertexShaderStatus !== 0) {
   throw new Error(
     `Vertex shader compile status ${vertexShaderStatus}. Diagnostics: ${vertexShaderDiagnosticsJson}`
   );
 }
-if (!vertexShaderGlsl.startsWith("#version 300 es") || !vertexShaderGlsl.includes("gl_Position")) {
-  throw new Error(`Expected WebGL2 vertex source, got: ${vertexShaderGlsl}`);
+const vertexShaderWgsl = translator.translate(
+  Uint8Array.from(Buffer.from(vertexShaderSpirvBase64, "base64"))
+);
+if (!vertexShaderWgsl.includes("@vertex") || !vertexShaderWgsl.includes("@builtin(position)")) {
+  throw new Error(`Expected WebGPU vertex source, got: ${vertexShaderWgsl}`);
 }
 
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
@@ -374,10 +396,10 @@ if this is a fragment shader:
     set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 `
 ]);
-const interpolantGlsl = {};
+const interpolantWgsl = {};
 for (const stage of ["fragment", "vertex"]) {
   const status = moduleInstance.ccall(
-    "dynlex_web_compile_and_emit_shader_glsl",
+    "dynlex_web_compile_and_emit_shader_spirv",
     "number",
     ["string"],
     [stage]
@@ -386,36 +408,44 @@ for (const stage of ["fragment", "vertex"]) {
   if (status !== 0) {
     throw new Error(`Shader interpolant ${stage} compile failed: ${diagnostics}`);
   }
-  interpolantGlsl[stage] = moduleInstance.ccall(
-    "dynlex_web_get_output_shader_glsl",
+  const spirvBase64 = moduleInstance.ccall(
+    "dynlex_web_get_output_shader_spirv_base64",
     "string",
     [],
     []
   );
+  interpolantWgsl[stage] = translator.translate(
+    Uint8Array.from(Buffer.from(spirvBase64, "base64"))
+  );
 }
 const surfaceInterpolantName = "dynlex_interpolant_73757266616365";
 if (
-  !interpolantGlsl.vertex.includes(surfaceInterpolantName)
-  || !interpolantGlsl.fragment.includes(surfaceInterpolantName)
+  !interpolantWgsl.vertex.includes(surfaceInterpolantName)
+  || !interpolantWgsl.fragment.includes(surfaceInterpolantName)
 ) {
-  throw new Error(`Named shader interpolant did not survive WebGL translation: ${
-    JSON.stringify(interpolantGlsl)
+  throw new Error(`Named shader interpolant did not survive WebGPU translation: ${
+    JSON.stringify(interpolantWgsl)
   }`);
 }
 
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], ["this shader does not compile"]);
 const invalidShaderStatus = moduleInstance.ccall(
-  "dynlex_web_compile_and_emit_shader_glsl",
+  "dynlex_web_compile_and_emit_shader_spirv",
   "number",
   ["string"],
   ["fragment"]
 );
-const invalidShaderGlsl = moduleInstance.ccall("dynlex_web_get_output_shader_glsl", "string", [], []);
+const invalidShaderSpirv = moduleInstance.ccall(
+  "dynlex_web_get_output_shader_spirv_base64",
+  "string",
+  [],
+  []
+);
 if (invalidShaderStatus === 0) {
   throw new Error("Invalid shader source compiled successfully");
 }
-if (invalidShaderGlsl !== "") {
-  throw new Error("A failed shader compilation retained a stale GLSL artifact");
+if (invalidShaderSpirv !== "") {
+  throw new Error("A failed shader compilation retained a stale SPIR-V artifact");
 }
 
 const wasmBytes = Uint8Array.from(Buffer.from(wasmBase64, "base64"));

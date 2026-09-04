@@ -1,6 +1,6 @@
 import lib/graphics.dl
 
-exposed function exercise the application state API for {C string:window}:
+exposed function exercise the application state API for {pointer:window}:
     execute:
         set application_pointer to 0 as a pointer to a byte
         set the application state of window to application_pointer

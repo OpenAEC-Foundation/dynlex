@@ -37,26 +37,22 @@ function a console display at scale {integer:scale} with playfield {integer:play
 allocate 2048 slots of 0.0 and set phosphor to it
 set panel to a console display at scale 16 with playfield (32 * 16) and status area height 48, backed by phosphor
 
-function feed the pad from {C string:window}:
+function feed the pad from {pointer:window}:
 	execute:
 		set left to 0
-		if key (the GLFW left key) is down in window:
+		if key (the left arrow key) is down in window:
 			set left to 1
-		if key (the GLFW A key) is down in window:
+		if key (the A key) is down in window:
 			set left to 1
 		set right to 0
-		if key (the GLFW right key) is down in window:
+		if key (the right arrow key) is down in window:
 			set right to 1
-		if key (the GLFW D key) is down in window:
+		if key (the D key) is down in window:
 			set right to 1
 		set machine key 4 to left
 		set machine key 6 to right
 
-function request that {C string:window} close:
-	execute:
-		@intrinsic("call", "glfw", "glfwSetWindowShouldClose", nothing, window, 1)
-
-function render the phosphor screen:
+function render the phosphor screen in {graphics frame:frame}:
 	globals: panel
 	execute:
 		# Fade every cell toward darkness, snap lit cells to full brightness.
@@ -80,7 +76,7 @@ function render the phosphor screen:
 				set brightness to the item at (row * 64 + column) in panel's phosphor
 				if brightness > 0.05:
 					set glow to a phosphor color with red ((105.0 * brightness) as an integer), green ((58.0 * brightness) as an integer) and blue ((12.0 * brightness) as an integer)
-					draw a rectangle at x (column * (panel's scale) - 3) and y (row * (panel's scale) - 3) with width 22 and height 22 in color red glow's red, green glow's green and blue glow's blue
+					draw a rectangle at x (column * (panel's scale) - 3) and y (row * (panel's scale) - 3) with width 22 and height 22 in color red glow's red, green glow's green and blue glow's blue in frame
 				increment column
 			increment row
 
@@ -92,7 +88,7 @@ function render the phosphor screen:
 				set brightness to the item at (row * 64 + column) in panel's phosphor
 				if brightness > 0.05:
 					set core to a phosphor color with red ((255.0 * brightness) as an integer), green ((196.0 * brightness) as an integer) and blue ((98.0 * brightness) as an integer)
-					draw a rectangle at x (column * (panel's scale) + 1) and y (row * (panel's scale) + 1) with width 14 and height 14 in color red core's red, green core's green and blue core's blue
+					draw a rectangle at x (column * (panel's scale) + 1) and y (row * (panel's scale) + 1) with width 14 and height 14 in color red core's red, green core's green and blue core's blue in frame
 				increment column
 			increment row
 
@@ -102,10 +98,10 @@ initialize the machine
 load the assembled program into the machine
 
 set window to a new window with width (64 * (panel's scale)) and height ((panel's playfield) + (panel's status))
-set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set typeface to a font loaded from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24 for window
 
-loop while the window remains open:
-	if key (the GLFW escape key) is down in window:
+loop while window remains open:
+	if key (the escape key) is down in window:
 		request that window close
 	if key 82 is down in window:
 		initialize the machine
@@ -115,20 +111,22 @@ loop while the window remains open:
 	step the machine 32 times
 	tick the machine timers
 
-	clear the screen
-	draw a rectangle at x 0 and y 0 with width 1024 and height panel's playfield in color red 9, green 7 and blue 12
-	render the phosphor screen
+	set frame to a new graphics frame in window
+	use screen coordinates in frame
+	draw a rectangle at x 0 and y 0 with width 1024 and height panel's playfield in color red 9, green 7 and blue 12 in frame
+	render the phosphor screen in frame
 
-	draw a rectangle at x 0 and y panel's playfield with width 1024 and height panel's status in color red 24, green 18 and blue 28
-	draw a rectangle at x 0 and y panel's playfield with width 1024 and height 2 in color red 92, green 60 and blue 24
-	draw "LEXI-8 BREAKOUT" as text at x 16 and y ((panel's playfield) + 32) using typeface in color red 255, green 196 and blue 98
-	draw "SCORE" as text at x 330 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
-	draw (the machine register 8) as a number at x 430 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
-	draw "LIVES" as text at x 530 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
-	draw (the machine register 10) as a number at x 630 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
-	draw "ARROWS MOVE - R RESET" as text at x 700 and y ((panel's playfield) + 32) using typeface in color red 120, green 100 and blue 80
+	draw a rectangle at x 0 and y panel's playfield with width 1024 and height panel's status in color red 24, green 18 and blue 28 in frame
+	draw a rectangle at x 0 and y panel's playfield with width 1024 and height 2 in color red 92, green 60 and blue 24 in frame
+	draw "LEXI-8 BREAKOUT" as text at x 16 and y ((panel's playfield) + 32) using typeface in color red 255, green 196 and blue 98 in frame
+	draw "SCORE" as text at x 330 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90 in frame
+	draw (the machine register 8) as a number at x 430 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140 in frame
+	draw "LIVES" as text at x 530 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90 in frame
+	draw (the machine register 10) as a number at x 630 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140 in frame
+	draw "ARROWS MOVE - R RESET" as text at x 700 and y ((panel's playfield) + 32) using typeface in color red 120, green 100 and blue 80 in frame
 
-	display the frame of window
+	display frame
 	sleep for 16 milliseconds
 
+release typeface
 close the window

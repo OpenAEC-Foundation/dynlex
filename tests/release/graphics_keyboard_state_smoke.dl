@@ -5,22 +5,22 @@ if window = 0 as a pointer to a byte:
 	return 1
 
 set failed to false
-if key (the GLFW W key) is down in window:
+if key (the W key) is down in window:
 	set failed to true
-if key (the GLFW A key) is down in window:
+if key (the A key) is down in window:
 	set failed to true
-if key (the GLFW up key) is down in window:
+if key (the up arrow key) is down in window:
 	set failed to true
-if key (the GLFW left key) is down in window:
+if key (the left arrow key) is down in window:
 	set failed to true
-if key (the GLFW 1 key) is down in window:
+if key (the 1 key) is down in window:
 	set failed to true
-if key (the GLFW escape key) is down in window:
+if key (the escape key) is down in window:
 	set failed to true
 
-if key (the GLFW W key) is up in window = false:
+if key (the W key) is up in window = false:
 	set failed to true
-if key (the GLFW 1 key) is up in window = false:
+if key (the 1 key) is up in window = false:
 	set failed to true
 
 close the window

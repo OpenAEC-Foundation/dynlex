@@ -1,6 +1,6 @@
 import lib/graphics.dl
 
-exposed function record the graphics scroll of {C string:window} with horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
+exposed function record the graphics scroll of {pointer:window} with horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
     execute:
         print x as a line
         print y as a line

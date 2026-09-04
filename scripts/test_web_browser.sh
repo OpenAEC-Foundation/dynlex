@@ -3,17 +3,34 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
+    DYNLEX_TEST_WEB_SERVER=static "$0"
+    DYNLEX_TEST_WEB_SERVER=vite \
+        DYNLEX_TEST_SERVER_PORT="${DYNLEX_TEST_VITE_PORT:-8766}" \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/vite_dev_browser.mjs" \
+        "$0"
+    exit 0
+fi
 SERVER_PORT="${DYNLEX_TEST_SERVER_PORT:-8765}"
 DEBUG_PORT="${DYNLEX_TEST_DEBUG_PORT:-9222}"
-BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/browser_execution.mjs}"
+WEB_SERVER="${DYNLEX_TEST_WEB_SERVER:-static}"
+if [[ "$WEB_SERVER" == "vite" ]]; then
+    BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/vite_dev_browser.mjs}"
+else
+    BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/browser_execution.mjs}"
+fi
 
-for dependency in node python3 google-chrome setsid; do
+dependencies=(node python3 google-chrome setsid xvfb-run Xvfb)
+if [[ "$WEB_SERVER" == "vite" ]]; then
+    dependencies+=(npm)
+fi
+for dependency in "${dependencies[@]}"; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
         echo "Missing required dependency: $dependency"
         exit 1
     fi
 done
-
+VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_lavapipe_icd.py")"
 BROWSER_PROFILE="$(mktemp -d)"
 SERVER_LOG="$(mktemp)"
 BROWSER_LOG="$(mktemp)"
@@ -43,9 +60,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python3 -m http.server "$SERVER_PORT" --directory "$PROJECT_DIR/web" >"$SERVER_LOG" 2>&1 &
+if [[ "$WEB_SERVER" == "static" ]]; then
+    python3 -m http.server "$SERVER_PORT" --directory "$PROJECT_DIR/web" >"$SERVER_LOG" 2>&1 &
+elif [[ "$WEB_SERVER" == "vite" ]]; then
+    (cd "$PROJECT_DIR/src/web/ide" && npm run dev -- --host 127.0.0.1 --port "$SERVER_PORT") >"$SERVER_LOG" 2>&1 &
+else
+    echo "Unknown web test server: $WEB_SERVER" >&2
+    exit 1
+fi
 SERVER_PID="$!"
-setsid google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
+VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
+    google-chrome --no-sandbox --no-first-run --no-default-browser-check \
+    --disable-background-networking --enable-unsafe-webgpu \
+    --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \
     --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
     --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
 BROWSER_PID="$!"

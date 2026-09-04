@@ -15,7 +15,7 @@ function required(selector, scope) {
 
 function validateManifest(manifest) {
   if (
-    manifest?.schemaVersion !== 9
+    manifest?.schemaVersion !== 11
     || !manifest.semanticLegend
     || !Array.isArray(manifest.scenes)
     || manifest.scenes.length < 3
@@ -31,14 +31,17 @@ function validateManifest(manifest) {
       || scene.durationSeconds <= 0
       || typeof scene.source !== "string"
       || typeof scene.shaders?.fragment?.path !== "string"
-      || !Array.isArray(scene.uniforms)
+      || !Array.isArray(scene.shaders.fragment.uniforms)
       || !Array.isArray(scene.semanticTokens)
     ) {
       throw new Error("Invalid homepage shader record");
     }
     const hasVertexShader = typeof scene.shaders.vertex?.path === "string";
     const hasGeometry = scene.geometry !== undefined;
-    if (hasVertexShader !== hasGeometry) {
+    if (
+      hasVertexShader !== hasGeometry
+      || (hasVertexShader && !Array.isArray(scene.shaders.vertex.uniforms))
+    ) {
       throw new Error("Homepage shader geometry and vertex source must be configured together");
     }
     if (hasGeometry) {
@@ -71,7 +74,7 @@ async function loadText(relativePath) {
     throw new Error(`Unable to load generated shader: ${relativePath}`);
   }
   const source = await response.text();
-  if (!source.startsWith("#version 300 es") || !source.includes("void main")) {
+  if (!source.includes("fn main") || !/@(?:fragment|vertex)\b/.test(source)) {
     throw new Error(`Generated shader is invalid: ${relativePath}`);
   }
   return source;
@@ -88,13 +91,18 @@ async function loadBinary(relativePath) {
 async function loadSceneProgram(scene) {
   const fragmentSource = await loadText(scene.shaders.fragment.path);
   if (!scene.geometry) {
-    return Object.freeze({ fragmentSource });
+    return Object.freeze({
+      fragmentSource,
+      fragmentUniforms: scene.shaders.fragment.uniforms
+    });
   }
   const vertexSource = await loadText(scene.shaders.vertex.path);
   if (isGeneratedTerrainGeometryDescriptor(scene.geometry)) {
     return Object.freeze({
       fragmentSource,
+      fragmentUniforms: scene.shaders.fragment.uniforms,
       vertexSource,
+      vertexUniforms: scene.shaders.vertex.uniforms,
       geometry: scene.geometry
     });
   }
@@ -107,7 +115,9 @@ async function loadSceneProgram(scene) {
     : undefined;
   return Object.freeze({
     fragmentSource,
+    fragmentUniforms: scene.shaders.fragment.uniforms,
     vertexSource,
+    vertexUniforms: scene.shaders.vertex.uniforms,
     geometry: Object.freeze({ ...scene.geometry, data, ...(indices ? { indices } : {}) })
   });
 }
@@ -247,7 +257,7 @@ export async function createShaderBanner(section) {
     throw new Error("The live shader banner requires exactly two render layers");
   }
 
-  const layers = layerElements.map((element, index) => {
+  const layers = await Promise.all(layerElements.map(async (element, index) => {
     if (element.dataset.shaderLayer !== String(index)) {
       throw new Error("Live shader layers must use consecutive indices");
     }
@@ -261,7 +271,7 @@ export async function createShaderBanner(section) {
       sceneIndex: null,
       startedAt: 0
     };
-    layer.preview = createShaderPreview(canvas, {
+    layer.preview = await createShaderPreview(canvas, {
       running: false,
       geometryHorizontalPixels() {
         return Math.max(
@@ -274,7 +284,7 @@ export async function createShaderBanner(section) {
       }
     });
     return layer;
-  });
+  }));
 
   let activeIndex = 0;
   let activeLayerIndex = 0;
@@ -286,6 +296,7 @@ export async function createShaderBanner(section) {
   let timelineResumeFrameRequest = 0;
   let timelineResumeStartedAt = null;
   let timelineResumeGeneration = 0;
+  let timelineWaitingForPreload = true;
   let pausedAt = bannerVisible ? null : performance.now();
   let preloadGeneration = 0;
 
@@ -325,6 +336,7 @@ export async function createShaderBanner(section) {
     if (
       timelineFrameRequest
       || timelineResumeStartedAt !== null
+      || timelineWaitingForPreload
       || !bannerVisible
       || reducedMotion.matches
     ) {
@@ -337,6 +349,7 @@ export async function createShaderBanner(section) {
     if (
       timelineFrameRequest
       || timelineResumeStartedAt !== null
+      || timelineWaitingForPreload
       || !bannerVisible
       || reducedMotion.matches
     ) {
@@ -362,6 +375,9 @@ export async function createShaderBanner(section) {
         timelineResumeStartedAt = null;
         scheduleTimelineAnimation();
       });
+    }).catch((error) => {
+      console.error("Homepage shader resume failed", error);
+      section.dataset.shaderPlaylistReady = "false";
     });
   }
 
@@ -414,14 +430,16 @@ export async function createShaderBanner(section) {
     editorLink.href = `ide/index.html?${params}`;
   }
 
-  function installScene(layer, sceneIndex, startedAt) {
+  async function installScene(layer, sceneIndex, startedAt) {
     const scene = manifest.scenes[sceneIndex];
+    const installed = await layer.preview.replaceProgram(scenePrograms[sceneIndex]);
+    if (!installed) return false;
     layer.sceneIndex = sceneIndex;
     layer.startedAt = startedAt;
-    layer.preview.replaceProgram(scenePrograms[sceneIndex], scene.uniforms);
+    return true;
   }
 
-  function preloadNextScene() {
+  async function preloadNextScene() {
     if (incomingLayerIndex !== null) {
       throw new Error("Cannot preload a shader while another shader is being revealed");
     }
@@ -431,20 +449,33 @@ export async function createShaderBanner(section) {
       throw new Error("The next shader must preload on the dormant render layer");
     }
     if (preloadLayer.sceneIndex !== nextSceneIndex) {
-      installScene(preloadLayer, nextSceneIndex, performance.now());
+      const installed = await installScene(preloadLayer, nextSceneIndex, performance.now());
+      if (!installed) return false;
     }
     section.dataset.preloadedShaderIndex = String(nextSceneIndex);
     nextButton.disabled = false;
+    return true;
   }
 
   function scheduleNextScenePreload() {
     const generation = ++preloadGeneration;
+    timelineWaitingForPreload = true;
     delete section.dataset.preloadedShaderIndex;
     nextButton.disabled = true;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (generation !== preloadGeneration) return;
-        preloadNextScene();
+        void preloadNextScene().then((installed) => {
+          if (!installed || generation !== preloadGeneration) return;
+          timelineWaitingForPreload = false;
+          sceneStartedAt = performance.now();
+          timelineProgress = 0;
+          if (!bannerVisible) pausedAt = sceneStartedAt;
+          scheduleTimelineAnimation();
+        }).catch((error) => {
+          console.error("Homepage shader preload failed", error);
+          section.dataset.shaderPlaylistReady = "false";
+        });
       });
     });
   }
@@ -481,7 +512,7 @@ export async function createShaderBanner(section) {
     incomingLayerIndex = null;
     delete section.dataset.incomingShaderIndex;
     delete section.dataset.incomingShader;
-    preloadNextScene();
+    scheduleNextScenePreload();
   }
 
   function setTimeline(progress) {
@@ -636,13 +667,13 @@ export async function createShaderBanner(section) {
   setLayerState(initialLayer, "active");
   setLayerState(layers[1 - activeLayerIndex], "dormant");
   setFullGeometry(section, initialLayer);
-  installScene(initialLayer, activeIndex, performance.now());
+  await installScene(initialLayer, activeIndex, performance.now());
   sceneStartedAt = performance.now();
   initialLayer.startedAt = sceneStartedAt;
   updateActiveReadout(manifest.scenes[activeIndex], activeIndex);
   updateLaptopReadout(manifest.scenes[activeIndex]);
   setTimeline(0);
   section.dataset.shaderPlaylistReady = "true";
-  scheduleTimelineAnimation();
   scheduleNextScenePreload();
+  scheduleTimelineAnimation();
 }

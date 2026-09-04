@@ -80,7 +80,10 @@ install_linux_deps() {
             libfreetype-dev \
             libglfw3-dev \
             libvulkan-dev \
+            mesa-vulkan-drivers \
             nlohmann-json3-dev \
+            spirv-tools \
+            xvfb \
             rustup \
             ccache \
             cmake \
@@ -102,7 +105,10 @@ install_linux_deps() {
             freetype-devel \
             glfw-devel \
             json-devel \
+            mesa-vulkan-drivers \
+            spirv-tools \
             vulkan-loader-devel \
+            xorg-x11-server-Xvfb \
             rustup \
             ccache \
             cmake \
@@ -124,8 +130,11 @@ install_linux_deps() {
             glfw \
             vulkan-headers \
             vulkan-icd-loader \
+            vulkan-swrast \
             binutils \
             nlohmann-json \
+            spirv-tools \
+            xorg-server-xvfb \
             rustup \
             ccache \
             cmake \
@@ -147,7 +156,10 @@ install_linux_deps() {
             binutils \
             freetype2-devel \
             libglfw-devel \
+            libvulkan_lvp \
+            spirv-tools \
             vulkan-devel \
+            xorg-x11-server-Xvfb \
             nlohmann_json-devel \
             rustup \
             ccache \
@@ -180,7 +192,7 @@ install_macos_deps() {
 
     local missing_formulas=()
     local formula
-    for formula in "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw vulkan-loader molten-vk rustup; do
+    for formula in "$BREW_LLVM_FORMULA" nlohmann-json freetype glfw vulkan-loader molten-vk rustup spirv-tools; do
         if ! brew list --formula --versions "$formula" >/dev/null 2>&1; then
             missing_formulas+=("$formula")
         fi

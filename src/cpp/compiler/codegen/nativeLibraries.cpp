@@ -1,17 +1,9 @@
 #include "nativeLibraries.h"
-#include <array>
 
-namespace {
-
-struct LibraryNameMapping {
-	llvm::StringLiteral portableName;
-	llvm::StringLiteral linkerName;
-};
-
-} // namespace
-
-std::vector<std::string>
-nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library, llvm::StringRef runtimeLibraryPath) {
+std::vector<std::string> nativeLibraryArguments(
+	const llvm::Triple &targetTriple, llvm::StringRef library, llvm::StringRef runtimeLibraryPath,
+	llvm::StringRef graphicsLibraryPath
+) {
 	if (library == "dynlex_runtime") {
 		std::vector<std::string> arguments = {runtimeLibraryPath.str()};
 		if (targetTriple.isOSWindows()) {
@@ -23,20 +15,17 @@ nativeLibraryArguments(const llvm::Triple &targetTriple, llvm::StringRef library
 		}
 		return arguments;
 	}
-	if (targetTriple.isOSDarwin() && library == "GL")
-		return {"-framework", "OpenGL"};
-
-	if (targetTriple.isOSWindows()) {
-		static constexpr std::array windowsLibraryNames = {
-			LibraryNameMapping{"GL", "opengl32"},
-			LibraryNameMapping{"glfw", "glfw3dll"},
-		};
-		for (const LibraryNameMapping &mapping : windowsLibraryNames) {
-			if (library == mapping.portableName) {
-				library = mapping.linkerName;
-				break;
-			}
+	if (library == "dynlex_graphics") {
+		std::vector<std::string> arguments = {graphicsLibraryPath.str(), runtimeLibraryPath.str()};
+		if (targetTriple.isOSWindows()) {
+			arguments.insert(arguments.end(), {"-lglfw3dll", "-lvulkan-1", "-lshell32", "-lole32", "-luuid"});
+		} else {
+			arguments.insert(arguments.end(), {"-lglfw", "-lvulkan"});
+			if (!targetTriple.isOSDarwin())
+				arguments.push_back("-lm");
+			arguments.push_back("-pthread");
 		}
+		return arguments;
 	}
 
 	return {"-l" + library.str()};

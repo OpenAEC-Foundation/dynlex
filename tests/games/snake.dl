@@ -65,7 +65,7 @@ set leftward to 4
 # Initialize
 seed the random number generator with the current time
 set window to a new window with width board's extent and height board's extent
-set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set typeface to a font loaded from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24 for window
 
 # Snake body
 allocate board's capacity slots of (a grid position at x 0 and y 0) and set body to it
@@ -77,17 +77,17 @@ store a grid position at x 8 and y 10 into body at 2
 set game to a snake game with body moving rightward toward (a grid position at x 15 and y 10)
 
 # Main game loop
-loop while the window remains open:
+loop while window remains open:
 	# Update direction
-	if key (the GLFW up key) is down in window:
+	if key (the up arrow key) is down in window:
 		set game's direction to upward
-	else if key (the GLFW right key) is down in window:
+	else if key (the right arrow key) is down in window:
 		set game's direction to rightward
-	else if key (the GLFW down key) is down in window:
+	else if key (the down arrow key) is down in window:
 		set game's direction to downward
-	else if key (the GLFW left key) is down in window:
+	else if key (the left arrow key) is down in window:
 		set game's direction to leftward
-	else if key (the GLFW escape key) is down in window:
+	else if key (the escape key) is down in window:
 		set game's running to false
 
 	if game is running:
@@ -132,15 +132,15 @@ loop while the window remains open:
 
 			store head into game's body at 0
 
-	# Render
-	clear the screen
+	set frame to a new graphics frame in window
+	use screen coordinates in frame
 
 	if game is running:
-		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 30, green 30 and blue 30
+		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 30, green 30 and blue 30 in frame
 
 		# Draw food
 		set food to game's food
-		draw a rectangle at x (food's x * board's scale) and y (food's y * board's scale) with width board's scale and height board's scale in color red 200, green 0 and blue 0
+		draw a rectangle at x (food's x * board's scale) and y (food's y * board's scale) with width board's scale and height board's scale in color red 200, green 0 and blue 0 in frame
 
 		# Draw snake (head = bright green, body = dark green)
 		set index to 0
@@ -149,22 +149,23 @@ loop while the window remains open:
 			set horizontal to (segment's x * board's scale)
 			set vertical to (segment's y * board's scale)
 			if index = 0:
-				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 200 and blue 0
+				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 200 and blue 0 in frame
 			else:
-				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 150 and blue 0
+				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 150 and blue 0 in frame
 			increment index
 
 		# Draw score
-		draw "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200
-		draw game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100
+		draw "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200 in frame
+		draw game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100 in frame
 	else:
-		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 80, green 20 and blue 20
-		draw "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255
-		draw "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200
-		draw game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100
+		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 80, green 20 and blue 20 in frame
+		draw "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255 in frame
+		draw "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200 in frame
+		draw game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100 in frame
 
-	display the frame of window
+	display frame
 	sleep for 150 milliseconds
 
+release typeface
 close the window
 print game's score as a line

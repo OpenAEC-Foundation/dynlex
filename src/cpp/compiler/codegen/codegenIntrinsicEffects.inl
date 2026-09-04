@@ -686,10 +686,18 @@ if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpola
 }
 
 if (kind == IntrinsicKind::ShaderUniform) {
-	// @intrinsic("shader uniform", uniformName) → load f32 from named uniform global
-	// The SPIR-V patcher wraps this in a UBO struct with proper decorations
+	// The SPIR-V patcher wraps this scalar global in a set-zero UBO at the explicit binding.
 	std::string uniformName = getCompileTimeString(context, args[1]);
 	requireCompilerInvariant(!uniformName.empty(), "shader uniform reached codegen without a validated name");
+	std::optional<std::int64_t> bindingValue =
+		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[2], context.flexBindingFrames));
+	requireCompilerInvariant(
+		bindingValue && *bindingValue >= 0 && static_cast<std::uint64_t>(*bindingValue) <= UINT32_MAX,
+		"shader uniform reached codegen without a validated binding"
+	);
+	context.registerShaderUniform(
+		uniformName, static_cast<std::uint32_t>(*bindingValue), intrinsicDiagnosticRange(context, callExpr)
+	);
 	std::string globalName = "ubo_" + uniformName;
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
 	if (!global) {
@@ -699,7 +707,6 @@ if (kind == IntrinsicKind::ShaderUniform) {
 			llvm::GlobalValue::NotThreadLocal, 3
 		);
 		global->setInitializer(llvm::Constant::getNullValue(f32Ty));
-		context.registerShaderUniformName(uniformName);
 	}
 	return builder.CreateLoad(builder.getFloatTy(), global, uniformName + "_val");
 }

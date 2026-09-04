@@ -5,6 +5,7 @@ import {
   screenshotDirectory, siteOrigin, sourceEditExpression, waitFor
 } from "./browser_test_driver.mjs";
 import { verifyOffscreenRevealReturn } from "./shader_visibility_test.mjs";
+import { verifyWebGpuStageUniformBindings } from "./webgpu_stage_uniform_browser.mjs";
 import {
   assertRiverChallengeLoadingBoundary,
   runRiverChallengeBrowserTest
@@ -14,14 +15,11 @@ const shaderManifest = await fetch(`${siteOrigin}/shaders/manifest.json`).then((
   assert.equal(response.ok, true, "The live shader manifest must load");
   return response.json();
 });
-const incomingTimeBinding = shaderManifest.scenes[1].uniforms.find(
-  (uniform) => uniform.name === "time"
-)?.binding;
-assert.ok(Number.isInteger(incomingTimeBinding), "The incoming shader must reflect its time uniform");
-const nanoTimeBinding = shaderManifest.scenes[2].uniforms.find(
-  (uniform) => uniform.name === "time"
-)?.binding;
-assert.ok(Number.isInteger(nanoTimeBinding), "The volumetric shader must reflect its time uniform");
+for (const scene of shaderManifest.scenes) {
+  const timeUniform = scene.shaders.fragment.uniforms.find((uniform) => uniform.name === "time");
+  assert.ok(Number.isInteger(timeUniform?.group), "Each shader must reflect its time uniform group");
+  assert.ok(Number.isInteger(timeUniform?.binding), "Each shader must reflect its time uniform binding");
+}
 
 await navigate("/");
 await waitFor(
@@ -186,7 +184,7 @@ assert.equal(
 );
 assert.match(preparedThought.clipPath, /thought-cloud-mask-[01]/);
 assert.notEqual(preparedThought.filter, "none", "The revealing thought cloud must retain its glow");
-await verifyOffscreenRevealReturn(incomingTimeBinding);
+await verifyOffscreenRevealReturn();
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
     + " && Number(getComputedStyle(document.querySelector('.shader-laptop')).opacity) > 0.75",
@@ -271,7 +269,7 @@ await waitFor(
 await captureScreenshot("homepage-terrain");
 assert.ok(
   requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.path}`)),
-  "Advancing must compile the next configured WebGL program"
+  "Advancing must load the next configured WebGPU program"
 );
 const editorSceneState = await evaluate(`(() => ({
   activeIndex: Number(document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex),
@@ -337,17 +335,13 @@ const thirdShaderPlaybackState = await evaluate(`(async () => {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const section = document.querySelector('[data-live-shader-banner]');
   const canvas = section.querySelector('[data-layer-state="active"] canvas');
-  const gl = canvas.getContext('webgl2');
-  const timeBuffer = gl.getIndexedParameter(gl.UNIFORM_BUFFER_BINDING, ${nanoTimeBinding});
-  if (!timeBuffer) throw new Error('The volumetric shader time buffer is not bound');
-  const value = new Float32Array(1);
-  gl.bindBuffer(gl.UNIFORM_BUFFER, timeBuffer);
-  gl.getBufferSubData(gl.UNIFORM_BUFFER, 0, value);
   return {
     progress: Number(section.dataset.sceneProgress),
-    shaderTime: value[0]
+    shaderTime: Number(canvas.dataset.previewElapsedSeconds),
+    api: canvas.dataset.previewApi
   };
 })()`);
+assert.equal(thirdShaderPlaybackState.api, "webgpu");
 assert.ok(
   thirdShaderPlaybackState.progress >= 0 && thirdShaderPlaybackState.progress < 1,
   "The promoted shader must remain inside its full-screen banner interval"
@@ -408,15 +402,17 @@ if (screenshotDirectory) {
       const vertexSource = await fetch('/' + scene.shaders.vertex.path).then((response) => response.text());
       const geometry = await fetch('/' + scene.geometry.path).then((response) => response.arrayBuffer());
       const { createShaderPreview } = await import('/shader-renderer.js');
-      const preview = createShaderPreview(canvas, {
+      const preview = await createShaderPreview(canvas, {
         elapsedSeconds: () => ${elapsedSeconds}
       });
       window.__dynlexFixedNanoPreview = preview;
-      preview.replaceProgram({
+      await preview.replaceProgram({
         fragmentSource,
+        fragmentUniforms: scene.shaders.fragment.uniforms,
         vertexSource,
+        vertexUniforms: scene.shaders.vertex.uniforms,
         geometry: { ...scene.geometry, data: geometry }
-      }, scene.uniforms);
+      });
       section.style.setProperty('--immersion-opacity', '1');
       section.style.setProperty('--laptop-opacity', '0');
       section.style.setProperty('--thought-tail-opacity', '0');
@@ -966,6 +962,7 @@ await evaluate("document.querySelector('[data-primary-nav] a[aria-current=\"page
 await waitFor("window.location.pathname === '/wiki/index.html'", "documentation navigation to reach the docs home");
 await captureScreenshot("documentation-mobile");
 await command("Emulation.clearDeviceMetricsOverride");
+await verifyWebGpuStageUniformBindings();
 await command("Emulation.setScriptExecutionDisabled", { value: true });
 await navigate("/");
 assert.equal(

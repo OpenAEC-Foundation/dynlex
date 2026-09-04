@@ -530,7 +530,6 @@ Expression *Section::detectPatternsRecursively(
 					}
 				}
 
-				context.processEncounteredIntrinsic(intrinsicExpr);
 				expr->arguments.push_back(intrinsicExpr);
 				reference->pattern.replaceLine(intrinsicStart, intrinsicEnd);
 			} else {

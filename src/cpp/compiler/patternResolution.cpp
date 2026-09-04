@@ -256,6 +256,21 @@ static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition
 	return family;
 }
 
+static void collectGeneratedPropertyAccessorFamilies(
+	Section *section, std::unordered_set<PatternDefinition *> &accessors,
+	std::unordered_set<PatternDefinition *> &familyDefinitions
+) {
+	for (PatternDefinition *definition : section->patternDefinitions) {
+		if (!definition->isGeneratedClassPropertyAccessor)
+			continue;
+		accessors.insert(definition);
+		for (PatternDefinition *familyDefinition : connectedPatternFamily(definition))
+			familyDefinitions.insert(familyDefinition);
+	}
+	for (Section *child : section->children)
+		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions);
+}
+
 static bool resolutionTraceEnabled() {
 	static const bool enabled = []() {
 		const auto env = llvm::sys::Process::GetEnv("DYNLEX_TRACE_RESOLUTION");

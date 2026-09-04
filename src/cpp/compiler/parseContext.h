@@ -9,8 +9,8 @@
 #include "section.h"
 #include "syntaxConfig.h"
 #include <algorithm>
+#include <cstdint>
 #include <functional>
-#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -37,9 +37,10 @@ class TargetMachine;
 } // namespace llvm
 
 struct ParseContext {
-	struct ShaderUniformSourceOrder {
-		int mergedLineIndex = std::numeric_limits<int>::max();
-		int column = std::numeric_limits<int>::max();
+	struct ShaderUniform {
+		std::string name;
+		std::uint32_t binding = 0;
+		Range range;
 	};
 
 	struct SectionFlexBodyFrame {
@@ -197,10 +198,8 @@ struct ParseContext {
 	// String constants (maps string content to global variable)
 	std::unordered_map<std::string, llvm::GlobalVariable *> stringConstants;
 
-	// Shader uniform names with stable parse-time source ordering metadata.
-	// SPIR-V UBO fallback bindings are assigned from source location order, not codegen use order.
-	std::vector<std::string> shaderUniformNames;
-	std::unordered_map<std::string, ShaderUniformSourceOrder> shaderUniformSourceOrder;
+	// Shader uniforms used by the selected stage, with explicit descriptor-set-zero bindings.
+	std::vector<ShaderUniform> shaderUniforms;
 	std::vector<std::string> shaderInterpolantNames;
 
 	// imported source files by path (also prevents circular imports)
@@ -255,8 +254,7 @@ struct ParseContext {
 	}
 	void printDiagnostics();
 	PatternMatch *match(PatternReference *reference, MatchOptions options = {}, MatchDependencies *dependencies = nullptr);
-	void processEncounteredIntrinsic(Expression *intrinsicExpr);
-	void registerShaderUniformName(const std::string &uniformName, CodeLine *line = nullptr, int column = -1);
+	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	Expression *cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata = false);

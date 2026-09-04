@@ -38,7 +38,8 @@ DynLex can be built as a browser-hosted compiler module (`dynlex_web.js/.wasm`) 
 This target requires Emscripten (`emcmake`, `emcc`). The build compiles and
 caches a WebAssembly version of the same pinned LLVM fork with the WebAssembly
 and SPIR-V targets.
-The build fetches its pinned SPIRV-Cross revision and links the GLSL translator into the compiler module.
+The build uses SPIRV-Cross for shader reflection and a pinned Naga WebAssembly
+module to validate and translate emitted SPIR-V into WebGPU's WGSL.
 
 Build compiler WASM artifacts and copy them into the web app:
 
@@ -51,7 +52,9 @@ The build script uses the active Emscripten SDK and builds the exact web LLVM
 toolchain recorded in `metadata/LLVM_TOOLCHAIN`.
 
 `./scripts/build_web.sh` refreshes `src/web/ide/public/compiler/dynlex_web.js` and
-`src/web/ide/public/compiler/dynlex_web.wasm`; commit those files when updating the deployed web compiler.
+`src/web/ide/public/compiler/dynlex_web.wasm` and
+`src/web/ide/public/compiler/dynlex_wgsl_translator.wasm`; commit those files
+when updating the deployed web compiler.
 
 Run the compiler WASM smoke test:
 
@@ -89,7 +92,7 @@ The web app uses:
 - live debounced compile with diagnostics published by the DynLex language server
 - one persistent DynLex LSP session for completion, hover, go-to-definition,
   semantic tokens, document symbols, quick fixes, and DynLex instantiation selection
-- live WebGL2 previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
+- live WebGPU previews for DynLex fragment/vertex shaders opened from the homepage shader gallery
 - built-in light and dark themes
 - `Run` executing the latest successful emitted program WASM
 
@@ -97,11 +100,11 @@ Compiler WASM C ABI exports:
 - `dynlex_web_init`
 - `dynlex_web_set_main_source`
 - `dynlex_web_compile_and_emit_wasm`
-- `dynlex_web_compile_and_emit_shader_glsl`
+- `dynlex_web_compile_and_emit_shader_spirv`
 - `dynlex_web_get_diagnostics_json`
 - `dynlex_web_get_output_wasm_ptr` / `dynlex_web_get_output_wasm_len`
 - `dynlex_web_get_output_wasm_base64`
-- `dynlex_web_get_output_shader_glsl`
+- `dynlex_web_get_output_shader_spirv_base64`
 - `dynlex_web_get_shader_uniforms_json`
 - `dynlex_web_get_compiler_log_json`
 - `dynlex_web_lsp_exchange_json`

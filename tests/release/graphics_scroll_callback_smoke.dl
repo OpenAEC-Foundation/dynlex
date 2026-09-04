@@ -1,12 +1,12 @@
 import lib/graphics.dl
 
-exposed function first scroll callback for {C string:window} at horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
+exposed function first scroll callback for {pointer:window} at horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
     execute:
         ignore window
         ignore x
         ignore y
 
-exposed function second scroll callback for {C string:window} at horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
+exposed function second scroll callback for {pointer:window} at horizontal offset {floating-point number:x} and vertical offset {floating-point number:y}:
     execute:
         ignore window
         ignore x
@@ -16,21 +16,8 @@ set window to a new window with width 128 and height 64
 if window = 0 as a pointer to a byte:
     return 1
 
-set first to @intrinsic("function", "first scroll callback for $ at horizontal offset $ and vertical offset $")
-set second to @intrinsic("function", "second scroll callback for $ at horizontal offset $ and vertical offset $")
-
 register the graphics scroll callback named "first scroll callback for $ at horizontal offset $ and vertical offset $" for window
-set previous to @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, 0 as a pointer to a byte)
-if previous != first:
-    close the window
-    return 1
-
 register the graphics scroll callback named "first scroll callback for $ at horizontal offset $ and vertical offset $" for window
 register the graphics scroll callback named "second scroll callback for $ at horizontal offset $ and vertical offset $" for window
-set previous to @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer to a byte, window, 0 as a pointer to a byte)
-if previous != second:
-    close the window
-    return 1
-
 close the window
 return 0

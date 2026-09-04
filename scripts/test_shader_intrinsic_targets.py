@@ -28,7 +28,7 @@ SHADER_INTRINSICS = {
         + """\
 function the shader time:
     replacement:
-        @intrinsic("shader uniform", "time")
+        @intrinsic("shader uniform", "time", 0)
 
 ignore the shader time
 """,
@@ -136,7 +136,45 @@ ignore the invalid shader input
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader interpolant output 'surface' is only available in vertex shaders",
     ),
+    (
+        "duplicate-uniform-binding",
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "width", 4))\n'
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "Shader uniform binding 4 is assigned to both 'time' and 'width'",
+    ),
+    (
+        "inconsistent-uniform-name",
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4))\n'
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 7))\n'
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "Shader uniform 'time' is assigned to both binding 4 and binding 7",
+    ),
+    (
+        "empty-uniform-name",
+        '@intrinsic("discard", @intrinsic("shader uniform", "", 0))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "shader uniform requires a non-empty string literal name",
+    ),
+    (
+        "out-of-range-uniform-binding",
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 4294967296))\n',
+        ("--emit-spirv", "--shader-stage=fragment"),
+        "Shader uniform binding must be a non-negative 32-bit compile-time integer",
+    ),
 )
+EXPLICIT_UNIFORM_STAGE_SHADERS = {
+    "vertex": (
+        '@intrinsic("discard", @intrinsic("shader uniform", "width", 2))\n'
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.0, 0.0, 0.0, 1.0))\n'
+    ),
+    "fragment": (
+        '@intrinsic("discard", @intrinsic("shader uniform", "time", 0))\n'
+        '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
+    ),
+}
 FLEX_BRANCH_SHADER = """\
 import lib/shader.dl
 
@@ -212,7 +250,7 @@ function set variable to value:
 
 function the shader time:
     replacement:
-        @intrinsic("shader uniform", "time")
+        @intrinsic("shader uniform", "time", 0)
 
 function [a|] floating-point number:
     replacement:
@@ -366,6 +404,8 @@ STORAGE_CLASS_OUTPUT = 3
 STORAGE_CLASS_CROSS_WORKGROUP = 5
 STORAGE_CLASS_FUNCTION = 7
 DECORATION_LOCATION = 30
+DECORATION_BINDING = 33
+DECORATION_DESCRIPTOR_SET = 34
 
 
 def compile_source(
@@ -417,7 +457,7 @@ def decode_spirv_string(words: tuple[int, ...]) -> str:
     return encoded.split(b"\0", 1)[0].decode("utf-8")
 
 
-def named_spirv_locations(path: Path) -> dict[str, int]:
+def named_spirv_decorations(path: Path, decoration: int) -> dict[str, int]:
     names = {
         operands[0]: decode_spirv_string(operands[1:])
         for operands in spirv_operands(path, OP_NAME)
@@ -427,8 +467,12 @@ def named_spirv_locations(path: Path) -> dict[str, int]:
         for operands in spirv_operands(path, OP_DECORATE)
         if len(operands) >= 3
         and operands[0] in names
-        and operands[1] == DECORATION_LOCATION
+        and operands[1] == decoration
     }
+
+
+def named_spirv_locations(path: Path) -> dict[str, int]:
+    return named_spirv_decorations(path, DECORATION_LOCATION)
 
 
 def main() -> int:
@@ -478,6 +522,33 @@ def main() -> int:
             if result.returncode != 0:
                 diagnostics = (result.stdout + result.stderr).strip()
                 failures.append(f"SPIR-V rejected intrinsic '{intrinsic_name}': {diagnostics}")
+
+        for shader_stage, source in EXPLICIT_UNIFORM_STAGE_SHADERS.items():
+            case_name = f"explicit-uniform-{shader_stage}"
+            result = compile_source(
+                compiler,
+                temporary_path,
+                case_name,
+                source,
+                ("--emit-spirv", f"--shader-stage={shader_stage}"),
+            )
+            if result.returncode != 0:
+                diagnostics = (result.stdout + result.stderr).strip()
+                failures.append(f"SPIR-V rejected explicit {shader_stage} uniform: {diagnostics}")
+                continue
+            output_path = temporary_path / f"{case_name}.out"
+            expected_name = "ubo_width" if shader_stage == "vertex" else "ubo_time"
+            expected_binding = 2 if shader_stage == "vertex" else 0
+            bindings = named_spirv_decorations(output_path, DECORATION_BINDING)
+            descriptor_sets = named_spirv_decorations(output_path, DECORATION_DESCRIPTOR_SET)
+            if bindings.get(expected_name) != expected_binding:
+                failures.append(
+                    f"SPIR-V {shader_stage} uniform has unstable binding: {bindings}"
+                )
+            if descriptor_sets.get(expected_name) != 0:
+                failures.append(
+                    f"SPIR-V {shader_stage} uniform is not in descriptor set 0: {descriptor_sets}"
+                )
 
         result = compile_source(
             compiler,

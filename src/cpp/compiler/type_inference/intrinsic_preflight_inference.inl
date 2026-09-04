@@ -23,7 +23,7 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
 		CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
 		const std::string *name = std::get_if<std::string>(&nameValue);
-		if (!name) {
+		if (!name || (kind == IntrinsicKind::ShaderUniform && name->empty())) {
 			std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
 																				: "shader uniform requires string literal";
 			context.fail(

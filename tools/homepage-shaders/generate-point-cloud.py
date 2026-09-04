@@ -544,7 +544,7 @@ def main() -> None:
             "Converted to deterministic surface and inward-density points.",
             "Paired spatially neighboring target and motorcycle regions recursively.",
             "Tagged motorcycle wheel points for vertex-stage rotation.",
-            "Expanded into micro-triangles for the DynLex WebGL renderer.",
+            "Expanded into micro-triangles for the DynLex WebGPU renderer.",
         ],
         "format": "float32x4",
         "primitive": "triangles",

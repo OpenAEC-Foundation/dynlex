@@ -1,8 +1,8 @@
 # Homepage shaders
 
-The banner renders DynLex shaders directly in WebGL2. `generate.mjs` compiles
+The banner renders DynLex shaders directly with WebGPU. `generate.mjs` compiles
 every configured fragment stage and optional vertex stage with the browser
-compiler, writes deterministic GLSL, caches compiler-produced semantic tokens,
+compiler, translates its SPIR-V artifacts to deterministic WGSL, caches compiler-produced semantic tokens,
 and creates the runtime manifest.
 
 ```bash
@@ -11,7 +11,7 @@ and creates the runtime manifest.
 ```
 
 Changing a configured shader or any transitive DynLex import changes the
-manifest input hash. The generated GLSL and semantic-token cache are replaced
+manifest input hash. The generated WGSL and semantic-token cache are replaced
 atomically, so the banner never mixes source and artifacts from different
 revisions.
 
