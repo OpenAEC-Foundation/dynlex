@@ -65,7 +65,13 @@ set leftward to 4
 # Initialize
 seed the random number generator with the current time
 set window to a new window with width board's extent and height board's extent
-set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set {font loading} to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set typeface to font loading's typeface
+if font loading failed:
+	set {font release} to the result of releasing (the address of typeface)
+	close the window
+	return 1
+set {font failure} to false
 
 # Snake body
 allocate board's capacity slots of (a grid position at x 0 and y 0) and set body to it
@@ -77,7 +83,7 @@ store a grid position at x 8 and y 10 into body at 2
 set game to a snake game with body moving rightward toward (a grid position at x 15 and y 10)
 
 # Main game loop
-loop while the window remains open:
+loop while (the window remains open) and (font failure = false):
 	# Update direction
 	if key (the GLFW up key) is down in window:
 		set game's direction to upward
@@ -155,16 +161,33 @@ loop while the window remains open:
 			increment index
 
 		# Draw score
-		draw "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200
-		draw game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100
+		set rendering to the result of drawing "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200
+		if rendering failed:
+			set font failure to true
+		if font failure = false:
+			set rendering to the result of drawing game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100
+			if rendering failed:
+				set font failure to true
 	else:
 		draw a rectangle at x 0 and y 0 with width board's extent and height board's extent in color red 80, green 20 and blue 20
-		draw "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255
-		draw "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200
-		draw game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100
+		set rendering to the result of drawing "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255
+		if rendering failed:
+			set font failure to true
+		if font failure = false:
+			set rendering to the result of drawing "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200
+			if rendering failed:
+				set font failure to true
+		if font failure = false:
+			set rendering to the result of drawing game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100
+			if rendering failed:
+				set font failure to true
 
-	display the frame of window
-	sleep for 150 milliseconds
+	if font failure = false:
+		display the frame of window
+		sleep for 150 milliseconds
 
+set {font release} to the result of releasing (the address of typeface)
 close the window
+if font failure or font release failed:
+	return 1
 print game's score as a line

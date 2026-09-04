@@ -102,9 +102,15 @@ initialize the machine
 load the assembled program into the machine
 
 set window to a new window with width (64 * (panel's scale)) and height ((panel's playfield) + (panel's status))
-set typeface to a loaded font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set {font loading} to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 24
+set typeface to font loading's typeface
+if font loading failed:
+	set {font release} to the result of releasing (the address of typeface)
+	close the window
+	return 1
+set {font failure} to false
 
-loop while the window remains open:
+loop while (the window remains open) and (font failure = false):
 	if key (the GLFW escape key) is down in window:
 		request that window close
 	if key 82 is down in window:
@@ -121,14 +127,35 @@ loop while the window remains open:
 
 	draw a rectangle at x 0 and y panel's playfield with width 1024 and height panel's status in color red 24, green 18 and blue 28
 	draw a rectangle at x 0 and y panel's playfield with width 1024 and height 2 in color red 92, green 60 and blue 24
-	draw "LEXI-8 BREAKOUT" as text at x 16 and y ((panel's playfield) + 32) using typeface in color red 255, green 196 and blue 98
-	draw "SCORE" as text at x 330 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
-	draw (the machine register 8) as a number at x 430 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
-	draw "LIVES" as text at x 530 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
-	draw (the machine register 10) as a number at x 630 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
-	draw "ARROWS MOVE - R RESET" as text at x 700 and y ((panel's playfield) + 32) using typeface in color red 120, green 100 and blue 80
+	set rendering to the result of drawing "LEXI-8 BREAKOUT" as text at x 16 and y ((panel's playfield) + 32) using typeface in color red 255, green 196 and blue 98
+	if rendering failed:
+		set font failure to true
+	if font failure = false:
+		set rendering to the result of drawing "SCORE" as text at x 330 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
+		if rendering failed:
+			set font failure to true
+	if font failure = false:
+		set rendering to the result of drawing (the machine register 8) as a number at x 430 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
+		if rendering failed:
+			set font failure to true
+	if font failure = false:
+		set rendering to the result of drawing "LIVES" as text at x 530 and y ((panel's playfield) + 32) using typeface in color red 160, green 130 and blue 90
+		if rendering failed:
+			set font failure to true
+	if font failure = false:
+		set rendering to the result of drawing (the machine register 10) as a number at x 630 and y ((panel's playfield) + 32) using typeface in color red 255, green 220 and blue 140
+		if rendering failed:
+			set font failure to true
+	if font failure = false:
+		set rendering to the result of drawing "ARROWS MOVE - R RESET" as text at x 700 and y ((panel's playfield) + 32) using typeface in color red 120, green 100 and blue 80
+		if rendering failed:
+			set font failure to true
 
-	display the frame of window
-	sleep for 16 milliseconds
+	if font failure = false:
+		display the frame of window
+		sleep for 16 milliseconds
 
+set {font release} to the result of releasing (the address of typeface)
 close the window
+if font failure or font release failed:
+	return 1
