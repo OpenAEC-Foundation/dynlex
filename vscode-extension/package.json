@@ -2,7 +2,7 @@
   "name": "dynlex-language",
   "displayName": "DynLex Language",
   "description": "Language support for the DynLex programming language",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "impertio",
   "license": "LGPL-3.0-or-later",
   "homepage": "https://dynlex.com",

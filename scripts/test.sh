@@ -32,7 +32,6 @@ if [[ "$is_windows" == "true" ]]; then
     DYNLEX_TEST_BASH="$(cygpath -w "$DYNLEX_TEST_BASH")"
 fi
 export DYNLEX_TEST_BASH
-export DYNLEX_HOST_TEST_EMPTY=""
 
 COMPILER="$PROJECT_DIR/build/dynlex"
 if [[ "$is_windows" == "true" ]]; then
@@ -40,10 +39,10 @@ if [[ "$is_windows" == "true" ]]; then
 fi
 
 # Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[0;33m'
+NC=$'\033[0m'
 
 passed=0
 failed=0
@@ -76,6 +75,10 @@ elapsed_ms_since() {
     printf "%s\n" "$((end_ms - start_ms))"
 }
 
+append_test_output() {
+    test_output+="$1"$'\n'
+}
+
 append_test_result() {
     local status="$1"
     local color="$2"
@@ -94,7 +97,7 @@ append_test_result() {
         line+=" (${elapsed_ms} ms)"
     fi
 
-    test_output+="${line}\n"
+    append_test_output "$line"
 }
 
 normalize_output() {
@@ -125,6 +128,7 @@ run_with_timeout() {
     local standard_input_file=""
     local standard_input_bytes_file=""
     local working_directory_file=""
+    local environment_file=""
     while [[ "${1:-}" == --* ]]; do
         if [[ $# -lt 2 ]]; then
             echo "run_with_timeout: ${1:-option} requires a path" >&2
@@ -135,6 +139,7 @@ run_with_timeout() {
         --standard-input-bytes-file) standard_input_bytes_file="$2" ;;
         --standard-input-file) standard_input_file="$2" ;;
         --working-directory-file) working_directory_file="$2" ;;
+        --environment-file) environment_file="$2" ;;
         *)
             echo "run_with_timeout: unknown option $1" >&2
             return 125
@@ -142,9 +147,10 @@ run_with_timeout() {
         esac
         shift 2
     done
-    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$PROJECT_DIR" "$@" <<'PY'
+    python3 - "$seconds" "$arguments_file" "$standard_input_file" "$standard_input_bytes_file" "$working_directory_file" "$environment_file" "$PROJECT_DIR" "$@" <<'PY'
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -154,8 +160,9 @@ arguments_file = sys.argv[2]
 standard_input_file = sys.argv[3]
 standard_input_bytes_file = sys.argv[4]
 working_directory_file = sys.argv[5]
-project_directory = Path(sys.argv[6])
-cmd = sys.argv[7:]
+environment_file = sys.argv[6]
+project_directory = Path(sys.argv[7])
+cmd = sys.argv[8:]
 if arguments_file:
     data = Path(arguments_file).read_bytes()
     argument_lines = [] if not data else data.split(b"\n")
@@ -215,6 +222,29 @@ if working_directory_file:
         sys.stderr.write(f"Test working directory does not exist: {working_directory}\n")
         sys.exit(125)
 
+process_environment = None
+if environment_file:
+    try:
+        environment_lines = Path(environment_file).read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        sys.stderr.write(f"Invalid UTF-8 in environment metadata: {error}\n")
+        sys.exit(125)
+    process_environment = os.environ.copy()
+    configured_names = set()
+    for index, line in enumerate(environment_lines, start=1):
+        if "\0" in line:
+            sys.stderr.write(f"NUL byte in environment metadata line {index}\n")
+            sys.exit(125)
+        name, separator, value = line.partition("=")
+        if not separator or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+            sys.stderr.write(f"Invalid environment metadata line {index}\n")
+            sys.exit(125)
+        if name in configured_names:
+            sys.stderr.write(f"Duplicate environment variable {name} on line {index}\n")
+            sys.exit(125)
+        configured_names.add(name)
+        process_environment[name] = value
+
 popen_options = {
     "stdout": subprocess.PIPE,
     "stderr": subprocess.PIPE,
@@ -223,6 +253,8 @@ if standard_input is not None:
     popen_options["stdin"] = subprocess.PIPE
 if working_directory is not None:
     popen_options["cwd"] = working_directory
+if process_environment is not None:
+    popen_options["env"] = process_environment
 if os.name == "nt":
     popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 else:
@@ -291,14 +323,14 @@ sys.exit(process.returncode)
 PY
 }
 
-echo -e "${YELLOW}Building compiler...${NC}"
+printf '%s\n' "${YELLOW}Building compiler...${NC}"
 "$SCRIPT_DIR/build.sh" "$@"
 build_exit=$?
 if [[ $build_exit -ne 0 ]]; then
-    echo -e "${RED}Build failed.${NC}"
+    printf '%s\n' "${RED}Build failed.${NC}"
     exit $build_exit
 fi
-echo -e "${GREEN}Compiler build complete.${NC}"
+printf '%s\n' "${GREEN}Compiler build complete.${NC}"
 
 total_start_ms=$(now_ms)
 
@@ -315,6 +347,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     standard_input_file="$test_dir/standard_input.txt"
     standard_input_bytes_file="$test_dir/standard_input.bytes"
     working_directory_file="$test_dir/working_directory.txt"
+    environment_file="$test_dir/environment.txt"
     expected_runtime_failure_file="$test_dir/expected_runtime_failure.txt"
     if [[ "$is_windows" == "true" ]]; then
         output_binary="$TEST_OUTPUT_DIR/main.exe"
@@ -339,7 +372,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         if [[ $expected_diagnostics_exit -ne 0 ]]; then
             test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
             append_test_result "FAIL" "$RED" "$test_name" "invalid expected diagnostics" "$test_elapsed_ms"
-            test_output+="  $normalized_expected_diagnostics\n"
+            append_test_output "  $normalized_expected_diagnostics"
             ((failed++))
             failures+=("$test_name")
             continue
@@ -377,7 +410,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ $compile_exit -eq 125 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "compiler terminated abnormally" "$test_elapsed_ms"
-        [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
+        [[ -n "$compile_output" ]] && append_test_output "  $compile_output"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -386,7 +419,7 @@ for test_dir in "$TESTS_DIR"/*/; do
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         signal=$((compile_exit - 128))
         append_test_result "FAIL" "$RED" "$test_name" "compiler crashed with signal ${signal}" "$test_elapsed_ms"
-        [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
+        [[ -n "$compile_output" ]] && append_test_output "  $compile_output"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -405,13 +438,13 @@ for test_dir in "$TESTS_DIR"/*/; do
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         if [[ "$has_expected_diagnostics" == "true" ]]; then
             append_test_result "FAIL" "$RED" "$test_name" "diagnostics mismatch" "$test_elapsed_ms"
-            test_output+="  Compiler exit:        $compile_exit\n"
-            test_output+="  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")\n"
-            test_output+="  Actual diagnostics:   $(head -c 400 <<< "$compile_output")\n"
+            append_test_output "  Compiler exit:        $compile_exit"
+            append_test_output "  Expected diagnostics: $(head -c 400 <<< "$expected_diagnostics")"
+            append_test_output "  Actual diagnostics:   $(head -c 400 <<< "$compile_output")"
         else
             append_test_result "FAIL" "$RED" "$test_name" "unexpected diagnostics" "$test_elapsed_ms"
-            test_output+="  Compiler exit:      $compile_exit\n"
-            test_output+="  Actual diagnostics: $(head -c 400 <<< "$compile_output")\n"
+            append_test_output "  Compiler exit:      $compile_exit"
+            append_test_output "  Actual diagnostics: $(head -c 400 <<< "$compile_output")"
         fi
         ((failed++))
         failures+=("$test_name")
@@ -430,7 +463,7 @@ for test_dir in "$TESTS_DIR"/*/; do
             else
                 append_test_result "FAIL" "$RED" "$test_name" "compilation failed" "$test_elapsed_ms"
             fi
-            [[ -n "$compile_output" ]] && test_output+="  $compile_output\n"
+            [[ -n "$compile_output" ]] && append_test_output "  $compile_output"
             ((failed++)) || true
             failures+=("$test_name")
         fi
@@ -460,6 +493,9 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ -f "$working_directory_file" ]]; then
         run_command+=(--working-directory-file "$working_directory_file")
     fi
+    if [[ -f "$environment_file" ]]; then
+        run_command+=(--environment-file "$environment_file")
+    fi
     actual_output=$("${run_command[@]}" "$output_binary" 2>&1)
     run_exit=$?
     if [[ $run_exit -eq 124 ]]; then
@@ -472,7 +508,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ $run_exit -eq 125 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "program terminated abnormally" "$test_elapsed_ms"
-        [[ -n "$actual_output" ]] && test_output+="  $actual_output\n"
+        [[ -n "$actual_output" ]] && append_test_output "  $actual_output"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -516,7 +552,7 @@ for test_dir in "$TESTS_DIR"/*/; do
             append_test_result \
                 "FAIL" "$RED" "$test_name" \
                 "expected runtime failure exit $expected_run_exit, got $run_exit" "$test_elapsed_ms"
-            [[ -n "$actual_output" ]] && test_output+="  $actual_output\n"
+            [[ -n "$actual_output" ]] && append_test_output "  $actual_output"
             ((failed++))
             failures+=("$test_name")
         fi
@@ -525,7 +561,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     if [[ $run_exit -ne 0 ]]; then
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "runtime error, exit $run_exit" "$test_elapsed_ms"
-        test_output+="  $actual_output\n"
+        append_test_output "  $actual_output"
         ((failed++))
         failures+=("$test_name")
         continue
@@ -544,7 +580,7 @@ for test_dir in "$TESTS_DIR"/*/; do
     else
         test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
         append_test_result "FAIL" "$RED" "$test_name" "output mismatch" "$test_elapsed_ms"
-        test_output+="$(render_output_difference "$expected_output" "$normalized_actual_output")\n"
+        append_test_output "$(render_output_difference "$expected_output" "$normalized_actual_output")"
         ((failed++))
         failures+=("$test_name")
     fi
@@ -569,7 +605,7 @@ run_auxiliary_test() {
         ((passed++))
     else
         append_test_result "FAIL" "$RED" "$test_name" "exit $auxiliary_exit" "$test_elapsed_ms"
-        [[ -n "$auxiliary_output" ]] && test_output+="  $auxiliary_output\n"
+        [[ -n "$auxiliary_output" ]] && append_test_output "  $auxiliary_output"
         ((failed++)) || true
         failures+=("$test_name")
     fi
@@ -640,7 +676,7 @@ else
     append_test_result \
         "FAIL" "$RED" "timeout_process_tree" \
         "expected timeout exit 124 within 10000 ms, got exit $timeout_test_exit" "$timeout_test_elapsed_ms"
-    [[ -n "$timeout_test_output" ]] && test_output+="  $timeout_test_output\n"
+    [[ -n "$timeout_test_output" ]] && append_test_output "  $timeout_test_output"
     ((failed++)) || true
     failures+=("timeout_process_tree")
 fi
@@ -659,7 +695,7 @@ if [[ $lsp_test_exit -eq 0 ]]; then
     ((passed++))
 else
     append_test_result "FAIL" "$RED" "lsp_integration" "exit $lsp_test_exit" "$lsp_test_elapsed_ms"
-    [[ -n "$lsp_test_output" ]] && test_output+="  $lsp_test_output\n"
+    [[ -n "$lsp_test_output" ]] && append_test_output "  $lsp_test_output"
     ((failed++)) || true
     failures+=("lsp_integration")
 fi
@@ -668,7 +704,7 @@ total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
 
 # Only show per-test details if there are failures
 if [[ $failed -gt 0 ]]; then
-    echo -e "$test_output"
+    printf '%s' "$test_output"
 fi
 
 echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total_elapsed_ms} ms total)"
@@ -686,10 +722,10 @@ if [[ ${#failures[@]} -gt 0 ]]; then
     done
 
     if [[ ${#known[@]} -gt 0 ]]; then
-        echo -e "${YELLOW}Known failing tests: ${known[*]}${NC}"
+        printf '%s\n' "${YELLOW}Known failing tests: ${known[*]}${NC}"
     fi
     if [[ ${#unexpected[@]} -gt 0 ]]; then
-        echo -e "${RED}Unexpected failures: ${unexpected[*]}${NC}"
+        printf '%s\n' "${RED}Unexpected failures: ${unexpected[*]}${NC}"
         exit 1
     fi
 fi

@@ -30,7 +30,7 @@ for dependency in "${dependencies[@]}"; do
         exit 1
     fi
 done
-VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_lavapipe_icd.py")"
+VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
 BROWSER_PROFILE="$(mktemp -d)"
 SERVER_LOG="$(mktemp)"
 BROWSER_LOG="$(mktemp)"

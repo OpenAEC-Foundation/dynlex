@@ -32,10 +32,10 @@ test('registry packages have distinct, explicit extension identities', async () 
         const registryManifest = buildRegistryManifest(manifest, registryPackage);
         assert.equal(registryManifest.publisher, registryPackage.publisher);
         assert.equal(registryManifest.name, 'dynlex-language');
-        assert.equal(registryManifest.version, '0.0.2');
+        assert.equal(registryManifest.version, manifest.version);
         assert.equal(
             artifactFileName(registryManifest, registryPackage),
-            `dynlex-language-0.0.2-${registryPackage.registry}.vsix`,
+            `dynlex-language-${manifest.version}-${registryPackage.registry}.vsix`,
         );
 
         const unchangedFields = { ...manifest };

@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from find_lavapipe_icd import find_lavapipe_icd, lavapipe_driver_environment
+from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
 
 
 if len(sys.argv) != 3:
@@ -63,15 +63,15 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
 
     command = [str(executable), str(vertex_shader), str(fragment_shader)]
     environment = os.environ.copy()
+    try:
+        vulkan_icd = find_vulkan_icd()
+    except RuntimeError as error:
+        raise SystemExit(f"The Vulkan runtime test requires a Vulkan driver: {error}") from error
+    environment = vulkan_driver_environment(vulkan_icd, environment)
     if sys.platform.startswith("linux"):
         xvfb_run = shutil.which("xvfb-run")
         if xvfb_run is None:
             raise SystemExit("The Vulkan runtime test requires xvfb-run on Linux")
-        try:
-            vulkan_icd = find_lavapipe_icd()
-        except RuntimeError as error:
-            raise SystemExit(f"The Vulkan runtime test requires Lavapipe: {error}") from error
-        environment = lavapipe_driver_environment(vulkan_icd, environment)
         command = [
             xvfb_run,
             "--auto-servernum",

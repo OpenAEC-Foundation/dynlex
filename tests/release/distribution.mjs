@@ -12,9 +12,18 @@ import {
   selectPrimaryReleaseAsset,
   selectReleaseAssets,
 } from "../../web/download.js";
+import {
+  matchingProjectVersion,
+  readProjectVersions,
+  updateProjectVersion,
+} from "../../scripts/update-version.mjs";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(testDirectory, "../..");
+const projectVersions = readProjectVersions(projectDirectory);
+assert.equal(projectVersions.native, projectVersions.extensionManifest);
+assert.equal(projectVersions.native, projectVersions.extensionLock);
+assert.equal(projectVersions.native, projectVersions.extensionLockRoot);
 const manifestPath = path.join(projectDirectory, "metadata/release-manifest.txt");
 const manifestText = fs.readFileSync(manifestPath, "utf8");
 const manifest = parseReleaseManifest(manifestText);
@@ -529,6 +538,42 @@ if (process.platform !== "win32") {
 
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "dynlex-release-test-"));
 try {
+  const versionFixture = path.join(temporaryDirectory, "version-fixture");
+  fs.mkdirSync(path.join(versionFixture, "metadata"), { recursive: true });
+  fs.mkdirSync(path.join(versionFixture, "vscode-extension"), { recursive: true });
+  fs.writeFileSync(path.join(versionFixture, "metadata/VERSION"), "1.2.3\n");
+  fs.writeFileSync(
+    path.join(versionFixture, "vscode-extension/package.json"),
+    `${JSON.stringify({ name: "dynlex-language", version: "1.2.3" }, null, 2)}\n`,
+  );
+  fs.writeFileSync(
+    path.join(versionFixture, "vscode-extension/package-lock.json"),
+    `${JSON.stringify({
+      name: "dynlex-language",
+      version: "1.2.3",
+      packages: { "": { name: "dynlex-language", version: "1.2.3" } },
+    }, null, 2)}\n`,
+  );
+  updateProjectVersion(versionFixture, "2.0.0");
+  assert.deepEqual(readProjectVersions(versionFixture), {
+    native: "2.0.0",
+    extensionManifest: "2.0.0",
+    extensionLock: "2.0.0",
+    extensionLockRoot: "2.0.0",
+  });
+  assert.equal(matchingProjectVersion(versionFixture), "2.0.0");
+  const mismatchedManifest = JSON.parse(
+    fs.readFileSync(path.join(versionFixture, "vscode-extension/package.json"), "utf8"),
+  );
+  mismatchedManifest.version = "2.0.1";
+  fs.writeFileSync(
+    path.join(versionFixture, "vscode-extension/package.json"),
+    `${JSON.stringify(mismatchedManifest, null, 2)}\n`,
+  );
+  assert.throws(() => matchingProjectVersion(versionFixture), /do not match/i);
+  assert.throws(() => updateProjectVersion(versionFixture, "2.0"), /invalid version/i);
+  assert.throws(() => updateProjectVersion(versionFixture, "02.0.0"), /invalid version/i);
+
   const artifactDirectory = path.join(temporaryDirectory, "artifacts");
   const outputDirectory = path.join(temporaryDirectory, "upload");
   fs.mkdirSync(artifactDirectory);

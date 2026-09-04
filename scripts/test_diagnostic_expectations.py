@@ -51,6 +51,26 @@ class DiagnosticExpectationsTests(unittest.TestCase):
             "tests/example/main.dl:4-19: Error: failure",
         )
 
+    def test_native_windows_project_paths_are_normalized(self) -> None:
+        self.assertEqual(
+            normalize_diagnostics(
+                "<unknown location>: Error: syntax config "
+                "C:\\repo\\tests\\example\\config.dl:3: failure\n",
+                Path("/c/repo"),
+            ),
+            "<unknown location>: Error: syntax config "
+            "tests/example/config.dl:3: failure",
+        )
+
+    def test_project_paths_without_source_locations_are_relative(self) -> None:
+        self.assertEqual(
+            normalize_diagnostics(
+                "<unknown location>: Error: output at /repo/build/result.txt\n",
+                Path("/repo"),
+            ),
+            "<unknown location>: Error: output at build/result.txt",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

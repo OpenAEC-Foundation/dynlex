@@ -29,8 +29,19 @@ def normalize_diagnostics(
         path_prefixes.add(f"{drive.upper()}:/{rest}")
         path_prefixes.add(f"{drive.lower()}:/{rest}")
 
-    for prefix in sorted(path_prefixes, key=len, reverse=True):
+    native_path_prefixes = path_prefixes | {
+        prefix.replace("/", "\\") for prefix in path_prefixes
+    }
+    for prefix in sorted(native_path_prefixes, key=len, reverse=True):
+        project_source_path = re.compile(
+            re.escape(prefix) + r"[\\/](?P<relative>[^:\r\n]*?\.dl)(?=:[0-9]+)"
+        )
+        text = project_source_path.sub(
+            lambda location: location.group("relative").replace("\\", "/"),
+            text,
+        )
         text = text.replace(prefix + "/", "")
+        text = text.replace(prefix + "\\", "")
 
     line_number_match = LINE_NUMBERED_LOCATION.search(text)
     if reject_line_numbers and line_number_match:

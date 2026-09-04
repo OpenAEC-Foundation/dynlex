@@ -12,22 +12,22 @@ Usage:
 
 Behavior:
   - Requires a clean git worktree
-  - Reads current version from metadata/VERSION
+  - Verifies native and extension versions match
   - Verifies HEAD is already pushed to upstream
   - Verifies CI workflow succeeded for that exact HEAD SHA
   - For patch/minor/major/X.Y.Z:
-      - updates metadata/VERSION
+      - updates native and extension version metadata together
       - builds and runs tests locally
       - commits "Release <version>"
       - creates release tag and pushes commit+tag in one push
   - For --retag:
-      - keeps metadata/VERSION unchanged
+      - keeps all version metadata unchanged
       - force-updates the existing <version> tag to HEAD
   - Waits for GitHub workflows for the pushed release SHA
 
 Notes:
   - If your worktree is not clean, commit first.
-  - Compiler/release version source of truth is metadata/VERSION.
+  - metadata/VERSION and the extension package metadata must stay synchronized.
   - Requires GitHub CLI auth: gh auth login
   - Override workflow files with:
       RELEASE_CI_WORKFLOW_FILE=<file> RELEASE_WORKFLOW_FILE=<file> ./scripts/release.sh ...
@@ -41,6 +41,7 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="${ROOT_DIR}/metadata/VERSION"
+VERSION_TOOL="${ROOT_DIR}/scripts/update-version.mjs"
 CI_WORKFLOW_FILE="${RELEASE_CI_WORKFLOW_FILE:-ci.yml}"
 RELEASE_WORKFLOW_FILE="${RELEASE_WORKFLOW_FILE:-release.yml}"
 WORKFLOW_TIMEOUT_SECONDS="${RELEASE_WORKFLOW_TIMEOUT_SECONDS:-1800}"
@@ -48,6 +49,10 @@ WORKFLOW_POLL_SECONDS="${RELEASE_WORKFLOW_POLL_SECONDS:-5}"
 
 if [[ ! -f "${VERSION_FILE}" ]]; then
   echo "Error: metadata/VERSION file not found at ${VERSION_FILE}" >&2
+  exit 1
+fi
+if [[ ! -f "${VERSION_TOOL}" ]]; then
+  echo "Error: version update tool not found at ${VERSION_TOOL}" >&2
   exit 1
 fi
 
@@ -61,6 +66,10 @@ if ! git -C "${ROOT_DIR}" diff --quiet || ! git -C "${ROOT_DIR}" diff --cached -
   exit 1
 fi
 
+if ! command -v node >/dev/null 2>&1; then
+  echo "Error: Node.js is required." >&2
+  exit 1
+fi
 if ! command -v gh >/dev/null 2>&1; then
   echo "Error: GitHub CLI (gh) is required." >&2
   exit 1
@@ -70,11 +79,7 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-current_version="$(tr -d '[:space:]' < "${VERSION_FILE}")"
-if [[ ! "${current_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Error: invalid version in metadata/VERSION: '${current_version}'" >&2
-  exit 1
-fi
+current_version="$(node "${VERSION_TOOL}" --check)"
 
 mode="$1"
 retag_mode=false
@@ -93,7 +98,7 @@ case "${mode}" in
     target_version="${current_version}"
     ;;
   *)
-    if [[ "${mode}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    if [[ "${mode}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
       target_version="${mode}"
     else
       echo "Error: invalid argument '${mode}'" >&2
@@ -180,19 +185,19 @@ version_updated=false
 release_commit_created=false
 cleanup() {
   if [[ "${version_updated}" == "true" && "${release_commit_created}" != "true" ]]; then
-    echo "${current_version}" > "${VERSION_FILE}"
+    node "${VERSION_TOOL}" "${current_version}"
   fi
 }
 trap cleanup EXIT
 
 if [[ "${retag_mode}" != "true" ]]; then
-  echo "${target_version}" > "${VERSION_FILE}"
   version_updated=true
+  node "${VERSION_TOOL}" "${target_version}"
 
   echo "Building and testing release ${target_version}..."
   "${ROOT_DIR}/scripts/test.sh" --release
 
-  git -C "${ROOT_DIR}" add metadata/VERSION
+  git -C "${ROOT_DIR}" add metadata/VERSION vscode-extension/package.json vscode-extension/package-lock.json
   git -C "${ROOT_DIR}" commit -m "Release ${target_version}"
   release_commit_created=true
   release_sha="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
