@@ -78,19 +78,49 @@ function a new JSON value of kind {integer:kind}:
         allocate one slot of initial and set result to it
         return result
 
+local function stop because a JSON allocation failed:
+    execute:
+        @intrinsic("call", "libc", "abort", nothing)
+
+local function the maximum JSON collection length:
+    replacement:
+        2147483647
+
+local function the maximum JSON allocation byte count:
+    execute:
+        if the build word size = 32:
+            return 2147483647 as a word sized integer
+        return 9223372036854775807 as a word sized integer
+
+local function the JSON allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
+    execute:
+        set quantity to count as a word sized integer
+        set width to (the size of kind) as a word sized integer
+        if quantity > (the maximum JSON allocation byte count / width):
+            stop because a JSON allocation failed
+        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+        if replacement = 0 as a pointer to kind:
+            stop because a JSON allocation failed
+        return replacement
+
 function ensure that {a pointer to a JSON value:parent} has JSON capacity for {integer:count}:
     execute:
+        if count < 0 or count > the maximum JSON collection length:
+            stop because a JSON allocation failed
         if count > the capacity of parent:
             set limit to the capacity of parent
             if limit < 4:
                 set limit to 4
             loop while limit < count:
-                set limit to (limit * 2)
+                if limit > the maximum JSON collection length / 2:
+                    set limit to the maximum JSON collection length
+                else:
+                    set limit to (limit * 2)
             if the kind of parent = the JSON object kind:
-                set members to @intrinsic("call", "libc", "realloc", a pointer to a JSON member, parent's members, limit * the size of a JSON member)
+                set members to the JSON allocation from (parent's members as a pointer) resized to limit items of a JSON member
                 set parent's members to members
             else:
-                set items to @intrinsic("call", "libc", "realloc", a pointer to a pointer to a JSON value, parent's items, limit * the size of a pointer to a JSON value)
+                set items to the JSON allocation from (parent's items as a pointer) resized to limit items of a pointer to a JSON value
                 set parent's items to items
             set the capacity of parent to limit
 

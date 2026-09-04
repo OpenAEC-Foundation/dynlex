@@ -1,0 +1,4 @@
+import json.dl
+
+set array to a new JSON value of kind the JSON array kind
+ensure that array has JSON capacity for 2147483648 as a 64 bit integer
