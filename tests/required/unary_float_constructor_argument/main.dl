@@ -1,0 +1,14 @@
+import lib/std.dl
+
+class:
+    patterns:
+        a point
+    members:
+        x as a floating-point number
+        y as a floating-point number
+
+a point with x {floating-point number:x} and y {floating-point number:y} means: @intrinsic("construct", a point, x, y)
+
+set half to 2.5
+set point to a point with x -half and y half
+print point's x as a line

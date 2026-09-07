@@ -7,40 +7,28 @@ class:
     members:
         x, y, z
 
-function a GPU vector:
-    replacement:
-        @intrinsic("vector", 3)
+a GPU vector means: @intrinsic("vector", 3)
+the vector type means: a GPU vector if the build target is GPU, else a CPU vector
+a new vector with x {a value:horizontal}, y {a value:vertical} and z {a value:depth} means: @intrinsic("construct", the vector type, horizontal, vertical, depth)
+to get {vector:left} + right:
+    set horizontal to ((the x of left) + right)
+    set vertical to ((the y of left) + right)
+    set depth to ((the z of left) + right)
+    return a new vector with x horizontal, y vertical and z depth
 
-function the vector type:
-    replacement:
-        a GPU vector if the build target is GPU, else a CPU vector
+to get {vector:left} * factor:
+    set horizontal to ((the x of left) * factor)
+    set vertical to ((the y of left) * factor)
+    set depth to ((the z of left) * factor)
+    return a new vector with x horizontal, y vertical and z depth
 
-function a new vector with x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
-    replacement:
-        @intrinsic("construct", the vector type, horizontal, vertical, depth)
-
-function {vector:left} + right:
-    execute:
-        set horizontal to ((the x of left) + right)
-        set vertical to ((the y of left) + right)
-        set depth to ((the z of left) + right)
-        return a new vector with x horizontal, y vertical and z depth
-
-function {vector:left} * factor:
-    execute:
-        set horizontal to ((the x of left) * factor)
-        set vertical to ((the y of left) * factor)
-        set depth to ((the z of left) * factor)
-        return a new vector with x horizontal, y vertical and z depth
-
-function the string form of {vector:value}:
-    execute:
-        set result to the string form of "["
-        set separator to the string form of ", "
-        set result to (result + the string form of the x of value)
-        set result to (result + separator)
-        set result to (result + the string form of the y of value)
-        set result to (result + separator)
-        set result to (result + the string form of the z of value)
-        set result to (result + the string form of "]")
-        return result
+to get the string form of {vector:value}:
+    set result to the string form of "["
+    set separator to the string form of ", "
+    add the string form of the x of value to result
+    add separator to result
+    add the string form of the y of value to result
+    add separator to result
+    add the string form of the z of value to result
+    add the string form of "]" to result
+    return result

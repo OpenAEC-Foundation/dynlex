@@ -13,11 +13,9 @@ local function the allocation of count bytes as {type:kind}:
 flex function allocate count bytes:
     replacement:
         set the subject to the allocation of count bytes
-
 flex function allocate count bytes as {type:kind}:
     replacement:
         set the subject to the allocation of count bytes as kind
-
 local function:
     patterns:
         the allocation of count slots of {type:kind}
@@ -29,6 +27,9 @@ local function:
         the allocation of one slot of {type:kind}
     execute:
         return the allocation of the size of kind bytes as a pointer to kind
+
+to get {type:kind} array of {integer:count} slots:
+    return the allocation of count slots of kind
 
 flex function:
     patterns:
@@ -47,24 +48,27 @@ local function the allocation of count slots initialized with value:
         set array to the allocation of count slots of the type of value
         set index to 0
         loop while index < count:
-            @intrinsic("initialize at", (array + index), value)
+            initialize value at (array + index)
             increment index
         return array
 
 local function the allocation of one slot initialized with value:
     execute:
         set array to the allocation of one slot of the type of value
-        @intrinsic("initialize at", array, value)
+        initialize value at array
         return array
+
+to get storage for {integer:count} slots initialized with value:
+    return the allocation of count slots initialized with value
+
+to get storage for one slot initialized with value:
+    return the allocation of one slot initialized with value
 
 flex function allocate count slots of value:
     replacement:
         set the subject to the allocation of count slots initialized with value
-
 flex function allocate one slot of value:
     replacement:
         set the subject to the allocation of one slot initialized with value
-
-function store value into array at index:
-    execute:
-        @intrinsic("store at", array + index, value)
+to store value into array at index:
+    @intrinsic("store at", array + index, value)

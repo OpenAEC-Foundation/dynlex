@@ -21,37 +21,25 @@ class:
 	members:
 		body, length, direction, food, running, score
 
-function a board with {integer:count} cells of {integer:scale} pixels each:
-	replacement:
-		@intrinsic("construct", a board layout, count, scale, count * count, count * scale)
+a board with {integer:count} cells of {integer:scale} pixels each means: @intrinsic("construct", a board layout, count, scale, count * count, count * scale)
+a grid position at x {integer:x} and y {integer:y} means: @intrinsic("construct", a grid position, x, y)
+a snake game with {a pointer to a grid position:body} moving {integer:direction} toward {grid position:food} means: @intrinsic("construct", a snake game, body, 3, direction, food, true, 0)
+to get {snake game:game} is running:
+	return game's running
 
-function a grid position at x {integer:x} and y {integer:y}:
-	replacement:
-		@intrinsic("construct", a grid position, x, y)
+to get {grid position:position} is outside {board layout:board}:
+	if position's x < 0:
+		return true
+	if position's x >= board's cells:
+		return true
+	if position's y < 0:
+		return true
+	return position's y >= board's cells
 
-function a snake game with {a pointer to a grid position:body} moving {integer:direction} toward {grid position:food}:
-	replacement:
-		@intrinsic("construct", a snake game, body, 3, direction, food, true, 0)
-
-function {snake game:game} is running:
-	execute:
-		return game's running
-
-function {grid position:position} is outside {board layout:board}:
-	execute:
-		if position's x < 0:
-			return true
-		if position's x >= board's cells:
-			return true
-		if position's y < 0:
-			return true
-		return position's y >= board's cells
-
-function {grid position:position} overlaps {grid position:other}:
-	execute:
-		if position's x != other's x:
-			return false
-		return position's y = other's y
+to get {grid position:position} overlaps {grid position:other}:
+	if position's x != other's x:
+		return false
+	return position's y = other's y
 
 # Game constants
 set board to a board with 20 cells of 20 pixels each
@@ -74,7 +62,7 @@ if font loading failed:
 set {font failure} to false
 
 # Snake body
-allocate board's capacity slots of (a grid position at x 0 and y 0) and set body to it
+set body to storage for board's capacity slots initialized with a grid position at x 0 and y 0
 
 # Initialize snake at center, moving right
 store a grid position at x 10 and y 10 into body at 0
@@ -98,7 +86,7 @@ loop while (window remains open) and (font failure = false):
 
 	if game is running:
 		# Calculate new head position
-		set head to the item at 0 in game's body
+		set head to the item at 0 in (game's body)
 
 		if game's direction = upward:
 			decrement head's y
@@ -117,7 +105,7 @@ loop while (window remains open) and (font failure = false):
 		if game is running:
 			set index to 0
 			loop while index < game's length:
-				set segment to the item at index in game's body
+				set segment to the item at index in (game's body)
 				if segment's x = head's x and segment's y = head's y:
 					set game's running to false
 				increment index
@@ -131,9 +119,9 @@ loop while (window remains open) and (font failure = false):
 				increment game's length
 
 			# Shift body segments backward
-			set index to (game's length - 1)
+			set index to game's length - 1
 			loop while index > 0:
-				store the item at (index - 1) in game's body into game's body at index
+				store the item at (index - 1) in (game's body) into game's body at index
 				decrement index
 
 			store head into game's body at 0
@@ -151,9 +139,9 @@ loop while (window remains open) and (font failure = false):
 		# Draw snake (head = bright green, body = dark green)
 		set index to 0
 		loop while index < game's length:
-			set segment to the item at index in game's body
-			set horizontal to (segment's x * board's scale)
-			set vertical to (segment's y * board's scale)
+			set segment to the item at index in (game's body)
+			set horizontal to segment's x * board's scale
+			set vertical to segment's y * board's scale
 			if index = 0:
 				draw a rectangle at x horizontal and y vertical with width board's scale and height board's scale in color red 0, green 200 and blue 0 in frame
 			else:
@@ -164,7 +152,7 @@ loop while (window remains open) and (font failure = false):
 		set rendering to the result of drawing "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200 in frame
 		if rendering failed:
 			set font failure to true
-		if font failure = false:
+		if the inverse of font failure:
 			set rendering to the result of drawing game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100 in frame
 			if rendering failed:
 				set font failure to true
@@ -173,17 +161,17 @@ loop while (window remains open) and (font failure = false):
 		set rendering to the result of drawing "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255 in frame
 		if rendering failed:
 			set font failure to true
-		if font failure = false:
+		if the inverse of font failure:
 			set rendering to the result of drawing "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200 in frame
 			if rendering failed:
 				set font failure to true
-		if font failure = false:
+		if the inverse of font failure:
 			set rendering to the result of drawing game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100 in frame
 			if rendering failed:
 				set font failure to true
 
 	display frame
-	if font failure = false:
+	if the inverse of font failure:
 		sleep for 150 milliseconds
 
 set {font release} to the result of releasing (the address of typeface)

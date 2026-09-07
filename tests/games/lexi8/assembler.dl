@@ -34,27 +34,15 @@ class:
 	members:
 		program, labels, fixups
 
-function an assembled program with {a pointer to an integer:bytes} and cursor {integer:cursor}:
-	replacement:
-		@intrinsic("construct", an assembled program, bytes, cursor)
-
-function a label table using {a pointer to a C string:names} and {a pointer to an integer:addresses} with count {integer:count}:
-	replacement:
-		@intrinsic("construct", a label table, names, addresses, count)
-
-function a fixup table using {a pointer to an integer:offsets} and {a pointer to a C string:names} with count {integer:count}:
-	replacement:
-		@intrinsic("construct", a fixup table, offsets, names, count)
-
-function an assembly state with {assembled program:program}, {label table:labels} and {fixup table:fixups}:
-	replacement:
-		@intrinsic("construct", an assembly state, program, labels, fixups)
-
-allocate 3584 slots of an integer and set bytes to it
-allocate 128 slots of "unnamed" and set names to it
-allocate 128 slots of an integer and set addresses to it
-allocate 512 slots of an integer and set offsets to it
-allocate 512 slots of "unnamed" and set symbols to it
+an assembled program with {a pointer to an integer:bytes} and cursor {integer:cursor} means: @intrinsic("construct", an assembled program, bytes, cursor)
+a label table using {a pointer to a C string:names} and {a pointer to an integer:addresses} with count {integer:count} means: @intrinsic("construct", a label table, names, addresses, count)
+a fixup table using {a pointer to an integer:offsets} and {a pointer to a C string:names} with count {integer:count} means: @intrinsic("construct", a fixup table, offsets, names, count)
+an assembly state with {assembled program:program}, {label table:labels} and {fixup table:fixups} means: @intrinsic("construct", an assembly state, program, labels, fixups)
+set bytes to an integer array of 3584 slots
+set names to storage for 128 slots initialized with "unnamed"
+set addresses to an integer array of 128 slots
+set offsets to an integer array of 512 slots
+set symbols to storage for 512 slots initialized with "unnamed"
 set program to an assembled program with bytes and cursor 0
 set labels to a label table using names and addresses with count 0
 set fixups to a fixup table using offsets and symbols with count 0
@@ -74,7 +62,7 @@ function the assembled program size:
 function the assembled program byte at {integer:offset}:
 	globals: assembler
 	execute:
-		return the item at offset in assembler's program's bytes
+		return the item at offset in (assembler's program)'s bytes
 
 function reset the assembly state:
 	globals: assembler
@@ -91,10 +79,9 @@ function emit a program byte {integer:value}:
 		store (value bitwise and 255) into assembler's program's bytes at assembler's program's cursor
 		increment assembler's program's cursor
 
-function emit an opcode with high byte {integer:high} and low byte {integer:low}:
-	execute:
-		emit a program byte high
-		emit a program byte low
+to emit an opcode with high byte {integer:high} and low byte {integer:low}:
+	emit a program byte high
+	emit a program byte low
 
 # --- Labels and fixups ---
 
@@ -110,8 +97,8 @@ function the address of label {C string:name}:
 	execute:
 		set index to 0
 		loop while index < assembler's labels's count:
-			if the item at index in assembler's labels's names = name:
-				return the item at index in assembler's labels's addresses
+			if the item at index in (assembler's labels)'s names = name:
+				return the item at index in (assembler's labels)'s addresses
 			increment index
 		return the negative of 1
 
@@ -130,14 +117,14 @@ function resolve [all|] labels:
 	execute:
 		set index to 0
 		loop while index < assembler's fixups's count:
-			set name to the item at index in assembler's fixups's names
+			set name to the item at index in (assembler's fixups)'s names
 			set target to the address of label name
 			if target < 0:
 				print "assembler error: unknown label" as a line
 				print name as a line
 				@intrinsic("call", "libc", "exit", nothing, 1)
-			set offset to the item at index in assembler's fixups's offsets
-			store ((the item at offset in assembler's program's bytes) bitwise or ((target shifted right by 8) bitwise and 15)) into assembler's program's bytes at offset
+			set offset to the item at index in (assembler's fixups)'s offsets
+			store ((the item at offset in (assembler's program)'s bytes) bitwise or ((target shifted right by 8) bitwise and 15)) into assembler's program's bytes at offset
 			store (target bitwise and 255) into assembler's program's bytes at offset + 1
 			increment index
 
@@ -146,192 +133,156 @@ function resolve [all|] labels:
 # can name their register roles with ordinary DynLex variables.
 
 # 00E0
-function clear the display:
-	execute:
-		emit an opcode with high byte 0 and low byte 224
+to clear the display:
+	emit an opcode with high byte 0 and low byte 224
 
 # 00EE
-function end the routine:
-	execute:
-		emit an opcode with high byte 0 and low byte 238
+to end the routine:
+	emit an opcode with high byte 0 and low byte 238
 
 # 1nnn
-function jump to label {C string:name}:
-	execute:
-		emit an opcode with top nibble 1 addressing label name
+to jump to label {C string:name}:
+	emit an opcode with top nibble 1 addressing label name
 
 # 2nnn
-function run the routine named {C string:name}:
-	execute:
-		emit an opcode with top nibble 2 addressing label name
+to run the routine named {C string:name}:
+	emit an opcode with top nibble 2 addressing label name
 
 # 3xnn
-function skip when register {integer:target} equals {integer:value}:
-	execute:
-		emit an opcode with high byte (48 bitwise or target) and low byte value
+to skip when register {integer:target} equals {integer:value}:
+	emit an opcode with high byte (48 bitwise or target) and low byte value
 
 # 4xnn
-function skip when register {integer:target} differs from {integer:value}:
-	execute:
-		emit an opcode with high byte (64 bitwise or target) and low byte value
+to skip when register {integer:target} differs from {integer:value}:
+	emit an opcode with high byte (64 bitwise or target) and low byte value
 
 # 5xy0
-function skip when register {integer:target} matches register {integer:source}:
-	execute:
-		emit an opcode with high byte (80 bitwise or target) and low byte (source shifted left by 4)
+to skip when register {integer:target} matches register {integer:source}:
+	emit an opcode with high byte (80 bitwise or target) and low byte (source shifted left by 4)
 
 # 9xy0
-function skip when register {integer:target} differs from register {integer:source}:
-	execute:
-		emit an opcode with high byte (144 bitwise or target) and low byte (source shifted left by 4)
+to skip when register {integer:target} differs from register {integer:source}:
+	emit an opcode with high byte (144 bitwise or target) and low byte (source shifted left by 4)
 
 # 6xnn
-function load value {integer:value} into register {integer:target}:
-	execute:
-		emit an opcode with high byte (96 bitwise or target) and low byte value
+to load value {integer:value} into register {integer:target}:
+	emit an opcode with high byte (96 bitwise or target) and low byte value
 
 # 7xnn (adds modulo 256, so 254 means "subtract 2")
-function raise register {integer:target} by {integer:value}:
-	execute:
-		emit an opcode with high byte (112 bitwise or target) and low byte value
+to raise register {integer:target} by {integer:value}:
+	emit an opcode with high byte (112 bitwise or target) and low byte value
 
 # 8xy0
-function copy register {integer:source} into register {integer:target}:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte (source shifted left by 4)
+to copy register {integer:source} into register {integer:target}:
+	emit an opcode with high byte (128 bitwise or target) and low byte (source shifted left by 4)
 
 # 8xy1
-function combine register {integer:target} with register {integer:source} using bitwise or:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 1)
+to combine register {integer:target} with register {integer:source} using bitwise or:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 1)
 
 # 8xy2
-function combine register {integer:target} with register {integer:source} using bitwise and:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 2)
+to combine register {integer:target} with register {integer:source} using bitwise and:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 2)
 
 # 8xy3
-function combine register {integer:target} with register {integer:source} using bitwise xor:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 3)
+to combine register {integer:target} with register {integer:source} using bitwise xor:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 3)
 
 # 8xy4 (carry lands in register 15)
-function add register {integer:source} into register {integer:target}:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 4)
+to add register {integer:source} into register {integer:target}:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 4)
 
 # 8xy5 (borrow flag lands in register 15)
-function subtract register {integer:source} from register {integer:target}:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 5)
+to subtract register {integer:source} from register {integer:target}:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 5)
 
 # 8xy6
-function shift register {integer:target} right:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 6)
+to shift register {integer:target} right:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 6)
 
 # 8xy7
-function replace register {integer:target} with register {integer:source} minus it:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 7)
+to replace register {integer:target} with register {integer:source} minus it:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((source shifted left by 4) bitwise or 7)
 
 # 8xyE
-function shift register {integer:target} left:
-	execute:
-		emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 14)
+to shift register {integer:target} left:
+	emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 14)
 
 # Annn
-function point index at label {C string:name}:
-	execute:
-		emit an opcode with top nibble 10 addressing label name
+to point index at label {C string:name}:
+	emit an opcode with top nibble 10 addressing label name
 
 # Bnnn
-function jump to label {C string:name} plus register zero:
-	execute:
-		emit an opcode with top nibble 11 addressing label name
+to jump to label {C string:name} plus register zero:
+	emit an opcode with top nibble 11 addressing label name
 
 # Cxnn
-function randomize register {integer:target} masked by {integer:value}:
-	execute:
-		emit an opcode with high byte (192 bitwise or target) and low byte value
+to randomize register {integer:target} masked by {integer:value}:
+	emit an opcode with high byte (192 bitwise or target) and low byte value
 
 # Dxyn
-function draw {integer:count} [row|rows] at horizontal register {integer:horizontal} and vertical register {integer:vertical}:
-	execute:
-		emit an opcode with high byte (208 bitwise or horizontal) and low byte ((vertical shifted left by 4) bitwise or count)
+to draw {integer:count} [row|rows] at horizontal register {integer:horizontal} and vertical register {integer:vertical}:
+	emit an opcode with high byte (208 bitwise or horizontal) and low byte ((vertical shifted left by 4) bitwise or count)
 
 # Ex9E
-function skip when key in register {integer:target} is down:
-	execute:
-		emit an opcode with high byte (224 bitwise or target) and low byte 158
+to skip when key in register {integer:target} is down:
+	emit an opcode with high byte (224 bitwise or target) and low byte 158
 
 # ExA1
-function skip when key in register {integer:target} is up:
-	execute:
-		emit an opcode with high byte (224 bitwise or target) and low byte 161
+to skip when key in register {integer:target} is up:
+	emit an opcode with high byte (224 bitwise or target) and low byte 161
 
 # Fx07
-function load the delay into register {integer:target}:
-	execute:
-		emit an opcode with high byte (240 bitwise or target) and low byte 7
+to load the delay into register {integer:target}:
+	emit an opcode with high byte (240 bitwise or target) and low byte 7
 
 # Fx0A
-function wait for a key and store it in register {integer:target}:
-	execute:
-		emit an opcode with high byte (240 bitwise or target) and low byte 10
+to wait for a key and store it in register {integer:target}:
+	emit an opcode with high byte (240 bitwise or target) and low byte 10
 
 # Fx15
-function start the delay from register {integer:source}:
-	execute:
-		emit an opcode with high byte (240 bitwise or source) and low byte 21
+to start the delay from register {integer:source}:
+	emit an opcode with high byte (240 bitwise or source) and low byte 21
 
 # Fx18
-function start the sound from register {integer:source}:
-	execute:
-		emit an opcode with high byte (240 bitwise or source) and low byte 24
+to start the sound from register {integer:source}:
+	emit an opcode with high byte (240 bitwise or source) and low byte 24
 
 # Fx1E
-function add register {integer:source} to the index:
-	execute:
-		emit an opcode with high byte (240 bitwise or source) and low byte 30
+to add register {integer:source} to the index:
+	emit an opcode with high byte (240 bitwise or source) and low byte 30
 
 # Fx29
-function point the index at the digit sprite in register {integer:source}:
-	execute:
-		emit an opcode with high byte (240 bitwise or source) and low byte 41
+to point the index at the digit sprite in register {integer:source}:
+	emit an opcode with high byte (240 bitwise or source) and low byte 41
 
 # Fx33
-function store the decimal digits of register {integer:source}:
-	execute:
-		emit an opcode with high byte (240 bitwise or source) and low byte 51
+to store the decimal digits of register {integer:source}:
+	emit an opcode with high byte (240 bitwise or source) and low byte 51
 
 # Fx55 (stores register 0 through the selected final register)
-function save all registers through register {integer:last}:
-	execute:
-		emit an opcode with high byte (240 bitwise or last) and low byte 85
+to save all registers through register {integer:last}:
+	emit an opcode with high byte (240 bitwise or last) and low byte 85
 
 # Fx65 (loads register 0 through the selected final register)
-function restore all registers through register {integer:last}:
-	execute:
-		emit an opcode with high byte (240 bitwise or last) and low byte 101
+to restore all registers through register {integer:last}:
+	emit an opcode with high byte (240 bitwise or last) and low byte 101
 
 # --- Data statements ---
 
-function emit a data byte {integer:value}:
-	execute:
-		emit a program byte value
+to emit a data byte {integer:value}:
+	emit a program byte value
 
 # Sprite art: an 8 character picture row, `X` for a lit pixel.
-function emit a data row {C string:picture}:
-	execute:
-		set value to 0
-		set index to 0
-		loop while index < 8:
-			set glyph to (the character at index in picture) as an integer
-			if glyph = 0:
-				set index to 8
-			else:
-				if glyph = 88:
-					set value to value bitwise or (128 shifted right by index)
-				increment index
-		emit a program byte value
+to emit a data row {C string:picture}:
+	set value to 0
+	set index to 0
+	loop while index < 8:
+		set glyph to (the character at index in picture) as an integer
+		if glyph = 0:
+			set index to 8
+		else:
+			if glyph = 88:
+				set value to value bitwise or (128 shifted right by index)
+			increment index
+	emit a program byte value

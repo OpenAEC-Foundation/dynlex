@@ -659,6 +659,9 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			 "value return contract message"},
 			{"replacement shorthand returns nothing: \"Replacement '{function}' must return a value\"",
 			 "replacement return contract message"},
+			{"class size unknown member type: \"Cannot determine the size of {type} because the type of member '{member}' is "
+			 "unknown; it is 'a value'\"",
+			 "unknown class member size message"},
 		};
 		for (const auto &[replacement, detail] : suggestions) {
 			if (startsLike(replacement))

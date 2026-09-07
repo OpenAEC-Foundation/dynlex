@@ -1,41 +1,26 @@
 import lib/shader.dl
 import lib/geometry.dl
 
-function [a|] planar position:
-    replacement:
-        a point
+[a|] planar position means: a point
+[a|] complex number means: a point
+[a|] light color means: a color
+a planar position with x {floating-point number:x} and y {floating-point number:y} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
+)
 
-function [a|] complex number:
-    replacement:
-        a point
+a complex number with real {floating-point number:real} and imaginary {floating-point number:imaginary} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 2 floating-point number values, real, imaginary)
+)
 
-function [a|] light color:
-    replacement:
-        a color
-
-function a planar position with x {floating-point number:x} and y {floating-point number:y}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 2 floating-point number values, x, y)
-        )
-
-function a complex number with real {floating-point number:real} and imaginary {floating-point number:imaginary}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 2 floating-point number values, real, imaginary)
-        )
-
-function a light color with red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a color,
-            @intrinsic("construct", an aggregate of 4 floating-point number values, red, green, blue, alpha)
-        )
+a light color with red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha} means: @intrinsic(
+    "construct",
+    a color,
+    @intrinsic("construct", an aggregate of 4 floating-point number values, red, green, blue, alpha)
+)
 
 function {complex number:value}'s real part:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
@@ -50,7 +35,6 @@ function {complex number:value}'s imaginary part:
 flex function set the real part of {complex number:value} to {a number:component}:
     replacement:
         set the x coordinate of value to component
-
 flex function set the imaginary part of {complex number:value} to {a number:component}:
     replacement:
         set the y coordinate of value to component

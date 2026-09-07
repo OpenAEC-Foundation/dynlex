@@ -10,13 +10,12 @@ import lib/random.dl
 import tests/games/lexi8/chip8.dl
 import tests/games/lexi8/breakout.dl
 
-function run {integer:count} [frame|frames]:
-	execute:
-		set elapsed to 0
-		loop while elapsed < count:
-			step the machine 32 times
-			tick the machine timers
-			increment elapsed
+to run {integer:count} [frame|frames]:
+	set elapsed to 0
+	loop while elapsed < count:
+		step the machine 32 times
+		tick the machine timers
+		increment elapsed
 
 seed the random number generator with 20260713
 build the breakout program

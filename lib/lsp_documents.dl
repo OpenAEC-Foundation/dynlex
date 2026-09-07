@@ -21,41 +21,40 @@ local function the LSP document index for {string:uri} in {a pointer to an LSP c
         set documents to state's documents
         set cursor to 0
         loop while cursor < the length of documents:
-            set entry to @intrinsic("cast", the item at cursor in documents, a pointer to an LSP document)
+            set entry to (the item at cursor in documents) as a pointer to an LSP document
             if entry's uri = uri:
                 return cursor
-            set cursor to (cursor + 1)
-        return 0 - 1
+            increment cursor
+        return -1
 
 local function the LSP document at {integer:index} in {a pointer to an LSP client:state}:
     execute:
         set documents to state's documents
-        return @intrinsic("cast", the item at index in documents, a pointer to an LSP document)
+        return (the item at index in documents) as a pointer to an LSP document
 
-function the LSP document with uri {a value:uri} in {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        set index to the LSP document index for address in state
-        if index < 0:
-            return @intrinsic(
-                "construct",
-                an LSP document result,
-                false,
-                address,
-                an empty LSP document text,
-                an empty LSP document text,
-                0
-            )
-        set entry to the LSP document at index in state
+to get the LSP document with uri {a value:uri} in {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    set index to the LSP document index for address in state
+    if index < 0:
         return @intrinsic(
             "construct",
             an LSP document result,
-            true,
-            entry's uri,
-            entry's language,
-            entry's text,
-            entry's version
+            false,
+            address,
+            an empty LSP document text,
+            an empty LSP document text,
+            0
         )
+    set entry to the LSP document at index in state
+    return @intrinsic(
+        "construct",
+        an LSP document result,
+        true,
+        entry's uri,
+        entry's language,
+        entry's text,
+        entry's version
+    )
 
 local function the result of sending {a pointer to a JSON value:change} for {a pointer to an LSP document:document} at {integer:version} using {a pointer to an LSP client:state}:
     execute:
@@ -80,89 +79,85 @@ local function an LSP replacement change for {string:original} with {string:repl
         free lines
         return a ranged LSP content change from line 0 and character 0 to line last and character position containing replacement
 
-function the result of opening LSP document {a value:uri} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        set dialect to the string form of language
-        set body to the string form of contents
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        if the LSP document index for address in state >= 0:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is already open"
-        set addressable to address is valid UTF-8
-        set recognizable to dialect is valid UTF-8
-        set readable to body is valid UTF-8
-        if (the inverse of addressable) or ((the inverse of recognizable) or (the inverse of readable)):
-            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document fields must be valid UTF-8"
-        if state's synchronization's open and close notifications:
-            set parameters to the LSP document opening parameters for URI address, language dialect, version 1 and text body
-            set session to state's session
-            set sent to the result of sending JSON-RPC session notification "textDocument/didOpen" with parameters using session
-            free parameters
-            if sent failed:
-                return sent
-        set initial to @intrinsic("construct", an LSP document, address, dialect, body, 1)
-        allocate one slot of initial and set entry to it
-        set documents to state's documents
-        append entry to documents
-        return a successful JSON-RPC operation
-
-function the result of opening an LSP document at native path {a value:path} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
-    execute:
-        set source to the string form of path
-        set converted to the file URI for source interpreted as a native path
-        if converted failed:
-            return a failed JSON-RPC operation with status the LSP document error status reporting converted's error message
-        return the result of opening LSP document converted's value written in language with contents as its text using state
-
-function the result of replacing LSP document uri {a value:uri} with text {a value:contents} using {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        set body to the string form of contents
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set index to the LSP document index for address in state
-        if index < 0:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
-        if body is invalid UTF-8:
-            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document text must be valid UTF-8"
-        set entry to the LSP document at index in state
-        if entry's version = 2147483647:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
-        set version to (entry's version + 1)
-        if state's synchronization's kind = the LSP incremental synchronization kind:
-            set change to an LSP replacement change for entry's text with body
-            set sent to the result of sending change for entry at version using state
-            if sent failed:
-                return sent
-        else if state's synchronization's kind = the LSP full synchronization kind:
-            set change to a full LSP content change containing body
-            set sent to the result of sending change for entry at version using state
-            if sent failed:
-                return sent
-        set entry's text to body
-        set entry's version to version
-        return a successful JSON-RPC operation
-
-function the result of saving LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set index to the LSP document index for address in state
-        if index < 0:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
-        if the inverse of state's synchronization's save notifications:
-            return a successful JSON-RPC operation
-        set entry to the LSP document at index in state
-        if state's synchronization's saved text inclusion:
-            set parameters to the LSP document saving parameters for entry's uri with text entry's text
-        else:
-            set parameters to the LSP document saving parameters for entry's uri
+to get the result of opening LSP document {a value:uri} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    set dialect to the string form of language
+    set body to the string form of contents
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    if the LSP document index for address in state >= 0:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is already open"
+    set addressable to address is valid UTF-8
+    set recognizable to dialect is valid UTF-8
+    set readable to body is valid UTF-8
+    if (the inverse of addressable) or ((the inverse of recognizable) or (the inverse of readable)):
+        return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document fields must be valid UTF-8"
+    if state's synchronization's open and close notifications:
+        set parameters to the LSP document opening parameters for URI address, language dialect, version 1 and text body
         set session to state's session
-        set sent to the result of sending JSON-RPC session notification "textDocument/didSave" with parameters using session
+        set sent to the result of sending JSON-RPC session notification "textDocument/didOpen" with parameters using session
         free parameters
-        return sent
+        if sent failed:
+            return sent
+    set initial to @intrinsic("construct", an LSP document, address, dialect, body, 1)
+    set entry to storage for one slot initialized with initial
+    set documents to state's documents
+    append entry to documents
+    return a successful JSON-RPC operation
+
+to get the result of opening an LSP document at native path {a value:path} written in {a value:language} with {a value:contents} as its text using {a pointer to an LSP client:state}:
+    set source to the string form of path
+    set converted to the file URI for source interpreted as a native path
+    if converted failed:
+        return a failed JSON-RPC operation with status the LSP document error status reporting converted's error message
+    return the result of opening LSP document converted's value written in language with contents as its text using state
+
+to get the result of replacing LSP document uri {a value:uri} with text {a value:contents} using {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    set body to the string form of contents
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set index to the LSP document index for address in state
+    if index < 0:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+    if body is invalid UTF-8:
+        return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document text must be valid UTF-8"
+    set entry to the LSP document at index in state
+    if entry's version = 2147483647:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
+    set version to entry's version + 1
+    if state's synchronization's kind = the LSP incremental synchronization kind:
+        set change to an LSP replacement change for entry's text with body
+        set sent to the result of sending change for entry at version using state
+        if sent failed:
+            return sent
+    else if state's synchronization's kind = the LSP full synchronization kind:
+        set change to a full LSP content change containing body
+        set sent to the result of sending change for entry at version using state
+        if sent failed:
+            return sent
+    set entry's text to body
+    set entry's version to version
+    return a successful JSON-RPC operation
+
+to get the result of saving LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set index to the LSP document index for address in state
+    if index < 0:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+    if the inverse of state's synchronization's save notifications:
+        return a successful JSON-RPC operation
+    set entry to the LSP document at index in state
+    if state's synchronization's saved text inclusion:
+        set parameters to the LSP document saving parameters for entry's uri with text entry's text
+    else:
+        set parameters to the LSP document saving parameters for entry's uri
+    set session to state's session
+    set sent to the result of sending JSON-RPC session notification "textDocument/didSave" with parameters using session
+    free parameters
+    return sent
 
 local function a failed LSP offset reporting {string:error}:
     replacement:
@@ -206,67 +201,65 @@ local function the byte offset for LSP line {integer:row} and character {integer
             return a failed LSP offset reporting "LSP character is outside the line or splits a UTF-16 surrogate pair"
         return a successful LSP offset at start + converted's position
 
-function the result of editing LSP document uri {a value:uri} from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end} with text {a value:contents} using {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        set replacement to the string form of contents
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set index to the LSP document index for address in state
-        if index < 0:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
-        if replacement is invalid UTF-8:
-            return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP replacement text must be valid UTF-8"
-        set entry to the LSP document at index in state
-        set original to entry's text
-        set first to the byte offset for LSP line beginning and character start in original
-        if first failed:
-            return a failed JSON-RPC operation with status the LSP document error status reporting first's error message
-        set last to the byte offset for LSP line ending and character end in original
-        if last failed:
-            return a failed JSON-RPC operation with status the LSP document error status reporting last's error message
-        if first's position > last's position:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP edit range is reversed"
-        if entry's version = 2147483647:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
-        set prefix to the substring of original from 0 spanning first's position bytes
-        set length to ((the length of original) - last's position)
-        set suffix to the substring of original from last's position spanning length bytes
-        set updated to (prefix + replacement)
-        set updated to (updated + suffix)
-        set version to (entry's version + 1)
-        if state's synchronization's kind = the LSP incremental synchronization kind:
-            set change to a ranged LSP content change from line beginning and character start to line ending and character end containing replacement
-            set sent to the result of sending change for entry at version using state
-            if sent failed:
-                return sent
-        else if state's synchronization's kind = the LSP full synchronization kind:
-            set change to a full LSP content change containing updated
-            set sent to the result of sending change for entry at version using state
-            if sent failed:
-                return sent
-        set entry's text to updated
-        set entry's version to version
-        return a successful JSON-RPC operation
+to get the result of editing LSP document uri {a value:uri} from line {integer:beginning} and character {integer:start} to line {integer:ending} and character {integer:end} with text {a value:contents} using {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    set replacement to the string form of contents
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set index to the LSP document index for address in state
+    if index < 0:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+    if replacement is invalid UTF-8:
+        return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP replacement text must be valid UTF-8"
+    set entry to the LSP document at index in state
+    set original to entry's text
+    set first to the byte offset for LSP line beginning and character start in original
+    if first failed:
+        return a failed JSON-RPC operation with status the LSP document error status reporting first's error message
+    set last to the byte offset for LSP line ending and character end in original
+    if last failed:
+        return a failed JSON-RPC operation with status the LSP document error status reporting last's error message
+    if first's position > last's position:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP edit range is reversed"
+    if entry's version = 2147483647:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document version is exhausted"
+    set prefix to the substring of original from 0 spanning first's position bytes
+    set length to ((the length of original) - last's position)
+    set suffix to the substring of original from last's position spanning length bytes
+    set updated to prefix + replacement
+    add suffix to updated
+    set version to entry's version + 1
+    if state's synchronization's kind = the LSP incremental synchronization kind:
+        set change to a ranged LSP content change from line beginning and character start to line ending and character end containing replacement
+        set sent to the result of sending change for entry at version using state
+        if sent failed:
+            return sent
+    else if state's synchronization's kind = the LSP full synchronization kind:
+        set change to a full LSP content change containing updated
+        set sent to the result of sending change for entry at version using state
+        if sent failed:
+            return sent
+    set entry's text to updated
+    set entry's version to version
+    return a successful JSON-RPC operation
 
-function the result of closing LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set index to the LSP document index for address in state
-        if index < 0:
-            return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
-        set entry to the LSP document at index in state
-        if state's synchronization's open and close notifications:
-            set parameters to the LSP document closing parameters for URI address
-            set session to state's session
-            set sent to the result of sending JSON-RPC session notification "textDocument/didClose" with parameters using session
-            free parameters
-            if sent failed:
-                return sent
-        set documents to state's documents
-        remove item index from documents
-        @intrinsic("destroy at", entry)
-        @intrinsic("call", "libc", "free", nothing, entry)
-        return a successful JSON-RPC operation
+to get the result of closing LSP document uri {a value:uri} using {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set index to the LSP document index for address in state
+    if index < 0:
+        return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
+    set entry to the LSP document at index in state
+    if state's synchronization's open and close notifications:
+        set parameters to the LSP document closing parameters for URI address
+        set session to state's session
+        set sent to the result of sending JSON-RPC session notification "textDocument/didClose" with parameters using session
+        free parameters
+        if sent failed:
+            return sent
+    set documents to state's documents
+    remove item index from documents
+    destroy the value at entry
+    deallocate entry
+    return a successful JSON-RPC operation

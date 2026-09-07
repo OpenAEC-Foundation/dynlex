@@ -1,15 +1,10 @@
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
-
-function left equals right:
-    replacement:
-        @intrinsic("equal", left, right)
-
+left equals right means: @intrinsic("equal", left, right)
 function ignore value:
     replacement:
         @intrinsic("discard", value)
-
 flex section if condition:
     replacement:
         @intrinsic("if", condition)

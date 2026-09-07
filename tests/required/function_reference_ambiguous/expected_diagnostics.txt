@@ -1,4 +1,4 @@
-lib/std.dl:9-37: Error: Ambiguous function reference: the string form of $
-  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [a pointer to a byte] -> an unresolved value lib/std.dl:9-37
+lib/std.dl:49-77: Error: Ambiguous function reference: the string form of $
+  note: while inferring intrinsic 'function' in '@intrinsic("function", name)' with arguments [a pointer to a byte] -> an unresolved value lib/std.dl:49-77
   note: while inferring call 'set reference to the function named "the string form of $"' with arguments [a pointer to a byte] -> an unresolved value tests/required/function_reference_ambiguous/main.dl:18-59
   note: while inferring call 'set reference to the function named "the string form of $"' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/function_reference_ambiguous/main.dl:1-59

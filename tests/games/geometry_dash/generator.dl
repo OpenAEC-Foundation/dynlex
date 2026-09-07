@@ -3,32 +3,36 @@ import lib/array.dl
 
 class:
 	patterns:
+		[a|] route step
+	members:
+		level as an integer
+		jump duration as an integer
+		slide duration as an integer
+
+class:
+	patterns:
 		[a|] route plan
 	members:
-		count, levels, jumps, slides
+		count, steps
 
-function a route plan with {integer:count} steps:
-	execute:
-		allocate count slots of an integer and set levels to it
-		allocate count slots of an integer and set jumps to it
-		allocate count slots of an integer and set slides to it
-		return @intrinsic("construct", a route plan, count, levels, jumps, slides)
+a route step at level {integer:level} with jump duration {integer:jump} and slide duration {integer:slide} means: @intrinsic("construct", a route step, level, jump, slide)
 
-function fill {route plan:plan} using seed {integer:seed}:
-	execute:
-		seed the random number generator with seed
-		set index to 0
-		set level to 0
-		loop while index < plan's count:
-			set jump to (420 + the remainder of (a random number) divided by 180)
-			set slide to (100 + the remainder of (a random number) divided by 180)
-			if the remainder of index divided by 4 = 0:
-				set jump to (340 + the remainder of (a random number) divided by 120)
-			if the remainder of index divided by 3 = 0 and level < 4:
-				increment level
-			else if the remainder of index divided by 5 = 0 and level > 0:
-				decrement level
-			store level into plan's levels at index
-			store jump into plan's jumps at index
-			store slide into plan's slides at index
-			increment index
+to get a route plan with {integer:count} steps:
+	set storage to a route step array of count slots
+	return @intrinsic("construct", a route plan, count, storage)
+
+to fill {route plan:plan} using seed {integer:seed}:
+	seed the random number generator with seed
+	set index to 0
+	set level to 0
+	loop while index < plan's count:
+		set jump to (420 + the remainder of (a random number) divided by 180)
+		set slide to (100 + the remainder of (a random number) divided by 180)
+		if the remainder of index divided by 4 = 0:
+			set jump to (340 + the remainder of (a random number) divided by 120)
+		if the remainder of index divided by 3 = 0 and level < 4:
+			increment level
+		else if the remainder of index divided by 5 = 0 and level > 0:
+			decrement level
+		store (a route step at level level with jump duration jump and slide duration slide) into plan's steps at index
+		increment index

@@ -30,10 +30,10 @@ local function a failed LSP client result with status {integer:code} reporting {
 local function the LSP synchronization number in {a pointer to a JSON value:node}:
     execute:
         if JSON-RPC number node is not an integer identifier:
-            return 0 - 1
+            return -1
         set candidate to the number of node
         if candidate < 0.0 or candidate > 2.0:
-            return 0 - 1
+            return -1
         return candidate as a 32 bit integer
 
 local function {a pointer to a JSON value:node} contains a valid LSP integer:
@@ -166,7 +166,7 @@ local function {a pointer to a JSON value:diagnostic} is a valid LSP diagnostic:
                 set number to the number of tag
                 if number < 1.0 or number > 2.0:
                     return false
-                set cursor to (cursor + 1)
+                increment cursor
         if diagnostic has JSON member named "relatedInformation":
             set related to the JSON member named "relatedInformation" in diagnostic
             if related is not a JSON array:
@@ -176,7 +176,7 @@ local function {a pointer to a JSON value:diagnostic} is a valid LSP diagnostic:
                 set information to the JSON value at index cursor in related
                 if information is invalid LSP diagnostic related information:
                     return false
-                set cursor to (cursor + 1)
+                increment cursor
         return true
 
 local function {a pointer to a JSON value:diagnostic} is an invalid LSP diagnostic:
@@ -269,7 +269,7 @@ local function a newly allocated LSP client owning {a pointer to a JSON-RPC sess
             reports,
             notifications
         )
-        allocate one slot of initial and set storage to it
+        set storage to storage for one slot initialized with initial
         return storage
 
 local function an LSP start failure after freeing {a pointer to an LSP client:state} with status {integer:code} reporting {string:error}:
@@ -357,45 +357,39 @@ local function the result of starting an LSP client using {process command:comma
         set connection to opened's connection
         return the result of initializing an LSP client over connection using parameters within timeout milliseconds
 
-function the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set address to the string form of root
-        if address is invalid UTF-8:
-            return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
-        set parameters to the LSP initialization parameters rooted at address with capabilities
-        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+to get the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
+    set address to the string form of root
+    if address is invalid UTF-8:
+        return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
+    set parameters to the LSP initialization parameters rooted at address with capabilities
+    return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
-function the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set address to the string form of root
-        if address is invalid UTF-8:
-            return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
-        set parameters to the LSP initialization parameters rooted at address with capabilities and initialization options options
-        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+to get the result of starting an LSP client using {process command:command} rooted at {a value:root} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
+    set address to the string form of root
+    if address is invalid UTF-8:
+        return a failed LSP client result with status the JSON-RPC invalid UTF-8 status reporting "LSP root URI must be valid UTF-8"
+    set parameters to the LSP initialization parameters rooted at address with capabilities and initialization options options
+    return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
-function the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set parameters to the LSP initialization parameters with capabilities
-        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+to get the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} waiting up to {integer:timeout} milliseconds:
+    set parameters to the LSP initialization parameters with capabilities
+    return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
-function the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set parameters to the LSP initialization parameters with capabilities and initialization options options
-        return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
+to get the result of starting an LSP client using {process command:command} with {a pointer to a JSON value:capabilities} and initialization options {a pointer to a JSON value:options} waiting up to {integer:timeout} milliseconds:
+    set parameters to the LSP initialization parameters with capabilities and initialization options options
+    return the result of starting an LSP client using command with capabilities, parameters parameters, and a limit of timeout milliseconds
 
-function the result of starting an LSP client using {process command:command} rooted at {a value:root} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set capabilities to the default LSP client capabilities
-        set outcome to the result of starting an LSP client using command rooted at root with capabilities waiting up to timeout milliseconds
-        free capabilities
-        return outcome
+to get the result of starting an LSP client using {process command:command} rooted at {a value:root} waiting up to {integer:timeout} milliseconds:
+    set capabilities to the default LSP client capabilities
+    set outcome to the result of starting an LSP client using command rooted at root with capabilities waiting up to timeout milliseconds
+    free capabilities
+    return outcome
 
-function the result of starting an LSP client using {process command:command} waiting up to {integer:timeout} milliseconds:
-    execute:
-        set capabilities to the default LSP client capabilities
-        set outcome to the result of starting an LSP client using command with capabilities waiting up to timeout milliseconds
-        free capabilities
-        return outcome
+to get the result of starting an LSP client using {process command:command} waiting up to {integer:timeout} milliseconds:
+    set capabilities to the default LSP client capabilities
+    set outcome to the result of starting an LSP client using command with capabilities waiting up to timeout milliseconds
+    free capabilities
+    return outcome
 
 local function a failed LSP send with status {integer:status} reporting {string:error}:
     replacement:
@@ -433,139 +427,122 @@ local function a failed LSP response with status {integer:code} reporting {C str
     execute:
         return a failed LSP response with status code reporting the string form of error
 
-function the result of sending an LSP request {a value:method} with {a pointer to a JSON value:parameters} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC request method with parameters using session
+to get the result of sending an LSP request {a value:method} with {a pointer to a JSON value:parameters} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC request method with parameters using session
 
-function the result of sending an LSP request {a value:method} with {a pointer to a JSON value:parameters} identified by {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC request method with parameters identified by identifier using session
+to get the result of sending an LSP request {a value:method} with {a pointer to a JSON value:parameters} identified by {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC request method with parameters identified by identifier using session
 
-function the result of sending an LSP request {a value:method} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC request method using session
+to get the result of sending an LSP request {a value:method} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC request method using session
 
-function the result of sending an LSP request {a value:method} identified by {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC request method identified by identifier using session
+to get the result of sending an LSP request {a value:method} identified by {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC request method identified by identifier using session
 
-function the result of sending an LSP notification {a value:method} with {a pointer to a JSON value:parameters} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC session notification method with parameters using session
+to get the result of sending an LSP notification {a value:method} with {a pointer to a JSON value:parameters} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC session notification method with parameters using session
 
-function the result of sending an LSP notification {a value:method} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of sending JSON-RPC session notification method using session
+to get the result of sending an LSP notification {a value:method} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of sending JSON-RPC session notification method using session
 
-function the LSP response for {string:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the JSON-RPC response for identifier using session
+to get the LSP response for {string:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the JSON-RPC response for identifier using session
 
-function the LSP response for {string:identifier} using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        if timeout < 0:
-            return a failed LSP response with status the JSON-RPC timeout status reporting "LSP response timeout must not be negative"
-        set session to state's session
-        return the JSON-RPC response for identifier using session waiting up to timeout milliseconds
+to get the LSP response for {string:identifier} using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    if timeout < 0:
+        return a failed LSP response with status the JSON-RPC timeout status reporting "LSP response timeout must not be negative"
+    set session to state's session
+    return the JSON-RPC response for identifier using session waiting up to timeout milliseconds
 
-function the LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the JSON-RPC response for identifier using session
+to get the LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the JSON-RPC response for identifier using session
 
-function the LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        if timeout < 0:
-            return a failed LSP response with status the JSON-RPC timeout status reporting "LSP response timeout must not be negative"
-        set session to state's session
-        return the JSON-RPC response for identifier using session waiting up to timeout milliseconds
+to get the LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    if timeout < 0:
+        return a failed LSP response with status the JSON-RPC timeout status reporting "LSP response timeout must not be negative"
+    set session to state's session
+    return the JSON-RPC response for identifier using session waiting up to timeout milliseconds
 
-function the queued LSP response for {string:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the queued JSON-RPC response for identifier using session
+to get the queued LSP response for {string:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the queued JSON-RPC response for identifier using session
 
-function the queued LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the queued JSON-RPC response for identifier using session
+to get the queued LSP response for {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP response with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the queued JSON-RPC response for identifier using session
 
-function the result of cancelling LSP request {string:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of cancelling JSON-RPC request identifier using session
+to get the result of cancelling LSP request {string:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of cancelling JSON-RPC request identifier using session
 
-function the result of cancelling LSP request {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of cancelling JSON-RPC request identifier using session
+to get the result of cancelling LSP request {a pointer to a JSON value:identifier} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of cancelling JSON-RPC request identifier using session
 
-function the result of replying to {a pointer to a JSON value:request} from the LSP server with {a pointer to a JSON value:result} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of replying to request with result using session
+to get the result of replying to {a pointer to a JSON value:request} from the LSP server with {a pointer to a JSON value:result} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of replying to request with result using session
 
-function the result of replying to {a pointer to a JSON value:request} from the LSP server with error code {integer:number} message {a value:error} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of replying to request with error code number message error using session
+to get the result of replying to {a pointer to a JSON value:request} from the LSP server with error code {integer:number} message {a value:error} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of replying to request with error code number message error using session
 
-function the result of replying to {a pointer to a JSON value:request} from the LSP server with error code {integer:number} message {a value:error} and data {a pointer to a JSON value:payload} using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of replying to request with error code number message error and data payload using session
+to get the result of replying to {a pointer to a JSON value:request} from the LSP server with error code {integer:number} message {a value:error} and data {a pointer to a JSON value:payload} using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of replying to request with error code number message error and data payload using session
 
 local function the LSP diagnostic report index for {string:uri} in {a pointer to an LSP client:state}:
     execute:
         set reports to state's reports
         set cursor to 0
         loop while cursor < the length of reports:
-            set entry to @intrinsic("cast", the item at cursor in reports, a pointer to an LSP diagnostic report)
+            set entry to (the item at cursor in reports) as a pointer to an LSP diagnostic report
             if entry's uri = uri:
                 return cursor
-            set cursor to (cursor + 1)
-        return 0 - 1
+            increment cursor
+        return -1
 
 local function the result of updating LSP diagnostics from {a pointer to a JSON value:envelope} using {a pointer to an LSP client:state}:
     execute:
@@ -589,7 +566,7 @@ local function the result of updating LSP diagnostics from {a pointer to a JSON 
             set diagnostic to the JSON value at index cursor in items
             if diagnostic is an invalid LSP diagnostic:
                 return a failed JSON-RPC operation with status the LSP invalid response status reporting "LSP diagnostics contain an invalid Diagnostic"
-            set cursor to (cursor + 1)
+            increment cursor
         set versioning to false
         set version to 0
         if parameters has JSON member named "version":
@@ -604,14 +581,14 @@ local function the result of updating LSP diagnostics from {a pointer to a JSON 
         set index to the LSP diagnostic report index for address in state
         if index >= 0:
             set reports to state's reports
-            set report to @intrinsic("cast", the item at index in reports, a pointer to an LSP diagnostic report)
+            set report to (the item at index in reports) as a pointer to an LSP diagnostic report
             free report's diagnostics
             set report's version presence to versioning
             set report's version to version
             set report's diagnostics to copied
             return a successful JSON-RPC operation
         set initial to @intrinsic("construct", an LSP diagnostic report, address, versioning, version, copied)
-        allocate one slot of initial and set report to it
+        set report to storage for one slot initialized with initial
         set reports to state's reports
         append report to reports
         return a successful JSON-RPC operation
@@ -648,172 +625,161 @@ local function the result of dispatching the next LSP notification using {a poin
             return a failed JSON-RPC operation with status updated's status reporting error
         return the result of queueing LSP notification envelope using state
 
-function the result of pumping one LSP message using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        set pending to session's notifications
-        if the length of pending > 0:
-            return the result of dispatching the next LSP notification using state
-        set pumped to the result of pumping one JSON-RPC message using session
-        if pumped failed:
-            return pumped
+to get the result of pumping one LSP message using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    set pending to session's notifications
+    if the length of pending > 0:
         return the result of dispatching the next LSP notification using state
+    set pumped to the result of pumping one JSON-RPC message using session
+    if pumped failed:
+        return pumped
+    return the result of dispatching the next LSP notification using state
 
-function the result of pumping one LSP message using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        if timeout < 0:
-            return a failed JSON-RPC operation with status the JSON-RPC timeout status reporting "LSP pump timeout must not be negative"
-        set session to state's session
-        set pending to session's notifications
-        if the length of pending > 0:
-            return the result of dispatching the next LSP notification using state
-        set pumped to the result of pumping one JSON-RPC message using session waiting up to timeout milliseconds
-        if pumped failed:
-            return pumped
+to get the result of pumping one LSP message using {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    if timeout < 0:
+        return a failed JSON-RPC operation with status the JSON-RPC timeout status reporting "LSP pump timeout must not be negative"
+    set session to state's session
+    set pending to session's notifications
+    if the length of pending > 0:
         return the result of dispatching the next LSP notification using state
+    set pumped to the result of pumping one JSON-RPC message using session waiting up to timeout milliseconds
+    if pumped failed:
+        return pumped
+    return the result of dispatching the next LSP notification using state
 
-function the next LSP server request from {a pointer to an LSP client:state}:
-    execute:
-        set session to state's session
-        return the next JSON-RPC server request from session
+to get the next LSP server request from {a pointer to an LSP client:state}:
+    set session to state's session
+    return the next JSON-RPC server request from session
 
-function the next LSP protocol diagnostic from {a pointer to an LSP client:state}:
-    execute:
-        set session to state's session
-        return the next JSON-RPC diagnostic from session
+to get the next LSP protocol diagnostic from {a pointer to an LSP client:state}:
+    set session to state's session
+    return the next JSON-RPC diagnostic from session
 
-function the next LSP notification from {a pointer to an LSP client:state}:
-    execute:
-        set notifications to state's notifications
-        if the length of notifications = 0:
-            return @intrinsic(
-                "construct",
-                a JSON-RPC queued message,
-                false,
-                the JSON-RPC queue empty status,
-                an empty LSP JSON node,
-                the string form of "LSP notification queue is empty"
-            )
-        set envelope to @intrinsic("cast", the item at 0 in notifications, a pointer to a JSON value)
-        remove item 0 from notifications
+to get the next LSP notification from {a pointer to an LSP client:state}:
+    set notifications to state's notifications
+    if the length of notifications = 0:
         return @intrinsic(
             "construct",
             a JSON-RPC queued message,
-            true,
-            the JSON-RPC success status,
-            envelope,
-            an empty LSP text
+            false,
+            the JSON-RPC queue empty status,
+            an empty LSP JSON node,
+            the string form of "LSP notification queue is empty"
         )
+    set envelope to (the item at 0 in notifications) as a pointer to a JSON value
+    remove item 0 from notifications
+    return @intrinsic(
+        "construct",
+        a JSON-RPC queued message,
+        true,
+        the JSON-RPC success status,
+        envelope,
+        an empty LSP text
+    )
 
-function the result of rejecting {a pointer to a JSON value:request} from the LSP server as method not found using {a pointer to an LSP client:state}:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
-        set session to state's session
-        return the result of replying to request with error code the JSON-RPC method not found code message "Method not found" using session
+to get the result of rejecting {a pointer to a JSON value:request} from the LSP server as method not found using {a pointer to an LSP client:state}:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed LSP send with status the LSP invalid state status reporting "LSP client is not running"
+    set session to state's session
+    return the result of replying to request with error code the JSON-RPC method not found code message "Method not found" using session
 
-function the LSP diagnostics for uri {a value:uri} in {a pointer to an LSP client:state}:
-    execute:
-        set address to the string form of uri
-        set index to the LSP diagnostic report index for address in state
-        if index < 0:
-            return @intrinsic("construct", an LSP diagnostics result, false, false, 0, an empty LSP JSON node)
-        set reports to state's reports
-        set report to @intrinsic("cast", the item at index in reports, a pointer to an LSP diagnostic report)
-        return @intrinsic("construct", an LSP diagnostics result, true, report's version presence, report's version, report's diagnostics)
+to get the LSP diagnostics for uri {a value:uri} in {a pointer to an LSP client:state}:
+    set address to the string form of uri
+    set index to the LSP diagnostic report index for address in state
+    if index < 0:
+        return @intrinsic("construct", an LSP diagnostics result, false, false, 0, an empty LSP JSON node)
+    set reports to state's reports
+    set report to (the item at index in reports) as a pointer to an LSP diagnostic report
+    return @intrinsic("construct", an LSP diagnostics result, true, report's version presence, report's version, report's diagnostics)
 
-function the LSP standard error from {a pointer to an LSP client:state}:
-    execute:
-        set session to state's session
-        set connection to session's connection
-        return connection's standard error
+to get the LSP standard error from {a pointer to an LSP client:state}:
+    set session to state's session
+    set connection to session's connection
+    return connection's standard error
 
-function take the LSP standard error from {a pointer to an LSP client:state}:
-    execute:
-        set session to state's session
-        set connection to session's connection
-        return take the JSON-RPC standard error from connection
+to get take the LSP standard error from {a pointer to an LSP client:state}:
+    set session to state's session
+    set connection to session's connection
+    return take the JSON-RPC standard error from connection
 
-function the result of shutting down {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
-    execute:
-        if state's lifecycle != the LSP running lifecycle:
-            return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
-        if timeout < 0:
-            return a failed JSON-RPC operation with status the JSON-RPC timeout status reporting "LSP shutdown timeout must not be negative"
-        set state's lifecycle to the LSP shutdown lifecycle
-        set session to state's session
-        set sent to the result of sending JSON-RPC request "shutdown" using session
-        if sent failed:
-            set error to sent's error message
-            return a failed JSON-RPC operation with status sent's status reporting error
-        set identifier to sent's request id
-        set response to the JSON-RPC response for identifier using session waiting up to timeout milliseconds
-        if response failed:
-            set error to response's error message
-            set code to response's status
-            free response
-            return a failed JSON-RPC operation with status code reporting error
-        if response's result is not JSON null:
-            free response
-            return a failed JSON-RPC operation with status the LSP invalid response status reporting "LSP shutdown result must be null"
+to get the result of shutting down {a pointer to an LSP client:state} waiting up to {integer:timeout} milliseconds:
+    if state's lifecycle != the LSP running lifecycle:
+        return a failed JSON-RPC operation with status the LSP invalid state status reporting "LSP client is not running"
+    if timeout < 0:
+        return a failed JSON-RPC operation with status the JSON-RPC timeout status reporting "LSP shutdown timeout must not be negative"
+    set state's lifecycle to the LSP shutdown lifecycle
+    set session to state's session
+    set sent to the result of sending JSON-RPC request "shutdown" using session
+    if sent failed:
+        set error to sent's error message
+        return a failed JSON-RPC operation with status sent's status reporting error
+    set identifier to sent's request id
+    set response to the JSON-RPC response for identifier using session waiting up to timeout milliseconds
+    if response failed:
+        set error to response's error message
+        set code to response's status
         free response
-        set exited to the result of sending JSON-RPC session notification "exit" using session
-        if exited failed:
-            set error to exited's error message
-            return a failed JSON-RPC operation with status exited's status reporting error
-        set connection to session's connection
-        set closed to the result of closing connection
-        set state's lifecycle to the LSP stopped lifecycle
-        if closed failed:
-            set error to closed's error message
-            return a failed JSON-RPC operation with status closed's status reporting error
-        return a successful JSON-RPC operation
+        return a failed JSON-RPC operation with status code reporting error
+    if response's result is not JSON null:
+        free response
+        return a failed JSON-RPC operation with status the LSP invalid response status reporting "LSP shutdown result must be null"
+    free response
+    set exited to the result of sending JSON-RPC session notification "exit" using session
+    if exited failed:
+        set error to exited's error message
+        return a failed JSON-RPC operation with status exited's status reporting error
+    set connection to session's connection
+    set closed to the result of closing connection
+    set state's lifecycle to the LSP stopped lifecycle
+    if closed failed:
+        set error to closed's error message
+        return a failed JSON-RPC operation with status closed's status reporting error
+    return a successful JSON-RPC operation
 
 local function free LSP documents in {a pointer to a list:values}:
     execute:
         set cursor to 0
         loop while cursor < the length of values:
-            set document to @intrinsic("cast", the item at cursor in values, a pointer to an LSP document)
-            @intrinsic("destroy at", document)
-            @intrinsic("call", "libc", "free", nothing, document)
-            set cursor to (cursor + 1)
+            set document to (the item at cursor in values) as a pointer to an LSP document
+            destroy the value at document
+            deallocate document
+            increment cursor
         free values
 
 local function free LSP diagnostic reports in {a pointer to a list:values}:
     execute:
         set cursor to 0
         loop while cursor < the length of values:
-            set report to @intrinsic("cast", the item at cursor in values, a pointer to an LSP diagnostic report)
+            set report to (the item at cursor in values) as a pointer to an LSP diagnostic report
             free report's diagnostics
-            @intrinsic("destroy at", report)
-            @intrinsic("call", "libc", "free", nothing, report)
-            set cursor to (cursor + 1)
+            destroy the value at report
+            deallocate report
+            increment cursor
         free values
 
 local function free LSP notifications in {a pointer to a list:values}:
     execute:
         set cursor to 0
         loop while cursor < the length of values:
-            set envelope to @intrinsic("cast", the item at cursor in values, a pointer to a JSON value)
+            set envelope to (the item at cursor in values) as a pointer to a JSON value
             free envelope
-            set cursor to (cursor + 1)
+            increment cursor
         free values
 
-function free {a pointer to an LSP client:state}:
-    execute:
-        set capabilities to state's capabilities
-        if capabilities != (an empty LSP JSON node):
-            free capabilities
-        set documents to state's documents
-        set reports to state's reports
-        set notifications to state's notifications
-        free LSP documents in documents
-        free LSP diagnostic reports in reports
-        free LSP notifications in notifications
-        set session to state's session
-        free session
-        @intrinsic("call", "libc", "free", nothing, state)
+to free {a pointer to an LSP client:state}:
+    set capabilities to state's capabilities
+    if capabilities != (an empty LSP JSON node):
+        free capabilities
+    set documents to state's documents
+    set reports to state's reports
+    set notifications to state's notifications
+    free LSP documents in documents
+    free LSP diagnostic reports in reports
+    free LSP notifications in notifications
+    set session to state's session
+    free session
+    deallocate state

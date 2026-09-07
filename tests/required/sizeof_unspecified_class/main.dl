@@ -1,0 +1,7 @@
+class:
+    patterns:
+        an item
+    members:
+        value
+
+@intrinsic("discard", @intrinsic("size of", an item))

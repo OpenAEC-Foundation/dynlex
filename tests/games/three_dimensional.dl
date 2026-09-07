@@ -12,58 +12,33 @@ class:
     members:
         minimum, maximum
 
-function [a|] spatial position:
-    replacement:
-        a point
+[a|] spatial position means: a point
+[the|] spatial dimensions means: a point
+[a|] spatial color means: a color
+[a|] normalized color means: a color
+a position with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
+)
 
-function [the|] spatial dimensions:
-    replacement:
-        a point
+the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
+)
 
-function [a|] spatial color:
-    replacement:
-        a color
+a color with red {integer:red}, green {integer:green} and blue {integer:blue} means: @intrinsic(
+    "construct",
+    a color,
+    @intrinsic("construct", an aggregate of 3 integer values, red, green, blue)
+)
 
-function [a|] normalized color:
-    replacement:
-        a color
+a normalized color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue} means: @intrinsic(
+    "construct",
+    a color,
+    @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
+)
 
-function a position with x {floating-point number:x}, y {floating-point number:y} and z {floating-point number:z}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 3 floating-point number values, x, y, z)
-        )
-
-function the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
-        )
-
-function a color with red {integer:red}, green {integer:green} and blue {integer:blue}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a color,
-            @intrinsic("construct", an aggregate of 3 integer values, red, green, blue)
-        )
-
-function a normalized color with red {floating-point number:red}, green {floating-point number:green} and blue {floating-point number:blue}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a color,
-            @intrinsic("construct", an aggregate of 3 floating-point number values, red, green, blue)
-        )
-
-function a camera at {spatial position:position} facing {floating-point number:yaw} degrees with speed {floating-point number:movement} and turn rate {floating-point number:turning}:
-    replacement:
-        @intrinsic("construct", a spatial camera, position, yaw, movement, turning)
-
-function a bounding box from {spatial position:minimum} to {spatial position:maximum}:
-    replacement:
-        @intrinsic("construct", a spatial bounding box, minimum, maximum)
+a camera at {spatial position:position} facing {floating-point number:yaw} degrees with speed {floating-point number:movement} and turn rate {floating-point number:turning} means: @intrinsic("construct", a spatial camera, position, yaw, movement, turning)
+a bounding box from {spatial position:minimum} to {spatial position:maximum} means: @intrinsic("construct", a spatial bounding box, minimum, maximum)

@@ -93,105 +93,38 @@ local function {filesystem path:path} is invalid:
     replacement:
         the inverse of path's validity
 
-function {file action:action} succeeded:
-    execute:
-        return action's success
+to get {file action:action} succeeded:
+    return action's success
 
-function {file action:action} failed:
-    replacement:
-        the inverse of action's success
+{file action:action} failed means: the inverse of action's success
+to get {file read action:action} succeeded:
+    return action's success
 
-function {file read action:action} succeeded:
-    execute:
-        return action's success
+{file read action:action} failed means: the inverse of action's success
+{directory enumeration:enumeration} succeeded means: enumeration's success
+{directory enumeration:enumeration} failed means: the inverse of enumeration's success
+{directory entry result:entry} lookup succeeded means: entry's success
+{directory entry result:entry} lookup failed means: the inverse of entry's success
+{directory entry result:entry} was found means: entry's presence
+{directory entry result:entry} was absent means: the inverse of entry's presence
+{directory entry result:entry} is a regular file means: entry's regular file kind
+{directory entry result:entry} is not a regular file means: the inverse of entry's regular file kind
+{directory entry result:entry} is a directory means: entry's directory kind
+{directory entry result:entry} is a symbolic link means: entry's symbolic link kind
+{directory entry result:entry} has another filesystem kind means: entry's other kind
+{file input stream:stream} succeeded means: stream's success
+{file input stream:stream} failed means: the inverse of stream's success
+{file chunk read result:reading} succeeded means: reading's success
+{file chunk read result:reading} failed means: the inverse of reading's success
+{file chunk read result:reading} reached the end of file means: reading's end of file
+{file chunk read result:reading} has not reached the end of file means: the inverse of reading's end of file
+{temporary directory result:result} succeeded means: result's success
+{temporary directory result:result} failed means: the inverse of result's success
+to get the error message of {file action:action}:
+    return action's error message
 
-function {file read action:action} failed:
-    replacement:
-        the inverse of action's success
-
-function {directory enumeration:enumeration} succeeded:
-    replacement:
-        enumeration's success
-
-function {directory enumeration:enumeration} failed:
-    replacement:
-        the inverse of enumeration's success
-
-function {directory entry result:entry} lookup succeeded:
-    replacement:
-        entry's success
-
-function {directory entry result:entry} lookup failed:
-    replacement:
-        the inverse of entry's success
-
-function {directory entry result:entry} was found:
-    replacement:
-        entry's presence
-
-function {directory entry result:entry} was absent:
-    replacement:
-        the inverse of entry's presence
-
-function {directory entry result:entry} is a regular file:
-    replacement:
-        entry's regular file kind
-
-function {directory entry result:entry} is not a regular file:
-    replacement:
-        the inverse of entry's regular file kind
-
-function {directory entry result:entry} is a directory:
-    replacement:
-        entry's directory kind
-
-function {directory entry result:entry} is a symbolic link:
-    replacement:
-        entry's symbolic link kind
-
-function {directory entry result:entry} has another filesystem kind:
-    replacement:
-        entry's other kind
-
-function {file input stream:stream} succeeded:
-    replacement:
-        stream's success
-
-function {file input stream:stream} failed:
-    replacement:
-        the inverse of stream's success
-
-function {file chunk read result:reading} succeeded:
-    replacement:
-        reading's success
-
-function {file chunk read result:reading} failed:
-    replacement:
-        the inverse of reading's success
-
-function {file chunk read result:reading} reached the end of file:
-    replacement:
-        reading's end of file
-
-function {file chunk read result:reading} has not reached the end of file:
-    replacement:
-        the inverse of reading's end of file
-
-function {temporary directory result:result} succeeded:
-    replacement:
-        result's success
-
-function {temporary directory result:result} failed:
-    replacement:
-        the inverse of result's success
-
-function the error message of {file action:action}:
-    execute:
-        return action's error message
-
-function the error message of {file read action:action}:
-    execute:
-        return action's error message
+to get the error message of {file read action:action}:
+    return action's error message
 
 local function an empty filesystem failure text:
     execute:
@@ -417,7 +350,7 @@ local function the result of transferring bytes from origin to target:
                 set copying to false
             if copying and reading's count > (0 as a word sized integer):
                 set writing to the result of transferring reading's count bytes from buffer to target
-                set transferred to (transferred + writing's count)
+                add writing's count to transferred
                 if writing failed:
                     set message to writing's error message
                     set succeeded to false
@@ -425,7 +358,7 @@ local function the result of transferring bytes from origin to target:
             if copying and reading's end of file:
                 set copying to false
 
-        @intrinsic("call", "libc", "free", nothing, buffer)
+        deallocate buffer
         if succeeded:
             return a successful filesystem stream transfer of transferred bytes that reached the end of file
         return a failed filesystem stream transfer of transferred bytes reporting message
@@ -504,9 +437,9 @@ local function the result of reading the file at path:
         set failed to false
         set message to an empty filesystem failure text
         loop while continuing:
-            set available to (capacity - total)
-            set chunk to (the result of transferring up to available bytes into buffer + total from stream)
-            set total to (total + chunk's count)
+            set available to capacity - total
+            set chunk to the result of transferring up to available bytes into buffer + total from stream
+            add chunk's count to total
             if chunk failed:
                 set message to chunk's error message
                 set failed to true
@@ -528,7 +461,7 @@ local function the result of reading the file at path:
                 else:
                     set limit to maximum
                     if capacity <= maximum / 2:
-                        set limit to (capacity * 2)
+                        set limit to capacity * 2
                     set resized to buffer resized to (limit + 1) bytes
                     if resized = (0 as a pointer to a byte):
                         set message to the current filesystem failure text
@@ -541,12 +474,12 @@ local function the result of reading the file at path:
         @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_file_release", nothing, stream)
 
         if failed:
-            @intrinsic("call", "libc", "free", nothing, buffer)
+            deallocate buffer
             return a failed file read action reporting message
 
         set contents to a new string buffer containing (total as an integer) bytes
         ignore @intrinsic("call", "libc", "memcpy", a pointer to a byte, the data of contents, buffer, total)
-        @intrinsic("call", "libc", "free", nothing, buffer)
+        deallocate buffer
         return a successful file read action containing contents
 
 local function the result of writing {string:contents} to the file at path:
@@ -714,39 +647,30 @@ local function the result of creating a directory at path:
 flex function read the file at path:
     replacement:
         set the subject to the result of reading the file at path
-
 flex function write {string:contents} to the file at path:
     replacement:
         set the subject to the result of writing contents to the file at path
-
 flex function append {string:contents} to the file at path:
     replacement:
         set the subject to the result of appending contents to the file at path
-
 flex function delete the filesystem entry at path:
     replacement:
         set the subject to the result of deleting the filesystem entry at path
-
 flex function rename the filesystem entry at source to destination:
     replacement:
         set the subject to the result of renaming the filesystem entry at source to destination
-
 flex function copy the filesystem entry at source to destination:
     replacement:
         set the subject to the result of copying the filesystem entry at source to destination
-
 flex function create a directory at path:
     replacement:
         set the subject to the result of creating a directory at path
-
 flex function create a directory tree at path:
     replacement:
         set the subject to the result of creating a directory at path
-
 flex function remove the filesystem tree at path:
     replacement:
         set the subject to the result of deleting the filesystem entry at path
-
 local function the result of opening a directory at path:
     execute:
         set prepared to a filesystem path for path
@@ -955,19 +879,15 @@ local function the result of creating a temporary directory:
 flex function open the directory at path:
     replacement:
         set the subject to the result of opening a directory at path
-
 flex function read the next directory entry from {directory enumeration:enumeration}:
     replacement:
         set the subject to the result of reading the next directory entry from enumeration
-
 flex function open the file at path for streaming reads:
     replacement:
         set the subject to the result of opening a file at path for streaming reads
-
 flex function read up to {integer:limit} bytes from {file input stream:stream}:
     replacement:
         set the subject to the result of reading up to limit bytes from stream
-
 flex function create a temporary directory:
     replacement:
         set the subject to the result of creating a temporary directory

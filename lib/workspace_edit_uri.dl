@@ -36,33 +36,30 @@ local function workspace URI {string:input} has a directory hint:
     execute:
         return (the length of input > 0) and (the character at (the length of input - 1) in input = 47)
 
-function the workspace identity of {string:path} using {path style:style}:
-    execute:
-        if the value of style = the value of the Windows path style:
-            return the lowercase form of path
-        return path
+to get the workspace identity of {string:path} using {path style:style}:
+    if the value of style = the value of the Windows path style:
+        return the lowercase form of path
+    return path
 
-function the normalized workspace file URI for {string:input} using {path style:style}:
-    execute:
-        set decoded to the path from input interpreted as a file URI using style
-        if decoded failed:
-            return a failed workspace URI reporting decoded's error message
-        if decoded is unsupported:
-            return a failed workspace URI reporting the string form of "File URI conversion is unsupported"
-        set location to decoded's value lexically normalized using style
-        if location failed:
-            return a failed workspace URI reporting location's error message
-        set absolute to whether location's value is an absolute path using style
-        if absolute failed:
-            return a failed workspace URI reporting absolute's error message
-        if the inverse of absolute's value:
-            return a failed workspace URI reporting the string form of "File URI path must be absolute"
-        set identity to the workspace identity of location's value using style
-        return a successful workspace URI at location's value, identified by identity, with relative path an empty workspace edit text and directory hint (workspace URI input has a directory hint)
+to get the normalized workspace file URI for {string:input} using {path style:style}:
+    set decoded to the path from input interpreted as a file URI using style
+    if decoded failed:
+        return a failed workspace URI reporting decoded's error message
+    if decoded is unsupported:
+        return a failed workspace URI reporting the string form of "File URI conversion is unsupported"
+    set location to decoded's value lexically normalized using style
+    if location failed:
+        return a failed workspace URI reporting location's error message
+    set absolute to whether location's value is an absolute path using style
+    if absolute failed:
+        return a failed workspace URI reporting absolute's error message
+    if the inverse of absolute's value:
+        return a failed workspace URI reporting the string form of "File URI path must be absolute"
+    set identity to the workspace identity of location's value using style
+    return a successful workspace URI at location's value, identified by identity, with relative path an empty workspace edit text and directory hint (workspace URI input has a directory hint)
 
-function the normalized workspace file URI for {C string:input} using {path style:style}:
-    execute:
-        return the normalized workspace file URI for the string form of input using style
+to get the normalized workspace file URI for {C string:input} using {path style:style}:
+    return the normalized workspace file URI for the string form of input using style
 
 local function {string:path} is outside its workspace boundary:
     execute:
@@ -76,49 +73,46 @@ local function {string:path} is outside its workspace boundary:
                     return true
         return false
 
-function native path {string:path} has a symbolic link ancestor within the workspace using {path style:style}:
-    execute:
-        set current to path
-        set searching to true
-        loop while searching:
-            set entry to the file system entry at current
-            if entry lookup failed:
-                return true
-            if entry was found and entry is a symbolic link:
-                return true
-            set parent to the parent path of current using style
-            if parent failed:
-                return true
-            if parent's value = current:
-                set searching to false
-            else:
-                set current to parent's value
-        return false
+to get native path {string:path} has a symbolic link ancestor within the workspace using {path style:style}:
+    set current to path
+    set searching to true
+    loop while searching:
+        set entry to the file system entry at current
+        if entry lookup failed:
+            return true
+        if entry was found and entry is a symbolic link:
+            return true
+        set parent to the parent path of current using style
+        if parent failed:
+            return true
+        if parent's value = current:
+            set searching to false
+        else:
+            set current to parent's value
+    return false
 
-function the normalized workspace file URI for {string:input} inside {string:root}:
-    execute:
-        set platform to the native path style
-        if (platform failed) or (platform is unsupported):
-            return a failed workspace URI reporting the string form of "Native path style is unsupported"
-        set style to platform's value
-        set boundary to root lexically normalized using style
-        if boundary failed:
-            return a failed workspace URI reporting boundary's error message
-        set absolute to whether boundary's value is an absolute path using style
-        if (absolute failed) or (the inverse of absolute's value):
-            return a failed workspace URI reporting the string form of "Workspace root must be absolute"
-        set location to the normalized workspace file URI for input using style
-        if location failed:
-            return location
-        set relative to the path from location's path relative to boundary's value using style
-        if relative failed:
-            return a failed workspace URI reporting relative's error message
-        if the value of relative is outside its workspace boundary:
-            return a failed workspace URI reporting the string form of "File URI is outside the workspace"
-        if native path location's path has a symbolic link ancestor within the workspace using style:
-            return a failed workspace URI reporting the string form of "Workspace edit paths may not traverse symbolic links"
-        return a successful workspace URI at location's path, identified by location's identity, with relative path relative's value and directory hint location's directory hint
+to get the normalized workspace file URI for {string:input} inside {string:root}:
+    set platform to the native path style
+    if (platform failed) or (platform is unsupported):
+        return a failed workspace URI reporting the string form of "Native path style is unsupported"
+    set style to platform's value
+    set boundary to root lexically normalized using style
+    if boundary failed:
+        return a failed workspace URI reporting boundary's error message
+    set absolute to whether boundary's value is an absolute path using style
+    if (absolute failed) or (the inverse of absolute's value):
+        return a failed workspace URI reporting the string form of "Workspace root must be absolute"
+    set location to the normalized workspace file URI for input using style
+    if location failed:
+        return location
+    set relative to the path from location's path relative to boundary's value using style
+    if relative failed:
+        return a failed workspace URI reporting relative's error message
+    if the value of relative is outside its workspace boundary:
+        return a failed workspace URI reporting the string form of "File URI is outside the workspace"
+    if native path location's path has a symbolic link ancestor within the workspace using style:
+        return a failed workspace URI reporting the string form of "Workspace edit paths may not traverse symbolic links"
+    return a successful workspace URI at location's path, identified by location's identity, with relative path relative's value and directory hint location's directory hint
 
-function the normalized workspace file URI for {C string:input} inside {string:root}:
-    execute:
-        return the normalized workspace file URI for the string form of input inside root
+to get the normalized workspace file URI for {C string:input} inside {string:root}:
+    return the normalized workspace file URI for the string form of input inside root

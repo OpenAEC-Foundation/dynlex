@@ -15,113 +15,98 @@ class:
 function {a point:value}'s x:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 0)
+        the element at 0 in value's coordinates
 
 function {a point:value}'s y:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 1)
+        the element at 1 in value's coordinates
 
 function {a point:value}'s z:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 2)
+        the element at 2 in value's coordinates
 
 function {a point:value}'s width:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 0)
+        the element at 0 in value's coordinates
 
 function {a point:value}'s height:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 1)
+        the element at 1 in value's coordinates
 
 function {a point:value}'s depth:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's coordinates, 2)
+        the element at 2 in value's coordinates
 
 flex function set the x coordinate of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 0 in value's coordinates with coordinate
 flex function set the y coordinate of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 1 in value's coordinates with coordinate
 flex function set the z coordinate of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 2 in value's coordinates with coordinate
 flex function set the width of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 0 in value's coordinates with coordinate
 flex function set the height of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 1 in value's coordinates with coordinate
 flex function set the depth of {a point:value} to {a number:coordinate}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, coordinate)
-
+        set value's coordinates to the aggregate formed by replacing element 2 in value's coordinates with coordinate
 flex function increase the x coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, value's x + amount)
-
+        set value's coordinates to the aggregate formed by replacing element 0 in value's coordinates with (value's x + amount)
 flex function increase the y coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, value's y + amount)
-
+        set value's coordinates to the aggregate formed by replacing element 1 in value's coordinates with (value's y + amount)
 flex function increase the z coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, value's z + amount)
-
+        set value's coordinates to the aggregate formed by replacing element 2 in value's coordinates with (value's z + amount)
 flex function decrease the x coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 0, value's x - amount)
-
+        set value's coordinates to the aggregate formed by replacing element 0 in value's coordinates with (value's x - amount)
 flex function decrease the y coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 1, value's y - amount)
-
+        set value's coordinates to the aggregate formed by replacing element 1 in value's coordinates with (value's y - amount)
 flex function decrease the z coordinate of {a point:value} by {a number:amount}:
     replacement:
-        set value's coordinates to @intrinsic("insert element", value's coordinates, 2, value's z - amount)
-
+        set value's coordinates to the aggregate formed by replacing element 2 in value's coordinates with (value's z - amount)
 function {a color:value}'s red:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's channels, 0)
+        the element at 0 in value's channels
 
 function {a color:value}'s green:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's channels, 1)
+        the element at 1 in value's channels
 
 function {a color:value}'s blue:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's channels, 2)
+        the element at 2 in value's channels
 
 function {a color:value}'s alpha:
     before: $ + $, $ - $, $ * $, $ / $, set $ to $
     replacement:
-        @intrinsic("extract element", value's channels, 3)
+        the element at 3 in value's channels
 
 flex function set the red channel of {a color:value} to {a number:channel}:
     replacement:
-        set value's channels to @intrinsic("insert element", value's channels, 0, channel)
-
+        set value's channels to the aggregate formed by replacing element 0 in value's channels with channel
 flex function set the green channel of {a color:value} to {a number:channel}:
     replacement:
-        set value's channels to @intrinsic("insert element", value's channels, 1, channel)
-
+        set value's channels to the aggregate formed by replacing element 1 in value's channels with channel
 flex function set the blue channel of {a color:value} to {a number:channel}:
     replacement:
-        set value's channels to @intrinsic("insert element", value's channels, 2, channel)
-
+        set value's channels to the aggregate formed by replacing element 2 in value's channels with channel
 flex function set the alpha channel of {a color:value} to {a number:channel}:
     replacement:
-        set value's channels to @intrinsic("insert element", value's channels, 3, channel)
+        set value's channels to the aggregate formed by replacing element 3 in value's channels with channel

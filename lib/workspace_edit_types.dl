@@ -107,297 +107,232 @@ class:
         text as a string
         failure reason as a string
 
-function [the|] workspace text change kind:
-    replacement:
-        1
+[the|] workspace text change kind means: 1
+[the|] workspace create change kind means: 2
+[the|] workspace rename change kind means: 3
+[the|] workspace delete change kind means: 4
+[the|] workspace UTF-8 position encoding means: 1
+[the|] workspace UTF-16 position encoding means: 2
+[the|] workspace UTF32 position encoding means: 3
+to get [an|the|] empty workspace edit text:
+    return the string form of ""
 
-function [the|] workspace create change kind:
-    replacement:
-        2
+{workspace edit parse result:result} succeeded means: result's success
+{workspace edit parse result:result} failed means: the inverse of result's success
+{workspace URI result:result} succeeded means: result's success
+{workspace URI result:result} failed means: the inverse of result's success
+{workspace text result:result} succeeded means: result's success
+{workspace text result:result} failed means: the inverse of result's success
+to get a new workspace text edit collection:
+    set initial to @intrinsic(
+        "construct",
+        a workspace text edit collection,
+        0 as a pointer to a pointer to a workspace text edit,
+        0,
+        0
+   )
+    set result to storage for one slot initialized with initial
+    return result
 
-function [the|] workspace rename change kind:
-    replacement:
-        3
+to append {a pointer to a workspace text edit:value} to workspace text edits {a pointer to a workspace text edit collection:collection}:
+    if the length of collection = the capacity of collection:
+        set growth to ((the capacity of collection) * 2)
+        if growth < 4:
+            set growth to 4
+        set resized to @intrinsic(
+            "call",
+            "libc",
+            "realloc",
+            a pointer to a pointer to a workspace text edit,
+            the items of collection,
+            growth * the size of a pointer to a workspace text edit
+       )
+        set the items of collection to resized
+        set the capacity of collection to growth
+    initialize value at (the items of collection) + (the length of collection)
+    increment the length of collection
 
-function [the|] workspace delete change kind:
-    replacement:
-        4
+to get the workspace text edit at index {integer:position} in {a pointer to a workspace text edit collection:collection}:
+    if position < 0 or position >= the length of collection:
+        abort the program
+    return the item at position in the items of collection
 
-function [the|] workspace UTF-8 position encoding:
-    replacement:
-        1
+to get a new workspace annotation collection:
+    set initial to @intrinsic(
+        "construct",
+        a workspace annotation collection,
+        0 as a pointer to a pointer to a workspace change annotation,
+        0,
+        0
+   )
+    set result to storage for one slot initialized with initial
+    return result
 
-function [the|] workspace UTF-16 position encoding:
-    replacement:
-        2
+to append {a pointer to a workspace change annotation:value} to workspace annotations {a pointer to a workspace annotation collection:collection}:
+    if the length of collection = the capacity of collection:
+        set growth to ((the capacity of collection) * 2)
+        if growth < 4:
+            set growth to 4
+        set resized to @intrinsic(
+            "call",
+            "libc",
+            "realloc",
+            a pointer to a pointer to a workspace change annotation,
+            the items of collection,
+            growth * the size of a pointer to a workspace change annotation
+       )
+        set the items of collection to resized
+        set the capacity of collection to growth
+    initialize value at (the items of collection) + (the length of collection)
+    increment the length of collection
 
-function [the|] workspace UTF32 position encoding:
-    replacement:
-        3
+to get the workspace change annotation at index {integer:position} in {a pointer to a workspace annotation collection:collection}:
+    if position < 0 or position >= the length of collection:
+        abort the program
+    return the item at position in the items of collection
 
-function [an|the|] empty workspace edit text:
-    execute:
-        return the string form of ""
+to get a new workspace change collection:
+    set initial to @intrinsic(
+        "construct",
+        a workspace change collection,
+        0 as a pointer to a pointer to a workspace edit change,
+        0,
+        0
+   )
+    set result to storage for one slot initialized with initial
+    return result
 
-function {workspace edit parse result:result} succeeded:
-    replacement:
-        result's success
+to append {a pointer to a workspace edit change:value} to workspace changes {a pointer to a workspace change collection:collection}:
+    if the length of collection = the capacity of collection:
+        set growth to ((the capacity of collection) * 2)
+        if growth < 4:
+            set growth to 4
+        set resized to @intrinsic(
+            "call",
+            "libc",
+            "realloc",
+            a pointer to a pointer to a workspace edit change,
+            the items of collection,
+            growth * the size of a pointer to a workspace edit change
+       )
+        set the items of collection to resized
+        set the capacity of collection to growth
+    initialize value at (the items of collection) + (the length of collection)
+    increment the length of collection
 
-function {workspace edit parse result:result} failed:
-    replacement:
-        the inverse of result's success
+to get the workspace change at index {integer:position} in {a pointer to a workspace change collection:collection}:
+    if position < 0 or position >= the length of collection:
+        abort the program
+    return the item at position in the items of collection
 
-function {workspace URI result:result} succeeded:
-    replacement:
-        result's success
+to get a new parsed workspace edit using document changes {boolean:ordered}:
+    set collection to a new workspace change collection
+    set annotations to a new workspace annotation collection
+    set initial to @intrinsic(
+        "construct",
+        a parsed workspace edit,
+        collection,
+        annotations,
+        ordered
+   )
+    set result to storage for one slot initialized with initial
+    return result
 
-function {workspace URI result:result} failed:
-    replacement:
-        the inverse of result's success
+a successful workspace edit parse containing {a pointer to a parsed workspace edit:edit} means: @intrinsic(
+    "construct",
+    a workspace edit parse result,
+    true,
+    edit,
+    an empty workspace edit text,
+    false,
+    0
+)
 
-function {workspace text result:result} succeeded:
-    replacement:
-        result's success
+a failed workspace edit parse reporting {string:reason} means: @intrinsic(
+    "construct",
+    a workspace edit parse result,
+    false,
+    0 as a pointer to a parsed workspace edit,
+    reason,
+    false,
+    0
+)
 
-function {workspace text result:result} failed:
-    replacement:
-        the inverse of result's success
+a failed workspace edit parse reporting {string:reason} at change {integer:position} means: @intrinsic(
+    "construct",
+    a workspace edit parse result,
+    false,
+    0 as a pointer to a parsed workspace edit,
+    reason,
+    true,
+    position as a 32 bit integer
+)
 
-function a new workspace text edit collection:
-    execute:
-        set initial to @intrinsic(
-            "construct",
-            a workspace text edit collection,
-            0 as a pointer to a pointer to a workspace text edit,
-            0,
-            0
-        )
-        allocate one slot of initial and set result to it
-        return result
+a successful workspace text result containing {string:contents} means: @intrinsic(
+    "construct",
+    a workspace text result,
+    true,
+    contents,
+    an empty workspace edit text
+)
 
-function append {a pointer to a workspace text edit:value} to workspace text edits {a pointer to a workspace text edit collection:collection}:
-    execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace text edit,
-                the items of collection,
-                growth * the size of a pointer to a workspace text edit
-            )
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+a failed workspace text result reporting {string:reason} means: @intrinsic(
+    "construct",
+    a workspace text result,
+    false,
+    an empty workspace edit text,
+    reason
+)
 
-function the workspace text edit at index {integer:position} in {a pointer to a workspace text edit collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
+to free {a pointer to a workspace text edit:target}:
+    if target = (0 as a pointer to a workspace text edit):
+        @intrinsic("return")
+    destroy the value at target
+    deallocate target
 
-function a new workspace annotation collection:
-    execute:
-        set initial to @intrinsic(
-            "construct",
-            a workspace annotation collection,
-            0 as a pointer to a pointer to a workspace change annotation,
-            0,
-            0
-        )
-        allocate one slot of initial and set result to it
-        return result
+to free {a pointer to a workspace text edit collection:target}:
+    if target = (0 as a pointer to a workspace text edit collection):
+        @intrinsic("return")
+    set position to 0
+    loop while (position < the length of target):
+        free (the workspace text edit at index position in target)
+        increment position
+    deallocate the items of target
+    destroy the value at target
+    deallocate target
 
-function append {a pointer to a workspace change annotation:value} to workspace annotations {a pointer to a workspace annotation collection:collection}:
-    execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace change annotation,
-                the items of collection,
-                growth * the size of a pointer to a workspace change annotation
-            )
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
+to free {a pointer to a workspace edit change:target}:
+    if target = (0 as a pointer to a workspace edit change):
+        @intrinsic("return")
+    set edits to the edits of target
+    if edits != (0 as a pointer to a workspace text edit collection):
+        free edits
+    destroy the value at target
+    deallocate target
 
-function the workspace change annotation at index {integer:position} in {a pointer to a workspace annotation collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
+to free {a pointer to a parsed workspace edit:target}:
+    if target = (0 as a pointer to a parsed workspace edit):
+        @intrinsic("return")
+    set changes to the changes of target
+    set position to 0
+    loop while (position < the length of changes):
+        free (the workspace change at index position in changes)
+        increment position
+    deallocate the items of changes
+    destroy the value at changes
+    deallocate changes
+    set annotations to the annotations of target
+    set position to 0
+    loop while (position < the length of annotations):
+        set annotation to the workspace change annotation at index position in annotations
+        destroy the value at annotation
+        deallocate annotation
+        increment position
+    deallocate the items of annotations
+    destroy the value at annotations
+    deallocate annotations
+    destroy the value at target
+    deallocate target
 
-function a new workspace change collection:
-    execute:
-        set initial to @intrinsic(
-            "construct",
-            a workspace change collection,
-            0 as a pointer to a pointer to a workspace edit change,
-            0,
-            0
-        )
-        allocate one slot of initial and set result to it
-        return result
-
-function append {a pointer to a workspace edit change:value} to workspace changes {a pointer to a workspace change collection:collection}:
-    execute:
-        if the length of collection = the capacity of collection:
-            set growth to ((the capacity of collection) * 2)
-            if growth < 4:
-                set growth to 4
-            set resized to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to a pointer to a workspace edit change,
-                the items of collection,
-                growth * the size of a pointer to a workspace edit change
-            )
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to ((the length of collection) + 1)
-
-function the workspace change at index {integer:position} in {a pointer to a workspace change collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
-
-function a new parsed workspace edit using document changes {boolean:ordered}:
-    execute:
-        set collection to a new workspace change collection
-        set annotations to a new workspace annotation collection
-        set initial to @intrinsic(
-            "construct",
-            a parsed workspace edit,
-            collection,
-            annotations,
-            ordered
-        )
-        allocate one slot of initial and set result to it
-        return result
-
-function a successful workspace edit parse containing {a pointer to a parsed workspace edit:edit}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a workspace edit parse result,
-            true,
-            edit,
-            an empty workspace edit text,
-            false,
-            0
-        )
-
-function a failed workspace edit parse reporting {string:reason}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a workspace edit parse result,
-            false,
-            0 as a pointer to a parsed workspace edit,
-            reason,
-            false,
-            0
-        )
-
-function a failed workspace edit parse reporting {string:reason} at change {integer:position}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a workspace edit parse result,
-            false,
-            0 as a pointer to a parsed workspace edit,
-            reason,
-            true,
-            position as a 32 bit integer
-        )
-
-function a successful workspace text result containing {string:contents}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a workspace text result,
-            true,
-            contents,
-            an empty workspace edit text
-        )
-
-function a failed workspace text result reporting {string:reason}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a workspace text result,
-            false,
-            an empty workspace edit text,
-            reason
-        )
-
-function free {a pointer to a workspace text edit:target}:
-    execute:
-        if target = (0 as a pointer to a workspace text edit):
-            @intrinsic("return")
-        @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
-
-function free {a pointer to a workspace text edit collection:target}:
-    execute:
-        if target = (0 as a pointer to a workspace text edit collection):
-            @intrinsic("return")
-        set position to 0
-        loop while (position < the length of target):
-            free (the workspace text edit at index position in target)
-            set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of target)
-        @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
-
-function free {a pointer to a workspace edit change:target}:
-    execute:
-        if target = (0 as a pointer to a workspace edit change):
-            @intrinsic("return")
-        set edits to the edits of target
-        if edits != (0 as a pointer to a workspace text edit collection):
-            free edits
-        @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
-
-function free {a pointer to a parsed workspace edit:target}:
-    execute:
-        if target = (0 as a pointer to a parsed workspace edit):
-            @intrinsic("return")
-        set changes to the changes of target
-        set position to 0
-        loop while (position < the length of changes):
-            free (the workspace change at index position in changes)
-            set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of changes)
-        @intrinsic("destroy at", changes)
-        @intrinsic("call", "libc", "free", nothing, changes)
-        set annotations to the annotations of target
-        set position to 0
-        loop while (position < the length of annotations):
-            set annotation to the workspace change annotation at index position in annotations
-            @intrinsic("destroy at", annotation)
-            @intrinsic("call", "libc", "free", nothing, annotation)
-            set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of annotations)
-        @intrinsic("destroy at", annotations)
-        @intrinsic("call", "libc", "free", nothing, annotations)
-        @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
-
-function free {workspace edit parse result:outcome}:
-    execute:
-        free outcome's edit
+to free {workspace edit parse result:outcome}:
+    free outcome's edit

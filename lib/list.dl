@@ -10,149 +10,130 @@ class:
         length as an integer
         capacity as an integer
 
-function an empty list of {type:kind}:
-    execute:
-        set data to 0 as a pointer to kind
-        set initial to @intrinsic("construct", a list, data, 0, 0)
-        allocate one slot of initial and set result to it
-        return result
+to get an empty list of {type:kind}:
+    set data to 0 as a pointer to kind
+    set initial to @intrinsic("construct", a list, data, 0, 0)
+    set result to storage for one slot initialized with initial
+    return result
 
-function a list containing first:
-    execute:
-        set result to an empty list of the type of first
-        append first to result
-        return result
+to get a list containing first:
+    set result to an empty list of the type of first
+    append first to result
+    return result
 
-function stop because a list index is out of bounds:
-    execute:
-        @intrinsic("call", "libc", "abort", nothing)
+to stop because a list index is out of bounds:
+    abort the program
 
-function {a pointer to a list:values} has an item at {integer:position}:
-    execute:
-        return position >= 0 and position < the length of values
+to get {a pointer to a list:values} has an item at {integer:position}:
+    return position >= 0 and position < the length of values
 
-function {a pointer to a list:values} lacks an item at {integer:position}:
-    execute:
-        return position < 0 or position >= the length of values
+to get {a pointer to a list:values} lacks an item at {integer:position}:
+    return position < 0 or position >= the length of values
 
-function the item at {integer:position} in {a pointer to a list:values}:
-    execute:
-        if values lacks an item at position:
-            stop because a list index is out of bounds
-        return the item at position in the data of values
+to get the item at {integer:position} in {a pointer to a list:values}:
+    if values lacks an item at position:
+        stop because a list index is out of bounds
+    return the item at position in the data of values
 
-function the last item of {a pointer to a list:values}:
-    execute:
-        if the length of values = 0:
-            stop because a list index is out of bounds
-        return the item at ((the length of values) - 1) in values
+to get the last item of {a pointer to a list:values}:
+    if the length of values = 0:
+        stop because a list index is out of bounds
+    return the item at ((the length of values) - 1) in values
 
-function ensure enough capacity in {a pointer to a list:values} for count items:
-    execute:
-        if count > the capacity of values:
-            set limit to the capacity of values
-            if limit < 4:
-                set limit to 4
-            loop while limit < count:
-                set limit to (limit * 2)
-            set data to @intrinsic(
-                "call",
-                "libc",
-                "realloc",
-                a pointer to the type of the item at 0 in the data of values,
-                the data of values,
-                limit * the size of the type of the item at 0 in the data of values
-            )
-            set the data of values to data
-            set the capacity of values to limit
+to ensure enough capacity in {a pointer to a list:values} for count items:
+    if count > the capacity of values:
+        set limit to the capacity of values
+        if limit < 4:
+            set limit to 4
+        loop while limit < count:
+            multiply limit by 2
+        set data to @intrinsic(
+            "call",
+            "libc",
+            "realloc",
+            a pointer to the type of the item at 0 in the data of values,
+            the data of values,
+            limit * the size of the type of the item at 0 in the data of values
+        )
+        set the data of values to data
+        set the capacity of values to limit
 
-function append item to {a pointer to a list:values}:
-    execute:
-        ensure enough capacity in values for (the length of values) + 1 items
-        @intrinsic("initialize at", (the data of values) + (the length of values), item)
-        set the length of values to ((the length of values) + 1)
+to append item to {a pointer to a list:values}:
+    ensure enough capacity in values for (the length of values) + 1 items
+    @intrinsic("initialize at", (the data of values) + (the length of values), item)
+    increment the length of values
 
-function insert item into {a pointer to a list:values} at index {integer:position}:
-    execute:
-        if position < 0 or position > the length of values:
-            stop because a list index is out of bounds
-        ensure enough capacity in values for (the length of values) + 1 items
-        set cursor to the length of values
-        if cursor > position:
-            @intrinsic("initialize at", (the data of values) + cursor, the item at cursor - 1 in the data of values)
-            set cursor to (cursor - 1)
-            loop while cursor > position:
-                store the item at cursor - 1 in the data of values into the data of values at cursor
-                set cursor to (cursor - 1)
-            store item into the data of values at position
-        else:
-            @intrinsic("initialize at", (the data of values) + position, item)
-        set the length of values to ((the length of values) + 1)
+to insert item into {a pointer to a list:values} at index {integer:position}:
+    if position < 0 or position > the length of values:
+        stop because a list index is out of bounds
+    ensure enough capacity in values for (the length of values) + 1 items
+    set cursor to the length of values
+    if cursor > position:
+        initialize the item at cursor - 1 in the data of values at (the data of values) + cursor
+        decrement cursor
+        loop while cursor > position:
+            store the item at cursor - 1 in the data of values into the data of values at cursor
+            decrement cursor
+        store item into the data of values at position
+    else:
+        initialize item at (the data of values) + position
+    increment the length of values
 
-function replace item at index {integer:position} in {a pointer to a list:values} with replacement:
-    execute:
-        if values lacks an item at position:
-            stop because a list index is out of bounds
-        store replacement into the data of values at position
+to replace item at index {integer:position} in {a pointer to a list:values} with replacement:
+    if values lacks an item at position:
+        stop because a list index is out of bounds
+    store replacement into the data of values at position
 
 local function the removed last item from {a pointer to a list:values}:
     execute:
         set result to the last item of values
-        set the length of values to ((the length of values) - 1)
-        @intrinsic("destroy at", (the data of values) + (the length of values))
+        decrement the length of values
+        destroy the value at (the data of values) + (the length of values)
         return result
 
 flex function remove the last item from {a pointer to a list:values}:
     replacement:
         set the subject to the removed last item from values
+to remove item {integer:position} from {a pointer to a list:values}:
+    if values lacks an item at position:
+        stop because a list index is out of bounds
+    set cursor to position
+    loop while cursor + 1 < the length of values:
+        store the item at cursor + 1 in the data of values into the data of values at cursor
+        increment cursor
+    decrement the length of values
+    destroy the value at (the data of values) + (the length of values)
 
-function remove item {integer:position} from {a pointer to a list:values}:
-    execute:
-        if values lacks an item at position:
-            stop because a list index is out of bounds
-        set cursor to position
-        loop while cursor + 1 < the length of values:
-            store the item at cursor + 1 in the data of values into the data of values at cursor
-            set cursor to (cursor + 1)
-        set the length of values to ((the length of values) - 1)
-        @intrinsic("destroy at", (the data of values) + (the length of values))
+to get {a pointer to a list:values} contains item:
+    set index to 0
+    loop while index < the length of values:
+        if the item at index in values = item:
+            return true
+        increment index
+    return false
 
-function {a pointer to a list:values} contains item:
-    execute:
-        set index to 0
-        loop while index < the length of values:
-            if the item at index in values = item:
-                return true
-            set index to (index + 1)
-        return false
+to get {a pointer to a list:values} does not contain item:
+    return (values contains item) = false
 
-function {a pointer to a list:values} does not contain item:
-    execute:
-        return (values contains item) = false
+to get the index of item in {a pointer to a list:values}:
+    set cursor to 0
+    loop while cursor < the length of values:
+        if the item at cursor in values = item:
+            return cursor
+        increment cursor
+    return -1
 
-function the index of item in {a pointer to a list:values}:
-    execute:
-        set cursor to 0
-        loop while cursor < the length of values:
-            if the item at cursor in values = item:
-                return cursor
-            set cursor to (cursor + 1)
-        return 0 - 1
+to get {a pointer to a list:values} is empty:
+    return the length of values = 0
 
-function {a pointer to a list:values} is empty:
-    execute:
-        return the length of values = 0
+to clear {a pointer to a list:values}:
+    set index to 0
+    loop while index < the length of values:
+        destroy the value at (the data of values) + index
+        increment index
+    set the length of values to 0
 
-function clear {a pointer to a list:values}:
-    execute:
-        set index to 0
-        loop while index < the length of values:
-            @intrinsic("destroy at", (the data of values) + index)
-            set index to (index + 1)
-        set the length of values to 0
-
-function free {a pointer to a list:values}:
-    execute:
-        clear values
-        @intrinsic("call", "libc", "free", nothing, the data of values)
-        @intrinsic("call", "libc", "free", nothing, values)
+to free {a pointer to a list:values}:
+    clear values
+    deallocate the data of values
+    deallocate values

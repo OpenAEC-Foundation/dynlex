@@ -5,6 +5,5 @@
 
 import lib/models/obj.dl
 
-function a loaded FBX mesh from path for {pointer:window}:
-    execute:
-        return a loaded OBJ mesh from path for window
+to get a loaded FBX mesh from path for {pointer:window}:
+    return a loaded OBJ mesh from path for window

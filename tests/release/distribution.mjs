@@ -389,7 +389,7 @@ assert.match(
   cmakeConfiguration,
   /install\(DIRECTORY \$\{CMAKE_SOURCE_DIR\}\/lib\/ DESTINATION \$\{CMAKE_INSTALL_DATADIR\}\/dynlex\/lib FILES_MATCHING PATTERN "\*\.dl"\)/,
 );
-assert.match(textureLibrary, /function a graphics texture loaded from PPM file at path for \{pointer:window\}/);
+assert.match(textureLibrary, /to get a graphics texture loaded from PPM file at path for \{pointer:window\}/);
 assert.match(cmakeConfiguration, /CPACK_DEBIAN_PACKAGE_DEPENDS/);
 assert.doesNotMatch(cmakeConfiguration, /johnheikens\/DynLex/i);
 assert.match(linuxInstaller, /linux_compile_dependencies_ready/);

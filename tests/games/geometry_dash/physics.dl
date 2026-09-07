@@ -6,70 +6,52 @@ class:
 	members:
 		y, velocity
 
-function a runner at height {floating-point number:y} moving with velocity {floating-point number:velocity}:
-	replacement:
-		@intrinsic("construct", a runner state, y, velocity)
+a runner at height {floating-point number:y} moving with velocity {floating-point number:velocity} means: @intrinsic("construct", a runner state, y, velocity)
+to get the window width:
+	return 1000
 
-function the window width:
-	execute:
-		return 1000
+to get the world height:
+	return 420
 
-function the world height:
-	execute:
-		return 420
+to get the ground height:
+	return 340
 
-function the ground height:
-	execute:
-		return 340
+to get the ceiling height:
+	return 48
 
-function the ceiling height:
-	execute:
-		return 48
+to get the player size:
+	return 32
 
-function the player size:
-	execute:
-		return 32
+to get the player horizontal position:
+	return 180
 
-function the player horizontal position:
-	execute:
-		return 180
+to get the reference horizontal offset:
+	return 84
 
-function the reference horizontal offset:
-	execute:
-		return 84
+to get the scroll speed:
+	return 7
 
-function the scroll speed:
-	execute:
-		return 7
+to get the frame time in milliseconds:
+	return 16
 
-function the frame time in milliseconds:
-	execute:
-		return 16
+to get the gravity strength:
+	return 1.15
 
-function the gravity strength:
-	execute:
-		return 1.15
+to get the jump speed:
+	return 15.5
 
-function the jump speed:
-	execute:
-		return 15.5
+to get the player's ground height:
+	return (the ground height - the player size) as a floating-point number
 
-function the player's ground height:
-	execute:
-		return (the ground height - the player size) as a floating-point number
+to start a jump for {runner state:body}:
+	set body's velocity to the negative of the jump speed
 
-function start a jump for {runner state:body}:
-	execute:
-		set body's velocity to the negative of the jump speed
+to apply gravity to {runner state:body}:
+	add the gravity strength to body's velocity
+	add body's velocity to body's y
 
-function apply gravity to {runner state:body}:
-	execute:
-		add the gravity strength to body's velocity
-		add body's velocity to body's y
-
-function clamp {runner state:body} to the ground:
-	execute:
-		set floor to the player's ground height
-		if body's y > floor:
-			set body's y to floor
-			set body's velocity to 0.0
+to clamp {runner state:body} to the ground:
+	set floor to the player's ground height
+	if body's y > floor:
+		set body's y to floor
+		set body's velocity to 0.0

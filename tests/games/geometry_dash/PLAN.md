@@ -71,10 +71,7 @@ If DynLex limitations force a different split, keep the same separation of conce
 
 ### Step 1: Generate timing plan
 
-Produce:
-
-- `the item at index in plan's jumps`
-- `the item at index in plan's slides`
+Produce an array of route steps containing each step's level, jump duration, and slide duration.
 
 Rules:
 

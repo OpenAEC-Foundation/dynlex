@@ -6,7 +6,12 @@ case Expression::Kind::IntrinsicCall: {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
 			if (expr->arguments.size() == 2) {
-				expr->type = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				if (kind == IntrinsicKind::Negate && !valueType.isNumeric()) {
+					failIntrinsicArgumentRequirement(1, "a number");
+					break;
+				}
+				expr->type = valueType;
 			} else {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
@@ -569,6 +574,20 @@ case Expression::Kind::IntrinsicCall: {
 					setConfiguredTypeFailure(expr->range, "size of type invalid");
 					break;
 				}
+				if (typeArgType.referencedKind == DataType::Kind::Class && typeArgType.classDefinition &&
+					typeArgType.classInstIndex < 0) {
+					auto unknownMember =
+						std::ranges::find_if(typeArgType.classDefinition->fields, [](const FieldDefinition &field) {
+						return field.declaredType.kind == DataType::Kind::Any;
+					});
+					if (unknownMember != typeArgType.classDefinition->fields.end()) {
+						setConfiguredTypeFailure(
+							typeExpression->range, "class size unknown member type", "message",
+							{{"type", typeToUserName(typeArgType.toReferencedType())}, {"member", unknownMember->name}}
+						);
+						break;
+					}
+				}
 				expr->type = {DataType::Kind::Int, 8};
 			} else if (kind == IntrinsicKind::BuildInfo) {
 				Expression *keyExpr = expr->arguments[1];
@@ -999,8 +1018,9 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		}
 	}
-	if (context.typesValid)
+	if (context.typesValid) {
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+		context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	}
 	break;
 }

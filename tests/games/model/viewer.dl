@@ -18,16 +18,12 @@ import tests/games/three_dimensional.dl
 #   2: UV debug mode
 #   3: vertex-color mode
 
-function position the model viewer camera from {spatial camera:view} in {graphics frame:frame}:
-    execute:
-        reset the camera in frame
-        rotate the camera in frame by (0.0 - view's yaw) degrees around x 0.0, y 1.0 and z 0.0
-        move the camera in frame by x (0.0 - view's position's x), y (0.0 - view's position's y) and z (0.0 - view's position's z)
+to position the model viewer camera from {spatial camera:view} in {graphics frame:frame}:
+    reset the camera in frame
+    rotate the camera in frame by -view's yaw degrees around x 0.0, y 1.0 and z 0.0
+    move the camera in frame by x -view's position's x, y -view's position's y and z -view's position's z
 
-function the configured model path:
-    replacement:
-        @intrinsic("call", "libc", "getenv", a pointer to a byte, "DYNLEX_MODEL_PATH")
-
+the configured model path means: @intrinsic("call", "libc", "getenv", a pointer to a byte, "DYNLEX_MODEL_PATH")
 set window to a new window with width 1400 and height 900
 if window = 0 as a pointer to a byte:
     print "failed to create viewer window" as a line
@@ -42,16 +38,16 @@ else:
     if mesh's vertex count <= 0:
         print "failed to load mesh. convert city.fbx to city.obj first" as a line
 
-    set bounds to a bounding box from (a position with x 0.0, y 0.0 and z 0.0) to (a position with x 0.0, y 0.0 and z 0.0)
+    set bounds to a bounding box from (a position with x 0.0, y 0.0 and z 0.0) to a position with x 0.0, y 0.0 and z 0.0
 
     if mesh's vertex count > 0:
-        set anchor to the item at 0 in mesh's vertices
+        set anchor to the item at 0 in (mesh's vertices)
         set bounds's minimum to a position with x anchor's x, y anchor's y and z anchor's z
         set bounds's maximum to a position with x anchor's x, y anchor's y and z anchor's z
 
         set index to 1
         while index < mesh's vertex count:
-            set vertex to the item at index in mesh's vertices
+            set vertex to the item at index in (mesh's vertices)
             if vertex's x < bounds's minimum's x:
                 set the x coordinate of bounds's minimum to vertex's x
             if vertex's y < bounds's minimum's y:
@@ -77,10 +73,10 @@ else:
 
     set scale to 1.0
     if span > 0.0001:
-        set scale to (160.0 / span)
+        set scale to 160.0 / span
 
     set center to a position with x ((bounds's minimum's x + bounds's maximum's x) / 2.0), y bounds's minimum's y and z ((bounds's minimum's z + bounds's maximum's z) / 2.0)
-    set offset to a position with x (0.0 - center's x * scale), y (0.0 - center's y * scale) and z (0.0 - center's z * scale)
+    set offset to a position with x -center's x * scale, y -center's y * scale and z -center's z * scale
 
     set message to the string form of "mesh vertices: "
     set message to (message + (the string form of (mesh's vertex count)))
@@ -111,22 +107,22 @@ else:
     print message as a line
     print "render modes: 1=textured/material, 2=uv debug, 3=vertex colors" as a line
 
-    set altitude to ((extent's height * scale) * 0.8)
+    set altitude to (extent's height * scale) * 0.8
     if altitude < 50.0:
         set altitude to 50.0
-    set distance to ((span * scale) * 1.8)
+    set distance to (span * scale) * 1.8
     if distance < 180.0:
         set distance to 180.0
-    set pace to ((span * scale) * 0.005)
+    set pace to (span * scale) * 0.005
     if pace < 1.4:
         set pace to 1.4
     set view to a camera at (a position with x 0.0, y altitude and z distance) facing 0.0 degrees with speed pace and turn rate 1.6
     set mode to 0
 
     while window remains open:
-        set radians to (view's yaw * 0.0174533)
-        set forward to a position with x (0.0 - (the sine of radians)), y 0.0 and z (0.0 - (the cosine of radians))
-        set rightward to a position with x (0.0 - forward's z), y 0.0 and z forward's x
+        set radians to view's yaw * 0.0174533
+        set forward to a position with x -(the sine of radians), y 0.0 and z -(the cosine of radians)
+        set rightward to a position with x -forward's z, y 0.0 and z forward's x
 
         if key (the W key) is down in window:
             increase the x coordinate of view's position by forward's x * view's movement
