@@ -9,12 +9,11 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-naga = { version = "=30.0.1", default-features = false, features = ["spv-in", "wgsl-out"] }
+naga = { version = "=30.0.1", default-features = false, features = ["spv-in", "wgsl-out", "glsl-out"] }
 
 [profile.release]
 codegen-units = 1
 lto = true
-opt-level = "s"
+opt-level = 3
 panic = "abort"
 strip = true
-

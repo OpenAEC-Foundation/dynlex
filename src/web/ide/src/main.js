@@ -570,7 +570,8 @@ async function runCompile({ commitActiveLine = false } = {}) {
     const result = await callWorker(shaderMode ? "compile.shader" : "compile", {
       source: model.getValue(),
       version: sourceVersion,
-      renderer: shaderRenderer !== null
+      renderer: shaderRenderer !== null,
+      rendererBackend: shaderPreview?.backend ?? null
     });
     if (sourceVersion !== model.getVersionId()) {
       return false;
@@ -580,11 +581,11 @@ async function runCompile({ commitActiveLine = false } = {}) {
       if (shaderMode) {
         try {
           await shaderPreview.replaceProgram({
-            fragmentSource: result.fragmentSource,
+            fragmentSources: result.fragmentSources,
             fragmentUniforms: result.fragmentUniforms,
             ...(shaderRenderer
               ? {
-                  vertexSource: result.vertexSource,
+                  vertexSources: result.vertexSources,
                   vertexUniforms: result.vertexUniforms,
                   geometry: shaderRenderer.geometry
                 }

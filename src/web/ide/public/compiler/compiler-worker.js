@@ -161,7 +161,7 @@ function compileSource(source, version) {
   };
 }
 
-function compileShaderStage(source, version, stage) {
+function compileShaderStage(source, version, stage, rendererBackend) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
   const compilationStartedAt = performance.now();
@@ -191,42 +191,51 @@ function compileShaderStage(source, version, stage) {
     throw new Error("Successful shader compilation returned invalid uniform reflection");
   }
 
-  const wgslSource = status === 0
-    ? state.wgslTranslator.translate(decodeBase64ToBytes(spirvBase64))
+  const spirvBytes = status === 0 ? decodeBase64ToBytes(spirvBase64) : null;
+  const translatedSource = status === 0
+    ? (
+        rendererBackend === "webgpu"
+          ? state.wgslTranslator.translate(spirvBytes)
+          : state.wgslTranslator.translateGlsl(spirvBytes, stage)
+      )
     : "";
+  const sources = { [rendererBackend]: translatedSource };
   return {
     status,
     ...feedback,
     compilationMilliseconds,
-    wgslSource,
+    sources,
     uniforms: status === 0 ? uniformPayload.uniforms : []
   };
 }
 
-function compileShaderSource(source, version, compileVertexStage) {
-  const fragment = compileShaderStage(source, version, "fragment");
+function compileShaderSource(source, version, compileVertexStage, rendererBackend) {
+  if (rendererBackend !== "webgpu" && rendererBackend !== "webgl") {
+    throw new Error("Shader compilation requires an active renderer backend");
+  }
+  const fragment = compileShaderStage(source, version, "fragment", rendererBackend);
   if (fragment.status !== 0 || !compileVertexStage) {
     return {
       status: fragment.status,
       diagnostics: fragment.diagnostics,
       compilerLog: fragment.compilerLog,
       compilationMilliseconds: fragment.compilationMilliseconds,
-      fragmentSource: fragment.wgslSource,
+      fragmentSources: fragment.sources,
       fragmentUniforms: fragment.uniforms,
-      vertexSource: "",
+      vertexSources: { [rendererBackend]: "" },
       vertexUniforms: []
     };
   }
 
-  const vertex = compileShaderStage(source, version, "vertex");
+  const vertex = compileShaderStage(source, version, "vertex", rendererBackend);
   return {
     status: vertex.status,
     diagnostics: vertex.diagnostics,
     compilerLog: [...fragment.compilerLog, ...vertex.compilerLog],
     compilationMilliseconds: fragment.compilationMilliseconds + vertex.compilationMilliseconds,
-    fragmentSource: fragment.wgslSource,
+    fragmentSources: fragment.sources,
     fragmentUniforms: fragment.uniforms,
-    vertexSource: vertex.status === 0 ? vertex.wgslSource : "",
+    vertexSources: vertex.status === 0 ? vertex.sources : { [rendererBackend]: "" },
     vertexUniforms: vertex.status === 0 ? vertex.uniforms : []
   };
 }
@@ -354,7 +363,12 @@ self.onmessage = async (event) => {
       const source = typeof payload?.source === "string" ? payload.source : "";
       const version = Number.isInteger(payload?.version) ? payload.version : -1;
       const compileVertexStage = payload?.renderer === true;
-      const result = compileShaderSource(source, version, compileVertexStage);
+      const result = compileShaderSource(
+        source,
+        version,
+        compileVertexStage,
+        payload?.rendererBackend
+      );
       postResponse(id, true, result);
       return;
     }

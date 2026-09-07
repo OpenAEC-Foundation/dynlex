@@ -1,12 +1,16 @@
 function scene(id, title, geometry = null) {
+  const stagePaths = (stage) => Object.freeze({
+    webgpu: `web/shaders/generated/${id}.${stage}.wgsl`,
+    webgl: `web/shaders/generated/${id}.${stage}.glsl`
+  });
   return Object.freeze({
     id,
     title,
     source: `tools/homepage-shaders/shaders/${id}.dl`,
-    fragment: `web/shaders/generated/${id}.fragment.wgsl`,
+    fragment: stagePaths("fragment"),
     ...(geometry
       ? {
-          vertex: `web/shaders/generated/${id}.vertex.wgsl`,
+          vertex: stagePaths("vertex"),
           geometry: Object.freeze(geometry)
         }
       : {})

@@ -15,10 +15,6 @@
         #030508;
 }
 
-.shader-clip-definitions {
-    position: absolute;
-}
-
 .shader-immersion,
 .shader-immersion canvas {
     position: absolute;
@@ -31,34 +27,8 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
-    opacity: 0;
-    filter: drop-shadow(0 0 24px rgba(104, 213, 255, 0.74));
-}
-
-.shader-immersion[data-shader-layer="0"] {
-    clip-path: url("#thought-cloud-mask-0");
-}
-
-.shader-immersion[data-shader-layer="1"] {
-    clip-path: url("#thought-cloud-mask-1");
-}
-
-.shader-immersion[data-layer-state="active"] {
-    z-index: 0;
     opacity: 1;
-    clip-path: none;
-    filter: none;
-}
-
-.shader-immersion[data-layer-state="revealing"] {
-    z-index: 3;
-    opacity: var(--immersion-opacity);
-    will-change: top, left, width, height, opacity;
-}
-
-.shader-immersion[data-layer-state="dormant"] {
     z-index: 0;
-    opacity: 0;
 }
 
 .shader-immersion::after {

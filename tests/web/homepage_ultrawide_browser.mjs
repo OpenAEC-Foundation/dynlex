@@ -24,12 +24,12 @@ export async function verifyHomepageUltrawideLayout(firstPreloadedVertexCount) {
     const codeRect = document.querySelector('[data-shader-code]').getBoundingClientRect();
     const cloudGuide = document.querySelector('.thought-assembly');
     const cloudRect = cloudGuide.getBoundingClientRect();
-    const terrainCanvas = section.querySelector('[data-layer-state="dormant"] canvas');
+    const terrainCanvas = section.querySelector('[data-shader-canvas="immersive"]');
     return {
       cloudWidthInScreens: cloudRect.width / codeRect.width,
       gapInScreens: (cloudRect.left - codeRect.right) / codeRect.width,
-      terrainVertices: Number(terrainCanvas.dataset.previewGeometryVertices),
-      terrainPixels: Number(terrainCanvas.dataset.previewGeometryHorizontalPixels),
+      terrainVertices: Number(terrainCanvas.dataset.previewPreparedGeometryVertices),
+      terrainPixels: Number(terrainCanvas.dataset.previewPreparedGeometryHorizontalPixels),
       sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1)),
       guideIsTransparent: (
         getComputedStyle(cloudGuide).backgroundImage === 'none'
