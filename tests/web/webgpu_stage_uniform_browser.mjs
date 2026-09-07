@@ -9,16 +9,21 @@ export async function verifyWebGpuStageUniformBindings() {
     const preview = await createShaderPreview(canvas, { running: false });
     try {
       await preview.replaceProgram({
-        fragmentSource: \`
+        fragmentSources: { webgpu: \`
           struct FragmentUniform { value: f32 }
           @group(0) @binding(1) var<uniform> fragmentUniform: FragmentUniform;
           @fragment
           fn main() -> @location(0) vec4<f32> {
             return vec4<f32>(fragmentUniform.value, 0.0, 0.0, 1.0);
           }
-        \`,
+        \`, webgl: \`#version 300 es
+          precision highp float;
+          layout(std140) uniform TestFragment { float _group_0_binding_1_fs; };
+          out vec4 color;
+          void main() { color = vec4(_group_0_binding_1_fs, 0.0, 0.0, 1.0); }
+        \` },
         fragmentUniforms: [{ name: 'time', group: 0, binding: 1 }],
-        vertexSource: \`
+        vertexSources: { webgpu: \`
           struct VertexUniform { value: f32 }
           struct VertexInput { @location(0) position: vec4<f32> }
           @group(0) @binding(0) var<uniform> vertexUniform: VertexUniform;
@@ -26,7 +31,12 @@ export async function verifyWebGpuStageUniformBindings() {
           fn main(input: VertexInput) -> @builtin(position) vec4<f32> {
             return vec4<f32>(input.position.xyz, input.position.w + vertexUniform.value * 0.0);
           }
-        \`,
+        \`, webgl: \`#version 300 es
+          precision highp float;
+          layout(location = 0) in vec4 position;
+          layout(std140) uniform TestVertex { float _group_0_binding_0_vs; };
+          void main() { gl_Position = vec4(position.xyz, position.w + _group_0_binding_0_vs * 0.0); }
+        \` },
         vertexUniforms: [{ name: 'width', group: 0, binding: 0 }],
         geometry: {
           format: 'float32x4',

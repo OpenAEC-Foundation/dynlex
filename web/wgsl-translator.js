@@ -30,8 +30,12 @@ export async function createWgslTranslator(
     "dynlex_wgsl_allocate",
     "dynlex_wgsl_deallocate",
     "dynlex_wgsl_translate",
+    "dynlex_glsl_translate",
+    "dynlex_shader_translate",
     "dynlex_wgsl_result_pointer",
     "dynlex_wgsl_result_length",
+    "dynlex_glsl_result_pointer",
+    "dynlex_glsl_result_length",
     "dynlex_wgsl_error_pointer",
     "dynlex_wgsl_error_length"
   ]) {
@@ -70,5 +74,76 @@ export async function createWgslTranslator(
     }
   }
 
-  return Object.freeze({ translate });
+  function translateGlsl(spirvBytes, stage) {
+    if (!(spirvBytes instanceof Uint8Array) || spirvBytes.byteLength === 0) {
+      throw new Error("GLSL translation requires SPIR-V bytes");
+    }
+    const stageCode = { vertex: 0, fragment: 1 }[stage];
+    if (stageCode === undefined) {
+      throw new Error("GLSL translation requires a vertex or fragment stage");
+    }
+    const pointer = exports.dynlex_wgsl_allocate(spirvBytes.byteLength);
+    try {
+      new Uint8Array(exports.memory.buffer, pointer, spirvBytes.byteLength).set(spirvBytes);
+      if (!exports.dynlex_glsl_translate(pointer, spirvBytes.byteLength, stageCode)) {
+        const error = decoder.decode(copiedBytes(
+          exports,
+          exports.dynlex_wgsl_error_pointer,
+          exports.dynlex_wgsl_error_length
+        ));
+        console.error("SPIR-V to GLSL translation failed", error);
+        throw new Error("Shader translation failed. Check the browser log.");
+      }
+      const glsl = decoder.decode(copiedBytes(
+        exports,
+        exports.dynlex_wgsl_result_pointer,
+        exports.dynlex_wgsl_result_length
+      ));
+      if (glsl.length === 0) {
+        throw new Error("GLSL translator returned no shader source");
+      }
+      return glsl;
+    } finally {
+      exports.dynlex_wgsl_deallocate(pointer, spirvBytes.byteLength);
+    }
+  }
+
+  function translateBoth(spirvBytes, stage) {
+    if (!(spirvBytes instanceof Uint8Array) || spirvBytes.byteLength === 0) {
+      throw new Error("Shader translation requires SPIR-V bytes");
+    }
+    const stageCode = { vertex: 0, fragment: 1 }[stage];
+    if (stageCode === undefined) {
+      throw new Error("Shader translation requires a vertex or fragment stage");
+    }
+    const pointer = exports.dynlex_wgsl_allocate(spirvBytes.byteLength);
+    try {
+      new Uint8Array(exports.memory.buffer, pointer, spirvBytes.byteLength).set(spirvBytes);
+      if (!exports.dynlex_shader_translate(pointer, spirvBytes.byteLength, stageCode)) {
+        const error = decoder.decode(copiedBytes(
+          exports,
+          exports.dynlex_wgsl_error_pointer,
+          exports.dynlex_wgsl_error_length
+        ));
+        console.error("SPIR-V shader translation failed", error);
+        throw new Error("Shader translation failed. Check the browser log.");
+      }
+      return Object.freeze({
+        webgpu: decoder.decode(copiedBytes(
+          exports,
+          exports.dynlex_wgsl_result_pointer,
+          exports.dynlex_wgsl_result_length
+        )),
+        webgl: decoder.decode(copiedBytes(
+          exports,
+          exports.dynlex_glsl_result_pointer,
+          exports.dynlex_glsl_result_length
+        ))
+      });
+    } finally {
+      exports.dynlex_wgsl_deallocate(pointer, spirvBytes.byteLength);
+    }
+  }
+
+  return Object.freeze({ translate, translateGlsl, translateBoth });
 }

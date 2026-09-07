@@ -32,9 +32,11 @@ for (const scene of shaderConfig.scenes) {
   assert.match(scene.id, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   assert.ok(scene.title.length > 0);
   assert.ok(fs.existsSync(path.join(projectDir, scene.source)), `Missing shader source: ${scene.source}`);
-  assert.ok(fs.existsSync(path.join(projectDir, scene.fragment)), `Missing generated WGSL: ${scene.fragment}`);
-  assert.match(scene.fragment, /\.fragment\.wgsl$/);
-  assert.ok(scene.fragment.startsWith("web/shaders/generated/"));
+  for (const [backend, shaderPath] of Object.entries(scene.fragment)) {
+    assert.ok(fs.existsSync(path.join(projectDir, shaderPath)), `Missing generated ${backend} shader: ${shaderPath}`);
+    assert.match(shaderPath, backend === "webgpu" ? /\.fragment\.wgsl$/ : /\.fragment\.glsl$/);
+    assert.ok(shaderPath.startsWith("web/shaders/generated/"));
+  }
 }
 
 const shaderSources = shaderConfig.scenes.map((scene) => (
@@ -378,7 +380,9 @@ for (const sharedThreeDimensionalPrimitive of [
 const manifestPath = path.join(projectDir, shaderConfig.manifest);
 assert.ok(fs.existsSync(manifestPath), "Missing generated shader manifest");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-assert.equal(manifest.schemaVersion, 11);
+assert.equal(manifest.schemaVersion, 13);
+assert.match(manifest.translatorHash, /^[a-f0-9]{64}$/);
+assert.match(manifest.compilerHash, /^[a-f0-9]{64}$/);
 assert.deepEqual(manifest.semanticLegend, JSON.parse(
   JSON.stringify(manifest.semanticLegend)
 ));
@@ -389,8 +393,13 @@ for (let index = 0; index < manifest.scenes.length; index += 1) {
   const configured = shaderConfig.scenes[index];
   assert.equal(record.source, fs.readFileSync(path.join(projectDir, configured.source), "utf8"));
   assert.match(record.sourceHash, /^[a-f0-9]{64}$/);
-  assert.equal(record.shaders.fragment.path, configured.fragment.replace(/^web\//, ""));
-  assert.match(record.shaders.fragment.hash, /^[a-f0-9]{64}$/);
+  for (const backend of ["webgpu", "webgl"]) {
+    assert.equal(
+      record.shaders.fragment.sources[backend].path,
+      configured.fragment[backend].replace(/^web\//, "")
+    );
+    assert.match(record.shaders.fragment.sources[backend].hash, /^[a-f0-9]{64}$/);
+  }
   assert.ok(Array.isArray(record.semanticTokens) && record.semanticTokens.length > 0);
   assert.equal(record.uniforms, undefined);
   assert.ok(Array.isArray(record.shaders.fragment.uniforms) && record.shaders.fragment.uniforms.length >= 3);
@@ -401,16 +410,27 @@ for (let index = 0; index < manifest.scenes.length; index += 1) {
     new Set(record.shaders.fragment.uniforms.map((uniform) => uniform.name)),
     new Set(expectedUniformNames)
   );
-  const wgsl = fs.readFileSync(path.join(projectDir, configured.fragment), "utf8");
+  const wgsl = fs.readFileSync(path.join(projectDir, configured.fragment.webgpu), "utf8");
+  const glsl = fs.readFileSync(path.join(projectDir, configured.fragment.webgl), "utf8");
   assert.match(wgsl, /@fragment/);
   assert.match(wgsl, /fn main/);
+  assert.match(glsl, /^#version 300 es/);
+  assert.match(glsl, /void main/);
 }
 
 const terrainConfig = shaderConfig.scenes[1];
 const terrainRecord = manifest.scenes[1];
 assert.equal(terrainConfig.geometry.generator, "camera-lod-grid");
-assert.equal(terrainRecord.shaders.vertex.path, terrainConfig.vertex.replace(/^web\//, ""));
-assert.match(terrainRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
+assert.equal(
+  terrainRecord.shaders.vertex.sources.webgpu.path,
+  terrainConfig.vertex.webgpu.replace(/^web\//, "")
+);
+assert.equal(
+  terrainRecord.shaders.vertex.sources.webgl.path,
+  terrainConfig.vertex.webgl.replace(/^web\//, "")
+);
+assert.match(terrainRecord.shaders.vertex.sources.webgpu.hash, /^[a-f0-9]{64}$/);
+assert.match(terrainRecord.shaders.vertex.sources.webgl.hash, /^[a-f0-9]{64}$/);
 assert.ok(Array.isArray(terrainRecord.shaders.vertex.uniforms));
 assert.equal(terrainRecord.geometry.generator, terrainConfig.geometry.generator);
 assert.equal(terrainRecord.geometry.path, undefined);
@@ -677,8 +697,13 @@ for (const [edge, useCount] of edgeUseCounts) {
 const nanoConfig = shaderConfig.scenes[2];
 const nanoRecord = manifest.scenes[2];
 assert.ok(nanoConfig.geometry, "Nano choreography must configure volumetric geometry");
-assert.equal(nanoRecord.shaders.vertex.path, nanoConfig.vertex.replace(/^web\//, ""));
-assert.match(nanoRecord.shaders.vertex.hash, /^[a-f0-9]{64}$/);
+for (const backend of ["webgpu", "webgl"]) {
+  assert.equal(
+    nanoRecord.shaders.vertex.sources[backend].path,
+    nanoConfig.vertex[backend].replace(/^web\//, "")
+  );
+  assert.match(nanoRecord.shaders.vertex.sources[backend].hash, /^[a-f0-9]{64}$/);
+}
 assert.equal(nanoRecord.geometry.path, nanoConfig.geometry.path.replace(/^web\//, ""));
 assert.equal(nanoRecord.geometry.format, "float32x4");
 assert.equal(nanoRecord.geometry.attributeEncoding, "paired-unorm12-wheel-corner");
@@ -877,20 +902,19 @@ assert.ok(
 );
 assert.equal(
   (html.match(/<canvas[^>]+data-shader-canvas/g) ?? []).length,
-  2,
-  "Two alternating full-resolution canvases must overlap consecutive shader thoughts"
+  1,
+  "The homepage transition must use one stable WebGPU presentation surface"
 );
-assert.equal((html.match(/data-shader-layer=/g) ?? []).length, 2);
-assert.equal((html.match(/data-shader-canvas="immersive"/g) ?? []).length, 2);
+assert.equal((html.match(/data-shader-layer=/g) ?? []).length, 1);
+assert.equal((html.match(/data-shader-canvas="immersive"/g) ?? []).length, 1);
 assert.doesNotMatch(html, /data-shader-canvas="thought"/);
 assert.match(html, /data-shader-code/);
 assert.match(html, /data-shader-editor-link/);
 assert.match(html, /data-shader-next/);
-assert.match(html, /LIVE WEBGPU/);
-assert.doesNotMatch(html, /LIVE WEBGL/);
+assert.match(html, /LIVE GPU/);
 assert.match(html, /class="thought-assembly"/);
 assert.doesNotMatch(html, /thought-cloud-guide|class="thought-cloud"|thought-cloud-shape/);
-assert.equal((html.match(/data-thought-cloud-path=/g) ?? []).length, 2);
+assert.doesNotMatch(html, /data-thought-cloud-path|shader-clip-definitions|clipPath/);
 assert.equal((html.match(/class="thought-tail-dot/g) ?? []).length, 3);
 assert.match(html, /data-thought-origin-dot/);
 assert.match(html, /data-thought-cloud-dot/);
@@ -899,6 +923,12 @@ assert.doesNotMatch(html, /<video\b|data-shader-film/);
 const homepageJavascript = fs.readFileSync(path.join(projectDir, "web/homepage.js"), "utf8");
 const shaderBannerJavascript = fs.readFileSync(path.join(projectDir, "web/shader-banner.js"), "utf8");
 const sharedRenderer = fs.readFileSync(path.join(projectDir, "web/shader-renderer.js"), "utf8");
+const webGpuRenderer = fs.readFileSync(path.join(projectDir, "web/shader-renderer-webgpu.js"), "utf8");
+const webGlRenderer = fs.readFileSync(path.join(projectDir, "web/shader-renderer-webgl.js"), "utf8");
+const transitionRenderer = fs.readFileSync(
+  path.join(projectDir, "web/shader-transition-compositor.js"),
+  "utf8"
+);
 const wgslTranslator = fs.readFileSync(path.join(projectDir, "web/wgsl-translator.js"), "utf8");
 const ideMain = fs.readFileSync(path.join(projectDir, "src/web/ide/src/main.js"), "utf8");
 assert.match(homepageJavascript, /createShaderBanner/);
@@ -913,12 +943,12 @@ assert.match(shaderBannerJavascript, /prepareIncomingScene/);
 assert.match(shaderBannerJavascript, /promoteIncomingScene/);
 assert.match(shaderBannerJavascript, /preloadNextScene/);
 assert.match(shaderBannerJavascript, /preloadedShaderIndex/);
-assert.match(shaderBannerJavascript, /updateThoughtAssembly/);
-assert.match(shaderBannerJavascript, /updateThoughtTail/);
-assert.match(shaderBannerJavascript, /visibleCloudGeometry/);
+assert.match(shaderBannerJavascript, /measureBannerGeometry/);
+assert.match(shaderBannerJavascript, /new ResizeObserver/);
 assert.match(shaderBannerJavascript, /INCOMING_CODE_START/);
-assert.match(shaderBannerJavascript, /layer\.path\.setAttribute\("transform"/);
-assert.match(shaderBannerJavascript, /translate\(-1 -1\) scale\(3 3\)/);
+assert.match(shaderBannerJavascript, /beginTransition/);
+assert.match(shaderBannerJavascript, /setTransition/);
+assert.match(shaderBannerJavascript, /promotePrepared/);
 assert.doesNotMatch(shaderBannerJavascript, /initialEntrance/);
 assert.doesNotMatch(shaderBannerJavascript, /transitionEndsAt/);
 assert.doesNotMatch(shaderBannerJavascript, /incomingLayer\.startedAt\s*=\s*timestamp/);
@@ -929,24 +959,40 @@ assert.match(
 );
 assert.doesNotMatch(shaderBannerJavascript, /thoughtPreview/);
 assert.doesNotMatch(shaderBannerJavascript, /HTMLMediaElement|\.play\(|\.pause\(|webm|mp4|poster/);
-assert.match(sharedRenderer, /getContext\("webgpu"/);
-assert.match(sharedRenderer, /navigator\.gpu\.requestAdapter/);
-assert.match(sharedRenderer, /navigator\.gpu\.getPreferredCanvasFormat/);
-assert.match(sharedRenderer, /addEventListener\("uncapturederror"/);
-assert.equal((sharedRenderer.match(/device\.lost\.then/g) ?? []).length, 1,
+assert.match(sharedRenderer, /navigator\.gpu/);
+assert.match(sharedRenderer, /createWebGpuShaderPreview/);
+assert.match(sharedRenderer, /createWebGlShaderPreview/);
+assert.match(webGpuRenderer, /getContext\("webgpu"/);
+assert.match(webGpuRenderer, /navigator\.gpu\.requestAdapter/);
+assert.match(webGpuRenderer, /navigator\.gpu\.getPreferredCanvasFormat/);
+assert.match(webGpuRenderer, /addEventListener\("uncapturederror"/);
+assert.equal((webGpuRenderer.match(/device\.lost\.then/g) ?? []).length, 1,
   "A shared WebGPU device must have one loss observer");
-assert.match(sharedRenderer, /createRenderPipelineAsync/);
-assert.match(sharedRenderer, /window\.devicePixelRatio \|\| 1/);
-assert.doesNotMatch(sharedRenderer, /Math\.min\(window\.devicePixelRatio/);
-assert.match(sharedRenderer, /format: "float32x4"/);
-assert.match(sharedRenderer, /renderPass\.draw\(pass\.vertexCount\)/);
-assert.match(sharedRenderer, /renderPass\.drawIndexed\(pass\.indexCount\)/);
-assert.match(sharedRenderer, /geometry\.vertexCount/);
-assert.match(sharedRenderer, /format: depthFormat/);
-assert.match(sharedRenderer, /depthWriteEnabled: render\.depthTest/);
-assert.match(sharedRenderer, /GPUTextureUsage\.RENDER_ATTACHMENT/);
-assert.doesNotMatch(sharedRenderer, /WebGL|webgl|glsl/i);
-assert.doesNotMatch(sharedRenderer, /paired-unorm12/);
+assert.match(webGpuRenderer, /createRenderPipelineAsync/);
+assert.match(webGpuRenderer, /prepareProgram/);
+assert.match(webGpuRenderer, /depth24plus-stencil8/);
+assert.match(webGpuRenderer, /setStencilReference/);
+assert.match(webGlRenderer, /getContext\("webgl2"/);
+assert.match(webGlRenderer, /gl\.STENCIL_TEST/);
+assert.match(webGlRenderer, /gl\.framebufferTexture2D/);
+assert.match(webGlRenderer, /prepareProgram/);
+assert.match(webGlRenderer, /promotePrepared/);
+assert.match(transitionRenderer, /GPUTextureUsage\.TEXTURE_BINDING/);
+assert.match(transitionRenderer, /stencilFront/);
+assert.match(transitionRenderer, /passOp:\s*"replace"/);
+assert.match(webGpuRenderer, /createTransitionCompositor/);
+for (const renderer of [webGpuRenderer, webGlRenderer]) {
+  assert.match(renderer, /window\.devicePixelRatio \|\| 1/);
+  assert.doesNotMatch(renderer, /Math\.min\(window\.devicePixelRatio/);
+  assert.match(renderer, /geometry\.vertexCount/);
+  assert.doesNotMatch(renderer, /paired-unorm12/);
+}
+assert.match(webGpuRenderer, /format: "float32x4"/);
+assert.match(webGpuRenderer, /renderPass\.draw\(pass\.vertexCount\)/);
+assert.match(webGpuRenderer, /renderPass\.drawIndexed\(pass\.indexCount\)/);
+assert.match(webGpuRenderer, /format: depthFormat/);
+assert.match(webGpuRenderer, /depthWriteEnabled: render\.depthTest/);
+assert.match(webGpuRenderer, /GPUTextureUsage\.RENDER_ATTACHMENT/);
 assert.match(wgslTranslator, /WebAssembly\.instantiateStreaming\(response\)/);
 assert.doesNotMatch(wgslTranslator, /typeof WebAssembly\.instantiateStreaming|response\.arrayBuffer/);
 assert.match(ideMain, /from "\.\.\/\.\.\/\.\.\/\.\.\/web\/shader-renderer\.js"/);
@@ -961,7 +1007,7 @@ assert.match(styles, /\.live-shader-section/);
 assert.match(styles, /\.thought-assembly/);
 assert.doesNotMatch(styles, /thought-cloud-guide|\.thought-cloud|--thought-guide-opacity/);
 assert.match(styles, /\.thought-tail-dot/);
-assert.match(styles, /\[data-layer-state="revealing"\]/);
+assert.doesNotMatch(styles, /clip-path:\s*url|drop-shadow\(0 0 24px/);
 assert.match(styles, /--laptop-code-opacity/);
 assert.match(styles, /\.site-header/);
 assert.doesNotMatch(styles, /\.shader-film|\.film-grain|@keyframes film-grain/);

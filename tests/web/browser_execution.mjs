@@ -43,19 +43,19 @@ await waitFor(
 );
 const firstPreloadedShaderState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
-  const canvas = document.querySelector('[data-layer-state="dormant"] canvas');
+  const canvas = section.querySelector('[data-shader-canvas="immersive"]');
   return {
     layer: canvas.parentElement.dataset.shaderLayer,
-    revision: Number(canvas.dataset.previewRevision),
-    vertexCount: Number(canvas.dataset.previewGeometryVertices),
-    horizontalPixels: Number(canvas.dataset.previewGeometryHorizontalPixels),
+    revision: Number(canvas.dataset.previewPreparedRevision),
+    vertexCount: Number(canvas.dataset.previewPreparedGeometryVertices),
+    horizontalPixels: Number(canvas.dataset.previewPreparedGeometryHorizontalPixels),
     sectionPixels: Math.ceil(section.clientWidth * (window.devicePixelRatio || 1))
   };
 })()`);
 assert.equal(firstPreloadedShaderState.horizontalPixels, firstPreloadedShaderState.sectionPixels);
 const shaderState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
-  const immersiveCanvas = section.querySelector('[data-shader-layer]:not([data-layer-state="dormant"]) canvas');
+  const immersiveCanvas = section.querySelector('[data-shader-canvas="immersive"]');
   const immersiveLayer = immersiveCanvas.parentElement;
   const sectionRect = section.getBoundingClientRect();
   const layerRect = immersiveLayer.getBoundingClientRect();
@@ -113,8 +113,13 @@ assert.equal(shaderState.editorScene, shaderManifest.scenes[0].id);
 assert.ok(shaderState.editorUrlLength < 256, "The editor link must not embed shader source in the request URL");
 assert.ok(shaderState.sectionHeight >= shaderState.viewportHeight * 0.9, "The shader must occupy the viewport");
 assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[0].shaders.fragment.path}`)),
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[0].shaders.fragment.sources.webgpu.path}`)),
   "The first generated shader must be rendered"
+);
+assert.equal(
+  requestedUrls.some((url) => url.endsWith(".glsl")),
+  false,
+  "A WebGPU browser must not download WebGL shader sources"
 );
 assert.equal(
   requestedUrls.some((url) => /\.(?:mp4|webm)(?:$|\?)/i.test(url)),
@@ -149,42 +154,29 @@ assert.equal(immersiveChrome.headerIsTopLayer, true, "The fixed site header must
 assert.ok(immersiveChrome.headlineOpacity >= 0.78, "The banner headline must remain visible over the shader");
 const preparedThought = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
+  const canvas = section.querySelector('[data-shader-canvas="immersive"]');
+  const before = [canvas.width, canvas.height];
   section.querySelector('[data-shader-next]').click();
   if (section.dataset.incomingShaderIndex !== '1') {
     throw new Error('The preloaded shader did not enter its reveal state synchronously');
   }
-  const cloudRect = section.querySelector('.thought-assembly').getBoundingClientRect();
-  const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
-  const revealingRect = revealingLayer.getBoundingClientRect();
-  const revealingStyle = getComputedStyle(revealingLayer);
   return {
-    layer: revealingLayer.dataset.shaderLayer,
-    revision: Number(revealingLayer.querySelector('canvas').dataset.previewRevision),
-    clipPath: revealingStyle.clipPath,
-    filter: revealingStyle.filter,
-    cloudRect: [cloudRect.left, cloudRect.top, cloudRect.width, cloudRect.height],
-    revealingRect: [revealingRect.left, revealingRect.top, revealingRect.width, revealingRect.height],
-    renderAreaMatchesCloud: (
-      Math.abs(revealingRect.left - cloudRect.left) <= 2
-      && Math.abs(revealingRect.top - cloudRect.top) <= 2
-      && Math.abs(revealingRect.width - cloudRect.width) <= 2
-      && Math.abs(revealingRect.height - cloudRect.height) <= 2
-    )
+    layer: canvas.parentElement.dataset.shaderLayer,
+    revision: Number(canvas.dataset.previewPreparedRevision),
+    transitionState: canvas.dataset.previewTransitionState,
+    canvasCount: section.querySelectorAll('[data-shader-canvas="immersive"]').length,
+    stableBackingSize: canvas.width === before[0] && canvas.height === before[1]
   };
 })()`);
 assert.equal(preparedThought.layer, firstPreloadedShaderState.layer);
 assert.equal(
   preparedThought.revision,
   firstPreloadedShaderState.revision,
-  "Revealing the next shader must reuse the program compiled while the previous shader rendered"
+  "The transition must reuse the program compiled while the previous shader rendered"
 );
-assert.equal(
-  preparedThought.renderAreaMatchesCloud,
-  true,
-  `The shader render surface must begin at the thought-cloud bounds: ${JSON.stringify(preparedThought)}`
-);
-assert.match(preparedThought.clipPath, /thought-cloud-mask-[01]/);
-assert.notEqual(preparedThought.filter, "none", "The revealing thought cloud must retain its glow");
+assert.equal(preparedThought.transitionState, "active");
+assert.equal(preparedThought.canvasCount, 1);
+assert.equal(preparedThought.stableBackingSize, true);
 await verifyOffscreenRevealReturn();
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.incomingShaderIndex === '1'"
@@ -196,8 +188,7 @@ const overlappingThoughts = await evaluate(`(() => {
   const code = section.querySelector('[data-shader-code]');
   const originDot = section.querySelector('[data-thought-origin-dot]');
   const cloudDot = section.querySelector('[data-thought-cloud-dot]');
-  const activeLayer = section.querySelector('[data-layer-state="active"]');
-  const revealingLayer = section.querySelector('[data-layer-state="revealing"]');
+  const canvas = section.querySelector('[data-shader-canvas="immersive"]');
   const codeRect = code.getBoundingClientRect();
   const originRect = originDot.getBoundingClientRect();
   const center = (rect) => ({
@@ -218,13 +209,9 @@ const overlappingThoughts = await evaluate(`(() => {
       && originCenter.y <= codeRect.bottom
     ),
     connectorTravelsTowardCloud: cloudCenter.x > originCenter.x && cloudCenter.y < originCenter.y,
-    activeLayerState: activeLayer?.dataset.layerState,
-    revealingLayerState: revealingLayer?.dataset.layerState,
-    revealingLayerIndex: revealingLayer?.dataset.shaderLayer,
-    revealingAboveConnector: (
-      Number(getComputedStyle(revealingLayer).zIndex)
-      > Number(getComputedStyle(originDot.parentElement).zIndex)
-    )
+    layerState: canvas.parentElement.dataset.layerState,
+    layerIndex: canvas.parentElement.dataset.shaderLayer,
+    transitionState: canvas.dataset.previewTransitionState
   };
 })()`);
 assert.equal(overlappingThoughts.activeShaderIndex, "0");
@@ -233,35 +220,34 @@ assert.equal(overlappingThoughts.shaderFile, `${shaderManifest.scenes[1].id}.dl`
 assert.equal(overlappingThoughts.codeContainsNextSource, true);
 assert.equal(overlappingThoughts.originInsideCode, true, "The thought connector must begin inside the code");
 assert.equal(overlappingThoughts.connectorTravelsTowardCloud, true);
-assert.equal(overlappingThoughts.activeLayerState, "active");
-assert.equal(overlappingThoughts.revealingLayerState, "revealing");
-assert.match(overlappingThoughts.revealingLayerIndex, /^[01]$/);
-assert.equal(
-  overlappingThoughts.revealingAboveConnector,
-  true,
-  "The expanding cloud must cover its connector circles"
-);
+assert.equal(overlappingThoughts.layerState, "active");
+assert.equal(overlappingThoughts.layerIndex, "single");
+assert.equal(overlappingThoughts.transitionState, "active");
 await captureScreenshot("homepage-next-shader-code");
 await captureScreenshot("homepage-overlapping-thoughts");
 await waitFor(
-  "document.querySelector('[data-live-shader-banner]').dataset.scenePhase === 'next-thought'"
-    + " && Number(document.querySelector('[data-live-shader-banner]').dataset.sceneProgress) >= 0.89",
-  "the incoming thought to expand over the outgoing shader"
+  "Number(document.querySelector('[data-live-shader-banner]').dataset.sceneProgress) >= 0.89"
+    + " || document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '1'",
+  "the incoming thought to expand or finish promotion"
 );
 const expandingViewport = await evaluate(`(() => {
-  const sectionRect = document.querySelector('[data-live-shader-banner]').getBoundingClientRect();
-  const layerRect = document.querySelector(
-    '[data-shader-layer="${overlappingThoughts.revealingLayerIndex}"]'
-  ).getBoundingClientRect();
+  const section = document.querySelector('[data-live-shader-banner]');
+  const sectionRect = section.getBoundingClientRect();
+  const layerRect = section.querySelector('[data-shader-layer]').getBoundingClientRect();
   return {
-    reachesTop: Math.abs(layerRect.top - sectionRect.top) <= 2,
-    reachesRight: Math.abs(layerRect.right - sectionRect.right) <= 2
+    stableSurface: Math.abs(layerRect.top - sectionRect.top) <= 2
+      && Math.abs(layerRect.right - sectionRect.right) <= 2,
+    transitionState: section.querySelector('canvas').dataset.previewTransitionState,
+    activeShaderIndex: section.dataset.activeShaderIndex
   };
 })()`);
 assert.equal(
-  expandingViewport.reachesTop && expandingViewport.reachesRight,
+  expandingViewport.stableSurface && (
+    expandingViewport.transitionState === "active"
+    || expandingViewport.activeShaderIndex === "1"
+  ),
   true,
-  "The shader viewport must cover the cloud wherever it reaches the screen edges"
+  "The GPU transition must use the stable full-banner render surface"
 );
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.activeShaderIndex === '1'",
@@ -269,7 +255,7 @@ await waitFor(
 );
 await captureScreenshot("homepage-terrain");
 assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.path}`)),
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.fragment.sources.webgpu.path}`)),
   "Advancing must load the next configured WebGPU program"
 );
 const editorSceneState = await evaluate(`(() => ({
@@ -295,15 +281,15 @@ await waitFor(
 );
 const nextShaderCanvasState = await evaluate(`(() => {
   const section = document.querySelector('[data-live-shader-banner]');
-  const canvas = document.querySelector(
-    'canvas[data-preview-geometry-vertices="${shaderManifest.scenes[2].geometry.vertexCount}"]'
-  );
+  const canvas = section.querySelector('[data-shader-canvas="immersive"]');
   return {
     layer: canvas.parentElement.dataset.shaderLayer,
-    revision: Number(canvas.dataset.previewRevision),
+    revision: Number(canvas.dataset.previewPreparedRevision),
+    vertexCount: Number(canvas.dataset.previewPreparedGeometryVertices),
     needsAdvance: section.dataset.preloadedShaderIndex === '2'
   };
 })()`);
+assert.equal(nextShaderCanvasState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
 if (nextShaderCanvasState.needsAdvance) {
   await evaluate("document.querySelector('[data-shader-next]').click()");
 }
@@ -329,7 +315,7 @@ assert.equal(
 );
 assert.equal(thirdShaderCanvasState.vertexCount, shaderManifest.scenes[2].geometry.vertexCount);
 assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.vertex.path}`)),
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[1].shaders.vertex.sources.webgpu.path}`)),
   "The terrain scene must load its DynLex-compiled displacement vertex shader"
 );
 const thirdShaderPlaybackState = await evaluate(`(async () => {
@@ -354,7 +340,7 @@ assert.ok(
   "The shader animation must continue from the portion already rendered inside its thought cloud"
 );
 assert.ok(
-  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[2].shaders.vertex.path}`)),
+  requestedUrls.some((url) => url.endsWith(`/${shaderManifest.scenes[2].shaders.vertex.sources.webgpu.path}`)),
   "The volumetric scene must load its DynLex-compiled vertex shader"
 );
 assert.ok(
@@ -399,8 +385,18 @@ if (screenshotDirectory) {
       layer.prepend(canvas);
       const manifest = await fetch('/shaders/manifest.json').then((response) => response.json());
       const scene = manifest.scenes[2];
-      const fragmentSource = await fetch('/' + scene.shaders.fragment.path).then((response) => response.text());
-      const vertexSource = await fetch('/' + scene.shaders.vertex.path).then((response) => response.text());
+      const fragmentSources = Object.fromEntries(await Promise.all(
+        Object.entries(scene.shaders.fragment.sources).map(async ([backend, source]) => [
+          backend,
+          await fetch('/' + source.path).then((response) => response.text())
+        ])
+      ));
+      const vertexSources = Object.fromEntries(await Promise.all(
+        Object.entries(scene.shaders.vertex.sources).map(async ([backend, source]) => [
+          backend,
+          await fetch('/' + source.path).then((response) => response.text())
+        ])
+      ));
       const geometry = await fetch('/' + scene.geometry.path).then((response) => response.arrayBuffer());
       const { createShaderPreview } = await import('/shader-renderer.js');
       const preview = await createShaderPreview(canvas, {
@@ -408,9 +404,9 @@ if (screenshotDirectory) {
       });
       window.__dynlexFixedNanoPreview = preview;
       await preview.replaceProgram({
-        fragmentSource,
+        fragmentSources,
         fragmentUniforms: scene.shaders.fragment.uniforms,
-        vertexSource,
+        vertexSources,
         vertexUniforms: scene.shaders.vertex.uniforms,
         geometry: { ...scene.geometry, data: geometry }
       });
@@ -608,6 +604,11 @@ await navigate(terrainShaderEditorPath);
 await waitFor(
   "document.querySelector('#shader-preview')?.dataset.previewState === 'ready'",
   "the editable shader's first successful preview"
+);
+await waitFor(
+  "Number(document.querySelector('#shader-preview').dataset.previewGeometryHorizontalPixels)"
+    + " === Math.ceil(document.querySelector('#shader-preview').clientWidth * (window.devicePixelRatio || 1))",
+  "the editable shader geometry to match its visible framebuffer"
 );
 await waitFor(
   `(() => {

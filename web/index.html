@@ -29,21 +29,7 @@
 
     <main id="main-content">
         <section class="live-shader-section" id="motion" data-live-shader-banner aria-labelledby="shader-title">
-            <svg class="shader-clip-definitions" width="0" height="0" aria-hidden="true">
-                <defs>
-                    <path id="thought-cloud-geometry" d="M .16 .78 C .05 .75 .01 .62 .08 .52 C .02 .39 .10 .25 .23 .25 C .28 .09 .45 .04 .56 .15 C .68 .05 .85 .12 .86 .28 C 1 .31 1 .49 .94 .58 C 1 .72 .88 .86 .75 .82 C .66 .94 .48 .94 .4 .84 C .31 .91 .2 .88 .16 .78 Z"/>
-                    <clipPath id="thought-cloud-mask-0" clipPathUnits="objectBoundingBox">
-                        <use href="#thought-cloud-geometry" data-thought-cloud-path="0"></use>
-                    </clipPath>
-                    <clipPath id="thought-cloud-mask-1" clipPathUnits="objectBoundingBox">
-                        <use href="#thought-cloud-geometry" data-thought-cloud-path="1"></use>
-                    </clipPath>
-                </defs>
-            </svg>
-            <div class="shader-immersion" data-shader-layer="0" data-layer-state="dormant" aria-hidden="true">
-                <canvas data-shader-canvas="immersive"></canvas>
-            </div>
-            <div class="shader-immersion" data-shader-layer="1" data-layer-state="dormant" aria-hidden="true">
+            <div class="shader-immersion" data-shader-layer="single" data-layer-state="active" aria-hidden="true">
                 <canvas data-shader-canvas="immersive"></canvas>
             </div>
             <div class="shader-origin" aria-hidden="true">
@@ -63,7 +49,7 @@
             </div>
             <div class="shader-atmosphere" aria-hidden="true"></div>
             <div class="page-shell shader-copy">
-                <p><span aria-hidden="true"></span> <strong data-shader-name>LOADING SHADER</strong> / LIVE WEBGPU</p>
+                <p><span aria-hidden="true"></span> <strong data-shader-name>LOADING SHADER</strong> / LIVE GPU</p>
                 <h1 id="shader-title">Code becomes<br><em>light.</em></h1>
             </div>
             <div class="page-shell shader-readout">

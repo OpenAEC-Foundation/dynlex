@@ -88,7 +88,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
   }
 
   return Object.freeze({
-    async compile(source, sourceName, stage) {
+    async compile(source, sourceName, stage, includeGlsl = true) {
       if (stage !== "fragment" && stage !== "vertex") {
         throw new Error(`Unsupported shader stage: ${stage}`);
       }
@@ -118,9 +118,14 @@ export async function createHomepageShaderCompiler(projectDirectory) {
         "shader-uniform"
       );
       const semanticTokens = await semanticTokensFor(source);
-      const wgsl = translator.translate(Uint8Array.from(Buffer.from(spirvBase64, "base64")));
+      const spirvBytes = Uint8Array.from(Buffer.from(spirvBase64, "base64"));
+      const wgsl = translator.translate(spirvBytes);
+      const glsl = includeGlsl ? translator.translateGlsl(spirvBytes, stage) : null;
       if (!wgsl.includes(`@${stage}`) || !wgsl.includes("fn main")) {
         throw new Error(`${sourceName} produced invalid WebGPU ${stage} source`);
+      }
+      if (glsl !== null && (!glsl.startsWith("#version 300 es") || !glsl.includes("void main"))) {
+        throw new Error(`${sourceName} produced invalid WebGL2 ${stage} source`);
       }
       if (!Array.isArray(uniformPayload.uniforms)) {
         throw new Error(`${sourceName} produced invalid shader-uniform reflection`);
@@ -128,6 +133,7 @@ export async function createHomepageShaderCompiler(projectDirectory) {
 
       return Object.freeze({
         wgsl,
+        glsl,
         uniforms: uniformPayload.uniforms,
         semanticTokens,
         semanticLegend

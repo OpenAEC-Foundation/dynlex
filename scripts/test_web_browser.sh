@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
     DYNLEX_TEST_WEB_SERVER=static "$0"
+    DYNLEX_TEST_WEB_SERVER=static \
+        DYNLEX_TEST_GRAPHICS=webgl \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/webgl_fallback_execution.mjs" \
+        "$0"
     DYNLEX_TEST_WEB_SERVER=vite \
         DYNLEX_TEST_SERVER_PORT="${DYNLEX_TEST_VITE_PORT:-8766}" \
         DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/vite_dev_browser.mjs" \
@@ -20,7 +24,11 @@ else
     BROWSER_TEST_ENTRY="${DYNLEX_BROWSER_TEST_ENTRY:-$PROJECT_DIR/tests/web/browser_execution.mjs}"
 fi
 
-dependencies=(node python3 google-chrome setsid xvfb-run Xvfb)
+GRAPHICS_BACKEND="${DYNLEX_TEST_GRAPHICS:-webgpu}"
+dependencies=(node python3 google-chrome setsid)
+if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
+    dependencies+=(xvfb-run Xvfb)
+fi
 if [[ "$WEB_SERVER" == "vite" ]]; then
     dependencies+=(npm)
 fi
@@ -30,7 +38,6 @@ for dependency in "${dependencies[@]}"; do
         exit 1
     fi
 done
-VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
 BROWSER_PROFILE="$(mktemp -d)"
 SERVER_LOG="$(mktemp)"
 BROWSER_LOG="$(mktemp)"
@@ -69,12 +76,23 @@ else
     exit 1
 fi
 SERVER_PID="$!"
-VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
-    google-chrome --no-sandbox --no-first-run --no-default-browser-check \
-    --disable-background-networking --enable-unsafe-webgpu \
-    --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \
-    --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
-    --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
+if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
+    VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
+    VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
+        google-chrome --no-sandbox --no-first-run --no-default-browser-check \
+        --disable-background-networking --enable-unsafe-webgpu \
+        --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \
+        --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
+        --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
+elif [[ "$GRAPHICS_BACKEND" = webgl ]]; then
+    setsid google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
+        --no-first-run --no-default-browser-check --disable-background-networking \
+        --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
+        --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
+else
+    echo "Unknown browser graphics backend: $GRAPHICS_BACKEND" >&2
+    exit 1
+fi
 BROWSER_PID="$!"
 
 READY=false
