@@ -106,6 +106,7 @@ print 8 squared as a line
 
 const queryParams = new URLSearchParams(window.location.search);
 const shaderMode = queryParams.get("mode") === "shader";
+const releaseAssetUrl = (path) => new URL(`${import.meta.env.BASE_URL}${path}`, window.location.origin);
 
 async function loadRequestedShaderScene() {
   const requestedScene = queryParams.get("scene");
@@ -116,7 +117,7 @@ async function loadRequestedShaderScene() {
     throw new Error("Invalid shader scene");
   }
 
-  const response = await fetch("/shaders/manifest.json");
+  const response = await fetch(releaseAssetUrl("shaders/manifest.json"));
   if (!response.ok) {
     throw new Error("Shader manifest could not be loaded");
   }
@@ -189,8 +190,8 @@ async function loadShaderRenderer(config) {
     return Object.freeze({ geometry: config.geometry });
   }
   const [geometryResponse, indexResponse] = await Promise.all([
-    fetch(`/${config.geometry.path}`),
-    config.geometry.indices ? fetch(`/${config.geometry.indices.path}`) : null
+    fetch(releaseAssetUrl(config.geometry.path)),
+    config.geometry.indices ? fetch(releaseAssetUrl(config.geometry.indices.path)) : null
   ]);
   if (!geometryResponse.ok || (indexResponse && !indexResponse.ok)) {
     throw new Error("Shader geometry could not be loaded");
@@ -227,8 +228,10 @@ for (const workspaceKind of document.querySelectorAll("[data-workspace-kind]")) 
   workspaceKind.textContent = shaderMode ? "SHADER" : workspaceKind.textContent;
 }
 
-const compilerWorkerUrl = new URL("/compiler/compiler-worker.js", window.location.origin);
-compilerWorkerUrl.searchParams.set("revision", __DYNLEX_COMPILER_REVISION__);
+const compilerWorkerUrl = new URL(
+  `${import.meta.env.BASE_URL}compiler/compiler-worker.js`,
+  window.location.origin
+);
 const worker = new Worker(compilerWorkerUrl, { type: "module" });
 let nextRequestId = 1;
 const pendingRequests = new Map();

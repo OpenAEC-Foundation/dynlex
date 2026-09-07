@@ -69,7 +69,7 @@ function validateManifest(manifest) {
 }
 
 async function loadText(relativePath) {
-  const response = await fetch(relativePath);
+  const response = await fetch(new URL(relativePath, import.meta.url));
   if (!response.ok) {
     throw new Error(`Unable to load generated shader: ${relativePath}`);
   }
@@ -81,7 +81,7 @@ async function loadText(relativePath) {
 }
 
 async function loadBinary(relativePath) {
-  const response = await fetch(relativePath);
+  const response = await fetch(new URL(relativePath, import.meta.url));
   if (!response.ok) {
     throw new Error(`Unable to load shader geometry: ${relativePath}`);
   }
@@ -244,7 +244,7 @@ export async function createShaderBanner(section) {
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   nextButton.disabled = true;
 
-  const manifestResponse = await fetch("shaders/manifest.json");
+  const manifestResponse = await fetch(new URL("./shaders/manifest.json", import.meta.url));
   if (!manifestResponse.ok) {
     throw new Error("Unable to load the homepage shader manifest");
   }

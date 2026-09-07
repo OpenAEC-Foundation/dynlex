@@ -35,11 +35,7 @@ for (const resource of [
 const workerRequest = requestedUrls.find(
   (url) => new URL(url).pathname === "/compiler/compiler-worker.js"
 );
-assert.match(
-  new URL(workerRequest).searchParams.get("revision"),
-  /^[0-9a-f]{64}$/,
-  "The Vite-served compiler worker must use the complete artifact revision"
-);
+assert.equal(new URL(workerRequest).search, "", "Local workers must resolve without deployment versioning");
 assert.deepEqual(runtimeExceptions, [], "The Vite-served IDE must not raise browser exceptions");
 
 closeBrowserSession();

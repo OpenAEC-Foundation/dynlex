@@ -2,8 +2,7 @@ name: Deploy website
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -15,21 +14,130 @@ concurrency:
 
 jobs:
   deploy:
-    uses: OpenAEC-Foundation/github/.github/workflows/deploy-site.yml@main
-    with:
-      deploy_host: ${{ vars.DEPLOY_HOST }}
-      deploy_port: ${{ vars.DEPLOY_PORT }}
-      deploy_user: ${{ vars.DEPLOY_USER }}
-      deploy_path: /var/www/dynlex.com
-      deploy_source: web
-      node_version: "22"
-      setup_command: |
-        test -f src/web/ide/public/compiler/dynlex_web.js
-        test -f src/web/ide/public/compiler/dynlex_web.wasm
-      install_command: cd src/web/ide && npm ci
-      build_command: |
-        ./scripts/build_web_root.sh
-        test -f web/compiler/dynlex_web.js
-        test -f web/compiler/dynlex_web.wasm
-    secrets:
-      deploy_ssh_key: ${{ secrets.DEPLOY_SSH_KEY }}
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PATH: /var/www/dynlex.com
+      RELEASE: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Build release
+        run: |
+          set -euo pipefail
+          test -f src/web/ide/public/compiler/dynlex_web.js
+          test -f src/web/ide/public/compiler/dynlex_web.wasm
+          DYNLEX_WEB_BASE="/releases/$RELEASE/" ./scripts/build_web_root.sh
+          node ./scripts/prepare_web_deployment.mjs "$RELEASE" "$RUNNER_TEMP/site"
+          test -f "$RUNNER_TEMP/site/compiler/dynlex_web.js"
+          test -f "$RUNNER_TEMP/site/compiler/dynlex_web.wasm"
+
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Trust deploy host
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload immutable release
+        run: |
+          set -euo pipefail
+          test "$(basename "$DEPLOY_PATH")" = "dynlex.com"
+          [[ "$RELEASE" =~ ^[0-9a-f]{40}$ ]]
+          remote_incoming="$DEPLOY_PATH/.incoming-$RELEASE"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "rm -rf '$remote_incoming' && mkdir -p '$remote_incoming'"
+          rsync -az --delete -e "ssh -p $DEPLOY_PORT" \
+            "$RUNNER_TEMP/site/" "$DEPLOY_USER@$DEPLOY_HOST:$remote_incoming/"
+
+      - name: Publish release atomically
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' RELEASE='$RELEASE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          [[ "$RELEASE" =~ ^[0-9a-f]{40}$ ]]
+          test "$(basename "$DEPLOY_PATH")" = "dynlex.com"
+          incoming="$DEPLOY_PATH/.incoming-$RELEASE"
+          release_path="$DEPLOY_PATH/releases/$RELEASE"
+          test -f "$incoming/index.html"
+          mkdir -p "$DEPLOY_PATH/releases"
+          if [ -e "$release_path" ]; then
+            diff -qr "$incoming" "$release_path"
+            rm -rf "$incoming"
+          else
+            mv "$incoming" "$release_path"
+          fi
+          touch "$release_path"
+          ln -s "releases/$RELEASE" "$DEPLOY_PATH/current.next"
+          mv -Tf "$DEPLOY_PATH/current.next" "$DEPLOY_PATH/current"
+          REMOTE
+
+      - name: Configure nginx caching
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          site_hostname="$(basename "$DEPLOY_PATH")"
+          cert_name="$(awk -F. '{ if (NF >= 2) print $(NF-1) "." $NF; else print $0 }' <<<"$site_hostname")"
+          config_path="/etc/nginx/sites-available/$site_hostname"
+          link_path="/etc/nginx/sites-enabled/$site_hostname"
+          cat > "$config_path" <<EOF
+          # Managed by DynLex deploy workflow
+          server {
+              listen 80;
+              listen [::]:80;
+              server_name $site_hostname;
+              return 301 https://\$host\$request_uri;
+          }
+
+          server {
+              listen 443 ssl http2;
+              listen [::]:443 ssl http2;
+              server_name $site_hostname;
+
+              root $DEPLOY_PATH/current;
+              index index.html;
+
+              ssl_certificate /etc/letsencrypt/live/$cert_name/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/$cert_name/privkey.pem;
+
+              location ^~ /releases/ {
+                  root $DEPLOY_PATH;
+                  try_files \$uri =404;
+                  add_header Cache-Control "public, max-age=31536000, immutable" always;
+              }
+
+              location / {
+                  try_files \$uri \$uri/ /index.html;
+                  add_header Cache-Control "no-cache" always;
+              }
+          }
+          EOF
+          ln -sfn "$config_path" "$link_path"
+          nginx -t
+          systemctl reload nginx
+          REMOTE
+
+      - name: Remove superseded deployment files
+        run: |
+          set -euo pipefail
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' RELEASE='$RELEASE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          test "$(basename "$DEPLOY_PATH")" = "dynlex.com"
+          find "$DEPLOY_PATH" -mindepth 1 -maxdepth 1 \
+            ! -name releases ! -name current -exec rm -rf -- {} +
+          find "$DEPLOY_PATH/releases" -mindepth 1 -maxdepth 1 -type d \
+            ! -name "$RELEASE" -mmin +1440 -exec rm -rf -- {} +
+          REMOTE

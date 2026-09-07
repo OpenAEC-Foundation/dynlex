@@ -518,15 +518,11 @@ assert.ok(
 const compilerWorkerRequest = requestedUrls.find(
   (url) => new URL(url).pathname === "/compiler/compiler-worker.js"
 );
-const compilerRevision = new URL(compilerWorkerRequest).searchParams.get("revision");
-assert.match(
-  compilerRevision,
-  /^[0-9a-f]{64}$/,
-  "The homepage compiler worker must use the complete artifact revision"
-);
-assert.ok(
+assert.equal(new URL(compilerWorkerRequest).search, "");
+assert.equal(
   requestedUrls.some((url) => new URL(url).pathname === "/compiler/manifest.json"),
-  "The homepage must obtain the compiler artifact revision from its generated manifest"
+  false,
+  "Local homepage compilation must not require a deployment manifest"
 );
 assert.equal(
   await evaluate(`(() => {

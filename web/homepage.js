@@ -113,17 +113,7 @@ function setSketchState(sketch, state) {
 }
 
 async function createSnippetWorker() {
-  const response = await fetch("/compiler/manifest.json", { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Compiler artifact manifest could not be loaded");
-  }
-  const manifest = await response.json();
-  const revision = manifest?.revision;
-  if (typeof revision !== "string" || !/^[0-9a-f]{64}$/.test(revision)) {
-    throw new Error("Compiler artifact manifest is invalid");
-  }
-  const workerUrl = new URL("/compiler/compiler-worker.js", window.location.origin);
-  workerUrl.searchParams.set("revision", revision);
+  const workerUrl = new URL("./compiler/compiler-worker.js", import.meta.url);
   snippetWorker = new Worker(workerUrl, { type: "module" });
   snippetWorker.addEventListener("message", (event) => {
     const message = event.data;
@@ -288,7 +278,7 @@ function startRiverChallengeMusic() {
     throw new Error("River challenge requires Web Audio");
   }
 
-  const audio = new Audio(new URL(sourcePath, document.baseURI).href);
+  const audio = new Audio(new URL(sourcePath, import.meta.url).href);
   const context = new AudioContextClass();
   const source = context.createMediaElementSource(audio);
   const gain = context.createGain();

@@ -1,11 +1,5 @@
-const runtimeRevision = new URL(import.meta.url).searchParams.get("revision");
-
 function runtimeDependencyUrl(path) {
-  const url = new URL(path, import.meta.url);
-  if (runtimeRevision) {
-    url.searchParams.set("revision", runtimeRevision);
-  }
-  return url.href;
+  return new URL(path, import.meta.url).href;
 }
 
 const [filesystemModule, pathHostModule, layoutModule] = await Promise.all([

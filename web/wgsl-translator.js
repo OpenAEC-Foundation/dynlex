@@ -20,9 +20,7 @@ async function instantiateTranslator(source) {
   return WebAssembly.instantiateStreaming(response);
 }
 
-export async function createWgslTranslator(
-  source = "/compiler/dynlex_wgsl_translator.wasm"
-) {
+export async function createWgslTranslator(source) {
   const instantiated = await instantiateTranslator(source);
   const exports = instantiated.instance.exports;
   for (const name of [

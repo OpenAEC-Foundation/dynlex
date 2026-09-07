@@ -112,20 +112,21 @@ for (const method of [
 }
 assert.match(compilerWorker, /"lsp\.exchange"/);
 assert.match(compilerWorker, /dynlex_web_lsp_exchange_json/);
-assert.match(compilerWorker, /compilerRevision/);
+assert.match(compilerWorker, /const compilerBaseUrl = new URL\("\.\/", self\.location\.href\)/);
 assert.match(compilerWorker, /compilerAssetUrl/);
 assert.match(
   compilerWorker,
   /const runtimeImportsPromise = import\(\/\* @vite-ignore \*\/ compilerAssetUrl\("runtimeImports\.js"\)\)/
 );
 assert.doesNotMatch(compilerWorker, /await import\(\/\* @vite-ignore \*\/ compilerAssetUrl\("runtimeImports\.js"\)\)/);
-assert.match(compilerWorker, /versionedAssetUrl\("\/wgsl-translator\.js"\)/);
+assert.match(compilerWorker, /new URL\("\.\.\/wgsl-translator\.js", compilerBaseUrl\)/);
 assert.match(compilerWorker, /createWgslTranslator\(compilerAssetUrl\("dynlex_wgsl_translator\.wasm"\)\)/);
 assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeFilesystem\.js"\)/);
 assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimePathHost\.js"\)/);
 assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeLayout\.js"\)/);
-assert.match(javascript, /__DYNLEX_COMPILER_REVISION__/);
-assert.match(viteConfig, /fileName: "compiler\/manifest\.json"/);
+assert.match(javascript, /import\.meta\.env\.BASE_URL/);
+assert.match(viteConfig, /base: process\.env\.DYNLEX_WEB_BASE \?\? "\/"/);
+assert.doesNotMatch(viteConfig, /compiler\/manifest\.json/);
 assert.match(viteConfig, /readdirSync\(compilerDirectory/);
 assert.doesNotMatch(compilerWorker, /dynlex_web_get_lsp_(?:hover|definition|semantic_tokens)_json/);
 assert.doesNotMatch(

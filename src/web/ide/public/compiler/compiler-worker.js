@@ -1,17 +1,7 @@
-const compilerBasePath = "/compiler/";
-const compilerRevision = new URL(self.location.href).searchParams.get("revision");
-if (!compilerRevision) {
-  throw new Error("Compiler worker requires an artifact revision");
-}
-
-function versionedAssetUrl(path) {
-  const url = new URL(path, self.location.origin);
-  url.searchParams.set("revision", compilerRevision);
-  return url.href;
-}
+const compilerBaseUrl = new URL("./", self.location.href);
 
 function compilerAssetUrl(path) {
-  return versionedAssetUrl(`${compilerBasePath}${path}`);
+  return new URL(path, compilerBaseUrl).href;
 }
 
 const runtimeImportsPromise = import(/* @vite-ignore */ compilerAssetUrl("runtimeImports.js"));
@@ -87,7 +77,7 @@ async function ensureCompilerInitialized() {
 
   const [imported, translatorModule, importedRuntime] = await Promise.all([
     import(/* @vite-ignore */ compilerAssetUrl("dynlex_web.js")),
-    import(/* @vite-ignore */ versionedAssetUrl("/wgsl-translator.js")),
+    import(/* @vite-ignore */ new URL("../wgsl-translator.js", compilerBaseUrl).href),
     runtimeImportsPromise
   ]);
   runtimeImports = importedRuntime;
