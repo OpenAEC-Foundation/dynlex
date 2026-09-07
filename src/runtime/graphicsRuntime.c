@@ -101,10 +101,15 @@ static bool configure_moltenvk_driver(void) { return true; }
 
 static bool retain_glfw(void) {
 	lock_glfw();
-	if (glfw_users == 0 && glfwInit() != GLFW_TRUE) {
-		set_glfw_error("initializing the graphics window system");
-		unlock_glfw();
-		return false;
+	if (glfw_users == 0) {
+#if GLFW_VERSION_MAJOR > 3 || (GLFW_VERSION_MAJOR == 3 && GLFW_VERSION_MINOR >= 4)
+		glfwInitVulkanLoader(vkGetInstanceProcAddr);
+#endif
+		if (glfwInit() != GLFW_TRUE) {
+			set_glfw_error("initializing the graphics window system");
+			unlock_glfw();
+			return false;
+		}
 	}
 	++glfw_users;
 	unlock_glfw();

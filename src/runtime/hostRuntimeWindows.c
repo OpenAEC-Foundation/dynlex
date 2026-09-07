@@ -2,6 +2,7 @@
 
 #include "hostRuntimeWindowsPath.h"
 #include "runtimeError.h"
+#include "windowsEnvironment.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -182,44 +183,20 @@ int dynlex_platform_environment_value(
 	wchar_t *wide_name = host_utf8_to_wide(name, name_length, "Invalid environment variable name");
 	if (wide_name == NULL)
 		return -1;
-	SetLastError(ERROR_SUCCESS);
-	DWORD required = GetEnvironmentVariableW(wide_name, NULL, 0);
-	DWORD error_number = GetLastError();
-	if (required == 0 && error_number == ERROR_ENVVAR_NOT_FOUND) {
+	LPWCH environment = GetEnvironmentStringsW();
+	if (environment == NULL) {
 		free(wide_name);
-		return 0;
-	}
-	if (required == 0 && error_number != ERROR_SUCCESS) {
-		free(wide_name);
-		dynlex_runtime_set_windows_error("Could not read environment variable", error_number);
+		dynlex_runtime_set_windows_error("Could not read environment", GetLastError());
 		return -1;
 	}
-	if (required == 0) {
-		free(wide_name);
-		*value = malloc(1);
-		if (*value == NULL) {
-			dynlex_runtime_set_windows_error("Could not allocate environment variable value", ERROR_OUTOFMEMORY);
-			return -1;
-		}
-		*found = 1;
-		return 0;
-	}
-	wchar_t *wide_value = malloc((size_t)required * sizeof(wchar_t));
-	if (wide_value == NULL) {
-		free(wide_name);
-		dynlex_runtime_set_windows_error("Could not allocate environment variable value", ERROR_OUTOFMEMORY);
-		return -1;
-	}
-	DWORD copied = GetEnvironmentVariableW(wide_name, wide_value, required);
+	const wchar_t *wide_value = dynlex_windows_environment_block_value(environment, wide_name);
 	free(wide_name);
-	if (copied == 0 || copied >= required) {
-		error_number = GetLastError();
-		free(wide_value);
-		dynlex_runtime_set_windows_error("Could not read environment variable", error_number);
-		return -1;
+	if (wide_value == NULL) {
+		FreeEnvironmentStringsW(environment);
+		return 0;
 	}
-	int result = host_wide_to_utf8(wide_value, copied, value, length);
-	free(wide_value);
+	int result = host_wide_to_utf8(wide_value, wcslen(wide_value), value, length);
+	FreeEnvironmentStringsW(environment);
 	if (result == 0)
 		*found = 1;
 	return result;
