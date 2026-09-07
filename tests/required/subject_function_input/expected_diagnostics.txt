@@ -1,5 +1,5 @@
-lib/std.dl:9-30: Error: no subject has been set
-  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/std.dl:9-30
+lib/std.dl:11-32: Error: no subject has been set
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/std.dl:11-32
   note: while inferring call 'ignore it' -> an unresolved value tests/required/subject_function_input/main.dl:16-18
   note: while inferring call 'ignore it' with arguments [an unresolved value] -> an unresolved value tests/required/subject_function_input/main.dl:9-18
   note: while inferring call 'consume a private subject' -> an unresolved value tests/required/subject_function_input/main.dl:9-34

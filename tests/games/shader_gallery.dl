@@ -28,7 +28,7 @@ while window remains open:
     set pressed to key (the up arrow key) is down in window or key (the right arrow key) is down in window or key (the down arrow key) is down in window or key (the left arrow key) is down in window
     if pressed:
         if ready:
-            set current to (current + 1)
+            increment current
             if current > 3:
                 set current to 0
             set ready to false

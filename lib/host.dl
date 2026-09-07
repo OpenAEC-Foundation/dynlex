@@ -40,86 +40,26 @@ class:
         end of file as a boolean
         error message as a string
 
-function {host text result:result} succeeded:
-    replacement:
-        result's success
-
-function {host text result:result} failed:
-    replacement:
-        the inverse of result's success
-
-function {host text result:result} is supported:
-    replacement:
-        result's support
-
-function {host text result:result} is unsupported:
-    replacement:
-        the inverse of result's support
-
-function {host truth result:result} succeeded:
-    replacement:
-        result's success
-
-function {host truth result:result} failed:
-    replacement:
-        the inverse of result's success
-
-function {host truth result:result} is supported:
-    replacement:
-        result's support
-
-function {host truth result:result} is unsupported:
-    replacement:
-        the inverse of result's support
-
-function {host lookup result:result} succeeded:
-    replacement:
-        result's success
-
-function {host lookup result:result} failed:
-    replacement:
-        the inverse of result's success
-
-function {host lookup result:result} is supported:
-    replacement:
-        result's support
-
-function {host lookup result:result} is unsupported:
-    replacement:
-        the inverse of result's support
-
-function {host lookup result:result} was found:
-    replacement:
-        result's found
-
-function {host lookup result:result} was absent:
-    replacement:
-        the inverse of result's found
-
-function {standard input chunk result:reading} succeeded:
-    replacement:
-        reading's success
-
-function {standard input chunk result:reading} failed:
-    replacement:
-        the inverse of reading's success
-
-function {standard input chunk result:reading} is supported:
-    replacement:
-        reading's support
-
-function {standard input chunk result:reading} is unsupported:
-    replacement:
-        the inverse of reading's support
-
-function {standard input chunk result:reading} reached the end of file:
-    replacement:
-        reading's end of file
-
-function {standard input chunk result:reading} has not reached the end of file:
-    replacement:
-        the inverse of reading's end of file
-
+{host text result:result} succeeded means: result's success
+{host text result:result} failed means: the inverse of result's success
+{host text result:result} is supported means: result's support
+{host text result:result} is unsupported means: the inverse of result's support
+{host truth result:result} succeeded means: result's success
+{host truth result:result} failed means: the inverse of result's success
+{host truth result:result} is supported means: result's support
+{host truth result:result} is unsupported means: the inverse of result's support
+{host lookup result:result} succeeded means: result's success
+{host lookup result:result} failed means: the inverse of result's success
+{host lookup result:result} is supported means: result's support
+{host lookup result:result} is unsupported means: the inverse of result's support
+{host lookup result:result} was found means: result's found
+{host lookup result:result} was absent means: the inverse of result's found
+{standard input chunk result:reading} succeeded means: reading's success
+{standard input chunk result:reading} failed means: the inverse of reading's success
+{standard input chunk result:reading} is supported means: reading's support
+{standard input chunk result:reading} is unsupported means: the inverse of reading's support
+{standard input chunk result:reading} reached the end of file means: reading's end of file
+{standard input chunk result:reading} has not reached the end of file means: the inverse of reading's end of file
 local function an empty host string:
     execute:
         return the string form of ""
@@ -146,44 +86,43 @@ local function the current host error message:
             )
         return text
 
-function whether the host platform is Windows:
-    execute:
-        set windows to 0 as an integer
-        set supported to 0 as an integer
-        set outcome to @intrinsic(
-            "call",
-            "dynlex_runtime",
-            "dynlex_host_platform_is_windows",
-            an integer,
-            the address of windows,
-            the address of supported
-        )
-        if outcome != 0:
-            return @intrinsic(
-                "construct",
-                a host truth result,
-                false,
-                supported != 0,
-                false,
-                the current host error message
-            )
-        if supported = 0:
-            return @intrinsic(
-                "construct",
-                a host truth result,
-                false,
-                false,
-                false,
-                the current host error message
-            )
+to get whether the host platform is Windows:
+    set windows to 0 as an integer
+    set supported to 0 as an integer
+    set outcome to @intrinsic(
+        "call",
+        "dynlex_runtime",
+        "dynlex_host_platform_is_windows",
+        an integer,
+        the address of windows,
+        the address of supported
+    )
+    if outcome != 0:
         return @intrinsic(
             "construct",
             a host truth result,
-            true,
-            true,
-            windows != 0,
-            an empty host string
+            false,
+            supported != 0,
+            false,
+            the current host error message
         )
+    if supported = 0:
+        return @intrinsic(
+            "construct",
+            a host truth result,
+            false,
+            false,
+            false,
+            the current host error message
+        )
+    return @intrinsic(
+        "construct",
+        a host truth result,
+        true,
+        true,
+        windows != 0,
+        an empty host string
+    )
 
 local function the host path value of kind {integer:kind}:
     execute:
@@ -296,17 +235,14 @@ local function the host path value of kind {integer:kind}:
             an empty host string
         )
 
-function the running executable path:
-    execute:
-        return the host path value of kind 1
+to get the running executable path:
+    return the host path value of kind 1
 
-function the running executable directory:
-    execute:
-        return the host path value of kind 2
+to get the running executable directory:
+    return the host path value of kind 2
 
-function the user cache directory:
-    execute:
-        return the host path value of kind 3
+to get the user cache directory:
+    return the host path value of kind 3
 
 local function the host lookup for {string:name} of kind {integer:kind}:
     execute:
@@ -364,36 +300,32 @@ local function the host lookup for {string:name} of kind {integer:kind}:
             return @intrinsic("construct", a host lookup result, false, supported != 0, false, an empty host string, the current host error message)
         return @intrinsic("construct", a host lookup result, true, true, found != 0, value, an empty host string)
 
-function the environment variable named name:
-    execute:
-        return the host lookup for the string form of name of kind 1
+to get the environment variable named name:
+    return the host lookup for the string form of name of kind 1
 
-function the executable named name:
-    execute:
-        return the host lookup for the string form of name of kind 2
+to get the executable named name:
+    return the host lookup for the string form of name of kind 2
 
-function the host platform name:
-    execute:
-        set length to 0 as a word sized integer
-        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, 0 as a pointer to a byte, 0 as a word sized integer, the address of length)
-        if outcome != 0:
-            return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
-        set value to a new string buffer containing (length as an integer) bytes
-        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, the data of value, length, the address of length)
-        if outcome != 0:
-            return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
-        return @intrinsic("construct", a host text result, true, true, value, an empty host string)
+to get the host platform name:
+    set length to 0 as a word sized integer
+    set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, 0 as a pointer to a byte, 0 as a word sized integer, the address of length)
+    if outcome != 0:
+        return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
+    set value to a new string buffer containing (length as an integer) bytes
+    set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_platform_name", an integer, the data of value, length, the address of length)
+    if outcome != 0:
+        return @intrinsic("construct", a host text result, false, true, an empty host string, the current host error message)
+    return @intrinsic("construct", a host text result, true, true, value, an empty host string)
 
-function whether the process has administrator privileges:
-    execute:
-        set flag to 0 as an integer
-        set supported to 0 as an integer
-        set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_is_administrator", an integer, the address of flag, the address of supported)
-        if outcome != 0:
-            return @intrinsic("construct", a host truth result, false, supported != 0, false, the current host error message)
-        if supported = 0:
-            return @intrinsic("construct", a host truth result, false, false, false, the current host error message)
-        return @intrinsic("construct", a host truth result, true, true, flag != 0, an empty host string)
+to get whether the process has administrator privileges:
+    set flag to 0 as an integer
+    set supported to 0 as an integer
+    set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_is_administrator", an integer, the address of flag, the address of supported)
+    if outcome != 0:
+        return @intrinsic("construct", a host truth result, false, supported != 0, false, the current host error message)
+    if supported = 0:
+        return @intrinsic("construct", a host truth result, false, false, false, the current host error message)
+    return @intrinsic("construct", a host truth result, true, true, flag != 0, an empty host string)
 
 local function the result of writing {string:message} to standard error:
     execute:
@@ -408,10 +340,8 @@ local function the result of writing {string:message} to standard error:
 flex function write message to standard error:
     replacement:
         set the subject to the result of writing the string form of message to standard error
-
-function exit the program with status {integer:status}:
-    execute:
-        @intrinsic("call", "dynlex_runtime", "dynlex_host_exit", nothing, status)
+to exit the program with status {integer:status}:
+    @intrinsic("call", "dynlex_runtime", "dynlex_host_exit", nothing, status)
 
 local function the chunk read from the standard input:
     execute:
@@ -430,7 +360,7 @@ local function the chunk read from the standard input:
             the address of supported
         )
         if outcome != 0:
-            @intrinsic("call", "libc", "free", nothing, data)
+            deallocate data
             return @intrinsic(
                 "construct",
                 a standard input chunk result,
@@ -441,7 +371,7 @@ local function the chunk read from the standard input:
                 the current host error message
             )
         if supported = 0:
-            @intrinsic("call", "libc", "free", nothing, data)
+            deallocate data
             return @intrinsic(
                 "construct",
                 a standard input chunk result,
@@ -463,7 +393,7 @@ local function the chunk read from the standard input:
                 data,
                 length
             )
-        @intrinsic("call", "libc", "free", nothing, data)
+        deallocate data
         return @intrinsic(
             "construct",
             a standard input chunk result,

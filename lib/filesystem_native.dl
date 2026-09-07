@@ -62,26 +62,26 @@ class:
         set owner to the owner of the path of @intrinsic("lifecycle value")
         if owner != (0 as a pointer to an integer):
             set references to @intrinsic("dereference", owner)
-            @intrinsic("store at", owner, references + 1)
+            store references + 1 at owner
         set owner to the owner of the error message of @intrinsic("lifecycle value")
         if owner != (0 as a pointer to an integer):
             set references to @intrinsic("dereference", owner)
-            @intrinsic("store at", owner, references + 1)
+            store references + 1 at owner
     release:
         set owner to the owner of the error message of @intrinsic("lifecycle value")
         if owner != (0 as a pointer to an integer):
             set references to @intrinsic("dereference", owner)
             if references = 1:
-                @intrinsic("call", "libc", "free", nothing, owner)
+                deallocate owner
             else:
-                @intrinsic("store at", owner, references - 1)
+                store references - 1 at owner
         set owner to the owner of the path of @intrinsic("lifecycle value")
         if owner != (0 as a pointer to an integer):
             set references to @intrinsic("dereference", owner)
             if references = 1:
-                @intrinsic("call", "libc", "free", nothing, owner)
+                deallocate owner
             else:
-                @intrinsic("store at", owner, references - 1)
+                store references - 1 at owner
         set handle to the handle of @intrinsic("lifecycle value")
         if handle != (0 as a pointer to a byte):
             @intrinsic("call", "dynlex_runtime", "dynlex_filesystem_staging_release", nothing, handle)
@@ -110,162 +110,45 @@ local class:
         creation time as an integer
         identity as an integer
 
-function {file identity:identity} is supported:
-    replacement:
-        identity's support
-
-function {file identity:identity} is unsupported:
-    replacement:
-        the inverse of identity's support
-
-function {file identity:identity} is available:
-    replacement:
-        identity's availability
-
-function {file identity:identity} is unavailable:
-    replacement:
-        the inverse of identity's availability
-
-function {file system entry:entry} is supported:
-    replacement:
-        entry's support
-
-function {file system entry:entry} is unsupported:
-    replacement:
-        the inverse of entry's support
-
-function {file system entry:entry} lookup succeeded:
-    replacement:
-        entry's success
-
-function {file system entry:entry} lookup failed:
-    replacement:
-        the inverse of entry's success
-
-function {file system entry:entry} was found:
-    replacement:
-        entry's presence
-
-function {file system entry:entry} was absent:
-    replacement:
-        the inverse of entry's presence
-
-function {file system entry:entry} is a regular file:
-    replacement:
-        entry's regular file kind
-
-function {file system entry:entry} is not a regular file:
-    replacement:
-        the inverse of entry's regular file kind
-
-function {file system entry:entry} is a directory:
-    replacement:
-        entry's directory kind
-
-function {file system entry:entry} is not a directory:
-    replacement:
-        entry's directory kind = false
-
-function {file system entry:entry} is a symbolic link:
-    replacement:
-        entry's symbolic link kind
-
-function {file system entry:entry} is not a symbolic link:
-    replacement:
-        entry's symbolic link kind = false
-
-function {file system entry:entry} has another filesystem kind:
-    replacement:
-        entry's other kind
-
-function {file system entry:entry} does not have another filesystem kind:
-    replacement:
-        entry's other kind = false
-
-function {file system entry:entry}'s mode is supported:
-    replacement:
-        entry's mode support
-
-function {file system entry:entry}'s mode is unsupported:
-    replacement:
-        the inverse of entry's mode support
-
-function {file system entry:entry}'s Windows attributes are supported:
-    replacement:
-        entry's Windows attributes support
-
-function {file system entry:entry}'s Windows attributes are unsupported:
-    replacement:
-        the inverse of entry's Windows attributes support
-
-function {file system entry:entry}'s access time is supported:
-    replacement:
-        entry's access time support
-
-function {file system entry:entry}'s access time is unsupported:
-    replacement:
-        the inverse of entry's access time support
-
-function {file system entry:entry} supports modification times:
-    replacement:
-        entry's modification time support
-
-function {file system entry:entry} does not support modification times:
-    replacement:
-        the inverse of entry's modification time support
-
-function {file system entry:entry}'s creation time is supported:
-    replacement:
-        entry's creation time support
-
-function {file system entry:entry}'s creation time is unsupported:
-    replacement:
-        the inverse of entry's creation time support
-
-function {file system staging file:staging} is supported:
-    replacement:
-        staging's support
-
-function {file system staging file:staging} is unsupported:
-    replacement:
-        the inverse of staging's support
-
-function {file system staging file:staging} succeeded:
-    replacement:
-        staging's success
-
-function {file system staging file:staging} failed:
-    replacement:
-        the inverse of staging's success
-
-function {file system staging file:staging}'s commit outcome is known:
-    replacement:
-        staging's commit outcome knowledge
-
-function {file system staging file:staging} was committed:
-    replacement:
-        staging's commitment
-
-function {file system staging file:staging} was not committed:
-    replacement:
-        staging's commitment = false
-
-function {file system staging file:staging} is durable:
-    replacement:
-        staging's durability
-
-function {file system staging file:staging} is not durable:
-    replacement:
-        staging's durability = false
-
-function {file system staging file:staging}'s cleanup succeeded:
-    replacement:
-        staging's cleanup success
-
-function {file system staging file:staging}'s cleanup failed:
-    replacement:
-        the inverse of staging's cleanup success
-
+{file identity:identity} is supported means: identity's support
+{file identity:identity} is unsupported means: the inverse of identity's support
+{file identity:identity} is available means: identity's availability
+{file identity:identity} is unavailable means: the inverse of identity's availability
+{file system entry:entry} is supported means: entry's support
+{file system entry:entry} is unsupported means: the inverse of entry's support
+{file system entry:entry} lookup succeeded means: entry's success
+{file system entry:entry} lookup failed means: the inverse of entry's success
+{file system entry:entry} was found means: entry's presence
+{file system entry:entry} was absent means: the inverse of entry's presence
+{file system entry:entry} is a regular file means: entry's regular file kind
+{file system entry:entry} is not a regular file means: the inverse of entry's regular file kind
+{file system entry:entry} is a directory means: entry's directory kind
+{file system entry:entry} is not a directory means: entry's directory kind = false
+{file system entry:entry} is a symbolic link means: entry's symbolic link kind
+{file system entry:entry} is not a symbolic link means: entry's symbolic link kind = false
+{file system entry:entry} has another filesystem kind means: entry's other kind
+{file system entry:entry} does not have another filesystem kind means: entry's other kind = false
+{file system entry:entry}'s mode is supported means: entry's mode support
+{file system entry:entry}'s mode is unsupported means: the inverse of entry's mode support
+{file system entry:entry}'s Windows attributes are supported means: entry's Windows attributes support
+{file system entry:entry}'s Windows attributes are unsupported means: the inverse of entry's Windows attributes support
+{file system entry:entry}'s access time is supported means: entry's access time support
+{file system entry:entry}'s access time is unsupported means: the inverse of entry's access time support
+{file system entry:entry} supports modification times means: entry's modification time support
+{file system entry:entry} does not support modification times means: the inverse of entry's modification time support
+{file system entry:entry}'s creation time is supported means: entry's creation time support
+{file system entry:entry}'s creation time is unsupported means: the inverse of entry's creation time support
+{file system staging file:staging} is supported means: staging's support
+{file system staging file:staging} is unsupported means: the inverse of staging's support
+{file system staging file:staging} succeeded means: staging's success
+{file system staging file:staging} failed means: the inverse of staging's success
+{file system staging file:staging}'s commit outcome is known means: staging's commit outcome knowledge
+{file system staging file:staging} was committed means: staging's commitment
+{file system staging file:staging} was not committed means: staging's commitment = false
+{file system staging file:staging} is durable means: staging's durability
+{file system staging file:staging} is not durable means: staging's durability = false
+{file system staging file:staging}'s cleanup succeeded means: staging's cleanup success
+{file system staging file:staging}'s cleanup failed means: the inverse of staging's cleanup success
 local function an empty native filesystem failure text:
     execute:
         return the string form of ""
@@ -399,99 +282,97 @@ local function a supported file system entry failure reporting {string:message}:
             message
         )
 
-function {file identity:left} identifies the same file as {file identity:right}:
-    execute:
-        if left is unsupported:
-            return false
-        if right is unsupported:
-            return false
-        if left is unavailable:
-            return false
-        if right is unavailable:
-            return false
-        return left's representation = right's representation
+to get {file identity:left} identifies the same file as {file identity:right}:
+    if left is unsupported:
+        return false
+    if right is unsupported:
+        return false
+    if left is unavailable:
+        return false
+    if right is unavailable:
+        return false
+    return left's representation = right's representation
 
-function the file system entry at {a value:path}:
-    execute:
-        set prepared to a native filesystem path for path
-        if prepared is invalid:
-            set message to the string form of "Invalid filesystem path"
-            return a supported file system entry failure reporting message
+to get the file system entry at {a value:path}:
+    set prepared to a native filesystem path for path
+    if prepared is invalid:
+        set message to the string form of "Invalid filesystem path"
+        return a supported file system entry failure reporting message
 
-        set kind to 0
-        set support to @intrinsic("construct", a file metadata support record, 0, 0, 0, 0, 0, 0)
-        set mode to 0 as a word sized integer
-        set attributes to 0 as a word sized integer
-        set restoration to 0 as a word sized integer
-        set access to an empty file system timestamp
-        set modification to an empty file system timestamp
-        set creation to an empty file system timestamp
-        set extent to 0 as a word sized integer
-        set buffer to a new string buffer containing 26 bytes
-        set outcome to @intrinsic(
-            "call",
-            "dynlex_runtime",
-            "dynlex_filesystem_entry",
-            an integer,
-            prepared's data,
-            prepared's length,
-            the address of kind,
-            the address of (support's mode),
-            the address of mode,
-            the address of (support's Windows attributes),
-            the address of attributes,
-            the address of restoration,
-            the address of (support's access time),
-            the address of (access's seconds),
-            the address of (access's nanoseconds),
-            the address of (support's modification time),
-            the address of (modification's seconds),
-            the address of (modification's nanoseconds),
-            the address of (support's creation time),
-            the address of (creation's seconds),
-            the address of (creation's nanoseconds),
-            the address of (support's identity),
-            the data of buffer,
-            buffer's length as a word sized integer,
-            the address of extent
-        )
-        if outcome < 0:
-            return a supported file system entry failure reporting the current native filesystem failure text
+    set kind to 0
+    set support to @intrinsic("construct", a file metadata support record, 0, 0, 0, 0, 0, 0)
+    set mode to 0 as a word sized integer
+    set attributes to 0 as a word sized integer
+    set restoration to 0 as a word sized integer
+    set access to an empty file system timestamp
+    set modification to an empty file system timestamp
+    set creation to an empty file system timestamp
+    set extent to 0 as a word sized integer
+    set buffer to a new string buffer containing 26 bytes
+    set outcome to @intrinsic(
+        "call",
+        "dynlex_runtime",
+        "dynlex_filesystem_entry",
+        an integer,
+        prepared's data,
+        prepared's length,
+        the address of kind,
+        the address of (support's mode),
+        the address of mode,
+        the address of (support's Windows attributes),
+        the address of attributes,
+        the address of restoration,
+        the address of (support's access time),
+        the address of (access's seconds),
+        the address of (access's nanoseconds),
+        the address of (support's modification time),
+        the address of (modification's seconds),
+        the address of (modification's nanoseconds),
+        the address of (support's creation time),
+        the address of (creation's seconds),
+        the address of (creation's nanoseconds),
+        the address of (support's identity),
+        the data of buffer,
+        buffer's length as a word sized integer,
+        the address of extent
+    )
+    if outcome < 0:
+        return a supported file system entry failure reporting the current native filesystem failure text
 
-        set representation to the string form of ""
-        if extent > (0 as a word sized integer):
-            set representation to the substring of buffer from 0 spanning (extent as an integer) bytes
-        set identity to @intrinsic(
-            "construct",
-            a file identity,
-            support's identity != 0,
-            extent > (0 as a word sized integer),
-            representation
-        )
-        return @intrinsic(
-            "construct",
-            a file system entry,
-            true,
-            true,
-            outcome = 1,
-            kind = 1,
-            kind = 2,
-            kind = 3,
-            kind = 4,
-            support's mode != 0,
-            mode,
-            support's Windows attributes != 0,
-            attributes,
-            restoration,
-            support's access time != 0,
-            access,
-            support's modification time != 0,
-            modification,
-            support's creation time != 0,
-            creation,
-            identity,
-            an empty native filesystem failure text
-        )
+    set representation to the string form of ""
+    if extent > (0 as a word sized integer):
+        set representation to the substring of buffer from 0 spanning (extent as an integer) bytes
+    set identity to @intrinsic(
+        "construct",
+        a file identity,
+        support's identity != 0,
+        extent > (0 as a word sized integer),
+        representation
+    )
+    return @intrinsic(
+        "construct",
+        a file system entry,
+        true,
+        true,
+        outcome = 1,
+        kind = 1,
+        kind = 2,
+        kind = 3,
+        kind = 4,
+        support's mode != 0,
+        mode,
+        support's Windows attributes != 0,
+        attributes,
+        restoration,
+        support's access time != 0,
+        access,
+        support's modification time != 0,
+        modification,
+        support's creation time != 0,
+        creation,
+        identity,
+        an empty native filesystem failure text
+    )
 
 local function a supported staging file creation failure reporting {string:message}:
     replacement:
@@ -639,7 +520,6 @@ local function the result of creating a staging file beside target:
 flex function create a staging file beside target:
     replacement:
         set the subject to the result of creating a staging file beside target
-
 local function the result of writing {string:contents} to {file system staging file:staging}:
     execute:
         if staging's handle = (0 as a pointer to a byte):
@@ -664,7 +544,6 @@ local function the result of writing {string:contents} to {file system staging f
 flex function write {string:contents} to {file system staging file:staging}:
     replacement:
         set the subject to the result of writing contents to staging
-
 local function the result of restoring metadata from {file system entry:snapshot} to {file system staging file:staging}:
     execute:
         if staging's handle = (0 as a pointer to a byte):
@@ -705,7 +584,6 @@ local function the result of restoring metadata from {file system entry:snapshot
 flex function restore metadata from {file system entry:snapshot} to {file system staging file:staging}:
     replacement:
         set the subject to the result of restoring metadata from snapshot to staging
-
 local function the result of cancelling {file system staging file:staging}:
     execute:
         if staging's handle = (0 as a pointer to a byte):
@@ -752,7 +630,6 @@ local function the result of cancelling {file system staging file:staging}:
 flex function cancel {file system staging file:staging}:
     replacement:
         set the subject to the result of cancelling staging
-
 local function the result of committing {file system staging file:staging} where overwriting is {boolean:replacement} and durability is {boolean:persistence}:
     execute:
         if staging's handle = (0 as a pointer to a byte):
@@ -787,7 +664,7 @@ local function the result of committing {file system staging file:staging} where
             the address of cleanup
         )
         set supported to outcome != -2
-        set succeeded to (outcome = 0)
+        set succeeded to outcome = 0
         set failed to outcome != 0
         set message to an empty native filesystem failure text
         if failed:

@@ -70,114 +70,31 @@ class:
         version as a 32 bit integer
         diagnostics as a pointer to a JSON value
 
-function the LSP created lifecycle:
-    replacement:
-        0
-
-function the LSP running lifecycle:
-    replacement:
-        1
-
-function the LSP shutdown lifecycle:
-    replacement:
-        2
-
-function the LSP stopped lifecycle:
-    replacement:
-        3
-
-function the LSP no synchronization kind:
-    replacement:
-        0
-
-function the LSP full synchronization kind:
-    replacement:
-        1
-
-function the LSP incremental synchronization kind:
-    replacement:
-        2
-
-function the LSP invalid state status:
-    replacement:
-        20
-
-function the LSP invalid response status:
-    replacement:
-        21
-
-function the LSP document error status:
-    replacement:
-        22
-
-function the LSP server not initialized code:
-    replacement:
-        0 - 32002
-
-function the LSP unknown error code:
-    replacement:
-        0 - 32001
-
-function the LSP request failed code:
-    replacement:
-        0 - 32803
-
-function the LSP server cancelled code:
-    replacement:
-        0 - 32802
-
-function the LSP content modified code:
-    replacement:
-        0 - 32801
-
-function the LSP request cancelled code:
-    replacement:
-        0 - 32800
-
-function {LSP client result:outcome} succeeded:
-    replacement:
-        outcome's success
-
-function {LSP client result:outcome} failed:
-    replacement:
-        the inverse of outcome's success
-
-function {LSP document result:outcome} was found:
-    replacement:
-        outcome's availability
-
-function {LSP document result:outcome} is missing:
-    replacement:
-        the inverse of outcome's availability
-
-function {LSP diagnostics result:outcome} was found:
-    replacement:
-        outcome's availability
-
-function {LSP diagnostics result:outcome} has a version:
-    replacement:
-        outcome's version presence
-
-function {LSP synchronization:settings} sends open and close notifications:
-    replacement:
-        settings's open and close notifications
-
-function {LSP synchronization:settings} does not send open and close notifications:
-    replacement:
-        the inverse of settings's open and close notifications
-
-function {LSP synchronization:settings} sends save notifications:
-    replacement:
-        settings's save notifications
-
-function {LSP synchronization:settings} does not send save notifications:
-    replacement:
-        the inverse of settings's save notifications
-
-function {LSP synchronization:settings} includes text in save notifications:
-    replacement:
-        settings's saved text inclusion
-
-function {LSP synchronization:settings} does not include text in save notifications:
-    replacement:
-        the inverse of settings's saved text inclusion
+the LSP created lifecycle means: 0
+the LSP running lifecycle means: 1
+the LSP shutdown lifecycle means: 2
+the LSP stopped lifecycle means: 3
+the LSP no synchronization kind means: 0
+the LSP full synchronization kind means: 1
+the LSP incremental synchronization kind means: 2
+the LSP invalid state status means: 20
+the LSP invalid response status means: 21
+the LSP document error status means: 22
+the LSP server not initialized code means: -32002
+the LSP unknown error code means: -32001
+the LSP request failed code means: -32803
+the LSP server cancelled code means: -32802
+the LSP content modified code means: -32801
+the LSP request cancelled code means: -32800
+{LSP client result:outcome} succeeded means: outcome's success
+{LSP client result:outcome} failed means: the inverse of outcome's success
+{LSP document result:outcome} was found means: outcome's availability
+{LSP document result:outcome} is missing means: the inverse of outcome's availability
+{LSP diagnostics result:outcome} was found means: outcome's availability
+{LSP diagnostics result:outcome} has a version means: outcome's version presence
+{LSP synchronization:settings} sends open and close notifications means: settings's open and close notifications
+{LSP synchronization:settings} does not send open and close notifications means: the inverse of settings's open and close notifications
+{LSP synchronization:settings} sends save notifications means: settings's save notifications
+{LSP synchronization:settings} does not send save notifications means: the inverse of settings's save notifications
+{LSP synchronization:settings} includes text in save notifications means: settings's saved text inclusion
+{LSP synchronization:settings} does not include text in save notifications means: the inverse of settings's saved text inclusion

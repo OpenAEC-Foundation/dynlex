@@ -2,63 +2,48 @@
 
 import lib/json_rpc_framing.dl
 
-function a new JSON-RPC text for {a value:input}:
-    execute:
-        set node to a new JSON value of kind the JSON text kind
-        set the text of node to the string form of input
-        return node
+to get a new JSON-RPC text for {a value:input}:
+    set node to a new JSON value of kind the JSON text kind
+    set the text of node to the string form of input
+    return node
 
-function a new JSON-RPC boolean for {boolean:input}:
-    execute:
-        set node to a new JSON value of kind the JSON boolean kind
-        set the boolean of node to input
-        return node
+to get a new JSON-RPC boolean for {boolean:input}:
+    set node to a new JSON value of kind the JSON boolean kind
+    set the boolean of node to input
+    return node
 
-function a new JSON-RPC null:
-    replacement:
-        a new JSON value of kind the JSON null kind
+a new JSON-RPC null means: a new JSON value of kind the JSON null kind
+to get a new JSON-RPC integer from {string:lexeme}:
+    parse lexeme as JSON and set parsed to it
+    if parsed failed:
+        free parsed
+        abort the program
+    set node to the value of parsed
+    if JSON-RPC number node is not an integer identifier:
+        free parsed
+        abort the program
+    return node
 
-function a new JSON-RPC integer from {string:lexeme}:
-    execute:
-        parse lexeme as JSON and set parsed to it
-        if parsed failed:
-            free parsed
-            @intrinsic("call", "libc", "abort", nothing)
-        set node to the value of parsed
-        if JSON-RPC number node is not an integer identifier:
-            free parsed
-            @intrinsic("call", "libc", "abort", nothing)
-        return node
+to get a new JSON-RPC integer from {C string:lexeme}:
+    return a new JSON-RPC integer from the string form of lexeme
 
-function a new JSON-RPC integer from {C string:lexeme}:
-    execute:
-        return a new JSON-RPC integer from the string form of lexeme
+to get a new JSON-RPC integer for {integer:input}:
+    set lexeme to the string form of input
+    return a new JSON-RPC integer from lexeme
 
-function a new JSON-RPC integer for {integer:input}:
-    execute:
-        set lexeme to the string form of input
-        return a new JSON-RPC integer from lexeme
+to get a copy of JSON-RPC node {a pointer to a JSON value:source}:
+    set validation to the validation of JSON-RPC value source
+    if validation failed:
+        abort the program
+    set encoded to the compact JSON form of source
+    parse encoded as JSON and set parsed to it
+    if parsed failed:
+        free parsed
+        abort the program
+    return the value of parsed
 
-function a copy of JSON-RPC node {a pointer to a JSON value:source}:
-    execute:
-        set validation to the validation of JSON-RPC value source
-        if validation failed:
-            @intrinsic("call", "libc", "abort", nothing)
-        set encoded to the compact JSON form of source
-        parse encoded as JSON and set parsed to it
-        if parsed failed:
-            free parsed
-            @intrinsic("call", "libc", "abort", nothing)
-        return the value of parsed
+to add JSON-RPC member {a value:name} containing {a pointer to a JSON value:node} to {a pointer to a JSON value:parent}:
+    add a JSON member named the string form of name with value node to parent
 
-function add JSON-RPC member {a value:name} containing {a pointer to a JSON value:node} to {a pointer to a JSON value:parent}:
-    execute:
-        add a JSON member named the string form of name with value node to parent
-
-function a new JSON-RPC object:
-    replacement:
-        a new JSON value of kind the JSON object kind
-
-function a new JSON-RPC array:
-    replacement:
-        a new JSON value of kind the JSON array kind
+a new JSON-RPC object means: a new JSON value of kind the JSON object kind
+a new JSON-RPC array means: a new JSON value of kind the JSON array kind

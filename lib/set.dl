@@ -8,41 +8,33 @@ class:
     members:
         values
 
-function an empty set of {type:kind}:
-    execute:
-        set values to an empty list of kind
-        set initial to @intrinsic("construct", a unique set, values)
-        allocate one slot of initial and set result to it
-        return result
+to get an empty set of {type:kind}:
+    set values to an empty list of kind
+    set initial to @intrinsic("construct", a unique set, values)
+    set result to storage for one slot initialized with initial
+    return result
 
-function the size of {a pointer to a unique set:items}:
-    execute:
-        return the length of the values of items
+to get the size of {a pointer to a unique set:items}:
+    return the length of the values of items
 
-function {a pointer to a unique set:items} contains value:
-    execute:
-        return the values of items contains value
+to get {a pointer to a unique set:items} contains value:
+    return the values of items contains value
 
-function {a pointer to a unique set:items} does not contain value:
-    execute:
-        return the values of items does not contain value
+to get {a pointer to a unique set:items} does not contain value:
+    return the values of items does not contain value
 
-function add value to {a pointer to a unique set:items}:
-    execute:
-        if items does not contain value:
-            append value to the values of items
+to add value to {a pointer to a unique set:items}:
+    if items does not contain value:
+        append value to the values of items
 
-function remove value from {a pointer to a unique set:items}:
-    execute:
-        set position to the index of value in the values of items
-        if position >= 0:
-            remove item position from the values of items
+to remove value from {a pointer to a unique set:items}:
+    set position to the index of value in the values of items
+    if position >= 0:
+        remove item position from the values of items
 
-function clear {a pointer to a unique set:items}:
-    execute:
-        clear the values of items
+to clear {a pointer to a unique set:items}:
+    clear the values of items
 
-function free {a pointer to a unique set:items}:
-    execute:
-        free (the values of items)
-        @intrinsic("call", "libc", "free", nothing, items)
+to free {a pointer to a unique set:items}:
+    free (the values of items)
+    deallocate items

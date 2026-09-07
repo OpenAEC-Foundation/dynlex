@@ -9,107 +9,103 @@ class:
         pattern as a string
         error position as an integer
 
-function the regular expression closing bracket in {string:pattern} from {integer:start} to {integer:finish}:
-    execute:
-        set cursor to start
-        loop while cursor < finish:
-            set token to the character at cursor in pattern
-            if token = 92:
-                set cursor to (cursor + 2)
-            else if token = 93:
+to get the regular expression closing bracket in {string:pattern} from {integer:start} to {integer:finish}:
+    set cursor to start
+    loop while cursor < finish:
+        set token to the character at cursor in pattern
+        if token = 92:
+            add 2 to cursor
+        else if token = 93:
+            return cursor
+        else:
+            increment cursor
+    return the negative of 1
+
+to get the regular expression closing parenthesis in {string:pattern} from {integer:start} to {integer:finish}:
+    set depth to 1
+    set cursor to start
+    loop while cursor < finish:
+        set token to the character at cursor in pattern
+        if token = 92:
+            add 2 to cursor
+        else if token = 91:
+            set bracket to the regular expression closing bracket in pattern from cursor + 1 to finish
+            if bracket < 0:
+                return the negative of 1
+            set cursor to bracket + 1
+        else if token = 40:
+            increment depth
+            increment cursor
+        else if token = 41:
+            decrement depth
+            if depth = 0:
                 return cursor
-            else:
-                set cursor to (cursor + 1)
-        return the negative of 1
+            increment cursor
+        else:
+            increment cursor
+    return the negative of 1
 
-function the regular expression closing parenthesis in {string:pattern} from {integer:start} to {integer:finish}:
-    execute:
-        set depth to 1
-        set cursor to start
-        loop while cursor < finish:
-            set token to the character at cursor in pattern
-            if token = 92:
-                set cursor to (cursor + 2)
-            else if token = 91:
-                set bracket to (the regular expression closing bracket in pattern from cursor + 1 to finish)
-                if bracket < 0:
-                    return the negative of 1
-                set cursor to (bracket + 1)
-            else if token = 40:
-                set depth to (depth + 1)
-                set cursor to (cursor + 1)
-            else if token = 41:
-                set depth to (depth - 1)
-                if depth = 0:
-                    return cursor
-                set cursor to (cursor + 1)
-            else:
-                set cursor to (cursor + 1)
-        return the negative of 1
+to get the regular expression error position in {string:pattern}:
+    set depth to 0
+    set cursor to 0
+    set repeatable to false
+    set incomplete to true
+    loop while cursor < the length of pattern:
+        set token to the character at cursor in pattern
+        if token = 92:
+            if cursor + 1 >= the length of pattern:
+                return cursor
+            add 2 to cursor
+            set repeatable to true
+            set incomplete to false
+        else if token = 91:
+            set bracket to the regular expression closing bracket in pattern from cursor + 1 to the length of pattern
+            if bracket < 0:
+                return cursor
+            set content to cursor + 1
+            if (content < bracket) and (the character at content in pattern = 94):
+                increment content
+            if content >= bracket:
+                return cursor
+            set cursor to bracket + 1
+            set repeatable to true
+            set incomplete to false
+        else if token = 40:
+            increment depth
+            increment cursor
+            set repeatable to false
+            set incomplete to true
+        else if token = 41:
+            if (depth = 0) or incomplete:
+                return cursor
+            decrement depth
+            increment cursor
+            set repeatable to true
+            set incomplete to false
+        else if token = 124:
+            if incomplete:
+                return cursor
+            increment cursor
+            set repeatable to false
+            set incomplete to true
+        else if (token = 42) or ((token = 43) or (token = 63)):
+            if the inverse of repeatable:
+                return cursor
+            increment cursor
+            set repeatable to false
+            set incomplete to false
+        else:
+            increment cursor
+            set repeatable to true
+            if (token = 94) or (token = 36):
+                set repeatable to false
+            set incomplete to false
+    if (depth != 0) or (incomplete and (the length of pattern > 0)):
+        return the length of pattern
+    return the negative of 1
 
-function the regular expression error position in {string:pattern}:
-    execute:
-        set depth to 0
-        set cursor to 0
-        set repeatable to false
-        set incomplete to true
-        loop while cursor < the length of pattern:
-            set token to the character at cursor in pattern
-            if token = 92:
-                if cursor + 1 >= the length of pattern:
-                    return cursor
-                set cursor to (cursor + 2)
-                set repeatable to true
-                set incomplete to false
-            else if token = 91:
-                set bracket to (the regular expression closing bracket in pattern from cursor + 1 to the length of pattern)
-                if bracket < 0:
-                    return cursor
-                set content to (cursor + 1)
-                if (content < bracket) and (the character at content in pattern = 94):
-                    set content to (content + 1)
-                if content >= bracket:
-                    return cursor
-                set cursor to (bracket + 1)
-                set repeatable to true
-                set incomplete to false
-            else if token = 40:
-                set depth to (depth + 1)
-                set cursor to (cursor + 1)
-                set repeatable to false
-                set incomplete to true
-            else if token = 41:
-                if (depth = 0) or incomplete:
-                    return cursor
-                set depth to (depth - 1)
-                set cursor to (cursor + 1)
-                set repeatable to true
-                set incomplete to false
-            else if token = 124:
-                if incomplete:
-                    return cursor
-                set cursor to (cursor + 1)
-                set repeatable to false
-                set incomplete to true
-            else if (token = 42) or ((token = 43) or (token = 63)):
-                if the inverse of repeatable:
-                    return cursor
-                set cursor to (cursor + 1)
-                set repeatable to false
-                set incomplete to false
-            else:
-                set cursor to (cursor + 1)
-                set repeatable to true
-                if (token = 94) or (token = 36):
-                    set repeatable to false
-                set incomplete to false
-        if (depth != 0) or (incomplete and (the length of pattern > 0)):
-            return the length of pattern
-        return the negative of 1
-
-function the regular expression error position in {C string:pattern}:
-    execute:
-        return the regular expression error position in the string form of pattern
+to get the regular expression error position in {C string:pattern}:
+    return the regular expression error position in the string form of pattern
 
 local function the regular expression compiled from {string:pattern}:
     execute:
@@ -122,236 +118,214 @@ local function the regular expression compiled from {C string:pattern}:
 flex function compile {string:pattern} as a regular expression:
     replacement:
         set the subject to the regular expression compiled from pattern
-
 flex function compile {C string:pattern} as a regular expression:
     replacement:
         set the subject to the regular expression compiled from pattern
+to get {regular expression:expression} is valid:
+    return expression's error position < 0
 
-function {regular expression:expression} is valid:
-    execute:
-        return expression's error position < 0
+{regular expression:expression} is invalid means: the inverse of expression is valid
+to get the error position of {regular expression:expression}:
+    return expression's error position
 
-function {regular expression:expression} is invalid:
-    replacement:
-        the inverse of expression is valid
-
-function the error position of {regular expression:expression}:
-    execute:
-        return expression's error position
-
-function the first top-level regular expression alternative in {string:pattern} from {integer:start} to {integer:finish}:
-    execute:
-        set depth to 0
-        set cursor to start
-        loop while cursor < finish:
-            set token to the character at cursor in pattern
-            if token = 92:
-                set cursor to (cursor + 2)
-            else if token = 91:
-                set cursor to (the regular expression closing bracket in pattern from cursor + 1 to finish)
-                set cursor to (cursor + 1)
-            else if token = 40:
-                set depth to (depth + 1)
-                set cursor to (cursor + 1)
-            else if token = 41:
-                set depth to (depth - 1)
-                set cursor to (cursor + 1)
-            else if (token = 124) and (depth = 0):
-                return cursor
-            else:
-                set cursor to (cursor + 1)
-        return the negative of 1
-
-function value matches the regular expression shorthand represented by code:
-    execute:
-        set digit to (value >= 48) and (value <= 57)
-        set lowercase to (value >= 97) and (value <= 122)
-        set uppercase to (value >= 65) and (value <= 90)
-        set word to digit or (lowercase or (uppercase or (value = 95)))
-        set space to (value = 32) or ((value >= 9) and (value <= 13))
-        if code = 100:
-            return digit
-        if code = 68:
-            return the inverse of digit
-        if code = 119:
-            return word
-        if code = 87:
-            return the inverse of word
-        if code = 115:
-            return space
-        if code = 83:
-            return the inverse of space
-        return code = value
-
-function code is a regular expression shorthand class:
-    execute:
-        return (code = 100) or ((code = 68) or ((code = 119) or ((code = 87) or ((code = 115) or (code = 83)))))
-
-function value matches the regular expression character class in {string:pattern} from {integer:opening} to {integer:closing}:
-    execute:
-        set cursor to (opening + 1)
-        set negated to false
-        if the character at cursor in pattern = 94:
-            set negated to true
-            set cursor to (cursor + 1)
-        set found to false
-        loop while cursor < closing:
-            set lower to the character at cursor in pattern
-            if lower = 92:
-                set cursor to (cursor + 1)
-                set lower to the character at cursor in pattern
-                set cursor to (cursor + 1)
-                if lower is a regular expression shorthand class:
-                    if value matches the regular expression shorthand represented by lower:
-                        set found to true
-                else:
-                    if value = lower:
-                        set found to true
-            else:
-                set cursor to (cursor + 1)
-                set upper to lower
-                if (cursor + 1 < closing) and (the character at cursor in pattern = 45):
-                    set cursor to (cursor + 1)
-                    set upper to the character at cursor in pattern
-                    if upper = 92:
-                        set cursor to (cursor + 1)
-                        set upper to the character at cursor in pattern
-                    set cursor to (cursor + 1)
-                if (value >= lower) and (value <= upper):
-                    set found to true
-        if negated:
-            return the inverse of found
-        return found
-
-function the regular expression pattern in {string:syntax} from {integer:beginning} to {integer:ending} matches {string:input} from {integer:start} to {integer:finish}:
-    execute:
-        if beginning >= ending:
-            return start = finish
-        set separator to the first top-level regular expression alternative in syntax from beginning to ending
-        if separator >= 0:
-            if (the regular expression pattern in syntax from beginning to separator matches input from start to finish):
-                return true
-            return (the regular expression pattern in syntax from separator + 1 to ending matches input from start to finish)
-
-        set token to the character at beginning in syntax
-        set boundary to (beginning + 1)
+to get the first top-level regular expression alternative in {string:pattern} from {integer:start} to {integer:finish}:
+    set depth to 0
+    set cursor to start
+    loop while cursor < finish:
+        set token to the character at cursor in pattern
         if token = 92:
-            set boundary to (beginning + 2)
+            add 2 to cursor
         else if token = 91:
-            set boundary to ((the regular expression closing bracket in syntax from beginning + 1 to ending) + 1)
+            set cursor to the regular expression closing bracket in pattern from cursor + 1 to finish
+            increment cursor
         else if token = 40:
-            set boundary to ((the regular expression closing parenthesis in syntax from beginning + 1 to ending) + 1)
+            increment depth
+            increment cursor
+        else if token = 41:
+            decrement depth
+            increment cursor
+        else if (token = 124) and (depth = 0):
+            return cursor
+        else:
+            increment cursor
+    return the negative of 1
 
-        set quantifier to 0
-        set remainder to boundary
-        if remainder < ending:
-            set candidate to the character at remainder in syntax
-            if (candidate = 42) or ((candidate = 43) or (candidate = 63)):
-                set quantifier to candidate
-                set remainder to (remainder + 1)
+to get value matches the regular expression shorthand represented by code:
+    set digit to (value >= 48) and (value <= 57)
+    set lowercase to (value >= 97) and (value <= 122)
+    set uppercase to (value >= 65) and (value <= 90)
+    set word to digit or (lowercase or (uppercase or (value = 95)))
+    set space to (value = 32) or ((value >= 9) and (value <= 13))
+    if code = 100:
+        return digit
+    if code = 68:
+        return the inverse of digit
+    if code = 119:
+        return word
+    if code = 87:
+        return the inverse of word
+    if code = 115:
+        return space
+    if code = 83:
+        return the inverse of space
+    return code = value
 
-        if (quantifier = 42) or (quantifier = 63):
-            if (the regular expression pattern in syntax from remainder to ending matches input from start to finish):
-                return true
+to get code is a regular expression shorthand class:
+    return (code = 100) or ((code = 68) or ((code = 119) or ((code = 87) or ((code = 115) or (code = 83)))))
 
-        set endpoint to start
-        loop while endpoint <= finish:
-            set matching to false
-            if token = 94:
-                if (start = 0) and (endpoint = start):
+to get value matches the regular expression character class in {string:pattern} from {integer:opening} to {integer:closing}:
+    set cursor to opening + 1
+    set negated to false
+    if the character at cursor in pattern = 94:
+        set negated to true
+        increment cursor
+    set found to false
+    loop while cursor < closing:
+        set lower to the character at cursor in pattern
+        if lower = 92:
+            increment cursor
+            set lower to the character at cursor in pattern
+            increment cursor
+            if lower is a regular expression shorthand class:
+                if value matches the regular expression shorthand represented by lower:
+                    set found to true
+            else:
+                if value = lower:
+                    set found to true
+        else:
+            increment cursor
+            set upper to lower
+            if (cursor + 1 < closing) and (the character at cursor in pattern = 45):
+                increment cursor
+                set upper to the character at cursor in pattern
+                if upper = 92:
+                    increment cursor
+                    set upper to the character at cursor in pattern
+                increment cursor
+            if (value >= lower) and (value <= upper):
+                set found to true
+    if negated:
+        return the inverse of found
+    return found
+
+to get the regular expression pattern in {string:syntax} from {integer:beginning} to {integer:ending} matches {string:input} from {integer:start} to {integer:finish}:
+    if beginning >= ending:
+        return start = finish
+    set separator to the first top-level regular expression alternative in syntax from beginning to ending
+    if separator >= 0:
+        if (the regular expression pattern in syntax from beginning to separator matches input from start to finish):
+            return true
+        return the regular expression pattern in syntax from separator + 1 to ending matches input from start to finish
+
+    set token to the character at beginning in syntax
+    set boundary to beginning + 1
+    if token = 92:
+        set boundary to beginning + 2
+    else if token = 91:
+        set boundary to ((the regular expression closing bracket in syntax from beginning + 1 to ending) + 1)
+    else if token = 40:
+        set boundary to ((the regular expression closing parenthesis in syntax from beginning + 1 to ending) + 1)
+
+    set quantifier to 0
+    set remainder to boundary
+    if remainder < ending:
+        set candidate to the character at remainder in syntax
+        if (candidate = 42) or ((candidate = 43) or (candidate = 63)):
+            set quantifier to candidate
+            increment remainder
+
+    if (quantifier = 42) or (quantifier = 63):
+        if (the regular expression pattern in syntax from remainder to ending matches input from start to finish):
+            return true
+
+    set endpoint to start
+    loop while endpoint <= finish:
+        set matching to false
+        if token = 94:
+            if (start = 0) and (endpoint = start):
+                set matching to true
+        else if token = 36:
+            if (start = the length of input) and (endpoint = start):
+                set matching to true
+        else if token = 40:
+            if (the regular expression pattern in syntax from beginning + 1 to boundary - 1 matches input from start to endpoint):
+                set matching to true
+        else if (endpoint = start + 1) and (start < the length of input):
+            if token = 91:
+                if (the character at start in input) matches the regular expression character class in syntax from beginning to boundary - 1:
                     set matching to true
-            else if token = 36:
-                if (start = the length of input) and (endpoint = start):
+            else if token = 46:
+                if the character at start in input != 10:
                     set matching to true
-            else if token = 40:
-                if (the regular expression pattern in syntax from beginning + 1 to boundary - 1 matches input from start to endpoint):
-                    set matching to true
-            else if (endpoint = start + 1) and (start < the length of input):
-                if token = 91:
-                    if (the character at start in input) matches the regular expression character class in syntax from beginning to boundary - 1:
-                        set matching to true
-                else if token = 46:
-                    if the character at start in input != 10:
-                        set matching to true
-                else:
-                    set literal to token
-                    if token = 92:
-                        set literal to (the character at beginning + 1 in syntax)
-                        if literal is a regular expression shorthand class:
-                            if (the character at start in input) matches the regular expression shorthand represented by literal:
-                                set matching to true
-                        else if the character at start in input = literal:
+            else:
+                set literal to token
+                if token = 92:
+                    set literal to the character at beginning + 1 in syntax
+                    if literal is a regular expression shorthand class:
+                        if (the character at start in input) matches the regular expression shorthand represented by literal:
                             set matching to true
                     else if the character at start in input = literal:
                         set matching to true
+                else if the character at start in input = literal:
+                    set matching to true
 
-            if matching:
-                if (the regular expression pattern in syntax from remainder to ending matches input from endpoint to finish):
+        if matching:
+            if (the regular expression pattern in syntax from remainder to ending matches input from endpoint to finish):
+                return true
+            if (endpoint > start) and ((quantifier = 42) or (quantifier = 43)):
+                if (the regular expression pattern in syntax from beginning to ending matches input from endpoint to finish):
                     return true
-                if (endpoint > start) and ((quantifier = 42) or (quantifier = 43)):
-                    if (the regular expression pattern in syntax from beginning to ending matches input from endpoint to finish):
-                        return true
-            set endpoint to (endpoint + 1)
-        return false
+        increment endpoint
+    return false
 
-function {string:text} matches {regular expression:expression}:
-    execute:
-        if expression is invalid:
-            @intrinsic("call", "libc", "abort", nothing)
-        return (the regular expression pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from 0 to the length of text)
+to get {string:text} matches {regular expression:expression}:
+    if expression is invalid:
+        abort the program
+    return the regular expression pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from 0 to the length of text
 
-function {C string:text} matches {regular expression:expression}:
-    execute:
-        return the string form of text matches expression
+to get {C string:text} matches {regular expression:expression}:
+    return the string form of text matches expression
 
-function {string:text} contains a match for {regular expression:expression}:
-    execute:
-        if expression is invalid:
-            @intrinsic("call", "libc", "abort", nothing)
-        set start to 0
-        loop while start <= the length of text:
-            set finish to start
-            loop while finish <= the length of text:
-                if (the regular expression pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from start to finish):
-                    return true
-                set finish to (finish + 1)
-            set start to (start + 1)
-        return false
+to get {string:text} contains a match for {regular expression:expression}:
+    if expression is invalid:
+        abort the program
+    set start to 0
+    loop while start <= the length of text:
+        set finish to start
+        loop while finish <= the length of text:
+            if (the regular expression pattern in the pattern of expression from 0 to the length of the pattern of expression matches text from start to finish):
+                return true
+            increment finish
+        increment start
+    return false
 
-function {C string:text} contains a match for {regular expression:expression}:
-    execute:
-        return the string form of text contains a match for expression
+to get {C string:text} contains a match for {regular expression:expression}:
+    return the string form of text contains a match for expression
 
-function {string:text} matches the regular expression described by {string:pattern}:
-    execute:
-        compile pattern as a regular expression and set compiled to it
-        return text matches compiled
+to get {string:text} matches the regular expression described by {string:pattern}:
+    compile pattern as a regular expression and set compiled to it
+    return text matches compiled
 
-function {string:text} matches the regular expression described by {C string:pattern}:
-    execute:
-        compile pattern as a regular expression and set compiled to it
-        return text matches compiled
+to get {string:text} matches the regular expression described by {C string:pattern}:
+    compile pattern as a regular expression and set compiled to it
+    return text matches compiled
 
-function {C string:text} matches the regular expression described by {C string:pattern}:
-    execute:
-        set source to the string form of text
-        set syntax to the string form of pattern
-        compile syntax as a regular expression and set compiled to it
-        return source matches compiled
+to get {C string:text} matches the regular expression described by {C string:pattern}:
+    set source to the string form of text
+    set syntax to the string form of pattern
+    compile syntax as a regular expression and set compiled to it
+    return source matches compiled
 
-function {string:text} contains a match for the regular expression described by {string:pattern}:
-    execute:
-        compile pattern as a regular expression and set compiled to it
-        return text contains a match for compiled
+to get {string:text} contains a match for the regular expression described by {string:pattern}:
+    compile pattern as a regular expression and set compiled to it
+    return text contains a match for compiled
 
-function {string:text} contains a match for the regular expression described by {C string:pattern}:
-    execute:
-        compile pattern as a regular expression and set compiled to it
-        return text contains a match for compiled
+to get {string:text} contains a match for the regular expression described by {C string:pattern}:
+    compile pattern as a regular expression and set compiled to it
+    return text contains a match for compiled
 
-function {C string:text} contains a match for the regular expression described by {C string:pattern}:
-    execute:
-        set source to the string form of text
-        set syntax to the string form of pattern
-        compile syntax as a regular expression and set compiled to it
-        return source contains a match for compiled
+to get {C string:text} contains a match for the regular expression described by {C string:pattern}:
+    set source to the string form of text
+    set syntax to the string form of pattern
+    compile syntax as a regular expression and set compiled to it
+    return source contains a match for compiled

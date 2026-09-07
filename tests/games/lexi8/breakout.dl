@@ -28,334 +28,324 @@ class:
 	members:
 		scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags
 
-function a ball register set with x {integer:x}, y {integer:y}, horizontal {integer:horizontal} and vertical {integer:vertical}:
-	replacement:
-		@intrinsic("construct", a ball register set, x, y, horizontal, vertical)
+a ball register set with x {integer:x}, y {integer:y}, horizontal {integer:horizontal} and vertical {integer:vertical} means: @intrinsic("construct", a ball register set, x, y, horizontal, vertical)
+a register pair with x {integer:x} and y {integer:y} means: @intrinsic("construct", a register pair, x, y)
+a breakout register set using {ball register set:ball} for the ball and {register pair:cursor} for the cursor, with scratch {integer:scratch}, tens {integer:tens}, ones {integer:ones}, paddle {integer:paddle}, score {integer:score}, bricks {integer:bricks}, lives {integer:lives}, temporary {integer:temporary}, auxiliary {integer:auxiliary} and flags {integer:flags} means: @intrinsic("construct", a breakout register set, scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags)
+to build the breakout program:
+	reset the assembly state
 
-function a register pair with x {integer:x} and y {integer:y}:
-	replacement:
-		@intrinsic("construct", a register pair, x, y)
+	# Register roles
+	set ball to a ball register set with x 4, y 5, horizontal 6 and vertical 7
+	set cursor to a register pair with x 12 and y 13
+	set registers to a breakout register set using ball for the ball and cursor for the cursor, with scratch 0, tens 1, ones 2, paddle 3, score 8, bricks 9, lives 10, temporary 11, auxiliary 14 and flags 15
 
-function a breakout register set using {ball register set:ball} for the ball and {register pair:cursor} for the cursor, with scratch {integer:scratch}, tens {integer:tens}, ones {integer:ones}, paddle {integer:paddle}, score {integer:score}, bricks {integer:bricks}, lives {integer:lives}, temporary {integer:temporary}, auxiliary {integer:auxiliary} and flags {integer:flags}:
-	replacement:
-		@intrinsic("construct", a breakout register set, scratch, tens, ones, paddle, ball, score, bricks, lives, temporary, cursor, auxiliary, flags)
+	# --- Boot ---
+	label "start"
+	clear the display
+	load value 3 into register registers's lives
+	load value 0 into register registers's score
+	load value 64 into register registers's bricks
+	load value 28 into register registers's paddle
+	run the routine named "draw the bricks"
+	point index at label "paddle sprite"
+	load value 31 into register registers's auxiliary
+	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
+	run the routine named "reset the ball"
+	jump to label "main loop"
 
-function build the breakout program:
-	execute:
-		reset the assembly state
+	# --- Routine: draw the wall of bricks (16 columns, 4 rows) ---
+	label "draw the bricks"
+	point index at label "brick sprite"
+	load value 0 into register registers's temporary
+	load value 6 into register registers's auxiliary
+	label "brick loop"
+	draw 1 row at horizontal register registers's temporary and vertical register registers's auxiliary
+	raise register registers's temporary by 4
+	skip when register registers's temporary equals 64
+	jump to label "brick loop"
+	load value 0 into register registers's temporary
+	raise register registers's auxiliary by 2
+	skip when register registers's auxiliary equals 14
+	jump to label "brick loop"
+	end the routine
 
-		# Register roles
-		set ball to a ball register set with x 4, y 5, horizontal 6 and vertical 7
-		set cursor to a register pair with x 12 and y 13
-		set registers to a breakout register set using ball for the ball and cursor for the cursor, with scratch 0, tens 1, ones 2, paddle 3, score 8, bricks 9, lives 10, temporary 11, auxiliary 14 and flags 15
+	# --- Routine: serve a fresh ball, drifting upward ---
+	label "reset the ball"
+	randomize register registers's ball's x masked by 31
+	raise register registers's ball's x by 16
+	load value 20 into register registers's ball's y
+	load value 255 into register registers's ball's vertical
+	randomize register registers's ball's horizontal masked by 1
+	skip when register registers's ball's horizontal equals 1
+	load value 255 into register registers's ball's horizontal
+	point index at label "ball sprite"
+	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
+	end the routine
 
-		# --- Boot ---
-		label "start"
-		clear the display
-		load value 3 into register registers's lives
-		load value 0 into register registers's score
-		load value 64 into register registers's bricks
-		load value 28 into register registers's paddle
-		run the routine named "draw the bricks"
-		point index at label "paddle sprite"
-		load value 31 into register registers's auxiliary
-		draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
-		run the routine named "reset the ball"
-		jump to label "main loop"
+	# --- Routines: reverse a direction (1 and 255 swap under xor 254) ---
+	label "reverse horizontal direction"
+	load value 254 into register registers's auxiliary
+	combine register registers's ball's horizontal with register registers's auxiliary using bitwise xor
+	end the routine
 
-		# --- Routine: draw the wall of bricks (16 columns, 4 rows) ---
-		label "draw the bricks"
-		point index at label "brick sprite"
-		load value 0 into register registers's temporary
-		load value 6 into register registers's auxiliary
-		label "brick loop"
-		draw 1 row at horizontal register registers's temporary and vertical register registers's auxiliary
-		raise register registers's temporary by 4
-		skip when register registers's temporary equals 64
-		jump to label "brick loop"
-		load value 0 into register registers's temporary
-		raise register registers's auxiliary by 2
-		skip when register registers's auxiliary equals 14
-		jump to label "brick loop"
-		end the routine
+	label "reverse vertical direction"
+	load value 254 into register registers's auxiliary
+	combine register registers's ball's vertical with register registers's auxiliary using bitwise xor
+	end the routine
 
-		# --- Routine: serve a fresh ball, drifting upward ---
-		label "reset the ball"
-		randomize register registers's ball's x masked by 31
-		raise register registers's ball's x by 16
-		load value 20 into register registers's ball's y
-		load value 255 into register registers's ball's vertical
-		randomize register registers's ball's horizontal masked by 1
-		skip when register registers's ball's horizontal equals 1
-		load value 255 into register registers's ball's horizontal
-		point index at label "ball sprite"
-		draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
-		end the routine
+	# --- Main loop: paddle input ---
+	label "main loop"
+	load value 4 into register registers's scratch
+	skip when key in register registers's scratch is down
+	jump to label "check right key"
+	skip when register registers's paddle differs from 0
+	jump to label "check right key"
+	point index at label "paddle sprite"
+	load value 31 into register registers's auxiliary
+	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
+	raise register registers's paddle by 254
+	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
+	label "check right key"
+	load value 6 into register registers's scratch
+	skip when key in register registers's scratch is down
+	jump to label "ball step"
+	skip when register registers's paddle differs from 58
+	jump to label "ball step"
+	point index at label "paddle sprite"
+	load value 31 into register registers's auxiliary
+	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
+	raise register registers's paddle by 2
+	draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
 
-		# --- Routines: reverse a direction (1 and 255 swap under xor 254) ---
-		label "reverse horizontal direction"
-		load value 254 into register registers's auxiliary
-		combine register registers's ball's horizontal with register registers's auxiliary using bitwise xor
-		end the routine
+	# --- Main loop: ball flight ---
+	label "ball step"
+	point index at label "ball sprite"
+	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
+	skip when register registers's ball's x equals 63
+	jump to label "check left wall"
+	skip when register registers's ball's horizontal equals 1
+	jump to label "check top wall"
+	run the routine named "reverse horizontal direction"
+	jump to label "check top wall"
+	label "check left wall"
+	skip when register registers's ball's x equals 0
+	jump to label "check top wall"
+	skip when register registers's ball's horizontal equals 255
+	jump to label "check top wall"
+	run the routine named "reverse horizontal direction"
+	label "check top wall"
+	skip when register registers's ball's y equals 0
+	jump to label "advance ball"
+	skip when register registers's ball's vertical equals 255
+	jump to label "advance ball"
+	run the routine named "reverse vertical direction"
+	label "advance ball"
+	add register registers's ball's horizontal into register registers's ball's x
+	add register registers's ball's vertical into register registers's ball's y
+	point index at label "ball sprite"
+	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
+	skip when register registers's flags equals 0
+	jump to label "hit something"
+	skip when register registers's ball's y equals 31
+	jump to label "pace"
+	jump to label "ball missed"
 
-		label "reverse vertical direction"
-		load value 254 into register registers's auxiliary
-		combine register registers's ball's vertical with register registers's auxiliary using bitwise xor
-		end the routine
+	# --- Collisions: the paddle sits at row 31, bricks on rows 6 to 12 ---
+	label "hit something"
+	skip when register registers's ball's y differs from 31
+	jump to label "paddle bounce"
+	copy register registers's ball's x into register registers's temporary
+	load value 252 into register registers's auxiliary
+	combine register registers's temporary with register registers's auxiliary using bitwise and
+	point index at label "brick sprite"
+	draw 1 row at horizontal register registers's temporary and vertical register registers's ball's y
+	raise register registers's score by 1
+	load value 1 into register registers's auxiliary
+	subtract register registers's auxiliary from register registers's bricks
+	run the routine named "reverse vertical direction"
+	skip when register registers's bricks equals 0
+	jump to label "pace"
+	jump to label "you win"
 
-		# --- Main loop: paddle input ---
-		label "main loop"
-		load value 4 into register registers's scratch
-		skip when key in register registers's scratch is down
-		jump to label "check right key"
-		skip when register registers's paddle differs from 0
-		jump to label "check right key"
-		point index at label "paddle sprite"
-		load value 31 into register registers's auxiliary
-		draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
-		raise register registers's paddle by 254
-		draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
-		label "check right key"
-		load value 6 into register registers's scratch
-		skip when key in register registers's scratch is down
-		jump to label "ball step"
-		skip when register registers's paddle differs from 58
-		jump to label "ball step"
-		point index at label "paddle sprite"
-		load value 31 into register registers's auxiliary
-		draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
-		raise register registers's paddle by 2
-		draw 1 row at horizontal register registers's paddle and vertical register registers's auxiliary
+	label "paddle bounce"
+	load value 255 into register registers's ball's vertical
+	jump to label "pace"
 
-		# --- Main loop: ball flight ---
-		label "ball step"
-		point index at label "ball sprite"
-		draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
-		skip when register registers's ball's x equals 63
-		jump to label "check left wall"
-		skip when register registers's ball's horizontal equals 1
-		jump to label "check top wall"
-		run the routine named "reverse horizontal direction"
-		jump to label "check top wall"
-		label "check left wall"
-		skip when register registers's ball's x equals 0
-		jump to label "check top wall"
-		skip when register registers's ball's horizontal equals 255
-		jump to label "check top wall"
-		run the routine named "reverse horizontal direction"
-		label "check top wall"
-		skip when register registers's ball's y equals 0
-		jump to label "advance ball"
-		skip when register registers's ball's vertical equals 255
-		jump to label "advance ball"
-		run the routine named "reverse vertical direction"
-		label "advance ball"
-		add register registers's ball's horizontal into register registers's ball's x
-		add register registers's ball's vertical into register registers's ball's y
-		point index at label "ball sprite"
-		draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
-		skip when register registers's flags equals 0
-		jump to label "hit something"
-		skip when register registers's ball's y equals 31
-		jump to label "pace"
-		jump to label "ball missed"
+	label "ball missed"
+	point index at label "ball sprite"
+	draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
+	load value 1 into register registers's auxiliary
+	subtract register registers's auxiliary from register registers's lives
+	skip when register registers's lives equals 0
+	jump to label "respawn"
+	jump to label "game over"
+	label "respawn"
+	run the routine named "reset the ball"
+	jump to label "pace"
 
-		# --- Collisions: the paddle sits at row 31, bricks on rows 6 to 12 ---
-		label "hit something"
-		skip when register registers's ball's y differs from 31
-		jump to label "paddle bounce"
-		copy register registers's ball's x into register registers's temporary
-		load value 252 into register registers's auxiliary
-		combine register registers's temporary with register registers's auxiliary using bitwise and
-		point index at label "brick sprite"
-		draw 1 row at horizontal register registers's temporary and vertical register registers's ball's y
-		raise register registers's score by 1
-		load value 1 into register registers's auxiliary
-		subtract register registers's auxiliary from register registers's bricks
-		run the routine named "reverse vertical direction"
-		skip when register registers's bricks equals 0
-		jump to label "pace"
-		jump to label "you win"
+	# --- Main loop: pacing (one game tick per two 60 Hz timer ticks) ---
+	label "pace"
+	load the delay into register registers's scratch
+	skip when register registers's scratch equals 0
+	jump to label "pace"
+	load value 2 into register registers's scratch
+	start the delay from register registers's scratch
+	jump to label "main loop"
 
-		label "paddle bounce"
-		load value 255 into register registers's ball's vertical
-		jump to label "pace"
+	# --- Routine: draw the two digit score with the built in font ---
+	label "show the score"
+	point index at label "score scratch"
+	store the decimal digits of register registers's score
+	point index at label "score scratch"
+	restore all registers through register 2
+	load value 26 into register registers's cursor's x
+	load value 20 into register registers's cursor's y
+	point the index at the digit sprite in register registers's tens
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point the index at the digit sprite in register registers's ones
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	end the routine
 
-		label "ball missed"
-		point index at label "ball sprite"
-		draw 1 row at horizontal register registers's ball's x and vertical register registers's ball's y
-		load value 1 into register registers's auxiliary
-		subtract register registers's auxiliary from register registers's lives
-		skip when register registers's lives equals 0
-		jump to label "respawn"
-		jump to label "game over"
-		label "respawn"
-		run the routine named "reset the ball"
-		jump to label "pace"
+	# --- Ending screens ---
+	label "game over"
+	clear the display
+	load value 6 into register registers's cursor's x
+	load value 8 into register registers's cursor's y
+	point index at label "letter G"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter A"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter M"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter E"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 10
+	point index at label "letter O"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter V"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter E"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter R"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	run the routine named "show the score"
+	label "rest in peace"
+	jump to label "rest in peace"
 
-		# --- Main loop: pacing (one game tick per two 60 Hz timer ticks) ---
-		label "pace"
-		load the delay into register registers's scratch
-		skip when register registers's scratch equals 0
-		jump to label "pace"
-		load value 2 into register registers's scratch
-		start the delay from register registers's scratch
-		jump to label "main loop"
+	label "you win"
+	clear the display
+	load value 14 into register registers's cursor's x
+	load value 8 into register registers's cursor's y
+	point index at label "letter Y"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter O"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter U"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 10
+	point index at label "letter W"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter I"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	raise register registers's cursor's x by 6
+	point index at label "letter N"
+	draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
+	run the routine named "show the score"
+	label "victory lap"
+	jump to label "victory lap"
 
-		# --- Routine: draw the two digit score with the built in font ---
-		label "show the score"
-		point index at label "score scratch"
-		store the decimal digits of register registers's score
-		point index at label "score scratch"
-		restore all registers through register 2
-		load value 26 into register registers's cursor's x
-		load value 20 into register registers's cursor's y
-		point the index at the digit sprite in register registers's tens
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point the index at the digit sprite in register registers's ones
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		end the routine
+	# --- Sprites ---
+	label "ball sprite"
+	emit a data row "X......."
+	label "paddle sprite"
+	emit a data row "XXXXXX.."
+	label "brick sprite"
+	emit a data row "XXX....."
+	label "score scratch"
+	emit a data byte 0
+	emit a data byte 0
+	emit a data byte 0
+	label "letter G"
+	emit a data row "XXXX...."
+	emit a data row "X......."
+	emit a data row "X.XX...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	label "letter A"
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	label "letter M"
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	label "letter E"
+	emit a data row "XXXX...."
+	emit a data row "X......."
+	emit a data row "XXXX...."
+	emit a data row "X......."
+	emit a data row "XXXX...."
+	label "letter O"
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	label "letter V"
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row ".XX....."
+	label "letter R"
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	emit a data row "X.X....."
+	emit a data row "X..X...."
+	label "letter Y"
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row ".XX....."
+	emit a data row ".X......"
+	emit a data row ".X......"
+	label "letter U"
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	label "letter W"
+	emit a data row "X..X...."
+	emit a data row "X..X...."
+	emit a data row "XXXX...."
+	emit a data row "XXXX...."
+	emit a data row "X..X...."
+	label "letter I"
+	emit a data row "XXX....."
+	emit a data row ".X......"
+	emit a data row ".X......"
+	emit a data row ".X......"
+	emit a data row "XXX....."
+	label "letter N"
+	emit a data row "X..X...."
+	emit a data row "XX.X...."
+	emit a data row "X.XX...."
+	emit a data row "X..X...."
+	emit a data row "X..X...."
 
-		# --- Ending screens ---
-		label "game over"
-		clear the display
-		load value 6 into register registers's cursor's x
-		load value 8 into register registers's cursor's y
-		point index at label "letter G"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter A"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter M"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter E"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 10
-		point index at label "letter O"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter V"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter E"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter R"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		run the routine named "show the score"
-		label "rest in peace"
-		jump to label "rest in peace"
-
-		label "you win"
-		clear the display
-		load value 14 into register registers's cursor's x
-		load value 8 into register registers's cursor's y
-		point index at label "letter Y"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter O"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter U"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 10
-		point index at label "letter W"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter I"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		raise register registers's cursor's x by 6
-		point index at label "letter N"
-		draw 5 rows at horizontal register registers's cursor's x and vertical register registers's cursor's y
-		run the routine named "show the score"
-		label "victory lap"
-		jump to label "victory lap"
-
-		# --- Sprites ---
-		label "ball sprite"
-		emit a data row "X......."
-		label "paddle sprite"
-		emit a data row "XXXXXX.."
-		label "brick sprite"
-		emit a data row "XXX....."
-		label "score scratch"
-		emit a data byte 0
-		emit a data byte 0
-		emit a data byte 0
-		label "letter G"
-		emit a data row "XXXX...."
-		emit a data row "X......."
-		emit a data row "X.XX...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		label "letter A"
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		label "letter M"
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		label "letter E"
-		emit a data row "XXXX...."
-		emit a data row "X......."
-		emit a data row "XXXX...."
-		emit a data row "X......."
-		emit a data row "XXXX...."
-		label "letter O"
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		label "letter V"
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row ".XX....."
-		label "letter R"
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		emit a data row "X.X....."
-		emit a data row "X..X...."
-		label "letter Y"
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row ".XX....."
-		emit a data row ".X......"
-		emit a data row ".X......"
-		label "letter U"
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		label "letter W"
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-		emit a data row "XXXX...."
-		emit a data row "XXXX...."
-		emit a data row "X..X...."
-		label "letter I"
-		emit a data row "XXX....."
-		emit a data row ".X......"
-		emit a data row ".X......"
-		emit a data row ".X......"
-		emit a data row "XXX....."
-		label "letter N"
-		emit a data row "X..X...."
-		emit a data row "XX.X...."
-		emit a data row "X.XX...."
-		emit a data row "X..X...."
-		emit a data row "X..X...."
-
-		resolve all labels
+	resolve all labels

@@ -9,61 +9,52 @@ class:
         keys
         values
 
-function an empty map from {type:domain} to {type:range}:
-    execute:
-        set keys to an empty list of domain
-        set values to an empty list of range
-        set initial to @intrinsic("construct", a map, keys, values)
-        allocate one slot of initial and set result to it
-        return result
+to get an empty map from {type:domain} to {type:range}:
+    set keys to an empty list of domain
+    set values to an empty list of range
+    set initial to @intrinsic("construct", a map, keys, values)
+    set result to storage for one slot initialized with initial
+    return result
 
-function the number of entries in {a pointer to a map:mapping}:
-    execute:
-        return the length of the keys of mapping
+to get the number of entries in {a pointer to a map:mapping}:
+    return the length of the keys of mapping
 
-function the index of key in {a pointer to a map:mapping}:
-    execute:
-        set cursor to 0
-        loop while cursor < the length of the keys of mapping:
-            if the item at cursor in the keys of mapping = key:
-                return cursor
-            set cursor to (cursor + 1)
-        return 0 - 1
+to get the index of key in {a pointer to a map:mapping}:
+    set cursor to 0
+    loop while cursor < the length of the keys of mapping:
+        if the item at cursor in the keys of mapping = key:
+            return cursor
+        increment cursor
+    return -1
 
-function {a pointer to a map:mapping} contains key {a value:key}:
-    execute:
-        return the index of key in mapping >= 0
+to get {a pointer to a map:mapping} contains key {a value:key}:
+    return the index of key in mapping >= 0
 
-function the value for key in {a pointer to a map:mapping}:
-    execute:
-        set position to the index of key in mapping
-        if position < 0:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the values of mapping
+to get the value for key in {a pointer to a map:mapping}:
+    set position to the index of key in mapping
+    if position < 0:
+        abort the program
+    return the item at position in the values of mapping
 
-function put value for key in {a pointer to a map:mapping}:
-    execute:
-        set position to the index of key in mapping
-        if position >= 0:
-            store value into the data of the values of mapping at position
-        else:
-            append key to the keys of mapping
-            append value to the values of mapping
+to put value for key in {a pointer to a map:mapping}:
+    set position to the index of key in mapping
+    if position >= 0:
+        store value into the data of the values of mapping at position
+    else:
+        append key to the keys of mapping
+        append value to the values of mapping
 
-function remove key from {a pointer to a map:mapping}:
-    execute:
-        set position to the index of key in mapping
-        if position >= 0:
-            remove item position from the keys of mapping
-            remove item position from the values of mapping
+to remove key from {a pointer to a map:mapping}:
+    set position to the index of key in mapping
+    if position >= 0:
+        remove item position from the keys of mapping
+        remove item position from the values of mapping
 
-function clear {a pointer to a map:mapping}:
-    execute:
-        clear the keys of mapping
-        clear the values of mapping
+to clear {a pointer to a map:mapping}:
+    clear the keys of mapping
+    clear the values of mapping
 
-function free {a pointer to a map:mapping}:
-    execute:
-        free (the keys of mapping)
-        free (the values of mapping)
-        @intrinsic("call", "libc", "free", nothing, mapping)
+to free {a pointer to a map:mapping}:
+    free (the keys of mapping)
+    free (the values of mapping)
+    deallocate mapping

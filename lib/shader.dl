@@ -2,18 +2,9 @@ import lib/std.dl
 
 # Fragment shader I/O
 
-function the fragment coordinates:
-    replacement:
-        @intrinsic("shader input", "FragCoord")
-
-function the fragment x coordinate:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 0)
-
-function the fragment y coordinate:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 1)
-
+the fragment coordinates means: @intrinsic("shader input", "FragCoord")
+the fragment x coordinate means: the element at 0 in @intrinsic("shader input", "FragCoord")
+the fragment y coordinate means: the element at 1 in @intrinsic("shader input", "FragCoord")
 function set the fragment color with a red channel of {a value:red}, a green channel of {a value:green}, a blue channel of {a value:blue} and an alpha channel of {a value:alpha}:
     replacement:
         @intrinsic(
@@ -23,26 +14,11 @@ function set the fragment color with a red channel of {a value:red}, a green cha
 
 # Vertex shader I/O
 
-function the vertex position:
-    replacement:
-        @intrinsic("shader input", "Position")
-
-function the vertex x:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "Position"), 0)
-
-function the vertex y:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "Position"), 1)
-
-function the vertex z:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "Position"), 2)
-
-function the vertex w:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
-
+the vertex position means: @intrinsic("shader input", "Position")
+the vertex x means: the element at 0 in @intrinsic("shader input", "Position")
+the vertex y means: the element at 1 in @intrinsic("shader input", "Position")
+the vertex z means: the element at 2 in @intrinsic("shader input", "Position")
+the vertex w means: the element at 3 in @intrinsic("shader input", "Position")
 function set the output position with x {a value:horizontal}, y {a value:vertical}, z {a value:depth} and w {a value:magnitude}:
     replacement:
         @intrinsic(
@@ -55,29 +31,11 @@ function set the output position with x {a value:horizontal}, y {a value:vertica
 function set [the|] shader interpolant named {a value:name} with an x coordinate of {a value:horizontal}, a y coordinate of {a value:vertical}, a z coordinate of {a value:depth} and a w coordinate of {a value:magnitude}:
     replacement:
         @intrinsic("shader interpolant output", name, horizontal, vertical, depth, magnitude)
-
-function [the|] shader interpolant x named name:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 0)
-
-function [the|] shader interpolant y named name:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 1)
-
-function [the|] shader interpolant z named name:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 2)
-
-function [the|] shader interpolant w named name:
-    replacement:
-        @intrinsic("extract element", @intrinsic("shader interpolant input", name), 3)
-
+[the|] shader interpolant x named name means: the element at 0 in @intrinsic("shader interpolant input", name)
+[the|] shader interpolant y named name means: the element at 1 in @intrinsic("shader interpolant input", name)
+[the|] shader interpolant z named name means: the element at 2 in @intrinsic("shader interpolant input", name)
+[the|] shader interpolant w named name means: the element at 3 in @intrinsic("shader interpolant input", name)
 # Shader uniforms (values passed from host each frame)
 
-function the shader time:
-    replacement:
-        @intrinsic("shader uniform", "time", 0)
-
-function the shader render pass:
-    replacement:
-        @intrinsic("shader uniform", "render_pass", 1)
+the shader time means: @intrinsic("shader uniform", "time", 0)
+the shader render pass means: @intrinsic("shader uniform", "render_pass", 1)

@@ -2,9 +2,8 @@
 
 import lib/std.dl
 
-function move {C string:source} to {C string:destination}:
-    execute:
-        set result to @intrinsic("call", "libc", "rename", an integer, source, destination)
-        if result != 0:
-            @intrinsic("call", "libc", "perror", nothing, source)
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to move {C string:source} to {C string:destination}:
+    set result to @intrinsic("call", "libc", "rename", an integer, source, destination)
+    if result != 0:
+        @intrinsic("call", "libc", "perror", nothing, source)
+        @intrinsic("call", "libc", "exit", nothing, 1)

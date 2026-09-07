@@ -7,248 +7,114 @@ import lib/string.dl
 function return [nothing]:
     replacement:
         @intrinsic("return")
-
 function return value:
     replacement:
         @intrinsic("return", value)
-
-function a new {type:kind} from value:
-	replacement:
-		@intrinsic("construct", kind, value)
-
-function a new {type:kind}:
-    replacement:
-        @intrinsic("construct", kind)
-
+a new {type:kind} from value means: @intrinsic("construct", kind, value)
+a new {type:kind} means: @intrinsic("construct", kind)
 # --- Variables ---
 
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
-
 function ignore value:
     replacement:
         @intrinsic("discard", value)
-
 flex function set the subject to value:
     replacement:
         @intrinsic("set subject", value)
-
-flex function it:
-    replacement:
-        @intrinsic("subject")
-
+it means: @intrinsic("subject")
 # --- Primitive types ---
 
-function a value:
-    replacement:
-        @intrinsic("type", "any")
-
-function fixed:
-    replacement:
-        @intrinsic("fix", a value)
-
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
-
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
-
-function [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("type", "int", bits)
-
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
-
-function [a|] {fixed integer:bits} bit floating-point number:
-    replacement:
-        @intrinsic("type", "float", bits)
-
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
-
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
-
-function true:
-    replacement:
-        1 as a boolean
-
-function false:
-    replacement:
-        0 as a boolean
-
-function [a|] type:
-	replacement:
-		@intrinsic("type", "type")
-
-function [a|] constraint:
-    replacement:
-        @intrinsic("type", "constraint")
-
-function [a|] {fixed integer:bits} bit value:
-    replacement:
-        @intrinsic("type", "any", bits)
-
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
-
-function the type [nothing]:
-    replacement:
-        @intrinsic("type", "nothing")
-
-function a number:
-    replacement:
-        @intrinsic("number")
-
+a value means: @intrinsic("type", "any")
+fixed means: @intrinsic("fix", a value)
+fixed value means: @intrinsic("fix", value)
+[an|] integer means: @intrinsic("type", "int")
+[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
+[a|] floating-point number means: @intrinsic("type", "float")
+[a|] {fixed integer:bits} bit floating-point number means: @intrinsic("type", "float", bits)
+[a|] byte means: @intrinsic("type", "int", 8)
+[a|] boolean means: @intrinsic("type", "bool")
+true means: 1 as a boolean
+false means: 0 as a boolean
+[a|] type means: @intrinsic("type", "type")
+[a|] constraint means: @intrinsic("type", "constraint")
+[a|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
+nothing means: @intrinsic("type", "nothing")
+the type [nothing] means: @intrinsic("type", "nothing")
+a number means: @intrinsic("number")
 # --- Pointer and string types ---
 
-function [a|] pointer:
-    replacement:
-        a pointer to a byte
-
-function [a|] pointer to {type:kind}:
-    replacement:
-        @intrinsic("add pointer depth", kind)
-
-function an array:
-    replacement:
-        @intrinsic("array")
-
-function [an|] array of {fixed integer:count} [item|items]:
-    replacement:
-        @intrinsic("array", count)
-
-function {type:kind} array of {fixed integer:count} [item|items]:
-    replacement:
-        @intrinsic("array", count, kind)
-
-function {fixed integer:count} {type:kind} array:
-    replacement:
-        @intrinsic("array", count, kind)
-
-flex function [an|] array as long as value:
-    replacement:
-        @intrinsic("array", @intrinsic("type extent", value, 0))
-
-function [an|] array of numbers:
-    replacement:
-        @intrinsic("array", a number)
-
-flex function [an|] array of numbers as long as value:
-    replacement:
-        @intrinsic("array", @intrinsic("type extent", value, 0), a number)
-
-function the length of {an array:values}:
-    replacement:
-        @intrinsic("type extent", values, 0)
-
-function the element type of value:
-    replacement:
-        @intrinsic("element type", value)
-
-function the arithmetic type promoted from {type:left} and {type:right}:
-    replacement:
-        @intrinsic("promote arithmetic type", left, right)
-
+[a|] pointer means: a pointer to a byte
+[a|] pointer to {type:kind} means: @intrinsic("add pointer depth", kind)
+an array means: @intrinsic("array")
+[an|] array of {fixed integer:count} [item|items] means: @intrinsic("array", count)
+{type:kind} array of {fixed integer:count} [item|items] means: @intrinsic("array", count, kind)
+{fixed integer:count} {type:kind} array means: @intrinsic("array", count, kind)
+[an|] array as long as value means: @intrinsic("array", @intrinsic("type extent", value, 0))
+[an|] array of numbers means: @intrinsic("array", a number)
+[an|] array of numbers as long as value means: @intrinsic("array", @intrinsic("type extent", value, 0), a number)
+the length of {an array:values} means: @intrinsic("type extent", values, 0)
+the element type of value means: @intrinsic("element type", value)
+the arithmetic type promoted from {type:left} and {type:right} means: @intrinsic("promote arithmetic type", left, right)
 # --- Type casts ---
 
-function value as {type:destination}:
-    execute:
-        return @intrinsic("cast", value, destination)
+to get value as {type:destination}:
+    return @intrinsic("cast", value, destination)
 
-function truth if {boolean:condition}, else falsehood:
-    replacement:
-        @intrinsic("select", condition, truth, falsehood)
+truth if {boolean:condition}, else falsehood means: @intrinsic("select", condition, truth, falsehood)
+the build info {fixed C string:key} means: @intrinsic("build info", key)
+the build word size means: @intrinsic("build info", "word size")
+[a|] word sized integer means: @intrinsic("type", "int", @intrinsic("build info", "word size"))
+[a|] C long integer means: @intrinsic("type", "int", @intrinsic("build info", "c long size"))
+the build optimization level means: @intrinsic("build info", "optimization level")
+the build target is CPU means: @intrinsic("target is", "cpu")
+the build target is GPU means: @intrinsic("target is", "gpu")
+the build target is WebAssembly means: @intrinsic("target is", "wasm")
+to get an aggregate of {fixed integer:count} {type:kind} values:
+    if the build target is GPU:
+        return @intrinsic("vector", count, kind)
+    return @intrinsic("array", count, kind)
 
-function the build info {fixed C string:key}:
-    replacement:
-        @intrinsic("build info", key)
-
-function the build word size:
-    replacement:
-        @intrinsic("build info", "word size")
-
-function [a|] word sized integer:
-    replacement:
-        @intrinsic("type", "int", @intrinsic("build info", "word size"))
-
-function [a|] C long integer:
-    replacement:
-        @intrinsic("type", "int", @intrinsic("build info", "c long size"))
-
-function the build optimization level:
-    replacement:
-        @intrinsic("build info", "optimization level")
-
-function the build target is CPU:
-    replacement:
-        @intrinsic("target is", "cpu")
-
-function the build target is GPU:
-    replacement:
-        @intrinsic("target is", "gpu")
-
-function the build target is WebAssembly:
-    replacement:
-        @intrinsic("target is", "wasm")
-
-function an aggregate of {fixed integer:count} {type:kind} values:
-    execute:
-        if the build target is GPU:
-            return @intrinsic("vector", count, kind)
-        return @intrinsic("array", count, kind)
-
-function this is a fragment shader:
-    replacement:
-        @intrinsic("shader stage is", "fragment")
-
-function this is a vertex shader:
-    replacement:
-        @intrinsic("shader stage is", "vertex")
-
-function the size of kind:
-    replacement:
-        @intrinsic("size of", kind)
-
-function the type of value:
-    replacement:
-        @intrinsic("type of", value)
-
-function the function named {fixed C string:name}:
-    replacement:
-        @intrinsic("function", name)
-
+this is a fragment shader means: @intrinsic("shader stage is", "fragment")
+this is a vertex shader means: @intrinsic("shader stage is", "vertex")
+the size of kind means: @intrinsic("size of", kind)
+the type of value means: @intrinsic("type of", value)
+the function named {fixed C string:name} means: @intrinsic("function", name)
 # --- Pointers ---
 
-function the address of variable:
+the address of variable means: @intrinsic("address of", variable)
+the value at address means: @intrinsic("dereference", address)
+to abort the program:
+    @intrinsic("call", "libc", "abort", nothing)
+flex function:
+    patterns:
+        deallocate {a pointer to a value:address}
     replacement:
-        @intrinsic("address of", variable)
-
-function the value at address:
+        @intrinsic("call", "libc", "free", nothing, address)
+flex function:
+    patterns:
+        deallocate {a pointer to a pointer to a value:address}
     replacement:
-        @intrinsic("dereference", address)
-
+        @intrinsic("call", "libc", "free", nothing, address)
 function store value at address:
     replacement:
         @intrinsic("store at", address, value)
-
-function the item at index in address:
+flex function initialize value at address:
     replacement:
-        @intrinsic("dereference", address + index)
+        @intrinsic("initialize at", address, value)
+flex function destroy the value at address:
+    replacement:
+        @intrinsic("destroy at", address)
+the element at {index} in {aggregate} means: @intrinsic("extract element", aggregate, index)
+the aggregate formed by replacing element {index} in {aggregate} with {value} means: @intrinsic("insert element", aggregate, index, value)
+the item at index in address means: @intrinsic("dereference", address + index)
 
 # --- Dynamic allocations ---
 
 local function stop because a collection allocation failed:
     execute:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
 
 local function the maximum collection capacity:
     replacement:
@@ -260,45 +126,41 @@ local function the maximum allocation byte count:
             return 2147483647 as a word sized integer
         return 9223372036854775807 as a word sized integer
 
-function the expanded collection capacity after {integer:capacity}:
-    execute:
-        if capacity < 0 or capacity >= the maximum collection capacity:
-            stop because a collection allocation failed
-        if capacity < 4:
-            return 4
-        if capacity > the maximum collection capacity / 2:
-            return the maximum collection capacity
-        return capacity * 2
+to get the expanded collection capacity after {integer:capacity}:
+    if capacity < 0 or capacity >= the maximum collection capacity:
+        stop because a collection allocation failed
+    if capacity < 4:
+        return 4
+    if capacity > the maximum collection capacity / 2:
+        return the maximum collection capacity
+    return capacity * 2
 
-function the collection length after adding one item to {integer:length}:
-    execute:
-        if length < 0 or length >= the maximum collection capacity:
-            stop because a collection allocation failed
-        return length + 1
+to get the collection length after adding one item to {integer:length}:
+    if length < 0 or length >= the maximum collection capacity:
+        stop because a collection allocation failed
+    return length + 1
 
-function the collection capacity from {integer:capacity} expanded to hold {integer:count} items:
-    execute:
-        if (capacity < 0) or ((count < 0) or (count > the maximum collection capacity)):
-            stop because a collection allocation failed
-        set limit to capacity
-        loop while limit < count:
-            set limit to the expanded collection capacity after limit
-        return limit
+to get the collection capacity from {integer:capacity} expanded to hold {integer:count} items:
+    if (capacity < 0) or ((count < 0) or (count > the maximum collection capacity)):
+        stop because a collection allocation failed
+    set limit to capacity
+    loop while limit < count:
+        set limit to the expanded collection capacity after limit
+    return limit
 
-function the checked allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
-    execute:
-        if count <= 0:
-            stop because a collection allocation failed
-        if the build word size = 32 and count > 2147483647:
-            stop because a collection allocation failed
-        set quantity to count as a word sized integer
-        set width to (the size of kind) as a word sized integer
-        if quantity > (the maximum allocation byte count / width):
-            stop because a collection allocation failed
-        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
-        if replacement = 0 as a pointer to kind:
-            stop because a collection allocation failed
-        return replacement
+to get the checked allocation from {pointer:allocation} resized to {integer:count} items of {type:kind}:
+    if count <= 0:
+        stop because a collection allocation failed
+    if the build word size = 32 and count > 2147483647:
+        stop because a collection allocation failed
+    set quantity to count as a word sized integer
+    set width to (the size of kind) as a word sized integer
+    if quantity > the maximum allocation byte count / width:
+        stop because a collection allocation failed
+    set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+    if replacement = 0 as a pointer to kind:
+        stop because a collection allocation failed
+    return replacement
 
 # --- Arithmetic (with precedence) ---
 
@@ -442,27 +304,21 @@ function the bitwise inverse of value:
 function multiply value by factor:
 	replacement:
 		set value to value * factor
-
 function divide value by divisor:
 	replacement:
 		set value to value / divisor
-
 function add value to target:
 	replacement:
 		set target to target + value
-
 function subtract value from target:
 	replacement:
 		set target to target - value
-
 function increment value:
 	replacement:
 		set value to value + 1
-
 function decrement value:
 	replacement:
 		set value to value - 1
-
 # --- Clamping ---
 
 function clamp value between low and high:
@@ -472,9 +328,8 @@ function clamp value between low and high:
 		if value > high:
 			set value to high
 
-function {a number:value} clamped between {a number:low} and {a number:high}:
-    execute:
-        return @intrinsic("min", @intrinsic("max", value, low), high)
+to get {a number:value} clamped between {a number:low} and {a number:high}:
+    return @intrinsic("min", @intrinsic("max", value, low), high)
 
 # --- Math functions ---
 
@@ -593,11 +448,9 @@ function left or right:
 flex function loop while condition:
     replacement:
         @intrinsic("loop while", condition)
-
 flex function execute the body:
     replacement:
         @intrinsic("execute body")
-
 flex section [loop |]while condition:
     replacement:
         loop while condition
@@ -670,18 +523,16 @@ class:
         data as a pointer to a C string
         length as an integer
 
-function the command line arguments:
-    execute:
-        return @intrinsic(
-            "construct",
-            an argument list,
-            @intrinsic("command line argument values"),
-            @intrinsic("command line argument count")
-        )
+to get the command line arguments:
+    return @intrinsic(
+        "construct",
+        an argument list,
+        @intrinsic("command line argument values"),
+        @intrinsic("command line argument count")
+    )
 
-function the argument at {integer:index} in {argument list:arguments}:
-    execute:
-        if index < 0 or index >= arguments' length:
-            @intrinsic("call", "libc", "abort", nothing)
-        set value to the item at index in arguments' data
-        return a new string from value containing (the length of value) bytes
+to get the argument at {integer:index} in {argument list:arguments}:
+    if index < 0 or index >= arguments' length:
+        abort the program
+    set value to the item at index in arguments' data
+    return a new string from value containing (the length of value) bytes

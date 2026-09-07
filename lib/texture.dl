@@ -19,16 +19,25 @@ local function a new graphics texture with resource {pointer:resource}, width {i
     replacement:
         @intrinsic("construct", a graphics texture, resource, width, height)
 
-function an empty graphics texture:
-    execute:
-        return a new graphics texture with resource (0 as a pointer to a byte), width 0 and height 0
+the next byte from {pointer:stream} means: @intrinsic("call", "libc", "fgetc", an integer, stream)
+
+local function put {integer:character} back in {pointer:stream}:
+    replacement:
+        ignore @intrinsic("call", "libc", "ungetc", an integer, character, stream)
+
+local function close PPM {pointer:stream}:
+    replacement:
+        ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+
+to get an empty graphics texture:
+    return a new graphics texture with resource (0 as a pointer to a byte), width 0 and height 0
 
 local function skip PPM header whitespace and comments in {pointer:stream}:
     execute:
         set done to false
         set found to false
         while done = false:
-            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+            set character to the next byte from stream
             if character = -1:
                 set done to true
             else:
@@ -36,33 +45,33 @@ local function skip PPM header whitespace and comments in {pointer:stream}:
                     ignore character
                 else:
                     if character = 35:
-                        set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+                        set character to the next byte from stream
                         while (character != -1) and ((character != 10) and (character != 13)):
-                            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+                            set character to the next byte from stream
                     else:
-                        ignore @intrinsic("call", "libc", "ungetc", an integer, character, stream)
+                        put character back in stream
                         set found to true
                         set done to true
         return found
 
 local function the PPM magic token is valid in {pointer:stream}:
     execute:
-        set first to @intrinsic("call", "libc", "fgetc", an integer, stream)
-        set second to @intrinsic("call", "libc", "fgetc", an integer, stream)
-        set separator to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        set first to the next byte from stream
+        set second to the next byte from stream
+        set separator to the next byte from stream
         if (first != 80) or ((second != 54) or (separator = -1)):
             return false
         if (separator != 9) and ((separator != 10) and ((separator != 11) and ((separator != 12) and ((separator != 13) and (separator != 32))))):
             return false
-        ignore @intrinsic("call", "libc", "ungetc", an integer, separator, stream)
+        put separator back in stream
         return true
 
 local function a PPM integer token from {pointer:stream}:
     execute:
-        if skip PPM header whitespace and comments in stream = false:
+        if the inverse of skip PPM header whitespace and comments in stream:
             return -1
 
-        set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        set character to the next byte from stream
         if (character < 48) or (character > 57):
             return -1
 
@@ -71,99 +80,97 @@ local function a PPM integer token from {pointer:stream}:
             set digit to character - 48
             if (value > 214748364) or ((value = 214748364) and (digit > 7)):
                 return -1
-            set value to (value * 10) + digit
-            set character to @intrinsic("call", "libc", "fgetc", an integer, stream)
+            set value to value * 10 + digit
+            set character to the next byte from stream
 
         if character = -1:
             return -1
         if (character != 9) and ((character != 10) and ((character != 11) and ((character != 12) and ((character != 13) and (character != 32))))):
             return -1
-        ignore @intrinsic("call", "libc", "ungetc", an integer, character, stream)
+        put character back in stream
         return value
 
 local function consume the PPM pixel separator in {pointer:stream}:
     execute:
-        set delimiter to @intrinsic("call", "libc", "fgetc", an integer, stream)
+        set delimiter to the next byte from stream
         if delimiter = -1:
             return false
         if (delimiter != 9) and ((delimiter != 10) and ((delimiter != 11) and ((delimiter != 12) and ((delimiter != 13) and (delimiter != 32))))):
             return false
         if delimiter = 13:
-            set following to @intrinsic("call", "libc", "fgetc", an integer, stream)
+            set following to the next byte from stream
             if following != 10 and following != -1:
-                ignore @intrinsic("call", "libc", "ungetc", an integer, following, stream)
+                put following back in stream
         return true
 
-function a graphics texture loaded from PPM file at path for {pointer:window}:
-    execute:
-        set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
-        if stream = 0 as a pointer to a byte:
-            return an empty graphics texture
+to get a graphics texture loaded from PPM file at path for {pointer:window}:
+    set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
+    if stream = 0 as a pointer to a byte:
+        return an empty graphics texture
 
-        if the PPM magic token is valid in stream = false:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
+    if the inverse of the PPM magic token is valid in stream:
+        close PPM stream
+        return an empty graphics texture
 
-        set width to a PPM integer token from stream
-        set height to a PPM integer token from stream
-        set maximum to a PPM integer token from stream
-        if (width <= 0) or ((height <= 0) or (maximum != 255)):
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        if consume the PPM pixel separator in stream = false:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
+    set width to a PPM integer token from stream
+    set height to a PPM integer token from stream
+    set maximum to a PPM integer token from stream
+    if (width <= 0) or ((height <= 0) or (maximum != 255)):
+        close PPM stream
+        return an empty graphics texture
+    if the inverse of consume the PPM pixel separator in stream:
+        close PPM stream
+        return an empty graphics texture
 
-        set count to width as a word sized integer
-        set vertical to height as a word sized integer
-        if count > (9223372036854775807 / vertical):
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        multiply count by vertical
-        if count > (9223372036854775807 / 3):
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        multiply count by 3
+    set count to width as a word sized integer
+    set vertical to height as a word sized integer
+    if count > (9223372036854775807 / vertical):
+        close PPM stream
+        return an empty graphics texture
+    multiply count by vertical
+    if count > (9223372036854775807 / 3):
+        close PPM stream
+        return an empty graphics texture
+    multiply count by 3
 
-        set position to @intrinsic("call", "libc", "ftell", a C long integer, stream)
-        if position < 0 as a C long integer:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        set status to @intrinsic("call", "libc", "fseek", an integer, stream, 0 as a C long integer, 2)
-        if status != 0:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        set finish to @intrinsic("call", "libc", "ftell", a C long integer, stream)
-        set status to @intrinsic("call", "libc", "fseek", an integer, stream, position, 0)
-        if (status != 0) or (finish < position):
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
-        set available to (finish - position) as a word sized integer
-        if available < count:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
+    set position to @intrinsic("call", "libc", "ftell", a C long integer, stream)
+    if position < 0 as a C long integer:
+        close PPM stream
+        return an empty graphics texture
+    set status to @intrinsic("call", "libc", "fseek", an integer, stream, 0 as a C long integer, 2)
+    if status != 0:
+        close PPM stream
+        return an empty graphics texture
+    set finish to @intrinsic("call", "libc", "ftell", a C long integer, stream)
+    set status to @intrinsic("call", "libc", "fseek", an integer, stream, position, 0)
+    if (status != 0) or (finish < position):
+        close PPM stream
+        return an empty graphics texture
+    set available to (finish - position) as a word sized integer
+    if available < count:
+        close PPM stream
+        return an empty graphics texture
 
-        set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
-        if pixels = 0 as a pointer to a byte:
-            ignore @intrinsic("call", "libc", "fclose", an integer, stream)
-            return an empty graphics texture
+    set pixels to @intrinsic("call", "libc", "malloc", a pointer to a byte, count as a word sized integer)
+    if pixels = 0 as a pointer to a byte:
+        close PPM stream
+        return an empty graphics texture
 
-        set received to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, count as a word sized integer, stream)
-        ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+    set received to @intrinsic("call", "libc", "fread", a word sized integer, pixels, 1 as a word sized integer, count as a word sized integer, stream)
+    close PPM stream
 
-        if received != count as a word sized integer:
-            @intrinsic("call", "libc", "free", nothing, pixels)
-            return an empty graphics texture
+    if received != count as a word sized integer:
+        deallocate pixels
+        return an empty graphics texture
 
-        set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_rgb8", a pointer to a byte, window, width, height, pixels)
-        @intrinsic("call", "libc", "free", nothing, pixels)
-        if resource = 0 as a pointer to a byte:
-            return an empty graphics texture
-        return a new graphics texture with resource resource, width width and height height
+    set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_rgb8", a pointer to a byte, window, width, height, pixels)
+    deallocate pixels
+    if resource = 0 as a pointer to a byte:
+        return an empty graphics texture
+    return a new graphics texture with resource resource, width width and height height
 
-function {graphics texture:texture} is loaded:
-    execute:
-        return texture's resource != 0 as a pointer to a byte
+to get {graphics texture:texture} is loaded:
+    return texture's resource != 0 as a pointer to a byte
 
 flex function release {graphics texture:texture}:
     replacement:

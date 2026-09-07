@@ -1,69 +1,67 @@
 import lib/graphics.dl
 import tests/games/three_dimensional.dl
 
-function position the camera from {spatial camera:view} in {graphics frame:frame}:
-    execute:
-        reset the camera in frame
-        rotate the camera in frame by (0.0 - view's yaw) degrees around x 0.0, y 1.0 and z 0.0
-        move the camera in frame by x (0.0 - view's position's x), y (0.0 - view's position's y) and z (0.0 - view's position's z)
+to position the camera from {spatial camera:view} in {graphics frame:frame}:
+    reset the camera in frame
+    rotate the camera in frame by -view's yaw degrees around x 0.0, y 1.0 and z 0.0
+    move the camera in frame by x -view's position's x, y -view's position's y and z -view's position's z
 
-function draw a cube at {spatial position:position} with size {floating-point number:size} in {graphics frame:frame}:
-    execute:
-        set half to (size / 2.0)
-        save the model transform in frame
-        move the model in frame by x position's x, y position's y and z position's z
-        start triangles in frame
+to draw a cube at {spatial position:position} with size {floating-point number:size} in {graphics frame:frame}:
+    set half to size / 2.0
+    save the model transform in frame
+    move the model in frame by x position's x, y position's y and z position's z
+    start triangles in frame
 
-        use vertex color red 220, green 80 and blue 80 in frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
-        add a vertex at x half, y (0.0 - half) and z half to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x (0.0 - half), y half and z half to frame
+    use vertex color red 220, green 80 and blue 80 in frame
+    add a vertex at x -half, y -half and z half to frame
+    add a vertex at x half, y -half and z half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x -half, y -half and z half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x -half, y half and z half to frame
 
-        use vertex color red 80, green 220 and blue 80 in frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
-        add a vertex at x half, y half and z (0.0 - half) to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y half and z (0.0 - half) to frame
-        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
+    use vertex color red 80, green 220 and blue 80 in frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x -half, y half and z -half to frame
+    add a vertex at x half, y half and z -half to frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x half, y half and z -half to frame
+    add a vertex at x half, y -half and z -half to frame
 
-        use vertex color red 80, green 80 and blue 220 in frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
-        add a vertex at x (0.0 - half), y half and z half to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x (0.0 - half), y half and z half to frame
-        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
+    use vertex color red 80, green 80 and blue 220 in frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x -half, y -half and z half to frame
+    add a vertex at x -half, y half and z half to frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x -half, y half and z half to frame
+    add a vertex at x -half, y half and z -half to frame
 
-        use vertex color red 220, green 220 and blue 80 in frame
-        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y half and z (0.0 - half) to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x half, y (0.0 - half) and z half to frame
+    use vertex color red 220, green 220 and blue 80 in frame
+    add a vertex at x half, y -half and z -half to frame
+    add a vertex at x half, y half and z -half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x half, y -half and z -half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x half, y -half and z half to frame
 
-        use vertex color red 220, green 80 and blue 220 in frame
-        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
-        add a vertex at x (0.0 - half), y half and z half to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x (0.0 - half), y half and z (0.0 - half) to frame
-        add a vertex at x half, y half and z half to frame
-        add a vertex at x half, y half and z (0.0 - half) to frame
+    use vertex color red 220, green 80 and blue 220 in frame
+    add a vertex at x -half, y half and z -half to frame
+    add a vertex at x -half, y half and z half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x -half, y half and z -half to frame
+    add a vertex at x half, y half and z half to frame
+    add a vertex at x half, y half and z -half to frame
 
-        use vertex color red 80, green 220 and blue 220 in frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y (0.0 - half) and z half to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z (0.0 - half) to frame
-        add a vertex at x half, y (0.0 - half) and z half to frame
-        add a vertex at x (0.0 - half), y (0.0 - half) and z half to frame
+    use vertex color red 80, green 220 and blue 220 in frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x half, y -half and z -half to frame
+    add a vertex at x half, y -half and z half to frame
+    add a vertex at x -half, y -half and z -half to frame
+    add a vertex at x half, y -half and z half to frame
+    add a vertex at x -half, y -half and z half to frame
 
-        finish triangles in frame
-        restore the model transform in frame
+    finish triangles in frame
+    restore the model transform in frame
 
 set window to a new window with width 800 and height 600
 

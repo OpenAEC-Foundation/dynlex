@@ -625,6 +625,8 @@ SyntaxConfig::Messages::Messages() {
 	set("ambiguous conversion", "message", "More than one conversion from {from_type} to {to_type} is equally specific");
 	set("address of requires addressable value", "message", "address of requires an addressable value");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
+	set("class size unknown member type", "message",
+		"Cannot determine the size of {type} because the type of member '{member}' is unknown; it is 'a value'");
 }
 
 const std::string *SyntaxConfig::Messages::find(std::string_view key, std::string_view variant) const {

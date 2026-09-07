@@ -12,24 +12,16 @@ class:
     members:
         program as a shader program
 
-function a horizon resource set owning {shader program:program}:
-    replacement:
-        @intrinsic("construct", a horizon resource set, program)
+a horizon resource set owning {shader program:program} means: @intrinsic("construct", a horizon resource set, program)
+to read the cursor from {pointer:window} into {spatial position:position}:
+    set {pointer position} to the cursor position of window
+    set the x coordinate of position to pointer position's x
+    set the y coordinate of position to pointer position's y
 
-function read the cursor from {pointer:window} into {spatial position:position}:
-    execute:
-        set {pointer position} to the cursor position of window
-        set the x coordinate of position to pointer position's x
-        set the y coordinate of position to pointer position's y
+to get mouse button {integer:number} is down in {pointer:window}:
+    return a mouse button numbered number is pressed in window
 
-function mouse button {integer:number} is down in {pointer:window}:
-    execute:
-        return a mouse button numbered number is pressed in window
-
-flex function release {horizon resource set:resources}:
-    replacement:
-        release resources's program
-
+release {horizon resource set:resources} means: release resources's program
 set window to a new window with width 1280 and height 720
 set the title of window to "EVENT HORIZON  |  WASD/arrows: move  |  mouse: bend  |  click: pulse  |  R: center"
 preserve mouse clicks in window
@@ -37,17 +29,17 @@ preserve mouse clicks in window
 set program to a shader program for window using vertex shader at "tests/games/event_horizon/vertex.spv" and fragment shader at "tests/games/event_horizon/horizon.spv"
 set resources to a horizon resource set owning program
 
-set click to (0.0 - 10.0)
+set click to -10.0
 set ready to true
 set view to a camera at (a position with x 0.0, y 0.0 and z 0.0) facing 0.0 degrees with speed 0.72 and turn rate 0.0
 set previous to the time since start for window
 
 while window remains open:
     set time to the time since start for window
-    set elapsed to (time - previous)
+    set elapsed to time - previous
     set previous to time
     clamp elapsed between 0.0 and 0.1
-    set movement to (elapsed * view's movement)
+    set movement to elapsed * view's movement
 
     set left to key (the A key) is down in window or key (the left arrow key) is down in window
     set right to key (the D key) is down in window or key (the right arrow key) is down in window
@@ -61,8 +53,8 @@ while window remains open:
         increase the y coordinate of view's position by movement
     if down:
         decrease the y coordinate of view's position by movement
-    set the x coordinate of view's position to (view's position's x clamped between (0.0 - 0.82) and 0.82)
-    set the y coordinate of view's position to (view's position's y clamped between (0.0 - 0.52) and 0.52)
+    set the x coordinate of view's position to view's position's x clamped between -0.82 and 0.82
+    set the y coordinate of view's position to view's position's y clamped between -0.52 and 0.52
     if key 82 is down in window:
         set the x coordinate of view's position to 0.0
         set the y coordinate of view's position to 0.0

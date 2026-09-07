@@ -23,19 +23,13 @@ class:
 	members:
 		x, y
 
-function a pixel position at x {integer:x} and y {integer:y}:
-	replacement:
-		@intrinsic("construct", a pixel position, x, y)
-
-function a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles}:
-	replacement:
-		@intrinsic("construct", a chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
-
-allocate 4096 slots of an integer and set memory to it
-allocate 16 slots of an integer and set registers to it
-allocate 16 slots of an integer and set stack to it
-allocate 2048 slots of an integer and set display to it
-allocate 16 slots of an integer and set keys to it
+a pixel position at x {integer:x} and y {integer:y} means: @intrinsic("construct", a pixel position, x, y)
+a chip machine using {a pointer to an integer:memory}, {a pointer to an integer:registers}, {a pointer to an integer:stack}, {a pointer to an integer:display} and {a pointer to an integer:keys}, starting at program {integer:program} with index {integer:index}, stack depth {integer:depth}, delay {integer:delay}, sound {integer:sound}, status {integer:status}, glyph position {integer:glyph} and cycle count {integer:cycles} means: @intrinsic("construct", a chip machine, memory, registers, stack, display, keys, program, index, depth, delay, sound, status, glyph, cycles)
+set memory to an integer array of 4096 slots
+set registers to an integer array of 16 slots
+set stack to an integer array of 16 slots
+set display to an integer array of 2048 slots
+set keys to an integer array of 16 slots
 set console to a chip machine using memory, registers, stack, display and keys, starting at program 512 with index 0, stack depth 0, delay 0, sound 0, status 0, glyph position 0 and cycle count 0
 
 # --- Built in hexadecimal font (5 bytes per glyph, stored at address 0) ---
@@ -46,13 +40,12 @@ function install a font byte {integer:value}:
 		store value into console's memory at console's glyph
 		increment console's glyph
 
-function install a glyph {integer:first} then {integer:second} then {integer:third} then {integer:fourth} then {integer:fifth}:
-	execute:
-		install a font byte first
-		install a font byte second
-		install a font byte third
-		install a font byte fourth
-		install a font byte fifth
+to install a glyph {integer:first} then {integer:second} then {integer:third} then {integer:fourth} then {integer:fifth}:
+	install a font byte first
+	install a font byte second
+	install a font byte third
+	install a font byte fourth
+	install a font byte fifth
 
 function install the machine font:
 	globals: console
@@ -116,12 +109,12 @@ function load the assembled program into the machine:
 function the machine pixel at {integer:column}, {integer:row}:
 	globals: console
 	execute:
-		return the item at (row * 64 + column) in console's display
+		return the item at (row * 64 + column) in (console's display)
 
 function the machine register {integer:number}:
 	globals: console
 	execute:
-		return the item at number in console's registers
+		return the item at number in (console's registers)
 
 function the machine program counter:
 	globals: console
@@ -149,7 +142,7 @@ function the count of lit machine pixels:
 		set total to 0
 		set index to 0
 		loop while index < 2048:
-			set total to (total + the item at index in console's display)
+			add the item at index in (console's display) to total
 			increment index
 		return total
 
@@ -185,16 +178,16 @@ function draw a machine sprite at {pixel position:origin} with {integer:count} [
 		loop while row < count:
 			set pixel to a pixel position at x origin's x and y (origin's y + row)
 			if pixel's y < 32:
-				set bitmap to the item at (console's index + row) in console's memory
+				set bitmap to the item at (console's index + row) in (console's memory)
 				set column to 0
 				loop while column < 8:
 					if ((bitmap shifted right by (7 - column)) bitwise and 1) = 1:
-						set pixel's x to (origin's x + column)
+						set pixel's x to origin's x + column
 						if pixel's x < 64:
-							set cell to (pixel's y * 64 + pixel's x)
-							if the item at cell in console's display = 1:
+							set cell to pixel's y * 64 + pixel's x
+							if the item at cell in (console's display) = 1:
 								store 1 into console's registers at 15
-							store ((the item at cell in console's display) bitwise xor 1) into console's display at cell
+							store ((the item at cell in (console's display)) bitwise xor 1) into console's display at cell
 					increment column
 			increment row
 
@@ -204,15 +197,15 @@ function step the machine:
 	globals: console
 	execute:
 		if the machine is running:
-			set high to the item at console's program in console's memory
-			set low to the item at (console's program + 1) in console's memory
+			set high to the item at console's program in (console's memory)
+			set low to the item at (console's program + 1) in (console's memory)
 			set opcode to (high shifted left by 8) bitwise or low
 			set target to high bitwise and 15
 			set source to low shifted right by 4
 			set operation to low bitwise and 15
 			set operand to low
 			set address to opcode bitwise and 4095
-			set console's program to (console's program + 2)
+			add 2 to console's program
 			increment console's cycles
 			match based on high shifted right by 4:
 				case 0:
@@ -223,7 +216,7 @@ function step the machine:
 							increment index
 					else if operand = 238:
 						decrement console's depth
-						set console's program to the item at console's depth in console's stack
+						set console's program to the item at console's depth in (console's stack)
 					else:
 						report a machine fault for opcode
 				case 1:
@@ -233,21 +226,21 @@ function step the machine:
 					increment console's depth
 					set console's program to address
 				case 3:
-					if the item at target in console's registers = operand:
-						set console's program to (console's program + 2)
+					if the item at target in (console's registers) = operand:
+						add 2 to console's program
 				case 4:
-					if the item at target in console's registers != operand:
-						set console's program to (console's program + 2)
+					if the item at target in (console's registers) != operand:
+						add 2 to console's program
 				case 5:
-					if the item at target in console's registers = the item at source in console's registers:
-						set console's program to (console's program + 2)
+					if the item at target in (console's registers) = the item at source in (console's registers):
+						add 2 to console's program
 				case 6:
 					store operand into console's registers at target
 				case 7:
-					store (((the item at target in console's registers) + operand) bitwise and 255) into console's registers at target
+					store (((the item at target in (console's registers)) + operand) bitwise and 255) into console's registers at target
 				case 8:
-					set left to the item at target in console's registers
-					set right to the item at source in console's registers
+					set left to the item at target in (console's registers)
+					set right to the item at source in (console's registers)
 					if operation = 0:
 						store right into console's registers at target
 					else if operation = 1:
@@ -274,24 +267,24 @@ function step the machine:
 					else:
 						report a machine fault for opcode
 				case 9:
-					if the item at target in console's registers != the item at source in console's registers:
-						set console's program to (console's program + 2)
+					if the item at target in (console's registers) != the item at source in (console's registers):
+						add 2 to console's program
 				case 10:
 					set console's index to address
 				case 11:
-					set console's program to (address + (the item at 0 in console's registers)) bitwise and 4095
+					set console's program to (address + (the item at 0 in (console's registers))) bitwise and 4095
 				case 12:
 					store ((a random number) bitwise and operand) into console's registers at target
 				case 13:
-					set origin to a pixel position at x ((the item at target in console's registers) bitwise and 63) and y ((the item at source in console's registers) bitwise and 31)
+					set origin to a pixel position at x ((the item at target in (console's registers)) bitwise and 63) and y ((the item at source in (console's registers)) bitwise and 31)
 					draw a machine sprite at origin with operation rows
 				case 14:
 					if operand = 158:
-						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 1:
-							set console's program to (console's program + 2)
+						if the item at ((the item at target in (console's registers)) bitwise and 15) in console's keys = 1:
+							add 2 to console's program
 					else if operand = 161:
-						if the item at ((the item at target in console's registers) bitwise and 15) in console's keys = 0:
-							set console's program to (console's program + 2)
+						if the item at ((the item at target in (console's registers)) bitwise and 15) in console's keys = 0:
+							add 2 to console's program
 					else:
 						report a machine fault for opcode
 				case 15:
@@ -301,42 +294,41 @@ function step the machine:
 						set pressed to the negative of 1
 						set key to 0
 						loop while key < 16:
-							if the item at key in console's keys = 1:
+							if the item at key in (console's keys) = 1:
 								set pressed to key
 							increment key
 						if pressed < 0:
-							set console's program to (console's program - 2)
+							set console's program to console's program - 2
 						else:
 							store pressed into console's registers at target
 					else if operand = 21:
-						set console's delay to the item at target in console's registers
+						set console's delay to the item at target in (console's registers)
 					else if operand = 24:
-						set console's sound to the item at target in console's registers
+						set console's sound to the item at target in (console's registers)
 					else if operand = 30:
-						set console's index to (console's index + (the item at target in console's registers)) bitwise and 4095
+						set console's index to (console's index + (the item at target in (console's registers))) bitwise and 4095
 					else if operand = 41:
-						set console's index to (((the item at target in console's registers) bitwise and 15) * 5)
+						set console's index to (((the item at target in (console's registers)) bitwise and 15) * 5)
 					else if operand = 51:
-						set left to the item at target in console's registers
+						set left to the item at target in (console's registers)
 						store left / 100 into console's memory at console's index
 						store the remainder of (left / 10) divided by 10 into console's memory at console's index + 1
 						store the remainder of left divided by 10 into console's memory at console's index + 2
 					else if operand = 85:
 						set index to 0
 						loop while index <= target:
-							store the item at index in console's registers into console's memory at console's index + index
+							store the item at index in (console's registers) into console's memory at console's index + index
 							increment index
 					else if operand = 101:
 						set index to 0
 						loop while index <= target:
-							store the item at (console's index + index) in console's memory into console's registers at index
+							store the item at (console's index + index) in (console's memory) into console's registers at index
 							increment index
 					else:
 						report a machine fault for opcode
 
-function step the machine {integer:count} [time|times]:
-	execute:
-		set index to 0
-		loop while index < count:
-			step the machine
-			increment index
+to step the machine {integer:count} [time|times]:
+	set index to 0
+	loop while index < count:
+		step the machine
+		increment index

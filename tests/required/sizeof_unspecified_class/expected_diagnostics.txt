@@ -1,0 +1,3 @@
+tests/required/sizeof_unspecified_class/main.dl:23-53: Error: Cannot determine the size of an item because the type of member 'value' is unknown; it is 'a value'
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", an item)' with arguments [a type] -> an unresolved value tests/required/sizeof_unspecified_class/main.dl:23-53
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("size of", an item))' with arguments [an unresolved value] -> an unresolved value tests/required/sizeof_unspecified_class/main.dl:1-54

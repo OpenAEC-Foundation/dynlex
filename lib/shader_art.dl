@@ -3,203 +3,174 @@ import lib/geometry.dl
 
 # Shared procedural-art vocabulary for editable fragment shaders.
 
-function a point with x {floating-point number:horizontal} and y {floating-point number:vertical}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 2 floating-point number values, horizontal, vertical)
-        )
+a point with x {floating-point number:horizontal} and y {floating-point number:vertical} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 2 floating-point number values, horizontal, vertical)
+)
 
-function a point with x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 3 floating-point number values, horizontal, vertical, depth)
-        )
+a point with x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 3 floating-point number values, horizontal, vertical, depth)
+)
 
-function the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth}:
-    replacement:
-        @intrinsic(
-            "construct",
-            a point,
-            @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
-        )
+the dimensions measuring {floating-point number:width} by {floating-point number:height} by {floating-point number:depth} means: @intrinsic(
+    "construct",
+    a point,
+    @intrinsic("construct", an aggregate of 3 floating-point number values, width, height, depth)
+)
 
-function the shader width:
-    replacement:
-        @intrinsic("shader uniform", "width", 2)
+the shader width means: @intrinsic("shader uniform", "width", 2)
+the shader height means: @intrinsic("shader uniform", "height", 3)
+to get the fractional part of number:
+    return number - the floor of number
 
-function the shader height:
-    replacement:
-        @intrinsic("shader uniform", "height", 3)
+to get number saturated:
+    set result to number
+    clamp result between 0.0 and 1.0
+    return result
 
-function the fractional part of number:
-    execute:
-        return number - the floor of number
+to get the smooth transition from lower to upper at sample:
+    set normalized to (sample - lower) / (upper - lower)
+    set normalized to normalized saturated
+    return (normalized * normalized) * (3.0 - 2.0 * normalized)
 
-function number saturated:
-    execute:
-        set result to number
-        clamp result between 0.0 and 1.0
-        return result
+to get the glow from inner to outer at sample:
+    return 1.0 - the smooth transition from inner to outer at sample
 
-function the smooth transition from lower to upper at sample:
-    execute:
-        set normalized to ((sample - lower) / (upper - lower))
-        set normalized to normalized saturated
-        return (normalized * normalized) * (3.0 - (2.0 * normalized))
+to get the simplex permutation of value:
+    set polynomial to ((value * 34.0 + 1.0) * value)
+    return polynomial - (the floor of (polynomial / 289.0)) * 289.0
 
-function the glow from inner to outer at sample:
-    execute:
-        return 1.0 - the smooth transition from inner to outer at sample
-
-function the simplex permutation of value:
-    execute:
-        set polynomial to (((value * 34.0) + 1.0) * value)
-        return polynomial - (the floor of (polynomial / 289.0)) * 289.0
-
-function the simplex corner at {a point:offset} with permutation {a value:permutation}:
-    execute:
-        set radius to the maximum of (0.5 - ((offset's x * offset's x) + (offset's y * offset's y))) and 0.0
-        set axis to (((the fractional part of (permutation / 41.0)) * 2.0) - 1.0)
-        set elevation to ((the absolute value of axis) - 0.5)
-        set shift to the floor of (axis + 0.5)
-        set axis to (axis - shift)
-        set normalization to (1.79284291 - 0.85373472 * ((axis * axis) + (elevation * elevation)))
-        set attenuation to (radius * radius)
-        set attenuation to (attenuation * attenuation)
-        return (attenuation * normalization) * ((axis * offset's x) + (elevation * offset's y))
+to get the simplex corner at {a point:offset} with permutation {a value:permutation}:
+    set radius to the maximum of (0.5 - (offset's x * offset's x + offset's y * offset's y)) and 0.0
+    set axis to (((the fractional part of (permutation / 41.0)) * 2.0) - 1.0)
+    set elevation to ((the absolute value of axis) - 0.5)
+    set shift to the floor of (axis + 0.5)
+    set axis to axis - shift
+    set normalization to (1.79284291 - 0.85373472 * (axis * axis + elevation * elevation))
+    set attenuation to radius * radius
+    multiply attenuation by attenuation
+    return (attenuation * normalization) * (axis * offset's x + elevation * offset's y)
 
 # A triangular simplex lattice avoids the axis-aligned cells and repeating
 # wave bands that become conspicuous when a field displaces visible geometry.
-function the simplex field at {a point:point} during {a value:phase}:
-    execute:
-        set sample to a point with x (point's x + phase * 17.17) and y (point's y - phase * 11.13)
-        set skew to ((sample's x + sample's y) * 0.36602540)
-        set corner to a point with x (the floor of (sample's x + skew)) and y (the floor of (sample's y + skew))
-        set unskew to ((corner's x + corner's y) * 0.21132487)
-        set offset to a point with x (sample's x - (corner's x - unskew)) and y (sample's y - (corner's y - unskew))
+to get the simplex field at {a point:point} during {a value:phase}:
+    set sample to a point with x (point's x + phase * 17.17) and y (point's y - phase * 11.13)
+    set skew to ((sample's x + sample's y) * 0.36602540)
+    set corner to a point with x (the floor of (sample's x + skew)) and y (the floor of (sample's y + skew))
+    set unskew to ((corner's x + corner's y) * 0.21132487)
+    set offset to a point with x (sample's x - (corner's x - unskew)) and y (sample's y - (corner's y - unskew))
 
-        set second to a point with x 0.0 and y 1.0
-        if offset's x > offset's y:
-            set the x coordinate of second to 1.0
-            set the y coordinate of second to 0.0
-        set middle to a point with x ((offset's x - second's x) + 0.21132487) and y ((offset's y - second's y) + 0.21132487)
-        set third to a point with x (offset's x - 0.57735027) and y (offset's y - 0.57735027)
+    set second to a point with x 0.0 and y 1.0
+    if offset's x > offset's y:
+        set the x coordinate of second to 1.0
+        set the y coordinate of second to 0.0
+    set middle to a point with x ((offset's x - second's x) + 0.21132487) and y ((offset's y - second's y) + 0.21132487)
+    set third to a point with x (offset's x - 0.57735027) and y (offset's y - 0.57735027)
 
-        set wrapped to a point with x (corner's x - (the floor of (corner's x / 289.0)) * 289.0) and y (corner's y - (the floor of (corner's y / 289.0)) * 289.0)
-        set initial to the simplex permutation of ((the simplex permutation of wrapped's y) + wrapped's x)
-        set following to the simplex permutation of (((the simplex permutation of (wrapped's y + second's y)) + wrapped's x) + second's x)
-        set final to the simplex permutation of (((the simplex permutation of (wrapped's y + 1.0)) + wrapped's x) + 1.0)
+    set wrapped to a point with x (corner's x - (the floor of (corner's x / 289.0)) * 289.0) and y (corner's y - (the floor of (corner's y / 289.0)) * 289.0)
+    set initial to the simplex permutation of ((the simplex permutation of wrapped's y) + wrapped's x)
+    set following to the simplex permutation of (((the simplex permutation of (wrapped's y + second's y)) + wrapped's x) + second's x)
+    set final to the simplex permutation of (((the simplex permutation of (wrapped's y + 1.0)) + wrapped's x) + 1.0)
 
-        set leading to the simplex corner at offset with permutation initial
-        set central to the simplex corner at middle with permutation following
-        set trailing to the simplex corner at third with permutation final
-        return ((leading + central) + trailing) * 130.0
+    set leading to the simplex corner at offset with permutation initial
+    set central to the simplex corner at middle with permutation following
+    set trailing to the simplex corner at third with permutation final
+    return ((leading + central) + trailing) * 130.0
 
-function the signed flow at {a point:point} during {a value:phase}:
-    execute:
-        set sway to the sine of (((point's x * 0.73) - (point's y * 0.41)) + phase)
-        set drift to the cosine of (((point's x * 0.37) + (point's y * 0.89)) - (phase * 0.71))
-        set longitude to (point's x + sway * 0.58)
-        set latitude to (point's y + drift * 0.58)
-        set broad to the sine of (((longitude * 1.31) + (latitude * 0.87)) + (phase * 0.43))
-        set crossing to the cosine of (((longitude * -0.79) + (latitude * 1.73)) - (phase * 0.31))
-        set curl to the sine of (((longitude * 2.47) - (latitude * 2.11)) + (broad * 1.8))
-        set detail to the cosine of (((longitude * 4.03) + (latitude * 3.17)) + (crossing * 1.4))
-        return ((broad * 0.46) + (crossing * 0.29)) + ((curl * 0.17) + (detail * 0.08))
+to get the signed flow at {a point:point} during {a value:phase}:
+    set sway to the sine of ((point's x * 0.73 - point's y * 0.41) + phase)
+    set drift to the cosine of ((point's x * 0.37 + point's y * 0.89) - phase * 0.71)
+    set longitude to point's x + sway * 0.58
+    set latitude to point's y + drift * 0.58
+    set broad to the sine of ((longitude * 1.31 + latitude * 0.87) + phase * 0.43)
+    set crossing to the cosine of ((longitude * -0.79 + latitude * 1.73) - phase * 0.31)
+    set curl to the sine of ((longitude * 2.47 - latitude * 2.11) + broad * 1.8)
+    set detail to the cosine of ((longitude * 4.03 + latitude * 3.17) + crossing * 1.4)
+    return (broad * 0.46 + crossing * 0.29) + (curl * 0.17 + detail * 0.08)
 
-function the flowing field at {a point:point} during {a value:phase}:
-    execute:
-        return (the signed flow at point during phase) * 0.5 + 0.5
+to get the flowing field at {a point:point} during {a value:phase}:
+    return (the signed flow at point during phase) * 0.5 + 0.5
 
-function the ridged field at {a point:point} during {a value:phase}:
-    execute:
-        set wave to the absolute value of (the signed flow at point during phase)
-        set ridge to (1.0 - the minimum of wave and 1.0)
-        return ridge * ridge
+to get the ridged field at {a point:point} during {a value:phase}:
+    set wave to the absolute value of (the signed flow at point during phase)
+    set ridge to 1.0 - the minimum of wave and 1.0
+    return ridge * ridge
 
-function the spark field at {a point:point} during {a value:phase}:
-    execute:
-        set sample to a point with x (point's x * 0.19) and y (point's y * 0.19)
-        set warp to the signed flow at sample during phase
-        set shifted to a point with x (point's x * 0.23 + 7.0) and y (point's y * 0.23 - 5.0)
-        set longitude to (point's x + warp * 1.7)
-        set latitude to (point's y + (the signed flow at shifted during (phase + 1.7)) * 1.7)
-        set primary to the absolute value of (the sine of ((longitude * 1.73) + (latitude * 0.31) + phase))
-        set secondary to the absolute value of (the sine of ((longitude * -0.27) + (latitude * 1.91) - phase * 0.83))
-        set crossing to the square root of (primary * primary + secondary * secondary)
-        set brightness to the glow from 0.0 to 0.115 at crossing
-        set location to a point with x (longitude * 0.11) and y (latitude * 0.11)
-        set rarity to the flowing field at location during (phase + 4.0)
-        return brightness * the smooth transition from 0.48 to 0.82 at rarity
+to get the spark field at {a point:point} during {a value:phase}:
+    set sample to a point with x (point's x * 0.19) and y (point's y * 0.19)
+    set warp to the signed flow at sample during phase
+    set shifted to a point with x (point's x * 0.23 + 7.0) and y (point's y * 0.23 - 5.0)
+    set longitude to point's x + warp * 1.7
+    set latitude to (point's y + (the signed flow at shifted during (phase + 1.7)) * 1.7)
+    set primary to the absolute value of (the sine of (longitude * 1.73 + latitude * 0.31 + phase))
+    set secondary to the absolute value of (the sine of (longitude * -0.27 + latitude * 1.91 - phase * 0.83))
+    set crossing to the square root of (primary * primary + secondary * secondary)
+    set brightness to the glow from 0.0 to 0.115 at crossing
+    set location to a point with x (longitude * 0.11) and y (latitude * 0.11)
+    set rarity to the flowing field at location during (phase + 4.0)
+    return brightness * the smooth transition from 0.48 to 0.82 at rarity
 
-function the distance from {a point:point} to segment from {a point:start} to {a point:end}:
-    execute:
-        set span to (end's x - start's x)
-        set rise to (end's y - start's y)
-        set horizontal to (point's x - start's x)
-        set vertical to (point's y - start's y)
-        set measure to (span * span + rise * rise)
-        set projection to ((horizontal * span + vertical * rise) / the maximum of measure and 0.000001)
-        set projection to projection saturated
-        set longitude to (start's x + span * projection)
-        set latitude to (start's y + rise * projection)
-        set difference to (point's x - longitude)
-        set deviation to (point's y - latitude)
-        return the square root of (difference * difference + deviation * deviation)
+to get the distance from {a point:point} to segment from {a point:start} to {a point:end}:
+    set span to end's x - start's x
+    set rise to end's y - start's y
+    set horizontal to point's x - start's x
+    set vertical to point's y - start's y
+    set measure to span * span + rise * rise
+    set projection to ((horizontal * span + vertical * rise) / the maximum of measure and 0.000001)
+    set projection to projection saturated
+    set longitude to start's x + span * projection
+    set latitude to start's y + rise * projection
+    set difference to point's x - longitude
+    set deviation to point's y - latitude
+    return the square root of (difference * difference + deviation * deviation)
 
-function the ring distance from {a point:point} around {a point:center} with radius {a value:radius}:
-    execute:
-        set difference to (point's x - center's x)
-        set deviation to (point's y - center's y)
-        set result to the square root of (difference * difference + deviation * deviation)
-        return the absolute value of (result - radius)
+to get the ring distance from {a point:point} around {a point:center} with radius {a value:radius}:
+    set difference to point's x - center's x
+    set deviation to point's y - center's y
+    set result to the square root of (difference * difference + deviation * deviation)
+    return the absolute value of (result - radius)
 
-function the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius {a value:radius}:
-    execute:
-        set span to (end's x - start's x)
-        set rise to (end's y - start's y)
-        set depth to (end's z - start's z)
-        set horizontal to (point's x - start's x)
-        set vertical to (point's y - start's y)
-        set forward to (point's z - start's z)
-        set measure to (((span * span) + (rise * rise)) + (depth * depth))
-        set projection to ((((horizontal * span) + (vertical * rise)) + (forward * depth)) / the maximum of measure and 0.000001)
-        set projection to projection saturated
-        set longitude to (start's x + span * projection)
-        set latitude to (start's y + rise * projection)
-        set altitude to (start's z + depth * projection)
-        set difference to (point's x - longitude)
-        set deviation to (point's y - latitude)
-        set separation to (point's z - altitude)
-        return (the square root of (difference * difference + deviation * deviation + separation * separation)) - radius
+to get the distance from {a point:point} to capsule from {a point:start} to {a point:end} with radius {a value:radius}:
+    set span to end's x - start's x
+    set rise to end's y - start's y
+    set depth to end's z - start's z
+    set horizontal to point's x - start's x
+    set vertical to point's y - start's y
+    set forward to point's z - start's z
+    set measure to ((span * span + rise * rise) + depth * depth)
+    set projection to (((horizontal * span + vertical * rise) + forward * depth) / the maximum of measure and 0.000001)
+    set projection to projection saturated
+    set longitude to start's x + span * projection
+    set latitude to start's y + rise * projection
+    set altitude to start's z + depth * projection
+    set difference to point's x - longitude
+    set deviation to point's y - latitude
+    set separation to point's z - altitude
+    return (the square root of (difference * difference + deviation * deviation + separation * separation)) - radius
 
-function the ellipsoid distance from {a point:point} with radii {a point:radii}:
-    execute:
-        set horizontal to (point's x / radii's width)
-        set vertical to (point's y / radii's height)
-        set forward to (point's z / radii's depth)
-        set result to the square root of (((horizontal * horizontal) + (vertical * vertical)) + (forward * forward))
-        set smallest to the minimum of radii's width and (the minimum of radii's height and radii's depth)
-        return (result - 1.0) * smallest
+to get the ellipsoid distance from {a point:point} with radii {a point:radii}:
+    set horizontal to point's x / radii's width
+    set vertical to point's y / radii's height
+    set forward to point's z / radii's depth
+    set result to the square root of ((horizontal * horizontal + vertical * vertical) + forward * forward)
+    set smallest to the minimum of radii's width and (the minimum of radii's height and radii's depth)
+    return (result - 1.0) * smallest
 
-function the torus distance from {a point:point} with major radius {a value:outer} and tube radius {a value:inner}:
-    execute:
-        set offset to ((the square root of (point's x * point's x + point's y * point's y)) - outer)
-        return (the square root of (offset * offset + point's z * point's z)) - inner
+to get the torus distance from {a point:point} with major radius {a value:outer} and tube radius {a value:inner}:
+    set offset to ((the square root of (point's x * point's x + point's y * point's y)) - outer)
+    return (the square root of (offset * offset + point's z * point's z)) - inner
 
-function the nano drone field at {a point:point} with phase {a value:phase}:
-    execute:
-        set first to (((point's x) * 43.13) + (((point's y) * 17.71) + (((point's z) * 7.19) + phase)))
-        set second to (((point's x) * -13.37) + (((point's y) * 47.07) + (((point's z) * 21.41) - (phase * 0.73))))
-        set third to (((point's x) * 29.79) - (((point's y) * 11.91) - (((point's z) * 59.33) + (phase * 1.31))))
-        set primary to the absolute value of (the sine of first)
-        set secondary to the absolute value of (the sine of second)
-        set tertiary to the absolute value of (the sine of third)
-        set crossing to the square root of (((primary * primary) + (secondary * secondary)) + (tertiary * tertiary))
-        set core to the glow from 0.0 to 0.42 at crossing
-        set aura to the glow from 0.0 to 0.70 at crossing
-        return core * 4.2 + aura * 0.16
+to get the nano drone field at {a point:point} with phase {a value:phase}:
+    set first to (point's x * 43.13) + ((point's y * 17.71) + ((point's z * 7.19) + phase))
+    set second to (point's x * -13.37) + ((point's y * 47.07) + ((point's z * 21.41) - phase * 0.73))
+    set third to (point's x * 29.79) - ((point's y * 11.91) - ((point's z * 59.33) + phase * 1.31))
+    set primary to the absolute value of (the sine of first)
+    set secondary to the absolute value of (the sine of second)
+    set tertiary to the absolute value of (the sine of third)
+    set crossing to the square root of ((primary * primary + secondary * secondary) + tertiary * tertiary)
+    set core to the glow from 0.0 to 0.42 at crossing
+    set aura to the glow from 0.0 to 0.70 at crossing
+    return core * 4.2 + aura * 0.16

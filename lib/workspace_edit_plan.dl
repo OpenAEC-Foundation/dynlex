@@ -12,7 +12,7 @@ local function the workspace annotation named {string:identifier} in {a pointer 
             set candidate to the workspace change annotation at index position in edit's annotations
             if candidate's identifier = identifier:
                 return candidate
-            set position to (position + 1)
+            increment position
         return 0 as a pointer to a workspace change annotation
 
 local function authorize workspace annotation {string:identifier} for change {integer:protocol} from {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
@@ -44,8 +44,8 @@ local function authorize workspace annotations from {a pointer to a parsed works
                 set amendment to the workspace text edit at index position in change's edits
                 if amendment's annotation presence:
                     authorize workspace annotation amendment's annotation id for change protocol from edit using context in plan
-                set position to (position + 1)
-            set protocol to (protocol + 1)
+                increment position
+            increment protocol
 
 local function {string:directory} names a nonempty workspace directory in {a pointer to a workspace resource snapshot collection:resources}:
     execute:
@@ -56,7 +56,7 @@ local function {string:directory} names a nonempty workspace directory in {a poi
                 if candidate's identity != directory:
                     if workspace identity candidate's identity equals or is below directory:
                         return true
-            set position to (position + 1)
+            increment position
         return false
 
 local function workspace directory {string:directory} contains an open document in {a pointer to a workspace resource snapshot collection:resources}:
@@ -68,7 +68,7 @@ local function workspace directory {string:directory} contains an open document 
                 if candidate's open document != (0 as a pointer to a workspace open document):
                     if workspace identity candidate's identity equals or is below directory:
                         return true
-            set position to (position + 1)
+            increment position
         return false
 
 local function the workspace parent resource for {string:path} using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
@@ -98,7 +98,7 @@ local function append workspace text operation at {integer:protocol} for {a poin
             false,
             resource's open document
         )
-        allocate one slot of initial and set entry to it
+        set entry to storage for one slot initialized with initial
         append planned workspace operation entry to the operations of plan
 
 local function append workspace resource operation at {integer:protocol} of kind {integer:kind} skipped {boolean:skipped} for path {string:path} identified by {string:identity}, old path {string:origin} identified by {string:previous}, new path {string:destination} identified by {string:following}, which is a directory if {boolean:directory}, and overwrite target {boolean:overwrite} to {a pointer to a workspace edit plan:plan}:
@@ -120,7 +120,7 @@ local function append workspace resource operation at {integer:protocol} of kind
             overwrite,
             0 as a pointer to a workspace open document
         )
-        allocate one slot of initial and set entry to it
+        set entry to storage for one slot initialized with initial
         append planned workspace operation entry to the operations of plan
 
 local function simulate workspace text change {a pointer to a normalized workspace change:normalized} at {integer:protocol} using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
@@ -150,7 +150,7 @@ local function simulate workspace text change {a pointer to a normalized workspa
         set the content of resource to result's text
         if the length of request's edits > 0:
             if resource's open document != (0 as a pointer to a workspace open document):
-                set the virtual version of resource to ((the virtual version of resource) + 1)
+                increment the virtual version of resource
             append workspace text operation at protocol for resource with result's text to plan
 
 local function simulate workspace create change {a pointer to a normalized workspace change:normalized} at {integer:protocol} using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
@@ -201,13 +201,12 @@ local function simulate workspace create change {a pointer to a normalized works
         set the content of resource to an empty workspace edit text
         append workspace resource operation at protocol of kind the workspace create change kind skipped false for path resource's path identified by resource's identity, old path an empty workspace edit text identified by an empty workspace edit text, new path an empty workspace edit text identified by an empty workspace edit text, which is a directory if request's directory hint, and overwrite target false to plan
 
-function the workspace path mapped from {string:source} rooted at {string:origin} to {string:destination}:
-    execute:
-        set length to (the length of source - the length of origin)
-        if length < 0:
-            @intrinsic("call", "libc", "abort", nothing)
-        set suffix to the substring of source from the length of origin spanning length bytes
-        return (destination + suffix)
+to get the workspace path mapped from {string:source} rooted at {string:origin} to {string:destination}:
+    set length to the length of source - the length of origin
+    if length < 0:
+        abort the program
+    set suffix to the substring of source from the length of origin spanning length bytes
+    return destination + suffix
 
 local function {a pointer to a workspace edit change:request} does not permit a collision at {string:identity} with target {string:target}:
     execute:
@@ -229,7 +228,7 @@ local function simulate workspace rename change {a pointer to a normalized works
         if the inverse of origin's filesystem presence:
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename source does not exist" at change protocol)
             @intrinsic("return")
-        set distinct to (normalized's old identity != normalized's new identity)
+        set distinct to normalized's old identity != normalized's new identity
         if origin's filesystem kind = the workspace directory resource kind:
             if distinct and (workspace identity normalized's new identity equals or is below normalized's old identity):
                 invalidate plan with (a failed workspace edit result reporting the string form of "Directory cannot be renamed into itself" at change protocol)
@@ -277,7 +276,7 @@ local function simulate workspace rename change {a pointer to a normalized works
                             if collision's filesystem presence or (collision's open document != (0 as a pointer to a workspace open document)):
                                 if request does not permit a collision at identity with target normalized's new identity:
                                     invalidate plan with (a failed workspace edit result reporting the string form of "Rename target collides with another workspace resource" at change protocol)
-            set position to (position + 1)
+            increment position
         if plan is invalid:
             @intrinsic("return")
         if distinct and (destination != (0 as a pointer to a workspace resource snapshot)):
@@ -296,7 +295,7 @@ local function simulate workspace rename change {a pointer to a normalized works
                         set the path of candidate to mapped
                         set the identity of candidate to identity
                         set the relative path of candidate to relative's value
-            set position to (position + 1)
+            increment position
         if plan is valid:
             append workspace resource operation at protocol of kind the workspace rename change kind skipped false for path an empty workspace edit text identified by an empty workspace edit text, old path normalized's old path identified by normalized's old identity, new path normalized's new path identified by normalized's new identity, which is a directory if (origin's filesystem kind = the workspace directory resource kind), and overwrite target (request's overwrite and distinct and (destination != (0 as a pointer to a workspace resource snapshot)) and destination's filesystem presence) to plan
 
@@ -319,7 +318,7 @@ local function simulate workspace delete change {a pointer to a normalized works
         if workspace directory resource's identity contains an open document in the resources of plan:
             invalidate plan with (a failed workspace edit result reporting the string form of "Delete target contains an open document" at change protocol)
             @intrinsic("return")
-        set directory to (resource's filesystem kind = the workspace directory resource kind)
+        set directory to resource's filesystem kind = the workspace directory resource kind
         if directory and (the inverse of request's recursion):
             if resource's identity names a nonempty workspace directory in the resources of plan:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Deleting a nonempty directory requires recursive deletion" at change protocol)
@@ -332,7 +331,7 @@ local function simulate workspace delete change {a pointer to a normalized works
                     set candidate's filesystem presence to false
                     set candidate's presence to false
                     set the content of candidate to an empty workspace edit text
-            set position to (position + 1)
+            increment position
         append workspace resource operation at protocol of kind the workspace delete change kind skipped false for path resource's path identified by resource's identity, old path an empty workspace edit text identified by an empty workspace edit text, new path an empty workspace edit text identified by an empty workspace edit text, which is a directory if directory, and overwrite target false to plan
 
 local function simulate normalized workspace changes using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
@@ -351,16 +350,15 @@ local function simulate normalized workspace changes using {a pointer to a works
                 simulate workspace delete change entry at protocol using context in plan
             else:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Unknown workspace edit change kind" at change protocol)
-            set protocol to (protocol + 1)
+            increment protocol
 
-function a workspace edit plan for {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context}:
-    execute:
-        set proposal to a new valid workspace edit plan
-        authorize workspace annotations from edit using context in proposal
-        if proposal is valid:
-            normalize workspace changes from edit using context into proposal
-        if proposal is valid:
-            snapshot normalized workspace changes using context in proposal
-        if proposal is valid:
-            simulate normalized workspace changes using context in proposal
-        return proposal
+to get a workspace edit plan for {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context}:
+    set proposal to a new valid workspace edit plan
+    authorize workspace annotations from edit using context in proposal
+    if proposal is valid:
+        normalize workspace changes from edit using context into proposal
+    if proposal is valid:
+        snapshot normalized workspace changes using context in proposal
+    if proposal is valid:
+        simulate normalized workspace changes using context in proposal
+    return proposal

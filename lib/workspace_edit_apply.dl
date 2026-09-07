@@ -69,7 +69,7 @@ local function the result of revalidating {a pointer to a workspace edit plan:pl
             set resource to the workspace resource snapshot at position in the resources of plan
             if resource changed in context:
                 return a failed workspace edit result reporting the string form of "Workspace resource changed before the edit was committed" at change resource's first change index
-            set position to (position + 1)
+            increment position
         return a successful workspace edit result
 
 local function update workspace documents after rename {a pointer to a planned workspace operation:operation} using {a pointer to a workspace edit context:context}:
@@ -82,11 +82,11 @@ local function update workspace documents after rename {a pointer to a planned w
                 set identity to the workspace identity of path using the path style of context
                 set uri to the file URI for path interpreted as a native path
                 if uri failed or uri is unsupported:
-                    @intrinsic("call", "libc", "abort", nothing)
+                    abort the program
                 set the path of document to path
                 set the identity of document to identity
                 set the uri of document to uri's value
-            set position to (position + 1)
+            increment position
 
 local function a workspace commit failure for {a pointer to a planned workspace operation:operation} after mutation {boolean:mutated}:
     execute:
@@ -105,7 +105,7 @@ local function the result of committing {a pointer to a workspace edit plan:plan
                 if operation's kind = the workspace text change kind:
                     if operation's open document != (0 as a pointer to a workspace open document):
                         set the text of operation's open document to operation's text
-                        set the version of operation's open document to ((the version of operation's open document) + 1)
+                        increment the version of operation's open document
                         set mutated to true
                     else:
                         set path to operation's path
@@ -147,40 +147,37 @@ local function the result of committing {a pointer to a workspace edit plan:plan
                         return a workspace commit failure for operation after mutation mutated
                     set mutated to true
                 else:
-                    @intrinsic("call", "libc", "abort", nothing)
-            set position to (position + 1)
+                    abort the program
+            increment position
         return a successful workspace edit result
 
-function the result of applying parsed workspace edit {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context}:
-    execute:
-        set plan to a workspace edit plan for edit using context
-        if plan is invalid:
-            set failure to the outcome of plan
-            free plan
-            return failure
-        set revalidation to the result of revalidating plan using context
-        if revalidation was not applied:
-            free plan
-            return revalidation
-        set outcome to the result of committing plan using context
+to get the result of applying parsed workspace edit {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit context:context}:
+    set plan to a workspace edit plan for edit using context
+    if plan is invalid:
+        set failure to the outcome of plan
         free plan
-        return outcome
+        return failure
+    set revalidation to the result of revalidating plan using context
+    if revalidation was not applied:
+        free plan
+        return revalidation
+    set outcome to the result of committing plan using context
+    free plan
+    return outcome
 
-function the result of applying workspace edit {string:source} using {a pointer to a workspace edit context:context}:
-    execute:
-        set parsing to the result of parsing source as a workspace edit
-        if parsing failed:
-            set reason to parsing's failure reason
-            set indexed to parsing's failed change presence
-            set failure to parsing's failed change
-            free parsing
-            if indexed:
-                return a failed workspace edit result reporting reason at change failure
-            return a failed workspace edit result reporting reason
-        set outcome to the result of applying parsed workspace edit parsing's edit using context
+to get the result of applying workspace edit {string:source} using {a pointer to a workspace edit context:context}:
+    set parsing to the result of parsing source as a workspace edit
+    if parsing failed:
+        set reason to parsing's failure reason
+        set indexed to parsing's failed change presence
+        set failure to parsing's failed change
         free parsing
-        return outcome
+        if indexed:
+            return a failed workspace edit result reporting reason at change failure
+        return a failed workspace edit result reporting reason
+    set outcome to the result of applying parsed workspace edit parsing's edit using context
+    free parsing
+    return outcome
 
-function the result of applying workspace edit {C string:source} using {a pointer to a workspace edit context:context}:
-    execute:
-        return the result of applying workspace edit the string form of source using context
+to get the result of applying workspace edit {C string:source} using {a pointer to a workspace edit context:context}:
+    return the result of applying workspace edit the string form of source using context

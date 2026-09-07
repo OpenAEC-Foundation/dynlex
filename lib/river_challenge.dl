@@ -19,18 +19,9 @@ local class:
         hay side as an integer
         activity as a boolean
 
-function [the|] sheep:
-    replacement:
-        @intrinsic("construct", a river passenger, 1 as a 32 bit integer)
-
-function [the|] wolf:
-    replacement:
-        @intrinsic("construct", a river passenger, 2 as a 32 bit integer)
-
-function [the|] hay:
-    replacement:
-        @intrinsic("construct", a river passenger, 3 as a 32 bit integer)
-
+[the|] sheep means: @intrinsic("construct", a river passenger, 1 as a 32 bit integer)
+[the|] wolf means: @intrinsic("construct", a river passenger, 2 as a 32 bit integer)
+[the|] hay means: @intrinsic("construct", a river passenger, 3 as a 32 bit integer)
 local function [a|] new river crossing:
     replacement:
         @intrinsic("construct", a river crossing, 0, 0 as a 32 bit integer, 0, 0, 0, true)
@@ -47,7 +38,7 @@ local function stop the river crossing with message:
 local function ensure {river passenger:passenger} is valid:
     execute:
         if (passenger's identifier < 1) or (passenger's identifier > 3):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
 
 local function [the|] river side of {river passenger:passenger}:
     globals:
