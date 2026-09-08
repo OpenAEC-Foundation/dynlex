@@ -35,6 +35,18 @@ set zero to a new vector with x 0.0 as a 32 bit floating-point number, y 0.0 as 
 set normalizedZero to zero normalized
 print the vector component width of (the x of normalizedZero) as a line
 print normalizedZero as a line
+set mixedVector to a new vector with x 3.0 as a 32 bit floating-point number, y -4.0 and z 5.0 as a 32 bit floating-point number
+set mixedNormalized to mixedVector normalized
+print the vector component width of (the x of mixedNormalized) as a line
+print the vector component width of (the y of mixedNormalized) as a line
+print the vector component width of (the z of mixedNormalized) as a line
+print mixedNormalized as a line
+set mixedZeroVector to a new vector with x 0.0 as a 32 bit floating-point number, y 0.0 and z 0.0 as a 32 bit floating-point number
+set mixedZeroNormalized to mixedZeroVector normalized
+print the vector component width of (the x of mixedZeroNormalized) as a line
+print the vector component width of (the y of mixedZeroNormalized) as a line
+print the vector component width of (the z of mixedZeroNormalized) as a line
+print mixedZeroNormalized as a line
 
 set doubleVector to a new vector with x -1.25, y 2.5 and z -4.75
 print the vector component width of (the x of (doubleVector * 2.0)) as a line
@@ -56,6 +68,11 @@ print floatAxisRotated as a line
 set integerRotated to (a new vector with x 1.0, y 0.0 and z 0.0) rotated around floatAxis by 90 degrees
 print the vector component width of (the x of integerRotated) as a line
 print integerRotated as a line
+set mixedAxis to a new vector with x 0.0, y 0.0 and z 1.0
+set mixedAxisTurn to a quaternion for rotation around mixedAxis by floatAngle degrees
+print the vector component width of (the x of mixedAxisTurn) as a line
+set mixedAngleTurn to a quaternion for rotation around floatAxis by 90.0 degrees
+print the vector component width of (the x of mixedAngleTurn) as a line
 set floatTurn to a new quaternion with w 0.70710677 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.70710677 as a 32 bit floating-point number
 set floatRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated by floatTurn
 print the vector component width of (the x of floatRotated) as a line
@@ -67,6 +84,26 @@ print the vector component width of (the x of normalizedZeroQuaternion) as a lin
 print the vector component width of (the x of inverseZeroQuaternion) as a line
 print normalizedZeroQuaternion as a line
 print inverseZeroQuaternion as a line
+set mixedQuaternion to a new quaternion with w 1.0 as a 32 bit floating-point number, x (-2.0), y 3.0 as a 32 bit floating-point number and z (-4.0) as a 32 bit floating-point number
+set mixedNormalizedQuaternion to mixedQuaternion normalized
+set mixedInverseQuaternion to the inverse of mixedQuaternion
+print the vector component width of (the w of mixedNormalizedQuaternion) as a line
+print the vector component width of (the x of mixedNormalizedQuaternion) as a line
+print the vector component width of (the y of mixedNormalizedQuaternion) as a line
+print the vector component width of (the z of mixedNormalizedQuaternion) as a line
+print mixedNormalizedQuaternion as a line
+print the vector component width of (the x of mixedInverseQuaternion) as a line
+print mixedInverseQuaternion as a line
+set mixedZeroQuaternion to a new quaternion with w 0.0 as a 32 bit floating-point number, x (0.0), y 0.0 as a 32 bit floating-point number and z (0.0) as a 32 bit floating-point number
+set mixedZeroNormalizedQuaternion to mixedZeroQuaternion normalized
+set mixedZeroInverseQuaternion to the inverse of mixedZeroQuaternion
+print the vector component width of (the w of mixedZeroNormalizedQuaternion) as a line
+print the vector component width of (the x of mixedZeroNormalizedQuaternion) as a line
+print the vector component width of (the y of mixedZeroNormalizedQuaternion) as a line
+print the vector component width of (the z of mixedZeroNormalizedQuaternion) as a line
+print mixedZeroNormalizedQuaternion as a line
+print the vector component width of (the x of mixedZeroInverseQuaternion) as a line
+print mixedZeroInverseQuaternion as a line
 set nonUnitTurn to a new quaternion with w 2.0 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 2.0 as a 32 bit floating-point number
 set nonUnitRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated by nonUnitTurn
 print the vector component width of (the x of nonUnitRotated) as a line

@@ -17,6 +17,14 @@ float32
 float32
 [0, 0, 0]
 float64
+float64
+float64
+[0.42426, -0.56569, 0.70711]
+float64
+float64
+float64
+[0, 0, 0]
+float64
 [-2.5, 5, -9.5]
 30.375
 [0, 1, 0]
@@ -26,11 +34,27 @@ float32
 [0, 1, 0]
 float64
 [0, 1, 0]
+float64
+float64
 float32
 [0, 1, 0]
 float32
 float32
 [1, 0, 0, 0]
+[1, 0, 0, 0]
+float64
+float64
+float64
+float64
+[0.18257, -0.36515, 0.54772, -0.7303]
+float64
+[0.03333, 0.06667, -0.1, 0.13333]
+float64
+float64
+float64
+float64
+[1, 0, 0, 0]
+float64
 [1, 0, 0, 0]
 float32
 [0, 1, 0]

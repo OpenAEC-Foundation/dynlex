@@ -148,9 +148,9 @@ function {vector:value} normalized:
     execute:
         set magnitude to the length of value
         if magnitude = 0.0:
-            set horizontal to 0.0 as (the type of the x of value)
-            set vertical to 0.0 as (the type of the y of value)
-            set depth to 0.0 as (the type of the z of value)
+            set horizontal to 0.0 as (the type of ((the x of value) / magnitude))
+            set vertical to 0.0 as (the type of ((the y of value) / magnitude))
+            set depth to 0.0 as (the type of ((the z of value) / magnitude))
             return a new vector with x horizontal, y vertical and z depth
         set horizontal to (the x of value) / magnitude
         set vertical to (the y of value) / magnitude

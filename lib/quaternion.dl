@@ -87,9 +87,11 @@ function {quaternion:value} normalized:
     execute:
         set magnitude to the length of value
         if magnitude = 0.0:
-            set zero to 0.0 as (the type of the w of value)
-            set one to 1.0 as (the type of the w of value)
-            return a new quaternion with w one, x zero, y zero and z zero
+            set scalar to 1.0 as (the type of ((the w of value) / magnitude))
+            set horizontal to 0.0 as (the type of ((the x of value) / magnitude))
+            set vertical to 0.0 as (the type of ((the y of value) / magnitude))
+            set depth to 0.0 as (the type of ((the z of value) / magnitude))
+            return a new quaternion with w scalar, x horizontal, y vertical and z depth
         set scalar to (the w of value) / magnitude
         set horizontal to (the x of value) / magnitude
         set vertical to (the y of value) / magnitude
@@ -104,9 +106,11 @@ function the inverse of {quaternion:value}:
     execute:
         set squared to the dot product of value and value
         if squared = 0.0:
-            set zero to 0.0 as (the type of the w of value)
-            set one to 1.0 as (the type of the w of value)
-            return a new quaternion with w one, x zero, y zero and z zero
+            set scalar to 1.0 as (the type of ((the w of value) / squared))
+            set horizontal to 0.0 as (the type of ((the x of value) / squared))
+            set vertical to 0.0 as (the type of ((the y of value) / squared))
+            set depth to 0.0 as (the type of ((the z of value) / squared))
+            return a new quaternion with w scalar, x horizontal, y vertical and z depth
         set conjugate to the conjugate of value
         return a new quaternion with w the w of conjugate / squared, x the x of conjugate / squared, y the y of conjugate / squared and z the z of conjugate / squared
 
