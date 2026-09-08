@@ -668,6 +668,7 @@ run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_sh
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_options.py" "$COMPILER"
+run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

@@ -824,6 +824,17 @@ bool inferTypes(ParseContext &parseContext) {
 		return false;
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
+	if (parseContext.options.noMain) {
+		for (CodeLine *line : parseContext.mainSection->codeLines) {
+			if (!line || !line->expression)
+				continue;
+			parseContext.diagnostics.push_back(Diagnostic(
+				parseContext, Diagnostic::Level::Error,
+				"definition-only output cannot contain executable top-level statements", Range(line, line->patternText)
+			));
+			return false;
+		}
+	}
 	InferenceContext context(parseContext);
 	context.currentVariableValues.clear();
 	context.currentAddressState = {};

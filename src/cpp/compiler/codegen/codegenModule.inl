@@ -102,7 +102,9 @@ bool generateCode(ParseContext &context) {
 	}
 
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
-	const bool supportsCommandLineArguments = !context.options.emitSPIRV && !context.options.emitWASM;
+	const bool generatesMain = !context.options.noMain;
+	const bool supportsCommandLineArguments =
+		generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
 	if (supportsCommandLineArguments) {
 		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
 			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
@@ -114,10 +116,10 @@ bool generateCode(ParseContext &context) {
 		);
 	}
 
-	// In SPIR-V mode, declare shader I/O globals before generating code
+	// In SPIR-V mode, declare shader I/O globals before generating code.
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
 	llvm::GlobalVariable *shaderOutputGlobal = nullptr;
-	if (context.options.emitSPIRV) {
+	if (generatesMain && context.options.emitSPIRV) {
 		constexpr unsigned spirvInputAddressSpace = 7;
 		constexpr unsigned spirvOutputAddressSpace = 8;
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
@@ -144,9 +146,12 @@ bool generateCode(ParseContext &context) {
 	}
 
 	// Create main function: void main() for shaders, int main() for WASM,
-	// and int main(int, char **) for native programs.
-	llvm::Function *mainFunc;
-	if (context.options.emitSPIRV) {
+	// and int main(int, char **) for native programs. Definition-only output
+	// intentionally emits no entry point or entry-point state.
+	llvm::Function *mainFunc = nullptr;
+	if (!generatesMain) {
+		context.mainLLVMFunction = nullptr;
+	} else if (context.options.emitSPIRV) {
 		llvm::FunctionType *mainType = llvm::FunctionType::get(builder.getVoidTy(), false);
 		mainFunc = llvm::Function::Create(mainType, llvm::Function::ExternalLinkage, "main", context.llvmModule);
 	} else if (context.options.emitWASM) {
@@ -161,8 +166,8 @@ bool generateCode(ParseContext &context) {
 		(++argument)->setName("argument_values");
 	}
 
-	// Create debug info subprogram for main
-	if (context.diBuilder) {
+	// Create debug info subprogram for main.
+	if (mainFunc && context.diBuilder) {
 		llvm::DIFile *mainFile = getOrCreateDIFile(context, context.mainSourceFile);
 		unsigned mainLine = 1;
 		std::vector<llvm::Metadata *> mainTypeMetadata;
@@ -183,8 +188,10 @@ bool generateCode(ParseContext &context) {
 		context.currentDebugScope = mainSP;
 	}
 
-	llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
-	builder.SetInsertPoint(entry);
+	if (mainFunc) {
+		llvm::BasicBlock *entry = llvm::BasicBlock::Create(*context.llvmContext, "entry", mainFunc);
+		builder.SetInsertPoint(entry);
+	}
 	if (supportsCommandLineArguments) {
 		auto argument = mainFunc->arg_begin();
 		llvm::Value *rawArgumentCount = &*argument++;
@@ -201,32 +208,36 @@ bool generateCode(ParseContext &context) {
 		builder.CreateStore(userArgumentCount, context.commandLineArgumentCountGlobal);
 		builder.CreateStore(userArgumentValues, context.commandLineArgumentValuesGlobal);
 	}
-	context.mainLLVMFunction = mainFunc;
-	context.mainCleanupBlock = llvm::BasicBlock::Create(*context.llvmContext, "main.cleanup", mainFunc);
-	if (!context.options.emitSPIRV)
-		context.mainReturnStorage = builder.CreateAlloca(builder.getInt32Ty(), nullptr, "main.return");
+	if (mainFunc) {
+		context.mainLLVMFunction = mainFunc;
+		context.mainCleanupBlock = llvm::BasicBlock::Create(*context.llvmContext, "main.cleanup", mainFunc);
+		if (!context.options.emitSPIRV)
+			context.mainReturnStorage = builder.CreateAlloca(builder.getInt32Ty(), nullptr, "main.return");
 
-	if (!generateSectionCode(context, context.mainSection))
-		return false;
+		if (!generateSectionCode(context, context.mainSection))
+			return false;
+	}
 
 	if (!generateExposedFunctions(context, context.mainSection))
 		return false;
 
-	if (!builder.GetInsertBlock()->hasTerminator()) {
-		if (!context.options.emitSPIRV)
-			builder.CreateStore(builder.getInt32(0), context.mainReturnStorage);
-		builder.CreateBr(context.mainCleanupBlock);
+	if (mainFunc) {
+		if (!builder.GetInsertBlock()->hasTerminator()) {
+			if (!context.options.emitSPIRV)
+				builder.CreateStore(builder.getInt32(0), context.mainReturnStorage);
+			builder.CreateBr(context.mainCleanupBlock);
+		}
+		builder.SetInsertPoint(context.mainCleanupBlock);
+		if (!releaseAllManagedStorage(context))
+			return false;
+		if (context.options.emitSPIRV)
+			builder.CreateRetVoid();
+		else
+			builder.CreateRet(builder.CreateLoad(builder.getInt32Ty(), context.mainReturnStorage, "main.return.value"));
 	}
-	builder.SetInsertPoint(context.mainCleanupBlock);
-	if (!releaseAllManagedStorage(context))
-		return false;
-	if (context.options.emitSPIRV)
-		builder.CreateRetVoid();
-	else
-		builder.CreateRet(builder.CreateLoad(builder.getInt32Ty(), context.mainReturnStorage, "main.return.value"));
 
 	// Add SPIR-V metadata for shader execution model and decorations
-	if (context.options.emitSPIRV) {
+	if (mainFunc && context.options.emitSPIRV) {
 		llvm::LLVMContext &ctx = *context.llvmContext;
 		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
 
@@ -307,6 +318,9 @@ bool generateCode(ParseContext &context) {
 			return false;
 		}
 		context.llvmModule->print(out, nullptr);
+	} else if (context.options.emitObject) {
+		if (!emitNativeObject(context))
+			return false;
 	} else {
 		if (!emitNativeExecutable(context))
 			return false;

@@ -37,7 +37,7 @@ void printUsage(std::ostream &output) {
 		   << "  dynlex <source...>\n"
 		   << "  dynlex -- <source...>\n\n"
 		   << "Compiler options:\n"
-		   << "  --emit-llvm | --emit-wasm | --emit-spirv\n"
+		   << "  --emit-llvm | --emit-object | --emit-wasm | --emit-spirv  --no-main\n"
 		   << "  --emit-completions line:column  --dump-purity\n"
 		   << "  --shader-stage=vertex|fragment  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
 		   << "  -ffast-math|-fno-fast-math  -ffp-contract=fast|off\n"
@@ -243,10 +243,14 @@ int main(int argumentCount, char *argumentValues[]) {
 			dumpPurity = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
+		} else if (arg == "--emit-object") {
+			context.options.emitObject = true;
 		} else if (arg == "--emit-wasm") {
 			context.options.emitWASM = true;
 		} else if (arg == "--emit-spirv") {
 			context.options.emitSPIRV = true;
+		} else if (arg == "--no-main") {
+			context.options.noMain = true;
 		} else if (arg == "--shader-stage=vertex") {
 			explicitShaderStage = true;
 			context.options.shaderStage = ParseContext::ShaderStage::Vertex;
@@ -380,10 +384,16 @@ int main(int argumentCount, char *argumentValues[]) {
 
 	int explicitOutputModes = 0;
 	explicitOutputModes += context.options.emitLLVM ? 1 : 0;
+	explicitOutputModes += context.options.emitObject ? 1 : 0;
 	explicitOutputModes += context.options.emitWASM ? 1 : 0;
 	explicitOutputModes += context.options.emitSPIRV ? 1 : 0;
 	if (explicitOutputModes > 1) {
-		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-wasm, or --emit-spirv" << std::endl;
+		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-object, --emit-wasm, or --emit-spirv"
+			  << std::endl;
+		return 1;
+	}
+	if (context.options.noMain && !context.options.emitLLVM && !context.options.emitObject) {
+		std::cerr << "--no-main requires --emit-llvm or --emit-object" << std::endl;
 		return 1;
 	}
 	if ((context.options.emitWASM || context.options.emitSPIRV) && context.options.hasExplicitTargetConfiguration) {
@@ -399,7 +409,7 @@ int main(int argumentCount, char *argumentValues[]) {
 			std::cerr << "Cannot combine a language or debug server with command-line source" << std::endl;
 			return 1;
 		}
-		if (explicitOutputModes != 0 || emitCompletions || dumpPurity || explicitShaderStage ||
+		if (explicitOutputModes != 0 || context.options.noMain || emitCompletions || dumpPurity || explicitShaderStage ||
 			!context.options.outputPath.empty()) {
 			std::cerr << "Command-line source supports native execution options only; use a .dl file when emitting output"
 					  << std::endl;

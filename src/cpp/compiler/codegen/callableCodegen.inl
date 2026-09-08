@@ -1,7 +1,7 @@
 static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
 	std::string name = getPatternFunctionName(definition->section) + "_callable";
 	for (const DataType &type : argumentTypes)
-		name += "_" + type.toString();
+		name += "_" + encodeLLVMNameComponent(type.toString());
 	return name;
 }
 

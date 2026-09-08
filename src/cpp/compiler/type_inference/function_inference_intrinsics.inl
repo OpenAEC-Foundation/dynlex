@@ -322,6 +322,10 @@ case Expression::Kind::IntrinsicCall: {
 					crashCompilerBug("subject assignment is missing its value expression");
 				expr->type = ensureExpressionType(expr->subjectSetter->arguments[1], context, flexBindingFrameStack);
 			} else if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+				if (context.parseContext.options.noMain) {
+					failWithDetail(expr->range, "Command-line arguments require a generated main function", 0);
+					break;
+				}
 				if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
 					failWithDetail(expr->range, "Command-line arguments are unavailable for this target", 0);
 					break;
