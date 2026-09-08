@@ -15,22 +15,96 @@ function the vector type:
     replacement:
         a GPU vector if the build target is GPU, else a CPU vector
 
-function a new vector with x {a value:horizontal}, y {a value:vertical} and z {a value:depth}:
+function a new vector with x {a number:horizontal}, y {a number:vertical} and z {a number:depth}:
     replacement:
         @intrinsic("construct", the vector type, horizontal, vertical, depth)
 
-function {vector:left} + right:
+function {vector:left} + {vector:right}:
+    before: $ or $, $ and $, $ = $, $ != $, $ < $, $ > $, $ <= $, $ >= $, $ << $, $ >> $
+    execute:
+        set leftHorizontal to the x of left
+        set leftVertical to the y of left
+        set leftDepth to the z of left
+        set rightHorizontal to the x of right
+        set rightVertical to the y of right
+        set rightDepth to the z of right
+        set horizontal to leftHorizontal + rightHorizontal
+        set vertical to leftVertical + rightVertical
+        set depth to leftDepth + rightDepth
+        return a new vector with x horizontal, y vertical and z depth
+
+function {vector:left} + {a number:right}:
+    before: $ or $, $ and $, $ = $, $ != $, $ < $, $ > $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         set horizontal to ((the x of left) + right)
         set vertical to ((the y of left) + right)
         set depth to ((the z of left) + right)
         return a new vector with x horizontal, y vertical and z depth
 
-function {vector:left} * factor:
+function {vector:left} - {vector:right}:
+    before: $ or $, $ and $, $ = $, $ != $, $ < $, $ > $, $ <= $, $ >= $, $ << $, $ >> $
+    execute:
+        set leftHorizontal to the x of left
+        set leftVertical to the y of left
+        set leftDepth to the z of left
+        set rightHorizontal to the x of right
+        set rightVertical to the y of right
+        set rightDepth to the z of right
+        set horizontal to leftHorizontal - rightHorizontal
+        set vertical to leftVertical - rightVertical
+        set depth to leftDepth - rightDepth
+        return a new vector with x horizontal, y vertical and z depth
+
+function {vector:left} * {vector:right}:
+    before: $ + $, $ - $
+    execute:
+        set leftHorizontal to the x of left
+        set leftVertical to the y of left
+        set leftDepth to the z of left
+        set rightHorizontal to the x of right
+        set rightVertical to the y of right
+        set rightDepth to the z of right
+        set horizontal to leftHorizontal * rightHorizontal
+        set vertical to leftVertical * rightVertical
+        set depth to leftDepth * rightDepth
+        return a new vector with x horizontal, y vertical and z depth
+
+function {vector:left} / {vector:right}:
+    before: $ + $, $ - $
+    execute:
+        set leftHorizontal to the x of left
+        set leftVertical to the y of left
+        set leftDepth to the z of left
+        set rightHorizontal to the x of right
+        set rightVertical to the y of right
+        set rightDepth to the z of right
+        set horizontal to leftHorizontal / rightHorizontal
+        set vertical to leftVertical / rightVertical
+        set depth to leftDepth / rightDepth
+        return a new vector with x horizontal, y vertical and z depth
+
+function {vector:left} * {a number:factor}:
+    before: $ + $, $ - $
     execute:
         set horizontal to ((the x of left) * factor)
         set vertical to ((the y of left) * factor)
         set depth to ((the z of left) * factor)
+        return a new vector with x horizontal, y vertical and z depth
+
+function {a number:factor} * {vector:right}:
+    before: $ + $, $ - $
+    execute:
+        set horizontal to factor * (the x of right)
+        set vertical to factor * (the y of right)
+        set depth to factor * (the z of right)
+        return a new vector with x horizontal, y vertical and z depth
+
+function {vector:left} / {a number:divisor}:
+    before: $ + $, $ - $
+    execute:
+        set horizontal to (the x of left) / divisor
+        set vertical to (the y of left) / divisor
+        set depth to (the z of left) / divisor
         return a new vector with x horizontal, y vertical and z depth
 
 function the string form of {vector:value}:
@@ -44,3 +118,41 @@ function the string form of {vector:value}:
         set result to (result + the string form of the z of value)
         set result to (result + the string form of "]")
         return result
+
+function the dot product of {vector:left} and {vector:right}:
+    execute:
+        set leftHorizontal to the x of left
+        set leftVertical to the y of left
+        set leftDepth to the z of left
+        set rightHorizontal to the x of right
+        set rightVertical to the y of right
+        set rightDepth to the z of right
+        set horizontal to leftHorizontal * rightHorizontal
+        set vertical to leftVertical * rightVertical
+        set depth to leftDepth * rightDepth
+        return (horizontal + vertical) + depth
+
+function the cross product of {vector:left} and {vector:right}:
+    execute:
+        return a new vector with x (the y of left) * (the z of right) - (the z of left) * (the y of right), y (the z of left) * (the x of right) - (the x of left) * (the z of right) and z (the x of left) * (the y of right) - (the y of left) * (the x of right)
+
+function the squared length of {vector:value}:
+    execute:
+        return the dot product of value and value
+
+function the length of {vector:value}:
+    execute:
+        return the square root of the squared length of value
+
+function {vector:value} normalized:
+    execute:
+        set magnitude to the length of value
+        if magnitude = 0.0:
+            set horizontal to 0.0 as (the type of the x of value)
+            set vertical to 0.0 as (the type of the y of value)
+            set depth to 0.0 as (the type of the z of value)
+            return a new vector with x horizontal, y vertical and z depth
+        set horizontal to (the x of value) / magnitude
+        set vertical to (the y of value) / magnitude
+        set depth to (the z of value) / magnitude
+        return a new vector with x horizontal, y vertical and z depth
