@@ -19,16 +19,22 @@ print left - right as a line
 print left * right as a line
 print left / right as a line
 set floatFactor to 2.0 as a 32 bit floating-point number
+print the vector component width of (the x of (left * floatFactor)) as a line
 print left * floatFactor as a line
 print floatFactor * left as a line
+print the vector component width of (the x of (left / floatFactor)) as a line
 print left / floatFactor as a line
 print the dot product of left and right as a line
 print the cross product of left and right as a line
 print the squared length of left as a line
 print (the length of left) as a line
-print left normalized as a line
+set normalizedLeft to left normalized
+print the vector component width of (the x of normalizedLeft) as a line
+print normalizedLeft as a line
 set zero to a new vector with x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number
-print zero normalized as a line
+set normalizedZero to zero normalized
+print the vector component width of (the x of normalizedZero) as a line
+print normalizedZero as a line
 
 set doubleVector to a new vector with x -1.25, y 2.5 and z -4.75
 print the vector component width of (the x of (doubleVector * 2.0)) as a line
@@ -38,10 +44,33 @@ print the dot product of doubleVector and doubleVector as a line
 set turn to a quaternion for rotation around (a new vector with x 0.0, y 0.0 and z 1.0) by 90.0 degrees
 set rotated to (a new vector with x 1.0, y 0.0 and z 0.0) rotated by turn
 print rotated as a line
+set floatAxis to a new vector with x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 1.0 as a 32 bit floating-point number
+set floatAngle to 90.0 as a 32 bit floating-point number
+set floatAxisTurn to a quaternion for rotation around floatAxis by floatAngle degrees
+set rawFloatQuaternion to a new quaternion with w 0.70710677 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.70710677 as a 32 bit floating-point number
+print the vector component width of (the x of (rawFloatQuaternion normalized)) as a line
+print the vector component width of (the x of floatAxisTurn) as a line
+set floatAxisRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated around floatAxis by floatAngle degrees
+print the vector component width of (the x of floatAxisRotated) as a line
+print floatAxisRotated as a line
+set integerRotated to (a new vector with x 1.0, y 0.0 and z 0.0) rotated around floatAxis by 90 degrees
+print the vector component width of (the x of integerRotated) as a line
+print integerRotated as a line
 set floatTurn to a new quaternion with w 0.70710677 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.70710677 as a 32 bit floating-point number
 set floatRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated by floatTurn
 print the vector component width of (the x of floatRotated) as a line
 print floatRotated as a line
+set zeroQuaternion to a new quaternion with w 0.0 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number
+set normalizedZeroQuaternion to zeroQuaternion normalized
+set inverseZeroQuaternion to the inverse of zeroQuaternion
+print the vector component width of (the x of normalizedZeroQuaternion) as a line
+print the vector component width of (the x of inverseZeroQuaternion) as a line
+print normalizedZeroQuaternion as a line
+print inverseZeroQuaternion as a line
+set nonUnitTurn to a new quaternion with w 2.0 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 2.0 as a 32 bit floating-point number
+set nonUnitRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated by nonUnitTurn
+print the vector component width of (the x of nonUnitRotated) as a line
+print nonUnitRotated as a line
 set baseQuaternion to a new quaternion with w 1.0, x -2.0, y 3.0 and z -4.0
 print baseQuaternion normalized as a line
 print the conjugate of baseQuaternion as a line
