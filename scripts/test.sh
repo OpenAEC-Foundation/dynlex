@@ -669,6 +669,7 @@ run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_comman
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
 run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_options.py" "$COMPILER"
 run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
+run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

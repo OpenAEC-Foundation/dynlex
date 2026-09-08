@@ -14,6 +14,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -374,17 +375,17 @@ static llvm::Intrinsic::ID mathIntrinsicId(IntrinsicKind kind) {
 	}
 }
 
-static DataType mathComputationType(DataType resultType, int mathFloatBytes) {
+static DataType mathComputationType(DataType resultType, int maximumFloatBytes) {
 	if (resultType.kind == DataType::Kind::Float) {
-		resultType.numericSize = mathFloatBytes;
+		resultType.numericSize = std::min(resultType.numericSize, maximumFloatBytes);
 		return resultType;
 	}
 	if (resultType.kind == DataType::Kind::Int)
-		return {DataType::Kind::Float, mathFloatBytes};
+		return {DataType::Kind::Float, maximumFloatBytes};
 	if (resultType.kind == DataType::Kind::Vector && resultType.arrayElementType) {
 		DataType computationType = resultType;
 		computationType.arrayElementType =
-			std::make_shared<DataType>(mathComputationType(*resultType.arrayElementType, mathFloatBytes));
+			std::make_shared<DataType>(mathComputationType(*resultType.arrayElementType, maximumFloatBytes));
 		return computationType;
 	}
 	return resultType;
@@ -742,9 +743,9 @@ CodegenResult generateIntrinsicCode(
 		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
-			// Compute in float and convert back to the inferred result type.
-			int mathFloatBytes = defaultFloatByteSize(context.options.emitSPIRV);
-			DataType computationType = mathComputationType(resultType, mathFloatBytes);
+			// Native LLVM math intrinsics retain the inferred 32/64-bit floating-point width.
+			int maximumFloatBytes = defaultFloatByteSize(context.options.emitSPIRV);
+			DataType computationType = mathComputationType(resultType, maximumFloatBytes);
 			if (args.size() == 2) {
 				llvm::Value *val = nullptr;
 				if (!generateRuntimeValue(args[1], val))

@@ -1,0 +1,17 @@
+import lib/std.dl
+
+set base to 1.25 as a 32 bit floating-point number
+set exponent to 2.0 as a 32 bit floating-point number
+set zero to 0.0 as a 32 bit floating-point number
+set square to 4.0 as a 32 bit floating-point number
+set negative to (-1.25) as a 32 bit floating-point number
+set fractionalup to 1.75 as a 32 bit floating-point number
+set fractionaldown to 1.25 as a 32 bit floating-point number
+
+print (base raised to the power of exponent) as a line
+print (the sine of zero) as a line
+print (the cosine of zero) as a line
+print (the square root of square) as a line
+print (the absolute value of negative) as a line
+print (the floor of fractionalup) as a line
+print (the ceiling of fractionaldown) as a line

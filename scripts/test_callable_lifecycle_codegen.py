@@ -29,8 +29,8 @@ def main() -> int:
         llvm = llvm_path.read_text(encoding="utf-8")
 
     wrapper_match = re.search(
-        r'^define [^{@]*@(?P<name>"[^"\n]*replace[^"\n]*_callable_[^"\n]*"|'
-        r'[^\s(]*replace[^\s(]*_callable_[^\s(]*)\([^\n]*\)[^{\n]*\{\n(?P<body>.*?)^\}',
+        r'^define [^{@]*@(?P<name>"[^"\n]*replace[^"\n]*_callable_callable_[^"\n]*"|'
+        r'[^\s(]*replace[^\s(]*_callable_callable_[^\s(]*)\([^\n]*\)[^{\n]*\{\n(?P<body>.*?)^\}',
         llvm,
         flags=re.MULTILINE | re.DOTALL,
     )
@@ -44,7 +44,7 @@ def main() -> int:
     ]
     retain_calls = [position for position, name in calls if "retain" in name]
     release_calls = [position for position, name in calls if "release" in name]
-    wrapped_calls = [position for position, name in calls if "replace" in name and "_callable_" not in name]
+    wrapped_calls = [position for position, name in calls if "replace" in name and "_callable_callable_" not in name]
     if len(retain_calls) != 1 or len(release_calls) != 1 or len(wrapped_calls) != 1:
         print(
             "managed callable wrapper must retain its borrowed input, call the implementation, and release its final value "
