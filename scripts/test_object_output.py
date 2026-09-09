@@ -33,6 +33,18 @@ exposed function foreign predicate {32 bit floating-point number:left} above {32
     execute:
         set result to predicate left above right minimum minimum
         return @intrinsic("call", "", "bool_value", a 32 bit integer, result)
+
+exposed function signed octet {8 bit integer:value}:
+    execute:
+        return value
+
+exposed function signed halfword {16 bit integer:value}:
+    execute:
+        return value
+
+exposed function foreign signed octet {8 bit integer:value}:
+    execute:
+        return @intrinsic("call", "", "octet_value", a 32 bit integer, value)
 """
 
 EXECUTABLE_SOURCE = """\
@@ -69,6 +81,9 @@ INCREMENT_SYMBOL = "increment_3a_pointer_to_a_32_bit_integer8value5_callable_i32
 PREDICATE_SYMBOL = "predicate_332_bit_floating5point_number8left5_above_332_bit_floating5point_number8right5_minimum_332_bit_floating5point_number8minimum5_callable_f32_f32_f32"
 NEGATE_SYMBOL = "negate_3boolean8flag5_callable_bool"
 FOREIGN_PREDICATE_SYMBOL = "foreign_" + PREDICATE_SYMBOL
+OCTET_SYMBOL = "signed_octet_38_bit_integer8value5_callable_i8"
+HALFWORD_SYMBOL = "signed_halfword_316_bit_integer8value5_callable_i16"
+FOREIGN_OCTET_SYMBOL = "foreign_" + OCTET_SYMBOL
 
 
 def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
@@ -135,8 +150,12 @@ extern void {INCREMENT_SYMBOL}(int32_t *value);
 extern bool {PREDICATE_SYMBOL}(float left, float right, float minimum);
 extern bool {NEGATE_SYMBOL}(bool value);
 extern int32_t {FOREIGN_PREDICATE_SYMBOL}(float left, float right, float minimum);
+extern int8_t {OCTET_SYMBOL}(int8_t value);
+extern int16_t {HALFWORD_SYMBOL}(int16_t value);
+extern int32_t {FOREIGN_OCTET_SYMBOL}(int8_t value);
 
 int32_t bool_value(bool value) {{ return value; }}
+int32_t octet_value(int8_t value) {{ return value; }}
 
 int main(void) {{
     int32_t value = 41;
@@ -147,6 +166,9 @@ int main(void) {{
     if ((int){NEGATE_SYMBOL}(true) != 0 || (int){NEGATE_SYMBOL}(false) != 1) return 4;
     if ({FOREIGN_PREDICATE_SYMBOL}(100.0f, 98.8f, 1.0f) != 1) return 5;
     if ({FOREIGN_PREDICATE_SYMBOL}(100.0f, 99.4f, 1.0f) != 0) return 6;
+    if ((int){OCTET_SYMBOL}(-128) != -128 || (int){OCTET_SYMBOL}(127) != 127) return 7;
+    if ((int){HALFWORD_SYMBOL}(-32768) != -32768 || (int){HALFWORD_SYMBOL}(32767) != 32767) return 8;
+    if ({FOREIGN_OCTET_SYMBOL}(-128) != -128 || {FOREIGN_OCTET_SYMBOL}(127) != 127) return 9;
     return 0;
 }}
 """,
@@ -180,6 +202,12 @@ int main(void) {{
                 raise RuntimeError("exposed Boolean argument omitted its native ABI contract")
             if not re.search(rf"call i32 @bool_value\(i1 {extension}", llvm_ir):
                 raise RuntimeError("foreign Boolean call omitted its native ABI contract")
+            uses_win64 = triple.startswith("x86_64") and "windows" in triple
+            integer_extension = "" if uses_aapcs64 or uses_win64 else "signext "
+            if not re.search(rf"^define {integer_extension}i8 @{OCTET_SYMBOL}\(i8 {integer_extension}%value\)", llvm_ir, flags=re.MULTILINE):
+                raise RuntimeError("exposed narrow integer omitted its native ABI contract")
+            if not re.search(rf"call i32 @octet_value\(i8 {integer_extension}", llvm_ir):
+                raise RuntimeError("foreign narrow integer call omitted its native ABI contract")
 
             negative_fixed_value = temporary / "negative-fixed-value.dl"
             negative_fixed_value.write_text(NEGATIVE_FIXED_VALUE_SOURCE, encoding="utf-8")

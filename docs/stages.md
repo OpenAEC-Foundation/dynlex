@@ -354,9 +354,10 @@ receives C's default argument promotions: booleans and integers narrower than 32
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.
 
-Native callable definitions and external-call declarations and call sites apply the same scalar Boolean ABI extension attributes.
-Booleans use `zeroext` except on non-Darwin AArch64 (AAPCS64), whose ABI leaves them unextended. Internal pattern calls keep
-their separate by-reference calling convention. A Boolean's LLVM `i1` type alone does not guarantee a canonical C Boolean.
+Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
+Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
+unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
+A Boolean's LLVM `i1` type alone does not guarantee a canonical C Boolean.
 
 SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
 stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
