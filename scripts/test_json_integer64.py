@@ -31,6 +31,14 @@ exposed function unsigned JSON round trip {a 64 bit unsigned integer:value}:
         return output
 """
 
+FAILED_GETTER_SOURCE = """\
+import json.dl
+
+parse "1.5" as JSON and set parsed to it
+set outcome to the unsigned 64 bit JSON integer read from the value of parsed
+print the unsigned 64 bit integer value of outcome as a line
+"""
+
 
 def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(arguments, cwd=working_directory, text=True, capture_output=True, check=False)
@@ -39,6 +47,11 @@ def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedPr
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
     if result.returncode != 0:
         raise RuntimeError(f"command {result.args} exited {result.returncode}:\n{result.stdout}{result.stderr}")
+
+
+def require_failure(result: subprocess.CompletedProcess[str]) -> None:
+    if result.returncode == 0:
+        raise RuntimeError(f"command unexpectedly succeeded: {result.args}")
 
 
 def exposed_symbol(llvm_ir: str, function_name: str) -> str:
@@ -103,6 +116,12 @@ int main(void) {{
                     run([c_compiler, "-O2", str(caller), str(object_output), "-o", str(executable)], repo_root)
                 )
                 require_success(run([str(executable)], repo_root))
+
+            failed_getter_source = temporary / "failed_getter.dl"
+            failed_getter_source.write_text(FAILED_GETTER_SOURCE, encoding="utf-8")
+            failed_getter = temporary / "failed_getter"
+            require_success(run([str(compiler), str(failed_getter_source), "-o", str(failed_getter)], repo_root))
+            require_failure(run([str(failed_getter)], repo_root))
     except RuntimeError as error:
         print(error, file=sys.stderr)
         return 1

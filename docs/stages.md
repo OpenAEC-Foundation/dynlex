@@ -381,8 +381,8 @@ keeps ordering metadata in natural-language wrappers, including default sequenti
 
 JSON number nodes retain their original validated decimal lexeme for serialization. `the signed 64 bit JSON integer read from value`
 and `the unsigned 64 bit JSON integer read from value` return typed result values with a success status; they parse that lexeme
-without a floating-point conversion and reject wrong JSON kinds, fractional or exponent syntax, negative nonzero unsigned values,
-and out-of-range magnitudes. `-0` reads as zero. `a new JSON number from` signed or unsigned 64-bit integers writes the exact
+without a floating-point conversion and reject wrong JSON kinds, fractional or exponent syntax, negative unsigned syntax,
+and out-of-range magnitudes. Signed `-0` reads as zero, while unsigned `-0` is rejected. `a new JSON number from` signed or unsigned 64-bit integers writes the exact
 decimal lexeme. The existing `number` member and JSON-number getters remain approximate floating-point views for compatibility;
 they are not an integer interchange API.
 

@@ -11,6 +11,7 @@ set fractionResult to the signed 64 bit JSON integer read from the JSON member n
 set exponentResult to the signed 64 bit JSON integer read from the JSON member named "exponent" in document
 set negativeResult to the unsigned 64 bit JSON integer read from the JSON member named "negative" in document
 set minusZeroResult to the unsigned 64 bit JSON integer read from the JSON member named "minusZero" in document
+set signedMinusZeroResult to the signed 64 bit JSON integer read from the JSON member named "minusZero" in document
 set signedOverflowResult to the signed 64 bit JSON integer read from the JSON member named "signedOverflow" in document
 set overflowResult to the unsigned 64 bit JSON integer read from the JSON member named "overflow" in document
 set textResult to the signed 64 bit JSON integer read from the JSON member named "text" in document
@@ -28,7 +29,8 @@ print whether fractionResult succeeded as a line
 print whether exponentResult succeeded as a line
 print whether negativeResult succeeded as a line
 print whether minusZeroResult succeeded as a line
-print the unsigned 64 bit integer value of minusZeroResult as a line
+print whether signedMinusZeroResult succeeded as a line
+print the signed 64 bit integer value of signedMinusZeroResult as a line
 print whether signedOverflowResult succeeded as a line
 print whether overflowResult succeeded as a line
 print whether textResult succeeded as a line

@@ -298,8 +298,6 @@ local function {a value:value} is not a JSON decimal digit:
 
 function JSON number {a pointer to a JSON value:value} has an integer lexeme:
     execute:
-        if value = (0 as a pointer to a JSON value):
-            return false
         if the kind of value != the JSON number kind:
             return false
         set text to the text of value
@@ -594,12 +592,30 @@ function {JSON unsigned 64 bit integer result:result} failed:
         the inverse of result's success
 
 function the signed 64 bit integer value of {JSON signed 64 bit integer result:result}:
-    replacement:
-        result's value
+    execute:
+        if result failed:
+            @intrinsic("call", "libc", "abort", nothing)
+        return result's value
 
 function the unsigned 64 bit integer value of {JSON unsigned 64 bit integer result:result}:
-    replacement:
-        result's value
+    execute:
+        if result failed:
+            @intrinsic("call", "libc", "abort", nothing)
+        return result's value
+
+local function the bounded JSON decimal magnitude in {string:text} starting at {integer:start} not exceeding {a 64 bit unsigned integer:maximum}:
+    execute:
+        set prefix to maximum / (10 as a 64 bit unsigned integer)
+        set remainder to the remainder of maximum divided by (10 as a 64 bit unsigned integer)
+        set total to 0 as a 64 bit unsigned integer
+        set cursor to start
+        loop while cursor < the length of text:
+            set digit to ((the character at cursor in text) - 48) as a 64 bit unsigned integer
+            if (total > prefix) or ((total = prefix) and (digit > remainder)):
+                return a failed JSON unsigned 64 bit integer result
+            set total to (total * (10 as a 64 bit unsigned integer) + digit)
+            set cursor to (cursor + 1)
+        return a successful JSON unsigned 64 bit integer result with value total
 
 function the signed 64 bit JSON integer read from {a pointer to a JSON value:value}:
     execute:
@@ -614,15 +630,10 @@ function the signed 64 bit JSON integer read from {a pointer to a JSON value:val
         set maximum to 9223372036854775807 as a 64 bit unsigned integer
         if negated:
             set maximum to 9223372036854775808 as a 64 bit unsigned integer
-        set prefix to maximum / (10 as a 64 bit unsigned integer)
-        set remainder to the remainder of maximum divided by (10 as a 64 bit unsigned integer)
-        set total to 0 as a 64 bit unsigned integer
-        loop while cursor < the length of text:
-            set digit to ((the character at cursor in text) - 48) as a 64 bit unsigned integer
-            if (total > prefix) or ((total = prefix) and (digit > remainder)):
-                return a failed JSON signed 64 bit integer result
-            set total to (total * (10 as a 64 bit unsigned integer) + digit)
-            set cursor to (cursor + 1)
+        set magnitude to the bounded JSON decimal magnitude in text starting at cursor not exceeding maximum
+        if magnitude failed:
+            return a failed JSON signed 64 bit integer result
+        set total to the unsigned 64 bit integer value of magnitude
         if negated:
             if total = 9223372036854775808 as a 64 bit unsigned integer:
                 return a successful JSON signed 64 bit integer result with value total as a 64 bit integer
@@ -639,19 +650,13 @@ function the unsigned 64 bit JSON integer read from {a pointer to a JSON value:v
         if the character at 0 in text = 45:
             set negated to true
             set cursor to 1
-        set maximum to 18446744073709551615 as a 64 bit unsigned integer
-        set prefix to maximum / (10 as a 64 bit unsigned integer)
-        set remainder to the remainder of maximum divided by (10 as a 64 bit unsigned integer)
-        set total to 0 as a 64 bit unsigned integer
-        loop while cursor < the length of text:
-            set digit to ((the character at cursor in text) - 48) as a 64 bit unsigned integer
-            if (total > prefix) or ((total = prefix) and (digit > remainder)):
-                return a failed JSON unsigned 64 bit integer result
-            set total to (total * (10 as a 64 bit unsigned integer) + digit)
-            set cursor to (cursor + 1)
-        if negated and total != (0 as a 64 bit unsigned integer):
+        if negated:
             return a failed JSON unsigned 64 bit integer result
-        return a successful JSON unsigned 64 bit integer result with value total
+        set maximum to 18446744073709551615 as a 64 bit unsigned integer
+        set magnitude to the bounded JSON decimal magnitude in text starting at cursor not exceeding maximum
+        if magnitude failed:
+            return a failed JSON unsigned 64 bit integer result
+        return magnitude
 
 function require that {a pointer to a JSON value:value} has {integer:expected} as its JSON kind:
     execute:
