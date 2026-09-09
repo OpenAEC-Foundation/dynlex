@@ -1,4 +1,5 @@
 import lib/std.dl
+import lib/vector.dl
 
 set maximum to 4294967295 as a 32 bit unsigned integer
 set high64 to 9223372036854775808 as a 64 bit unsigned integer
@@ -11,6 +12,10 @@ set narrowMaximum to 255 as a 8 bit unsigned integer
 set narrowOne to 1 as a 8 bit unsigned integer
 set shortMaximum to 65535 as a 16 bit unsigned integer
 set shortOne to 1 as a 16 bit unsigned integer
+set zero8 to 0 as a 8 bit unsigned integer
+set zero16 to 0 as a 16 bit unsigned integer
+set zero32 to 0 as a 32 bit unsigned integer
+set zero64 to 0 as a 64 bit unsigned integer
 set signed32 to (-1) as a 32 bit integer
 set signed64 to (-1) as a 64 bit integer
 set floatMaximum to maximum as a 64 bit floating-point number
@@ -20,8 +25,14 @@ set floatTruncated to floatFraction as a 32 bit unsigned integer
 set floatHigh64 to 9223372036854775808 as a 64 bit floating-point number
 set floatHigh64RoundTrip to floatHigh64 as a 64 bit unsigned integer
 set maximumPointer to @intrinsic("address of", maximum)
+set unsignedVector to a new vector with x maximum, y maximum and z (1 as a 32 bit unsigned integer)
+set shiftedVector to unsignedVector / (2 as a 32 bit unsigned integer)
 
 print maximum as a line
+print zero8 as a line
+print zero16 as a line
+print zero32 as a line
+print zero64 as a line
 print (maximum shifted right by 1) as a line
 print (maximum / 2) as a line
 set one to 1 as a 32 bit unsigned integer
@@ -45,6 +56,7 @@ print floatRoundTrip as a line
 print floatTruncated as a line
 print floatHigh64RoundTrip as a line
 print @intrinsic("dereference", maximumPointer) as a line
+print the x of shiftedVector as a line
 
 function the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
     execute:

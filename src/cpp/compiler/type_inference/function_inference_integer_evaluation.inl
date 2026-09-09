@@ -4,10 +4,6 @@ static std::int64_t compileTimeBitwiseNot(std::int64_t value) {
 	return static_cast<std::int64_t>(~static_cast<std::uint64_t>(value));
 }
 
-static std::int64_t compileTimeShiftLeft(std::int64_t value, unsigned amount) {
-	return static_cast<std::int64_t>(static_cast<std::uint64_t>(value) << amount);
-}
-
 static std::int64_t compileTimeShiftRight(std::int64_t value, unsigned amount) {
 	if (amount == 0)
 		return value;

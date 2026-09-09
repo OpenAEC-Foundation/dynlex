@@ -26,14 +26,12 @@ an ordinary flex function and `replacement` section. Logical indentation and sou
 and diagnostic locations; later stages do not have a separate shorthand execution path.
 
 Integer literals are parsed exactly rather than through floating-point storage.
-Magnitudes through `2^63` are retained so unary negation can form the signed
-64-bit minimum; larger magnitudes are rejected here. The boundary magnitude is
-rejected after inference unless ordinary intrinsic evaluation records that
-unary negation consumed it without another value operation using it. Those
-effects are committed with the inferred expression, so rejected overload and
-operand-grouping trials cannot affect the selected expression. Unreachable
-bodies remain semantically uninferred and therefore do not create boundary-use
-effects. Explicit floating-point literals remain 64-bit floating-point values.
+Signed values use 32 or 64 bits, and positive values through `2^64 - 1` use
+unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
+direct unary negation produces signed 64-bit minimum. Stored unsigned values,
+including that boundary, use ordinary wrapping negation. Larger magnitudes are
+rejected during parsing. Explicit floating-point literals remain 64-bit
+floating-point values.
 
 # Pattern Matching Stage
 

@@ -267,13 +267,14 @@ function the string form of {unsigned integer:value}:
         set data to the data of result
         set remaining to value
         set index to (digits - 1)
-        loop while remaining > 0:
+        set writing to true
+        loop while writing:
             set digit to the remainder of remaining divided by (10 as (the type of remaining))
             set character to ((digit + 48) as a byte)
             store character into data at index
             set remaining to (remaining / (10 as (the type of remaining)))
             if index = 0:
-                set remaining to 0 as (the type of remaining)
+                set writing to false
             else:
                 set index to (index - 1)
         return result

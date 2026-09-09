@@ -266,6 +266,14 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		}
 
 		if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
+			if (leftType.isNumeric() && rightType.isNumeric()) {
+				std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
+				std::optional<double> rightNumber = getCompileTimeNumericValue(rightValue);
+				if (!leftNumber || !rightNumber)
+					return {};
+				bool equal = *leftNumber == *rightNumber;
+				return kind == IntrinsicKind::Equal ? CompileTimeValue(equal) : CompileTimeValue(!equal);
+			}
 			bool result = false;
 			if (auto *leftText = std::get_if<std::string>(&leftValue)) {
 				if (auto *rightText = std::get_if<std::string>(&rightValue))
@@ -296,63 +304,6 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 					return {};
 			}
 			return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
-		}
-
-		if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
-			kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-			std::optional<std::int64_t> leftInteger = getCompileTimeIntegerValue(leftValue);
-			std::optional<std::int64_t> rightInteger = getCompileTimeIntegerValue(rightValue);
-			if (!leftInteger.has_value() || !rightInteger.has_value())
-				return {};
-			if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-				if (*rightInteger < 0 || *rightInteger >= 64)
-					return {};
-				unsigned shiftAmount = static_cast<unsigned>(*rightInteger);
-				std::int64_t result = kind == IntrinsicKind::ShiftLeft ? compileTimeShiftLeft(*leftInteger, shiftAmount)
-																	   : compileTimeShiftRight(*leftInteger, shiftAmount);
-				return expr->type.isInteger() ? normalizeSignedIntegerToType(result, expr->type) : result;
-			}
-			std::uint64_t leftBits = static_cast<std::uint64_t>(*leftInteger);
-			std::uint64_t rightBits = static_cast<std::uint64_t>(*rightInteger);
-			std::uint64_t result = kind == IntrinsicKind::BitwiseAnd  ? (leftBits & rightBits)
-								   : kind == IntrinsicKind::BitwiseOr ? (leftBits | rightBits)
-																	  : (leftBits ^ rightBits);
-			std::int64_t signedResult = static_cast<std::int64_t>(result);
-			return expr->type.isInteger() ? normalizeSignedIntegerToType(signedResult, expr->type) : signedResult;
-		}
-
-		auto *leftInteger = std::get_if<std::int64_t>(&leftValue);
-		auto *rightInteger = std::get_if<std::int64_t>(&rightValue);
-		if (leftInteger && rightInteger) {
-			auto normalizeResult = [&](std::uint64_t bits) -> CompileTimeValue {
-				std::int64_t result = static_cast<std::int64_t>(bits);
-				return expr->type.isInteger() ? CompileTimeValue(normalizeSignedIntegerToType(result, expr->type))
-											  : CompileTimeValue(result);
-			};
-			if (kind == IntrinsicKind::Add)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) + static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Subtract)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) - static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Multiply)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) * static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Divide) {
-				if (*rightInteger == 0 || (*leftInteger == std::numeric_limits<std::int64_t>::min() && *rightInteger == -1))
-					return {};
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger / *rightInteger));
-			}
-			if (kind == IntrinsicKind::Modulo) {
-				if (*rightInteger == 0 || (*leftInteger == std::numeric_limits<std::int64_t>::min() && *rightInteger == -1))
-					return {};
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger % *rightInteger));
-			}
-			if (kind == IntrinsicKind::LessThan)
-				return *leftInteger < *rightInteger;
-			if (kind == IntrinsicKind::GreaterThan)
-				return *leftInteger > *rightInteger;
-			if (kind == IntrinsicKind::LessThanOrEqual)
-				return *leftInteger <= *rightInteger;
-			if (kind == IntrinsicKind::GreaterThanOrEqual)
-				return *leftInteger >= *rightInteger;
 		}
 
 		std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
