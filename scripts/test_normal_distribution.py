@@ -169,6 +169,12 @@ static void corpus(SeedFn seedFn, RawFn rawFn, NextFn nextFn, const Seed* seeds,
         firstDistribution.param(std::normal_distribution<float>::param_type(-1.0f, 0.5f));
         equal(nextFn(&first, &firstState, -1.0f, 0.5f), firstDistribution(firstExpected),
               "reset", seedNumber, 0);
+        const Seed reseeded = static_cast<Seed>(seed + static_cast<Seed>(1));
+        seedFn(&first, reseeded); reset(&firstState); firstExpected.seed(reseeded);
+        firstDistribution.reset();
+        firstDistribution.param(std::normal_distribution<float>::param_type(2.0f, 0.25f));
+        equal(nextFn(&first, &firstState, 2.0f, 0.25f), firstDistribution(firstExpected),
+              "reseed", seedNumber, 0);
 
         Engine interleaved{{}}; NormalState interleavedState{{}};
         seedFn(&interleaved, seed);
@@ -198,25 +204,27 @@ struct Script64 {{ using result_type = std::uint64_t; const std::uint64_t* value
     result_type operator()() {{ require(position < count, "scripted 64-bit engine overdraw"); return values[position++]; }} }};
 
 static void scriptedCorpus() {{
-    const std::uint32_t sequence32[] = {{0, 0, UINT32_MAX, UINT32_MAX, 1, UINT32_C(0x80000000)}};
-    const std::uint64_t sequence64[] = {{0, 0, UINT64_MAX, UINT64_MAX, 1, UINT64_C(0x8000000000000000)}};
-    Script32 expected32{{sequence32, 6}}; std::normal_distribution<float> distribution32(0.0f, 1.0f);
+    const std::uint32_t sequence32[] = {{0, 0, UINT32_MAX, UINT32_MAX, UINT32_C(0x80000000), UINT32_C(0x80000000), 1, UINT32_C(0x80000000)}};
+    const std::uint64_t sequence64[] = {{0, 0, UINT64_MAX, UINT64_MAX, UINT64_C(0x8000000000000000), UINT64_C(0x8000000000000000), 1, UINT64_C(0x8000000000000000)}};
+    Script32 expected32{{sequence32, 8}}; std::normal_distribution<float> distribution32(0.0f, 1.0f);
     const float firstExpected32 = distribution32(expected32);
     Engine32 actual32{{}}; NormalState state32{{}}; actual32.index = 0;
-    for (int index = 0; index < 6; ++index) actual32.state[index] = untemper32(sequence32[index]);
+    for (int index = 0; index < 8; ++index) actual32.state[index] = untemper32(sequence32[index]);
     equal(next32(&actual32, &state32, 0.0f, 1.0f), firstExpected32, "scripted MT32", 0, 0);
     equal(next32(&actual32, &state32, 4.0f, 3.0f),
           distribution32(expected32) * 3.0f + 4.0f, "scripted MT32 cached", 0, 1);
-    require(actual32.index == 6, "cached MT32 result consumed an engine draw");
+    require(actual32.index == 8, "cached MT32 result consumed an engine draw");
+    require(expected32.position == 8, "scripted MT32 expected draw count mismatch");
 
-    Script64 expected64{{sequence64, 6}}; std::normal_distribution<float> distribution64(0.0f, 1.0f);
+    Script64 expected64{{sequence64, 8}}; std::normal_distribution<float> distribution64(0.0f, 1.0f);
     const float firstExpected64 = distribution64(expected64);
     Engine64 actual64{{}}; NormalState state64{{}}; actual64.index = 0;
-    for (int index = 0; index < 6; ++index) actual64.state[index] = untemper64(sequence64[index]);
+    for (int index = 0; index < 8; ++index) actual64.state[index] = untemper64(sequence64[index]);
     equal(next64(&actual64, &state64, 0.0f, 1.0f), firstExpected64, "scripted MT64", 0, 0);
     equal(next64(&actual64, &state64, 4.0f, 3.0f),
           distribution64(expected64) * 3.0f + 4.0f, "scripted MT64 cached", 0, 1);
-    require(actual64.index == 6, "cached MT64 result consumed an engine draw");
+    require(actual64.index == 8, "cached MT64 result consumed an engine draw");
+    require(expected64.position == 8, "scripted MT64 expected draw count mismatch");
 }}
 
 int main() {{
@@ -228,6 +236,16 @@ int main() {{
 }}
 ''', encoding="utf-8")
         for optimization in ("-O0", "-O2", "-O3"):
+            run([str(compiler), str(root / "tests/required/normal_distribution_native/abi.dl"),
+                 "--emit-object", "--no-main", optimization, "-ffp-contract=off", "-o", str(wrapper)], root)
+            llvm_output = output / f"normal_distribution{optimization}.ll"
+            run([str(compiler), str(root / "tests/required/normal_distribution_native/abi.dl"),
+                 "--emit-llvm", "--no-main", optimization, "-ffp-contract=off", "-o", str(llvm_output)], root)
+            llvm_ir = llvm_output.read_text(encoding="utf-8")
+            if "@llvm.log.f32" not in llvm_ir or "@llvm.sqrt.f32" not in llvm_ir:
+                fail(f"{optimization} normal distribution did not emit f32 log/sqrt")
+            if "@llvm.log.f64" in llvm_ir or "@llvm.sqrt.f64" in llvm_ir:
+                fail(f"{optimization} normal distribution widened f32 math")
             executable = output / f"normal_distribution_native{optimization}"
             run([cxx, "-std=c++20", optimization, "-ffp-contract=off", str(wrapper), str(source),
                  "-o", str(executable)], root)
