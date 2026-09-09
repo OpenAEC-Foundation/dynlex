@@ -1,0 +1,131 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] tracked token
+    members:
+        retains as a pointer to an integer
+        releases as a pointer to an integer
+        releaseSequence as a pointer to an integer
+        identifier as an integer
+    retain:
+        set count to @intrinsic("dereference", the retains of @intrinsic("lifecycle value"))
+        @intrinsic("store at", the retains of @intrinsic("lifecycle value"), count + 1)
+    release:
+        set count to @intrinsic("dereference", the releases of @intrinsic("lifecycle value"))
+        @intrinsic("store at", the releases of @intrinsic("lifecycle value"), count + 1)
+        set sequence to @intrinsic("dereference", the releaseSequence of @intrinsic("lifecycle value"))
+        @intrinsic("store at", the releaseSequence of @intrinsic("lifecycle value"), (sequence * 10) + the identifier of @intrinsic("lifecycle value"))
+
+class:
+    patterns:
+        [a|] token array pointer holder
+    members:
+        storage as a pointer to (a tracked token array of 3 items)
+
+class:
+    patterns:
+        [a|] token array pointer collection
+    members:
+        values as (a pointer to (a tracked token array of 3 items)) array of 2 items
+
+class:
+    patterns:
+        [a|] managed token array pointer owner
+    members:
+        owned as a tracked token array of 1 items
+        storage as a pointer to (a tracked token array of 3 items)
+
+class:
+    patterns:
+        [a|] generator record
+    members:
+        name as a string
+        value as a 32 bit floating-point number
+
+function the returned token array pointer {a pointer to (a tracked token array of 3 items):storage}:
+    execute:
+        return storage
+
+function receive token array pointer {a pointer to (a tracked token array of 3 items):storage}:
+    execute:
+        ignore storage
+
+function exercise owning arrays using {a pointer to an integer:retains}, {a pointer to an integer:releases} and {a pointer to an integer:releaseSequence}:
+    execute:
+        set none to @intrinsic("construct", a tracked token array of 0 items)
+        set one to [@intrinsic("construct", a tracked token, retains, releases, releaseSequence, 1)]
+        set several to [
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 2),
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 3),
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 4)
+        ]
+        set nested to [
+            [
+                @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 5),
+                @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 6)
+            ],
+            [
+                @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 7),
+                @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 8)
+            ]
+        ]
+
+function exercise raw array pointers using {a pointer to an integer:retains}, {a pointer to an integer:releases} and {a pointer to an integer:releaseSequence}:
+    execute:
+        set storage to [
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 1),
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 2),
+            @intrinsic("construct", a tracked token, retains, releases, releaseSequence, 3)
+        ]
+        set direct to the address of storage
+        set copied to direct
+        set indirect to the address of copied
+        set indirectCopy to indirect
+        receive token array pointer copied
+        set returned to the returned token array pointer copied
+        set copied to returned
+        set holder to @intrinsic("construct", a token array pointer holder, returned)
+        set collection to @intrinsic("construct", a token array pointer collection, [direct, returned])
+        set owner to @intrinsic(
+            "construct",
+            a managed token array pointer owner,
+            [@intrinsic("construct", a tracked token, retains, releases, releaseSequence, 9)],
+            copied
+        )
+        ignore holder
+        ignore collection
+        ignore owner
+        ignore indirectCopy
+
+function exercise string record array pointers:
+    execute:
+        set storage to [@intrinsic(
+            "construct",
+            a generator record,
+            the string form of "one",
+            1.0 as a 32 bit floating-point number
+        )]
+        set records to (the address of storage) as a pointer to a generator record
+        set copied to records
+        set records to copied
+        set entry to @intrinsic("dereference", records)
+        set name to the name of entry
+        print (the length of name) as a line
+
+set owningRetains to 0
+set owningReleases to 0
+set owningReleaseSequence to 0
+exercise owning arrays using the address of owningRetains, the address of owningReleases and the address of owningReleaseSequence
+print owningRetains as a line
+print owningReleases as a line
+print owningReleaseSequence as a line
+
+set pointerRetains to 0
+set pointerReleases to 0
+set pointerReleaseSequence to 0
+exercise raw array pointers using the address of pointerRetains, the address of pointerReleases and the address of pointerReleaseSequence
+print pointerRetains as a line
+print pointerReleases as a line
+print pointerReleaseSequence as a line
+exercise string record array pointers
