@@ -357,6 +357,10 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
 
+Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
+the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward
+order and release them in reverse order; pointer copies, arguments, returns, and fields do not retain or release their pointees.
+
 External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
 library function names. `@intrinsic("call", library, function, return type, arguments...)` emits a fixed signature.
 `@intrinsic("variadic call", library, function, return type, fixed argument count, arguments...)` emits the first

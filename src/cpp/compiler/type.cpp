@@ -21,9 +21,11 @@ uint64_t fixedAllocationSize(const llvm::DataLayout &dataLayout, llvm::Type *typ
 using ClassInstanceKey = std::pair<const ClassDefinition *, int>;
 
 bool typeHasManagedLifecycle(const DataType &type, std::set<ClassInstanceKey> &visited) {
+	if (type.isPointer())
+		return false;
 	if (type.kind == DataType::Kind::Array)
 		return type.arrayElementType && typeHasManagedLifecycle(*type.arrayElementType, visited);
-	if (type.kind != DataType::Kind::Class || type.isPointer())
+	if (type.kind != DataType::Kind::Class)
 		return false;
 	requireCompilerInvariant(
 		type.classDefinition && type.classInstIndex >= 0, "managed lifecycle requires a concrete class type"
