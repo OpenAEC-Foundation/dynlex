@@ -989,9 +989,8 @@ bool inferTypes(ParseContext &parseContext) {
 
 	std::vector<std::shared_ptr<const MinimumSignedIntegerMagnitudeIdentity>> reportedMinimumIntegers;
 	for (const auto &[identity, range] : minimumIntegerLiterals) {
-		bool consumed = containsMinimumSignedIntegerMagnitudeIdentity(minimumIntegerEffects.consumedByNegation, identity);
 		bool rejected = containsMinimumSignedIntegerMagnitudeIdentity(minimumIntegerEffects.rejectedUses, identity);
-		if (consumed && !rejected)
+		if (!rejected)
 			continue;
 		if (containsMinimumSignedIntegerMagnitudeIdentity(reportedMinimumIntegers, identity))
 			continue;

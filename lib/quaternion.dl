@@ -122,7 +122,7 @@ local function the half angle for {a 64 bit floating-point number:angle}:
     execute:
         return angle * 0.008726646259971648
 
-local function the half angle for {integer:angle}:
+local function the half angle for {a number:angle}:
     execute:
         return (angle as a floating-point number) * 0.008726646259971648
 

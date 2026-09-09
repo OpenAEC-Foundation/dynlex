@@ -14,6 +14,7 @@ struct Instantiation;
 bool isCompileTimeKnown(const CompileTimeValue &value);
 std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value);
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value);
+std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTimeValue &value);
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value);
 std::optional<TypeReferenceValue> getCompileTimeTypeReferenceValue(const CompileTimeValue &value);
 std::optional<TypeConstraint> getCompileTimeConstraintValue(const CompileTimeValue &value);

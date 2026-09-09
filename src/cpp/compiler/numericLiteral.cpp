@@ -15,7 +15,7 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 		std::uint64_t magnitude = 0;
 		auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), magnitude);
 		if (error == std::errc::result_out_of_range)
-			return {{std::int64_t{0}}, NumericLiteralParseError::IntegerOutOfRange};
+			return {{std::int64_t{0}}, NumericLiteralParseError::UnsignedIntegerOutOfRange};
 		if (error != std::errc{} || end != text.data() + text.size())
 			return {{std::int64_t{0}}, NumericLiteralParseError::Invalid};
 		constexpr std::uint64_t maximumSignedInteger = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
@@ -26,7 +26,7 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 				{MinimumSignedIntegerMagnitude{std::make_shared<const MinimumSignedIntegerMagnitudeIdentity>()}},
 				NumericLiteralParseError::None
 			};
-		return {{std::int64_t{0}}, NumericLiteralParseError::IntegerOutOfRange};
+		return {{magnitude}, NumericLiteralParseError::None};
 	}
 
 	try {
@@ -51,13 +51,17 @@ DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {
 																														 : 8;
 		return {DataType::Kind::Int, byteSize};
 	}
+	if (std::holds_alternative<std::uint64_t>(value))
+		return {DataType::Kind::UInt, 8};
 	if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
-		return {DataType::Kind::Int, 8};
+		return {DataType::Kind::UInt, 8};
 	return defaultFloatType(emitSPIRV);
 }
 
 CompileTimeValue numericLiteralCompileTimeValue(const NumericLiteralValue &value) {
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return *integer;
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
 		return *integer;
 	if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value))
 		return *minimumMagnitude;

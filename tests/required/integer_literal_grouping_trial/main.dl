@@ -2,7 +2,7 @@ function integer:
     replacement:
         @intrinsic("type", "int")
 
-function negative {integer:value}:
+function negative value:
     replacement:
         @intrinsic("negate", value)
 

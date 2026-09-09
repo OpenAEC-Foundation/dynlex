@@ -1,0 +1,1 @@
+tests/required/unsigned_literal_out_of_range/main.dl:8-28: Error: Integer literal exceeds the unsigned 64-bit range

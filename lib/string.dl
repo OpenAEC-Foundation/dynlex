@@ -205,7 +205,7 @@ function the count of decimal digits in {integer:value}:
         set remaining to value as a word sized integer
         set total to 1
         loop while (remaining <= -10) or (remaining >= 10):
-            set remaining to (remaining / 10)
+            set remaining to (remaining / (10 as (the type of remaining)))
             set total to (total + 1)
         return total
 
@@ -254,6 +254,28 @@ function the string form of {integer:value}:
                 set index to (index - 1)
         if negative:
             store 45 as a byte into data at 0
+        return result
+
+function the string form of {unsigned integer:value}:
+    execute:
+        set remaining to value
+        set digits to 1
+        loop while remaining >= (10 as (the type of remaining)):
+            set remaining to (remaining / (10 as (the type of remaining)))
+            set digits to (digits + 1)
+        set result to a new string buffer containing digits bytes
+        set data to the data of result
+        set remaining to value
+        set index to (digits - 1)
+        loop while remaining > 0:
+            set digit to the remainder of remaining divided by (10 as (the type of remaining))
+            set character to ((digit + 48) as a byte)
+            store character into data at index
+            set remaining to (remaining / (10 as (the type of remaining)))
+            if index = 0:
+                set remaining to 0 as (the type of remaining)
+            else:
+                set index to (index - 1)
         return result
 
 function the string form of {floating-point number:value}:

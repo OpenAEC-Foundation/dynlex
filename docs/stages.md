@@ -124,14 +124,17 @@ value. The `constraint` meta-type carries `TypeConstraint` values just as the `t
 requirement enabled. Type and constraint shaping uses the same surface patterns; shaping a constraint preserves the constraint
 category. A compile-time-known requirement is not an overload axis, so definitions which differ only by `fix` are duplicates.
 Type values retain both meanings when used in a signature: their constraint view controls overload matching, while their exact type
-view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` accepts every integer
-width as a constraint but denotes the default integer width as a standalone type value. Code generation consumes that recorded exact
+view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` and `unsigned integer`
+accept every corresponding signed or unsigned integer width as constraints but denote their default widths as standalone type values. Code generation consumes that recorded exact
 view; it does not reinterpret the constraint.
 
-An integer literal uses a 32-bit integer type when its exact value fits and a
-64-bit integer type otherwise. Its compile-time value remains an exact signed
-integer through inference and pure evaluation; it is never routed through a
-floating-point representation.
+An integer literal uses a 32-bit signed integer type when its value fits, a
+64-bit signed integer type through the signed range, and an unsigned 64-bit
+integer type above that range. The exact magnitude of signed 64-bit minimum is
+also accepted so unary negation can form that signed value; it can be explicitly
+cast to an unsigned 64-bit integer. Explicit `8`, `16`, `32`, and `64` bit unsigned
+integer type values preserve wrapping arithmetic, logical right shifts, and
+unsigned comparison, division, and remainder at compile time and runtime.
 
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.

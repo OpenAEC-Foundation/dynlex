@@ -60,6 +60,14 @@ function [a|] {fixed integer:bits} bit integer:
     replacement:
         @intrinsic("type", "int", bits)
 
+function [an|] unsigned integer:
+    replacement:
+        @intrinsic("type", "uint")
+
+function [a|] {fixed integer:bits} bit unsigned integer:
+    replacement:
+        @intrinsic("type", "uint", bits)
+
 function [a|] floating-point number:
     replacement:
         @intrinsic("type", "float")

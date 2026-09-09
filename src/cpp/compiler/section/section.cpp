@@ -673,6 +673,9 @@ Expression *Section::detectPatternsRecursively(
 			case NumericLiteralParseError::IntegerOutOfRange:
 				diagnosticKey = "integer literal out of range";
 				break;
+			case NumericLiteralParseError::UnsignedIntegerOutOfRange:
+				diagnosticKey = "unsigned integer literal out of range";
+				break;
 			case NumericLiteralParseError::FloatingPointOutOfRange:
 				diagnosticKey = "floating point literal out of range";
 				break;

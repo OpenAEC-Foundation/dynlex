@@ -5,11 +5,12 @@
 #include <string_view>
 #include <variant>
 
-using NumericLiteralValue = std::variant<std::int64_t, MinimumSignedIntegerMagnitude, double>;
+using NumericLiteralValue = std::variant<std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double>;
 
 enum class NumericLiteralParseError {
 	None,
 	IntegerOutOfRange,
+	UnsignedIntegerOutOfRange,
 	FloatingPointOutOfRange,
 	Invalid,
 };

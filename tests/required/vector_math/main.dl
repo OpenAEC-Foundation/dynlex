@@ -72,6 +72,8 @@ set mixedAxis to a new vector with x 0.0, y 0.0 and z 1.0
 set mixedAxisTurn to a quaternion for rotation around mixedAxis by floatAngle degrees
 print the vector component width of (the x of mixedAxisTurn) as a line
 set mixedAngleTurn to a quaternion for rotation around floatAxis by 90.0 degrees
+set unsignedAngleTurn to a quaternion for rotation around floatAxis by 90 as a 32 bit unsigned integer degrees
+print the w of unsignedAngleTurn as a line
 print the vector component width of (the x of mixedAngleTurn) as a line
 set floatTurn to a new quaternion with w 0.70710677 as a 32 bit floating-point number, x 0.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.70710677 as a 32 bit floating-point number
 set floatRotated to (a new vector with x 1.0 as a 32 bit floating-point number, y 0.0 as a 32 bit floating-point number and z 0.0 as a 32 bit floating-point number) rotated by floatTurn

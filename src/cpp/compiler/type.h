@@ -28,6 +28,7 @@ struct DataType {
 		Bool,
 		Float,
 		Int,
+		UInt,
 		Array,
 		Vector,
 		Matrix,
@@ -40,7 +41,7 @@ struct DataType {
 	};
 
 	Kind kind = Kind::Unresolved;
-	int numericSize = 0;						// Int/Float: 1/2/4/8, others: 0
+	int numericSize = 0;						// Int/UInt/Float: 1/2/4/8, others: 0
 	int pointerDepth = 0;						// 0=value, 1=ptr, 2=ptr-to-ptr, ...
 	ClassDefinition *classDefinition = nullptr; // For Kind::Class and Kind::Type (class type refs)
 	int classInstIndex = -1;					// Index into classDefinition->instantiations
@@ -117,8 +118,10 @@ struct DataType {
 		return false;
 	}
 
-	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int) && pointerDepth == 0; }
-	bool isInteger() const { return kind == Kind::Int && pointerDepth == 0; }
+	bool isNumeric() const { return (kind == Kind::Float || kind == Kind::Int || kind == Kind::UInt) && pointerDepth == 0; }
+	bool isInteger() const { return (kind == Kind::Int || kind == Kind::UInt) && pointerDepth == 0; }
+	bool isSignedInteger() const { return kind == Kind::Int && pointerDepth == 0; }
+	bool isUnsignedInteger() const { return kind == Kind::UInt && pointerDepth == 0; }
 	bool isVector() const { return kind == Kind::Vector && pointerDepth == 0; }
 	bool isMatrix() const { return kind == Kind::Matrix && pointerDepth == 0; }
 	int vectorSize() const { return arraySize; }
@@ -143,6 +146,13 @@ struct DataType {
 	DataType vectorElementType() const {
 		requireCompilerInvariant(hasVectorPayload() && arrayElementType, "Vector type must have element type");
 		return *arrayElementType;
+	}
+	DataType numericElementType() const {
+		if (kind == Kind::Vector)
+			return vectorElementType();
+		if (kind == Kind::Matrix)
+			return matrixElementType();
+		return *this;
 	}
 	DataType matrixElementType() const {
 		requireCompilerInvariant(hasMatrixPayload() && arrayElementType, "Matrix type must have element type");
@@ -203,9 +213,9 @@ struct DataType {
 
 		if (concreteFromType.isPointer() && concreteToType.isPointer())
 			return true;
-		if (concreteFromType.isPointer() && concreteToType.kind == Kind::Int && concreteToType.pointerDepth == 0)
+		if (concreteFromType.isPointer() && concreteToType.isInteger())
 			return true;
-		if (concreteFromType.kind == Kind::Int && concreteFromType.pointerDepth == 0 && concreteToType.isPointer())
+		if (concreteFromType.isInteger() && concreteToType.isPointer())
 			return true;
 
 		if (concreteFromType.isNumeric() && concreteToType.isNumeric())
@@ -333,9 +343,12 @@ struct DataType {
 		}
 		if (left.isNumeric() && right.isNumeric()) {
 			result = {};
-			result.kind = (left.kind == Kind::Float || right.kind == Kind::Float) ? Kind::Float : Kind::Int;
-			result.numericSize = std::max(left.numericSize, right.numericSize);
-			return true;
+			if (left.kind == Kind::Float || right.kind == Kind::Float) {
+				result.kind = Kind::Float;
+				result.numericSize = std::max(left.numericSize, right.numericSize);
+				return true;
+			}
+			return promoteIntegerScalars(left, right, result);
 		}
 		return false;
 	}
@@ -358,7 +371,20 @@ struct DataType {
 		}
 		if (!left.isInteger() || !right.isInteger())
 			return false;
-		result = {Kind::Int, std::max(left.numericSize, right.numericSize)};
+		return promoteIntegerScalars(left, right, result);
+	}
+
+	static bool promoteIntegerScalars(const DataType &left, const DataType &right, DataType &result) {
+		if (!left.isInteger() || !right.isInteger())
+			return false;
+		if (left.kind == right.kind)
+			result.kind = left.kind;
+		else
+			result.kind = (left.kind == Kind::Int ? left.numericSize > right.numericSize
+															 : right.numericSize > left.numericSize)
+				? Kind::Int
+				: Kind::UInt;
+		result.numericSize = std::max(left.numericSize, right.numericSize);
 		return true;
 	}
 
@@ -410,6 +436,9 @@ makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optiona
 	DataType result{DataType::Kind::Type};
 	if (kindName == "int") {
 		result.referencedKind = DataType::Kind::Int;
+		result.numericSize = numericByteSize.value_or(4);
+	} else if (kindName == "uint") {
+		result.referencedKind = DataType::Kind::UInt;
 		result.numericSize = numericByteSize.value_or(4);
 	} else if (kindName == "float") {
 		result.referencedKind = DataType::Kind::Float;

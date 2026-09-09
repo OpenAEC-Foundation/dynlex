@@ -14,6 +14,8 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 		return *boolean;
 	if (auto *integer = std::get_if<std::int64_t>(&value))
 		return *integer != 0;
+	if (auto *integer = std::get_if<std::uint64_t>(&value))
+		return *integer != 0;
 	if (auto *number = std::get_if<double>(&value))
 		return *number != 0.0;
 	if (auto *text = std::get_if<std::string>(&value))
@@ -24,6 +26,11 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value) {
 	if (auto *integer = std::get_if<std::int64_t>(&value))
 		return *integer;
+	if (auto *integer = std::get_if<std::uint64_t>(&value)) {
+		if (*integer <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+			return static_cast<std::int64_t>(*integer);
+		return std::nullopt;
+	}
 	auto *number = std::get_if<double>(&value);
 	if (!number || !std::isfinite(*number))
 		return std::nullopt;
@@ -40,8 +47,30 @@ std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &v
 	return static_cast<std::int64_t>(truncated);
 }
 
+std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTimeValue &value) {
+	if (auto *integer = std::get_if<std::uint64_t>(&value))
+		return *integer;
+	if (auto *integer = std::get_if<std::int64_t>(&value))
+		return static_cast<std::uint64_t>(*integer);
+	if (auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value)) {
+		requireCompilerInvariant(minimumMagnitude->identity != nullptr, "minimum integer magnitude has no identity");
+		return std::uint64_t{1} << 63;
+	}
+	if (auto *number = std::get_if<double>(&value)) {
+		if (!std::isfinite(*number) || *number < 0.0)
+			return std::nullopt;
+		double truncated = std::trunc(*number);
+		if (truncated >= 18446744073709551616.0)
+			return std::nullopt;
+		return static_cast<std::uint64_t>(truncated);
+	}
+	return std::nullopt;
+}
+
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value) {
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
+		return static_cast<double>(*integer);
+	if (const auto *integer = std::get_if<std::uint64_t>(&value))
 		return static_cast<double>(*integer);
 	if (const auto *floatingPoint = std::get_if<double>(&value))
 		return *floatingPoint;
@@ -111,6 +140,8 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
 		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
+			return *integer;
+		if (const auto *integer = std::get_if<std::uint64_t>(&expr->literalValue))
 			return *integer;
 		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue))
 			return *minimumMagnitude;

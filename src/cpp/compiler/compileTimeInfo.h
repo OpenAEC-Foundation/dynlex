@@ -18,7 +18,8 @@ struct MinimumSignedIntegerMagnitude {
 };
 
 using CompileTimeValue = std::variant<
-	std::monostate, std::int64_t, MinimumSignedIntegerMagnitude, double, std::string, bool, TypeReferenceValue, TypeConstraint>;
+	std::monostate, std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double, std::string, bool, TypeReferenceValue,
+	TypeConstraint>;
 
 struct MinimumSignedIntegerMagnitudeEffects {
 	std::vector<std::shared_ptr<const MinimumSignedIntegerMagnitudeIdentity>> consumedByNegation;

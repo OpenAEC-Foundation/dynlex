@@ -48,8 +48,8 @@ static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *index
 		return builder.CreateFPToSI(indexVal, sizeTy, "idx_size");
 	if (indexType.kind == DataType::Kind::Bool)
 		return builder.CreateZExt(indexVal, sizeTy, "idx_size");
-	if (indexType.kind == DataType::Kind::Int)
-		return ensureType(context, indexVal, indexType, {DataType::Kind::Int, 8});
+	if (indexType.isInteger())
+		return ensureType(context, indexVal, indexType, {DataType::Kind::UInt, 8});
 	return indexVal;
 }
 
@@ -281,21 +281,8 @@ static llvm::Value *generateScalarOrVectorArithmetic(
 	ParseContext &context, ArithmeticIntrinsicKind op, llvm::Value *left, llvm::Value *right, DataType resultType
 ) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	if (resultType.kind == DataType::Kind::Vector) {
-		switch (op) {
-		case ArithmeticIntrinsicKind::Add:
-			return builder.CreateFAdd(left, right, "vadd");
-		case ArithmeticIntrinsicKind::Subtract:
-			return builder.CreateFSub(left, right, "vsub");
-		case ArithmeticIntrinsicKind::Multiply:
-			return builder.CreateFMul(left, right, "vmul");
-		case ArithmeticIntrinsicKind::Divide:
-			return builder.CreateFDiv(left, right, "vdiv");
-		default:
-			return nullptr;
-		}
-	}
-	if (resultType.kind == DataType::Kind::Float) {
+	DataType elementType = resultType.numericElementType();
+	if (elementType.kind == DataType::Kind::Float) {
 		switch (op) {
 		case ArithmeticIntrinsicKind::Add:
 			return builder.CreateFAdd(left, right, "fadd");
@@ -319,15 +306,16 @@ static llvm::Value *generateScalarOrVectorArithmetic(
 	case ArithmeticIntrinsicKind::Multiply:
 		return builder.CreateMul(left, right, "mul");
 	case ArithmeticIntrinsicKind::Divide:
-		return builder.CreateSDiv(left, right, "div");
+	return elementType.isUnsignedInteger() ? builder.CreateUDiv(left, right, "div") : builder.CreateSDiv(left, right, "div");
 	case ArithmeticIntrinsicKind::Modulo:
-		return builder.CreateSRem(left, right, "mod");
+	return elementType.isUnsignedInteger() ? builder.CreateURem(left, right, "mod") : builder.CreateSRem(left, right, "mod");
 	default:
 		return nullptr;
 	}
 }
 
-static llvm::Value *generateScalarBitwise(ParseContext &context, IntrinsicKind kind, llvm::Value *left, llvm::Value *right) {
+static llvm::Value *
+generateScalarBitwise(ParseContext &context, IntrinsicKind kind, llvm::Value *left, llvm::Value *right, DataType resultType) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	switch (kind) {
 	case IntrinsicKind::BitwiseAnd:
@@ -339,7 +327,8 @@ static llvm::Value *generateScalarBitwise(ParseContext &context, IntrinsicKind k
 	case IntrinsicKind::ShiftLeft:
 		return builder.CreateShl(left, right, "shl");
 	case IntrinsicKind::ShiftRight:
-		return builder.CreateAShr(left, right, "shr");
+		return resultType.numericElementType().isUnsignedInteger() ? builder.CreateLShr(left, right, "shr")
+																			 : builder.CreateAShr(left, right, "shr");
 	default:
 		return nullptr;
 	}
@@ -381,7 +370,7 @@ static DataType mathComputationType(DataType resultType, int maximumFloatBytes) 
 		resultType.numericSize = std::min(resultType.numericSize, maximumFloatBytes);
 		return resultType;
 	}
-	if (resultType.kind == DataType::Kind::Int)
+	if (resultType.isInteger())
 		return {DataType::Kind::Float, maximumFloatBytes};
 	if (resultType.kind == DataType::Kind::Vector && resultType.arrayElementType) {
 		DataType computationType = resultType;
@@ -605,7 +594,7 @@ CodegenResult generateIntrinsicCode(
 
 		left = ensureType(context, left, leftType, resultType);
 		right = ensureType(context, right, rightType, resultType);
-		return generateScalarBitwise(context, kind, left, right);
+		return generateScalarBitwise(context, kind, left, right, resultType);
 	}
 
 	// Comparison intrinsics
@@ -649,14 +638,15 @@ CodegenResult generateIntrinsicCode(
 				else
 					cmp = builder.CreateFCmpONE(left, right, "fne");
 			} else {
+				DataType comparisonElementType = promoted.numericElementType();
 				if (kind == IntrinsicKind::LessThan)
-					cmp = builder.CreateICmpSLT(left, right, "lt");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULT(left, right, "lt") : builder.CreateICmpSLT(left, right, "lt");
 				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = builder.CreateICmpSLE(left, right, "le");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULE(left, right, "le") : builder.CreateICmpSLE(left, right, "le");
 				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = builder.CreateICmpSGT(left, right, "gt");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGT(left, right, "gt") : builder.CreateICmpSGT(left, right, "gt");
 				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = builder.CreateICmpSGE(left, right, "ge");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGE(left, right, "ge") : builder.CreateICmpSGE(left, right, "ge");
 				else if (kind == IntrinsicKind::Equal)
 					cmp = builder.CreateICmpEQ(left, right, "eq");
 				else
@@ -733,8 +723,10 @@ CodegenResult generateIntrinsicCode(
 			return builder.CreateCall(fn, {left, right}, kind == IntrinsicKind::Min ? "fmin" : "fmax");
 		}
 
-		llvm::Value *cmp = kind == IntrinsicKind::Min ? builder.CreateICmpSLT(left, right, "min_cmp")
-													  : builder.CreateICmpSGT(left, right, "max_cmp");
+		bool unsignedElements = promoted.numericElementType().isUnsignedInteger();
+		llvm::Value *cmp = kind == IntrinsicKind::Min
+			? (unsignedElements ? builder.CreateICmpULT(left, right, "min_cmp") : builder.CreateICmpSLT(left, right, "min_cmp"))
+			: (unsignedElements ? builder.CreateICmpUGT(left, right, "max_cmp") : builder.CreateICmpSGT(left, right, "max_cmp"));
 		return builder.CreateSelect(cmp, left, right, kind == IntrinsicKind::Min ? "min" : "max");
 	}
 
@@ -743,6 +735,14 @@ CodegenResult generateIntrinsicCode(
 		context.requiredLibraries.insert("m");
 		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
+			DataType operandType = args.size() == 2 ? finalizedExpressionType(context, args[1]) : DataType{};
+			if ((kind == IntrinsicKind::Abs || kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil ||
+				 kind == IntrinsicKind::Round) && operandType.numericElementType().isUnsignedInteger()) {
+				llvm::Value *value = nullptr;
+				if (!generateRuntimeValue(args[1], value))
+					return CodegenResult::failure();
+				return value;
+			}
 			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
 			// Native LLVM math intrinsics retain the inferred 32/64-bit floating-point width.
 			int maximumFloatBytes = defaultFloatByteSize(context.options.emitSPIRV);

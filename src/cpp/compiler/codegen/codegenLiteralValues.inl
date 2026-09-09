@@ -25,7 +25,7 @@ generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &v
 	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
 	llvm::Type *llvmType = getLLVMType(context, type);
 	if (const auto *integer = std::get_if<std::int64_t>(&value)) {
-		if (type.kind == DataType::Kind::Int)
+		if (type.isInteger())
 			return llvm::ConstantInt::get(llvmType, *integer, true);
 		if (type.kind == DataType::Kind::Float)
 			return llvm::ConstantFP::get(llvmType, static_cast<double>(*integer));
@@ -35,12 +35,18 @@ generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &v
 			minimumMagnitude->identity != nullptr, "minimum integer magnitude reached runtime codegen without an identity"
 		);
 		requireCompilerInvariant(
-			type.kind == DataType::Kind::Int && type.numericSize == 8, "minimum integer magnitude is not i64"
+			type.isInteger() && type.numericSize == 8, "minimum integer magnitude is not a 64-bit integer"
 		);
-		return llvm::ConstantInt::get(llvmType, std::numeric_limits<std::int64_t>::min(), true);
+		return llvm::ConstantInt::get(llvmType, std::uint64_t{1} << 63, false);
+	}
+	if (const auto *integer = std::get_if<std::uint64_t>(&value)) {
+		if (type.isInteger())
+			return llvm::ConstantInt::get(llvmType, *integer, false);
+		if (type.kind == DataType::Kind::Float)
+			return llvm::ConstantFP::get(llvmType, static_cast<double>(*integer));
 	}
 	if (const auto *number = std::get_if<double>(&value)) {
-		if (type.kind == DataType::Kind::Int)
+		if (type.isInteger())
 			return llvm::ConstantInt::get(llvmType, static_cast<int64_t>(*number), true);
 		if (type.kind == DataType::Kind::Float)
 			return llvm::ConstantFP::get(llvmType, *number);

@@ -76,6 +76,7 @@ dynlex options:
         pattern choice combination limit: "pattern expands to more than {limit} choice combinations"
         disallowed character: "Disallowed character {character}"
         integer literal out of range: "Integer literal exceeds the signed 64-bit range"
+        unsigned integer literal out of range: "Integer literal exceeds the unsigned 64-bit range"
         floating point literal out of range: "Floating-point literal exceeds the supported range"
         invalid numeric literal: "Invalid numeric literal"
         variable has no type: "Variable '{name}' has no type (never assigned a value)"

@@ -7,6 +7,13 @@ case Expression::Kind::IntrinsicCall: {
 		case IntrinsicReturnKind::SameAsArgs:
 			if (expr->arguments.size() == 2) {
 				expr->type = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				ResolvedBindingLayers resolvedArgument =
+					resolveExpressionBindingWithCallerScope(expr->arguments[1], flexBindingFrameStack);
+				if (kind == IntrinsicKind::Negate && resolvedArgument.expression &&
+					std::holds_alternative<MinimumSignedIntegerMagnitude>(
+						context.lookupExpressionValue(resolvedArgument.expression)
+					))
+					expr->type = {DataType::Kind::Int, 8};
 			} else {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);

@@ -1,0 +1,71 @@
+import lib/std.dl
+
+set maximum to 4294967295 as a 32 bit unsigned integer
+set high64 to 9223372036854775808 as a 64 bit unsigned integer
+set bareHigh64 to 9223372036854775808
+set signedMinimum to -9223372036854775808
+set limit to 9223372036854775808
+set wrappedLimit to -limit
+set full64 to 18446744073709551615
+set narrowMaximum to 255 as a 8 bit unsigned integer
+set narrowOne to 1 as a 8 bit unsigned integer
+set shortMaximum to 65535 as a 16 bit unsigned integer
+set shortOne to 1 as a 16 bit unsigned integer
+set signed32 to (-1) as a 32 bit integer
+set signed64 to (-1) as a 64 bit integer
+set floatMaximum to maximum as a 64 bit floating-point number
+set floatRoundTrip to floatMaximum as a 64 bit unsigned integer
+set floatFraction to 1.5 as a 64 bit floating-point number
+set floatTruncated to floatFraction as a 32 bit unsigned integer
+set floatHigh64 to 9223372036854775808 as a 64 bit floating-point number
+set floatHigh64RoundTrip to floatHigh64 as a 64 bit unsigned integer
+set maximumPointer to @intrinsic("address of", maximum)
+
+print maximum as a line
+print (maximum shifted right by 1) as a line
+print (maximum / 2) as a line
+set one to 1 as a 32 bit unsigned integer
+print (maximum > one) as a line
+print the minimum of maximum and one as a line
+print the maximum of maximum and one as a line
+print (signed32 + maximum) as a line
+print (signed64 + maximum) as a line
+print (signed32 as a 64 bit unsigned integer) as a line
+print (maximum as a 64 bit integer) as a line
+print (full64 as a 64 bit integer) as a line
+print high64 as a line
+print bareHigh64 as a line
+print signedMinimum as a line
+print wrappedLimit as a line
+print full64 as a line
+print (the absolute value of full64) as a line
+print (the floor of full64) as a line
+print (the ceiling of full64) as a line
+print floatRoundTrip as a line
+print floatTruncated as a line
+print floatHigh64RoundTrip as a line
+print @intrinsic("dereference", maximumPointer) as a line
+
+function the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
+    execute:
+        set golden to 2654435769 as a 32 bit unsigned integer
+        set multiplier to 2246822507 as a 32 bit unsigned integer
+        set state to hash ^ ((value + golden) + ((hash << 6) + (hash >> 2)))
+        set state to state * multiplier
+        return state ^ (state >> 16)
+
+function the mixed animal seed from {a 32 bit unsigned integer:value}:
+    execute:
+        set firstMultiplier to 2146121005 as a 32 bit unsigned integer
+        set secondMultiplier to 2221713035 as a 32 bit unsigned integer
+        set state to value ^ (value >> 16)
+        set state to state * firstMultiplier
+        set state to state ^ (state >> 15)
+        set state to state * secondMultiplier
+        return state ^ (state >> 16)
+
+print the combined seed from 0 as a 32 bit unsigned integer and 0 as a 32 bit unsigned integer as a line
+print the combined seed from 1 as a 32 bit unsigned integer and 2 as a 32 bit unsigned integer as a line
+print the combined seed from maximum and 2147483648 as a 32 bit unsigned integer as a line
+print the mixed animal seed from maximum as a line
+print the mixed animal seed from 2147483648 as a 32 bit unsigned integer as a line

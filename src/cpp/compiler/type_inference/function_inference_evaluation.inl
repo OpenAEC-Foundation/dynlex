@@ -20,10 +20,7 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return {};
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	auto readArgumentValue = [&](Expression *argument) {
-		CompileTimeValue value = readArgumentValueFn(argument);
-		if (kind != IntrinsicKind::Negate)
-			recordRejectedMinimumSignedIntegerMagnitudeUse(minimumIntegerEffects, value);
-		return value;
+		return readArgumentValueFn(argument);
 	};
 	auto requireArgument = [&](size_t index, std::string_view intrinsicName) -> Expression * {
 		if (expr->arguments.size() <= index || !expr->arguments[index]) {
@@ -98,7 +95,11 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!targetType.isNumeric())
 			return {};
 		if (targetType.kind == DataType::Kind::Int) {
-			std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
+			if (std::optional<std::uint64_t> integerBits = getCompileTimeUnsignedIntegerValue(value))
+				return compileTimeIntegerFromBits(*integerBits, targetType);
+			std::optional<std::int64_t> integerValue;
+			if (!std::holds_alternative<std::uint64_t>(value))
+				integerValue = getCompileTimeIntegerValue(value);
 			if (!integerValue) {
 				if (const auto *boolean = std::get_if<bool>(&value))
 					integerValue = *boolean ? 1 : 0;
@@ -106,6 +107,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			if (!integerValue)
 				return {};
 			return normalizeSignedIntegerToType(*integerValue, targetType);
+		}
+		if (targetType.kind == DataType::Kind::UInt) {
+			if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+				recordConsumedMinimumSignedIntegerMagnitude(minimumIntegerEffects, value);
+			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
+			if (!integerValue) {
+				if (const auto *boolean = std::get_if<bool>(&value))
+					integerValue = *boolean ? 1 : 0;
+			}
+			return integerValue ? compileTimeIntegerFromBits(*integerValue, targetType) : CompileTimeValue{};
 		}
 		if (const auto *boolean = std::get_if<bool>(&value))
 			return *boolean ? 1.0 : 0.0;
@@ -124,8 +135,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		auto *boolean = std::get_if<bool>(&value);
 		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
 	}
+	if (kind == IntrinsicKind::Abs || kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil || kind == IntrinsicKind::Round) {
+		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
+		return expr->type.numericElementType().isUnsignedInteger() ? value : CompileTimeValue{};
+	}
 	if (kind == IntrinsicKind::BitwiseNot) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
+		if (expr->type.isUnsignedInteger()) {
+			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
+			return integerValue ? compileTimeIntegerFromBits(~*integerValue, expr->type) : CompileTimeValue{};
+		}
 		std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
 		return integerValue.has_value() ? CompileTimeValue(compileTimeBitwiseNot(*integerValue)) : CompileTimeValue{};
 	}
@@ -141,6 +160,11 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 				negated = normalizeSignedIntegerToType(negated, expr->type);
 			return negated;
 		}
+		if (const auto *integer = std::get_if<std::uint64_t>(&value)) {
+			if (!expr->type.isUnsignedInteger())
+				return {};
+			return compileTimeIntegerFromBits(std::uint64_t{0} - *integer, expr->type);
+		}
 		if (const auto *number = std::get_if<double>(&value))
 			return -*number;
 		return {};
@@ -152,7 +176,7 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract || kind == IntrinsicKind::Multiply ||
 		kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo || kind == IntrinsicKind::LessThan ||
 		kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
-		kind == IntrinsicKind::GreaterThanOrEqual) {
+		kind == IntrinsicKind::GreaterThanOrEqual || kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
 		CompileTimeValue leftValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		CompileTimeValue rightValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
 		if (!isCompileTimeKnown(leftValue) || !isCompileTimeKnown(rightValue))
@@ -164,7 +188,81 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			if (!leftBool || !rightBool)
 				return {};
 			return kind == IntrinsicKind::And ? CompileTimeValue(*leftBool && *rightBool)
-											  : CompileTimeValue(*leftBool || *rightBool);
+													  : CompileTimeValue(*leftBool || *rightBool);
+		}
+
+		DataType leftType = expr->arguments[1]->type;
+		DataType rightType = expr->arguments[2]->type;
+		DataType integerType;
+		bool integerOperation = leftType.isInteger() && rightType.isInteger() &&
+			((kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
+				kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight)
+				? DataType::promoteBitwise(leftType, rightType, integerType)
+				: DataType::promoteArithmetic(leftType, rightType, integerType));
+		if (integerOperation) {
+			std::optional<std::uint64_t> leftBits = getCompileTimeUnsignedIntegerValue(leftValue);
+			std::optional<std::uint64_t> rightBits = getCompileTimeUnsignedIntegerValue(rightValue);
+			if (!leftBits || !rightBits)
+				return {};
+			*leftBits = normalizeIntegerBitsToType(*leftBits, integerType);
+			*rightBits = normalizeIntegerBitsToType(*rightBits, integerType);
+			if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual)
+				return kind == IntrinsicKind::Equal ? CompileTimeValue(*leftBits == *rightBits) : CompileTimeValue(*leftBits != *rightBits);
+			if (kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
+				bool takeLeft = integerType.isUnsignedInteger()
+					? (kind == IntrinsicKind::Min ? *leftBits < *rightBits : *leftBits > *rightBits)
+					: (kind == IntrinsicKind::Min ? signedIntegerFromBits(*leftBits, integerType) < signedIntegerFromBits(*rightBits, integerType)
+																 : signedIntegerFromBits(*leftBits, integerType) > signedIntegerFromBits(*rightBits, integerType));
+				return compileTimeIntegerFromBits(takeLeft ? *leftBits : *rightBits, integerType);
+			}
+			if (kind == IntrinsicKind::LessThan)
+				return integerType.isUnsignedInteger() ? CompileTimeValue(*leftBits < *rightBits)
+					: CompileTimeValue(signedIntegerFromBits(*leftBits, integerType) < signedIntegerFromBits(*rightBits, integerType));
+			if (kind == IntrinsicKind::GreaterThan)
+				return integerType.isUnsignedInteger() ? CompileTimeValue(*leftBits > *rightBits)
+					: CompileTimeValue(signedIntegerFromBits(*leftBits, integerType) > signedIntegerFromBits(*rightBits, integerType));
+			if (kind == IntrinsicKind::LessThanOrEqual)
+				return integerType.isUnsignedInteger() ? CompileTimeValue(*leftBits <= *rightBits)
+					: CompileTimeValue(signedIntegerFromBits(*leftBits, integerType) <= signedIntegerFromBits(*rightBits, integerType));
+			if (kind == IntrinsicKind::GreaterThanOrEqual)
+				return integerType.isUnsignedInteger() ? CompileTimeValue(*leftBits >= *rightBits)
+					: CompileTimeValue(signedIntegerFromBits(*leftBits, integerType) >= signedIntegerFromBits(*rightBits, integerType));
+			if (kind == IntrinsicKind::BitwiseAnd)
+				return compileTimeIntegerFromBits(*leftBits & *rightBits, integerType);
+			if (kind == IntrinsicKind::BitwiseOr)
+				return compileTimeIntegerFromBits(*leftBits | *rightBits, integerType);
+			if (kind == IntrinsicKind::BitwiseXor)
+				return compileTimeIntegerFromBits(*leftBits ^ *rightBits, integerType);
+			if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
+				if (*rightBits >= static_cast<std::uint64_t>(integerType.numericSize * 8))
+					return {};
+				unsigned amount = static_cast<unsigned>(*rightBits);
+				std::uint64_t result = kind == IntrinsicKind::ShiftLeft ? *leftBits << amount
+					: integerType.isUnsignedInteger() ? *leftBits >> amount
+						: static_cast<std::uint64_t>(compileTimeShiftRight(signedIntegerFromBits(*leftBits, integerType), amount));
+				return compileTimeIntegerFromBits(result, integerType);
+			}
+			if (kind == IntrinsicKind::Add)
+				return compileTimeIntegerFromBits(*leftBits + *rightBits, integerType);
+			if (kind == IntrinsicKind::Subtract)
+				return compileTimeIntegerFromBits(*leftBits - *rightBits, integerType);
+			if (kind == IntrinsicKind::Multiply)
+				return compileTimeIntegerFromBits(*leftBits * *rightBits, integerType);
+			if (kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo) {
+				if (*rightBits == 0)
+					return {};
+				if (integerType.isUnsignedInteger())
+					return compileTimeIntegerFromBits(
+						kind == IntrinsicKind::Divide ? *leftBits / *rightBits : *leftBits % *rightBits, integerType
+					);
+				std::int64_t leftSigned = signedIntegerFromBits(*leftBits, integerType);
+				std::int64_t rightSigned = signedIntegerFromBits(*rightBits, integerType);
+				if (leftSigned == std::numeric_limits<std::int64_t>::min() && rightSigned == -1)
+					return {};
+				return compileTimeIntegerFromBits(
+					static_cast<std::uint64_t>(kind == IntrinsicKind::Divide ? leftSigned / rightSigned : leftSigned % rightSigned), integerType
+				);
+			}
 		}
 
 		if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
@@ -279,6 +377,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			return *leftNumber <= *rightNumber;
 		if (kind == IntrinsicKind::GreaterThanOrEqual)
 			return *leftNumber >= *rightNumber;
+		if (kind == IntrinsicKind::Min)
+			return std::min(*leftNumber, *rightNumber);
+		if (kind == IntrinsicKind::Max)
+			return std::max(*leftNumber, *rightNumber);
 	}
 
 	for (size_t index = 1; index < expr->arguments.size(); index++)
