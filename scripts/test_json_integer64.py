@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import os
 import re
+import resource
+import signal
 import subprocess
 import sys
 import tempfile
@@ -31,7 +33,15 @@ exposed function unsigned JSON round trip {a 64 bit unsigned integer:value}:
         return output
 """
 
-FAILED_GETTER_SOURCE = """\
+FAILED_SIGNED_GETTER_SOURCE = """\
+import json.dl
+
+parse "1.5" as JSON and set parsed to it
+set outcome to the signed 64 bit JSON integer read from the value of parsed
+print the signed 64 bit integer value of outcome as a line
+"""
+
+FAILED_UNSIGNED_GETTER_SOURCE = """\
 import json.dl
 
 parse "1.5" as JSON and set parsed to it
@@ -40,8 +50,21 @@ print the unsigned 64 bit integer value of outcome as a line
 """
 
 
-def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(arguments, cwd=working_directory, text=True, capture_output=True, check=False)
+def disable_core_dumps() -> None:
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+
+def run(
+    arguments: list[str], working_directory: Path, *, disable_core_dump: bool = False
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        arguments,
+        cwd=working_directory,
+        text=True,
+        capture_output=True,
+        check=False,
+        preexec_fn=disable_core_dumps if disable_core_dump else None,
+    )
 
 
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
@@ -49,9 +72,13 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
         raise RuntimeError(f"command {result.args} exited {result.returncode}:\n{result.stdout}{result.stderr}")
 
 
-def require_failure(result: subprocess.CompletedProcess[str]) -> None:
-    if result.returncode == 0:
-        raise RuntimeError(f"command unexpectedly succeeded: {result.args}")
+def require_abort(result: subprocess.CompletedProcess[str]) -> None:
+    expected_return_code = -signal.SIGABRT
+    if result.returncode != expected_return_code:
+        raise RuntimeError(
+            f"command {result.args} exited {result.returncode}, expected SIGABRT ({expected_return_code}):\\n"
+            f"{result.stdout}{result.stderr}"
+        )
 
 
 def exposed_symbol(llvm_ir: str, function_name: str) -> str:
@@ -117,11 +144,15 @@ int main(void) {{
                 )
                 require_success(run([str(executable)], repo_root))
 
-            failed_getter_source = temporary / "failed_getter.dl"
-            failed_getter_source.write_text(FAILED_GETTER_SOURCE, encoding="utf-8")
-            failed_getter = temporary / "failed_getter"
-            require_success(run([str(compiler), str(failed_getter_source), "-o", str(failed_getter)], repo_root))
-            require_failure(run([str(failed_getter)], repo_root))
+            for name, source in (
+                ("failed_signed_getter", FAILED_SIGNED_GETTER_SOURCE),
+                ("failed_unsigned_getter", FAILED_UNSIGNED_GETTER_SOURCE),
+            ):
+                failed_getter_source = temporary / f"{name}.dl"
+                failed_getter_source.write_text(source, encoding="utf-8")
+                failed_getter = temporary / name
+                require_success(run([str(compiler), str(failed_getter_source), "-o", str(failed_getter)], repo_root))
+                require_abort(run([str(failed_getter)], repo_root, disable_core_dump=True))
     except RuntimeError as error:
         print(error, file=sys.stderr)
         return 1
