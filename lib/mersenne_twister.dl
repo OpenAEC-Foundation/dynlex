@@ -1,0 +1,52 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] Mersenne Twister 32 engine
+    members:
+        state as a 32 bit unsigned integer array of 624 items
+        index as a 32 bit unsigned integer
+
+function seed {a pointer to a Mersenne Twister 32 engine:engine} with {a 32 bit unsigned integer:initialSeed}:
+    execute:
+        set the index of engine to 624 as a 32 bit unsigned integer
+        store initialSeed into the state of engine at 0
+        set position to 1
+        loop while position < 624:
+            set previous to the item at (position - 1) in the state of engine
+            set mixed to previous bitwise xor (previous shifted right by 30)
+            set value to (1812433253 as a 32 bit unsigned integer) * mixed
+            set value to value + (position as a 32 bit unsigned integer)
+            store value into the state of engine at position
+            set position to position + 1
+
+function the next 32 bit unsigned integer from {a pointer to a Mersenne Twister 32 engine:engine}:
+    execute:
+        if the index of engine >= 624 as a 32 bit unsigned integer:
+            set position to 0
+            loop while position < 624:
+                set nextPosition to position + 1
+                if nextPosition = 624:
+                    set nextPosition to 0
+                set stateValue to the item at position in the state of engine
+                set nextStateValue to the item at nextPosition in the state of engine
+                set upper to stateValue bitwise and (2147483648 as a 32 bit unsigned integer)
+                set lower to nextStateValue bitwise and (2147483647 as a 32 bit unsigned integer)
+                set combined to upper bitwise or lower
+                set sourcePosition to position + 397
+                if sourcePosition >= 624:
+                    set sourcePosition to sourcePosition - 624
+                set twistValue to (the item at sourcePosition in the state of engine) bitwise xor (combined shifted right by 1)
+                if (combined bitwise and (1 as a 32 bit unsigned integer)) != 0 as a 32 bit unsigned integer:
+                    set twistValue to twistValue bitwise xor (2567483615 as a 32 bit unsigned integer)
+                store twistValue into the state of engine at position
+                set position to position + 1
+            set the index of engine to 0 as a 32 bit unsigned integer
+        set statePosition to the index of engine
+        set value to the item at statePosition in the state of engine
+        set value to value bitwise xor (value shifted right by 11)
+        set value to value bitwise xor ((value shifted left by 7) bitwise and (2636928640 as a 32 bit unsigned integer))
+        set value to value bitwise xor ((value shifted left by 15) bitwise and (4022730752 as a 32 bit unsigned integer))
+        set value to value bitwise xor (value shifted right by 18)
+        set the index of engine to (statePosition + 1) as a 32 bit unsigned integer
+        return value

@@ -1,0 +1,64 @@
+import lib/mersenne_twister.dl
+
+function print first values from {a 32 bit unsigned integer:seed}:
+    execute:
+        set generator to a new Mersenne Twister 32 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with seed
+        print the next 32 bit unsigned integer from generatorAddress as a line
+        print the next 32 bit unsigned integer from generatorAddress as a line
+        print the next 32 bit unsigned integer from generatorAddress as a line
+        print the next 32 bit unsigned integer from generatorAddress as a line
+        print the next 32 bit unsigned integer from generatorAddress as a line
+
+function the checksum after 10000 values from {a 32 bit unsigned integer:seed}:
+    execute:
+        set generator to a new Mersenne Twister 32 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with seed
+        set result to 0 as a 32 bit unsigned integer
+        set count to 0
+        loop while count < 10000:
+            set result to result bitwise xor (the next 32 bit unsigned integer from generatorAddress)
+            set count to count + 1
+        return result
+
+function exercise independent engines:
+    execute:
+        set first to a new Mersenne Twister 32 engine
+        set second to a new Mersenne Twister 32 engine
+        set firstAddress to the address of first
+        set secondAddress to the address of second
+        seed firstAddress with (5489 as a 32 bit unsigned integer)
+        seed secondAddress with (5489 as a 32 bit unsigned integer)
+        print the next 32 bit unsigned integer from firstAddress as a line
+        print the next 32 bit unsigned integer from secondAddress as a line
+        print the next 32 bit unsigned integer from firstAddress as a line
+        print the next 32 bit unsigned integer from secondAddress as a line
+
+function exercise copy and reset:
+    execute:
+        set original to a new Mersenne Twister 32 engine
+        set originalAddress to the address of original
+        seed originalAddress with (1 as a 32 bit unsigned integer)
+        set clone to original
+        set cloneAddress to the address of clone
+        print the next 32 bit unsigned integer from originalAddress as a line
+        print the next 32 bit unsigned integer from cloneAddress as a line
+        print the next 32 bit unsigned integer from originalAddress as a line
+        print the next 32 bit unsigned integer from cloneAddress as a line
+        seed cloneAddress with (1 as a 32 bit unsigned integer)
+        print the next 32 bit unsigned integer from cloneAddress as a line
+
+print first values from (0 as a 32 bit unsigned integer)
+print first values from (1 as a 32 bit unsigned integer)
+print first values from (5489 as a 32 bit unsigned integer)
+print first values from (2147483648 as a 32 bit unsigned integer)
+print first values from (4294967295 as a 32 bit unsigned integer)
+print the checksum after 10000 values from (0 as a 32 bit unsigned integer) as a line
+print the checksum after 10000 values from (1 as a 32 bit unsigned integer) as a line
+print the checksum after 10000 values from (5489 as a 32 bit unsigned integer) as a line
+print the checksum after 10000 values from (2147483648 as a 32 bit unsigned integer) as a line
+print the checksum after 10000 values from (4294967295 as a 32 bit unsigned integer) as a line
+exercise independent engines
+exercise copy and reset
