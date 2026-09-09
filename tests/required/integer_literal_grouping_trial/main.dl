@@ -1,17 +1,3 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
+import lib/std.dl
 
-function negative value:
-    replacement:
-        @intrinsic("negate", value)
-
-function {integer:left} + {integer:right}:
-    replacement:
-        @intrinsic("add", left, right)
-
-function ignore value:
-    replacement:
-        @intrinsic("discard", value)
-
-ignore negative 9223372036854775808 + 1
+print (the negative of 9223372036854775808 + 1) as a line
