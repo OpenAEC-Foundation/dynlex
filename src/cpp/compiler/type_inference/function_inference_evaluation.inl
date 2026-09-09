@@ -1,14 +1,13 @@
 #include "llvm/IR/Module.h"
 
+#include "compile_time_numeric_token.inl"
 #include "function_inference_integer_evaluation.inl"
 #include "function_inference_type_merging.inl"
 #include "numericLiteral.h"
-#include "compile_time_numeric_token.inl"
 
 template <typename ReadArgumentValueFn, typename ReadStoredValueFn>
 static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
-	Expression *expr, ParseContext &parseContext, ReadArgumentValueFn &&readArgumentValueFn,
-	ReadStoredValueFn &&readStoredValue
+	Expression *expr, ParseContext &parseContext, ReadArgumentValueFn &&readArgumentValueFn, ReadStoredValueFn &&readStoredValue
 ) {
 	if (!expr)
 		return {};
@@ -123,10 +122,27 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		auto *boolean = std::get_if<bool>(&value);
 		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
 	}
-	if (kind == IntrinsicKind::Abs || kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil ||
-		kind == IntrinsicKind::Round) {
+	if (kind == IntrinsicKind::Abs || isRoundingIntrinsicKind(kind)) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		return expr->type.numericElementType().isUnsignedInteger() ? value : CompileTimeValue{};
+		DataType elementType = expr->type.numericElementType();
+		if (elementType.isUnsignedInteger() || (elementType.isInteger() && isRoundingIntrinsicKind(kind)))
+			return value;
+		const auto *number = std::get_if<double>(&value);
+		if (!number)
+			return {};
+		double operand = elementType.numericSize == 4 ? static_cast<float>(*number) : *number;
+		switch (kind) {
+		case IntrinsicKind::Abs:
+			return std::fabs(operand);
+		case IntrinsicKind::Floor:
+			return std::floor(operand);
+		case IntrinsicKind::Ceil:
+			return std::ceil(operand);
+		case IntrinsicKind::Round:
+			return std::round(operand);
+		default:
+			crashCompilerBug("unexpected rounding intrinsic during constant evaluation");
+		}
 	}
 	if (kind == IntrinsicKind::BitwiseNot) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
@@ -591,7 +607,8 @@ static PureExpressionExecutionResult evaluatePureExpression(
 		},
 				[&](Expression *expression) {
 			return pureExecutionStoredValue(expression, state);
-		}),
+		}
+			),
 			false,
 			{},
 		};

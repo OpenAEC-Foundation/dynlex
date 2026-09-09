@@ -202,6 +202,10 @@ inline bool isPointerArithmeticIntrinsic(ArithmeticIntrinsicKind kind) {
 	return kind == ArithmeticIntrinsicKind::Add || kind == ArithmeticIntrinsicKind::Subtract;
 }
 
+constexpr bool isRoundingIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil || kind == IntrinsicKind::Round;
+}
+
 inline bool isLogicalIntrinsicKind(IntrinsicKind kind) {
 	return kind == IntrinsicKind::And || kind == IntrinsicKind::Or || kind == IntrinsicKind::Not;
 }

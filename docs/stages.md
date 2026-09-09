@@ -139,6 +139,11 @@ fits the target signed or unsigned width, matching the native LLVM conversion.
 The positive `2^63` literal participates in floating-point conversion, Boolean
 conversion and mixed numeric comparison like other unsigned values.
 
+Floor, ceiling, and round preserve an integer operand exactly, without converting it to floating point.
+For floating-point operands they preserve the operand width; round chooses the nearest integer value,
+with half-way values rounded away from zero. Constant evaluation uses the same operand precision and
+rounding rules as native code generation.
+
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.
 

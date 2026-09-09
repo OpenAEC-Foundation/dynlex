@@ -743,9 +743,9 @@ CodegenResult generateIntrinsicCode(
 		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			DataType operandType = args.size() == 2 ? finalizedExpressionType(context, args[1]) : DataType{};
-			if ((kind == IntrinsicKind::Abs || kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil ||
-				 kind == IntrinsicKind::Round) &&
-				operandType.numericElementType().isUnsignedInteger()) {
+			DataType elementType = operandType.numericElementType();
+			if ((isRoundingIntrinsicKind(kind) && elementType.isInteger()) ||
+				(kind == IntrinsicKind::Abs && elementType.isUnsignedInteger())) {
 				llvm::Value *value = nullptr;
 				if (!generateRuntimeValue(args[1], value))
 					return CodegenResult::failure();
