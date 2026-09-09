@@ -670,6 +670,7 @@ run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "
 run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_options.py" "$COMPILER"
 run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
 run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native_pointer_calls.py" "$COMPILER"
+run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."

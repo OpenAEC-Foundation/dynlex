@@ -1,0 +1,41 @@
+import lib/std.dl
+
+function atomically load {pointer:address}:
+    replacement:
+        @intrinsic("atomic load", address, "seq_cst")
+
+function atomically load relaxed {pointer:address}:
+    replacement:
+        @intrinsic("atomic load", address, "relaxed")
+
+function atomically load acquire {pointer:address}:
+    replacement:
+        @intrinsic("atomic load", address, "acquire")
+
+function atomically store {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic store", address, value, "seq_cst")
+
+function atomically store relaxed {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic store", address, value, "relaxed")
+
+function atomically store release {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic store", address, value, "release")
+
+function atomically exchange {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic exchange", address, value, "seq_cst")
+
+function atomically add {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic fetch add", address, value, "seq_cst")
+
+function atomically add acquire release {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic fetch add", address, value, "acq_rel")
+
+function atomically subtract {value} at {pointer:address}:
+    replacement:
+        @intrinsic("atomic fetch sub", address, value, "seq_cst")

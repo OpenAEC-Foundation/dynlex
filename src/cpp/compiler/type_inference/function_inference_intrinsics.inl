@@ -264,9 +264,9 @@ case Expression::Kind::IntrinsicCall: {
 		case IntrinsicReturnKind::Float:
 			expr->type = {DataType::Kind::Float, 4};
 			break;
-		case IntrinsicReturnKind::Custom:
-#include "intrinsics/aggregate_inference.inl"
-			if (kind == IntrinsicKind::ShaderInterpolantInput) {
+			case IntrinsicReturnKind::Custom:
+	#include "intrinsics/atomic_inference.inl"
+				if (kind == IntrinsicKind::ShaderInterpolantInput) {
 				expr->type = {DataType::Kind::Vector};
 				expr->type.arraySize = 4;
 				expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);

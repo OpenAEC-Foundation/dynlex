@@ -372,6 +372,13 @@ must ensure the runtime pointer and stated signature match, and should keep this
 that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
 site.
 
+Atomic scalar access uses `@intrinsic("atomic load", pointer, order)`, `atomic store`, `atomic exchange`, `atomic fetch add`,
+and `atomic fetch sub`. Orders are literal `relaxed`, `acquire`, `release`, `acq_rel`, or `seq_cst`; loads cannot use release or
+acq_rel, and stores cannot use acquire or acq_rel. Operations are CPU-only. The pointee must be a concrete naturally aligned scalar:
+Boolean, 8/16/32/64-bit signed or unsigned integer, 32/64-bit float, or pointer; fetch add/sub only accept integers. Boolean storage
+is one byte. The caller owns correct scalar storage alignment and must not mix atomic and non-atomic concurrent accesses. `lib/atomic.dl`
+keeps ordering metadata in natural-language wrappers, including default sequentially consistent and relaxed/release/acquire forms.
+
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.

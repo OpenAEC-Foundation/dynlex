@@ -1,4 +1,5 @@
 #include "arithmeticTypePromotion.h"
+#include "atomicIntrinsics.h"
 #include "classDefinition.h"
 #include "codegenInternal.h"
 #include "compileTimeValue.h"
@@ -871,4 +872,5 @@ CodegenResult generateIntrinsicCode(
 		return nullptr;
 	}
 
-#include "codegenIntrinsicEffects.inl"
+	#include "codegenAtomicIntrinsics.inl"
+	#include "codegenIntrinsicEffects.inl"
