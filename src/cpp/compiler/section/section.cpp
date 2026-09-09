@@ -365,17 +365,12 @@ static Expression *createArrayLiteral(
 	arrayExpr->kind = Expression::Kind::ArrayLiteral;
 
 	auto processElement = [&](StringHierarchy *elementNode) -> bool {
-		Expression *elementExpr = nullptr;
-		if (elementNode->character == '"') {
-			elementExpr = createStringLiteral(range, elementNode);
-		} else {
-			StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
-			elementExpr = section->detectPatternsRecursively(
-				context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function,
-				registerPatternReferences
-			);
-			delete clonedNode;
-		}
+		StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
+		Expression *elementExpr = section->detectPatternsRecursively(
+			context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function,
+			registerPatternReferences
+		);
+		delete clonedNode;
 		if (!elementExpr)
 			return false;
 		elementExpr->isExplicitGroup = true;
@@ -383,29 +378,18 @@ static Expression *createArrayLiteral(
 		return true;
 	};
 
-	if (!arrayNode->children.empty()) {
-		if (arrayNode->children[0]->character == ',') {
-			for (StringHierarchy *child : arrayNode->children) {
-				if (!processElement(child))
-					return nullptr;
-			}
-		} else {
-			if (!processElement(arrayNode->children[0]))
+	if (!arrayNode->children.empty() && arrayNode->children[0]->character == ',') {
+		for (StringHierarchy *child : arrayNode->children) {
+			if (!processElement(child))
 				return nullptr;
 		}
 	} else {
-		size_t elementStart = arrayNode->start;
-		size_t elementEnd = arrayNode->end;
-		while (elementStart < elementEnd && std::isspace(static_cast<unsigned char>(range.subString[elementStart])))
-			elementStart++;
-		while (elementEnd > elementStart && std::isspace(static_cast<unsigned char>(range.subString[elementEnd - 1])))
-			elementEnd--;
-		if (elementStart < elementEnd) {
-			StringHierarchy elementNode(0, elementStart);
-			elementNode.end = elementEnd;
-			if (!processElement(&elementNode))
-				return nullptr;
-		}
+		std::string_view contents = range.subString.substr(arrayNode->start, arrayNode->end - arrayNode->start);
+		bool hasElement = std::any_of(contents.begin(), contents.end(), [](unsigned char character) {
+			return !std::isspace(character);
+		});
+		if (hasElement && !processElement(arrayNode))
+			return nullptr;
 	}
 	return arrayExpr;
 }

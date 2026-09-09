@@ -20,6 +20,9 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 - What patterns does each section have?
 - We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.
 
+Every array element is parsed as a complete expression. A single-element array uses its entire interior text and nested
+bracket hierarchy, just as comma-separated elements do; a nested string or parenthesis is not the element by itself.
+
 Function declaration shorthands are normalized before section analysis. An action declaration using `to` and a value
 declaration using `to get` become ordinary function and `execute` sections. A one-line declaration using `means:` becomes
 an ordinary flex function and `replacement` section. Logical indentation and source slices preserve the authored nesting
