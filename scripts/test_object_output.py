@@ -45,6 +45,26 @@ exposed function signed halfword {16 bit integer:value}:
 exposed function foreign signed octet {8 bit integer:value}:
     execute:
         return @intrinsic("call", "", "octet_value", a 32 bit integer, value)
+
+exposed function unsigned octet {8 bit unsigned integer:value}:
+    execute:
+        return value
+
+exposed function unsigned halfword {16 bit unsigned integer:value}:
+    execute:
+        return value
+
+exposed function foreign unsigned octet {8 bit unsigned integer:value}:
+    execute:
+        return @intrinsic("call", "", "unsigned_octet_value", a 32 bit unsigned integer, value)
+
+exposed function foreign unsigned halfword {16 bit unsigned integer:value}:
+    execute:
+        return @intrinsic("call", "", "unsigned_halfword_value", a 32 bit unsigned integer, value)
+
+exposed function foreign unsigned result:
+    execute:
+        return @intrinsic("call", "", "unsigned_halfword_result", a 16 bit unsigned integer)
 """
 
 EXECUTABLE_SOURCE = """\
@@ -84,6 +104,11 @@ FOREIGN_PREDICATE_SYMBOL = "foreign_" + PREDICATE_SYMBOL
 OCTET_SYMBOL = "signed_octet_38_bit_integer8value5_callable_i8"
 HALFWORD_SYMBOL = "signed_halfword_316_bit_integer8value5_callable_i16"
 FOREIGN_OCTET_SYMBOL = "foreign_" + OCTET_SYMBOL
+UNSIGNED_OCTET_SYMBOL = "unsigned_octet_38_bit_unsigned_integer8value5_callable_u8"
+UNSIGNED_HALFWORD_SYMBOL = "unsigned_halfword_316_bit_unsigned_integer8value5_callable_u16"
+FOREIGN_UNSIGNED_OCTET_SYMBOL = "foreign_" + UNSIGNED_OCTET_SYMBOL
+FOREIGN_UNSIGNED_HALFWORD_SYMBOL = "foreign_" + UNSIGNED_HALFWORD_SYMBOL
+FOREIGN_UNSIGNED_RESULT_SYMBOL = "foreign_unsigned_result_callable"
 
 
 def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
@@ -153,9 +178,17 @@ extern int32_t {FOREIGN_PREDICATE_SYMBOL}(float left, float right, float minimum
 extern int8_t {OCTET_SYMBOL}(int8_t value);
 extern int16_t {HALFWORD_SYMBOL}(int16_t value);
 extern int32_t {FOREIGN_OCTET_SYMBOL}(int8_t value);
+extern uint8_t {UNSIGNED_OCTET_SYMBOL}(uint8_t value);
+extern uint16_t {UNSIGNED_HALFWORD_SYMBOL}(uint16_t value);
+extern uint32_t {FOREIGN_UNSIGNED_OCTET_SYMBOL}(uint8_t value);
+extern uint32_t {FOREIGN_UNSIGNED_HALFWORD_SYMBOL}(uint16_t value);
+extern uint16_t {FOREIGN_UNSIGNED_RESULT_SYMBOL}(void);
 
 int32_t bool_value(bool value) {{ return value; }}
 int32_t octet_value(int8_t value) {{ return value; }}
+uint32_t unsigned_octet_value(uint8_t value) {{ return value; }}
+uint32_t unsigned_halfword_value(uint16_t value) {{ return value; }}
+uint16_t unsigned_halfword_result(void) {{ return UINT16_MAX; }}
 
 int main(void) {{
     int32_t value = 41;
@@ -169,6 +202,11 @@ int main(void) {{
     if ((int){OCTET_SYMBOL}(-128) != -128 || (int){OCTET_SYMBOL}(127) != 127) return 7;
     if ((int){HALFWORD_SYMBOL}(-32768) != -32768 || (int){HALFWORD_SYMBOL}(32767) != 32767) return 8;
     if ({FOREIGN_OCTET_SYMBOL}(-128) != -128 || {FOREIGN_OCTET_SYMBOL}(127) != 127) return 9;
+    if ((int){UNSIGNED_OCTET_SYMBOL}(0) != 0 || (int){UNSIGNED_OCTET_SYMBOL}(UINT8_MAX) != UINT8_MAX) return 10;
+    if ((int){UNSIGNED_HALFWORD_SYMBOL}(0) != 0 || (int){UNSIGNED_HALFWORD_SYMBOL}(UINT16_MAX) != UINT16_MAX) return 11;
+    if ({FOREIGN_UNSIGNED_OCTET_SYMBOL}(UINT8_MAX) != UINT8_MAX) return 12;
+    if ({FOREIGN_UNSIGNED_HALFWORD_SYMBOL}(UINT16_MAX) != UINT16_MAX) return 13;
+    if ((int){FOREIGN_UNSIGNED_RESULT_SYMBOL}() != UINT16_MAX) return 14;
     return 0;
 }}
 """,
@@ -208,6 +246,14 @@ int main(void) {{
                 raise RuntimeError("exposed narrow integer omitted its native ABI contract")
             if not re.search(rf"call i32 @octet_value\(i8 {integer_extension}", llvm_ir):
                 raise RuntimeError("foreign narrow integer call omitted its native ABI contract")
+            unsigned_extension = "" if uses_aapcs64 or uses_win64 else "zeroext "
+            for width, symbol in ((8, UNSIGNED_OCTET_SYMBOL), (16, UNSIGNED_HALFWORD_SYMBOL)):
+                if not re.search(rf"^define {unsigned_extension}i{width} @{symbol}\(i{width} {unsigned_extension}%value\)", llvm_ir, flags=re.MULTILINE):
+                    raise RuntimeError("exposed unsigned integer omitted its native ABI contract")
+            if not re.search(rf"call i32 @unsigned_octet_value\(i8 {unsigned_extension}", llvm_ir):
+                raise RuntimeError("foreign unsigned argument omitted its native ABI contract")
+            if not re.search(rf"call {unsigned_extension}i16 @unsigned_halfword_result\(\)", llvm_ir):
+                raise RuntimeError("foreign unsigned result omitted its native ABI contract")
 
             negative_fixed_value = temporary / "negative-fixed-value.dl"
             negative_fixed_value.write_text(NEGATIVE_FIXED_VALUE_SOURCE, encoding="utf-8")
