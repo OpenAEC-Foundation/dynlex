@@ -1,0 +1,6 @@
+import lib/std.dl
+
+set maximum to 3.4028234663852886e38 as a 32 bit floating-point number
+set tiny to 1e-3 as a 32 bit floating-point number
+
+print tiny as a line

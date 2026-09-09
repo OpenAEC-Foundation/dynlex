@@ -640,6 +640,17 @@ Expression *Section::detectPatternsRecursively(
 			if (fracStart == pos)
 				pos = dotPos; // keep integer-only match if '.' isn't followed by digits
 		}
+		if (pos < patternSnapshot.size() && (patternSnapshot[pos] == 'e' || patternSnapshot[pos] == 'E')) {
+			size_t exponentStart = pos;
+			pos++;
+			if (pos < patternSnapshot.size() && (patternSnapshot[pos] == '+' || patternSnapshot[pos] == '-'))
+				pos++;
+			size_t exponentDigitsStart = pos;
+			while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+				pos++;
+			if (exponentDigitsStart == pos)
+				pos = exponentStart;
+		}
 
 		// Word boundary on the right to avoid partial matches in identifiers.
 		if (pos < patternSnapshot.size() && std::isalnum(static_cast<unsigned char>(patternSnapshot[pos]))) {
