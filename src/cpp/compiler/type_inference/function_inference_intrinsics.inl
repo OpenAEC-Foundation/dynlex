@@ -2,6 +2,7 @@ case Expression::Kind::IntrinsicCall: {
 #include "intrinsic_preflight_inference.inl"
 	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
 		break;
+#include "intrinsics/atomic_inference.inl"
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
@@ -264,14 +265,9 @@ case Expression::Kind::IntrinsicCall: {
 		case IntrinsicReturnKind::Float:
 			expr->type = {DataType::Kind::Float, 4};
 			break;
-			case IntrinsicReturnKind::Custom:
-	#include "intrinsics/atomic_inference.inl"
-				if (kind == IntrinsicKind::ShaderInterpolantInput) {
-				expr->type = {DataType::Kind::Vector};
-				expr->type.arraySize = 4;
-				expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-				break;
-			}
+		case IntrinsicReturnKind::Custom:
+#include "intrinsics/aggregate_inference.inl"
+#include "intrinsics/shader_custom_inference.inl"
 			if (handledAggregateIntrinsic)
 				break;
 			if (kind == IntrinsicKind::LifecycleValue) {
@@ -328,7 +324,9 @@ case Expression::Kind::IntrinsicCall: {
 			} else if (isExternalCallIntrinsicKind(kind)) {
 				if (kind == IntrinsicKind::CallPointer) {
 					if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
-						failWithDetail(expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0);
+						failWithDetail(
+							expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0
+						);
 						break;
 					}
 					DataType calleeType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);

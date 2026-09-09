@@ -872,5 +872,5 @@ CodegenResult generateIntrinsicCode(
 		return nullptr;
 	}
 
-	#include "codegenAtomicIntrinsics.inl"
-	#include "codegenIntrinsicEffects.inl"
+#include "codegenAtomicIntrinsics.inl"
+#include "codegenIntrinsicEffects.inl"

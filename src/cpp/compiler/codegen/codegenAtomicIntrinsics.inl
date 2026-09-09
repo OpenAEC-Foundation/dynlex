@@ -4,11 +4,16 @@ if (isAtomicIntrinsicKind(kind)) {
 	requireCompilerInvariant(sourceOrder.has_value(), "atomic operation reached codegen with an invalid memory order");
 	auto toLLVMOrder = [](AtomicMemoryOrder order) {
 		switch (order) {
-		case AtomicMemoryOrder::Relaxed: return llvm::AtomicOrdering::Monotonic;
-		case AtomicMemoryOrder::Acquire: return llvm::AtomicOrdering::Acquire;
-		case AtomicMemoryOrder::Release: return llvm::AtomicOrdering::Release;
-		case AtomicMemoryOrder::AcquireRelease: return llvm::AtomicOrdering::AcquireRelease;
-		case AtomicMemoryOrder::SequentiallyConsistent: return llvm::AtomicOrdering::SequentiallyConsistent;
+		case AtomicMemoryOrder::Relaxed:
+			return llvm::AtomicOrdering::Monotonic;
+		case AtomicMemoryOrder::Acquire:
+			return llvm::AtomicOrdering::Acquire;
+		case AtomicMemoryOrder::Release:
+			return llvm::AtomicOrdering::Release;
+		case AtomicMemoryOrder::AcquireRelease:
+			return llvm::AtomicOrdering::AcquireRelease;
+		case AtomicMemoryOrder::SequentiallyConsistent:
+			return llvm::AtomicOrdering::SequentiallyConsistent;
 		}
 		crashCompilerBug("unknown atomic memory order");
 	};
@@ -24,7 +29,8 @@ if (isAtomicIntrinsicKind(kind)) {
 		return valueType.kind == DataType::Kind::Bool ? builder.CreateZExt(value, storageType, "atomic_bool_store") : value;
 	};
 	auto fromStorage = [&](llvm::Value *value) -> llvm::Value * {
-		return valueType.kind == DataType::Kind::Bool ? builder.CreateTrunc(value, builder.getInt1Ty(), "atomic_bool_load") : value;
+		return valueType.kind == DataType::Kind::Bool ? builder.CreateTrunc(value, builder.getInt1Ty(), "atomic_bool_load")
+													  : value;
 	};
 	if (kind == IntrinsicKind::AtomicLoad) {
 		llvm::LoadInst *load = builder.CreateAlignedLoad(storageType, pointer, alignment, "atomic_load");
@@ -40,9 +46,9 @@ if (isAtomicIntrinsicKind(kind)) {
 		store->setAtomic(order);
 		return nullptr;
 	}
-	llvm::AtomicRMWInst::BinOp operation = kind == IntrinsicKind::AtomicExchange
-		? llvm::AtomicRMWInst::Xchg
-		: kind == IntrinsicKind::AtomicFetchAdd ? llvm::AtomicRMWInst::Add : llvm::AtomicRMWInst::Sub;
+	llvm::AtomicRMWInst::BinOp operation = kind == IntrinsicKind::AtomicExchange   ? llvm::AtomicRMWInst::Xchg
+										   : kind == IntrinsicKind::AtomicFetchAdd ? llvm::AtomicRMWInst::Add
+																				   : llvm::AtomicRMWInst::Sub;
 	llvm::AtomicRMWInst *result = builder.CreateAtomicRMW(operation, pointer, value, alignment, order);
 	return fromStorage(result);
 }

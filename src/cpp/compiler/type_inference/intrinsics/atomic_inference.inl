@@ -24,9 +24,11 @@ if (isAtomicIntrinsicKind(kind)) {
 		break;
 	}
 	DataType valueType = pointerType.dereferenced();
-	bool scalar = valueType.isPointer() || valueType.kind == DataType::Kind::Bool ||
-		((valueType.kind == DataType::Kind::Int || valueType.kind == DataType::Kind::UInt || valueType.kind == DataType::Kind::Float) &&
-		 (valueType.numericSize == 1 || valueType.numericSize == 2 || valueType.numericSize == 4 || valueType.numericSize == 8));
+	bool integerScalar =
+		(valueType.kind == DataType::Kind::Int || valueType.kind == DataType::Kind::UInt) &&
+		(valueType.numericSize == 1 || valueType.numericSize == 2 || valueType.numericSize == 4 || valueType.numericSize == 8);
+	bool floatScalar = valueType.kind == DataType::Kind::Float && (valueType.numericSize == 4 || valueType.numericSize == 8);
+	bool scalar = valueType.isPointer() || valueType.kind == DataType::Kind::Bool || integerScalar || floatScalar;
 	if (!valueType.isConcrete() || !scalar || typeHasManagedLifecycle(valueType)) {
 		failWithDetail(expr->arguments[1]->range, "Atomic operation requires a supported concrete scalar pointee", 0);
 		break;
@@ -43,8 +45,10 @@ if (isAtomicIntrinsicKind(kind)) {
 			failWithDetail(expr->arguments[2]->range, "Atomic operation value type must exactly match its pointer pointee", 0);
 			break;
 		}
+		Expression *storedValue =
+			kind == IntrinsicKind::AtomicStore || kind == IntrinsicKind::AtomicExchange ? expr->arguments[2] : nullptr;
 		applyStoreThroughAddress(
-			context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), expr->arguments[2],
+			context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), storedValue,
 			flexBindingFrameStack
 		);
 	}
@@ -52,5 +56,3 @@ if (isAtomicIntrinsicKind(kind)) {
 	context.setExpressionValue(expr, {});
 	break;
 }
-
-#include "aggregate_inference.inl"

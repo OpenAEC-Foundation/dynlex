@@ -7,19 +7,21 @@
 enum class AtomicMemoryOrder { Relaxed, Acquire, Release, AcquireRelease, SequentiallyConsistent };
 
 constexpr bool isAtomicIntrinsicKind(IntrinsicKind kind) {
-	return kind == IntrinsicKind::AtomicLoad || kind == IntrinsicKind::AtomicStore ||
-		   kind == IntrinsicKind::AtomicExchange || kind == IntrinsicKind::AtomicFetchAdd ||
-		   kind == IntrinsicKind::AtomicFetchSub;
+	return kind == IntrinsicKind::AtomicLoad || kind == IntrinsicKind::AtomicStore || kind == IntrinsicKind::AtomicExchange ||
+		   kind == IntrinsicKind::AtomicFetchAdd || kind == IntrinsicKind::AtomicFetchSub;
 }
 
-constexpr bool atomicIntrinsicWrites(IntrinsicKind kind) { return kind != IntrinsicKind::AtomicLoad; }
-
 inline std::optional<AtomicMemoryOrder> parseAtomicMemoryOrder(std::string_view text) {
-	if (text == "relaxed") return AtomicMemoryOrder::Relaxed;
-	if (text == "acquire") return AtomicMemoryOrder::Acquire;
-	if (text == "release") return AtomicMemoryOrder::Release;
-	if (text == "acq_rel") return AtomicMemoryOrder::AcquireRelease;
-	if (text == "seq_cst") return AtomicMemoryOrder::SequentiallyConsistent;
+	if (text == "relaxed")
+		return AtomicMemoryOrder::Relaxed;
+	if (text == "acquire")
+		return AtomicMemoryOrder::Acquire;
+	if (text == "release")
+		return AtomicMemoryOrder::Release;
+	if (text == "acq_rel")
+		return AtomicMemoryOrder::AcquireRelease;
+	if (text == "seq_cst")
+		return AtomicMemoryOrder::SequentiallyConsistent;
 	return std::nullopt;
 }
 

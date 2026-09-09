@@ -1,41 +1,41 @@
 import lib/std.dl
 
-function atomically load {pointer:address}:
+function atomically load {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic load", address, "seq_cst")
 
-function atomically load relaxed {pointer:address}:
+function atomically load relaxed {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic load", address, "relaxed")
 
-function atomically load acquire {pointer:address}:
+function atomically load acquire {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic load", address, "acquire")
 
-function atomically store {value} at {pointer:address}:
+function atomically store {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic store", address, value, "seq_cst")
 
-function atomically store relaxed {value} at {pointer:address}:
+function atomically store relaxed {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic store", address, value, "relaxed")
 
-function atomically store release {value} at {pointer:address}:
+function atomically store release {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic store", address, value, "release")
 
-function atomically exchange {value} at {pointer:address}:
+function atomically exchange {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic exchange", address, value, "seq_cst")
 
-function atomically add {value} at {pointer:address}:
+function atomically add {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic fetch add", address, value, "seq_cst")
 
-function atomically add acquire release {value} at {pointer:address}:
+function atomically add acquire release {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic fetch add", address, value, "acq_rel")
 
-function atomically subtract {value} at {pointer:address}:
+function atomically subtract {a value:value} at {a pointer to a value:address}:
     replacement:
         @intrinsic("atomic fetch sub", address, value, "seq_cst")
