@@ -1,0 +1,89 @@
+import lib/array.dl
+import lib/sort.dl
+
+class:
+    patterns:
+        [a|] weighted index record
+    members:
+        weight as a 32 bit floating-point number
+        index as a 32 bit unsigned integer
+
+function compare unsigned values {pointer:left} and {pointer:right}:
+    execute:
+        set first to @intrinsic("dereference", left as a pointer to a 32 bit unsigned integer)
+        set second to @intrinsic("dereference", right as a pointer to a 32 bit unsigned integer)
+        if first < second:
+            return 0 - 1
+        if first > second:
+            return 1
+        return 0
+
+function compare weighted records {pointer:left} and {pointer:right}:
+    execute:
+        set first to @intrinsic("dereference", left as a pointer to a weighted index record)
+        set second to @intrinsic("dereference", right as a pointer to a weighted index record)
+        set firstWeight to @intrinsic("property", first, "weight")
+        set secondWeight to @intrinsic("property", second, "weight")
+        if firstWeight > secondWeight:
+            return 0 - 1
+        if firstWeight < secondWeight:
+            return 1
+        set firstIndex to @intrinsic("property", first, "index")
+        set secondIndex to @intrinsic("property", second, "index")
+        if firstIndex < secondIndex:
+            return 0 - 1
+        if firstIndex > secondIndex:
+            return 1
+        return 0
+
+set comparator to the function named "compare unsigned values $ and $"
+allocate 5 slots of a 32 bit unsigned integer and set values to it
+@intrinsic("store at", values + 0, 4294967295 as a 32 bit unsigned integer)
+@intrinsic("store at", values + 1, 1 as a 32 bit unsigned integer)
+@intrinsic("store at", values + 2, 2147483648 as a 32 bit unsigned integer)
+@intrinsic("store at", values + 3, 1 as a 32 bit unsigned integer)
+@intrinsic("store at", values + 4, 0 as a 32 bit unsigned integer)
+sort native array at (values as a pointer) with (5 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using comparator
+print the value at (values + 0) as a line
+print the value at (values + 1) as a line
+print the value at (values + 2) as a line
+print the value at (values + 3) as a line
+print the value at (values + 4) as a line
+@intrinsic("call", "libc", "free", nothing, values)
+
+allocate one slot of a 32 bit unsigned integer and set singleton to it
+@intrinsic("store at", singleton, 17 as a 32 bit unsigned integer)
+sort native array at (singleton as a pointer) with (1 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using comparator
+print the value at singleton as a line
+@intrinsic("call", "libc", "free", nothing, singleton)
+
+allocate one slot of a 32 bit unsigned integer and set empty to it
+@intrinsic("store at", empty, 29 as a 32 bit unsigned integer)
+sort native array at (empty as a pointer) with (0 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using comparator
+print the value at empty as a line
+@intrinsic("call", "libc", "free", nothing, empty)
+
+allocate 5 slots of a weighted index record and set records to it
+@intrinsic("initialize at", records + 0, @intrinsic("construct", a weighted index record, 2.5, 8 as a 32 bit unsigned integer))
+@intrinsic("initialize at", records + 1, @intrinsic("construct", a weighted index record, 1.25, 4 as a 32 bit unsigned integer))
+@intrinsic("initialize at", records + 2, @intrinsic("construct", a weighted index record, 2.5, 3 as a 32 bit unsigned integer))
+@intrinsic("initialize at", records + 3, @intrinsic("construct", a weighted index record, 1.25, 2 as a 32 bit unsigned integer))
+@intrinsic("initialize at", records + 4, @intrinsic("construct", a weighted index record, 3.75, 1 as a 32 bit unsigned integer))
+set recordComparator to the function named "compare weighted records $ and $"
+sort native array at (records as a pointer) with (5 as a word sized unsigned integer) items of (8 as a word sized unsigned integer) bytes using recordComparator
+set record to @intrinsic("dereference", records + 0)
+print (@intrinsic("property", record, "weight")) as a line
+print (@intrinsic("property", record, "index")) as a line
+set record to @intrinsic("dereference", records + 1)
+print (@intrinsic("property", record, "weight")) as a line
+print (@intrinsic("property", record, "index")) as a line
+set record to @intrinsic("dereference", records + 2)
+print (@intrinsic("property", record, "weight")) as a line
+print (@intrinsic("property", record, "index")) as a line
+set record to @intrinsic("dereference", records + 3)
+print (@intrinsic("property", record, "weight")) as a line
+print (@intrinsic("property", record, "index")) as a line
+set record to @intrinsic("dereference", records + 4)
+print (@intrinsic("property", record, "weight")) as a line
+print (@intrinsic("property", record, "index")) as a line
+@intrinsic("call", "libc", "free", nothing, records)

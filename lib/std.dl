@@ -188,6 +188,10 @@ function [a|] word sized integer:
     replacement:
         @intrinsic("type", "int", @intrinsic("build info", "word size"))
 
+function [a|] word sized unsigned integer:
+    replacement:
+        @intrinsic("type", "uint", @intrinsic("build info", "word size"))
+
 function [a|] C long integer:
     replacement:
         @intrinsic("type", "int", @intrinsic("build info", "c long size"))
