@@ -1,0 +1,17 @@
+import lib/normal_distribution.dl
+
+set engine32 to a new Mersenne Twister 32 engine
+set engine32Pointer to the address of engine32
+seed engine32Pointer with (5489 as a 32 bit unsigned integer)
+set state32 to a new normal distribution state
+set state32Pointer to the address of state32
+print the next normal value from state32Pointer using engine32Pointer with mean (0.0 as a 32 bit floating-point number) and standard deviation (1.0 as a 32 bit floating-point number) as a line
+print the next normal value from state32Pointer using engine32Pointer with mean (1.0 as a 32 bit floating-point number) and standard deviation (2.0 as a 32 bit floating-point number) as a line
+
+set engine64 to a new Mersenne Twister 64 engine
+set engine64Pointer to the address of engine64
+seed engine64Pointer with (5489 as a 64 bit unsigned integer)
+set state64 to a new normal distribution state
+set state64Pointer to the address of state64
+print the next normal value from state64Pointer using engine64Pointer with mean (0.0 as a 32 bit floating-point number) and standard deviation (1.0 as a 32 bit floating-point number) as a line
+print the next normal value from state64Pointer using engine64Pointer with mean (1.0 as a 32 bit floating-point number) and standard deviation (2.0 as a 32 bit floating-point number) as a line

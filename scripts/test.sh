@@ -674,6 +674,7 @@ run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomi
 run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
 run_auxiliary_test "mersenne_twister64_native_abi" 30 python3 -B "$SCRIPT_DIR/test_mersenne_twister64.py" "$COMPILER"
+run_auxiliary_test "normal_distribution_native_abi" 30 python3 -B "$SCRIPT_DIR/test_normal_distribution.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

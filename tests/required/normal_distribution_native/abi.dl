@@ -1,0 +1,38 @@
+import lib/normal_distribution.dl
+
+exposed function abi seed normal MT32 at {pointer:opaquePointer} with {32 bit unsigned integer:seedValue}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 32 engine
+        seed engineAddress with seedValue
+
+exposed function abi seed normal MT64 at {pointer:opaquePointer} with {64 bit unsigned integer:seedValue}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 64 engine
+        seed engineAddress with seedValue
+
+exposed function abi next normal MT32 at {pointer:opaquePointer} using {pointer:statePointer} with mean {32 bit floating-point number:meanValue} and standard deviation {32 bit floating-point number:deviationValue}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 32 engine
+        set normalAddress to statePointer as a pointer to a normal distribution state
+        return the next normal value from normalAddress using engineAddress with mean meanValue and standard deviation deviationValue
+
+exposed function abi next normal MT64 at {pointer:opaquePointer} using {pointer:statePointer} with mean {32 bit floating-point number:meanValue} and standard deviation {32 bit floating-point number:deviationValue}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 64 engine
+        set normalAddress to statePointer as a pointer to a normal distribution state
+        return the next normal value from normalAddress using engineAddress with mean meanValue and standard deviation deviationValue
+
+exposed function abi reset normal at {pointer:statePointer}:
+    execute:
+        set normalAddress to statePointer as a pointer to a normal distribution state
+        reset normalAddress
+
+exposed function abi next raw MT32 at {pointer:opaquePointer}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 32 engine
+        return the next 32 bit unsigned integer from engineAddress
+
+exposed function abi next raw MT64 at {pointer:opaquePointer}:
+    execute:
+        set engineAddress to opaquePointer as a pointer to a Mersenne Twister 64 engine
+        return the next 64 bit unsigned integer from engineAddress
