@@ -133,6 +133,11 @@ also accepted so unary negation can form that signed value; it can be explicitly
 cast to an unsigned 64-bit integer. Explicit `8`, `16`, `32`, and `64` bit unsigned
 integer type values preserve wrapping arithmetic, logical right shifts, and
 unsigned comparison, division, and remainder at compile time and runtime.
+Integer casts retain the target-width bits. Floating-point to integer casts
+truncate toward zero and are compile-time-known only when the truncated value
+fits the target signed or unsigned width, matching the native LLVM conversion.
+The positive `2^63` literal participates in floating-point conversion, Boolean
+conversion and mixed numeric comparison like other unsigned values.
 
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.

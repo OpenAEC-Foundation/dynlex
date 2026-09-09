@@ -12,11 +12,7 @@ bool isCompileTimeKnown(const CompileTimeValue &value) { return !std::holds_alte
 std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 	if (auto *boolean = std::get_if<bool>(&value))
 		return *boolean;
-	if (auto *integer = std::get_if<std::int64_t>(&value))
-		return *integer != 0;
-	if (auto *integer = std::get_if<std::uint64_t>(&value))
-		return *integer != 0;
-	if (auto *number = std::get_if<double>(&value))
+	if (std::optional<double> number = getCompileTimeNumericValue(value))
 		return *number != 0.0;
 	if (auto *text = std::get_if<std::string>(&value))
 		return !text->empty();
@@ -70,8 +66,8 @@ std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTim
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value) {
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return static_cast<double>(*integer);
-	if (const auto *integer = std::get_if<std::uint64_t>(&value))
-		return static_cast<double>(*integer);
+	if (std::holds_alternative<std::uint64_t>(value) || std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return static_cast<double>(*getCompileTimeUnsignedIntegerValue(value));
 	if (const auto *floatingPoint = std::get_if<double>(&value))
 		return *floatingPoint;
 	return std::nullopt;

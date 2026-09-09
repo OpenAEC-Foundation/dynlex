@@ -306,9 +306,11 @@ static llvm::Value *generateScalarOrVectorArithmetic(
 	case ArithmeticIntrinsicKind::Multiply:
 		return builder.CreateMul(left, right, "mul");
 	case ArithmeticIntrinsicKind::Divide:
-	return elementType.isUnsignedInteger() ? builder.CreateUDiv(left, right, "div") : builder.CreateSDiv(left, right, "div");
+		return elementType.isUnsignedInteger() ? builder.CreateUDiv(left, right, "div")
+											   : builder.CreateSDiv(left, right, "div");
 	case ArithmeticIntrinsicKind::Modulo:
-	return elementType.isUnsignedInteger() ? builder.CreateURem(left, right, "mod") : builder.CreateSRem(left, right, "mod");
+		return elementType.isUnsignedInteger() ? builder.CreateURem(left, right, "mod")
+											   : builder.CreateSRem(left, right, "mod");
 	default:
 		return nullptr;
 	}
@@ -328,7 +330,7 @@ generateScalarBitwise(ParseContext &context, IntrinsicKind kind, llvm::Value *le
 		return builder.CreateShl(left, right, "shl");
 	case IntrinsicKind::ShiftRight:
 		return resultType.numericElementType().isUnsignedInteger() ? builder.CreateLShr(left, right, "shr")
-																			 : builder.CreateAShr(left, right, "shr");
+																   : builder.CreateAShr(left, right, "shr");
 	default:
 		return nullptr;
 	}
@@ -640,13 +642,17 @@ CodegenResult generateIntrinsicCode(
 			} else {
 				DataType comparisonElementType = promoted.numericElementType();
 				if (kind == IntrinsicKind::LessThan)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULT(left, right, "lt") : builder.CreateICmpSLT(left, right, "lt");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULT(left, right, "lt")
+																	: builder.CreateICmpSLT(left, right, "lt");
 				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULE(left, right, "le") : builder.CreateICmpSLE(left, right, "le");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULE(left, right, "le")
+																	: builder.CreateICmpSLE(left, right, "le");
 				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGT(left, right, "gt") : builder.CreateICmpSGT(left, right, "gt");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGT(left, right, "gt")
+																	: builder.CreateICmpSGT(left, right, "gt");
 				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGE(left, right, "ge") : builder.CreateICmpSGE(left, right, "ge");
+					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGE(left, right, "ge")
+																	: builder.CreateICmpSGE(left, right, "ge");
 				else if (kind == IntrinsicKind::Equal)
 					cmp = builder.CreateICmpEQ(left, right, "eq");
 				else
@@ -724,9 +730,10 @@ CodegenResult generateIntrinsicCode(
 		}
 
 		bool unsignedElements = promoted.numericElementType().isUnsignedInteger();
-		llvm::Value *cmp = kind == IntrinsicKind::Min
-			? (unsignedElements ? builder.CreateICmpULT(left, right, "min_cmp") : builder.CreateICmpSLT(left, right, "min_cmp"))
-			: (unsignedElements ? builder.CreateICmpUGT(left, right, "max_cmp") : builder.CreateICmpSGT(left, right, "max_cmp"));
+		llvm::Value *cmp = kind == IntrinsicKind::Min ? (unsignedElements ? builder.CreateICmpULT(left, right, "min_cmp")
+																		  : builder.CreateICmpSLT(left, right, "min_cmp"))
+													  : (unsignedElements ? builder.CreateICmpUGT(left, right, "max_cmp")
+																		  : builder.CreateICmpSGT(left, right, "max_cmp"));
 		return builder.CreateSelect(cmp, left, right, kind == IntrinsicKind::Min ? "min" : "max");
 	}
 
@@ -737,7 +744,8 @@ CodegenResult generateIntrinsicCode(
 		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
 			DataType operandType = args.size() == 2 ? finalizedExpressionType(context, args[1]) : DataType{};
 			if ((kind == IntrinsicKind::Abs || kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil ||
-				 kind == IntrinsicKind::Round) && operandType.numericElementType().isUnsignedInteger()) {
+				 kind == IntrinsicKind::Round) &&
+				operandType.numericElementType().isUnsignedInteger()) {
 				llvm::Value *value = nullptr;
 				if (!generateRuntimeValue(args[1], value))
 					return CodegenResult::failure();

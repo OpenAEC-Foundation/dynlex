@@ -956,8 +956,7 @@ static bool inferNonFlexPatternCall(
 		expr->type = inst.returnType;
 		inferredReturnValue =
 			evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context, flexBindingFrameStack);
-		if (isDirectMinimumSignedLiteralCall(expr, inferredReturnValue.value))
-			expr->type = {DataType::Kind::Int, 8};
+		refineDirectMinimumSignedLiteralType(expr, inferredReturnValue.value);
 		context.setExpressionEvaluation(expr, std::move(inferredReturnValue));
 	}
 	if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {

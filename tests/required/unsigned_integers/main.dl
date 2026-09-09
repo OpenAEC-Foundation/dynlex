@@ -8,10 +8,6 @@ set signedMinimum to -9223372036854775808
 set limit to 9223372036854775808
 set wrappedLimit to -limit
 set full64 to 18446744073709551615
-set narrowMaximum to 255 as a 8 bit unsigned integer
-set narrowOne to 1 as a 8 bit unsigned integer
-set shortMaximum to 65535 as a 16 bit unsigned integer
-set shortOne to 1 as a 16 bit unsigned integer
 set zero8 to 0 as a 8 bit unsigned integer
 set zero16 to 0 as a 16 bit unsigned integer
 set zero32 to 0 as a 32 bit unsigned integer
@@ -76,6 +72,13 @@ print checked fixed value (the floor of 18446744073709551615) as a line
 print checked fixed value (the ceiling of 18446744073709551615) as a line
 print checked fixed equality ((4294967295 as a 32 bit unsigned integer) = (4294967295 as a 64 bit floating-point number)) as a line
 print checked fixed equality ((4294967295 as a 64 bit floating-point number) = (4294967295 as a 32 bit unsigned integer)) as a line
+print checked fixed value ((9223372036854775808 as a 64 bit floating-point number) as a 64 bit unsigned integer) as a line
+print checked fixed value ((1.5 as a 64 bit floating-point number) as a 32 bit unsigned integer) as a line
+print checked fixed value ((65536 as a 32 bit unsigned integer) as a 16 bit unsigned integer) as a line
+print checked fixed equality (9223372036854775808 = (9223372036854775808 as a 64 bit floating-point number)) as a line
+print checked fixed equality (9223372036854775808 as a boolean) as a line
+print checked fixed value ((-1.5) as a 32 bit integer) as a line
+print checked fixed value ((-0.5) as a 32 bit unsigned integer) as a line
 
 function the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
     execute:
