@@ -54,6 +54,10 @@ exposed function exchange pointer {a pointer to a pointer to a byte:slot} with {
     execute:
         return @intrinsic("atomic exchange", slot, value, "seq_cst")
 
+exposed function exchange boolean pointer {a pointer to a pointer to a boolean:slot} with {a pointer to a boolean:value}:
+    execute:
+        return @intrinsic("atomic exchange", slot, value, "seq_cst")
+
 exposed function add signed halfword {a pointer to a 16 bit integer:slot}:
     execute:
         return @intrinsic("atomic fetch add", slot, 1 as a 16 bit integer, "relaxed")
@@ -225,6 +229,7 @@ extern int8_t add_signed_octet(void *) __asm__("{symbols['add signed octet']}");
 extern uint8_t subtract_unsigned_octet(void *) __asm__("{symbols['subtract unsigned octet']}");
 extern float exchange_float(void *, float) __asm__("{symbols['exchange float']}");
 extern void *exchange_pointer(void *, void *) __asm__("{symbols['exchange pointer']}");
+extern bool *exchange_boolean_pointer(void *, bool *) __asm__("{symbols['exchange boolean pointer']}");
 extern uint32_t wrapped_exchange(void *, uint32_t) __asm__("{symbols['wrapped exchange']}");
 extern uint32_t wrapped_increment(void *) __asm__("{symbols['wrapped increment']}");
 extern uint32_t wrapped_load(void *) __asm__("{symbols['wrapped load']}");
@@ -279,11 +284,16 @@ int main(void) {{
     void *replacement = (void *)(uintptr_t)UINT32_C(0x5678);
     if (exchange_pointer(&pointer, replacement) != (void *)(uintptr_t)UINT32_C(0x1234)) return 11;
     if (atomic_load(&pointer) != replacement) return 12;
+    bool old_boolean = false;
+    bool new_boolean = true;
+    _Atomic(bool *) boolean_pointer = &old_boolean;
+    if ((uintptr_t)exchange_boolean_pointer(&boolean_pointer, &new_boolean) != (uintptr_t)&old_boolean) return 13;
+    if ((uintptr_t)atomic_load(&boolean_pointer) != (uintptr_t)&new_boolean) return 14;
     _Atomic uint32_t wrapped = 7;
-    if (wrapped_exchange(&wrapped, 9) != 7 || wrapped_increment(&wrapped) != 9) return 13;
-    if (wrapped_load(&wrapped) != 10) return 14;
+    if (wrapped_exchange(&wrapped, 9) != 7 || wrapped_increment(&wrapped) != 9) return 15;
+    if (wrapped_load(&wrapped) != 10) return 16;
     wrapped_store(&wrapped, 11);
-    return atomic_load(&wrapped) == 11 ? 0 : 15;
+    return atomic_load(&wrapped) == 11 ? 0 : 17;
 }}
 '''
 
@@ -311,7 +321,7 @@ def main() -> int:
             require_atomic_ir(llvm_ir)
             names = (
                 "increment", "load count", "publish", "is ready", "exchange boolean", "add signed octet",
-                "subtract unsigned octet", "exchange float", "exchange pointer", "wrapped exchange",
+                "subtract unsigned octet", "exchange float", "exchange pointer", "exchange boolean pointer", "wrapped exchange",
                 "wrapped increment", "wrapped load", "wrapped store",
             )
             symbols = {name: exposed_symbol(llvm_ir, name) for name in names}

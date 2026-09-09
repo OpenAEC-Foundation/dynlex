@@ -2,7 +2,6 @@ case Expression::Kind::IntrinsicCall: {
 #include "intrinsic_preflight_inference.inl"
 	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
 		break;
-#include "intrinsics/atomic_inference.inl"
 	if (info) {
 		switch (info->returnKind) {
 		case IntrinsicReturnKind::SameAsArgs:
@@ -267,6 +266,7 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		case IntrinsicReturnKind::Custom:
 #include "intrinsics/aggregate_inference.inl"
+#include "intrinsics/atomic_inference.inl"
 #include "intrinsics/shader_custom_inference.inl"
 			if (handledAggregateIntrinsic)
 				break;

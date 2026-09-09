@@ -22,15 +22,15 @@ if (isAtomicIntrinsicKind(kind)) {
 		return CodegenResult::failure();
 	DataType pointerType = finalizedExpressionType(context, args[1]);
 	DataType valueType = pointerType.dereferenced();
-	llvm::Type *storageType = valueType.kind == DataType::Kind::Bool ? builder.getInt8Ty() : getLLVMType(context, valueType);
-	llvm::Align alignment = valueType.kind == DataType::Kind::Bool ? llvm::Align(1) : getLLVMABIAlignment(context, valueType);
+	bool booleanValue = valueType.kind == DataType::Kind::Bool && !valueType.isPointer();
+	llvm::Type *storageType = booleanValue ? builder.getInt8Ty() : getLLVMType(context, valueType);
+	llvm::Align alignment = booleanValue ? llvm::Align(1) : getLLVMABIAlignment(context, valueType);
 	llvm::AtomicOrdering order = toLLVMOrder(*sourceOrder);
 	auto toStorage = [&](llvm::Value *value) {
-		return valueType.kind == DataType::Kind::Bool ? builder.CreateZExt(value, storageType, "atomic_bool_store") : value;
+		return booleanValue ? builder.CreateZExt(value, storageType, "atomic_bool_store") : value;
 	};
 	auto fromStorage = [&](llvm::Value *value) -> llvm::Value * {
-		return valueType.kind == DataType::Kind::Bool ? builder.CreateTrunc(value, builder.getInt1Ty(), "atomic_bool_load")
-													  : value;
+		return booleanValue ? builder.CreateTrunc(value, builder.getInt1Ty(), "atomic_bool_load") : value;
 	};
 	if (kind == IntrinsicKind::AtomicLoad) {
 		llvm::LoadInst *load = builder.CreateAlignedLoad(storageType, pointer, alignment, "atomic_load");
