@@ -1,6 +1,14 @@
 import lib/std.dl
 
+exposed function scientific scale {32 bit floating-point number:value}:
+    execute:
+        return value * (1E+3 as a 32 bit floating-point number)
+
 set maximum to 3.4028234663852886e38 as a 32 bit floating-point number
 set tiny to 1e-3 as a 32 bit floating-point number
+if maximum != (340282346638528859811704183484516925440.0 as a 32 bit floating-point number):
+    @intrinsic("call", "libc", "exit", nothing, 1)
+if (scientific scale tiny) != (1.0 as a 32 bit floating-point number):
+    @intrinsic("call", "libc", "exit", nothing, 1)
 
 print tiny as a line
