@@ -43,11 +43,11 @@ exposed function call predicate {a pointer:callee} with {boolean:value}:
 
 exposed function call signed octet result {a pointer:callee}:
     execute:
-        return @intrinsic("call pointer", callee, an 8 bit integer)
+        return @intrinsic("call pointer", callee, a 8 bit integer)
 
 exposed function call unsigned octet result {a pointer:callee}:
     execute:
-        return @intrinsic("call pointer", callee, an 8 bit unsigned integer)
+        return @intrinsic("call pointer", callee, a 8 bit unsigned integer)
 
 exposed function call signed halfword result {a pointer:callee}:
     execute:
