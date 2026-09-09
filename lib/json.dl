@@ -37,6 +37,20 @@ class:
         value as a pointer to a JSON value
         error position as an integer
 
+class:
+    patterns:
+        [a|] JSON signed 64 bit integer result
+    members:
+        success as a boolean
+        value as a 64 bit integer
+
+class:
+    patterns:
+        [a|] JSON unsigned 64 bit integer result
+    members:
+        success as a boolean
+        value as a 64 bit unsigned integer
+
 function the JSON null kind:
     replacement:
         0
@@ -76,6 +90,20 @@ function a new JSON value of kind {integer:kind}:
         set members to 0 as a pointer to a JSON member
         set initial to @intrinsic("construct", a JSON value, kind, text, 0.0 as a 64 bit floating-point number, false, items, members, 0, 0)
         allocate one slot of initial and set result to it
+        return result
+
+function a new JSON number from {a 64 bit integer:value}:
+    execute:
+        set result to a new JSON value of kind the JSON number kind
+        set the text of result to the string form of value
+        set the number of result to value as a 64 bit floating-point number
+        return result
+
+function a new JSON number from {a 64 bit unsigned integer:value}:
+    execute:
+        set result to a new JSON value of kind the JSON number kind
+        set the text of result to the string form of value
+        set the number of result to value as a 64 bit floating-point number
         return result
 
 function ensure that {a pointer to a JSON value:parent} has JSON capacity for {integer:count}:
@@ -267,6 +295,31 @@ local function {a value:value} is a JSON decimal digit:
 local function {a value:value} is not a JSON decimal digit:
     execute:
         return value < 48 or value > 57
+
+function JSON number {a pointer to a JSON value:value} has an integer lexeme:
+    execute:
+        if value = (0 as a pointer to a JSON value):
+            return false
+        if the kind of value != the JSON number kind:
+            return false
+        set text to the text of value
+        if the length of text = 0:
+            return false
+        set cursor to 0
+        if the character at 0 in text = 45:
+            set cursor to 1
+        if cursor >= the length of text:
+            return false
+        if the character at cursor in text = 48:
+            return cursor + 1 = the length of text
+        if the character at cursor in text < 49 or the character at cursor in text > 57:
+            return false
+        set cursor to (cursor + 1)
+        loop while cursor < the length of text:
+            if the character at cursor in text < 48 or the character at cursor in text > 57:
+                return false
+            set cursor to (cursor + 1)
+        return true
 
 local function the JSON number read by {a pointer to a JSON parser:parser}:
     execute:
@@ -507,6 +560,98 @@ function the value of {JSON result:result}:
         if result failed:
             @intrinsic("call", "libc", "abort", nothing)
         return result's value
+
+function a failed JSON signed 64 bit integer result:
+    replacement:
+        @intrinsic("construct", a JSON signed 64 bit integer result, false, 0 as a 64 bit integer)
+
+function a successful JSON signed 64 bit integer result with value {a 64 bit integer:value}:
+    replacement:
+        @intrinsic("construct", a JSON signed 64 bit integer result, true, value)
+
+function a failed JSON unsigned 64 bit integer result:
+    replacement:
+        @intrinsic("construct", a JSON unsigned 64 bit integer result, false, 0 as a 64 bit unsigned integer)
+
+function a successful JSON unsigned 64 bit integer result with value {a 64 bit unsigned integer:value}:
+    replacement:
+        @intrinsic("construct", a JSON unsigned 64 bit integer result, true, value)
+
+function {JSON signed 64 bit integer result:result} succeeded:
+    replacement:
+        result's success
+
+function {JSON signed 64 bit integer result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function {JSON unsigned 64 bit integer result:result} succeeded:
+    replacement:
+        result's success
+
+function {JSON unsigned 64 bit integer result:result} failed:
+    replacement:
+        the inverse of result's success
+
+function the signed 64 bit integer value of {JSON signed 64 bit integer result:result}:
+    replacement:
+        result's value
+
+function the unsigned 64 bit integer value of {JSON unsigned 64 bit integer result:result}:
+    replacement:
+        result's value
+
+function the signed 64 bit JSON integer read from {a pointer to a JSON value:value}:
+    execute:
+        if JSON number value has an integer lexeme is false:
+            return a failed JSON signed 64 bit integer result
+        set text to the text of value
+        set cursor to 0
+        set negated to false
+        if the character at 0 in text = 45:
+            set negated to true
+            set cursor to 1
+        set maximum to 9223372036854775807 as a 64 bit unsigned integer
+        if negated:
+            set maximum to 9223372036854775808 as a 64 bit unsigned integer
+        set prefix to maximum / (10 as a 64 bit unsigned integer)
+        set remainder to the remainder of maximum divided by (10 as a 64 bit unsigned integer)
+        set total to 0 as a 64 bit unsigned integer
+        loop while cursor < the length of text:
+            set digit to ((the character at cursor in text) - 48) as a 64 bit unsigned integer
+            if (total > prefix) or ((total = prefix) and (digit > remainder)):
+                return a failed JSON signed 64 bit integer result
+            set total to (total * (10 as a 64 bit unsigned integer) + digit)
+            set cursor to (cursor + 1)
+        if negated:
+            if total = 9223372036854775808 as a 64 bit unsigned integer:
+                return a successful JSON signed 64 bit integer result with value total as a 64 bit integer
+            return a successful JSON signed 64 bit integer result with value ((0 as a 64 bit integer) - (total as a 64 bit integer))
+        return a successful JSON signed 64 bit integer result with value total as a 64 bit integer
+
+function the unsigned 64 bit JSON integer read from {a pointer to a JSON value:value}:
+    execute:
+        if JSON number value has an integer lexeme is false:
+            return a failed JSON unsigned 64 bit integer result
+        set text to the text of value
+        set cursor to 0
+        set negated to false
+        if the character at 0 in text = 45:
+            set negated to true
+            set cursor to 1
+        set maximum to 18446744073709551615 as a 64 bit unsigned integer
+        set prefix to maximum / (10 as a 64 bit unsigned integer)
+        set remainder to the remainder of maximum divided by (10 as a 64 bit unsigned integer)
+        set total to 0 as a 64 bit unsigned integer
+        loop while cursor < the length of text:
+            set digit to ((the character at cursor in text) - 48) as a 64 bit unsigned integer
+            if (total > prefix) or ((total = prefix) and (digit > remainder)):
+                return a failed JSON unsigned 64 bit integer result
+            set total to (total * (10 as a 64 bit unsigned integer) + digit)
+            set cursor to (cursor + 1)
+        if negated and total != (0 as a 64 bit unsigned integer):
+            return a failed JSON unsigned 64 bit integer result
+        return a successful JSON unsigned 64 bit integer result with value total
 
 function require that {a pointer to a JSON value:value} has {integer:expected} as its JSON kind:
     execute:

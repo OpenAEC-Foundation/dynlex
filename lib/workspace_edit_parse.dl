@@ -169,11 +169,11 @@ local function the workspace JSON integer {string:name} from {a pointer to a JSO
         if the kind of value != the JSON number kind:
             record workspace edit parse failure reason using state
             return 0
-        set number to the number of value
-        set whole to number as a 64 bit integer
-        if (whole as a 64 bit floating-point number) != number:
+        set outcome to the signed 64 bit JSON integer read from value
+        if outcome failed:
             record workspace edit parse failure reason using state
             return 0
+        set whole to the signed 64 bit integer value of outcome
         if whole < (0 - 2147483648) or whole > 2147483647:
             record workspace edit parse failure reason using state
             return 0

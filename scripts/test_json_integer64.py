@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Verify lossless JSON integer construction and reads through the native C ABI."""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+LIBRARY_SOURCE = """\
+import json.dl
+
+exposed function signed JSON round trip {a 64 bit integer:value}:
+    execute:
+        set node to a new JSON number from value
+        set result to the signed 64 bit JSON integer read from node
+        set output to the signed 64 bit integer value of result
+        free node
+        return output
+
+exposed function unsigned JSON round trip {a 64 bit unsigned integer:value}:
+    execute:
+        set node to a new JSON number from value
+        set result to the unsigned 64 bit JSON integer read from node
+        set output to the unsigned 64 bit integer value of result
+        free node
+        return output
+"""
+
+
+def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(arguments, cwd=working_directory, text=True, capture_output=True, check=False)
+
+
+def require_success(result: subprocess.CompletedProcess[str]) -> None:
+    if result.returncode != 0:
+        raise RuntimeError(f"command {result.args} exited {result.returncode}:\n{result.stdout}{result.stderr}")
+
+
+def exposed_symbol(llvm_ir: str, function_name: str) -> str:
+    match = re.search(
+        rf"^define .* @([^( ]*{function_name.replace(' ', '_')}[^ (]*_callable[^ (]*)\(",
+        llvm_ir,
+        re.MULTILINE,
+    )
+    if not match:
+        raise RuntimeError(f"LLVM output omitted exposed function {function_name!r}:\n{llvm_ir}")
+    return match.group(1)
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: test_json_integer64.py <compiler>", file=sys.stderr)
+        return 2
+    compiler = Path(sys.argv[1]).resolve()
+    if not compiler.is_file():
+        print(f"compiler not found: {compiler}", file=sys.stderr)
+        return 2
+    repo_root = Path(__file__).resolve().parent.parent
+    c_compiler = os.environ.get("CC", "cc")
+    try:
+        with tempfile.TemporaryDirectory(prefix="dynlex-json-integer64-") as temporary_directory:
+            temporary = Path(temporary_directory)
+            library = temporary / "json_integer64.dl"
+            library.write_text(LIBRARY_SOURCE, encoding="utf-8")
+            llvm_output = temporary / "json_integer64.ll"
+            require_success(
+                run([str(compiler), str(library), "--emit-llvm", "--no-main", "-o", str(llvm_output)], repo_root)
+            )
+            llvm_ir = llvm_output.read_text(encoding="utf-8")
+            signed_symbol = exposed_symbol(llvm_ir, "signed JSON round trip")
+            unsigned_symbol = exposed_symbol(llvm_ir, "unsigned JSON round trip")
+            caller = temporary / "caller.c"
+            caller.write_text(
+                f"""\
+#include <stdint.h>
+extern int64_t signed_round_trip(int64_t) __asm__("{signed_symbol}");
+extern uint64_t unsigned_round_trip(uint64_t) __asm__("{unsigned_symbol}");
+int main(void) {{
+    if (signed_round_trip(INT64_MIN) != INT64_MIN) return 1;
+    if (signed_round_trip(INT64_MAX) != INT64_MAX) return 2;
+    if (unsigned_round_trip(UINT64_C(9007199254740993)) != UINT64_C(9007199254740993)) return 3;
+    if (unsigned_round_trip(UINT64_MAX) != UINT64_MAX) return 4;
+    return 0;
+}}
+""",
+                encoding="utf-8",
+            )
+            object_output = temporary / "json_integer64.o"
+            executable = temporary / "caller"
+            for optimization in ("-O0", "-O2", "-O3"):
+                require_success(
+                    run(
+                        [str(compiler), str(library), "--emit-object", "--no-main", optimization, "-o", str(object_output)],
+                        repo_root,
+                    )
+                )
+                require_success(
+                    run([c_compiler, "-O2", str(caller), str(object_output), "-o", str(executable)], repo_root)
+                )
+                require_success(run([str(executable)], repo_root))
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

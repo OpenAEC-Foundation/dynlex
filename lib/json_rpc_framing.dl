@@ -499,27 +499,8 @@ local function JSON-RPC method name is reserved in {string:method}:
         return first and (second and (third and fourth))
 
 function JSON-RPC number {a pointer to a JSON value:value} is an integer identifier:
-    execute:
-        if the kind of value != the JSON number kind:
-            return false
-        set text to the text of value
-        if the length of text = 0:
-            return false
-        set cursor to 0
-        if the character at 0 in text = 45:
-            set cursor to 1
-        if cursor >= the length of text:
-            return false
-        if the character at cursor in text = 48:
-            return cursor + 1 = the length of text
-        if the character at cursor in text < 49 or the character at cursor in text > 57:
-            return false
-        set cursor to (cursor + 1)
-        loop while cursor < the length of text:
-            if the character at cursor in text < 48 or the character at cursor in text > 57:
-                return false
-            set cursor to (cursor + 1)
-        return true
+    replacement:
+        JSON number value has an integer lexeme
 
 function JSON-RPC number {a pointer to a JSON value:value} is not an integer identifier:
     execute:

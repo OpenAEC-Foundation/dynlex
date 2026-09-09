@@ -379,6 +379,13 @@ Boolean, 8/16/32/64-bit signed or unsigned integer, 32/64-bit float, or pointer;
 is one byte. The caller owns correct scalar storage alignment and must not mix atomic and non-atomic concurrent accesses. `lib/atomic.dl`
 keeps ordering metadata in natural-language wrappers, including default sequentially consistent and relaxed/release/acquire forms.
 
+JSON number nodes retain their original validated decimal lexeme for serialization. `the signed 64 bit JSON integer read from value`
+and `the unsigned 64 bit JSON integer read from value` return typed result values with a success status; they parse that lexeme
+without a floating-point conversion and reject wrong JSON kinds, fractional or exponent syntax, negative nonzero unsigned values,
+and out-of-range magnitudes. `-0` reads as zero. `a new JSON number from` signed or unsigned 64-bit integers writes the exact
+decimal lexeme. The existing `number` member and JSON-number getters remain approximate floating-point views for compatibility;
+they are not an integer interchange API.
+
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
