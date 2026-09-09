@@ -1,0 +1,3 @@
+import tests/required/mersenne_twister64_native/abi.dl
+
+print "native wrappers available" as a line

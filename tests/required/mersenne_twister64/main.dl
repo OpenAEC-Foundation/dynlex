@@ -1,0 +1,70 @@
+import lib/mersenne_twister64.dl
+
+function print first values from {a 64 bit unsigned integer:seedValue}:
+    execute:
+        set generator to a new Mersenne Twister 64 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with seedValue
+        print the next 64 bit unsigned integer from generatorAddress as a line
+        print the next 64 bit unsigned integer from generatorAddress as a line
+        print the next 64 bit unsigned integer from generatorAddress as a line
+        print the next 64 bit unsigned integer from generatorAddress as a line
+        print the next 64 bit unsigned integer from generatorAddress as a line
+
+function the xor checksum after 10000 values from {a 64 bit unsigned integer:seedValue}:
+    execute:
+        set generator to a new Mersenne Twister 64 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with seedValue
+        set result to 0 as a 64 bit unsigned integer
+        set count to 0
+        loop while count < 10000:
+            set result to result bitwise xor (the next 64 bit unsigned integer from generatorAddress)
+            set count to count + 1
+        return result
+
+function exercise independent engines:
+    execute:
+        set firstGenerator to a new Mersenne Twister 64 engine
+        set secondGenerator to a new Mersenne Twister 64 engine
+        set firstAddress to the address of firstGenerator
+        set secondAddress to the address of secondGenerator
+        seed firstAddress with (5489 as a 64 bit unsigned integer)
+        seed secondAddress with (5489 as a 64 bit unsigned integer)
+        print the next 64 bit unsigned integer from firstAddress as a line
+        print the next 64 bit unsigned integer from secondAddress as a line
+        print the next 64 bit unsigned integer from firstAddress as a line
+        print the next 64 bit unsigned integer from secondAddress as a line
+
+function exercise reset:
+    execute:
+        set generator to a new Mersenne Twister 64 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with (1 as a 64 bit unsigned integer)
+        print the next 64 bit unsigned integer from generatorAddress as a line
+        seed generatorAddress with (1 as a 64 bit unsigned integer)
+        print the next 64 bit unsigned integer from generatorAddress as a line
+
+function exercise unit fractions:
+    execute:
+        set generator to a new Mersenne Twister 64 engine
+        set generatorAddress to the address of generator
+        seed generatorAddress with (0 as a 64 bit unsigned integer)
+        set fraction32 to the next 32 bit unit fraction from generatorAddress
+        set fraction64 to the next 64 bit unit fraction from generatorAddress
+        print fraction32 >= 0.0 and fraction32 < 1.0 as a line
+        print fraction64 >= 0.0 and fraction64 < 1.0 as a line
+
+print first values from (0 as a 64 bit unsigned integer)
+print first values from (1 as a 64 bit unsigned integer)
+print first values from (5489 as a 64 bit unsigned integer)
+print first values from (9223372036854775808 as a 64 bit unsigned integer)
+print first values from (18446744073709551615 as a 64 bit unsigned integer)
+print the xor checksum after 10000 values from (0 as a 64 bit unsigned integer) as a line
+print the xor checksum after 10000 values from (1 as a 64 bit unsigned integer) as a line
+print the xor checksum after 10000 values from (5489 as a 64 bit unsigned integer) as a line
+print the xor checksum after 10000 values from (9223372036854775808 as a 64 bit unsigned integer) as a line
+print the xor checksum after 10000 values from (18446744073709551615 as a 64 bit unsigned integer) as a line
+exercise independent engines
+exercise reset
+exercise unit fractions

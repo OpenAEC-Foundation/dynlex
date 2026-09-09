@@ -1,0 +1,68 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] Mersenne Twister 64 engine
+    members:
+        state as a 64 bit unsigned integer array of 312 items
+        index as a 64 bit unsigned integer
+
+function seed {a pointer to a Mersenne Twister 64 engine:engine} with {a 64 bit unsigned integer:initialSeed}:
+    execute:
+        set the index of engine to 312 as a 64 bit unsigned integer
+        store initialSeed into the state of engine at 0
+        set position to 1 as a 64 bit unsigned integer
+        loop while position < 312 as a 64 bit unsigned integer:
+            set previous to the item at (position - (1 as a 64 bit unsigned integer)) in the state of engine
+            set mixed to previous bitwise xor (previous shifted right by (62 as a 64 bit unsigned integer))
+            set value to (6364136223846793005 as a 64 bit unsigned integer) * mixed
+            set value to value + position
+            store value into the state of engine at position
+            set position to position + (1 as a 64 bit unsigned integer)
+
+function the next 64 bit unsigned integer from {a pointer to a Mersenne Twister 64 engine:engine}:
+    execute:
+        if the index of engine >= 312 as a 64 bit unsigned integer:
+            set position to 0 as a 64 bit unsigned integer
+            while position < 312 as a 64 bit unsigned integer:
+                set nextPosition to position + (1 as a 64 bit unsigned integer)
+                if nextPosition = 312 as a 64 bit unsigned integer:
+                    set nextPosition to 0 as a 64 bit unsigned integer
+                set stateValue to the item at position in the state of engine
+                set nextStateValue to the item at nextPosition in the state of engine
+                set upper to stateValue bitwise and (18446744071562067968 as a 64 bit unsigned integer)
+                set lower to nextStateValue bitwise and (2147483647 as a 64 bit unsigned integer)
+                set combined to upper bitwise or lower
+                set sourcePosition to position + (156 as a 64 bit unsigned integer)
+                if sourcePosition >= 312 as a 64 bit unsigned integer:
+                    set sourcePosition to sourcePosition - (312 as a 64 bit unsigned integer)
+                set twistValue to (the item at sourcePosition in the state of engine) bitwise xor (combined shifted right by (1 as a 64 bit unsigned integer))
+                if (combined bitwise and (1 as a 64 bit unsigned integer)) != 0 as a 64 bit unsigned integer:
+                    set twistValue to twistValue bitwise xor (13043109905998158313 as a 64 bit unsigned integer)
+                store twistValue into the state of engine at position
+                set position to position + (1 as a 64 bit unsigned integer)
+            set the index of engine to 0 as a 64 bit unsigned integer
+        set statePosition to the index of engine
+        set value to the item at statePosition in the state of engine
+        set value to value bitwise xor ((value shifted right by (29 as a 64 bit unsigned integer)) bitwise and (6148914691236517205 as a 64 bit unsigned integer))
+        set value to value bitwise xor ((value shifted left by (17 as a 64 bit unsigned integer)) bitwise and (8202884508482404352 as a 64 bit unsigned integer))
+        set value to value bitwise xor ((value shifted left by (37 as a 64 bit unsigned integer)) bitwise and (18444473444759240704 as a 64 bit unsigned integer))
+        set value to value bitwise xor (value shifted right by (43 as a 64 bit unsigned integer))
+        set the index of engine to statePosition + (1 as a 64 bit unsigned integer)
+        return value
+
+function the next 64 bit unit fraction from {a pointer to a Mersenne Twister 64 engine:engine}:
+    execute:
+        set bits to the next 64 bit unsigned integer from engine
+        set computedFraction to (bits as a 64 bit floating-point number) / (18446744073709551616.0 as a 64 bit floating-point number)
+        if computedFraction >= 1.0:
+            return 0.9999999999999999 as a 64 bit floating-point number
+        return computedFraction
+
+function the next 32 bit unit fraction from {a pointer to a Mersenne Twister 64 engine:engine}:
+    execute:
+        set bits to the next 64 bit unsigned integer from engine
+        set computedFraction to (bits as a 32 bit floating-point number) / (18446744073709551616.0 as a 32 bit floating-point number)
+        if computedFraction >= 1.0:
+            return 0.9999999403953552 as a 32 bit floating-point number
+        return computedFraction
