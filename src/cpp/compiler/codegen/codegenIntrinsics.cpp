@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "compilerUtils.h"
 #include "intrinsicInfo.h"
+#include "nativeScalarABI.h"
 #include "sectionFlexBody.h"
 #include "spirv.h"
 #include "type.h"

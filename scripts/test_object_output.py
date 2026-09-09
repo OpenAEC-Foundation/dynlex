@@ -20,6 +20,19 @@ exposed function sum {a 32 bit integer:left} and {a 32 bit integer:right}:
 exposed function increment {a pointer to a 32 bit integer:value}:
     execute:
         @intrinsic("store at", value, @intrinsic("add", @intrinsic("dereference", value), 1))
+
+exposed function predicate {32 bit floating-point number:left} above {32 bit floating-point number:right} minimum {32 bit floating-point number:minimum}:
+    execute:
+        return (left > (0.0 as a 32 bit floating-point number)) and ((left - right) >= minimum)
+
+exposed function negate {boolean:flag}:
+    execute:
+        return the inverse of flag
+
+exposed function foreign predicate {32 bit floating-point number:left} above {32 bit floating-point number:right} minimum {32 bit floating-point number:minimum}:
+    execute:
+        set result to predicate left above right minimum minimum
+        return @intrinsic("call", "", "bool_value", a 32 bit integer, result)
 """
 
 EXECUTABLE_SOURCE = """\
@@ -53,6 +66,9 @@ ignore the fixed value -1
 
 SUM_SYMBOL = "sum_3a_32_bit_integer8left5_and_3a_32_bit_integer8right5_callable_i32_i32"
 INCREMENT_SYMBOL = "increment_3a_pointer_to_a_32_bit_integer8value5_callable_i32_2a_"
+PREDICATE_SYMBOL = "predicate_332_bit_floating5point_number8left5_above_332_bit_floating5point_number8right5_minimum_332_bit_floating5point_number8minimum5_callable_f32_f32_f32"
+NEGATE_SYMBOL = "negate_3boolean8flag5_callable_bool"
+FOREIGN_PREDICATE_SYMBOL = "foreign_" + PREDICATE_SYMBOL
 
 
 def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
@@ -61,7 +77,7 @@ def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedPr
 
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
     if result.returncode != 0:
-        raise RuntimeError(result.stdout + result.stderr)
+        raise RuntimeError(f"command {result.args} exited {result.returncode}:\n{result.stdout}{result.stderr}")
 
 
 def require_failure(result: subprocess.CompletedProcess[str], message: str) -> None:
@@ -112,21 +128,36 @@ def main() -> int:
             caller.write_text(
                 f"""\
 #include <stdint.h>
+#include <stdbool.h>
 
 extern int32_t {SUM_SYMBOL}(int32_t left, int32_t right);
 extern void {INCREMENT_SYMBOL}(int32_t *value);
+extern bool {PREDICATE_SYMBOL}(float left, float right, float minimum);
+extern bool {NEGATE_SYMBOL}(bool value);
+extern int32_t {FOREIGN_PREDICATE_SYMBOL}(float left, float right, float minimum);
+
+int32_t bool_value(bool value) {{ return value; }}
 
 int main(void) {{
     int32_t value = 41;
     {INCREMENT_SYMBOL}(&value);
-    return {SUM_SYMBOL}(19, 23) == 42 && value == 42 ? 0 : 1;
+    if ({SUM_SYMBOL}(19, 23) != 42 || value != 42) return 1;
+    if ((int){PREDICATE_SYMBOL}(100.0f, 98.8f, 1.0f) != 1) return 2;
+    if ((int){PREDICATE_SYMBOL}(100.0f, 99.4f, 1.0f) != 0) return 3;
+    if ((int){NEGATE_SYMBOL}(true) != 0 || (int){NEGATE_SYMBOL}(false) != 1) return 4;
+    if ({FOREIGN_PREDICATE_SYMBOL}(100.0f, 98.8f, 1.0f) != 1) return 5;
+    if ({FOREIGN_PREDICATE_SYMBOL}(100.0f, 99.4f, 1.0f) != 0) return 6;
+    return 0;
 }}
 """,
                 encoding="utf-8",
             )
             caller_program = temporary / ("caller.exe" if os.name == "nt" else "caller")
-            require_success(run([c_compiler, str(caller), str(default_object), "-o", str(caller_program)], repo_root))
-            require_success(run([str(caller_program)], repo_root))
+            for optimization in ("-O0", "-O2", "-O3"):
+                require_success(run([str(compiler), str(library), "--emit-object", "--no-main", optimization,
+                                     "-o", str(default_object)], repo_root))
+                require_success(run([c_compiler, "-O2", str(caller), str(default_object), "-o", str(caller_program)], repo_root))
+                require_success(run([str(caller_program)], repo_root))
 
             llvm_output = temporary / "library.ll"
             require_success(
@@ -137,6 +168,18 @@ int main(void) {{
                 raise RuntimeError("definition-only LLVM output defines main")
             if f'@{SUM_SYMBOL}' not in llvm_ir or f'@{INCREMENT_SYMBOL}' not in llvm_ir:
                 raise RuntimeError("definition-only LLVM output omitted exposed callable functions")
+            target = re.search(r'^target triple = "([^"]+)"', llvm_ir, flags=re.MULTILINE)
+            if not target:
+                raise RuntimeError("native LLVM output omitted its target triple")
+            triple = target.group(1)
+            uses_aapcs64 = triple.startswith(("aarch64", "arm64")) and "apple" not in triple
+            extension = "" if uses_aapcs64 else "zeroext "
+            if not re.search(rf"^define {extension}i1 @{PREDICATE_SYMBOL}\(", llvm_ir, flags=re.MULTILINE):
+                raise RuntimeError("exposed Boolean result omitted its native ABI contract")
+            if not re.search(rf"^define {extension}i1 @{NEGATE_SYMBOL}\(i1 {extension}%flag\)", llvm_ir, flags=re.MULTILINE):
+                raise RuntimeError("exposed Boolean argument omitted its native ABI contract")
+            if not re.search(rf"call i32 @bool_value\(i1 {extension}", llvm_ir):
+                raise RuntimeError("foreign Boolean call omitted its native ABI contract")
 
             negative_fixed_value = temporary / "negative-fixed-value.dl"
             negative_fixed_value.write_text(NEGATIVE_FIXED_VALUE_SOURCE, encoding="utf-8")

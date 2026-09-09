@@ -9,6 +9,7 @@
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "native.h"
+#include "nativeScalarABI.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionFlexBody.h"

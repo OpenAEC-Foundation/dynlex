@@ -400,8 +400,13 @@ if (isExternalCallIntrinsicKind(kind)) {
 		fixedArgumentTypes.push_back(callArgs[argumentIndex]->getType());
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnLLVMType, fixedArgumentTypes, isVariadic);
 	llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+	auto fixedTypes = std::span<const DataType>(callArgumentTypes).first(fixedArgumentCount);
+	applyNativeScalarABI(
+		*llvm::cast<llvm::Function>(callee.getCallee()), context.llvmModule->getTargetTriple(), returnType, fixedTypes
+	);
 
-	llvm::Value *callResult = builder.CreateCall(callee, callArgs);
+	llvm::CallInst *callResult = builder.CreateCall(callee, callArgs);
+	applyNativeScalarABI(*callResult, context.llvmModule->getTargetTriple(), returnType, fixedTypes);
 	for (auto iterator = ownedManagedArguments.rbegin(); iterator != ownedManagedArguments.rend(); iterator++)
 		if (!releaseManagedValue(context, iterator->first, iterator->second))
 			return CodegenResult::failure();

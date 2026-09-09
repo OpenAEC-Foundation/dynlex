@@ -62,6 +62,9 @@ bool ensureCallableFunctionGenerated(
 												  : llvm::GlobalValue::InternalLinkage;
 	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
 	instantiationPointer->llvmCallableFunction = callableFunction;
+	applyNativeScalarABI(
+		*callableFunction, context.llvmModule->getTargetTriple(), instantiationPointer->returnType, argumentTypes
+	);
 
 	size_t argumentIndex = 0;
 	for (llvm::Argument &argument : callableFunction->args())
