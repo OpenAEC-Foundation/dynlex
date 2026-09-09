@@ -322,16 +322,27 @@ if (kind == IntrinsicKind::Return) {
 }
 
 if (isExternalCallIntrinsicKind(kind)) {
-	// call: args[1]="library", args[2]="function", args[3]="return type", args[4+]=actual args
+	// call: args[1]="library", args[2]="function", args[3]="return type", args[4+]=actual args.
 	// variadic call: the fixed argument count is args[4], and actual args begin at args[5].
-	std::string library = getCompileTimeString(context, args[1]);
-	std::string funcName = getCompileTimeString(context, args[2]);
-	if (!library.empty() && library != "libc")
-		context.requiredLibraries.insert(library);
+	// call pointer: args[1]=runtime callee, args[2]="return type", args[3+]=actual args.
+	const bool isPointerCall = kind == IntrinsicKind::CallPointer;
+	std::string funcName;
+	if (!isPointerCall) {
+		std::string library = getCompileTimeString(context, args[1]);
+		funcName = getCompileTimeString(context, args[2]);
+		if (!library.empty() && library != "libc")
+			context.requiredLibraries.insert(library);
+	}
 
-	DataType retTypeRef = finalizedExpressionType(context, args[3]);
+	DataType retTypeRef = finalizedExpressionType(context, args[externalCallReturnTypeArgumentIndex(kind)]);
 	DataType returnType = retTypeRef.toReferencedType();
 	llvm::Type *returnLLVMType = getLLVMType(context, returnType);
+	llvm::Value *pointerCallee = nullptr;
+	if (isPointerCall) {
+		if (!generateRuntimeValue(args[1], pointerCallee))
+			return CodegenResult::failure();
+		requireCompilerInvariant(pointerCallee != nullptr, "call pointer callee produced no runtime value after inference");
+	}
 
 	// Build call arguments — string literals become global constant pointers
 	std::vector<llvm::Value *> callArgs;
@@ -399,13 +410,17 @@ if (isExternalCallIntrinsicKind(kind)) {
 	for (size_t argumentIndex = 0; argumentIndex < fixedArgumentCount; argumentIndex++)
 		fixedArgumentTypes.push_back(callArgs[argumentIndex]->getType());
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnLLVMType, fixedArgumentTypes, isVariadic);
-	llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
 	auto fixedTypes = std::span<const DataType>(callArgumentTypes).first(fixedArgumentCount);
-	applyNativeScalarABI(
-		*llvm::cast<llvm::Function>(callee.getCallee()), context.llvmModule->getTargetTriple(), returnType, fixedTypes
-	);
-
-	llvm::CallInst *callResult = builder.CreateCall(callee, callArgs);
+	llvm::CallInst *callResult = nullptr;
+	if (isPointerCall) {
+		callResult = builder.CreateCall(funcType, pointerCallee, callArgs);
+	} else {
+		llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(funcName, funcType);
+		applyNativeScalarABI(
+			*llvm::cast<llvm::Function>(callee.getCallee()), context.llvmModule->getTargetTriple(), returnType, fixedTypes
+		);
+		callResult = builder.CreateCall(callee, callArgs);
+	}
 	applyNativeScalarABI(*callResult, context.llvmModule->getTargetTriple(), returnType, fixedTypes);
 	for (auto iterator = ownedManagedArguments.rbegin(); iterator != ownedManagedArguments.rend(); iterator++)
 		if (!releaseManagedValue(context, iterator->first, iterator->second))

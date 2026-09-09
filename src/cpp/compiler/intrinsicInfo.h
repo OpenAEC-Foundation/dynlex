@@ -103,6 +103,7 @@ enum class IntrinsicPurityKind {
 	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                      \
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                                     \
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)                    \
+	X(CallPointer, "call pointer", 3, -1, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Impure)                      \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
 	X(Array, "array", 1, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
 	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
@@ -225,10 +226,16 @@ inline bool isComparisonIntrinsicKind(IntrinsicKind kind) {
 }
 
 constexpr bool isExternalCallIntrinsicKind(IntrinsicKind kind) {
-	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall;
+	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall || kind == IntrinsicKind::CallPointer;
 }
 
-constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) { return kind == IntrinsicKind::VariadicCall ? 5 : 4; }
+constexpr size_t externalCallReturnTypeArgumentIndex(IntrinsicKind kind) {
+	return kind == IntrinsicKind::CallPointer ? 2 : 3;
+}
+
+constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) {
+	return kind == IntrinsicKind::VariadicCall ? 5 : kind == IntrinsicKind::CallPointer ? 3 : 4;
+}
 
 inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {
 	const IntrinsicInfo *info = findIntrinsic(name);

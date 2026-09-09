@@ -365,6 +365,13 @@ receives C's default argument promotions: booleans and integers narrower than 32
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.
 
+Runtime-loaded native symbols use `@intrinsic("call pointer", callee pointer, return type, arguments...)`. The callee is an
+opaque runtime pointer and the return type is a concrete compile-time type; the remaining operands define its fixed, nonvariadic C
+ABI signature. This is CPU-only, because WebAssembly and SPIR-V have no corresponding opaque native-call ABI. Library authors
+must ensure the runtime pointer and stated signature match, and should keep this intrinsic inside a natural-language wrapper pattern
+that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
+site.
+
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.

@@ -329,11 +329,13 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			if (valueType.isDeduced())
 				return valueType.pointed();
 		} else if (isExternalCallIntrinsicKind(kind)) {
-			if (resolved->arguments.size() <= 3)
+			size_t returnTypeArgumentIndex = externalCallReturnTypeArgumentIndex(kind);
+			if (resolved->arguments.size() <= returnTypeArgumentIndex)
 				return {};
-			DataType retTypeRef = resolveKnownExpressionType(resolved->arguments[3], effectiveBindingFrameStack);
-			if (retTypeRef.kind != DataType::Kind::Type || retTypeRef.referencedKind == DataType::Kind::Type ||
-				retTypeRef.referencedKind == DataType::Kind::Unresolved)
+			DataType retTypeRef =
+				resolveKnownExpressionType(resolved->arguments[returnTypeArgumentIndex], effectiveBindingFrameStack);
+			if (retTypeRef.kind != DataType::Kind::Type || !retTypeRef.toReferencedType().isDeduced() ||
+				retTypeRef.toReferencedType().isMetaType())
 				return {};
 			for (size_t i = externalCallRuntimeArgumentStart(kind); i < resolved->arguments.size(); i++) {
 				DataType argType = resolveKnownExpressionType(resolved->arguments[i], effectiveBindingFrameStack);

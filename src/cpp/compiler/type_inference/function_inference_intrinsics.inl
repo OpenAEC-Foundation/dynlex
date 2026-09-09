@@ -326,22 +326,36 @@ case Expression::Kind::IntrinsicCall: {
 				if (ptrType.isDeduced() && ptrType.isPointer())
 					expr->type = ptrType.dereferenced();
 			} else if (isExternalCallIntrinsicKind(kind)) {
-				for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
-					Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
-					if (!metadataExpression || !std::holds_alternative<std::string>(metadataExpression->literalValue)) {
-						failIntrinsicArgumentRequirement(metadataIndex, "a string literal");
+				if (kind == IntrinsicKind::CallPointer) {
+					if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
+						failWithDetail(expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0);
 						break;
+					}
+					DataType calleeType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+					if (calleeType.isDeduced() && !calleeType.isPointer()) {
+						setConfiguredTypeFailure(expr->range, "call pointer callee must be a native pointer");
+						break;
+					}
+				} else {
+					for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
+						Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
+						if (!metadataExpression || !std::holds_alternative<std::string>(metadataExpression->literalValue)) {
+							failIntrinsicArgumentRequirement(metadataIndex, "a string literal");
+							break;
+						}
 					}
 				}
 				if (!context.typesValid)
 					break;
-				DataType retTypeRef = ensureExpressionType(expr->arguments[3], context, flexBindingFrameStack);
+				size_t returnTypeArgumentIndex = externalCallReturnTypeArgumentIndex(kind);
+				DataType retTypeRef =
+					ensureExpressionType(expr->arguments[returnTypeArgumentIndex], context, flexBindingFrameStack);
 				if (retTypeRef.kind != DataType::Kind::Type) {
 					setConfiguredTypeFailure(expr->range, "call return type must be type reference");
 					break;
 				}
-				if (retTypeRef.kind == DataType::Kind::Type && (retTypeRef.referencedKind == DataType::Kind::Type ||
-																retTypeRef.referencedKind == DataType::Kind::Unresolved)) {
+				if (retTypeRef.kind == DataType::Kind::Type &&
+					(!retTypeRef.toReferencedType().isDeduced() || retTypeRef.toReferencedType().isMetaType())) {
 					setConfiguredTypeFailure(expr->range, "call return type must be concrete runtime type");
 					break;
 				}
