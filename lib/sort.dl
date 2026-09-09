@@ -7,6 +7,8 @@ import lib/list.dl
 # a negative, zero, or positive 32-bit integer for its two record pointers.
 function sort native array at {pointer:values} with {a word sized unsigned integer:count} items of {a word sized unsigned integer:stride} bytes using {pointer:comparator}:
     execute:
+        if count < 2:
+            @intrinsic("return")
         @intrinsic("call", "libc", "qsort", nothing, values, count, stride, comparator)
 
 function the unsigned byte value of octet:

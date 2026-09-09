@@ -36,6 +36,10 @@ function compare weighted records {pointer:left} and {pointer:right}:
             return 1
         return 0
 
+function the comparator that must not be called {pointer:left} and {pointer:right}:
+    execute:
+        @intrinsic("call", "libc", "abort", nothing)
+
 set comparator to the function named "compare unsigned values $ and $"
 allocate 5 slots of a 32 bit unsigned integer and set values to it
 @intrinsic("store at", values + 0, 4294967295 as a 32 bit unsigned integer)
@@ -53,15 +57,13 @@ print the value at (values + 4) as a line
 
 allocate one slot of a 32 bit unsigned integer and set singleton to it
 @intrinsic("store at", singleton, 17 as a 32 bit unsigned integer)
-sort native array at (singleton as a pointer) with (1 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using comparator
+set noCallComparator to the function named "the comparator that must not be called $ and $"
+sort native array at (singleton as a pointer) with (1 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using noCallComparator
 print the value at singleton as a line
 @intrinsic("call", "libc", "free", nothing, singleton)
 
-allocate one slot of a 32 bit unsigned integer and set empty to it
-@intrinsic("store at", empty, 29 as a 32 bit unsigned integer)
-sort native array at (empty as a pointer) with (0 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using comparator
-print the value at empty as a line
-@intrinsic("call", "libc", "free", nothing, empty)
+sort native array at (0 as a pointer) with (0 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using noCallComparator
+print 29 as a line
 
 allocate 5 slots of a weighted index record and set records to it
 @intrinsic("initialize at", records + 0, @intrinsic("construct", a weighted index record, 2.5, 8 as a 32 bit unsigned integer))
