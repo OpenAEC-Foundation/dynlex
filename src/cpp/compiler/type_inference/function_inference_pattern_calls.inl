@@ -1,3 +1,4 @@
+#include "direct_minimum_literal.inl"
 struct PatternCallResolution {
 	PatternDefinition *definition;
 	size_t pathIndex;
@@ -955,12 +956,7 @@ static bool inferNonFlexPatternCall(
 		expr->type = inst.returnType;
 		inferredReturnValue =
 			evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context, flexBindingFrameStack);
-		bool directlyNegatedMinimumLiteral = std::ranges::any_of(expr->arguments, [](Expression *argument) {
-			return argument && argument->kind == Expression::Kind::Literal &&
-				std::holds_alternative<MinimumSignedIntegerMagnitude>(argument->literalValue);
-		});
-		if (directlyNegatedMinimumLiteral && std::holds_alternative<std::int64_t>(inferredReturnValue.value) &&
-			std::get<std::int64_t>(inferredReturnValue.value) == std::numeric_limits<std::int64_t>::min())
+		if (isDirectMinimumSignedLiteralCall(expr, inferredReturnValue.value))
 			expr->type = {DataType::Kind::Int, 8};
 		context.setExpressionEvaluation(expr, std::move(inferredReturnValue));
 	}

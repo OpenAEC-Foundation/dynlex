@@ -28,6 +28,14 @@ set maximumPointer to @intrinsic("address of", maximum)
 set unsignedVector to a new vector with x maximum, y maximum and z (1 as a 32 bit unsigned integer)
 set shiftedVector to unsignedVector / (2 as a 32 bit unsigned integer)
 
+function checked fixed value {fixed a number:value}:
+    execute:
+        return value
+
+function checked fixed equality {fixed boolean:value}:
+    execute:
+        return value
+
 print maximum as a line
 print zero8 as a line
 print zero16 as a line
@@ -57,6 +65,17 @@ print floatTruncated as a line
 print floatHigh64RoundTrip as a line
 print @intrinsic("dereference", maximumPointer) as a line
 print the x of shiftedVector as a line
+print checked fixed value ((4294967295 as a 32 bit unsigned integer) + (1 as a 32 bit unsigned integer)) as a line
+print checked fixed value ((255 as a 8 bit unsigned integer) + (1 as a 8 bit unsigned integer)) as a line
+print checked fixed value ((65535 as a 16 bit unsigned integer) + (1 as a 16 bit unsigned integer)) as a line
+print checked fixed value (18446744073709551615 as a 64 bit unsigned integer as a 64 bit integer) as a line
+print checked fixed value (the minimum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer)) as a line
+print checked fixed value (the maximum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer)) as a line
+print checked fixed value (the absolute value of 18446744073709551615) as a line
+print checked fixed value (the floor of 18446744073709551615) as a line
+print checked fixed value (the ceiling of 18446744073709551615) as a line
+print checked fixed equality ((4294967295 as a 32 bit unsigned integer) = (4294967295 as a 64 bit floating-point number)) as a line
+print checked fixed equality ((4294967295 as a 64 bit floating-point number) = (4294967295 as a 32 bit unsigned integer)) as a line
 
 function the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
     execute:
