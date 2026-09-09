@@ -6,6 +6,7 @@
 #include "intrinsicInfo.h"
 #include "numericLiteral.h"
 #include "parseContext.h"
+#include "parseUtils.h"
 #include "patternTreeNode.h"
 #include "sectionSection.h"
 #include "stringHierarchy.h"
@@ -77,23 +78,6 @@ InstantiatedSectionBody::compileTimeValueForReference(const VariableReference *r
 			return result;
 	}
 	return std::nullopt;
-}
-
-// Process escape sequences in a string literal
-static std::string processEscapeSequences(std::string_view input) {
-	static const std::unordered_map<char, char> escapes = {{'n', '\n'}, {'t', '\t'}, {'r', '\r'},  {'a', '\a'}, {'b', '\b'},
-														   {'f', '\f'}, {'v', '\v'}, {'\\', '\\'}, {'"', '"'},	{'0', '\0'}};
-	std::string result;
-	result.reserve(input.size());
-	for (size_t i = 0; i < input.size(); ++i) {
-		if (input[i] == '\\' && i + 1 < input.size()) {
-			auto it = escapes.find(input[++i]);
-			result += (it != escapes.end()) ? it->second : input[i];
-		} else {
-			result += input[i];
-		}
-	}
-	return result;
 }
 
 void Section::collectPatternReferencesAndSections(
