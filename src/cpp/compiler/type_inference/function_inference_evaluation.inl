@@ -3,18 +3,12 @@
 #include "function_inference_integer_evaluation.inl"
 #include "function_inference_type_merging.inl"
 #include "numericLiteral.h"
-
-static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token) {
-	NumericLiteralParseResult parsed = parseNumericLiteral(token);
-	if (!parsed)
-		return std::nullopt;
-	return numericLiteralCompileTimeValue(parsed.value);
-}
+#include "compile_time_numeric_token.inl"
 
 template <typename ReadArgumentValueFn, typename ReadStoredValueFn>
 static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	Expression *expr, ParseContext &parseContext, ReadArgumentValueFn &&readArgumentValueFn,
-	ReadStoredValueFn &&readStoredValue, MinimumSignedIntegerMagnitudeEffects &minimumIntegerEffects
+	ReadStoredValueFn &&readStoredValue
 ) {
 	if (!expr)
 		return {};
@@ -105,8 +99,6 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 								  : CompileTimeValue(static_cast<std::int64_t>(truncated));
 		}
 		if (targetType.isInteger()) {
-			if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
-				recordConsumedMinimumSignedIntegerMagnitude(minimumIntegerEffects, value);
 			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
 			if (!integerValue) {
 				if (const auto *boolean = std::get_if<bool>(&value))
@@ -147,10 +139,8 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	}
 	if (kind == IntrinsicKind::Negate) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value)) {
-			recordConsumedMinimumSignedIntegerMagnitude(minimumIntegerEffects, value);
+		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 			return std::numeric_limits<std::int64_t>::min();
-		}
 		if (const auto *integer = std::get_if<std::int64_t>(&value)) {
 			std::int64_t negated = static_cast<std::int64_t>(std::uint64_t{0} - static_cast<std::uint64_t>(*integer));
 			if (expr->type.isInteger())
@@ -259,23 +249,21 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	return {};
 }
 
-static CompileTimeEvaluation
+static CompileTimeValue
 inferIntrinsicCompileTimeValue(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	(void)bindingFrameStack;
 	if (!expr)
 		return {};
 	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Return && expr->arguments.size() > 1)
-		return {.value = context.lookupExpressionValue(expr->arguments[1]), .minimumIntegerEffects = {}};
+		return context.lookupExpressionValue(expr->arguments[1]);
 	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Subject && expr->subjectSetter &&
 		expr->subjectSetter->arguments.size() > 1)
-		return {.value = context.lookupExpressionValue(expr->subjectSetter->arguments[1]), .minimumIntegerEffects = {}};
-	CompileTimeEvaluation evaluation;
-	evaluation.value = evaluatePureIntrinsicCompileTimeValue(expr, context.parseContext, [&](Expression *argumentExpression) {
+		return context.lookupExpressionValue(expr->subjectSetter->arguments[1]);
+	return evaluatePureIntrinsicCompileTimeValue(expr, context.parseContext, [&](Expression *argumentExpression) {
 		return context.lookupExpressionValue(argumentExpression);
 	}, [&](Expression *expression) {
 		return context.lookupExpressionValue(expression);
-	}, evaluation.minimumIntegerEffects);
-	return evaluation;
+	});
 }
 
 static Variable *findExecutionSectionVariable(Section *section, const std::string &name) {
@@ -344,7 +332,6 @@ struct PureSectionFlexBodyExecutionFrame {
 struct PureExecutionState {
 	ParseContext &parseContext;
 	InferenceContext *inferenceContext{};
-	MinimumSignedIntegerMagnitudeEffects minimumIntegerEffects;
 	std::vector<std::pair<Section *, std::vector<CompileTimeValue>>> activeCalls;
 	std::vector<InstantiatedSectionBody *> activeBodies;
 	std::vector<PureSectionFlexBodyExecutionFrame> sectionFlexBodyFrames;
@@ -485,17 +472,13 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		return {};
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
-	if (cachedIt != instantiation.pureReturnValuesByArguments.end()) {
-		mergeMinimumSignedIntegerMagnitudeEffects(state.minimumIntegerEffects, cachedIt->second.minimumIntegerEffects);
-		return cachedIt->second.value;
-	}
+	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
+		return cachedIt->second;
 	for (const auto &[activeSection, activeArguments] : state.activeCalls) {
 		if (activeSection == section && activeArguments == argumentValueKey)
 			return {};
 	}
 	state.activeCalls.push_back({section, argumentValueKey});
-	MinimumSignedIntegerMagnitudeEffects callerEffects = std::move(state.minimumIntegerEffects);
-	state.minimumIntegerEffects = {};
 	PureExecutionFrame frame;
 	frame.instantiation = &instantiation;
 	requireCompilerInvariant(
@@ -523,17 +506,11 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		return !executionResult.returned;
 	});
 	state.activeCalls.pop_back();
-	MinimumSignedIntegerMagnitudeEffects functionEffects = std::move(state.minimumIntegerEffects);
-	state.minimumIntegerEffects = std::move(callerEffects);
-	mergeMinimumSignedIntegerMagnitudeEffects(state.minimumIntegerEffects, functionEffects);
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
 	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
 		state.inferenceContext->trialJournal->recordInstantiationWrite(&instantiation);
-	instantiation.pureReturnValuesByArguments.emplace(
-		std::move(argumentValueKey),
-		CompileTimeEvaluation{.value = executionResult.value, .minimumIntegerEffects = std::move(functionEffects)}
-	);
+	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
 	return executionResult.value;
 }
 
@@ -614,8 +591,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 		},
 				[&](Expression *expression) {
 			return pureExecutionStoredValue(expression, state);
-		}, state.minimumIntegerEffects
-			),
+		}),
 			false,
 			{},
 		};
@@ -814,7 +790,7 @@ static PureExpressionExecutionResult executePureSection(
 	return {};
 }
 
-static CompileTimeEvaluation evaluatePureFunctionCallReturnValue(
+static CompileTimeValue evaluatePureFunctionCallReturnValue(
 	Expression *expr, PatternDefinition *definition, Section *section, Instantiation &instantiation, InferenceContext &context,
 	const BindingFrameStack &bindingFrameStack
 ) {
@@ -829,10 +805,7 @@ static CompileTimeEvaluation evaluatePureFunctionCallReturnValue(
 		return {};
 	}
 	PureExecutionState executionState{context.parseContext, &context};
-	return {
-		.value = executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues),
-		.minimumIntegerEffects = std::move(executionState.minimumIntegerEffects),
-	};
+	return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
 }
 
 static Instantiation *ensureCallableFunctionInstantiationInferred(

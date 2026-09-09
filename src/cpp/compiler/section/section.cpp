@@ -670,9 +670,6 @@ Expression *Section::detectPatternsRecursively(
 				relativeRange.subRange(reference->pattern.getLinePos(pos), reference->pattern.getLinePos(endPos));
 			std::string_view diagnosticKey;
 			switch (parsed.error) {
-			case NumericLiteralParseError::IntegerOutOfRange:
-				diagnosticKey = "integer literal out of range";
-				break;
 			case NumericLiteralParseError::UnsignedIntegerOutOfRange:
 				diagnosticKey = "unsigned integer literal out of range";
 				break;

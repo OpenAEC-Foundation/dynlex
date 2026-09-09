@@ -86,7 +86,6 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
 	expr->compileTimeValue = {};
-	expr->minimumIntegerEffects = {};
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;
@@ -713,10 +712,8 @@ class GroupingInferenceTransaction {
 			requireCompilerInvariant(savedTrialJournal, "nested grouping inference transaction has no parent journal");
 			savedTrialJournal->absorb(std::move(journal));
 		} else {
-			for (const auto &[expression, evaluation] : context.trialExpressionValues) {
-				setExpressionCompileTimeValue(expression, evaluation.value);
-				expression->minimumIntegerEffects = evaluation.minimumIntegerEffects;
-			}
+			for (const auto &[expression, value] : context.trialExpressionValues)
+				setExpressionCompileTimeValue(expression, value);
 			commitTrialCodeLineGroupings(context);
 			for (const auto &[definition, instantiation] : context.trialCallableInstantiations) {
 				requireCompilerInvariant(
@@ -766,7 +763,7 @@ class GroupingInferenceTransaction {
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
-	const std::unordered_map<Expression *, CompileTimeEvaluation> *savedInheritedTrialExpressionValues;
+	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
 	bool active = true;

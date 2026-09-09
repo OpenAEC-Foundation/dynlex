@@ -1,5 +1,4 @@
 #include "numericLiteral.h"
-#include "compilerUtils.h"
 #include <charconv>
 #include <cmath>
 #include <limits>
@@ -66,22 +65,4 @@ CompileTimeValue numericLiteralCompileTimeValue(const NumericLiteralValue &value
 	if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value))
 		return *minimumMagnitude;
 	return std::get<double>(value);
-}
-
-void recordConsumedMinimumSignedIntegerMagnitude(MinimumSignedIntegerMagnitudeEffects &effects, const CompileTimeValue &value) {
-	if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value)) {
-		requireCompilerInvariant(minimumMagnitude->identity != nullptr, "minimum integer magnitude has no identity");
-		if (!containsMinimumSignedIntegerMagnitudeIdentity(effects.consumedByNegation, minimumMagnitude->identity))
-			effects.consumedByNegation.push_back(minimumMagnitude->identity);
-	}
-}
-
-void recordRejectedMinimumSignedIntegerMagnitudeUse(
-	MinimumSignedIntegerMagnitudeEffects &effects, const CompileTimeValue &value
-) {
-	if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value)) {
-		requireCompilerInvariant(minimumMagnitude->identity != nullptr, "minimum integer magnitude has no identity");
-		if (!containsMinimumSignedIntegerMagnitudeIdentity(effects.rejectedUses, minimumMagnitude->identity))
-			effects.rejectedUses.push_back(minimumMagnitude->identity);
-	}
 }

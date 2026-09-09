@@ -431,13 +431,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
 					if (tryApplyUserConversion(expr->arguments[1], requestedType, false, context, flexBindingFrameStack)) {
 						expr->type = requestedType;
-						context.setExpressionEvaluation(
-							expr,
-							{
-								.value = context.lookupExpressionValue(expr->arguments[1]),
-								.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(expr->arguments[1]),
-							}
-						);
+						context.setExpressionValue(expr, context.lookupExpressionValue(expr->arguments[1]));
 						break;
 					}
 					if (!context.typesValid)
@@ -1012,6 +1006,6 @@ case Expression::Kind::IntrinsicCall: {
 	}
 	if (context.typesValid)
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 	break;
 }

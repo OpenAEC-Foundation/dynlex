@@ -121,7 +121,7 @@ struct Instantiation {
 	bool externallyEscapesUnknownAddress = false;
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	InstantiationPurity purity = InstantiationPurity::Pure;
-	std::map<std::vector<CompileTimeValue>, CompileTimeEvaluation> pureReturnValuesByArguments;
+	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	llvm::Function *llvmFunction = nullptr;
 	llvm::Function *llvmCallableFunction = nullptr;

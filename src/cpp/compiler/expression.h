@@ -56,7 +56,6 @@ struct Expression {
 	Kind kind = Kind::Pending;
 	DataType type;
 	CompileTimeValue compileTimeValue{};
-	MinimumSignedIntegerMagnitudeEffects minimumIntegerEffects;
 	Range range;
 
 	// For Literal: the actual value
