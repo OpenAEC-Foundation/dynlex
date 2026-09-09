@@ -1,0 +1,46 @@
+import lib/mersenne_twister.dl
+
+function require {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function print unit stream for {a 32 bit unsigned integer:seedValue}:
+    execute:
+        set generator to a new Mersenne Twister 32 engine
+        set engine to the address of generator
+        seed engine with seedValue
+        set hashValue to 2166136261 as a 32 bit unsigned integer
+        set index to 0
+        loop while index < 10000:
+            set fraction to the next 32 bit unit fraction from engine
+            require ((fraction >= (0.0 as a 32 bit floating-point number)) and (fraction < (1.0 as a 32 bit floating-point number)))
+            set bits to the value at ((the address of fraction) as a pointer to a 32 bit unsigned integer)
+            set hashValue to (hashValue bitwise xor bits) * (16777619 as a 32 bit unsigned integer)
+            increment index
+        print hashValue as a line
+        print (the next 32 bit unsigned integer from engine) as a line
+
+function unit value from raw state {a 32 bit unsigned integer:rawValue}:
+    execute:
+        set generator to a new Mersenne Twister 32 engine
+        set engine to the address of generator
+        set generator's index to 0 as a 32 bit unsigned integer
+        store rawValue into generator's state at 0
+        set fraction to the next 32 bit unit fraction from engine
+        require (generator's index = (1 as a 32 bit unsigned integer))
+        return fraction
+
+print unit stream for (0 as a 32 bit unsigned integer)
+print unit stream for (1 as a 32 bit unsigned integer)
+print unit stream for (5489 as a 32 bit unsigned integer)
+print unit stream for (2147483648 as a 32 bit unsigned integer)
+print unit stream for (4294967295 as a 32 bit unsigned integer)
+require ((unit value from raw state (0 as a 32 bit unsigned integer)) = (0.0 as a 32 bit floating-point number))
+require ((unit value from raw state (2148540932 as a 32 bit unsigned integer)) = (0.5 as a 32 bit floating-point number))
+# These pre-tempering states produce 0xFFFFFF7F, 0xFFFFFF80, and 0xFFFFFFFF.
+# The upper two round to 1.0 during float conversion but must remain below one.
+require ((unit value from raw state (46126970 as a 32 bit unsigned integer)) = (0.999999940395355224609375 as a 32 bit floating-point number))
+require ((unit value from raw state (2279697106 as a 32 bit unsigned integer)) = (0.999999940395355224609375 as a 32 bit floating-point number))
+require ((unit value from raw state (316513203 as a 32 bit unsigned integer)) = (0.999999940395355224609375 as a 32 bit floating-point number))
+print "MT unit fractions passed" as a line

@@ -50,3 +50,14 @@ function the next 32 bit unsigned integer from {a pointer to a Mersenne Twister 
         set value to value bitwise xor (value shifted right by 18)
         set the index of engine to (statePosition + 1) as a 32 bit unsigned integer
         return value
+
+# Consume one full 32-bit draw, round it to float32, and scale to [0, 1).
+# Keep the largest float below one when the integer conversion rounds upward.
+# This is distinct from discarding the low eight random bits before conversion.
+function the next 32 bit unit fraction from {a pointer to a Mersenne Twister 32 engine:engine}:
+    execute:
+        set bits to the next 32 bit unsigned integer from engine
+        set unitValue to (bits as a 32 bit floating-point number) / (4294967296.0 as a 32 bit floating-point number)
+        if unitValue >= (1.0 as a 32 bit floating-point number):
+            return 0.999999940395355224609375 as a 32 bit floating-point number
+        return unitValue
