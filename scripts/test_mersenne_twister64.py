@@ -195,6 +195,7 @@ int main() {{
         0,
         1,
         UINT64_C(1) << 32,
+        UINT64_C(1) << 63,
         UINT64_MAX / 2,
         UINT64_MAX - (UINT64_C(1) << 39) - 1,
         UINT64_MAX - (UINT64_C(1) << 39),
@@ -202,6 +203,9 @@ int main() {{
         UINT64_MAX - 2049,
         UINT64_MAX - 2048,
         UINT64_MAX - 2047,
+        UINT64_MAX - 1024,
+        UINT64_MAX - 1023,
+        UINT64_MAX - 1022,
         UINT64_MAX,
     }};
     for (std::uint64_t output : endpointValues) {{
