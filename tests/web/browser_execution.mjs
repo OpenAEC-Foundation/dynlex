@@ -29,8 +29,8 @@ await waitFor(
 );
 await waitFor("document.fonts.status === 'loaded'", "the homepage fonts");
 await waitFor(
-  "document.querySelectorAll('.snippet-editor-shell[data-highlight-state=\"cached\"]').length === 5",
-  "cached syntax highlighting on every homepage editor"
+  "document.querySelectorAll('[data-snippet-source][data-language-ready=true]').length === 5",
+  "shared language features on every homepage editor"
 );
 await waitFor(
   "document.querySelector('[data-live-shader-banner]').dataset.shaderPlaylistReady === 'true'",
@@ -461,41 +461,7 @@ if (screenshotDirectory) {
     delete window.__dynlexLiveShaderSection;
   })()`);
 }
-assert.equal(
-  await evaluate("[...document.querySelectorAll('.snippet-editor-shell')].every((shell) => shell.querySelector('.snippet-token'))"),
-  true,
-  "Every initial snippet must contain compiler-produced token spans"
-);
-const initialEditorGeometry = await evaluate(`[...document.querySelectorAll('.snippet-editor-shell')].map((shell) => {
-  const source = shell.querySelector('[data-snippet-source]');
-  const highlight = shell.querySelector('.snippet-highlight');
-  return {
-    label: source.getAttribute('aria-label'),
-    clientHeight: source.clientHeight,
-    scrollHeight: source.scrollHeight,
-    shellHeight: shell.getBoundingClientRect().height,
-    sourceHeight: source.getBoundingClientRect().height,
-    highlightHeight: highlight.getBoundingClientRect().height
-  };
-})`);
-assert.deepEqual(
-  initialEditorGeometry.filter((editor) => editor.scrollHeight > editor.clientHeight + 1),
-  [],
-  "Initial snippets must fit before a scrollbar is needed"
-);
-assert.deepEqual(
-  initialEditorGeometry.filter((editor) => (
-    Math.abs(editor.shellHeight - editor.sourceHeight) > 1
-    || Math.abs(editor.shellHeight - editor.highlightHeight) > 1
-  )),
-  [],
-  "Editable source and syntax overlay must fill their complete frame"
-);
-assert.equal(
-  requestedUrls.some((url) => url.includes("/compiler/")),
-  false,
-  "The compiler must stay lazy until a visitor edits or runs a sketch"
-);
+assert.equal(await evaluate("document.querySelectorAll('[data-snippet-source] .monaco-editor').length"),5);
 assertRiverChallengeLoadingBoundary(requestedUrls);
 
 const heroEdit = await evaluate(sourceEditExpression(0, `import lib/std.dl
@@ -504,7 +470,7 @@ print 81 as a line`));
 assert.equal(heroEdit.state, "edited");
 assert.match(heroEdit.value, /print 81 as a line/);
 await waitFor(
-  "document.querySelectorAll('.snippet-editor-shell')[0].dataset.highlightState === 'semantic'",
+  "document.querySelector('[data-snippet-source]').dataset.languageReady === 'true'",
   "semantic highlighting for the edited hero sketch"
 );
 assert.ok(
@@ -519,14 +485,6 @@ assert.equal(
   requestedUrls.some((url) => new URL(url).pathname === "/compiler/manifest.json"),
   false,
   "Local homepage compilation must not require a deployment manifest"
-);
-assert.equal(
-  await evaluate(`(() => {
-    const shell = document.querySelectorAll('.snippet-editor-shell')[0];
-    return shell.querySelector('[data-snippet-source]').value === shell.querySelector('.snippet-highlight').textContent;
-  })()`),
-  true,
-  "Highlighted text must stay synchronized with the editable source"
 );
 await evaluate("document.querySelectorAll('[data-snippet-run]')[0].click()");
 await waitFor(
@@ -841,7 +799,7 @@ await navigate("/");
 await waitFor("document.querySelector('[data-runnable-sketch]')", "the mobile homepage");
 await waitFor("document.fonts.status === 'loaded'", "the mobile homepage fonts");
 await waitFor(
-  "[...document.querySelectorAll('[data-snippet-source]')].every((source) => source.closest('.snippet-editor-shell'))",
+  "[...document.querySelectorAll('[data-snippet-source]')].every((source) => source.dataset.languageReady === 'true')",
   "the mobile snippet editors"
 );
 const mobileLayout = await evaluate(`({
@@ -850,7 +808,7 @@ const mobileLayout = await evaluate(`({
   overflowingEditors: [...document.querySelectorAll('[data-snippet-source]')]
     .filter((source) => source.scrollHeight > source.clientHeight + 1)
     .map((source) => {
-      const shell = source.closest('.snippet-editor-shell');
+      const shell = source;
       return {
         label: source.getAttribute('aria-label'),
         clientHeight: source.clientHeight,

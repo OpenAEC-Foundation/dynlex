@@ -44,8 +44,12 @@ void expandMultiWordVariableCompletionPrefix(
 			if (entered.size() <= longestPrefix || !name.starts_with(entered))
 				continue;
 			std::string committed = normalizeCompletionPatternPrefix(std::string_view(prefix.source).substr(0, start));
-			std::optional<MatcherFrontier> frontier = collectMatcherFrontier(context, sectionType, committed);
-			if (!frontier || !nodeAcceptsArgument(frontier->node, *sourceFile))
+			bool acceptsArgument = false;
+			visitCompletionFrontiers(context, sectionType, committed, [&](const MatcherFrontier &frontier) {
+				acceptsArgument = acceptsArgument || nodeAcceptsArgument(frontier.node, *sourceFile);
+				return true;
+			});
+			if (!acceptsArgument)
 				continue;
 			longestPrefix = entered.size();
 			prefix.committed = std::move(committed);

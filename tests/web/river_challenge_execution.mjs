@@ -17,7 +17,7 @@ import {
 
 await navigate("/");
 await waitFor(
-  "document.querySelectorAll('[data-runnable-sketch]').length === 2",
+  "document.querySelectorAll('[data-runnable-sketch]').length === 3",
   "the homepage"
 );
 await waitFor("document.fonts.status === 'loaded'", "the homepage fonts");

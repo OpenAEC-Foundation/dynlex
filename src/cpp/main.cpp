@@ -44,7 +44,7 @@ void printUsage(std::ostream &output) {
 		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
 		   << "  -funroll-loops|-fno-unroll-loops\n"
-		   << "  -o <output>  -g|--debug\n"
+		   << "  -o <output>  -g|--debug  --trace-execution\n"
 		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
 		   << "  --version  --help\n";
 }
@@ -255,6 +255,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			context.options.shaderStage = ParseContext::ShaderStage::Fragment;
 		} else if (arg == "-g" || arg == "--debug") {
 			context.options.emitDebugInfo = true;
+		} else if (arg == "--trace-execution") {
+			context.options.traceExecution = true;
 		} else if (arg == "-O0") {
 			context.options.optimizationLevel = 0;
 			context.options.optimizationSize = ParseContext::OptimizationSize::None;

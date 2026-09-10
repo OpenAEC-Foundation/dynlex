@@ -16,25 +16,11 @@ class TextDocument : public SourceFile {
 	// Apply an incremental change to the document
 	void applyChange(const TextDocumentContentChangeEvent &change, int newVersion);
 
-	// Convert a position (line/column) to an offset in the content
+	// Convert an LSP UTF-16 position (line/column) to an offset in the content
 	size_t positionToOffset(const Position &pos) const;
 
 	// Convert an offset to a position
 	Position offsetToPosition(size_t offset) const;
-
-	// Get the line at a given index (0-based)
-	std::string_view getLine(int lineIndex) const;
-
-	// Get the line including its trailing line terminator, if any.
-	std::string_view getLineWithTerminator(int lineIndex) const;
-
-	// Get the number of lines
-	int lineCount() const { return static_cast<int>(lineOffsets.size()); }
-
-  private:
-	std::vector<size_t> lineOffsets; // offset of each line start
-
-	void rebuildLineOffsets();
 };
 
 } // namespace lsp

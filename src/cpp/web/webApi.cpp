@@ -1,3 +1,4 @@
+#include "textEncoding.h"
 #ifdef DYNLEX_WEB
 
 #include "codegen/codegen.h"
@@ -187,12 +188,12 @@ std::string diagnosticSeverity(Diagnostic::Level level) {
 }
 
 nlohmann::json sourceLocationToJson(const SourceLocation &location) {
+	nlohmann::json result = {{"file", nullptr}, {"line", nullptr}, {"column", nullptr}};
 	if (!location.sourceFile)
-		return nullptr;
-	nlohmann::json result;
+		return result;
 	result["file"] = location.sourceFile->uri;
 	result["line"] = location.sourceFileLineIndex + 1;
-	result["column"] = location.column + 1;
+	result["column"] = lsp::utf16Column(location.sourceFile->getLine(location.sourceFileLineIndex), location.column) + 1;
 	return result;
 }
 
@@ -212,26 +213,15 @@ nlohmann::json rangeToJson(Range range) {
 void flushDiagnosticsJson(const std::vector<Diagnostic> &diagnostics) {
 	nlohmann::json entries = nlohmann::json::array();
 	for (const Diagnostic &diagnostic : diagnostics) {
-		SourceLocation start = diagnostic.range.sourceStart();
-		nlohmann::json entry;
+		nlohmann::json entry = sourceLocationToJson(diagnostic.range.sourceStart());
 		entry["severity"] = diagnosticSeverity(diagnostic.level);
 		entry["message"] = diagnostic.message;
-		entry["file"] = start.sourceFile ? nlohmann::json(start.sourceFile->uri) : nlohmann::json(nullptr);
-		entry["line"] = start.sourceFile ? nlohmann::json(start.sourceFileLineIndex + 1) : nlohmann::json(nullptr);
-		entry["column"] = start.sourceFile ? nlohmann::json(start.column + 1) : nlohmann::json(nullptr);
 		entry["range"] = rangeToJson(diagnostic.range);
 
 		nlohmann::json related = nlohmann::json::array();
 		for (const RelatedInfo &relatedInfo : diagnostic.relatedInfo) {
-			SourceLocation relatedStart = relatedInfo.range.sourceStart();
-			nlohmann::json relatedEntry;
+			nlohmann::json relatedEntry = sourceLocationToJson(relatedInfo.range.sourceStart());
 			relatedEntry["message"] = relatedInfo.message;
-			relatedEntry["file"] =
-				relatedStart.sourceFile ? nlohmann::json(relatedStart.sourceFile->uri) : nlohmann::json(nullptr);
-			relatedEntry["line"] =
-				relatedStart.sourceFile ? nlohmann::json(relatedStart.sourceFileLineIndex + 1) : nlohmann::json(nullptr);
-			relatedEntry["column"] =
-				relatedStart.sourceFile ? nlohmann::json(relatedStart.column + 1) : nlohmann::json(nullptr);
 			relatedEntry["range"] = rangeToJson(relatedInfo.range);
 			related.push_back(std::move(relatedEntry));
 		}
@@ -351,7 +341,7 @@ bool reflectShaderSpirv(const std::vector<uint8_t> &spirvBytes, std::string &uni
 	}
 }
 
-int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderStage) {
+int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderStage, bool traceExecution = false) {
 	WebCompilerState &state = webState();
 	if (!state.initialized) {
 		appendCompilerLog("error", "compiler state is not initialized");
@@ -374,6 +364,7 @@ int compileAndEmit(WebOutputKind outputKind, ParseContext::ShaderStage shaderSta
 	context.options.emitLLVM = false;
 	context.options.emitSPIRV = outputKind == WebOutputKind::ShaderSpirv;
 	context.options.shaderStage = shaderStage;
+	context.options.traceExecution = traceExecution;
 	auto memoryFileSystem = std::make_unique<lsp::MemoryFileSystem>(std::make_unique<lsp::LocalFileSystem>());
 	memoryFileSystem->setFile(kMainSourcePath, state.mainSource);
 	context.fileSystem = std::move(memoryFileSystem);
@@ -495,6 +486,10 @@ EMSCRIPTEN_KEEPALIVE void dynlex_web_set_main_source(const char *utf8Source) {
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm() {
 	return compileAndEmit(WebOutputKind::ProgramWasm, ParseContext::ShaderStage::Fragment);
+}
+
+EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_wasm_traced() {
+	return compileAndEmit(WebOutputKind::ProgramWasm, ParseContext::ShaderStage::Fragment, true);
 }
 
 EMSCRIPTEN_KEEPALIVE int dynlex_web_compile_and_emit_shader_spirv(const char *shaderStage) {

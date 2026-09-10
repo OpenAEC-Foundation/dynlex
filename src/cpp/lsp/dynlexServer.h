@@ -77,6 +77,7 @@ class DynLexServer : public LanguageServer {
 	void publishMergedDiagnostics(const std::string &fileUri);
 
 	// Convert DynLex Range to LSP Range
+	TextDocumentPositionParams bytePositionParams(TextDocumentPositionParams params) const;
 	Range convertRange(const ::Range &range) const;
 
 	// Convert DynLex Diagnostic to LSP Diagnostic

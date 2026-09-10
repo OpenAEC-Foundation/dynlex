@@ -119,38 +119,6 @@ static bool startsExplicitDefinition(std::string_view text, const SyntaxConfig &
 		   firstToken == syntax.exposedName || firstToken == syntax.implicitName;
 }
 
-static void appendSourceSlices(
-	std::vector<SourceSlice> &target, const CodeLine &source, size_t sourceStart, size_t sourceEnd, int transformedStart
-) {
-	if (sourceStart >= sourceEnd)
-		return;
-	if (source.sourceSlices.empty()) {
-		target.push_back({
-			transformedStart,
-			transformedStart + static_cast<int>(sourceEnd - sourceStart),
-			source.sourceFile,
-			source.sourceFileLineIndex,
-			static_cast<int>(sourceStart),
-		});
-		return;
-	}
-	for (const SourceSlice &slice : source.sourceSlices) {
-		size_t sliceStart = static_cast<size_t>(std::max(0, slice.transformedStart));
-		size_t sliceEnd = static_cast<size_t>(std::max(0, slice.transformedEnd));
-		size_t overlapStart = std::max(sourceStart, sliceStart);
-		size_t overlapEnd = std::min(sourceEnd, sliceEnd);
-		if (overlapStart >= overlapEnd)
-			continue;
-		target.push_back({
-			transformedStart + static_cast<int>(overlapStart - sourceStart),
-			transformedStart + static_cast<int>(overlapEnd - sourceStart),
-			slice.sourceFile,
-			slice.sourceFileLineIndex,
-			slice.sourceColumnStart + static_cast<int>(overlapStart - sliceStart),
-		});
-	}
-}
-
 class LogicalLineBuilder {
   public:
 	LogicalLineBuilder(ParseContext &context, CodeLine &source) : context(context), source(source) {}
@@ -158,7 +126,7 @@ class LogicalLineBuilder {
 	void appendSource(size_t start, size_t end) {
 		int transformedStart = static_cast<int>(text.size());
 		text += source.fullText.substr(start, end - start);
-		appendSourceSlices(slices, source, start, end, transformedStart);
+		source.appendSourceSlices(slices, start, end, transformedStart);
 	}
 
 	void appendSynthetic(std::string_view value, size_t sourceAnchor) {

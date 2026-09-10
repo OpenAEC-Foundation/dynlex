@@ -129,6 +129,7 @@ struct ParseContext {
 		// when other patterns are resolved. 256 iterations is sufficient for deeply nested patterns.
 		int maxResolutionIterations = 256;
 		bool emitDebugInfo = false;
+		bool traceExecution = false;
 	} options;
 
 	// LLVM

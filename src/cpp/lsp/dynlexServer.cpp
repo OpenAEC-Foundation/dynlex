@@ -4,6 +4,7 @@
 #include "compiler.h"
 #include "completion.h"
 #include "configDocument.h"
+#include "editorCoordinates.h"
 #include "expression.h"
 #include "lspAnalysis.h"
 #include "lspFileSystem.h"
@@ -435,20 +436,23 @@ void DynLexServer::publishMergedDiagnostics(const std::string &fileUri) {
 	publishDiagnostics(fileUri, merged);
 }
 
+TextDocumentPositionParams DynLexServer::bytePositionParams(TextDocumentPositionParams params) const {
+	params.position = compilerPosition(*documents.at(params.textDocument.uri), params.position);
+	return params;
+}
+
 Range DynLexServer::convertRange(const ::Range &range) const {
-	Range lspRange;
-	SourceLocation mappedStart = range.sourceStart();
-	SourceLocation mappedEnd = range.sourceEnd();
-	lspRange.start.line = mappedStart.sourceFileLineIndex;
-	lspRange.start.character = mappedStart.column;
-	lspRange.end.line = mappedEnd.sourceFileLineIndex;
-	lspRange.end.character = mappedEnd.column;
-	return lspRange;
+	const SourceLocation start = range.sourceStart(), end = range.sourceEnd();
+	return {
+		editorPosition(*start.sourceFile, {start.sourceFileLineIndex, start.column}),
+		editorPosition(*end.sourceFile, {end.sourceFileLineIndex, end.column})
+	};
 }
 
 Diagnostic DynLexServer::convertDiagnostic(const ::Diagnostic &diag) const {
 	Diagnostic lspDiag;
-	lspDiag.range = convertRange(diag.range);
+	// File-level failures (such as an unreadable main file) have no source span.
+	lspDiag.range = diag.range.line ? convertRange(diag.range) : Range{};
 	lspDiag.message = diag.message;
 	lspDiag.source = "dynlex";
 
@@ -507,15 +511,22 @@ CompletionList DynLexServer::onCompletion(const TextDocumentPositionParams &para
 		return {};
 	}
 	if (isConfigDocumentUri(params.textDocument.uri)) {
-		return collectConfigCompletions(*docIt->second, params.position.line, params.position.character);
+		return editorCompletions(
+			*docIt->second, collectConfigCompletions(
+								*docIt->second, params.position.line,
+								byteColumn(docIt->second->getLine(params.position.line), params.position.character)
+							)
+		);
 	}
 
 	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
 	std::string_view line = docIt->second->getLine(params.position.line);
-	size_t character = std::min<size_t>(params.position.character, line.size());
-	return collectCompletions(makeCompletionContext(
-		completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line, static_cast<int>(character)
-	));
+	int character = byteColumn(line, params.position.character);
+	return editorCompletions(
+		*docIt->second, collectCompletions(makeCompletionContext(
+							completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line, character
+						))
+	);
 }
 
 PatternFrontierList DynLexServer::onPatternFrontier(const TextDocumentPositionParams &params) {
@@ -525,7 +536,7 @@ PatternFrontierList DynLexServer::onPatternFrontier(const TextDocumentPositionPa
 
 	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
 	std::string_view line = docIt->second->getLine(params.position.line);
-	size_t character = std::min<size_t>(params.position.character, line.size());
+	int character = byteColumn(line, params.position.character);
 	return collectPatternFrontiers(makeCompletionContext(
 		completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line, static_cast<int>(character)
 	));
@@ -538,7 +549,7 @@ FilterContinuationsResult DynLexServer::onFilterContinuations(const FilterContin
 
 	ParseContext *completionContext = findCompletionContextFor(params.textDocument.uri);
 	std::string_view line = docIt->second->getLine(params.position.line);
-	size_t character = std::min<size_t>(params.position.character, line.size());
+	int character = byteColumn(line, params.position.character);
 	return filterPatternContinuations(
 		makeCompletionContext(
 			completionContext, params.textDocument.uri, line, workspaceRootPath, params.position.line,

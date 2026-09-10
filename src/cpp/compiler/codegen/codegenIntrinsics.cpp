@@ -4,6 +4,7 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "executionTrace.h"
 #include "intrinsicInfo.h"
 #include "sectionFlexBody.h"
 #include "spirv.h"

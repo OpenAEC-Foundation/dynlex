@@ -259,7 +259,7 @@
     letter-spacing: 0.1em;
 }
 
-.lab-panel > :is(.snippet-editor-shell, .snippet-editor) {
+.lab-panel > .snippet-editor {
     margin-top: 28px;
 }
 
@@ -395,7 +395,7 @@
     overflow: hidden;
 }
 
-.studio-code > :is(.snippet-editor-shell, .snippet-editor) {
+.studio-code > .snippet-editor {
     flex: 1;
     min-height: 0;
 }

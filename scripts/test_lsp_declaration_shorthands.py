@@ -4,6 +4,44 @@ import pathlib
 from lsp_tokens import LspSession, default_server_path, initialize_session, to_file_uri
 
 
+def assert_multiline_inline_tokens(root: pathlib.Path) -> None:
+    source = ('answer means: @intrinsic(\n'
+              '    "add",\n'
+              '    1,\n'
+              '    2\n'
+              ')\n'
+              'to calculate: @intrinsic(\n'
+              '    "add",\n'
+              '    3,\n'
+              '    4\n'
+              ')\n')
+    uri = to_file_uri(root / "tests/lsp/multiline-inline.dl")
+    session = LspSession(default_server_path(root), root, False, False)
+    try:
+        initialize_session(session, root)
+        session.notify("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "dynlex", "version": 1, "text": source,
+        }})
+        result = session.request("textDocument/semanticTokens/full", {"textDocument": {"uri": uri}})
+        lines = source.splitlines()
+        line = column = 0
+        previous = (0, 0)
+        locations = set()
+        for offset in range(0, len(result["data"]), 5):
+            delta_line, delta_column, length, _, _ = result["data"][offset:offset + 5]
+            line += delta_line
+            column = delta_column if delta_line else column + delta_column
+            assert length > 0 and line < len(lines), (line, column, length)
+            assert column + length <= len(lines[line]), (lines[line], column, length)
+            assert (line, column) >= previous, (previous, line, column)
+            previous = (line, column + length)
+            locations.add((line, column, lines[line][column:column + length]))
+        for line, text in [(1, '"add"'), (2, "1"), (3, "2"), (6, '"add"'), (7, "3"), (8, "4")]:
+            assert (line, 4, text) in locations, (line, text, locations)
+    finally:
+        session.close()
+
+
 def tagged_tokens(root: pathlib.Path, document: pathlib.Path) -> str:
     uri = to_file_uri(document)
     session = LspSession(default_server_path(root), root, False, False)
@@ -94,6 +132,7 @@ def edited_completion_labels(root: pathlib.Path, document: pathlib.Path, line: i
 
 def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
+    assert_multiline_inline_tokens(root)
     declaration_document = root / "tests" / "required" / "declaration_shorthands" / "main.dl"
     declaration_tokens = tagged_tokens(root, declaration_document)
     expected_comments = {

@@ -87,6 +87,7 @@ struct CodeLine {
 	bool isPatternDefinition() const;
 	bool isPatternReference() const;
 	void setOwnedText(std::string text);
+	void appendSourceSlices(std::vector<SourceSlice> &target, size_t sourceStart, size_t sourceEnd, int transformedStart) const;
 	SourceLocation mapOffsetToSource(int offset, bool preferNextAtBoundary = false) const;
 	int mapSourceToOffset(const std::string &uri, int sourceLineIndex, int column) const;
 	bool containsSourceLocation(const std::string &uri, int sourceLineIndex, int column) const;

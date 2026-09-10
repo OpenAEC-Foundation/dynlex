@@ -1,0 +1,11 @@
+.coding-goals { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:20px; padding-top:16px; border-top:1px solid #85966d55; color:#46583c; }
+.coding-goals>h4 { grid-column:1/-1; font:600 14px "Manrope",sans-serif; margin:0; }
+.coding-goals>article { padding:12px 0; border-bottom:1px solid #85966d33; }
+.coding-goals h5 { font:600 13px "Manrope",sans-serif; margin:0 0 6px; }
+.coding-goals p { margin:6px 0; font:12px/1.6 "Manrope",sans-serif; }
+.coding-goals progress { width:110px; height:6px; margin-right:10px; accent-color:#729051; }
+.coding-goals span,.coding-goals summary { font:11px/1.6 "DM Mono",monospace; }
+.coding-goals details { margin-top:8px; }.coding-goals summary { cursor:pointer; }
+.coding-goals [data-complete=true] h5 { color:#58793b; }
+.river-game .coding-goals { margin:16px 22px 22px; color:#d0dec5; }
+.river-game .coding-goals [data-complete=true] h5 { color:#b5d570; }

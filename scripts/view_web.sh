@@ -40,10 +40,7 @@ open_browser() {
 }
 
 echo "Serving $WEB_ROOT_DIR at $URL"
-(
-    cd "$WEB_ROOT_DIR"
-    python3 -m http.server "$PORT" --bind "$HOST"
-) &
+python3 "$SCRIPT_DIR/serve_web.py" "$PORT" --bind "$HOST" --directory "$WEB_ROOT_DIR" &
 SERVER_PID=$!
 
 cleanup() {

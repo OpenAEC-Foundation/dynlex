@@ -6,6 +6,7 @@ export const siteOrigin = process.env.DYNLEX_SITE_ORIGIN || "http://127.0.0.1:87
 export const screenshotDirectory = process.env.DYNLEX_SCREENSHOT_DIRECTORY;
 export const requestedUrls = [];
 export const runtimeExceptions = [];
+export const consoleErrors = [];
 const consoleMessages = [];
 
 const targets = await fetch(`${cdpOrigin}/json/list`).then((response) => response.json());
@@ -39,6 +40,7 @@ socket.addEventListener("message", (event) => {
   } else if (message.method === "Runtime.exceptionThrown") {
     runtimeExceptions.push(message.params.exceptionDetails);
   } else if (message.method === "Runtime.consoleAPICalled") {
+    if (message.params.type === "error") consoleErrors.push(message.params.args.map(argument=>argument.value ?? argument.description));
     consoleMessages.push({
       type: message.params.type,
       values: message.params.args.map((argument) => argument.value ?? argument.description ?? argument.type)
@@ -124,13 +126,14 @@ export async function dispatchKey(key, code, virtualKeyCode, modifiers = 0, text
 }
 
 export function sourceEditExpression(sketchIndex, sourceText) {
-  return `(() => {
+  return `(async () => {
+    const {monaco} = await import('/editor.js');
     const sketch = document.querySelectorAll('[data-runnable-sketch]')[${sketchIndex}];
     const source = sketch.querySelector('[data-lab-panel]:not([hidden]) [data-snippet-source]')
       || sketch.querySelector('[data-snippet-source]');
-    source.value = ${JSON.stringify(sourceText)};
-    source.dispatchEvent(new Event('input', { bubbles: true }));
-    return { state: sketch.dataset.runState, value: source.value };
+    const editor = monaco.editor.getEditors().find(editor=>editor.getContainerDomNode()===source);
+    editor.executeEdits('test',[{range:editor.getModel().getFullModelRange(),text:${JSON.stringify(sourceText)}}]);
+    return { state: sketch.dataset.runState, value: editor.getValue() };
   })()`;
 }
 

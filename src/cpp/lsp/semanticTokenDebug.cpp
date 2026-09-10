@@ -13,6 +13,7 @@
 #include "sourceFile.h"
 #include "syntaxConfig.h"
 #include "textDocument.h"
+#include "textEncoding.h"
 #include "variable.h"
 #include <algorithm>
 #include <cctype>
@@ -448,11 +449,14 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		}
 	}
 
-	std::function<void(const Expression *)> tokenizeExpression = [&](const Expression *expr) {
+	std::function<void(const Expression *, int)> tokenizeExpression = [&](const Expression *expr, int depth) {
 		if (!expr)
 			return;
+		const auto callType = getPatternCallTokenType(expr);
+		const bool isCall = expr->kind == Expression::Kind::IntrinsicCall ||
+							(expr->kind == Expression::Kind::PatternCall && callType != SemanticTokenType::Section);
 		for (const Expression *arg : expr->arguments)
-			tokenizeExpression(arg);
+			tokenizeExpression(arg, depth + (isCall ? 1 : 0));
 		switch (expr->kind) {
 		case Expression::Kind::Literal:
 			if (std::holds_alternative<std::string>(expr->literalValue))
@@ -463,10 +467,10 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 				addToken(expr->range, SemanticTokenType::Number, false);
 			break;
 		case Expression::Kind::IntrinsicCall:
-			addToken(expr->range, SemanticTokenType::Intrinsic, false);
+			addTokenWithModifiers(expr->range, SemanticTokenType::Intrinsic, callDepthModifier(depth));
 			break;
 		case Expression::Kind::PatternCall:
-			addToken(expr->range, getPatternCallTokenType(expr), false);
+			addTokenWithModifiers(expr->range, callType, isCall ? callDepthModifier(depth) : 0);
 			break;
 		case Expression::Kind::Variable:
 			if (expr->variable) {
@@ -487,7 +491,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		if (pathutil::toAbsoluteUri(line->sourceFile->uri) != uri || !line->expression ||
 			(!hasAllPatterns && (!hasFunctionPatterns || !isInsidePatternDefinition(line))))
 			continue;
-		tokenizeExpression(line->expression);
+		tokenizeExpression(line->expression, 0);
 	}
 
 	for (CodeLine *line : context.codeLines) {
@@ -541,7 +545,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 	return builder.tokenLines();
 }
 
-std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToken>> &tokensByLine) {
+std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToken>> &tokensByLine, const SourceFile &source) {
 	std::vector<int> data;
 	int prevLine = 0;
 	int prevChar = 0;
@@ -552,15 +556,17 @@ std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToke
 			return a.start < b.start;
 		});
 		for (const SemanticToken &t : lineTokens) {
+			int start = utf16Column(source.getLine(line), t.start);
+			int end = utf16Column(source.getLine(line), t.end);
 			int deltaLine = line - prevLine;
-			int deltaChar = (deltaLine == 0) ? (t.start - prevChar) : t.start;
+			int deltaChar = (deltaLine == 0) ? (start - prevChar) : start;
 			data.push_back(deltaLine);
 			data.push_back(deltaChar);
-			data.push_back(t.end - t.start);
+			data.push_back(end - start);
 			data.push_back(static_cast<int>(t.type));
 			data.push_back(t.modifiers);
 			prevLine = line;
-			prevChar = t.start;
+			prevChar = start;
 		}
 	}
 
@@ -654,7 +660,10 @@ std::string renderTaggedSemanticTokensFromData(std::string_view text, const std:
 		prevChar = start;
 		if (line < 0 || line >= static_cast<int>(tokensByLine.size()))
 			continue;
-		tokensByLine[line].push_back({start, start + length, static_cast<SemanticTokenType>(tokenType), modifiers});
+		tokensByLine[line].push_back(
+			{byteColumn(lines[line], start), byteColumn(lines[line], start + length), static_cast<SemanticTokenType>(tokenType),
+			 modifiers}
+		);
 	}
 
 	std::string out;
@@ -696,7 +705,7 @@ std::string renderTaggedSemanticTokens(ParseContext &context, const std::string 
 	std::vector<std::string_view> lines = splitLines(sourceFile->content);
 	std::vector<std::vector<SemanticToken>> tokensByLine =
 		collectSemanticTokens(context, pathutil::toAbsoluteUri(path), static_cast<int>(lines.size()), suppressOnFileErrors);
-	return renderTaggedSemanticTokensFromData(sourceFile->content, encodeSemanticTokens(tokensByLine));
+	return renderTaggedSemanticTokensFromData(sourceFile->content, encodeSemanticTokens(tokensByLine, *sourceFile));
 }
 
 } // namespace lsp

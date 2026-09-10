@@ -10,7 +10,7 @@ const paths = {
   homepage: path.join(webDir, "homepage.js"),
   challenge: path.join(webDir, "river-challenge.js"),
   art: path.join(webDir, "river-character-art.js"),
-  editor: path.join(webDir, "river-challenge-editor.js"),
+  editor: path.join(webDir, "river-program.js"),
   audio: path.join(webDir, "river-challenge-audio.js"),
   model: path.join(webDir, "river-challenge-model.js"),
   styles: path.join(webDir, "river-challenge.css"),
@@ -107,15 +107,10 @@ assert.match(challenge, /data-river-speed/);
 assert.match(challenge, /data-river-reset/);
 assert.match(challenge, /data-river-mute/);
 assert.match(challenge, /animation-play-state/);
-assert.match(challenge, /analyzeDynLex/);
-assert.match(challenge, /completeDynLex/);
-assert.match(challenge, /data-river-source-diagnostics/);
-assert.match(challenge, /data-river-source-playback/);
-assert.match(challenge, /data-river-completions/);
-assert.match(editor, /renderSemanticTokens/);
-assert.match(editor, /rebaseLspDiagnosticsAfterLines/);
-assert.match(editor, /dynlex|DynLex/);
-assert.match(editor, /riverCommandCallRanges/);
+assert.match(challenge, /createEditor/);
+assert.match(challenge, /editor\.decorate/);
+assert.doesNotMatch(challenge, /createRiverCompletions|renderSemanticTokens|<textarea/);
+assert.match(challenge, /showExecution/);
 assert.doesNotMatch(challenge, /commandFromLine|commandLineNumbers/);
 assert.match(challenge, /createRiverChallengeAudio/);
 assert.match(challenge, /event\.action === "CROSS" \? "rowing" : "boat"/);
@@ -146,11 +141,6 @@ assert.match(
   attributions,
   /forest-with-small-river-birds-and-nature-field-recording-6735/
 );
-assert.match(styles, /\[data-river-line-state="active"\]/);
-assert.match(styles, /\[data-river-line-state="error"\]/);
-assert.match(styles, /\[data-river-call-state="active"\]/);
-assert.match(styles, /\[data-river-call-state="error"\]/);
-assert.match(styles, /\.river-completions/);
 assert.match(styles, /\.river-sheep\.is-bellowing \.river-sheep-mouth/);
 assert.match(styles, /sheep\.webp/);
 assert.match(styles, /sheep-blink\.webp/);
@@ -182,9 +172,9 @@ for (const pattern of [
 ]) {
   assert.match(library, new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
-assert.match(library, /function \[the\|\] sheep:/);
-assert.match(library, /function \[the\|\] wolf:/);
-assert.match(library, /function \[the\|\] hay:/);
+assert.match(library, /^\[the\|\] sheep means:/m);
+assert.match(library, /^\[the\|\] wolf means:/m);
+assert.match(library, /^\[the\|\] hay means:/m);
 assert.doesNotMatch(
   library,
   /^\s+(?:get|put|load|take|unload|let) (?:the )?(?:sheep|wolf|hay)\b/m,
@@ -202,72 +192,6 @@ const {
   createInitialRiverScene,
   parseRiverTrace
 } = await import(pathToFileURL(paths.model).href);
-const {
-  riverCommandCallRanges,
-  riverCompletionPlacement
-} = await import(pathToFileURL(paths.editor).href);
-
-assert.deepEqual(riverCompletionPlacement({
-  caret: { top: 72, right: 81, bottom: 92, left: 80 },
-  container: { width: 500, height: 300 },
-  list: { width: 220, height: 140 }
-}), {
-  placement: "right",
-  left: 89,
-  top: 72
-});
-assert.deepEqual(riverCompletionPlacement({
-  caret: { top: 52, right: 261, bottom: 72, left: 260 },
-  container: { width: 300, height: 300 },
-  list: { width: 220, height: 140 }
-}), {
-  placement: "below",
-  left: 72,
-  top: 80
-});
-assert.deepEqual(riverCompletionPlacement({
-  caret: { top: 190, right: 261, bottom: 210, left: 260 },
-  container: { width: 300, height: 300 },
-  list: { width: 220, height: 140 }
-}), {
-  placement: "above",
-  left: 72,
-  top: 42
-});
-
-const repeatedCallRanges = riverCommandCallRanges([
-  {
-    range: {
-      start: { line: 2, character: 0 },
-      end: { line: 2, character: 25 }
-    },
-    definition: { uri: "file:///lib/river_challenge.dl" },
-    returnType: "nothing"
-  },
-  {
-    range: {
-      start: { line: 2, character: 30 },
-      end: { line: 2, character: 51 }
-    },
-    definition: { uri: "file:///lib/river_challenge.dl" },
-    returnType: "nothing"
-  }
-], 3);
-assert.deepEqual(repeatedCallRanges, [
-  {
-    start: { line: 0, character: 0 },
-    end: { line: 0, character: 25 }
-  },
-  {
-    start: { line: 0, character: 30 },
-    end: { line: 0, character: 51 }
-  },
-  {
-    start: { line: 0, character: 0 },
-    end: { line: 0, character: 25 }
-  }
-]);
-
 const trace = parseRiverTrace([
   "RIVER|COMMAND|LOAD|HAY",
   "RIVER|ACTION|LOAD|HAY",
@@ -282,11 +206,15 @@ assert.equal(trace.commands.length, 2);
 assert.deepEqual(trace.commands[0], {
   action: "LOAD",
   subject: "HAY",
+  range: null,
+  branch: null,
   events: [{ type: "ACTION", action: "LOAD", subject: "HAY" }]
 });
 assert.deepEqual(trace.commands[1], {
   action: "CROSS",
   subject: null,
+  range: null,
+  branch: null,
   events: [
     { type: "ACTION", action: "CROSS", subject: "FAR" },
     { type: "DANGER", predator: "WOLF", prey: "SHEEP" },

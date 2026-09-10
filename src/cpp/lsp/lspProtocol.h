@@ -172,6 +172,13 @@ enum class CompletionItemKind {
 	File = 17,
 };
 
+struct Command {
+	std::string title;
+	std::string command;
+};
+
+inline void to_json(Json &j, const Command &command) { j = Json{{"title", command.title}, {"command", command.command}}; }
+
 struct CompletionItem {
 	std::string label;
 	std::optional<CompletionItemKind> kind;
@@ -179,6 +186,7 @@ struct CompletionItem {
 	std::optional<std::string> insertText;
 	std::optional<std::string> sortText;
 	std::optional<TextEdit> textEdit;
+	std::optional<Command> command;
 };
 
 inline void to_json(Json &j, const CompletionItem &item) {
@@ -197,6 +205,9 @@ inline void to_json(Json &j, const CompletionItem &item) {
 	}
 	if (item.textEdit) {
 		j["textEdit"] = *item.textEdit;
+	}
+	if (item.command) {
+		j["command"] = *item.command;
 	}
 }
 
@@ -482,6 +493,7 @@ struct ServerCapabilities {
 inline void to_json(Json &j, const ServerCapabilities &c) {
 	j = Json{
 		{"textDocumentSync", c.textDocumentSync},
+		{"positionEncoding", "utf-16"},
 		{"definitionProvider", c.definitionProvider},
 		{"hoverProvider", c.hoverProvider},
 		{"semanticTokensProvider", Json{{"full", c.semanticTokensProvider.full}, {"legend", c.semanticTokensProvider.legend}}}

@@ -1,5 +1,6 @@
 #include "configDocument.h"
 #include "completion.h"
+#include "editorCoordinates.h"
 #include "semanticTokenBuilder.h"
 #include "semanticTokenDebug.h"
 #include "syntaxConfig.h"
@@ -501,9 +502,10 @@ bool isConfigDocumentUri(std::string_view uri) {
 std::vector<Diagnostic> collectConfigDiagnostics(const TextDocument &document) {
 	std::vector<Diagnostic> diagnostics;
 	std::vector<std::unique_ptr<ConfigNode>> roots;
-	if (!parseConfigDocument(document, diagnostics, roots))
-		return diagnostics;
-	validateConfigTree(roots, diagnostics);
+	if (parseConfigDocument(document, diagnostics, roots))
+		validateConfigTree(roots, diagnostics);
+	for (auto &diagnostic : diagnostics)
+		diagnostic.range = editorRange(document, diagnostic.range);
 	return diagnostics;
 }
 
@@ -511,7 +513,7 @@ std::vector<int> encodeConfigSemanticTokens(const TextDocument &document) {
 	SemanticTokenBuilder builder(document.lineCount());
 	for (int lineIndex = 0; lineIndex < document.lineCount(); ++lineIndex)
 		addConfigLineTokens(builder, lineIndex, document.getLine(lineIndex));
-	return encodeSemanticTokens(builder.tokenLines());
+	return encodeSemanticTokens(builder.tokenLines(), document);
 }
 
 CompletionList collectConfigCompletions(const TextDocument &document, int line, int character) {

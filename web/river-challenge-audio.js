@@ -259,6 +259,7 @@ export async function createRiverChallengeAudio(section, music, muteButton, shee
     observer.disconnect();
     document.removeEventListener("visibilitychange", visibilityChange);
     muteButton.removeEventListener("click", toggleMute);
+    window.removeEventListener("pagehide", destroy);
     for (const record of [...activeSources]) {
       stopRecord(record);
     }
@@ -278,6 +279,7 @@ export async function createRiverChallengeAudio(section, music, muteButton, shee
   syncAudibility();
 
   return Object.freeze({
+    destroy,
     playOneShot(name) {
       return playCue(name, false, () => undefined);
     },

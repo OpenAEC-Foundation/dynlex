@@ -4,6 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
+    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/preview_cache_browser.mjs" "$0"
+    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/indentation_browser.mjs" "$0"
+    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/farm_collection_browser.mjs" "$0"
     DYNLEX_TEST_WEB_SERVER=static "$0"
     DYNLEX_TEST_WEB_SERVER=static \
         DYNLEX_TEST_GRAPHICS=webgl \
@@ -68,7 +74,7 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "$WEB_SERVER" == "static" ]]; then
-    python3 -m http.server "$SERVER_PORT" --directory "$PROJECT_DIR/web" >"$SERVER_LOG" 2>&1 &
+    python3 "$SCRIPT_DIR/serve_web.py" "$SERVER_PORT" --directory "$PROJECT_DIR/web" >"$SERVER_LOG" 2>&1 &
 elif [[ "$WEB_SERVER" == "vite" ]]; then
     (cd "$PROJECT_DIR/src/web/ide" && npm run dev -- --host 127.0.0.1 --port "$SERVER_PORT") >"$SERVER_LOG" 2>&1 &
 else

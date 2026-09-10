@@ -265,6 +265,11 @@ void addCompletionItem(
 	CompletionItem item;
 	item.label = label;
 	item.kind = kind;
+	// Accepting a completion is an edit, not a typed trigger character. Both editor
+	// clients use this command to continue through the pattern's next argument or literal.
+	if (kind != CompletionItemKind::File) {
+		item.command = Command{"Continue completion", "editor.action.triggerSuggest"};
+	}
 	if (!detail.empty()) {
 		item.detail = std::move(detail);
 	}
@@ -431,8 +436,9 @@ collectMatcherFrontierCandidates(const CompletionContext &context, SectionType s
 		}
 
 		bool sourceComplete = current.sourceElementIndex == reference.patternElements.size();
-		if (sourceComplete && matchStep.nextMatches.empty() &&
-			subtreeHasVisibleDefinition(current.currentNode, *completionSourceFile(context))) {
+		// A completed call can still have a longer overload, even when the matcher
+		// also resumes its parent or extends it as an operand of another call.
+		if (sourceComplete && subtreeHasVisibleDefinition(current.currentNode, *completionSourceFile(context))) {
 			size_t parentDepth = 0;
 			for (const MatchProgress *nested = &current; nested->parents;) {
 				requireCompilerInvariant(
@@ -456,19 +462,24 @@ collectMatcherFrontierCandidates(const CompletionContext &context, SectionType s
 	return candidates;
 }
 
-std::optional<MatcherFrontier>
-collectMatcherFrontier(const CompletionContext &context, SectionType sectionType, const std::string &linePrefix) {
-	std::vector<MatcherFrontierCandidate> candidates = collectMatcherFrontierCandidates(context, sectionType, linePrefix);
-	if (candidates.empty())
-		return std::nullopt;
-	const MatcherFrontierCandidate &best = *std::min_element(
-		candidates.begin(), candidates.end(),
-		[](const MatcherFrontierCandidate &left, const MatcherFrontierCandidate &right) {
+// Rank only frontiers that can contribute at the cursor. Choosing one parse
+// before matching the partial token loses valid nested literal continuations.
+template <typename Visitor>
+void visitCompletionFrontiers(
+	const CompletionContext &context, SectionType sectionType, const std::string &linePrefix, Visitor visit
+) {
+	auto candidates = collectMatcherFrontierCandidates(context, sectionType, linePrefix);
+	std::stable_sort(candidates.begin(), candidates.end(), [](const auto &left, const auto &right) {
 		return std::tie(left.variableCount, left.parentDepth, left.completedSubmatchCount) <
 			   std::tie(right.variableCount, right.parentDepth, right.completedSubmatchCount);
+	});
+	std::optional<size_t> variableCount;
+	for (const auto &candidate : candidates) {
+		if (variableCount && candidate.variableCount > *variableCount)
+			break;
+		if (visit(candidate.frontier))
+			variableCount = candidate.variableCount;
 	}
-	);
-	return best.frontier;
 }
 
 std::string pathToSlashString(const std::filesystem::path &path) { return path.generic_string(); }
@@ -615,201 +626,7 @@ void addKeywordCompletions(
 
 #include "completion_prefix.inl"
 
-struct PartialMatches {
-	bool any = false;
-	bool exact = false;
-
-	void include(const PartialMatches &other) {
-		any = any || other.any;
-		exact = exact || other.exact;
-	}
-};
-
-PatternFrontier describePatternFrontier(
-	const MatcherFrontier &matcherFrontier, SectionType sectionType, const SourceFile &sourceFile,
-	std::optional<std::string_view> partial
-) {
-	PatternFrontier result;
-	result.patternKind = sectionTypeToString(sectionType);
-	result.canComplete = !partial && nodeHasVisibleDefinition(matcherFrontier.node, sourceFile);
-
-	if (matcherFrontier.node) {
-		for (const auto &[literal, child] : matcherFrontier.node->literalChildren) {
-			if (partial && !literal.starts_with(*partial))
-				continue;
-			std::string remaining = literal.substr(partial ? partial->size() : 0);
-			if (!remaining.empty() && subtreeHasVisibleDefinition(child, sourceFile))
-				result.transitions.push_back({"literal", std::move(remaining)});
-		}
-		if (!partial && nodeAcceptsArgument(matcherFrontier.node, sourceFile))
-			result.transitions.push_back({"argument", {}});
-	}
-
-	std::sort(
-		result.transitions.begin(), result.transitions.end(),
-		[](const PatternFrontierTransition &left, const PatternFrontierTransition &right) {
-		return std::tie(left.kind, left.text) < std::tie(right.kind, right.text);
-	}
-	);
-	return result;
-}
-
-std::string patternFrontierKey(const PatternFrontier &frontier) {
-	std::string key = frontier.patternKind;
-	key += frontier.canComplete ? "\1" : "\0";
-	for (const PatternFrontierTransition &transition : frontier.transitions) {
-		key += transition.kind;
-		key += '\0';
-		key += transition.text;
-		key += '\1';
-	}
-	return key;
-}
-
-void appendPatternFrontiers(
-	const CompletionContext &context, SectionType sectionType, const CompletionPrefix &prefix,
-	std::vector<PatternFrontier> &frontiers, std::set<std::string> &seen
-) {
-	CompletionPrefix effectivePrefix = prefix;
-	expandMultiWordVariableCompletionPrefix(context, sectionType, visibleVariableNames(context), effectivePrefix);
-	SourceFile *sourceFile = completionSourceFile(context);
-	auto append = [&](const std::vector<MatcherFrontierCandidate> &candidates, std::optional<std::string_view> partial) {
-		for (const MatcherFrontierCandidate &candidate : candidates) {
-			PatternFrontier frontier = describePatternFrontier(candidate.frontier, sectionType, *sourceFile, partial);
-			if (!frontier.canComplete && frontier.transitions.empty())
-				continue;
-			if (seen.insert(patternFrontierKey(frontier)).second)
-				frontiers.push_back(std::move(frontier));
-		}
-	};
-
-	append(
-		collectMatcherFrontierCandidates(context, sectionType, effectivePrefix.committed),
-		effectivePrefix.partial ? std::optional<std::string_view>(effectivePrefix.partial->text) : std::nullopt
-	);
-	if (effectivePrefix.partial)
-		append(collectMatcherFrontierCandidates(context, sectionType, effectivePrefix.normalized), std::nullopt);
-}
-
-PartialMatches collectPartialLiteralSuggestions(
-	PatternTreeNode *node, std::string_view partial, std::vector<CompletionItem> &items, std::set<std::string> &seen,
-	std::string_view detailPrefix, std::string_view sortPrefix, const SourceFile &sourceFile, const CompletionContext &context
-) {
-	PartialMatches matches;
-	if (!node)
-		return matches;
-
-	std::vector<std::string> literals;
-	for (const auto &[literal, child] : node->literalChildren) {
-		if (!literal.starts_with(partial) || !subtreeHasVisibleDefinition(child, sourceFile))
-			continue;
-		matches.any = true;
-		std::string suggestion = extendLiteralSuggestion(literal, child);
-		if (literal.size() == partial.size()) {
-			matches.exact = true;
-			if (suggestion == literal)
-				continue;
-		}
-		literals.push_back(std::move(suggestion));
-	}
-
-	std::sort(literals.begin(), literals.end());
-	for (const std::string &literal : literals) {
-		TextEdit textEdit;
-		textEdit.range = makeRange(context.line, context.character - static_cast<int>(partial.size()), context.character);
-		textEdit.newText = literal;
-		addCompletionItem(
-			items, seen, literal, CompletionItemKind::Keyword, std::string(detailPrefix), literal,
-			std::string(sortPrefix) + literal, std::move(textEdit)
-		);
-	}
-	return matches;
-}
-
-PartialMatches collectPartialVariableSuggestions(
-	PatternTreeNode *node, const std::set<std::string> &variableNames, std::string_view partial,
-	std::vector<CompletionItem> &items, std::set<std::string> &seen, const SourceFile &sourceFile,
-	const CompletionContext &context
-) {
-	PartialMatches matches;
-	if (!nodeAcceptsArgument(node, sourceFile))
-		return matches;
-	for (const std::string &name : variableNames) {
-		if (!name.starts_with(partial))
-			continue;
-		matches.any = true;
-		matches.exact = matches.exact || name.size() == partial.size();
-	}
-	collectVariableSuggestions(
-		node, variableNames, items, seen, sourceFile, context, partial, completionSourceSuffixLength(context, partial)
-	);
-	return matches;
-}
-
-void collectStableFrontierSuggestions(
-	const MatcherFrontier &frontier, std::string_view detailPrefix, const CompletionContext &context,
-	std::vector<CompletionItem> &items, std::set<std::string> &seenLabels
-) {
-	SourceFile *sourceFile = completionSourceFile(context);
-	TextEdit insertionEdit;
-	insertionEdit.range = makeRange(context.line, context.character, context.character);
-
-	collectNextLiteralSuggestions(
-		frontier.node, items, seenLabels, std::string(detailPrefix) + " next token", "0_", *sourceFile, insertionEdit
-	);
-	if (!nodeAcceptsArgument(frontier.node, *sourceFile))
-		return;
-
-	PatternTreeNode *functionRoot = context.parseContext->patternTrees[(int)SectionType::Function];
-	requireCompilerInvariant(functionRoot != nullptr, "completion substitution requires a function pattern tree");
-	collectNextLiteralSuggestions(
-		functionRoot, items, seenLabels, "function pattern substitution", "1_", *sourceFile, insertionEdit
-	);
-
-	std::set<std::string> variableNames = visibleVariableNames(context);
-	variableNames.insert(frontier.acceptedVariables.begin(), frontier.acceptedVariables.end());
-	collectVariableSuggestions(frontier.node, variableNames, items, seenLabels, *sourceFile, context);
-}
-
-void collectMatcherFrontierCompletions(
-	SectionType sectionType, std::string_view detailPrefix, const CompletionContext &context, const std::string &linePrefix,
-	std::vector<CompletionItem> &items, std::set<std::string> &seenLabels
-) {
-	CompletionPrefix prefix = splitCompletionPrefix(linePrefix);
-	std::set<std::string> variableNames = visibleVariableNames(context);
-	expandMultiWordVariableCompletionPrefix(context, sectionType, variableNames, prefix);
-	std::optional<MatcherFrontier> committedFrontier = collectMatcherFrontier(context, sectionType, prefix.committed);
-	if (!committedFrontier)
-		return;
-
-	if (!prefix.partial) {
-		collectStableFrontierSuggestions(*committedFrontier, detailPrefix, context, items, seenLabels);
-		return;
-	}
-
-	SourceFile *sourceFile = completionSourceFile(context);
-	PartialMatches matches = collectPartialLiteralSuggestions(
-		committedFrontier->node, prefix.partial->text, items, seenLabels, std::string(detailPrefix) + " token", "0_",
-		*sourceFile, context
-	);
-	variableNames.insert(committedFrontier->acceptedVariables.begin(), committedFrontier->acceptedVariables.end());
-	if (nodeAcceptsArgument(committedFrontier->node, *sourceFile)) {
-		PatternTreeNode *functionRoot = context.parseContext->patternTrees[(int)SectionType::Function];
-		requireCompilerInvariant(functionRoot != nullptr, "completion substitution requires a function pattern tree");
-		matches.include(collectPartialLiteralSuggestions(
-			functionRoot, prefix.partial->text, items, seenLabels, "function pattern substitution", "1_", *sourceFile, context
-		));
-		matches.include(collectPartialVariableSuggestions(
-			committedFrontier->node, variableNames, prefix.partial->text, items, seenLabels, *sourceFile, context
-		));
-	}
-
-	if (!matches.any || matches.exact) {
-		std::optional<MatcherFrontier> fullFrontier = collectMatcherFrontier(context, sectionType, prefix.normalized);
-		if (fullFrontier)
-			collectStableFrontierSuggestions(*fullFrontier, detailPrefix, context, items, seenLabels);
-	}
-}
+#include "completion_suggestions.inl"
 
 std::string getLinePrefixFromFile(const std::string &path, int zeroBasedLine, int zeroBasedCharacter) {
 	std::ifstream file(path);

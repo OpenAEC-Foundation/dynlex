@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /players/{uid}/games/progress {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['version', 'payload', 'updatedAt'])
+        && request.resource.data.version == 7
+        && request.resource.data.payload is string
+        && request.resource.data.payload.size() <= 900000
+        && request.resource.data.updatedAt == request.time;
+    }
+  }
+}

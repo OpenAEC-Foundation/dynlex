@@ -35,7 +35,7 @@ void MemoryFileSystem::setFile(const std::string &path, std::string content) {
 	if (inserted)
 		it->second = std::make_unique<SourceFile>(path, std::move(content));
 	else
-		it->second->content = std::move(content);
+		it->second->setContent(std::move(content));
 }
 
 void MemoryFileSystem::removeFile(const std::string &path) { files.erase(path); }

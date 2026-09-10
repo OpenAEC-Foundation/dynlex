@@ -362,3 +362,13 @@ the four floating-point components while the intrinsic layer owns the stage rest
 # LSP Interaction
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.
+
+Compiler ranges and source slices use UTF-8 byte offsets. Editor-facing APIs use
+UTF-16 columns: incoming edits and cursor positions convert to bytes, and outgoing
+ranges, semantic tokens, web diagnostics, and execution traces convert back.
+Source files share line indexing; the semantic token encoder is shared by the
+language server and tagged-token inspection tools.
+
+Document symbols combine the authored ranges of their opening line, own code,
+and descendant sections. Anonymous execution and branch sections contribute to
+the enclosing symbol's extent; named nested definitions also remain child symbols.

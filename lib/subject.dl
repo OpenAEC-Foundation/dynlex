@@ -1,0 +1,2 @@
+# Shared subject reader. Libraries choose when an action sets the subject.
+it means: @intrinsic("subject")

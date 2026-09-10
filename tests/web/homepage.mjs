@@ -15,10 +15,8 @@ const files = {
   navigation: path.join(webDir, "site-navigation.js"),
   javascript: path.join(webDir, "homepage.js"),
   lspClient: path.join(webDir, "lsp-client.js"),
-  highlightCache: path.join(webDir, "snippet-highlights.js"),
-  highlightKey: path.join(webDir, "snippet-highlight-key.js"),
   semanticHighlighter: path.join(webDir, "semantic-highlighting.js"),
-  semanticTokenLegend: path.join(webDir, "semantic-token-legend.js")
+  editor: path.join(projectDir, "src/web/ide/src/editor.js")
 };
 
 for (const filePath of Object.values(files)) {
@@ -58,7 +56,7 @@ assert.equal((html.match(/data-runnable-sketch/g) ?? []).length, 3, "Homepage ne
 assert.equal((html.match(/data-snippet-source/g) ?? []).length, 5, "Runnable sketches need editable source fields");
 assert.equal((html.match(/data-snippet-run/g) ?? []).length, 3, "Runnable sketches need run controls");
 assert.equal((html.match(/data-snippet-output/g) ?? []).length, 3, "Runnable sketches need inline output");
-assert.match(html, /<textarea[^>]+data-snippet-source/);
+assert.match(html, /<div[^>]+data-snippet-source/);
 assert.doesNotMatch(
   html,
   /class="studio-window[^"]*"[^>]*aria-hidden="true"/,
@@ -93,16 +91,9 @@ const homepageCss = [
 assert.match(homepageJavascript, /new URL\("\.\/compiler\/compiler-worker\.js", import\.meta\.url\)/);
 assert.doesNotMatch(homepageJavascript, /compiler\/manifest\.json|searchParams\.set\("revision"/);
 assert.match(homepageJavascript, /new Worker\(workerUrl/);
-assert.match(homepageJavascript, /from "\.\/snippet-highlights\.js"/);
-assert.match(homepageJavascript, /from "\.\/snippet-highlight-key\.js"/);
-assert.match(homepageJavascript, /from "\.\/semantic-highlighting\.js"/);
-assert.match(homepageJavascript, /textDocument\/semanticTokens\/full/);
-assert.match(homepageJavascript, /new LspSession/);
-assert.doesNotMatch(homepageJavascript, /initializeLsp|shutdownLsp|new LspClient/);
-assert.match(
-  homepageJavascript,
-  /snippetLsp\.request\(\s*"dynlex\/callExpressions",\s*snippetLspDocument\.identifier\s*\)/
-);
+assert.match(homepageJavascript, /from "\.\/editor\.js"/);
+assert.match(homepageJavascript, /createDynLexEditor/);
+assert.doesNotMatch(homepageJavascript, /setRangeText|scheduleSemanticHighlight|textDocument\/completion/);
 assert.match(lspClientJavascript, /dynlex\/activeCursorChanged/);
 assert.match(homepageJavascript, /initializeSiteNavigation\(\)/);
 assert.doesNotMatch(homepageJavascript, /function setMenu\(/);
@@ -114,17 +105,8 @@ assert.doesNotMatch(
   "Snippet initialization must not branch for individual homepage editors"
 );
 
-const highlightCache = fs.readFileSync(files.highlightCache, "utf8");
-assert.match(highlightCache, /semanticHighlightCache/);
-assert.match(highlightCache, /new Map\(/);
-assert.match(highlightCache, /from "\.\/semantic-token-legend\.js"/);
-assert.doesNotMatch(highlightCache, /import lib\//, "Generated cache must not duplicate homepage source text");
-
-const highlightKey = fs.readFileSync(files.highlightKey, "utf8");
-assert.match(highlightKey, /SHA-256/);
 const semanticHighlighter = fs.readFileSync(files.semanticHighlighter, "utf8");
 assert.match(semanticHighlighter, /export function renderSemanticTokens/);
-assert.match(semanticHighlighter, /export function semanticLegendsMatch/);
 assert.match(homepageCss, /::-webkit-scrollbar-thumb/);
 assert.match(homepageCss, /scrollbar-color:/);
 assert.match(homepageCss, /\*::-webkit-scrollbar-track/);

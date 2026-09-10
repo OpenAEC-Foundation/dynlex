@@ -1,99 +1,12 @@
-import * as monaco from "monaco-editor/editor";
-import "monaco-editor/features/clipboard/register";
-import "monaco-editor/features/codeAction/register";
-import "monaco-editor/features/codicon/register";
-import "monaco-editor/features/contextmenu/register";
-import "monaco-editor/features/documentSymbols/register";
-import "monaco-editor/features/find/register";
-import "monaco-editor/features/gotoSymbol/register";
-import "monaco-editor/features/hover/register";
-import "monaco-editor/features/readOnlyMessage/register";
-import "monaco-editor/features/semanticTokens/register";
-import "monaco-editor/editor/contrib/semanticTokens/browser/documentSemanticTokens";
-import "monaco-editor/editor/contrib/suggest/browser/suggestController";
 import {
   createShaderPreview,
   validateShaderGeometryDescriptor
 } from "../../../../web/shader-renderer.js";
 import { isGeneratedTerrainGeometryDescriptor } from "../../../../web/terrain-geometry.js";
-import { DynLexLanguageFeatures } from "./lspIntegration.js";
+import { createDynLexEditor, monaco } from "./editor.js";
 import "./styles.css";
 
-self.MonacoEnvironment = {
-  getWorker() {
-    return new Worker(new URL("monaco-editor/editor/editor.worker.js", import.meta.url), {
-      type: "module"
-    });
-  }
-};
-
 const THEME_STORAGE_KEY = "dynlex-web-theme";
-
-monaco.languages.register({ id: "dynlex" });
-
-const scrollbarThemeColors = Object.freeze({
-  "scrollbarSlider.background": "#3F474199",
-  "scrollbarSlider.hoverBackground": "#59625BCC",
-  "scrollbarSlider.activeBackground": "#707A72E6"
-});
-
-monaco.editor.defineTheme("dynlex-light", {
-  base: "vs",
-  inherit: true,
-  semanticHighlighting: true,
-  rules: [
-    { token: "keyword", foreground: "C53A30", fontStyle: "bold" },
-    { token: "string", foreground: "8A5A00" },
-    { token: "comment", foreground: "74766F", fontStyle: "italic" },
-    { token: "function", foreground: "304FC3" },
-    { token: "section", foreground: "8A5A00", fontStyle: "bold" },
-    { token: "variable", foreground: "1C211E" },
-    { token: "number", foreground: "5C49B5" },
-    { token: "type", foreground: "A33A27" },
-    { token: "intrinsic", foreground: "6543B6", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "2E5797", fontStyle: "bold" }
-  ],
-  colors: {
-    ...scrollbarThemeColors,
-    "editor.background": "#F8F6EF",
-    "editor.foreground": "#1C211E",
-    "editorLineNumber.foreground": "#A19F96",
-    "editorLineNumber.activeForeground": "#30352F",
-    "editorCursor.foreground": "#304FC3",
-    "editor.selectionBackground": "#D9DDFF",
-    "editor.lineHighlightBackground": "#F0EDE4",
-    "editorIndentGuide.background1": "#DDD9CF"
-  }
-});
-
-monaco.editor.defineTheme("dynlex-dark", {
-  base: "vs-dark",
-  inherit: true,
-  semanticHighlighting: true,
-  rules: [
-    { token: "keyword", foreground: "FF8B73", fontStyle: "bold" },
-    { token: "string", foreground: "FFD787" },
-    { token: "comment", foreground: "7F8B80", fontStyle: "italic" },
-    { token: "function", foreground: "B8E5FF" },
-    { token: "section", foreground: "FFD787", fontStyle: "bold" },
-    { token: "variable", foreground: "E2E6DF" },
-    { token: "number", foreground: "9AA5FF" },
-    { token: "type", foreground: "FFAD9C" },
-    { token: "intrinsic", foreground: "BFB1FF", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "C9FF38", fontStyle: "bold" }
-  ],
-  colors: {
-    ...scrollbarThemeColors,
-    "editor.background": "#151816",
-    "editor.foreground": "#E2E6DF",
-    "editorLineNumber.foreground": "#555C56",
-    "editorLineNumber.activeForeground": "#A9B0AA",
-    "editorCursor.foreground": "#C9FF38",
-    "editor.selectionBackground": "#38453A",
-    "editor.lineHighlightBackground": "#1A1E1B",
-    "editorIndentGuide.background1": "#2B302C"
-  }
-});
 
 const defaultSource = `import lib/std.dl
 
@@ -377,26 +290,11 @@ for (const [index, tab] of toolTabs.entries()) {
   });
 }
 
-const model = monaco.editor.createModel(
-  startupSource,
-  "dynlex",
-  monaco.Uri.parse(`file:///workspace/${fileName}`)
-);
-const editor = monaco.editor.create(editorElement, {
-  model,
-  minimap: { enabled: false },
-  automaticLayout: true,
-  fontFamily: "'DM Mono', Consolas, Menlo, monospace",
-  fontSize: 14,
-  lineHeight: 23,
-  tabSize: 4,
-  insertSpaces: true,
-  scrollBeyondLastLine: false,
-  padding: { top: 18, bottom: 18 },
-  renderLineHighlight: "line",
-  smoothScrolling: true,
-  "semanticHighlighting.enabled": true
+const codeEditor = createDynLexEditor(editorElement, {
+  value: startupSource, uri: `file:///workspace/${fileName}`,
+  onRun: () => { if (!runButton.disabled) void runCurrentSource(); }
 });
+const { model, editor } = codeEditor;
 
 function applyTheme(nextTheme) {
   const theme = normalizeTheme(nextTheme);
@@ -651,10 +549,6 @@ runButton.addEventListener("click", () => {
   void runCurrentSource();
 });
 
-editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-  if (runButton.disabled) return;
-  void runCurrentSource();
-});
 
 model.onDidChangeContent(() => {
   if (compileTimer) {
@@ -678,10 +572,7 @@ model.onDidChangeContent(() => {
     }
     await callWorker("init");
     workerReady = true;
-    languageFeatures = new DynLexLanguageFeatures({
-      monaco,
-      editor,
-      mainModel: model,
+    languageFeatures = await codeEditor.connect({
       exchange: (message) => callWorker("lsp.exchange", { message }),
       analysisProfiles: shaderMode
         ? [
@@ -718,7 +609,6 @@ model.onDidChangeContent(() => {
         renderOpenFiles(openSourceModels);
       }
     });
-    await languageFeatures.start();
     await runCompile();
     if (autoRunOnStartup && !shaderMode) {
       await runProgram();

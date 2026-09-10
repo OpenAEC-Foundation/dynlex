@@ -1,6 +1,7 @@
 # DynLex Standard Library
 
 import lib/string.dl
+import lib/subject.dl
 
 # --- Basic patterns ---
 
@@ -23,7 +24,6 @@ function ignore value:
 flex function set the subject to value:
     replacement:
         @intrinsic("set subject", value)
-it means: @intrinsic("subject")
 # --- Primitive types ---
 
 a value means: @intrinsic("type", "any")

@@ -1,3 +1,4 @@
+import { executionOutput } from "./execution-trace.js";
 const SIDES = new Set(["HOME", "FAR"]);
 const SUBJECTS = new Set(["SHEEP", "WOLF", "HAY"]);
 
@@ -51,13 +52,20 @@ export function parseRiverTrace(stdout) {
   let currentCommand = null;
   let outcome = "running";
   let message = "";
-  for (const line of stdout.replace(/\r\n/g, "\n").split("\n").filter(Boolean)) {
+  for (const record of executionOutput(stdout)) {
+    if (record.branch !== null) {
+      commands.push({ action: "TEST", subject: null, events: [], range: record.range, branch: record.branch });
+      continue;
+    }
+    const line = record.text;
     const parts = line.split("|");
     if (parts[0] !== "RIVER") {
       fail(`unexpected line '${line}'`);
     }
     if (parts[1] === "COMMAND") {
       currentCommand = parseCommand(parts);
+      currentCommand.range = record.range;
+      currentCommand.branch = null;
       commands.push(currentCommand);
       continue;
     }

@@ -331,7 +331,7 @@
         padding: 30px 22px;
     }
 
-    .lab-panel > :is(.snippet-editor-shell, .snippet-editor) {
+    .lab-panel > .snippet-editor {
         margin-top: 24px;
     }
 

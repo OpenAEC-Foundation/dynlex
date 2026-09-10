@@ -15,7 +15,6 @@ done
 
 (cd "$IDE_DIR" && npm ci)
 
-node "$PROJECT_DIR/scripts/generate_homepage_highlights.mjs"
 node "$PROJECT_DIR/tools/homepage-shaders/generate.mjs"
 (cd "$IDE_DIR" && npm run build)
 
@@ -24,5 +23,6 @@ mkdir -p "$WEB_ROOT_DIR/ide"
 cp "$IDE_DIR/dist/index.html" "$WEB_ROOT_DIR/ide/index.html"
 cp -R "$IDE_DIR/dist/assets" "$WEB_ROOT_DIR/"
 cp -R "$IDE_DIR/dist/compiler" "$WEB_ROOT_DIR/"
+node "$PROJECT_DIR/scripts/copy_web_editor.mjs"
 
 echo "Web root refreshed at: $WEB_ROOT_DIR"

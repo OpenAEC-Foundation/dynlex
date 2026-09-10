@@ -1,27 +1,11 @@
+import { RIVER_GOALS, newGoalProgress, recordGoal, createCodingGoals } from "./coding-goals.js";
 import {
   applyRiverEvent,
   createInitialRiverScene,
   parseRiverTrace
 } from "./river-challenge-model.js";
-import {
-  applyRiverSourceEdit,
-  clearRiverLineStates,
-  createRiverCompletions,
-  prefixedRiverPosition,
-  renderRiverCallRange,
-  renderRiverCompilerDiagnostics,
-  renderRiverDiagnosticRanges,
-  renderRiverLspFeedback,
-  renderRiverLspLineFeedback,
-  renderRiverSourceLine,
-  riverCommandCallRanges,
-  riverSingleChangedLine,
-  riverSourcePosition,
-  RIVER_PROGRAM_PREFIX,
-  RIVER_PROGRAM_PREFIX_LINES,
-  RIVER_STARTER_SOURCE,
-  setRiverLineState
-} from "./river-challenge-editor.js";
+import { RIVER_PROGRAM_PREFIX, RIVER_PROGRAM_PREFIX_LINES, RIVER_STARTER_SOURCE } from "./river-program.js";
+import { InstructionGate, showExecution } from "./execution-trace.js";
 import { createRiverChallengeAudio } from "./river-challenge-audio.js";
 import {
   createWolfTongue,
@@ -37,6 +21,8 @@ const SHEEP_BLINK_URL = new URL("./media/river-challenge/sheep-blink.webp", impo
 const WOLF_URL = new URL("./media/river-challenge/wolf.webp", import.meta.url).href;
 const WOLF_BLINK_URL = new URL("./media/river-challenge/wolf-blink.webp", import.meta.url).href;
 const HAY_URL = new URL("./media/river-challenge/hay.webp", import.meta.url).href;
+const editorRange = range => ({ startLineNumber: range.start.line + 1, startColumn: range.start.character + 1,
+  endLineNumber: range.end.line + 1, endColumn: range.end.character + 1 });
 const SPEEDS = [1, 2, 4];
 const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -74,30 +60,8 @@ function riverMarkup() {
             <span>YOUR PLAN</span>
             <small>plain English / real DynLex</small>
           </div>
-          <div class="river-editor-shell" data-river-editor-shell>
-            <i class="river-source-line-state" data-river-source-line-state hidden></i>
-            <pre class="river-source-highlight" data-river-source-highlight aria-hidden="true"><code data-river-source-code></code></pre>
-            <pre class="river-source-playback" data-river-source-playback aria-hidden="true"><code data-river-call-code></code></pre>
-            <pre class="river-source-diagnostics" data-river-source-diagnostics aria-hidden="true"><code data-river-diagnostic-code></code></pre>
-            <textarea
-              class="river-source"
-              data-river-source
-              aria-label="River crossing DynLex source"
-              spellcheck="false"
-              wrap="off"
-              autocapitalize="off"
-              autocomplete="off"
-              aria-autocomplete="list"
-              aria-controls="river-completions"
-            ></textarea>
-            <div
-              class="river-completions"
-              id="river-completions"
-              data-river-completions
-              role="listbox"
-              hidden
-            ></div>
-          </div>
+          <div class="river-editor-shell" data-river-editor-shell></div>
+          <p class="river-program-message" data-river-execution></p>
           <div class="river-diagnostics" data-river-diagnostics role="status" aria-live="polite" hidden></div>
           <div class="river-editor-actions">
             <span>⌘ / CTRL + ENTER</span>
@@ -136,6 +100,7 @@ function riverMarkup() {
               <span aria-hidden="true">▶</span> PLAY
             </button>
             <button type="button" data-river-speed aria-label="Change animation speed">1× SPEED</button>
+            <button type="button" data-river-step>ONE INSTRUCTION</button>
             <button type="button" data-river-reset>↺ RESET</button>
             <button type="button" data-river-mute aria-pressed="false">
               <span aria-hidden="true">♪</span> AUDIO ON
@@ -146,6 +111,7 @@ function riverMarkup() {
           </p>
         </section>
       </div>
+      <section data-river-goals></section>
       <footer class="river-game-credit">
         <span>PAINTED FOR DYNLEX / ORIGINAL GAME ART</span>
         <a href="https://pixabay.com/music/happy-childrens-tunes-puzzle-amp-casual-game-music-460543/">
@@ -164,12 +130,16 @@ class PlaybackController {
     this.paused = true;
     this.activeAnimations = new Set();
     this.abortController = null;
+    this.gate = new InstructionGate();
+    this.insideInstruction = false;
   }
 
-  begin() {
+  begin(stepping = false) {
     this.stop();
     this.abortController = new AbortController();
     this.paused = false;
+    this.insideInstruction = false;
+    if (stepping) this.gate.step(); else this.gate.resume();
     this.sync();
     return this.abortController.signal;
   }
@@ -184,16 +154,27 @@ class PlaybackController {
     }
     this.activeAnimations.clear();
     this.paused = true;
+    this.gate.pause();
     this.sync();
   }
 
   toggle() {
-    this.paused = !this.paused;
+    if (this.paused) this.gate.resume(); else this.gate.pause();
+    this.setPaused(!this.paused);
+  }
+
+  setPaused(paused) {
+    this.paused = paused;
     for (const animation of this.activeAnimations) {
       if (this.paused) animation.pause();
       else animation.play();
     }
     this.sync();
+  }
+
+  step() {
+    if (this.insideInstruction) this.gate.pause(); else this.gate.step();
+    this.setPaused(false);
   }
 
   cycleSpeed() {
@@ -405,19 +386,22 @@ async function transitionScene(renderer, controller, currentScene, event, durati
 }
 
 export async function initializeRiverChallenge(section, {
-  analyzeDynLex,
-  completeDynLex,
+  createEditor,
   music,
+  onSolved,
+  saved = null,
+  onSave = () => {},
+  signal,
   runDynLex
 }) {
   if (typeof runDynLex !== "function") {
     throw new TypeError("River challenge requires a DynLex runner");
   }
-  if (typeof analyzeDynLex !== "function") {
-    throw new TypeError("River challenge requires a DynLex language analyzer");
+  if (typeof onSolved !== "function") {
+    throw new TypeError("River challenge requires a solved callback");
   }
-  if (typeof completeDynLex !== "function") {
-    throw new TypeError("River challenge requires DynLex completion");
+  if (!(signal instanceof AbortSignal)) {
+    throw new TypeError("River challenge requires a lifecycle signal");
   }
   await Promise.all([
     loadImage(LANDSCAPE_URL),
@@ -429,24 +413,18 @@ export async function initializeRiverChallenge(section, {
     loadImage(WOLF_BLINK_URL),
     loadImage(HAY_URL)
   ]);
+  signal.throwIfAborted();
 
   const mount = required("[data-river-challenge-mount]", section);
   mount.innerHTML = riverMarkup();
   const game = required("[data-river-game]", mount);
   required('[data-river-character="WOLF"]', game).append(createWolfTongue());
-  const source = required("[data-river-source]", game);
-  const highlight = required("[data-river-source-highlight]", game);
-  const sourceCode = required("[data-river-source-code]", game);
-  const playbackHighlight = required("[data-river-source-playback]", game);
-  const callCode = required("[data-river-call-code]", game);
-  const diagnosticHighlight = required("[data-river-source-diagnostics]", game);
-  const diagnosticCode = required("[data-river-diagnostic-code]", game);
-  const completionList = required("[data-river-completions]", game);
-  const lineIndicator = required("[data-river-source-line-state]", game);
   const editorShell = required("[data-river-editor-shell]", game);
   const diagnostics = required("[data-river-diagnostics]", game);
   const runButton = required("[data-river-run]", game);
   const playButton = required("[data-river-playback-toggle]", game);
+  const stepButton = required("[data-river-step]", game);
+  const execution = required("[data-river-execution]", game);
   const speedButton = required("[data-river-speed]", game);
   const resetButton = required("[data-river-reset]", game);
   const muteButton = required("[data-river-mute]", game);
@@ -458,98 +436,30 @@ export async function initializeRiverChallenge(section, {
   const renderer = createSceneRenderer(game);
   const sheep = renderer.actors.get("SHEEP");
   const challengeAudio = await createRiverChallengeAudio(section, music, muteButton, sheep);
+  if (signal.aborted) {
+    challengeAudio.destroy();
+    signal.throwIfAborted();
+  }
   let scene = createInitialRiverScene();
   let lastTrace = null;
-  let lastCallRanges = [];
   let playing = false;
   let programGeneration = 0;
-  let highlightGeneration = 0;
-  let highlightTimer = null;
-  let activeEditLine = null;
+  let solved = saved?.solved ?? false;
+  const coding = saved === null ? newGoalProgress(RIVER_GOALS) : saved.coding;
+  const updateGoals = createCodingGoals(required("[data-river-goals]",game),RIVER_GOALS);
+  updateGoals(coding);
+  let announced = false;
+  let destroyed = false;
+  const save = () => onSave({ source: editor.getValue(), solved, coding });
 
-  function scheduleSemanticHighlight({ delay = 160, line = null, position } = {}) {
-    highlightGeneration += 1;
-    const generation = highlightGeneration;
-    if (highlightTimer !== null) {
-      clearTimeout(highlightTimer);
-    }
-    const sourceText = source.value;
-    if (line === null) {
-      if (sourceCode.textContent !== sourceText) {
-        applyRiverSourceEdit(sourceCode, sourceCode.textContent, sourceText);
-      }
-    } else {
-      renderRiverSourceLine(sourceCode, sourceCode.textContent, sourceText, [], line);
-    }
-    editorShell.dataset.highlightState = "loading";
-    highlightTimer = window.setTimeout(() => {
-      highlightTimer = null;
-      void analyzeDynLex(RIVER_PROGRAM_PREFIX + sourceText, position).then((feedback) => {
-        if (generation !== highlightGeneration || sourceText !== source.value) {
-          return;
-        }
-        let sourceDiagnostics = [];
-        if (line === null) {
-          sourceDiagnostics = renderRiverLspFeedback({
-            diagnosticCode,
-            diagnostics: feedback.diagnostics,
-            lineIndicator,
-            panel: diagnostics,
-            source: sourceText,
-            sourceCode,
-            semanticTokens: feedback.semanticTokens
-          });
-        } else {
-          renderRiverLspLineFeedback({
-            line,
-            previousSource: sourceCode.textContent,
-            source: sourceText,
-            sourceCode,
-            semanticTokens: feedback.semanticTokens
-          });
-        }
-        editorShell.dataset.highlightState = "semantic";
-        if (sourceDiagnostics.length > 0) {
-          status.textContent = "CHECK CODE";
-          worldState.textContent = "the plan does not compile";
-          game.dataset.playbackState = "error";
-        }
-      }).catch((error) => {
-        if (generation !== highlightGeneration) {
-          return;
-        }
-        console.error("River challenge syntax highlighting failed", error);
-        renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
-        diagnostics.hidden = false;
-        diagnostics.textContent = "An error occurred. Check the browser log.";
-        status.textContent = "ERROR";
-        worldState.textContent = "the plan could not be analyzed";
-        game.dataset.playbackState = "error";
-        editorShell.dataset.highlightState = "error";
-      });
-    }, delay);
-  }
-
-  function commitEditedLine(position) {
-    if (activeEditLine === null) return;
-    if (
-      position !== undefined
-      && position.line - RIVER_PROGRAM_PREFIX_LINES === activeEditLine
-    ) {
-      return;
-    }
-    activeEditLine = null;
-    scheduleSemanticHighlight({ delay: 0, position });
-  }
-
-  function syncEditorScroll() {
-    highlight.scrollLeft = source.scrollLeft;
-    highlight.scrollTop = source.scrollTop;
-    playbackHighlight.scrollLeft = source.scrollLeft;
-    playbackHighlight.scrollTop = source.scrollTop;
-    diagnosticHighlight.scrollLeft = source.scrollLeft;
-    diagnosticHighlight.scrollTop = source.scrollTop;
-    editorShell.style.setProperty("--river-source-scroll-y", `${-source.scrollTop}px`);
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true;
+    programGeneration += 1;
+    controller.stop();
+    editor.dispose();
+    challengeAudio.destroy();
+    signal.removeEventListener("abort", destroy);
   }
 
   function syncControls({ paused, speed }) {
@@ -582,8 +492,7 @@ export async function initializeRiverChallenge(section, {
     status.textContent = "READY";
     game.dataset.playbackState = "ready";
     if (clearFeedback) {
-      clearRiverLineStates(lineIndicator);
-      renderRiverCallRange(callCode, source.value);
+      showExecution(editor,execution);
       diagnostics.hidden = true;
       diagnostics.textContent = "";
       message.textContent = "The farmer can take one passenger at a time.";
@@ -618,8 +527,8 @@ export async function initializeRiverChallenge(section, {
     }
   }
 
-  async function playTrace(trace, callRanges) {
-    const signal = controller.begin();
+  async function playTrace(trace, stepping = false) {
+    const signal = controller.begin(stepping);
     challengeAudio.setIdleEnabled(false);
     playing = true;
     playButton.disabled = false;
@@ -630,16 +539,16 @@ export async function initializeRiverChallenge(section, {
     hideSpeech();
     scene = createInitialRiverScene();
     renderer.render(scene);
-    clearRiverLineStates(lineIndicator);
-    renderRiverCallRange(callCode, source.value);
+    editor.decorate();
 
     try {
       for (let index = 0; index < trace.commands.length; index += 1) {
+        await controller.gate.beforeInstruction(signal);
+        controller.insideInstruction = true;
         const command = trace.commands[index];
-        const callRange = callRanges[index];
-        const lineNumber = callRange.start.line + 1;
-        setRiverLineState(lineIndicator, lineNumber, "active");
-        renderRiverCallRange(callCode, source.value, callRange, "active");
+        const callRange = command.range;
+        showExecution(editor, execution, command);
+        if (command.action === "TEST") await controller.wait(500, signal);
         for (const event of command.events) {
           if (event.type === "ACTION") {
             const duration = event.action === "CROSS" ? 1000 : 560;
@@ -649,6 +558,9 @@ export async function initializeRiverChallenge(section, {
             );
             try {
               scene = await transitionScene(renderer, controller, scene, event, duration, signal);
+              if (event.action === "LOAD") recordGoal(coding,"passenger",1,"loaded");
+              if (event.action === "UNLOAD" && scene.farmer === "FAR") recordGoal(coding,"deliveries",1,event.subject);
+              updateGoals(coding); save();
             } finally {
               sound.stop();
             }
@@ -661,8 +573,7 @@ export async function initializeRiverChallenge(section, {
             }
           } else if (event.type === "ERROR") {
             scene = applyRiverEvent(scene, event);
-            setRiverLineState(lineIndicator, lineNumber, "error");
-            renderRiverCallRange(callCode, source.value, callRange, "error");
+            editor.decorate(editorRange(callRange), "error");
             diagnostics.hidden = false;
             diagnostics.textContent = event.message;
             message.textContent = event.message;
@@ -699,8 +610,17 @@ export async function initializeRiverChallenge(section, {
               }))
             ], 520, signal);
             game.dataset.playbackState = "success";
+            if (!announced) {
+              announced = true;
+              solved = true;
+              recordGoal(coding,"rescue",1,"solved"); updateGoals(coding);
+              save();
+              onSolved();
+            }
           }
         }
+        controller.insideInstruction = false;
+        if (controller.gate.paused && index + 1 < trace.commands.length) controller.setPaused(true);
       }
       if (trace.outcome === "failure") {
         await controller.wait(2400, signal);
@@ -730,29 +650,30 @@ export async function initializeRiverChallenge(section, {
     }
   }
 
-  async function runProgram() {
+  async function runProgram(stepping = false) {
     const generation = ++programGeneration;
     controller.stop();
     challengeAudio.stopTraceEffects();
     challengeAudio.setIdleEnabled(false);
     playing = false;
-    clearRiverLineStates(lineIndicator);
-    renderRiverCallRange(callCode, source.value);
+    editor.decorate();
     diagnostics.hidden = true;
     diagnostics.textContent = "";
     hideSpeech();
     runButton.disabled = true;
+    stepButton.disabled = true;
     status.textContent = "COMPILING";
     worldState.textContent = "reading your plan";
     game.dataset.playbackState = "compiling";
     try {
-      const programSource = RIVER_PROGRAM_PREFIX + source.value;
+      const programSource = RIVER_PROGRAM_PREFIX + editor.getValue();
       const result = await runDynLex(programSource);
       if (generation !== programGeneration) {
         return;
       }
       if (result.compileResult.status !== 0) {
-        renderRiverCompilerDiagnostics(diagnostics, lineIndicator, result.compileResult.diagnostics);
+        diagnostics.hidden = false;
+        diagnostics.textContent = result.compileResult.diagnostics.map(d => `Line ${Math.max(1, d.line - RIVER_PROGRAM_PREFIX_LINES)}: ${d.message}`).join("\n");
         status.textContent = "CHECK CODE";
         worldState.textContent = "the plan did not compile";
         game.dataset.playbackState = "error";
@@ -769,11 +690,9 @@ export async function initializeRiverChallenge(section, {
         return;
       }
       const trace = parseRiverTrace(result.runResult.stdout);
-      const feedback = await analyzeDynLex(programSource);
-      const callRanges = riverCommandCallRanges(feedback.callExpressions, trace.commands.length);
       lastTrace = trace;
-      lastCallRanges = callRanges;
-      await playTrace(trace, callRanges);
+      stepButton.disabled = false;
+      await playTrace(trace, stepping);
     } catch (error) {
       console.error("River challenge program failed", error);
       diagnostics.hidden = false;
@@ -783,62 +702,24 @@ export async function initializeRiverChallenge(section, {
       game.dataset.playbackState = "error";
     } finally {
       runButton.disabled = false;
+      stepButton.disabled = false;
       if (!playing) {
         challengeAudio.setIdleEnabled(true);
       }
     }
   }
 
-  const completions = createRiverCompletions({
-    completeDynLex,
-    list: completionList,
-    source
+  const editor = await createEditor(editorShell, {
+    value: saved?.source ?? RIVER_STARTER_SOURCE, prefix: RIVER_PROGRAM_PREFIX,
+    ariaLabel: "River crossing DynLex source",
+    onRun: () => { if (!runButton.disabled) void runProgram(); }
   });
-  let completionRequestQueued = false;
-  function requestCompletions() {
-    if (completionRequestQueued) {
-      return;
-    }
-    completionRequestQueued = true;
-    queueMicrotask(() => {
-      completionRequestQueued = false;
-      void completions.request().catch((error) => {
-        console.error("River challenge completion failed", error);
-        completions.close();
-      });
-    });
-  }
-  source.value = RIVER_STARTER_SOURCE;
-  scheduleSemanticHighlight({
-    delay: 0,
-    position: prefixedRiverPosition(source.value, source.selectionEnd)
-  });
-  source.addEventListener("scroll", () => {
-    syncEditorScroll();
-    completions.close();
-  }, { passive: true });
-  source.addEventListener("input", () => {
-    programGeneration += 1;
-    controller.stop();
-    challengeAudio.stopTraceEffects();
-    challengeAudio.setIdleEnabled(true);
-    playing = false;
-    clearRiverLineStates(lineIndicator);
-    renderRiverCallRange(callCode, source.value);
-    renderRiverDiagnosticRanges(diagnosticCode, source.value, []);
-    const position = prefixedRiverPosition(source.value, source.selectionEnd);
-    const changedLine = riverSingleChangedLine(sourceCode.textContent, source.value);
-    const cursorLine = riverSourcePosition(source.value, source.selectionEnd).line;
-    if (
-      changedLine === cursorLine
-      && (activeEditLine === null || activeEditLine === changedLine)
-    ) {
-      activeEditLine = changedLine;
-      scheduleSemanticHighlight({ line: changedLine, position });
-    } else {
-      activeEditLine = changedLine === cursorLine ? changedLine : null;
-      scheduleSemanticHighlight({ delay: 0, position });
-    }
+  if (signal.aborted) { destroy(); signal.throwIfAborted(); }
+  signal.addEventListener("abort", destroy, { once: true });
+  editor.onChange(() => {
+    save(); programGeneration += 1; controller.stop();
+    challengeAudio.stopTraceEffects(); challengeAudio.setIdleEnabled(true);
+    playing = false; showExecution(editor,execution);
     diagnostics.hidden = true;
     diagnostics.textContent = "";
     message.textContent = "Your previous result was cleared because the plan changed.";
@@ -849,36 +730,7 @@ export async function initializeRiverChallenge(section, {
     renderer.render(scene);
     hideSpeech();
     lastTrace = null;
-    lastCallRanges = [];
     playButton.disabled = true;
-    requestCompletions();
-  });
-  source.addEventListener("keydown", (event) => {
-    if (completions.handleKeydown(event)) {
-      return;
-    }
-    completions.close();
-    if (event.key === "Tab") {
-      event.preventDefault();
-      source.setRangeText("    ", source.selectionStart, source.selectionEnd, "end");
-      source.dispatchEvent(new Event("input", { bubbles: true }));
-    } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      if (!runButton.disabled) void runProgram();
-    }
-  });
-  source.addEventListener("pointerdown", () => completions.close());
-  source.addEventListener("selectionchange", () => {
-    if (source.ownerDocument.activeElement !== source) return;
-    const position = prefixedRiverPosition(source.value, source.selectionEnd);
-    if (position.line - RIVER_PROGRAM_PREFIX_LINES !== activeEditLine) {
-      completions.close();
-    }
-    commitEditedLine(position);
-  });
-  source.addEventListener("blur", () => {
-    commitEditedLine(undefined);
-    window.setTimeout(() => completions.close(), 0);
   });
   runButton.addEventListener("click", () => void runProgram());
   playButton.addEventListener("click", () => {
@@ -887,16 +739,18 @@ export async function initializeRiverChallenge(section, {
       return;
     }
     if (lastTrace) {
-      void playTrace(lastTrace, lastCallRanges);
+      void playTrace(lastTrace);
     }
+  });
+  stepButton.addEventListener("click", () => {
+    if (playing) controller.step();
+    else if (lastTrace) void playTrace(lastTrace, true);
+    else void runProgram(true);
   });
   speedButton.addEventListener("click", () => controller.cycleSpeed());
   resetButton.addEventListener("click", () => resetScene());
-  editorShell.addEventListener("click", (event) => {
-    if (event.target !== source) {
-      source.focus();
-    }
-  });
   resetScene();
+  save();
   mount.dataset.challengeLoaded = "true";
+  return Object.freeze({ destroy });
 }

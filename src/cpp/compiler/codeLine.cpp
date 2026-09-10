@@ -75,3 +75,35 @@ bool CodeLine::hasIdentitySourceMapping() const {
 	return slice.transformedStart == 0 && slice.transformedEnd == static_cast<int>(fullText.size()) &&
 		   slice.sourceFile == sourceFile && slice.sourceFileLineIndex == sourceFileLineIndex && slice.sourceColumnStart == 0;
 }
+
+void CodeLine::appendSourceSlices(
+	std::vector<SourceSlice> &target, size_t sourceStart, size_t sourceEnd, int transformedStart
+) const {
+	if (sourceStart >= sourceEnd)
+		return;
+	if (sourceSlices.empty()) {
+		target.push_back({
+			transformedStart,
+			transformedStart + static_cast<int>(sourceEnd - sourceStart),
+			sourceFile,
+			sourceFileLineIndex,
+			static_cast<int>(sourceStart),
+		});
+		return;
+	}
+	for (const SourceSlice &slice : sourceSlices) {
+		size_t sliceStart = static_cast<size_t>(std::max(0, slice.transformedStart));
+		size_t sliceEnd = static_cast<size_t>(std::max(0, slice.transformedEnd));
+		size_t overlapStart = std::max(sourceStart, sliceStart);
+		size_t overlapEnd = std::min(sourceEnd, sliceEnd);
+		if (overlapStart >= overlapEnd)
+			continue;
+		target.push_back({
+			transformedStart + static_cast<int>(overlapStart - sourceStart),
+			transformedStart + static_cast<int>(overlapEnd - sourceStart),
+			slice.sourceFile,
+			slice.sourceFileLineIndex,
+			slice.sourceColumnStart + static_cast<int>(overlapStart - sliceStart),
+		});
+	}
+}

@@ -7,6 +7,17 @@ const test = require('node:test');
 const extensionRoot = path.resolve(__dirname, '..');
 const manifest = require('../package.json');
 
+test('nested call colors use the shared palette and stay scoped to DynLex', () => {
+    const colors = require('../../shared/call-colors.json');
+    const rules = manifest.contributes.configurationDefaults['editor.semanticTokenColorCustomizations'].rules;
+    assert.deepEqual(manifest.contributes.semanticTokenModifiers.map(entry => entry.id), colors.map((_, depth) => `callDepth${depth}`));
+    for (const [depth, color] of colors.entries()) {
+        for (const type of ['function', 'intrinsic', 'type']) {
+            assert.deepEqual(rules[`${type}.callDepth${depth}:dynlex`], { foreground: `#${color.editor}` });
+        }
+    }
+});
+
 test('extension manifest includes the DynLex icon at marketplace resolution', () => {
     assert.equal(manifest.icon, 'icons/dynlex.png');
     assert.deepEqual(manifest.contributes.languages[0].icon, {

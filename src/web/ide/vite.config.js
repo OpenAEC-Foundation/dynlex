@@ -46,6 +46,13 @@ function serveCompilerAssets() {
 export default defineConfig({
   base: process.env.DYNLEX_WEB_BASE ?? "/",
   plugins: [serveCompilerAssets()],
+  build: {
+    manifest: true,
+    rollupOptions: {
+      input: { main: path.resolve(configDirectory, "index.html"), editor: path.resolve(configDirectory, "src/editor.js") },
+      preserveEntrySignatures: "exports-only"
+    }
+  },
   server: {
     host: true,
     port: 5173
