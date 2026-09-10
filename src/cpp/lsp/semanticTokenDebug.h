@@ -14,7 +14,7 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 std::vector<SemanticToken>
 collectLiveLineSemanticTokens(const ParseContext *context, const TextDocument &document, const std::string &uri, int lineIndex);
 
-std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToken>> &tokensByLine);
+std::vector<int> encodeSemanticTokens(const std::vector<std::vector<SemanticToken>> &tokensByLine, const SourceFile &source);
 std::string renderTaggedSemanticTokensFromData(std::string_view text, const std::vector<int> &data);
 
 std::string renderTaggedSemanticTokens(ParseContext &context, const std::string &path, bool suppressOnFileErrors = true);

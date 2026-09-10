@@ -1,13 +1,3 @@
-export function semanticLegendsMatch(left, right) {
-  if (!left || !right) return false;
-  return ["tokenTypes", "tokenModifiers"].every((key) => (
-    Array.isArray(left[key])
-    && Array.isArray(right[key])
-    && left[key].length === right[key].length
-    && left[key].every((value, index) => value === right[key][index])
-  ));
-}
-
 function sourceLineStarts(sourceText) {
   const starts = [0];
   for (let index = 0; index < sourceText.length; index += 1) {
@@ -35,7 +25,7 @@ export function decodeSemanticTokenRanges(sourceText, tokenData, legend) {
     if (!tuple.every((value) => Number.isInteger(value) && value >= 0)) {
       throw new Error("Semantic-token data contains an invalid integer");
     }
-    const [deltaLine, deltaColumn, length, typeIndex] = tuple;
+    const [deltaLine, deltaColumn, length, typeIndex, modifierBits] = tuple;
     if (deltaLine === 0) {
       column += deltaColumn;
     } else {
@@ -53,7 +43,8 @@ export function decodeSemanticTokenRanges(sourceText, tokenData, legend) {
     if (typeof tokenType !== "string" || tokenType.length === 0 || end > lineEnd || start < previousEnd) {
       throw new Error("Semantic token has an invalid range or type");
     }
-    ranges.push({ start, end, tokenType });
+    const modifiers = legend.tokenModifiers.filter((_, bit) => modifierBits & (1 << bit));
+    ranges.push({ start, end, tokenType, modifiers });
     previousEnd = end;
   }
   return ranges;
@@ -105,50 +96,6 @@ export function rebaseSemanticTokensAfterLines(tokenData, removedLineCount) {
   return rebased;
 }
 
-export function rebaseLspDiagnosticsAfterLines(diagnostics, removedLineCount) {
-  if (!Array.isArray(diagnostics)) {
-    throw new TypeError("LSP diagnostics must be an array");
-  }
-  if (!Number.isInteger(removedLineCount) || removedLineCount < 0) {
-    throw new TypeError("Removed diagnostic line count must be a non-negative integer");
-  }
-
-  return diagnostics.map((diagnostic) => {
-    const start = diagnostic?.range?.start;
-    const end = diagnostic?.range?.end;
-    const positions = [start?.line, start?.character, end?.line, end?.character];
-    if (!positions.every((value) => Number.isInteger(value) && value >= 0)) {
-      throw new Error("LSP diagnostic has an invalid range");
-    }
-    if (
-      end.line < start.line
-      || (end.line === start.line && end.character < start.character)
-    ) {
-      throw new Error("LSP diagnostic range ends before it starts");
-    }
-    if (start.line < removedLineCount || end.line < removedLineCount) {
-      throw new Error("LSP diagnostic points into the removed prefix");
-    }
-    if (typeof diagnostic.message !== "string" || diagnostic.message.length === 0) {
-      throw new Error("LSP diagnostic has no message");
-    }
-
-    return {
-      ...diagnostic,
-      range: {
-        start: {
-          line: start.line - removedLineCount,
-          character: start.character
-        },
-        end: {
-          line: end.line - removedLineCount,
-          character: end.character
-        }
-      }
-    };
-  });
-}
-
 export function semanticTokenClassName(tokenType, prefix) {
   if (typeof prefix !== "string" || prefix.length === 0) {
     throw new Error("Semantic token class prefix is required");
@@ -174,7 +121,7 @@ function semanticTokenFragment(document, sourceText, ranges, start, end, options
       fragment.append(document.createTextNode(sourceText.slice(offset, range.start)));
     }
     const token = document.createElement("span");
-    token.className = [baseClass, semanticTokenClassName(range.tokenType, classPrefix)]
+    token.className = [baseClass, semanticTokenClassName(range.tokenType, classPrefix), ...range.modifiers.map(name => name.toLowerCase())]
       .filter(Boolean)
       .join(" ");
     token.textContent = sourceText.slice(range.start, range.end);
@@ -185,90 +132,6 @@ function semanticTokenFragment(document, sourceText, ranges, start, end, options
     fragment.append(document.createTextNode(sourceText.slice(offset, end)));
   }
   return fragment;
-}
-
-function sourceLineRanges(sourceText) {
-  const starts = sourceLineStarts(sourceText);
-  return starts.map((start, line) => ({
-    start,
-    end: line + 1 < starts.length ? starts[line + 1] - 1 : sourceText.length
-  }));
-}
-
-function topLevelTextBoundary(target, offset, splitToken = false) {
-  let traversed = 0;
-  for (const [index, child] of [...target.childNodes].entries()) {
-    const length = child.textContent.length;
-    if (offset === traversed) return index;
-    if (offset === traversed + length) return index + 1;
-    if (offset < traversed + length) {
-      if (child.nodeType !== 3) {
-        if (!splitToken) {
-          throw new Error("Semantic token crosses a source-line boundary");
-        }
-        const tokenOffset = offset - traversed;
-        const before = child.cloneNode(false);
-        before.textContent = child.textContent.slice(0, tokenOffset);
-        const after = child.cloneNode(false);
-        after.textContent = child.textContent.slice(tokenOffset);
-        child.replaceWith(before, after);
-        return index + 1;
-      }
-      child.splitText(offset - traversed);
-      return index + 1;
-    }
-    traversed += length;
-  }
-  if (offset !== traversed) {
-    throw new Error("Semantic source-line boundary is outside the rendered text");
-  }
-  return target.childNodes.length;
-}
-
-export function applySemanticTextEdit(target, previousSourceText, sourceText) {
-  if (!target?.ownerDocument || typeof target.replaceChildren !== "function") {
-    throw new Error("Semantic-token target must be a DOM element");
-  }
-  if (target.textContent !== previousSourceText) {
-    throw new Error("Rendered semantic text differs from its previous source");
-  }
-
-  let start = 0;
-  while (
-    start < previousSourceText.length
-    && start < sourceText.length
-    && previousSourceText[start] === sourceText[start]
-  ) {
-    start += 1;
-  }
-  let previousEnd = previousSourceText.length;
-  let sourceEnd = sourceText.length;
-  while (
-    previousEnd > start
-    && sourceEnd > start
-    && previousSourceText[previousEnd - 1] === sourceText[sourceEnd - 1]
-  ) {
-    previousEnd -= 1;
-    sourceEnd -= 1;
-  }
-  if (start === previousEnd && start === sourceEnd) return;
-
-  const startBoundary = topLevelTextBoundary(target, start, true);
-  const endBoundary = topLevelTextBoundary(target, previousEnd, true);
-  const afterEdit = target.childNodes[endBoundary] ?? null;
-  for (let index = endBoundary - 1; index >= startBoundary; index -= 1) {
-    target.childNodes[index].remove();
-  }
-  if (sourceEnd > start) {
-    target.insertBefore(
-      target.ownerDocument.createTextNode(sourceText.slice(start, sourceEnd)),
-      afterEdit
-    );
-  }
-  target.normalize();
-  if (target.textContent !== sourceText) {
-    throw new Error("Incremental semantic edit produced incorrect source text");
-  }
 }
 
 export function renderSemanticTokens(target, sourceText, tokenData, legend, options = {}) {
@@ -284,61 +147,4 @@ export function renderSemanticTokens(target, sourceText, tokenData, legend, opti
     sourceText.length,
     options
   ));
-}
-
-export function renderSemanticTokenLine(
-  target,
-  previousSourceText,
-  sourceText,
-  tokenData,
-  legend,
-  line,
-  options = {}
-) {
-  if (!target?.ownerDocument || typeof target.replaceChildren !== "function") {
-    throw new Error("Semantic-token target must be a DOM element");
-  }
-  if (target.textContent !== previousSourceText) {
-    throw new Error("Rendered semantic text differs from its previous source");
-  }
-  const previousLines = sourceLineRanges(previousSourceText);
-  const sourceLines = sourceLineRanges(sourceText);
-  if (!Number.isInteger(line) || line < 0 || line >= sourceLines.length) {
-    throw new Error("Semantic source-line index is invalid");
-  }
-  if (previousLines.length !== sourceLines.length) {
-    throw new Error("Incremental semantic rendering cannot change the source line count");
-  }
-  for (let index = 0; index < sourceLines.length; index += 1) {
-    if (index === line) continue;
-    const previous = previousLines[index];
-    const current = sourceLines[index];
-    if (
-      previousSourceText.slice(previous.start, previous.end)
-      !== sourceText.slice(current.start, current.end)
-    ) {
-      throw new Error("Incremental semantic rendering changed more than one source line");
-    }
-  }
-
-  const previousLine = previousLines[line];
-  const sourceLine = sourceLines[line];
-  const startBoundary = topLevelTextBoundary(target, previousLine.start);
-  const endBoundary = topLevelTextBoundary(target, previousLine.end);
-  const afterLine = target.childNodes[endBoundary] ?? null;
-  for (let index = endBoundary - 1; index >= startBoundary; index -= 1) {
-    target.childNodes[index].remove();
-  }
-  const ranges = decodeSemanticTokenRanges(sourceText, tokenData, legend);
-  target.insertBefore(semanticTokenFragment(
-    target.ownerDocument,
-    sourceText,
-    ranges,
-    sourceLine.start,
-    sourceLine.end,
-    options
-  ), afterLine);
-  if (target.textContent !== sourceText) {
-    throw new Error("Incremental semantic rendering produced incorrect source text");
-  }
 }

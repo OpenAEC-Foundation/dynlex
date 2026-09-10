@@ -10,6 +10,8 @@ const files = {
   html: path.join(ideDir, "index.html"),
   css: path.join(ideDir, "src/styles.css"),
   javascript: path.join(ideDir, "src/main.js"),
+  editor: path.join(ideDir, "src/editor.js"),
+  connection: path.join(ideDir, "src/languageConnection.js"),
   packageJson: path.join(ideDir, "package.json"),
   viteConfig: path.join(ideDir, "vite.config.js"),
   lspClient: path.join(projectDir, "web/lsp-client.js"),
@@ -27,11 +29,11 @@ for (const filePath of Object.values(files)) {
 }
 
 const html = fs.readFileSync(files.html, "utf8");
-const javascript = fs.readFileSync(files.javascript, "utf8");
+const javascript = fs.readFileSync(files.javascript, "utf8")+fs.readFileSync(files.editor,"utf8");
 const packageJson = JSON.parse(fs.readFileSync(files.packageJson, "utf8"));
 const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
 const lspClient = fs.readFileSync(files.lspClient, "utf8");
-const languageJavascript = `${javascript}\n${lspIntegration}`;
+const languageJavascript = `${javascript}\n${lspIntegration}\n${fs.readFileSync(files.connection,"utf8")}`;
 const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
 const runtimeImports = fs.readFileSync(files.runtimeImports, "utf8");
 const browserDriver = fs.readFileSync(files.browserDriver, "utf8");

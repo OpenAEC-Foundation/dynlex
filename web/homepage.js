@@ -1,9 +1,7 @@
-import { semanticHighlightCache, semanticTokenLegend } from "./snippet-highlights.js";
-import { semanticHighlightKey } from "./snippet-highlight-key.js";
-import { renderSemanticTokens, semanticLegendsMatch } from "./semantic-highlighting.js";
 import { createShaderBanner } from "./shader-banner.js";
 import { initializeSiteNavigation } from "./site-navigation.js";
-import { LspSession } from "./lsp-client.js";
+import { createDynLexEditor, DynLexConnection } from "./editor.js";
+import { initializeGameAccount } from "./game-account.js";
 
 function required(selector, scope = document) {
   const element = scope.querySelector(selector);
@@ -79,20 +77,23 @@ const runnableSketches = [...document.querySelectorAll("[data-runnable-sketch]")
 let snippetWorker = null;
 let snippetWorkerReady = null;
 let snippetWorkerInitialized = false;
-let snippetLsp = null;
-let snippetLspDocument = null;
+let languageConnection = null;
 let nextSnippetRequestId = 1;
 let nextSnippetVersion = 1;
 let snippetCompilerQueue = Promise.resolve();
 const pendingSnippetRequests = new Map();
-const snippetHighlightStates = new WeakMap();
-const runtimeSemanticHighlightCache = new Map();
-const snippetDocumentUri = "file:///workspace/homepage-snippet.dl";
-let snippetDocumentDiagnostics = Object.freeze([]);
+const snippetEditors = new Map();
 const riverChallenge = required("[data-river-challenge]");
 const riverChallengeLoad = required("[data-river-challenge-load]", riverChallenge);
+const farmChallengeLoad = required("[data-farm-challenge-load]", riverChallenge);
 const riverChallengeError = required("[data-river-challenge-error]", riverChallenge);
+const gameAccount = initializeGameAccount(riverChallenge);
+const progress = gameAccount.progress;
 let riverChallengePromise = null;
+let farmChallengePromise = null;
+let farmChallengeInstance = null;
+let riverChallengeInstance = null;
+let riverAbortController = null;
 
 function setSketchState(sketch, state) {
   const status = required("[data-snippet-status]", sketch);
@@ -150,33 +151,6 @@ function callSnippetWorker(type, payload = {}) {
 function ensureSnippetWorker() {
   if (!snippetWorkerReady) {
     snippetWorkerReady = createSnippetWorker().then(() => callSnippetWorker("init")).then(async (result) => {
-      snippetLsp = new LspSession((message) => callSnippetWorker("lsp.exchange", { message }));
-      snippetLsp.onNotification("textDocument/publishDiagnostics", (params) => {
-        if (params.uri !== snippetDocumentUri) {
-          return;
-        }
-        if (!Array.isArray(params.diagnostics)) {
-          throw new Error("DynLex language server returned malformed diagnostics");
-        }
-        snippetDocumentDiagnostics = Object.freeze([...params.diagnostics]);
-      });
-      snippetLsp.onRequest("workspace/semanticTokens/refresh", () => null);
-      const initializeResult = await snippetLsp.start({
-        capabilities: {
-          textDocument: {
-            semanticTokens: {
-              requests: { full: true }
-            }
-          },
-          workspace: {
-            semanticTokens: { refreshSupport: true }
-          }
-        }
-      });
-      const serverLegend = initializeResult.capabilities?.semanticTokensProvider?.legend;
-      if (!semanticLegendsMatch(serverLegend, semanticTokenLegend)) {
-        throw new Error("DynLex language server legend differs from the generated highlight cache");
-      }
       snippetWorkerInitialized = true;
       return result;
     });
@@ -184,35 +158,13 @@ function ensureSnippetWorker() {
   return snippetWorkerReady;
 }
 
-async function syncSnippetLspDocument(sourceText, position) {
-  if (!snippetLsp) {
-    throw new Error("Homepage DynLex language client is not initialized");
-  }
-  if (position !== undefined) {
-    if (
-      !Number.isInteger(position.line)
-      || position.line < 0
-      || !Number.isInteger(position.character)
-      || position.character < 0
-    ) {
-      throw new TypeError("Homepage DynLex cursor position is invalid");
-    }
-  }
-  if (!snippetLspDocument) {
-    snippetLspDocument = await snippetLsp.openDocument({
-      uri: snippetDocumentUri,
-      languageId: "dynlex",
-      version: 1,
-      text: sourceText,
-      position
-    });
-  } else {
-    await snippetLspDocument.replaceText(sourceText, { position });
-    if (position === undefined) {
-      await snippetLsp.clearActiveCursor();
-    }
-  }
-  return snippetLspDocument.identifier;
+async function createSiteEditor(host, { prefix = "", ...options }) {
+  await ensureSnippetWorker();
+  languageConnection ??= new DynLexConnection(message => queueCompilerTask(() => callSnippetWorker("lsp.exchange", { message })));
+  const editor = createDynLexEditor(host, { embedded: true, ...options });
+  try { await editor.connect({ connection: languageConnection, prefix }); }
+  catch (error) { editor.dispose(); throw error; }
+  return editor;
 }
 
 function queueCompilerTask(task) {
@@ -224,10 +176,11 @@ function queueCompilerTask(task) {
   return result;
 }
 
-async function compileAndRunSource(sourceText) {
+async function compileAndRunSource(sourceText, traceExecution = false) {
   await ensureSnippetWorker();
   const compileResult = await callSnippetWorker("compile", {
     source: sourceText,
+    traceExecution,
     version: nextSnippetVersion++
   });
   renderCompilationTime(compileResult.compilationMilliseconds);
@@ -241,31 +194,6 @@ async function compileAndRunSource(sourceText) {
     throw new Error("Program execution failed");
   }
   return { compileResult, runResult };
-}
-
-async function analyzeDynLexSource(sourceText, position) {
-  await ensureSnippetWorker();
-  await syncSnippetLspDocument(sourceText, position);
-  const response = await snippetLspDocument.request("textDocument/semanticTokens/full");
-  const callExpressions = await snippetLsp.request(
-    "dynlex/callExpressions",
-    snippetLspDocument.identifier
-  );
-  return Object.freeze({
-    callExpressions: Object.freeze([...callExpressions]),
-    diagnostics: snippetDocumentDiagnostics,
-    semanticTokens: Object.freeze([...response.data])
-  });
-}
-
-async function completeDynLexSource(sourceText, position) {
-  await ensureSnippetWorker();
-  await syncSnippetLspDocument(sourceText, position);
-  return snippetLspDocument.request("textDocument/completion", { position });
-}
-
-async function semanticTokensForSource(sourceText) {
-  return (await analyzeDynLexSource(sourceText)).semanticTokens;
 }
 
 function startRiverChallengeMusic() {
@@ -292,6 +220,42 @@ function startRiverChallengeMusic() {
   return { audio, context, gain, started };
 }
 
+function loadFarm() {
+  if (farmChallengePromise) return farmChallengePromise;
+  riverAbortController?.abort();
+  riverChallengeInstance?.destroy();
+  riverChallengeInstance = null;
+  riverChallenge.dataset.challengeState = "loading-farm";
+  farmChallengePromise = import("./farm.js")
+    .then((module) => module.initializeFarm(riverChallenge, {
+      saved: progress.load("farm"),
+      onSave: data => progress.save("farm", data),
+      createEditor: createSiteEditor,
+      compileDynLex: (sourceText) => queueCompilerTask(async () => {
+        await ensureSnippetWorker();
+        const compileResult = await callSnippetWorker("compile", { source: sourceText, version: nextSnippetVersion++, traceExecution: true });
+        if (compileResult.status !== 0) return { compileResult, wasm: null };
+        const { wasm } = await callSnippetWorker("artifact");
+        return { compileResult, wasm };
+      })
+    }))
+    .then((instance) => {
+      farmChallengeInstance = instance;
+      riverChallenge.dataset.challengeState = "farm";
+    })
+    .catch((error) => {
+      console.error("Farm challenge failed to load", error);
+      riverChallenge.dataset.challengeState = "error";
+      riverChallengeError.hidden = false;
+      throw error;
+    });
+  return farmChallengePromise;
+}
+
+farmChallengeLoad.addEventListener("click", () => {
+  void loadFarm();
+});
+
 riverChallengeLoad.addEventListener("click", () => {
   if (riverChallengePromise) {
     return;
@@ -301,6 +265,7 @@ riverChallengeLoad.addEventListener("click", () => {
   riverChallengeLoad.dataset.loadState = "loading";
   riverChallengeLoad.setAttribute("aria-expanded", "true");
   riverChallenge.dataset.challengeState = "accepted";
+  riverAbortController = new AbortController();
   let music;
   try {
     music = startRiverChallengeMusic();
@@ -313,18 +278,25 @@ riverChallengeLoad.addEventListener("click", () => {
   riverChallengePromise = import("./river-challenge.js")
     .then((module) => module.initializeRiverChallenge(riverChallenge, {
       music,
-      analyzeDynLex: (sourceText, position) => (
-        queueCompilerTask(() => analyzeDynLexSource(sourceText, position))
-      ),
-      completeDynLex: (sourceText, position) => (
-        queueCompilerTask(() => completeDynLexSource(sourceText, position))
-      ),
-      runDynLex: (sourceText) => queueCompilerTask(() => compileAndRunSource(sourceText))
+      saved: progress.load("river"),
+      onSave: data => progress.save("river", data),
+      onSolved: () => {
+        window.setTimeout(() => void loadFarm(), 700);
+      },
+      signal: riverAbortController.signal,
+      createEditor: createSiteEditor,
+      runDynLex: (sourceText) => queueCompilerTask(() => compileAndRunSource(sourceText, true))
     }))
-    .then(() => {
+    .then((instance) => {
+      riverChallengeInstance = instance;
       riverChallenge.dataset.challengeState = "ready";
     })
     .catch((error) => {
+      if (error.name === "AbortError") {
+        music.audio.pause();
+        if (music.context.state !== "closed") void music.context.close();
+        return;
+      }
       console.error("River challenge failed to load", error);
       music.audio.pause();
       void music.context.close();
@@ -333,95 +305,14 @@ riverChallengeLoad.addEventListener("click", () => {
     });
 });
 
+gameAccount.resume.addEventListener("click", () => {
+  if (progress.snapshot.lastGame === "farm" || progress.load("river")?.solved) void loadFarm();
+  else riverChallengeLoad.click();
+});
+
 function activeSnippetSource(sketch) {
   const visiblePanelSource = sketch.querySelector("[data-lab-panel]:not([hidden]) [data-snippet-source]");
   return visiblePanelSource || required("[data-snippet-source]", sketch);
-}
-
-function renderSemanticHighlight(source, tokenData, legend, stateName) {
-  const highlightState = snippetHighlightStates.get(source);
-  if (!highlightState) {
-    throw new Error("Snippet highlighter has not been installed");
-  }
-
-  const sourceText = source.value;
-  renderSemanticTokens(highlightState.code, sourceText, tokenData, legend, {
-    baseClass: "snippet-token",
-    classPrefix: "snippet-token-"
-  });
-  highlightState.shell.dataset.highlightState = stateName;
-}
-
-function syncSnippetHighlightScroll(source) {
-  const highlightState = snippetHighlightStates.get(source);
-  if (!highlightState) {
-    throw new Error("Snippet highlighter has not been installed");
-  }
-  highlightState.shell.style.setProperty("--snippet-scroll-x", `${-source.scrollLeft}px`);
-  highlightState.shell.style.setProperty("--snippet-scroll-y", `${-source.scrollTop}px`);
-}
-
-async function installSnippetHighlighter(source) {
-  const cacheKey = await semanticHighlightKey(source.value);
-  const cachedTokens = semanticHighlightCache.get(cacheKey);
-  if (!cachedTokens) {
-    throw new Error("Editable homepage snippet is missing from the generated highlight cache");
-  }
-  runtimeSemanticHighlightCache.set(source.value, cachedTokens);
-
-  const shell = document.createElement("div");
-  shell.className = "snippet-editor-shell";
-
-  const highlight = document.createElement("pre");
-  highlight.className = `${source.className} snippet-highlight`;
-  highlight.setAttribute("aria-hidden", "true");
-  const code = document.createElement("code");
-  highlight.append(code);
-
-  source.before(shell);
-  shell.append(highlight, source);
-  snippetHighlightStates.set(source, { shell, code, generation: 0, timer: null });
-  renderSemanticHighlight(source, cachedTokens, semanticTokenLegend, "cached");
-  source.addEventListener("scroll", () => syncSnippetHighlightScroll(source), { passive: true });
-}
-
-function scheduleSemanticHighlight(source) {
-  const highlightState = snippetHighlightStates.get(source);
-  if (!highlightState) {
-    throw new Error("Snippet highlighter has not been installed");
-  }
-
-  highlightState.generation += 1;
-  const generation = highlightState.generation;
-  if (highlightState.timer !== null) {
-    clearTimeout(highlightState.timer);
-    highlightState.timer = null;
-  }
-
-  const cachedTokens = runtimeSemanticHighlightCache.get(source.value);
-  renderSemanticHighlight(source, cachedTokens ?? [], semanticTokenLegend, cachedTokens ? "cached" : "loading");
-  void ensureSnippetWorker().catch((error) => {
-    if (generation !== highlightState.generation) return;
-    console.error("Homepage syntax highlighter failed to initialize", error);
-    highlightState.shell.dataset.highlightState = "error";
-  });
-  if (cachedTokens) return;
-
-  highlightState.timer = setTimeout(() => {
-    highlightState.timer = null;
-    const sourceText = source.value;
-    void queueCompilerTask(async () => {
-      if (generation !== highlightState.generation || sourceText !== source.value) return;
-      const tokenData = await semanticTokensForSource(sourceText);
-      if (generation !== highlightState.generation || sourceText !== source.value) return;
-      runtimeSemanticHighlightCache.set(sourceText, tokenData);
-      renderSemanticHighlight(source, tokenData, semanticTokenLegend, "semantic");
-    }).catch((error) => {
-      if (generation !== highlightState.generation) return;
-      console.error("Homepage syntax highlighting failed", error);
-      highlightState.shell.dataset.highlightState = "error";
-    });
-  }, 160);
 }
 
 function renderSnippetDiagnostics(sketch, diagnostics) {
@@ -463,7 +354,7 @@ async function executeSketch(sketch) {
     }
     await ensureSnippetWorker();
     setSketchState(sketch, "running");
-    const { compileResult, runResult } = await compileAndRunSource(source.value);
+    const { compileResult, runResult } = await compileAndRunSource(snippetEditors.get(source).getValue());
     renderSnippetDiagnostics(sketch, compileResult.diagnostics);
     if (compileResult.status !== 0) {
       setSketchState(sketch, "error");
@@ -490,38 +381,23 @@ function queueSketch(sketch) {
   void queueCompilerTask(() => executeSketch(sketch));
 }
 
-const snippetSources = runnableSketches.flatMap((sketch) => (
-  [...sketch.querySelectorAll("[data-snippet-source]")]
-));
-await Promise.all(snippetSources.map((source) => installSnippetHighlighter(source)));
-
 for (const sketch of runnableSketches) {
   const button = required("[data-snippet-run]", sketch);
   const status = required("[data-snippet-status]", sketch);
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
+  status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
   button.addEventListener("click", () => queueSketch(sketch));
-
   for (const source of sketch.querySelectorAll("[data-snippet-source]")) {
-    source.addEventListener("input", () => {
-      source.dataset.edited = "true";
-      scheduleSemanticHighlight(source);
-      if (source === activeSnippetSource(sketch)) {
-        setSketchState(sketch, "edited");
+    const value = source.textContent;
+    source.replaceChildren();
+    const editor = await createSiteEditor(source, {
+      value, ariaLabel: source.getAttribute("aria-label"),
+      onRun: () => { if (!button.disabled) queueSketch(sketch); },
+      onChange: () => {
+        source.dataset.edited = "true";
+        if (source === activeSnippetSource(sketch)) setSketchState(sketch, "edited");
       }
     });
-    source.addEventListener("keydown", (event) => {
-      if (event.key === "Tab") {
-        event.preventDefault();
-        source.setRangeText("    ", source.selectionStart, source.selectionEnd, "end");
-        source.dispatchEvent(new Event("input", { bubbles: true }));
-      } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        if (!button.disabled) {
-          queueSketch(sketch);
-        }
-      }
-    });
+    snippetEditors.set(source, editor);
   }
 }
 
@@ -656,14 +532,12 @@ reducedMotion.addEventListener("change", syncFieldMotion);
 resizeCanvas();
 syncFieldMotion();
 
-window.addEventListener("pagehide", () => {
+window.addEventListener("pagehide", (event) => {
   cancelAnimationFrame(frameHandle);
-  if (snippetLsp) {
-    void queueCompilerTask(async () => {
-      await snippetLsp.stop();
-      snippetWorker.terminate();
-    }).catch((error) => {
-      console.error("Homepage DynLex language server shutdown failed", error);
-    });
+  if (!event.persisted) farmChallengeInstance?.destroy();
+  if (!event.persisted && languageConnection) {
+    for (const editor of snippetEditors.values()) editor.dispose();
+    riverChallengeInstance?.destroy();
   }
+
 }, { once: true });

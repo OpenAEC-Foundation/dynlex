@@ -55,6 +55,7 @@ if (kind == IntrinsicKind::LoopWhile) {
 	DataType condType = finalizedExpressionType(context, args[1]);
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("loop while condition must be boolean after type inference");
+	emitExecutionTrace(context, bodyFrame.openingExpression->range, condValue);
 	const bool *knownCondition = bodyFrame.openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop
 									 ? std::get_if<bool>(&bodyFrame.openingExpression->sectionOutcome.conditionValue)
 									 : nullptr;
@@ -91,6 +92,7 @@ if (kind == IntrinsicKind::If) {
 	DataType condType = finalizedExpressionType(context, args[1]);
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("if condition must be boolean after type inference");
+	emitExecutionTrace(context, activeSectionFlexBodyFrame(context).openingExpression->range, condValue);
 	builder.CreateCondBr(condValue, thenBlock, exitBlock);
 
 	builder.SetInsertPoint(thenBlock);
@@ -138,6 +140,7 @@ if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf) {
 		DataType condType = finalizedExpressionType(context, args[1]);
 		if (condType.kind != DataType::Kind::Bool)
 			crashCompilerBug("else if condition must be boolean after type inference");
+		emitExecutionTrace(context, activeSectionFlexBodyFrame(context).openingExpression->range, condValue);
 		builder.CreateCondBr(condValue, elifThenBlock, newExitBlock);
 
 		builder.SetInsertPoint(elifThenBlock);

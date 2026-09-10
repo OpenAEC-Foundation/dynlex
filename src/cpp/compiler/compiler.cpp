@@ -313,18 +313,10 @@ static CodeLine *createLogicalInlineLine(
 	logicalText += text;
 
 	std::vector<SourceSlice> sourceSlices;
-	if (!indent.empty()) {
-		sourceSlices.push_back({0, static_cast<int>(indent.size()), sourceLine->sourceFile, sourceLine->sourceFileLineIndex, 0}
-		);
-	}
-	SourceLocation mappedStart = sourceLine->mapOffsetToSource(sourceColumnStart, true);
-	sourceSlices.push_back({
-		static_cast<int>(indent.size()),
-		static_cast<int>(indent.size() + text.size()),
-		mappedStart.sourceFile,
-		mappedStart.sourceFileLineIndex,
-		mappedStart.column,
-	});
+	sourceLine->appendSourceSlices(sourceSlices, 0, indent.size(), 0);
+	sourceLine->appendSourceSlices(
+		sourceSlices, sourceColumnStart, sourceColumnStart + text.size(), static_cast<int>(indent.size())
+	);
 
 	CodeLine *logicalLine = context.createCodeLine(
 		sourceLine->sourceFile, sourceLine->sourceFileLineIndex, std::move(logicalText), std::move(sourceSlices)

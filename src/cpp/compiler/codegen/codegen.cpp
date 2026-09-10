@@ -6,6 +6,7 @@
 #include "compileTimeValue.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "executionTrace.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "native.h"
@@ -592,6 +593,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::vector<std::pair<std::string, Expression *>> paramBindings;
 		collectPatternCallBindingPairs(expr, matchedDef, paramBindings);
 		if (matchedSection->isFlex) {
+			if (finalizedExpressionType(context, expr).kind == DataType::Kind::Void)
+				emitExecutionTrace(context, expr->range);
 			// Flex: inline the body with expression substitution.
 			// Push current bindings and set only this flex's parameters (scoped).
 			pushPatternCallBindingScope(context.flexBindingFrames, expr, matchedDef);
@@ -742,6 +745,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 		}
 
+		if (finalizedExpressionType(context, expr).kind == DataType::Kind::Void)
+			emitExecutionTrace(context, expr->range);
 		llvm::CallInst *call = builder.CreateCall(func, args);
 		for (auto iterator = managedTemporaryArguments.rbegin(); iterator != managedTemporaryArguments.rend(); iterator++)
 			if (!releaseManagedTemporaryStorage(context, *iterator))
@@ -835,6 +840,18 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 			const Expression::BranchSelection &selection = *lineExpression->branchSelection;
 			if (selection.known) {
 				lastGeneratedValue = nullptr;
+				if (context.options.traceExecution) {
+					auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+					const size_t lastTest = selection.selectedBranchIndex < 0 ? chainEnd : selection.selectedBranchIndex;
+					for (size_t branch = i; branch <= lastTest; ++branch) {
+						Expression *header = body ? body->lineExpression(branch) : section->codeLines[branch]->expression;
+						if (header->sectionOutcome.kind != Expression::SectionOutcome::Kind::Alternative)
+							emitExecutionTrace(
+								context, header->range,
+								builder.getInt1(static_cast<int>(branch) == selection.selectedBranchIndex)
+							);
+					}
+				}
 				if (selection.selectedBranchIndex >= 0) {
 					requireCompilerInvariant(
 						selection.selectedBranchIndex < static_cast<int>(section->codeLines.size()),

@@ -146,6 +146,60 @@
           "variable.constant": {
             "fontStyle": "",
             "foreground": "#7FA9C6"
+          },
+          "function.callDepth0:dynlex": {
+            "foreground": "#4388BB"
+          },
+          "intrinsic.callDepth0:dynlex": {
+            "foreground": "#4388BB"
+          },
+          "type.callDepth0:dynlex": {
+            "foreground": "#4388BB"
+          },
+          "function.callDepth1:dynlex": {
+            "foreground": "#B569BE"
+          },
+          "intrinsic.callDepth1:dynlex": {
+            "foreground": "#B569BE"
+          },
+          "type.callDepth1:dynlex": {
+            "foreground": "#B569BE"
+          },
+          "function.callDepth2:dynlex": {
+            "foreground": "#299C78"
+          },
+          "intrinsic.callDepth2:dynlex": {
+            "foreground": "#299C78"
+          },
+          "type.callDepth2:dynlex": {
+            "foreground": "#299C78"
+          },
+          "function.callDepth3:dynlex": {
+            "foreground": "#B78632"
+          },
+          "intrinsic.callDepth3:dynlex": {
+            "foreground": "#B78632"
+          },
+          "type.callDepth3:dynlex": {
+            "foreground": "#B78632"
+          },
+          "function.callDepth4:dynlex": {
+            "foreground": "#CF7186"
+          },
+          "intrinsic.callDepth4:dynlex": {
+            "foreground": "#CF7186"
+          },
+          "type.callDepth4:dynlex": {
+            "foreground": "#CF7186"
+          },
+          "function.callDepth5:dynlex": {
+            "foreground": "#8A7AD1"
+          },
+          "intrinsic.callDepth5:dynlex": {
+            "foreground": "#8A7AD1"
+          },
+          "type.callDepth5:dynlex": {
+            "foreground": "#8A7AD1"
           }
         }
       }
@@ -234,7 +288,33 @@
           "description": "Connect to an externally launched server instead of spawning one (for C++ debugging)"
         }
       }
-    }
+    },
+    "semanticTokenModifiers": [
+      {
+        "id": "callDepth0",
+        "description": "Call nesting color 1; colors repeat every 6 levels."
+      },
+      {
+        "id": "callDepth1",
+        "description": "Call nesting color 2; colors repeat every 6 levels."
+      },
+      {
+        "id": "callDepth2",
+        "description": "Call nesting color 3; colors repeat every 6 levels."
+      },
+      {
+        "id": "callDepth3",
+        "description": "Call nesting color 4; colors repeat every 6 levels."
+      },
+      {
+        "id": "callDepth4",
+        "description": "Call nesting color 5; colors repeat every 6 levels."
+      },
+      {
+        "id": "callDepth5",
+        "description": "Call nesting color 6; colors repeat every 6 levels."
+      }
+    ]
   },
   "scripts": {
     "sync:license": "node ./scripts/sync-license.mjs",

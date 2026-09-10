@@ -1,0 +1,28 @@
+import {action,itemId,targetId} from "../../web/farm-vocabulary.js";
+import assert from "node:assert/strict";
+import { createFarm } from "../../web/farm-world.js";
+import { perform } from "../../web/farm-actions.js";
+import { FARM_GOALS, newGoalProgress, recordGoal } from "../../web/coding-goals.js";
+
+const world=createFarm(), worker=world.workers[0], tile=world.tiles[10][8];
+worker.x=8; worker.y=11; worker.direction=0;
+perform(world, worker, action("water"));
+assert.equal(world.coding.watering.count,0,"A failed action does not advance a goal");
+worker.inventory=[{kind:"bucket",count:1,water:4}];
+perform(world, worker, action("water"));
+assert.equal(world.coding.watering.count,1);
+tile.moisture=0; perform(world, worker, action("water"));
+assert.equal(world.coding.watering.count,1,"Repeating the same bed does not count twice");
+tile.crop=null; worker.inventory=[{kind:"seeds",count:3}];
+perform(world, worker, action("plant")); assert.equal(world.coding.planting.count,1);
+tile.crop=null; perform(world, worker, action("plant",{argument:itemId("wheat")})); assert.equal(world.coding.planting.count,1);
+world.player.x=9; world.player.y=11; world.player.direction=0;
+world.player.inventory=[{kind:"bucket",count:1,water:4}];
+perform(world, world.player, action("water")); assert.equal(world.coding.watering.count,1,"The farmer cannot complete a worker coding goal manually");
+world.tiles[worker.y][worker.x].items=[{kind:"eggs",count:3}]; worker.inventory=[];
+perform(world, worker, action("collect",{argument:itemId("eggs")})); assert.equal(world.coding.eggs.count,3);
+perform(world, worker, action("collect",{argument:itemId("eggs")})); assert.equal(world.coding.eggs.count,3);
+assert.deepEqual(newGoalProgress(FARM_GOALS).eggs,{count:0,seen:[]});
+const saved=JSON.parse(JSON.stringify(world.coding)); recordGoal(saved,"eggs",3);
+assert.equal(saved.eggs.count,6); assert.equal(world.coding.eggs.count,3);
+console.log("Coding goals count successful worker actions, unique beds, and saved progress.");

@@ -1,3 +1,6 @@
+@import url("./coding-goals.css");
+@import url('./call-colors.css');
+
 :root {
     --ink: #080a09;
     --ink-1: #0d100e;
@@ -464,126 +467,10 @@ code {
 }
 
 .snippet-editor {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    margin: 0;
-    border: 0;
-    border-radius: 0;
-    outline: 0;
-    background: transparent;
-    color: #dce2da;
-    caret-color: var(--acid);
-    font: 400 0.82rem/1.8 var(--mono);
-    tab-size: 4;
-    resize: none;
+    position:relative; width:100%; min-width:0; margin:0; overflow:hidden;
+    white-space:pre; font:400 13px/22px var(--mono);
 }
-
-.snippet-editor-shell {
-    --snippet-default: #dce2da;
-    --snippet-function: var(--sky);
-    --snippet-section: var(--acid);
-    --snippet-variable: #f0f3ee;
-    --snippet-comment: #7f887f;
-    --snippet-pattern: #aab1ff;
-    --snippet-number: #bfb1ff;
-    --snippet-string: #ffd787;
-    --snippet-intrinsic: var(--acid);
-    --snippet-type: #ffad9c;
-    --snippet-keyword: var(--coral);
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    color: var(--snippet-default);
-}
-
-:is(.workbench-code, .lab-panel) > :is(.snippet-editor-shell, .snippet-editor) {
-    height: var(--snippet-frame-height);
-}
-
-.snippet-editor-shell > textarea.snippet-editor {
-    position: relative;
-    z-index: 1;
-    height: 100%;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
-}
-
-.snippet-highlight {
-    position: absolute;
-    z-index: 0;
-    inset: 0;
-    overflow: hidden;
-    margin: 0 !important;
-    pointer-events: none;
-    color: var(--snippet-default);
-    white-space: pre;
-}
-
-.snippet-highlight code {
-    display: block;
-    min-width: max-content;
-    color: inherit;
-    font: inherit;
-    white-space: inherit;
-    transform: translate(var(--snippet-scroll-x, 0), var(--snippet-scroll-y, 0));
-}
-
-.snippet-token-function {
-    color: var(--snippet-function);
-}
-
-.snippet-token-section {
-    color: var(--snippet-section);
-    font-weight: 600;
-}
-
-.snippet-token-variable {
-    color: var(--snippet-variable);
-}
-
-.snippet-token-comment {
-    color: var(--snippet-comment);
-    font-style: italic;
-}
-
-.snippet-token-patterndefinition {
-    color: var(--snippet-pattern);
-    font-weight: 600;
-}
-
-.snippet-token-number {
-    color: var(--snippet-number);
-}
-
-.snippet-token-string {
-    color: var(--snippet-string);
-}
-
-.snippet-token-intrinsic {
-    color: var(--snippet-intrinsic);
-    font-weight: 600;
-}
-
-.snippet-token-type {
-    color: var(--snippet-type);
-}
-
-.snippet-token-keyword {
-    color: var(--snippet-keyword);
-    font-weight: 600;
-}
-
-.snippet-editor::selection {
-    background: rgba(133, 220, 255, 0.3);
-}
-
-.snippet-editor:focus {
-    background: rgba(133, 220, 255, 0.035);
-    box-shadow: inset 0 0 0 1px var(--sky);
-}
+:is(.workbench-code, .lab-panel) > .snippet-editor { height:var(--snippet-frame-height); }
 
 .hero-snippet-editor {
     padding: 48px 42px;

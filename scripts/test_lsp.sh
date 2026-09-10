@@ -3,6 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+node "$SCRIPT_DIR/generate_call_colors.mjs" --check
+python3 "$SCRIPT_DIR/test_lsp_call_colors.py"
+python3 "$SCRIPT_DIR/test_lsp_unicode.py"
+python3 "$SCRIPT_DIR/test_lsp_symbols.py"
+
 echo "Running TCP startup failure test..."
 python3 "$SCRIPT_DIR/test_lsp_tcp_startup.py"
 echo "Running concurrent stdio test..."
@@ -19,6 +24,7 @@ echo "Running call-expression range test..."
 python3 "$SCRIPT_DIR/test_lsp_call_expressions.py"
 echo "Running completion frontier test..."
 python3 "$SCRIPT_DIR/test_lsp_completions.py"
+python3 "$SCRIPT_DIR/test_lsp_nested_completions.py"
 echo "Running return type quick-fix test..."
 python3 "$SCRIPT_DIR/test_lsp_return_type_quick_fix.py"
 echo "Running function pattern semantic-stage test..."

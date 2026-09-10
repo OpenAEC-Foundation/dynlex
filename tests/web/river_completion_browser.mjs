@@ -1,21 +1,14 @@
-import assert from "node:assert/strict";
-
-export async function assertRiverEnterCommitsLine({ dispatchKey, evaluate, waitFor }) {
-  await evaluate(`(() => {
-    const source = document.querySelector('[data-river-source]');
-    const lineStart = source.value.lastIndexOf('\\n') + 1;
-    source.setRangeText('ro', lineStart, source.value.length, 'end');
-    source.dispatchEvent(new Event('input', { bubbles: true }));
-  })()`);
-  await waitFor(
-    "[...document.querySelectorAll('[data-river-completion]')]"
-      + ".some((item) => item.querySelector('strong').textContent === 'row ')",
-    "real DynLex row completion before committing the line with Enter"
-  );
-  await dispatchKey("Enter", "Enter", 13, 0, "\r");
-  assert.match(
-    await evaluate("document.querySelector('[data-river-source]').value"),
-    /\nro\n$/,
-    "Enter must finish the active line without accepting its selected completion"
-  );
+import assert from 'node:assert/strict';
+import { withEditor, readCode } from './editor_test_driver.mjs';
+const host='[data-river-editor-shell]';
+export async function assertRiverEnterCommitsLine({dispatchKey,waitFor}) {
+  await withEditor(host, `
+    const line=model.getLineCount();
+    editor.executeEdits('test',[{range:{startLineNumber:line,startColumn:1,endLineNumber:line,endColumn:model.getLineMaxColumn(line)},text:'ro'}]);
+    editor.focus();editor.setPosition({lineNumber:line,column:3});
+    editor.trigger('test','editor.action.triggerSuggest',{});
+  `);
+  await waitFor("[...document.querySelectorAll('.suggest-widget.visible .monaco-list-row')].some(row=>row.textContent.includes('row'))",'row completion');
+  await dispatchKey('Enter','Enter',13,0,'\r');
+  assert.match(await readCode(host),/\nro\n$/,'Enter inserts a newline without accepting the selected completion');
 }

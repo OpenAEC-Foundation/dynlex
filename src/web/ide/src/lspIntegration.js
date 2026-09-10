@@ -1,4 +1,6 @@
-import { LspSession } from "../../../../web/lsp-client.js";
+import { CancellationError } from "monaco-editor/base/common/errors";
+import { DynLexConnection } from "./languageConnection.js";
+import { SourceCoordinates } from "./sourceCoordinates.js";
 import {
   completionKindFromLsp,
   diagnosticSeverityFromLsp,
@@ -8,8 +10,7 @@ import {
   symbolKindFromLsp
 } from "./lspProtocol.js";
 
-const languageSelector = { language: "dynlex", scheme: "file" };
-const selectInstantiationCommand = "dynlex.selectInstantiation";
+let nextEditorId = 1;
 
 function textDocument(model) {
   return { uri: model.uri.toString() };
@@ -71,6 +72,9 @@ export class DynLexLanguageFeatures {
     editor,
     mainModel,
     exchange,
+    connection,
+    prefix = "",
+    embedded = false,
     analysisProfiles,
     onDiagnostics,
     onModelChanged,
@@ -79,8 +83,13 @@ export class DynLexLanguageFeatures {
     this.monaco = monaco;
     this.editor = editor;
     this.mainModel = mainModel;
-    this.session = new LspSession(exchange);
-    this.analysisProfiles = analysisProfiles;
+    this.connection = connection ?? new DynLexConnection(exchange, analysisProfiles);
+    this.ownsConnection = !connection;
+    this.session = this.connection.session;
+    this.embedded = embedded;
+    this.coordinates = new SourceCoordinates(mainModel.uri.toString(), prefix);
+    this.languageSelector = { language: "dynlex", scheme: "file", ...(embedded ? { pattern: mainModel.uri.path } : {}) };
+    this.selectInstantiationCommand = `dynlex.selectInstantiation.${nextEditorId++}`;
     this.onDiagnostics = onDiagnostics;
     this.onModelChanged = onModelChanged;
     this.onDocumentsChanged = onDocumentsChanged;
@@ -94,33 +103,11 @@ export class DynLexLanguageFeatures {
   }
 
   async start() {
-    this.disposables.push(
-      this.session.onNotification("textDocument/publishDiagnostics", (params) => {
-        this.#publishDiagnostics(params);
-      }),
-      this.session.onRequest("workspace/semanticTokens/refresh", () => {
-        this.semanticTokensChanged.fire();
-        return null;
-      })
-    );
-
-    const initializeResult = await this.session.start({
-      capabilities: {
-        textDocument: {
-          semanticTokens: {
-            requests: { full: true }
-          }
-        },
-        workspace: {
-          semanticTokens: { refreshSupport: true }
-        }
-      },
-      initializationOptions: {
-        dynlex: {
-          analysisProfiles: this.analysisProfiles
-        }
-      }
-    });
+    this.disposables.push(this.connection.subscribe(
+      params => this.#publishDiagnostics(this.coordinates.map(params, -1, params.uri)),
+      () => this.semanticTokensChanged.fire()
+    ));
+    const initializeResult = await this.connection.ready;
     this.capabilities = requireCapabilities(initializeResult);
     await this.#openDocument(this.mainModel);
     this.#registerLanguageProviders();
@@ -133,14 +120,17 @@ export class DynLexLanguageFeatures {
   }
 
   async stop() {
-    for (const { contentListener } of this.openDocuments.values()) {
-      contentListener.dispose();
-    }
-    await this.session.stop();
+    for (const disposable of this.disposables.splice(0)) disposable.dispose();
+    for (const { contentListener } of this.openDocuments.values()) contentListener.dispose();
+    if (this.ownsConnection) await this.connection.stop();
+    else for (const { document } of this.openDocuments.values()) await document.close();
     this.openDocuments.clear();
-    for (const disposable of this.disposables.splice(0)) {
-      disposable.dispose();
-    }
+  }
+
+  async callExpressions() {
+    await this.commitActiveLine();
+    // Trace line numbers are compiler coordinates, including the game import.
+    return this.session.request("dynlex/callExpressions", textDocument(this.mainModel));
   }
 
   #runDocumentOperation(operation) {
@@ -149,8 +139,13 @@ export class DynLexLanguageFeatures {
     });
   }
 
-  #request(method, params) {
-    return this.session.request(method, params);
+  async #request(method, params) {
+    const uri = params.textDocument?.uri ?? params.uri ?? this.mainModel.uri.toString();
+    const response = await this.session.request(method, this.coordinates.map(params, 1, uri));
+    if (method === "textDocument/semanticTokens/full" && uri === this.mainModel.uri.toString()) {
+      return { ...response, data: this.coordinates.tokens(response.data) };
+    }
+    return this.coordinates.map(response, -1, uri);
   }
 
   async #openDocument(model) {
@@ -162,16 +157,19 @@ export class DynLexLanguageFeatures {
       uri,
       languageId: "dynlex",
       version: model.getVersionId(),
-      text: model.getValue()
+      text: this.coordinates.text(model)
     });
     const contentListener = model.onDidChangeContent(() => {
       this.#runDocumentOperation(
-        document.replaceText(model.getValue(), {
+        document.replaceText(this.coordinates.text(model), {
           version: model.getVersionId()
         })
       );
     });
     this.openDocuments.set(uri, { model, document, contentListener });
+    // The editor stays usable while didOpen is in flight. Synchronize edits made
+    // during that await before any provider can request tokens for this model.
+    await document.replaceText(this.coordinates.text(model), { version: model.getVersionId() });
     const diagnostics = this.diagnosticsByUri.get(uri);
     if (diagnostics || this.#hasRelatedDiagnostics(uri)) {
       this.#setModelMarkers(model, uri);
@@ -236,7 +234,7 @@ export class DynLexLanguageFeatures {
   #registerLanguageProviders() {
     const capabilities = this.capabilities;
     if (capabilities.completionProvider) {
-      this.disposables.push(this.monaco.languages.registerCompletionItemProvider(languageSelector, {
+      this.disposables.push(this.monaco.languages.registerCompletionItemProvider(this.languageSelector, {
         triggerCharacters: capabilities.completionProvider.triggerCharacters ?? [],
         provideCompletionItems: async (model, position, _context, token) => {
           const response = await this.#request("textDocument/completion", {
@@ -261,6 +259,7 @@ export class DynLexLanguageFeatures {
               kind: completionKindFromLsp(item.kind, this.monaco.languages.CompletionItemKind),
               detail: item.detail,
               sortText: item.sortText,
+              command: item.command ? { id: item.command.command, title: item.command.title } : undefined,
               insertText: item.textEdit?.newText ?? item.insertText ?? item.label,
               range: item.textEdit?.range ? rangeFromLsp(item.textEdit.range) : defaultRange
             }))
@@ -270,7 +269,7 @@ export class DynLexLanguageFeatures {
     }
 
     if (capabilities.definitionProvider) {
-      this.disposables.push(this.monaco.languages.registerDefinitionProvider(languageSelector, {
+      this.disposables.push(this.monaco.languages.registerDefinitionProvider(this.languageSelector, {
         provideDefinition: async (model, position, token) => {
           const location = await this.#request("textDocument/definition", {
             textDocument: textDocument(model),
@@ -290,7 +289,7 @@ export class DynLexLanguageFeatures {
     if (capabilities.hoverProvider) {
       this.disposables.push(
         this.monaco.editor.registerCommand(
-          selectInstantiationCommand,
+          this.selectInstantiationCommand,
           async (_accessor, selectionKey, instantiationKey) => {
             await this.session.notify("dynlex/selectInstantiation", {
               selectionKey,
@@ -300,7 +299,7 @@ export class DynLexLanguageFeatures {
             this.editor.trigger("dynlex", "editor.action.showHover", {});
           }
         ),
-        this.monaco.languages.registerHoverProvider(languageSelector, {
+        this.monaco.languages.registerHoverProvider(this.languageSelector, {
           provideHover: async (model, position, token) => {
             const hover = await this.#request("textDocument/hover", {
               textDocument: textDocument(model),
@@ -319,7 +318,7 @@ export class DynLexLanguageFeatures {
             };
           }
         }),
-        this.monaco.languages.registerHoverProvider(languageSelector, {
+        this.monaco.languages.registerHoverProvider(this.languageSelector, {
           provideHover: async (model, position, token) => {
             const lspPosition = positionToLsp(position);
             const instantiations = await this.#request(
@@ -344,12 +343,12 @@ export class DynLexLanguageFeatures {
               ]));
               const prefix = option.key === entry.currentKey ? "current: " : "";
               return `[${escapeMarkdown(prefix + option.label)}]`
-                + `(command:${selectInstantiationCommand}?${commandArguments})`;
+                + `(command:${this.selectInstantiationCommand}?${commandArguments})`;
             });
             return {
               contents: [{
                 value: `Choose inferred instance:\n\n${options.join("  \n")}`,
-                isTrusted: { enabledCommands: [selectInstantiationCommand] }
+                isTrusted: { enabledCommands: [this.selectInstantiationCommand] }
               }],
               range: rangeFromLsp(entry.range)
             };
@@ -364,22 +363,23 @@ export class DynLexLanguageFeatures {
       if (!Array.isArray(legend?.tokenTypes) || !Array.isArray(legend?.tokenModifiers)) {
         throw new Error("DynLex language server returned an invalid semantic-token legend");
       }
-      this.disposables.push(this.monaco.languages.registerDocumentSemanticTokensProvider(languageSelector, {
+      this.disposables.push(this.monaco.languages.registerDocumentSemanticTokensProvider(this.languageSelector, {
         onDidChange: this.semanticTokensChanged.event,
         getLegend: () => legend,
         provideDocumentSemanticTokens: async (model, _lastResultId, token) => {
+          const version = model.getVersionId();
           const response = await this.#request("textDocument/semanticTokens/full", {
             textDocument: textDocument(model)
           });
-          if (token.isCancellationRequested) {
-            return { data: new Uint32Array() };
-          }
+          // Monaco treats null as removal of the current colors. Cancellation
+          // retains them while it schedules analysis for the newer document.
+          if (token.isCancellationRequested || model.isDisposed() || model.getVersionId() !== version) throw new CancellationError();
           if (!Array.isArray(response?.data) || response.data.some((value) => !Number.isInteger(value) || value < 0)) {
             throw new Error("DynLex language server returned invalid semantic tokens");
           }
           return {
             data: Uint32Array.from(response.data),
-            resultId: String(model.getVersionId())
+            resultId: String(version)
           };
         },
         releaseDocumentSemanticTokens() {}
@@ -387,7 +387,7 @@ export class DynLexLanguageFeatures {
     }
 
     if (capabilities.documentSymbolProvider) {
-      this.disposables.push(this.monaco.languages.registerDocumentSymbolProvider(languageSelector, {
+      this.disposables.push(this.monaco.languages.registerDocumentSymbolProvider(this.languageSelector, {
         displayName: "DynLex",
         provideDocumentSymbols: async (model, token) => {
           const symbols = await this.#request("textDocument/documentSymbol", {
@@ -402,7 +402,7 @@ export class DynLexLanguageFeatures {
     }
 
     if (capabilities.codeActionProvider) {
-      this.disposables.push(this.monaco.languages.registerCodeActionProvider(languageSelector, {
+      this.disposables.push(this.monaco.languages.registerCodeActionProvider(this.languageSelector, {
         provideCodeActions: async (model, range, context, token) => {
           const uri = model.uri.toString();
           const requestedRange = rangeToLsp(range);
@@ -436,9 +436,16 @@ export class DynLexLanguageFeatures {
   }
 
   #registerEditorIntegration() {
+    if (this.embedded) this.disposables.push(
+      this.editor.onDidFocusEditorText(() => this.#runDocumentOperation(this.#sendActiveCursor())),
+      this.editor.onDidBlurEditorText(() => {
+        if (this.session.activeCursor?.uri === this.mainModel.uri.toString()) this.#runDocumentOperation(this.session.clearActiveCursor());
+      })
+    );
     this.disposables.push(
       this.monaco.editor.registerEditorOpener({
         openCodeEditor: async (sourceEditor, resource, selection) => {
+          if (sourceEditor !== this.editor || this.embedded) return false;
           const targetModel = await this.#modelForUri(resource.toString());
           await this.#activateModel(targetModel, selection);
           return true;
@@ -457,6 +464,7 @@ export class DynLexLanguageFeatures {
   }
 
   async #sendActiveCursor() {
+    if (this.embedded && !this.editor.hasTextFocus()) return;
     const model = this.editor.getModel();
     const position = this.editor.getPosition();
     if (!model || !position || model.getLanguageId() !== "dynlex") {
@@ -467,9 +475,9 @@ export class DynLexLanguageFeatures {
     if (!entry) {
       throw new Error(`Active DynLex document is not open: ${model.uri.toString()}`);
     }
-    await entry.document.replaceText(model.getValue(), {
+    await entry.document.replaceText(this.coordinates.text(model), {
       version: model.getVersionId(),
-      position: positionToLsp(position)
+      position: this.coordinates.map(positionToLsp(position), 1, model.uri.toString())
     });
   }
 
@@ -478,7 +486,7 @@ export class DynLexLanguageFeatures {
       throw new Error("DynLex language server published invalid diagnostics");
     }
     this.diagnosticsByUri.set(params.uri, params.diagnostics);
-    for (const model of this.monaco.editor.getModels()) {
+    for (const { model } of this.openDocuments.values()) {
       if (model.getLanguageId() === "dynlex") {
         this.#setModelMarkers(model, model.uri.toString());
       }

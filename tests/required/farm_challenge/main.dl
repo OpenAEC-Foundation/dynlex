@@ -1,0 +1,20 @@
+import lib/farm_challenge.dl
+
+to collect timber:
+    if i am carrying an axe:
+        if there's a tree in front of me:
+            if i can reach it:
+                chop it down
+            else:
+                step forward
+        else:
+            step backward
+    else:
+        walk to the barn
+        grab an axe
+
+if i am a lumberjack:
+    loop forever:
+        collect timber
+        loop 2 times:
+            wait

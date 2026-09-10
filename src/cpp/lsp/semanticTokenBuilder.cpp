@@ -42,38 +42,6 @@ void SemanticTokenBuilder::add(int line, SemanticToken token) {
 	}
 }
 
-std::vector<int> SemanticTokenBuilder::build() {
-	std::vector<int> data;
-
-	int prevLine = 0;
-	int prevChar = 0;
-
-	for (int line = 0; line < static_cast<int>(tokensByLine.size()); ++line) {
-		auto &lineTokens = tokensByLine[line];
-
-		// Sort tokens on this line by start position
-		std::sort(lineTokens.begin(), lineTokens.end(), [](const SemanticToken &a, const SemanticToken &b) {
-			return a.start < b.start;
-		});
-
-		for (const SemanticToken &t : lineTokens) {
-			int deltaLine = line - prevLine;
-			int deltaChar = (deltaLine == 0) ? (t.start - prevChar) : t.start;
-
-			data.push_back(deltaLine);
-			data.push_back(deltaChar);
-			data.push_back(t.end - t.start);
-			data.push_back(static_cast<int>(t.type));
-			data.push_back(t.modifiers);
-
-			prevLine = line;
-			prevChar = t.start;
-		}
-	}
-
-	return data;
-}
-
 const std::vector<std::vector<SemanticToken>> &SemanticTokenBuilder::tokenLines() const { return tokensByLine; }
 
 } // namespace lsp

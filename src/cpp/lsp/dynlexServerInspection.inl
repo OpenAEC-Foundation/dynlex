@@ -385,8 +385,9 @@ resolveCursorData(ParseContext &context, const std::string &uri, int line, int c
 std::optional<Location> DynLexServer::onDefinition(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
+	const auto byteParams = bytePositionParams(params);
 	for (ParseContext *context : findContextsFor(params.textDocument.uri)) {
-		if (std::optional<Location> location = definitionInContext(context, params))
+		if (std::optional<Location> location = definitionInContext(context, byteParams))
 			return location;
 	}
 	return std::nullopt;
@@ -433,8 +434,9 @@ std::optional<Location> DynLexServer::definitionInContext(ParseContext *context,
 std::optional<Hover> DynLexServer::onHover(const TextDocumentPositionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
 		return std::nullopt;
+	const auto byteParams = bytePositionParams(params);
 	for (ParseContext *context : findContextsFor(params.textDocument.uri)) {
-		if (std::optional<Hover> hover = hoverInContext(context, params))
+		if (std::optional<Hover> hover = hoverInContext(context, byteParams))
 			return hover;
 	}
 	return std::nullopt;
@@ -794,87 +796,7 @@ void DynLexServer::onSelectInstantiation(const Json &params) {
 	selectedInstantiationBySelectionKey[selectionKey] = instantiationKey;
 }
 
-// Reconstruct pattern name from definition elements
-static std::string getPatternName(const PatternDefinition *def) {
-	std::string name;
-	for (const auto &elem : def->patternElements) {
-		if (elem.type == PatternElement::Choice && !elem.alternatives.empty()) {
-			name += elem.alternatives[0][0].text;
-		} else {
-			name += elem.text;
-		}
-	}
-	return name;
-}
-
-static SymbolKind symbolKindForSection(SectionType type) {
-	switch (type) {
-	case SectionType::Function:
-		return SymbolKind::Function;
-	case SectionType::Class:
-		return SymbolKind::Class;
-	case SectionType::Pattern:
-		return SymbolKind::Module;
-	default:
-		return SymbolKind::Namespace;
-	}
-}
-
-std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolParams &params) {
-	if (isConfigDocumentUri(params.textDocument.uri))
-		return {};
-	ParseContext *context = findContextFor(params.textDocument.uri);
-	if (!hasCompilationStage(context, ParseContext::CompilationStage::AnalyzedSections)) {
-		return {};
-	}
-
-	std::function<void(Section *, std::vector<DocumentSymbol> &)> collectSymbols = [&](Section *section,
-																					   std::vector<DocumentSymbol> &out) {
-		for (PatternDefinition *def : section->patternDefinitions) {
-			if (!def->range.line || pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri) {
-				continue;
-			}
-
-			DocumentSymbol sym;
-			sym.name = getPatternName(def);
-			std::string typeStr = sectionTypeToString(section->type);
-			sym.detail = section->isFlex ? "flex " + typeStr : typeStr;
-			sym.kind = symbolKindForSection(section->type);
-			sym.selectionRange = convertRange(def->range);
-
-			// Full range: from definition line through last code line of the section
-			sym.range = sym.selectionRange;
-			if (!section->codeLines.empty()) {
-				CodeLine *last = section->codeLines.back();
-				if (pathutil::toAbsoluteUri(last->sourceFile->uri) == params.textDocument.uri &&
-					(last->sourceFileLineIndex > sym.range.end.line ||
-					 (last->sourceFileLineIndex == sym.range.end.line &&
-					  static_cast<int>(last->rightTrimmedText.size()) > sym.range.end.character))) {
-					sym.range.end.line = last->sourceFileLineIndex;
-					sym.range.end.character = static_cast<int>(last->rightTrimmedText.size());
-				}
-			}
-
-			// Recurse into child sections
-			for (Section *child : section->children) {
-				collectSymbols(child, sym.children);
-			}
-
-			out.push_back(std::move(sym));
-		}
-
-		// Sections without pattern definitions but with children (e.g. main section)
-		if (section->patternDefinitions.empty()) {
-			for (Section *child : section->children) {
-				collectSymbols(child, out);
-			}
-		}
-	};
-
-	std::vector<DocumentSymbol> result;
-	collectSymbols(context->mainSection, result);
-	return result;
-}
+#include "dynlexServerSymbols.inl"
 
 std::vector<CodeAction> DynLexServer::onCodeAction(const CodeActionParams &params) {
 	if (isConfigDocumentUri(params.textDocument.uri))
@@ -972,5 +894,5 @@ std::vector<int> DynLexServer::generateSemanticTokens(const std::string &uri) {
 		}
 	}
 
-	return encodeSemanticTokens(tokensByLine);
+	return encodeSemanticTokens(tokensByLine, *docIt->second);
 }

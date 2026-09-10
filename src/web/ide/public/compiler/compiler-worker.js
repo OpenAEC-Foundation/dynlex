@@ -134,11 +134,11 @@ function compilerFeedback(module) {
   };
 }
 
-function compileSource(source, version) {
+function compileSource(source, version, traceExecution) {
   const module = state.compilerModule;
   syncCompilerSource(source, version);
   const compilationStartedAt = performance.now();
-  const status = module.ccall("dynlex_web_compile_and_emit_wasm", "number", [], []);
+  const status = module.ccall(traceExecution ? "dynlex_web_compile_and_emit_wasm_traced" : "dynlex_web_compile_and_emit_wasm", "number", [], []);
   const compilationMilliseconds = performance.now() - compilationStartedAt;
 
   const feedback = compilerFeedback(module);
@@ -335,6 +335,7 @@ async function runLastSuccessfulProgram() {
 // - compile { source, version } -> compileResult
 // - compile.shader { source, version } -> shaderCompileResult
 // - run -> runResult
+// - artifact -> the most recently compiled program bytes
 // - lsp.exchange { message } -> JSON-RPC messages emitted by the DynLex language server
 self.onmessage = async (event) => {
   const { id, type, payload } = event.data ?? {};
@@ -353,7 +354,7 @@ self.onmessage = async (event) => {
       await ensureCompilerInitialized();
       const source = typeof payload?.source === "string" ? payload.source : "";
       const version = Number.isInteger(payload?.version) ? payload.version : -1;
-      const result = compileSource(source, version);
+      const result = compileSource(source, version, payload.traceExecution === true);
       postResponse(id, true, result);
       return;
     }
@@ -377,6 +378,12 @@ self.onmessage = async (event) => {
       await ensureCompilerInitialized();
       const result = await runLastSuccessfulProgram();
       postResponse(id, true, result);
+      return;
+    }
+
+    if (type === "artifact") {
+      if (!state.lastSuccessfulWasm) throw new Error("No compiled program artifact exists.");
+      postResponse(id, true, { wasm: state.lastSuccessfulWasm });
       return;
     }
 
