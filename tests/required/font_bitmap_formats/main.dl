@@ -1,0 +1,15 @@
+import lib/font_bitmap.dl
+
+function [show mask from] {an array:bytes} [width] {integer:width} [height] {integer:height} [pitch] {integer:pitch} [mode] {integer:mode} [levels] {integer:levels}:
+    execute:
+        set mask to the font coverage bytes from ((the address of bytes) as a pointer) width width height height pitch pitch mode mode gray levels levels
+        set index to 0
+        loop while index < mask's length:
+            print (((the character at index in mask) as an integer) bitwise and 255) as a line
+            increment index
+
+show mask from [160 as a byte, 64 as a byte] width 4 height 2 pitch 1 mode 1 levels 2
+show mask from [27 as a byte] width 4 height 1 pitch 1 mode 3 levels 4
+show mask from [15 as a byte, 135 as a byte] width 4 height 1 pitch 2 mode 4 levels 16
+show mask from [0 as a byte, 5 as a byte, 10 as a byte, 15 as a byte] width 4 height 1 pitch 4 mode 2 levels 16
+show mask from [30 as a byte, 40 as a byte, 99 as a byte, 10 as a byte, 20 as a byte, 99 as a byte] width 2 height 2 pitch -3 mode 2 levels 256

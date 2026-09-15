@@ -1,0 +1,3 @@
+tests/required/sizeof_generic_class_after_construction/main.dl:23-49: Error: size of requires a concrete runtime type with a complete memory layout
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", box)' with arguments [a type] -> an unresolved value tests/required/sizeof_generic_class_after_construction/main.dl:23-49
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("size of", box))' with arguments [an unresolved value] -> an unresolved value tests/required/sizeof_generic_class_after_construction/main.dl:1-50

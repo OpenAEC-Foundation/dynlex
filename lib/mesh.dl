@@ -1,0 +1,31 @@
+# Retained triangle meshes. Vertices are copied to graphics memory once.
+# Draw ranges contain complete triangles. Release meshes before their window.
+import lib/graphics.dl
+
+function [a|] graphics vertex:
+    replacement:
+        DynlexGraphicsVertex
+
+class:
+    patterns:
+        [a|] graphics mesh
+    members:
+        resource as a pointer
+        count as an integer
+
+function a graphics mesh containing {integer:count} vertices at {a pointer to a graphics vertex:vertices} for {pointer:window}:
+    execute:
+        set resource to an uploaded graphics mesh containing count vertices at (vertices as a pointer to DynlexGraphicsVertex) in (window as a pointer to DynlexGraphics)
+        return @intrinsic("construct", a graphics mesh, resource as a pointer, count)
+
+function draw {graphics mesh:mesh} from vertex {integer:first} for {integer:count} vertices in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+    execute:
+        if frame's drawable:
+            draw the uploaded graphics mesh (mesh's resource as a pointer to DynlexGraphicsMesh) from vertex first for count vertices tinted red red green green blue blue in (frame's window as a pointer to DynlexGraphics)
+
+flex function release {graphics mesh:mesh}:
+    replacement:
+        if mesh's resource != (0 as a pointer):
+            release the uploaded graphics mesh (mesh's resource as a pointer to DynlexGraphicsMesh)
+        set mesh's resource to 0 as a pointer to a byte
+        set mesh's count to 0

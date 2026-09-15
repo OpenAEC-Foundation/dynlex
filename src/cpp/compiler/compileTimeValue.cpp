@@ -3,6 +3,8 @@
 #include "numericLiteral.h"
 #include "parseContext.h"
 #include "pattern/pattern_tree/patternElement.h"
+#include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -230,9 +232,15 @@ CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_
 }
 
 std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName) {
-	if (targetName != "cpu" && targetName != "wasm" && targetName != "gpu")
-		return std::nullopt;
-	return currentBuildTargetName(context) == targetName;
+	if (targetName == "cpu" || targetName == "wasm" || targetName == "gpu")
+		return currentBuildTargetName(context) == targetName;
+	if (targetName == "windows" || targetName == "macos" || targetName == "linux") {
+		if (currentBuildTargetName(context) != "cpu")
+			return false;
+		llvm::Triple target(llvm::sys::getDefaultTargetTriple());
+		return targetName == "windows" ? target.isOSWindows() : targetName == "macos" ? target.isMacOSX() : target.isOSLinux();
+	}
+	return std::nullopt;
 }
 
 std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::string_view shaderStageName) {

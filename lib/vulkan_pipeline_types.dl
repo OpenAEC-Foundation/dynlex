@@ -1,0 +1,303 @@
+# Vulkan pipeline ABI declarations from the Khronos registry.
+import lib/vulkan_frame_types.dl
+
+class:
+    patterns:
+        VkDescriptorBufferInfo
+    members:
+        buffer as a pointer
+        offset as a 64 bit unsigned integer
+        range as a 64 bit unsigned integer
+
+class:
+    patterns:
+        VkDescriptorImageInfo
+    members:
+        sampler as a pointer
+        imageView as a pointer
+        imageLayout as a 32 bit integer
+
+class:
+    patterns:
+        VkDescriptorSetAllocateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        descriptorPool as a pointer
+        descriptorSetCount as a 32 bit unsigned integer
+        pSetLayouts as a pointer to (a pointer)
+
+class:
+    patterns:
+        VkDescriptorSetLayoutBinding
+    members:
+        binding as a 32 bit unsigned integer
+        descriptorType as a 32 bit integer
+        descriptorCount as a 32 bit unsigned integer
+        stageFlags as a 32 bit unsigned integer
+        pImmutableSamplers as a pointer to (a pointer)
+
+class:
+    patterns:
+        VkDescriptorSetLayoutCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        bindingCount as a 32 bit unsigned integer
+        pBindings as a pointer to (VkDescriptorSetLayoutBinding)
+
+class:
+    patterns:
+        VkGraphicsPipelineCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        stageCount as a 32 bit unsigned integer
+        pStages as a pointer to (VkPipelineShaderStageCreateInfo)
+        pVertexInputState as a pointer to (VkPipelineVertexInputStateCreateInfo)
+        pInputAssemblyState as a pointer to (VkPipelineInputAssemblyStateCreateInfo)
+        pTessellationState as a pointer to (VkPipelineTessellationStateCreateInfo)
+        pViewportState as a pointer to (VkPipelineViewportStateCreateInfo)
+        pRasterizationState as a pointer to (VkPipelineRasterizationStateCreateInfo)
+        pMultisampleState as a pointer to (VkPipelineMultisampleStateCreateInfo)
+        pDepthStencilState as a pointer to (VkPipelineDepthStencilStateCreateInfo)
+        pColorBlendState as a pointer to (VkPipelineColorBlendStateCreateInfo)
+        pDynamicState as a pointer to (VkPipelineDynamicStateCreateInfo)
+        layout as a pointer
+        renderPass as a pointer
+        subpass as a 32 bit unsigned integer
+        basePipelineHandle as a pointer
+        basePipelineIndex as a 32 bit integer
+
+class:
+    patterns:
+        VkPipelineColorBlendAttachmentState
+    members:
+        blendEnable as a 32 bit unsigned integer
+        srcColorBlendFactor as a 32 bit integer
+        dstColorBlendFactor as a 32 bit integer
+        colorBlendOp as a 32 bit integer
+        srcAlphaBlendFactor as a 32 bit integer
+        dstAlphaBlendFactor as a 32 bit integer
+        alphaBlendOp as a 32 bit integer
+        colorWriteMask as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPipelineColorBlendStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        logicOpEnable as a 32 bit unsigned integer
+        logicOp as a 32 bit integer
+        attachmentCount as a 32 bit unsigned integer
+        pAttachments as a pointer to (VkPipelineColorBlendAttachmentState)
+        blendConstants as (a 32 bit floating-point number) array of 4 items
+
+class:
+    patterns:
+        VkPipelineDepthStencilStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        depthTestEnable as a 32 bit unsigned integer
+        depthWriteEnable as a 32 bit unsigned integer
+        depthCompareOp as a 32 bit integer
+        depthBoundsTestEnable as a 32 bit unsigned integer
+        stencilTestEnable as a 32 bit unsigned integer
+        front as VkStencilOpState
+        back as VkStencilOpState
+        minDepthBounds as a 32 bit floating-point number
+        maxDepthBounds as a 32 bit floating-point number
+
+class:
+    patterns:
+        VkPipelineDynamicStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        dynamicStateCount as a 32 bit unsigned integer
+        pDynamicStates as a pointer to (a 32 bit integer)
+
+class:
+    patterns:
+        VkPipelineInputAssemblyStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        topology as a 32 bit integer
+        primitiveRestartEnable as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPipelineLayoutCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        setLayoutCount as a 32 bit unsigned integer
+        pSetLayouts as a pointer to (a pointer)
+        pushConstantRangeCount as a 32 bit unsigned integer
+        pPushConstantRanges as a pointer to (VkPushConstantRange)
+
+class:
+    patterns:
+        VkPipelineMultisampleStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        rasterizationSamples as a 32 bit integer
+        sampleShadingEnable as a 32 bit unsigned integer
+        minSampleShading as a 32 bit floating-point number
+        pSampleMask as a pointer to (a 32 bit unsigned integer)
+        alphaToCoverageEnable as a 32 bit unsigned integer
+        alphaToOneEnable as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPipelineRasterizationStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        depthClampEnable as a 32 bit unsigned integer
+        rasterizerDiscardEnable as a 32 bit unsigned integer
+        polygonMode as a 32 bit integer
+        cullMode as a 32 bit unsigned integer
+        frontFace as a 32 bit integer
+        depthBiasEnable as a 32 bit unsigned integer
+        depthBiasConstantFactor as a 32 bit floating-point number
+        depthBiasClamp as a 32 bit floating-point number
+        depthBiasSlopeFactor as a 32 bit floating-point number
+        lineWidth as a 32 bit floating-point number
+
+class:
+    patterns:
+        VkPipelineShaderStageCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        stage as a 32 bit integer
+        module as a pointer
+        pName as a pointer to (a byte)
+        pSpecializationInfo as a pointer to (VkSpecializationInfo)
+
+class:
+    patterns:
+        VkPipelineTessellationStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        patchControlPoints as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPipelineVertexInputStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        vertexBindingDescriptionCount as a 32 bit unsigned integer
+        pVertexBindingDescriptions as a pointer to (VkVertexInputBindingDescription)
+        vertexAttributeDescriptionCount as a 32 bit unsigned integer
+        pVertexAttributeDescriptions as a pointer to (VkVertexInputAttributeDescription)
+
+class:
+    patterns:
+        VkPipelineViewportStateCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        viewportCount as a 32 bit unsigned integer
+        pViewports as a pointer to (VkViewport)
+        scissorCount as a 32 bit unsigned integer
+        pScissors as a pointer to (VkRect2D)
+
+class:
+    patterns:
+        VkPushConstantRange
+    members:
+        stageFlags as a 32 bit unsigned integer
+        offset as a 32 bit unsigned integer
+        size as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkShaderModuleCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        codeSize as a word sized unsigned integer
+        pCode as a pointer to (a 32 bit unsigned integer)
+
+class:
+    patterns:
+        VkSpecializationInfo
+    members:
+        mapEntryCount as a 32 bit unsigned integer
+        pMapEntries as a pointer to (VkSpecializationMapEntry)
+        dataSize as a word sized unsigned integer
+        pData as a pointer to (a byte)
+
+class:
+    patterns:
+        VkSpecializationMapEntry
+    members:
+        constantID as a 32 bit unsigned integer
+        offset as a 32 bit unsigned integer
+        size as a word sized unsigned integer
+
+class:
+    patterns:
+        VkStencilOpState
+    members:
+        failOp as a 32 bit integer
+        passOp as a 32 bit integer
+        depthFailOp as a 32 bit integer
+        compareOp as a 32 bit integer
+        compareMask as a 32 bit unsigned integer
+        writeMask as a 32 bit unsigned integer
+        reference as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkVertexInputAttributeDescription
+    members:
+        location as a 32 bit unsigned integer
+        binding as a 32 bit unsigned integer
+        format as a 32 bit integer
+        offset as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkVertexInputBindingDescription
+    members:
+        binding as a 32 bit unsigned integer
+        stride as a 32 bit unsigned integer
+        inputRate as a 32 bit integer
+
+class:
+    patterns:
+        VkWriteDescriptorSet
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        dstSet as a pointer
+        dstBinding as a 32 bit unsigned integer
+        dstArrayElement as a 32 bit unsigned integer
+        descriptorCount as a 32 bit unsigned integer
+        descriptorType as a 32 bit integer
+        pImageInfo as a pointer to (VkDescriptorImageInfo)
+        pBufferInfo as a pointer to (VkDescriptorBufferInfo)
+        pTexelBufferView as a pointer to (a pointer)

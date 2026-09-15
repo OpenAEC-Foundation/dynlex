@@ -1,0 +1,90 @@
+import lib/vulkan_memory.dl
+import lib/graphics_builtin_pipelines.dl
+import lib/graphics_textures.dl
+import lib/vulkan_frame_types.dl
+
+function [begin a Vulkan frame cleared to red] {floating-point number:red} [green] {floating-point number:green} [blue] {floating-point number:blue} [alpha] {floating-point number:alpha} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active = false) reporting "Beginning a graphics frame requires an idle graphics context"
+        set width to 0
+        set height to 0
+        @intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, state's window, the address of width, the address of height)
+        if width = 0 or height = 0:
+            return false
+        if state's swapchain_dirty:
+            recreate the graphics swapchain in state
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        require Vulkan status @intrinsic("call", "vulkan", "vkWaitForFences", an integer, state's device, 1, the address of (frame's completed), 1, 18446744073709551615 as a 64 bit unsigned integer) for "Waiting for a graphics frame"
+        destroy retired graphics textures from frame in state
+        set result to @intrinsic("call", "vulkan", "vkAcquireNextImageKHR", an integer, state's device, state's swapchain, 18446744073709551615 as a 64 bit unsigned integer, frame's image_available, 0 as a pointer, the address of (state's image_index))
+        if result = -1000001004:
+            set state's swapchain_dirty to true
+            recreate the graphics swapchain in state
+            return false
+        if result = 1000001003:
+            set state's swapchain_dirty to true
+        else:
+            require Vulkan status result for "Acquiring a swapchain image"
+        require Vulkan status @intrinsic("call", "vulkan", "vkResetCommandBuffer", an integer, frame's commands, 0) for "Resetting graphics commands"
+        set commandBegin to a new VkCommandBufferBeginInfo
+        set commandBegin's sType to 42
+        require Vulkan status @intrinsic("call", "vulkan", "vkBeginCommandBuffer", an integer, frame's commands, the address of commandBegin) for "Beginning graphics commands"
+        # VkClearValue contains four 32-bit words. The second value clears
+        # depth to 1.0 and stencil to zero; its remaining words are unused.
+        set clearValues to [red as a 32 bit floating-point number, green as a 32 bit floating-point number, blue as a 32 bit floating-point number, alpha as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number]
+        set area to a new VkRect2D
+        set area's extent to state's swapchain_extent
+        set renderBegin to a new VkRenderPassBeginInfo
+        set renderBegin's sType to 43
+        set renderBegin's renderPass to state's render_pass
+        set renderBegin's framebuffer to @intrinsic("dereference", state's framebuffers + state's image_index)
+        set renderBegin's renderArea to area
+        set renderBegin's clearValueCount to 2 as a 32 bit unsigned integer
+        set renderBegin's pClearValues to (clearValues + 0) as a pointer
+        @intrinsic("call", "vulkan", "vkCmdBeginRenderPass", nothing, frame's commands, the address of renderBegin, 0)
+        set viewport to a new VkViewport
+        set viewport's width to state's swapchain_extent's width as a 32 bit floating-point number
+        set viewport's height to state's swapchain_extent's height as a 32 bit floating-point number
+        set viewport's maxDepth to 1.0 as a 32 bit floating-point number
+        @intrinsic("call", "vulkan", "vkCmdSetViewport", nothing, frame's commands, 0, 1, the address of viewport)
+        @intrinsic("call", "vulkan", "vkCmdSetScissor", nothing, frame's commands, 0, 1, the address of area)
+        set frame's upload_offset to 0 as a 64 bit unsigned integer
+        set state's triangle_vertex_count to 0 as a 32 bit unsigned integer
+        set state's triangles_active to false
+        set state's frame_active to true
+        return true
+
+function [present the Vulkan frame in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active and state's triangles_active = false) reporting "Ending a graphics frame requires an active frame with no unfinished triangles"
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        @intrinsic("call", "vulkan", "vkCmdEndRenderPass", nothing, frame's commands)
+        require Vulkan status @intrinsic("call", "vulkan", "vkEndCommandBuffer", an integer, frame's commands) for "Ending graphics commands"
+        set waitStage to 1024 as a 32 bit unsigned integer
+        set ready to @intrinsic("dereference", state's presentation_ready + state's image_index)
+        set submission to a new VkSubmitInfo
+        set submission's sType to 4
+        set submission's waitSemaphoreCount to 1 as a 32 bit unsigned integer
+        set submission's pWaitSemaphores to (the address of (frame's image_available)) as a pointer
+        set submission's pWaitDstStageMask to (the address of waitStage) as a pointer
+        set submission's commandBufferCount to 1 as a 32 bit unsigned integer
+        set submission's pCommandBuffers to (the address of (frame's commands)) as a pointer
+        set submission's signalSemaphoreCount to 1 as a 32 bit unsigned integer
+        set submission's pSignalSemaphores to (the address of ready) as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkResetFences", an integer, state's device, 1, the address of (frame's completed)) for "Resetting frame completion"
+        require Vulkan status @intrinsic("call", "vulkan", "vkQueueSubmit", an integer, state's graphics_queue, 1, the address of submission, frame's completed) for "Submitting a graphics frame"
+        set presentation to a new VkPresentInfoKHR
+        set presentation's sType to 1000001001
+        set presentation's waitSemaphoreCount to 1 as a 32 bit unsigned integer
+        set presentation's pWaitSemaphores to (the address of ready) as a pointer
+        set presentation's swapchainCount to 1 as a 32 bit unsigned integer
+        set presentation's pSwapchains to (the address of (state's swapchain)) as a pointer
+        set presentation's pImageIndices to (the address of (state's image_index)) as a pointer
+        set result to @intrinsic("call", "vulkan", "vkQueuePresentKHR", an integer, state's present_queue, the address of presentation)
+        set state's frame_active to false
+        set state's frame_index to (the remainder of (state's frame_index + 1) divided by (the length of state's frames)) as a 32 bit unsigned integer
+        @intrinsic("call", "glfw", "glfwPollEvents", nothing)
+        if result = -1000001004 or result = 1000001003:
+            set state's swapchain_dirty to true
+        else:
+            require Vulkan status result for "Presenting a graphics frame"

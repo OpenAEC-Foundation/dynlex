@@ -1,0 +1,75 @@
+import lib/graphics.dl
+
+function require {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set translation to a graphics translation by x 10.0 y 20.0 z 30.0
+set rotation to a graphics rotation of 90.0 degrees around x 0.0 y 0.0 z 2.0
+set combined to the graphics product of translation and rotation
+require ((the absolute value of ((the item at 0 in combined) - 0.0)) < 0.00001)
+require ((the absolute value of ((the item at 1 in combined) - 1.0)) < 0.00001)
+require ((the absolute value of ((the item at 4 in combined) + 1.0)) < 0.00001)
+require ((the item at 12 in combined) = 10.0)
+require ((the item at 13 in combined) = 20.0)
+require ((the item at 14 in combined) = 30.0)
+set scale to a graphics scale by x 2.0 y 3.0 z 4.0
+set combined to the graphics product of translation and scale
+require ((the item at 0 in combined) = 2.0)
+require ((the item at 5 in combined) = 3.0)
+require ((the item at 10 in combined) = 4.0)
+require ((the item at 12 in combined) = 10.0)
+set projection to a graphics orthographic projection from left 0.0 right 640.0 top 0.0 bottom 480.0 near -1.0 far 1.0
+require ((the item at 12 in projection) = -1.0)
+require ((the item at 13 in projection) = -1.0)
+require ((the item at 10 in projection) = -0.5)
+require ((the item at 14 in projection) = 0.5)
+set projection to a graphics perspective projection with angle 90.0 aspect 2.0 near 1.0 far 11.0
+require ((the absolute value of ((the item at 0 in projection) - 0.5)) < 0.00001)
+require ((the absolute value of ((the item at 5 in projection) - 1.0)) < 0.00001)
+require ((the item at 11 in projection) = -1.0)
+require ((the absolute value of ((the item at 10 in projection) + 1.1)) < 0.00001)
+require ((the absolute value of ((the item at 14 in projection) + 1.1)) < 0.00001)
+# The public frame API must update the same state consumed by the renderer.
+set native to a new DynlexGraphics
+set frame to @intrinsic("construct", a graphics frame, (the address of native) as a pointer, true)
+reset the model in frame
+move the model in frame by x 4.0, y 5.0 and z 6.0
+save the model transform in frame
+scale the model in frame by x 2.0, y 3.0 and z 4.0
+require ((the item at 0 in native's model) = 2.0)
+require ((the item at 12 in native's model) = 4.0)
+restore the model transform in frame
+require ((the item at 0 in native's model) = 1.0)
+require ((the item at 12 in native's model) = 4.0)
+require (native's model_stack_size = 0)
+rotate the model in frame by 90.0 degrees around x 0.0, y 0.0 and z 1.0
+require ((the absolute value of ((the item at 1 in native's model) - 1.0)) < 0.00001)
+reset the camera in frame
+move the camera in frame by x -4.0, y -5.0 and z -6.0
+require ((the item at 12 in native's camera) = -4.0)
+rotate the camera in frame by -90.0 degrees around x 0.0, y 0.0 and z 1.0
+require ((the absolute value of ((the item at 1 in native's camera) + 1.0)) < 0.00001)
+enable depth testing in frame
+require native's depth_testing
+disable depth testing in frame
+require (native's depth_testing = false)
+set native's swapchain_extent's width to 640 as a 32 bit unsigned integer
+set native's swapchain_extent's height to 320 as a 32 bit unsigned integer
+use perspective with a vertical field of view of 90.0 degrees, a near plane of 1.0 and a far plane of 11.0 in frame
+require ((the absolute value of ((the item at 0 in native's projection) - 0.5)) < 0.00001)
+print "graphics transforms passed" as a line
+
+set native's swapchain_format to 50
+set encoded to graphics color channel 128 for (the address of native)
+require ((the absolute value of (encoded - 0.2158605)) < 0.00001)
+set native's swapchain_format to 44
+set encoded to graphics color channel 128 for (the address of native)
+require ((the absolute value of (encoded - (128.0 / 255.0))) < 0.00001)
+set state to 123
+exposed function [receive test scroll in] {pointer:window} [at] {floating-point number:x} [and] {floating-point number:y}:
+    execute:
+        ignore x
+register the graphics scroll callback named "receive test scroll in $ at $ and $" for (frame's window)
+require (state = 123)

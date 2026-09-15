@@ -372,17 +372,36 @@ function print whether condition as a line:
 
 function {string:left} + {string:right}:
     before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {string:left} + {C string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {C string:left} + {string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {C string:left} + {C string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+local function [the concatenation of] {a value:left} [and] {a value:right}:
     execute:
-        set total to (left's length + right's length)
+        set total to ((the length of left) + (the length of right))
         set result to a new string buffer containing total bytes
         set data to the data of result
-        set boundary to left's length
+        set boundary to the length of left
         set index to 0
         loop while index < boundary:
             store the character at index in left into data at index
             set index to (index + 1)
         set cursor to 0
-        loop while cursor < right's length:
+        loop while cursor < (the length of right):
             store the character at cursor in right into data at boundary + cursor
             set cursor to (cursor + 1)
         return result

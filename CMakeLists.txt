@@ -314,8 +314,6 @@ if(NOT EMSCRIPTEN)
     set(DYNLEX_RUNTIME_SOURCES
         src/runtime/filesystemRuntime.c
         src/runtime/hostRuntime.c
-        src/runtime/pathRuntime.c
-        src/runtime/pathUriRuntime.c
         src/runtime/processRuntime.c
         src/runtime/runtimeError.c
         src/runtime/runtimeText.c
@@ -327,7 +325,6 @@ if(NOT EMSCRIPTEN)
             src/runtime/hostRuntimeWindows.c
             src/runtime/hostRuntimeWindowsPath.c
             src/runtime/processRuntimeWindows.c
-            src/runtime/processRuntimeWindowsQuoting.c
             src/runtime/windowsEnvironment.c
         )
     else()
@@ -345,28 +342,12 @@ if(NOT EMSCRIPTEN)
         src/runtime/filesystemTransactionInternal.h
         src/runtime/hostRuntimeInternal.h
         src/runtime/hostRuntimeWindowsPath.h
-        src/runtime/pathRuntimeInternal.h
         src/runtime/platformFeatureTest.h
         src/runtime/processRuntimeInternal.h
         src/runtime/processRuntimePosixWrite.h
-        src/runtime/processRuntimeWindowsQuoting.h
         src/runtime/runtimeError.h
         src/runtime/runtimeText.h
         src/runtime/windowsEnvironment.h
-    )
-    set(DYNLEX_GRAPHICS_SOURCES
-        src/runtime/graphicsRuntime.c
-        src/runtime/graphicsRuntimeDraw.c
-        src/runtime/graphicsRuntimePipeline.c
-        src/runtime/graphicsRuntimeTexture.c
-        src/runtime/graphicsRuntimeVulkan.c
-    )
-    set(DYNLEX_GRAPHICS_HEADERS
-        src/runtime/graphicsBuiltinShaders.h
-        src/runtime/graphicsRuntime.h
-        src/runtime/graphicsRuntimeInternal.h
-        src/runtime/platformFeatureTest.h
-        src/runtime/runtimeError.h
     )
     if(WIN32)
         set(DYNLEX_WINDOWS_RUNTIME_COMPILER
@@ -450,67 +431,6 @@ if(NOT EMSCRIPTEN)
         set(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH "${DYNLEX_WINDOWS_RUNTIME_ARCHIVE}")
         set(DYNLEX_RUNTIME_LIBRARY_FILENAME "libdynlex_runtime.a")
 
-        set(DYNLEX_WINDOWS_GRAPHICS_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/windows-graphics")
-        set(DYNLEX_WINDOWS_GRAPHICS_ARCHIVE
-            "${DYNLEX_WINDOWS_GRAPHICS_DIRECTORY}/libdynlex_graphics.a"
-        )
-        set(DYNLEX_WINDOWS_GRAPHICS_OBJECTS)
-        foreach(DYNLEX_GRAPHICS_SOURCE IN LISTS DYNLEX_GRAPHICS_SOURCES)
-            get_filename_component(
-                DYNLEX_GRAPHICS_SOURCE_NAME
-                "${DYNLEX_GRAPHICS_SOURCE}"
-                NAME_WE
-            )
-            set(DYNLEX_GRAPHICS_OBJECT
-                "${DYNLEX_WINDOWS_GRAPHICS_DIRECTORY}/${DYNLEX_GRAPHICS_SOURCE_NAME}.o"
-            )
-            set(DYNLEX_GRAPHICS_DEPENDENCIES
-                "${DYNLEX_WINDOWS_GRAPHICS_DIRECTORY}/${DYNLEX_GRAPHICS_SOURCE_NAME}.d"
-            )
-            add_custom_command(
-                OUTPUT "${DYNLEX_GRAPHICS_OBJECT}"
-                COMMAND "${CMAKE_COMMAND}" -E make_directory
-                    "${DYNLEX_WINDOWS_GRAPHICS_DIRECTORY}"
-                COMMAND "${DYNLEX_WINDOWS_RUNTIME_COMPILER}"
-                    "--target=${DYNLEX_WINDOWS_TOOLCHAIN_TARGET}"
-                    -std=c11
-                    "${DYNLEX_WINDOWS_RUNTIME_OPTIMIZATION}"
-                    -g
-                    -Wall
-                    -Wextra
-                    -Wpedantic
-                    -Werror
-                    "-D_WIN32_WINNT=${DYNLEX_WINDOWS_TARGET_VERSION}"
-                    "-DWINVER=${DYNLEX_WINDOWS_TARGET_VERSION}"
-                    "-I${CMAKE_SOURCE_DIR}/src/runtime"
-                    "-I${DYNLEX_WINDOWS_DEPENDENCY_ROOT}/include"
-                    -MMD
-                    -MF "${DYNLEX_GRAPHICS_DEPENDENCIES}"
-                    -c "${CMAKE_SOURCE_DIR}/${DYNLEX_GRAPHICS_SOURCE}"
-                    -o "${DYNLEX_GRAPHICS_OBJECT}"
-                DEPENDS
-                    "${CMAKE_SOURCE_DIR}/${DYNLEX_GRAPHICS_SOURCE}"
-                    ${DYNLEX_GRAPHICS_HEADERS}
-                DEPFILE "${DYNLEX_GRAPHICS_DEPENDENCIES}"
-                VERBATIM
-            )
-            list(APPEND DYNLEX_WINDOWS_GRAPHICS_OBJECTS "${DYNLEX_GRAPHICS_OBJECT}")
-        endforeach()
-        add_custom_command(
-            OUTPUT "${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE}"
-            COMMAND "${CMAKE_COMMAND}" -E rm -f "${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE}"
-            COMMAND "${DYNLEX_WINDOWS_RUNTIME_ARCHIVER}" rcs
-                "${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE}"
-                ${DYNLEX_WINDOWS_GRAPHICS_OBJECTS}
-            DEPENDS ${DYNLEX_WINDOWS_GRAPHICS_OBJECTS}
-            VERBATIM
-        )
-        add_custom_target(
-            dynlex_graphics ALL
-            DEPENDS "${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE}"
-        )
-        set(DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH "${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE}")
-        set(DYNLEX_GRAPHICS_LIBRARY_FILENAME "libdynlex_graphics.a")
     else()
         add_library(dynlex_runtime STATIC ${DYNLEX_RUNTIME_SOURCES})
         set_target_properties(dynlex_runtime PROPERTIES
@@ -522,32 +442,15 @@ if(NOT EMSCRIPTEN)
         set(DYNLEX_RUNTIME_LIBRARY_BUILD_PATH "$<TARGET_FILE:dynlex_runtime>")
         set(DYNLEX_RUNTIME_LIBRARY_FILENAME "$<TARGET_FILE_NAME:dynlex_runtime>")
 
-        add_library(dynlex_graphics STATIC ${DYNLEX_GRAPHICS_SOURCES} ${DYNLEX_GRAPHICS_HEADERS})
-        set_target_properties(dynlex_graphics PROPERTIES
-            C_STANDARD 11
-            C_STANDARD_REQUIRED ON
-            POSITION_INDEPENDENT_CODE ON
-        )
-        target_include_directories(dynlex_graphics PUBLIC src/runtime)
-        target_compile_options(dynlex_graphics PRIVATE -Wall -Wextra -Wpedantic -Werror)
-        target_link_libraries(dynlex_graphics PUBLIC glfw Vulkan::Vulkan)
-        if(NOT APPLE)
-            target_link_libraries(dynlex_graphics PUBLIC m)
-        endif()
-        set(DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH "$<TARGET_FILE:dynlex_graphics>")
-        set(DYNLEX_GRAPHICS_LIBRARY_FILENAME "$<TARGET_FILE_NAME:dynlex_graphics>")
     endif()
 
     add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
                                     ${PROJECT_CONFIGS})
-    add_dependencies(${PROJECT_NAME} dynlex_runtime dynlex_graphics)
+    add_dependencies(${PROJECT_NAME} dynlex_runtime)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         DYNLEX_RUNTIME_LIBRARY_BUILD_PATH="${DYNLEX_RUNTIME_LIBRARY_BUILD_PATH}"
         DYNLEX_RUNTIME_LIBRARY_FILENAME="${DYNLEX_RUNTIME_LIBRARY_FILENAME}"
         DYNLEX_RUNTIME_LIBRARY_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex"
-        DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH="${DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH}"
-        DYNLEX_GRAPHICS_LIBRARY_FILENAME="${DYNLEX_GRAPHICS_LIBRARY_FILENAME}"
-        DYNLEX_GRAPHICS_LIBRARY_INSTALL_DIR="${CMAKE_INSTALL_LIBDIR}/dynlex"
     )
     if(WIN32)
         file(TO_CMAKE_PATH "${DYNLEX_WINDOWS_TOOLCHAIN_ROOT}" DYNLEX_WINDOWS_TOOLCHAIN_ROOT_CMAKE)
@@ -612,19 +515,6 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     )
 
-    if(NOT WIN32)
-        add_executable(
-            dynlex_graphics_runtime_test EXCLUDE_FROM_ALL
-            tests/runtime/graphics_runtime_vulkan.c
-        )
-        target_link_libraries(dynlex_graphics_runtime_test PRIVATE dynlex_graphics dynlex_runtime)
-        set_target_properties(dynlex_graphics_runtime_test PROPERTIES
-            C_STANDARD 11
-            C_STANDARD_REQUIRED ON
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-        )
-        target_compile_options(dynlex_graphics_runtime_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
-    endif()
 
     # MinGW stores full DWARF in every COFF object for a normal Debug build.
     # Keeping that data in the objects makes LLD spend an unbounded amount of
@@ -725,13 +615,6 @@ if(TARGET dynlex_runtime)
         install(FILES ${DYNLEX_WINDOWS_RUNTIME_ARCHIVE} DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
     else()
         install(TARGETS dynlex_runtime ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
-    endif()
-endif()
-if(TARGET dynlex_graphics)
-    if(WIN32)
-        install(FILES ${DYNLEX_WINDOWS_GRAPHICS_ARCHIVE} DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
-    else()
-        install(TARGETS dynlex_graphics ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/dynlex)
     endif()
 endif()
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/dynlex/lib FILES_MATCHING PATTERN "*.dl")

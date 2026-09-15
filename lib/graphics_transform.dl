@@ -1,0 +1,110 @@
+# Column-major transformations, matching the matrix layout used by shaders.
+import lib/check.dl
+
+function [a|] graphics matrix:
+    replacement:
+        (a 32 bit floating-point number) array of 16 items
+
+function {floating-point number:value} [is finite]:
+    execute:
+        return (value - value) = 0.0
+
+function [an identity graphics matrix]:
+    execute:
+        set result to a new graphics matrix
+        store (1.0) as a 32 bit floating-point number into result at 0
+        store (1.0) as a 32 bit floating-point number into result at 5
+        store (1.0) as a 32 bit floating-point number into result at 10
+        store (1.0) as a 32 bit floating-point number into result at 15
+        return result
+
+function [the graphics product of] {graphics matrix:left} [and] {graphics matrix:right}:
+    execute:
+        set result to a new graphics matrix
+        set column to 0
+        loop while column < 4:
+            set row to 0
+            loop while row < 4:
+                set sum to 0.0 as a 32 bit floating-point number
+                set inner to 0
+                loop while inner < 4:
+                    set sum to sum + ((the item at (inner * 4 + row) in left) * (the item at (column * 4 + inner) in right))
+                    increment inner
+                store (sum) as a 32 bit floating-point number into result at (column * 4 + row)
+                increment row
+            increment column
+        return result
+
+function [a graphics translation by x] {floating-point number:x} [y] {floating-point number:y} [z] {floating-point number:z}:
+    execute:
+        set result to an identity graphics matrix
+        store (x) as a 32 bit floating-point number into result at 12
+        store (y) as a 32 bit floating-point number into result at 13
+        store (z) as a 32 bit floating-point number into result at 14
+        return result
+
+function [a graphics scale by x] {floating-point number:x} [y] {floating-point number:y} [z] {floating-point number:z}:
+    execute:
+        set result to an identity graphics matrix
+        store (x) as a 32 bit floating-point number into result at 0
+        store (y) as a 32 bit floating-point number into result at 5
+        store (z) as a 32 bit floating-point number into result at 10
+        return result
+
+function [a graphics rotation of] {floating-point number:degrees} [degrees around x] {floating-point number:horizontal} [y] {floating-point number:vertical} [z] {floating-point number:depth}:
+    execute:
+        set magnitude to the square root of ((horizontal * horizontal + vertical * vertical) + depth * depth)
+        require condition ((degrees is finite) and ((magnitude is finite) and magnitude > 0.0)) reporting "A graphics rotation requires a finite angle and a non-zero finite axis"
+        set x to horizontal / magnitude
+        set y to vertical / magnitude
+        set z to depth / magnitude
+        set radians to degrees * 0.017453292519943295769
+        set cosine to the cosine of radians
+        set sine to the sine of radians
+        set complement to 1.0 - cosine
+        set result to an identity graphics matrix
+        store ((cosine + ((x * x) * complement))) as a 32 bit floating-point number into result at 0
+        store ((((y * x) * complement) + z * sine)) as a 32 bit floating-point number into result at 1
+        store ((((z * x) * complement) - y * sine)) as a 32 bit floating-point number into result at 2
+        store ((((x * y) * complement) - z * sine)) as a 32 bit floating-point number into result at 4
+        store ((cosine + ((y * y) * complement))) as a 32 bit floating-point number into result at 5
+        store ((((z * y) * complement) + x * sine)) as a 32 bit floating-point number into result at 6
+        store ((((x * z) * complement) + y * sine)) as a 32 bit floating-point number into result at 8
+        store ((((y * z) * complement) - x * sine)) as a 32 bit floating-point number into result at 9
+        store ((cosine + ((z * z) * complement))) as a 32 bit floating-point number into result at 10
+        return result
+
+function [a graphics orthographic projection from left] {floating-point number:left} [right] {floating-point number:right} [top] {floating-point number:top} [bottom] {floating-point number:bottom} [near] {floating-point number:near} [far] {floating-point number:far}:
+    execute:
+        set bounds to [left, right, top, bottom, near, far]
+        set index to 0
+        loop while index < 6:
+            require condition ((the item at index in bounds) is finite) reporting "An orthographic projection requires finite bounds"
+            increment index
+        require condition ((left != right and top != bottom) and near != far) reporting "An orthographic projection requires distinct bounds"
+        set result to an identity graphics matrix
+        store ((2.0 / (right - left))) as a 32 bit floating-point number into result at 0
+        store ((2.0 / (bottom - top))) as a 32 bit floating-point number into result at 5
+        store ((1.0 / (near - far))) as a 32 bit floating-point number into result at 10
+        store (((0.0 - (right + left)) / (right - left))) as a 32 bit floating-point number into result at 12
+        store (((0.0 - (bottom + top)) / (bottom - top))) as a 32 bit floating-point number into result at 13
+        store ((near / (near - far))) as a 32 bit floating-point number into result at 14
+        return result
+
+function [a graphics perspective projection with angle] {floating-point number:degrees} [aspect] {floating-point number:aspect} [near] {floating-point number:near} [far] {floating-point number:far}:
+    execute:
+        set parameters to [degrees, aspect, near, far]
+        set index to 0
+        loop while index < 4:
+            require condition ((the item at index in parameters) is finite) reporting "A perspective projection requires finite parameters"
+            increment index
+        require condition ((degrees > 0.0 and degrees < 180.0) and (aspect > 0.0 and (near > 0.0 and far > near))) reporting "A perspective projection requires an angle between 0 and 180, a positive aspect ratio and valid clip planes"
+        set radians to degrees * 0.0087266462599716478846
+        set scale to (the cosine of radians) / (the sine of radians)
+        set result to a new graphics matrix
+        store ((scale / aspect)) as a 32 bit floating-point number into result at 0
+        store (scale) as a 32 bit floating-point number into result at 5
+        store ((far / (near - far))) as a 32 bit floating-point number into result at 10
+        store (-1.0) as a 32 bit floating-point number into result at 11
+        store (((near * far) / (near - far))) as a 32 bit floating-point number into result at 14
+        return result

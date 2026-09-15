@@ -1,0 +1,33 @@
+import lib/graphics_drawing.dl
+
+function [set graphics uniform binding] {integer:binding} [to] {floating-point number:value} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition ((binding >= 0 and binding < (the length of state's uniform_values)) and (value is finite)) reporting "A scalar shader uniform requires a binding from 0 through 31 and a finite value"
+        store (value as a 32 bit floating-point number) into state's uniform_values at binding
+
+function [draw a fullscreen graphics shader in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition ((state's frame_active and state's triangles_active = false) and (state's active_pipeline != (0 as a pointer to DynlexGraphicsPipeline))) reporting "Drawing a fullscreen shader requires an active frame, pipeline, and no unfinished triangles"
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        set positions to [(-1.0) as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number]
+        set size to (the size of (a 32 bit floating-point number array of 16 items)) as a 64 bit unsigned integer
+        require condition (frame's upload_offset <= (33554432 - size)) reporting "The graphics frame exceeds its transient vertex capacity"
+        set offset to frame's upload_offset
+        set destination to (frame's upload + offset) as a pointer to (a 32 bit floating-point number array of 16 items)
+        @intrinsic("store at", destination, positions)
+        set frame's upload_offset to frame's upload_offset + size
+        set pipeline to state's active_pipeline
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < pipeline's binding_count:
+            set binding to the item at index in (pipeline's bindings)
+            set value to the item at binding in (state's uniform_values)
+            set mapped to the item at (state's frame_index) in (pipeline's uniform_maps)
+            set uniformDestination to (mapped + (pipeline's uniform_stride * index)) as a pointer to a 32 bit floating-point number
+            @intrinsic("store at", uniformDestination, value)
+            increment index
+        @intrinsic("call", "vulkan", "vkCmdBindPipeline", nothing, frame's commands, 0, pipeline's pipeline)
+        @intrinsic("call", "vulkan", "vkCmdBindVertexBuffers", nothing, frame's commands, 0, 1, the address of (frame's upload_buffer), the address of offset)
+        if pipeline's binding_count > 0:
+            set descriptor to the address of (the item at (state's frame_index) in (pipeline's descriptor_sets))
+            @intrinsic("call", "vulkan", "vkCmdBindDescriptorSets", nothing, frame's commands, 0, pipeline's layout, 0, 1, descriptor, 0, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkCmdDraw", nothing, frame's commands, 4, 1, 0, 0)

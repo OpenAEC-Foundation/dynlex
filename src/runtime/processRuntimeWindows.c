@@ -1,7 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "processRuntimeInternal.h"
-#include "processRuntimeWindowsQuoting.h"
 
 #include "runtimeError.h"
 #include "windowsEnvironment.h"
@@ -384,55 +383,6 @@ static wchar_t *search_executable_path(const wchar_t *executable, const wchar_t 
 	return NULL;
 }
 
-static wchar_t *build_command_line(const DynlexProcessCommand *command, const wchar_t *wide_executable) {
-	wchar_t **arguments = calloc(command->argument_count + 1, sizeof(*arguments));
-	if (arguments == NULL) {
-		dynlex_runtime_set_errno_error("Could not allocate Windows argument conversion", ENOMEM);
-		return NULL;
-	}
-	arguments[0] = _wcsdup(wide_executable);
-	if (arguments[0] == NULL) {
-		dynlex_runtime_set_errno_error("Could not allocate Windows executable argument", ENOMEM);
-		free(arguments);
-		return NULL;
-	}
-	size_t total = dynlex_windows_quoted_argument_length(arguments[0]) + 1;
-	for (size_t index = 0; index < command->argument_count; ++index) {
-		arguments[index + 1] =
-			utf8_to_wide(command->arguments[index].data, command->arguments[index].length, "Invalid Windows process argument");
-		if (arguments[index + 1] == NULL)
-			goto failure;
-		size_t length = dynlex_windows_quoted_argument_length(arguments[index + 1]);
-		if (total > SIZE_MAX - length - 1) {
-			dynlex_runtime_set_error("Windows command line is too large");
-			goto failure;
-		}
-		total += length + 1;
-	}
-	wchar_t *command_line = calloc(total, sizeof(*command_line));
-	if (command_line == NULL) {
-		dynlex_runtime_set_errno_error("Could not allocate Windows command line", ENOMEM);
-		goto failure;
-	}
-	wchar_t *destination = command_line;
-	for (size_t index = 0; index <= command->argument_count; ++index) {
-		if (index != 0)
-			*destination++ = L' ';
-		destination = dynlex_windows_append_quoted_argument(destination, arguments[index]);
-	}
-	*destination = L'\0';
-	for (size_t index = 0; index <= command->argument_count; ++index)
-		free(arguments[index]);
-	free(arguments);
-	return command_line;
-
-failure:
-	for (size_t index = 0; index <= command->argument_count; ++index)
-		free(arguments[index]);
-	free(arguments);
-	return NULL;
-}
-
 static wchar_t *
 resolve_executable(const DynlexProcessCommand *command, const wchar_t *working_directory, const wchar_t *environment) {
 	wchar_t *executable = utf8_to_wide(command->executable.data, command->executable.length, "Invalid Windows executable");
@@ -516,7 +466,9 @@ static void close_handle(HANDLE *handle) {
 	*handle = NULL;
 }
 
-int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCommand *command) {
+int dynlex_platform_process_launch(
+	DynlexProcess *process, const DynlexProcessCommand *command, DynlexWindowsCommandLineBuilder build_command_line
+) {
 	DynlexWindowsProcess *platform = calloc(1, sizeof(*platform));
 	wchar_t *working_directory = NULL;
 	wchar_t *executable = NULL;
@@ -559,7 +511,7 @@ int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCo
 	executable = resolve_executable(command, working_directory, environment);
 	if (executable == NULL)
 		goto failure;
-	command_line = build_command_line(command, executable);
+	command_line = (wchar_t *)build_command_line((const uint16_t *)executable, command->arguments, command->argument_count);
 	if (command_line == NULL)
 		goto failure;
 

@@ -1,0 +1,205 @@
+import lib/vulkan_devices.dl
+import lib/vulkan_images.dl
+
+function [choose the Vulkan depth format in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set candidates to [126, 129, 124]
+        set index to 0
+        loop while index < (the length of candidates):
+            set format to the item at index in candidates
+            set properties to a new VkFormatProperties
+            @intrinsic("call", "vulkan", "vkGetPhysicalDeviceFormatProperties", nothing, state's physical_device, format, the address of properties)
+            if (properties' optimalTilingFeatures bitwise and 512) != 0:
+                return format
+            increment index
+        require condition false reporting "The Vulkan device has no supported depth attachment format"
+        return 0
+
+function [the preferred Vulkan surface format in] {a pointer to VkSurfaceFormatKHR:formats} [count] {32 bit unsigned integer:count}:
+    execute:
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < count:
+            set format to @intrinsic("dereference", formats + index)
+            if format's format = 50 and format's colorSpace = 0:
+                return format
+            increment index
+        set chosen to @intrinsic("dereference", formats)
+        if chosen's format = 0:
+            set chosen's format to 50
+        return chosen
+
+function [create the Vulkan swapchain replacing] {pointer:previous} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set capabilities to a new VkSurfaceCapabilitiesKHR
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", an integer, state's physical_device, state's surface, the address of capabilities) for "Querying Vulkan surface capabilities"
+        require condition ((capabilities' supportedUsageFlags bitwise and 16) != 0) reporting "The Vulkan surface cannot be used as a color attachment"
+        set count to 0 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceFormatsKHR", an integer, state's physical_device, state's surface, the address of count, 0 as a pointer) for "Counting Vulkan surface formats"
+        require condition (count > 0) reporting "The Vulkan surface has no supported formats"
+        set formats to allocated Vulkan storage for (count as a word sized unsigned integer) instances of VkSurfaceFormatKHR
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceFormatsKHR", an integer, state's physical_device, state's surface, the address of count, formats) for "Querying Vulkan surface formats"
+        set chosen to the preferred Vulkan surface format in formats count count
+        @intrinsic("call", "libc", "free", nothing, formats)
+        set extent to capabilities' currentExtent
+        if extent's width = (4294967295 as a 32 bit unsigned integer):
+            set width to 0
+            set height to 0
+            @intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, state's window, the address of width, the address of height)
+            set extent's width to width as a 32 bit unsigned integer
+            set extent's height to height as a 32 bit unsigned integer
+            if extent's width < capabilities' minImageExtent's width:
+                set extent's width to capabilities' minImageExtent's width
+            if extent's width > capabilities' maxImageExtent's width:
+                set extent's width to capabilities' maxImageExtent's width
+            if extent's height < capabilities' minImageExtent's height:
+                set extent's height to capabilities' minImageExtent's height
+            if extent's height > capabilities' maxImageExtent's height:
+                set extent's height to capabilities' maxImageExtent's height
+        set imageCount to capabilities' minImageCount + 1
+        if (capabilities' maxImageCount > 0) and (imageCount > capabilities' maxImageCount):
+            set imageCount to capabilities' maxImageCount
+        set families to [state's graphics_queue_family, state's present_queue_family]
+        # Vulkan guarantees at least one supported composite-alpha bit.
+        set alpha to 1 as a 32 bit unsigned integer
+        loop while (capabilities' supportedCompositeAlpha bitwise and alpha) = 0:
+            set alpha to alpha shifted left by 1
+        set creation to a new VkSwapchainCreateInfoKHR
+        set creation's sType to 1000001000
+        set creation's surface to state's surface
+        set creation's minImageCount to imageCount
+        set creation's imageFormat to chosen's format
+        set creation's imageColorSpace to chosen's colorSpace
+        set creation's imageExtent to extent
+        set creation's imageArrayLayers to 1 as a 32 bit unsigned integer
+        set creation's imageUsage to 16 as a 32 bit unsigned integer
+        if state's graphics_queue_family != state's present_queue_family:
+            set creation's imageSharingMode to 1
+            set creation's queueFamilyIndexCount to 2 as a 32 bit unsigned integer
+            set creation's pQueueFamilyIndices to families + 0
+        set creation's preTransform to capabilities' currentTransform
+        set creation's compositeAlpha to alpha as an integer
+        set creation's presentMode to 2
+        set creation's clipped to 1 as a 32 bit unsigned integer
+        set creation's oldSwapchain to previous
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateSwapchainKHR", an integer, state's device, the address of creation, 0 as a pointer, the address of (state's swapchain)) for "Creating the Vulkan swapchain"
+        set state's swapchain_format to chosen's format
+        set state's swapchain_color_space to chosen's colorSpace
+        set state's swapchain_extent to extent
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetSwapchainImagesKHR", an integer, state's device, state's swapchain, the address of imageCount, 0 as a pointer) for "Counting Vulkan swapchain images"
+        set capacity to imageCount as a word sized unsigned integer
+        set state's swapchain_images to allocated Vulkan storage for capacity instances of a pointer
+        set state's swapchain_views to allocated Vulkan storage for capacity instances of a pointer
+        set state's depth_images to allocated Vulkan storage for capacity instances of a pointer
+        set state's depth_memories to allocated Vulkan storage for capacity instances of a pointer
+        set state's depth_views to allocated Vulkan storage for capacity instances of a pointer
+        set state's framebuffers to allocated Vulkan storage for capacity instances of a pointer
+        set state's presentation_ready to allocated Vulkan storage for capacity instances of a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetSwapchainImagesKHR", an integer, state's device, state's swapchain, the address of imageCount, state's swapchain_images) for "Querying Vulkan swapchain images"
+        set state's swapchain_image_count to imageCount
+
+function [create the Vulkan render pass in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set colorAttachment to a new VkAttachmentDescription
+        set colorAttachment's format to state's swapchain_format
+        set colorAttachment's samples to 1
+        set colorAttachment's loadOp to 1
+        set colorAttachment's stencilLoadOp to 2
+        set colorAttachment's stencilStoreOp to 1
+        set colorAttachment's finalLayout to 1000001002
+        set depthAttachment to colorAttachment
+        set depthAttachment's format to state's depth_format
+        set depthAttachment's storeOp to 1
+        set depthAttachment's finalLayout to 3
+        set attachments to [colorAttachment, depthAttachment]
+        set color to a new VkAttachmentReference
+        set color's layout to 2
+        set depth to a new VkAttachmentReference
+        set depth's attachment to 1 as a 32 bit unsigned integer
+        set depth's layout to 3
+        set subpass to a new VkSubpassDescription
+        set subpass's colorAttachmentCount to 1 as a 32 bit unsigned integer
+        set subpass's pColorAttachments to the address of color
+        set subpass's pDepthStencilAttachment to the address of depth
+        set dependency to a new VkSubpassDependency
+        set dependency's srcSubpass to 4294967295 as a 32 bit unsigned integer
+        set dependency's srcStageMask to 1280 as a 32 bit unsigned integer
+        set dependency's dstStageMask to 1280 as a 32 bit unsigned integer
+        set dependency's dstAccessMask to 1280 as a 32 bit unsigned integer
+        set creation to a new VkRenderPassCreateInfo
+        set creation's sType to 38
+        set creation's attachmentCount to 2 as a 32 bit unsigned integer
+        set creation's pAttachments to attachments + 0
+        set creation's subpassCount to 1 as a 32 bit unsigned integer
+        set creation's pSubpasses to the address of subpass
+        set creation's dependencyCount to 1 as a 32 bit unsigned integer
+        set creation's pDependencies to the address of dependency
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateRenderPass", an integer, state's device, the address of creation, 0 as a pointer, the address of (state's render_pass)) for "Creating the Vulkan render pass"
+
+function [create Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < state's swapchain_image_count:
+            set colorView to a new VkImageViewCreateInfo
+            set colorView's sType to 15
+            set colorView's image to @intrinsic("dereference", state's swapchain_images + index)
+            set colorView's viewType to 1
+            set colorView's format to state's swapchain_format
+            set colorView's subresourceRange's aspectMask to 1 as a 32 bit unsigned integer
+            set colorView's subresourceRange's levelCount to 1 as a 32 bit unsigned integer
+            set colorView's subresourceRange's layerCount to 1 as a 32 bit unsigned integer
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateImageView", an integer, state's device, the address of colorView, 0 as a pointer, state's swapchain_views + index) for "Creating a swapchain image view"
+            set depth to a Vulkan image of width (state's swapchain_extent's width) height (state's swapchain_extent's height) format (state's depth_format) usage (32 as a 32 bit unsigned integer) in state
+            @intrinsic("store at", state's depth_images + index, depth's handle)
+            @intrinsic("store at", state's depth_memories + index, depth's memory)
+            set depthView to colorView
+            set depthView's image to depth's handle
+            set depthView's format to state's depth_format
+            set depthView's subresourceRange's aspectMask to 2 as a 32 bit unsigned integer
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateImageView", an integer, state's device, the address of depthView, 0 as a pointer, state's depth_views + index) for "Creating a depth image view"
+            set attachments to [@intrinsic("dereference", state's swapchain_views + index), @intrinsic("dereference", state's depth_views + index)]
+            set framebuffer to a new VkFramebufferCreateInfo
+            set framebuffer's sType to 37
+            set framebuffer's renderPass to state's render_pass
+            set framebuffer's attachmentCount to 2 as a 32 bit unsigned integer
+            set framebuffer's pAttachments to attachments + 0
+            set framebuffer's width to state's swapchain_extent's width
+            set framebuffer's height to state's swapchain_extent's height
+            set framebuffer's layers to 1 as a 32 bit unsigned integer
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateFramebuffer", an integer, state's device, the address of framebuffer, 0 as a pointer, state's framebuffers + index) for "Creating a Vulkan framebuffer"
+            set semaphore to a new VkSemaphoreCreateInfo
+            set semaphore's sType to 9
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateSemaphore", an integer, state's device, the address of semaphore, 0 as a pointer, state's presentation_ready + index) for "Creating Vulkan presentation synchronization"
+            increment index
+
+function [destroy Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < state's swapchain_image_count:
+            @intrinsic("call", "vulkan", "vkDestroySemaphore", nothing, state's device, @intrinsic("dereference", state's presentation_ready + index), 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyFramebuffer", nothing, state's device, @intrinsic("dereference", state's framebuffers + index), 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyImageView", nothing, state's device, @intrinsic("dereference", state's depth_views + index), 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyImage", nothing, state's device, @intrinsic("dereference", state's depth_images + index), 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, @intrinsic("dereference", state's depth_memories + index), 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyImageView", nothing, state's device, @intrinsic("dereference", state's swapchain_views + index), 0 as a pointer)
+            increment index
+        @intrinsic("call", "libc", "free", nothing, state's framebuffers)
+        @intrinsic("call", "libc", "free", nothing, state's depth_views)
+        @intrinsic("call", "libc", "free", nothing, state's depth_images)
+        @intrinsic("call", "libc", "free", nothing, state's depth_memories)
+        @intrinsic("call", "libc", "free", nothing, state's swapchain_views)
+        @intrinsic("call", "libc", "free", nothing, state's swapchain_images)
+        @intrinsic("call", "libc", "free", nothing, state's presentation_ready)
+
+function [recreate the Vulkan swapchain resources in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to rebuild the Vulkan swapchain"
+        set previousFormat to state's swapchain_format
+        set previousSwapchain to state's swapchain
+        destroy Vulkan swapchain attachments in state
+        create the Vulkan swapchain replacing previousSwapchain in state
+        @intrinsic("call", "vulkan", "vkDestroySwapchainKHR", nothing, state's device, previousSwapchain, 0 as a pointer)
+        if previousFormat != state's swapchain_format:
+            @intrinsic("call", "vulkan", "vkDestroyRenderPass", nothing, state's device, state's render_pass, 0 as a pointer)
+            create the Vulkan render pass in state
+        create Vulkan swapchain attachments in state
+        set state's swapchain_dirty to false

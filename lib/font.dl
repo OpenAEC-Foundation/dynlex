@@ -1,3 +1,4 @@
+import lib/font_bitmap.dl
 # DynLex Font Library - TrueType rendering through the graphics renderer
 
 import lib/string.dl
@@ -80,11 +81,31 @@ class:
 
 class:
     patterns:
+        [a|] font glyph
+    members:
+        code as a word sized integer
+        width as an integer
+        height as an integer
+        left as an integer
+        top as an integer
+        advance as an integer
+        texture as a graphics texture
+        next as a pointer to a font glyph
+
+class:
+    patterns:
+        [a|] font cache
+    members:
+        window as a pointer
+        first as a pointer to a font glyph
+
+class:
+    patterns:
         [a|] font
     members:
         library as a pointer
         face as a pointer
-        texture as a graphics texture
+        cache as a pointer to a font cache
 
 class:
     patterns:
@@ -115,13 +136,13 @@ class:
         green as an integer
         blue as an integer
 
-local function a new font using {pointer:library}, {pointer:face} and {graphics texture:texture}:
+local function a new font using {pointer:library}, {pointer:face} and {a pointer to a font cache:cache}:
     replacement:
-        @intrinsic("construct", a font, library, face, texture)
+        @intrinsic("construct", a font, library, face, cache)
 
 local function an empty font:
     execute:
-        return a new font using (0 as a pointer to a byte), (0 as a pointer to a byte) and an empty graphics texture
+        return a new font using (0 as a pointer to a byte), (0 as a pointer to a byte) and (0 as a pointer to a font cache)
 
 local function a successful font operation status:
     replacement:
@@ -181,7 +202,7 @@ function a font color from {a value:red}, {a value:green} and {a value:blue}:
 
 local function a failed font load after cleaning up {pointer:library} and {pointer:face} following {C string:operation} with error code {integer:error}:
     execute:
-        set typeface to a new font using library, face and an empty graphics texture
+        set typeface to a new font using library, face and (0 as a pointer to a font cache)
         set cleanup to the result of releasing (the address of typeface)
         if cleanup failed:
             return a failed font load containing typeface with cleanup
@@ -206,54 +227,60 @@ function the result of loading a font from path at size {a value:size} for {poin
         if error != 0:
             return a failed font load after cleaning up library and face following "FT_Set_Pixel_Sizes" with error code error
 
-        set blank to 0 as a byte
-        set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_red8", a pointer to a byte, window, 1, 1, the address of blank)
-        if resource = 0 as a pointer to a byte:
-            return a failed font load after cleaning up library and face following "dynlex_graphics_texture_create_red8" with error code -1
-        set texture to @intrinsic("construct", a graphics texture, resource, 1, 1)
+        if window = (0 as a pointer):
+            return a failed font load after cleaning up library and face following "creating the font texture" with error code -1
+        set cache to @intrinsic("call", "libc", "calloc", a pointer to a font cache, 1 as a word sized integer, the size of a font cache)
+        require condition (cache != (0 as a pointer to a font cache)) reporting "Could not allocate the font glyph cache"
+        set cache's window to window
+        return a successful font load containing (a new font using library, face and cache)
 
-        return a successful font load containing (a new font using library, face and texture)
 
-# --- Character rendering ---
+local function [clear cached glyphs in] {a pointer to a font cache:cache}:
+    execute:
+        loop while cache's first != (0 as a pointer to a font glyph):
+            set glyph to cache's first
+            set cache's first to glyph's next
+            release glyph's texture
+            @intrinsic("call", "libc", "free", nothing, glyph)
 
 local function the result of rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     execute:
-        set face to the face of typeface
-        set texture to typeface's texture
-
-        # Load and render the glyph
-        set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, code as a C long integer, 4)
+        set cache to typeface's cache
+        set glyph to 0 as a pointer to a font glyph
+        if cache != (0 as a pointer to a font cache):
+            set glyph to cache's first
+        loop while glyph != (0 as a pointer to a font glyph):
+            if glyph's code = (code as a word sized integer):
+                return the result of drawing cached glyph glyph at x horizontal y vertical in color color on frame
+            set glyph to glyph's next
+        set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, typeface's face, code as a C long integer, 4)
         if error != 0:
             return a failed font rendering at horizontal position horizontal in "FT_Load_Char" with error code error
+        set metadata to typeface's face as a pointer to an FT face
+        set slot to metadata's glyph as a pointer to an FT glyph slot
+        set glyph to @intrinsic("call", "libc", "calloc", a pointer to a font glyph, 1 as a word sized integer, the size of a font glyph)
+        require condition (glyph != (0 as a pointer to a font glyph)) reporting "Could not allocate cached font glyph information"
+        set glyph's code to code as a word sized integer
+        set glyph's width to slot's bitmap width
+        set glyph's height to slot's bitmap rows
+        set glyph's left to slot's bitmap left
+        set glyph's top to slot's bitmap top
+        set glyph's advance to (slot's advance x / 64) as an integer
+        if (glyph's width > 0) and (glyph's height > 0):
+            set pixels to the font coverage bytes from slot's bitmap buffer width glyph's width height glyph's height pitch slot's bitmap pitch mode (slot's bitmap pixel mode as an integer) gray levels (slot's bitmap number of gray levels as an integer)
+            set resource to a graphics texture resource from (the data of pixels) with width glyph's width height glyph's height channels (1 as a 32 bit unsigned integer) in (cache's window as a pointer to DynlexGraphics)
+            set glyph's texture to @intrinsic("construct", a graphics texture, resource as a pointer, glyph's width, glyph's height)
+        set glyph's next to cache's first
+        set cache's first to glyph
+        return the result of drawing cached glyph glyph at x horizontal y vertical in color color on frame
 
-        # Read glyph slot from the face after loading the character
-        set metadata to face as a pointer to an FT face
-        set glyph to the glyph of metadata
-
-        # Cast the glyph slot pointer to access its bitmap data
-        set slot to glyph as a pointer to an FT glyph slot
-
-        set width to the bitmap width of slot
-        set height to the bitmap rows of slot
-        set buffer to the bitmap buffer of slot
-        set left to the bitmap left of slot
-        set top to the bitmap top of slot
-        set advance to the advance x of slot
-
-        if (width > 0) and (height > 0):
-            set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_update", an integer, texture's resource, width, height, buffer)
-            if status = 0:
-                print (the current graphics error message) as a line
-                @intrinsic("call", "libc", "abort", nothing)
-
-            set west to (horizontal + left)
-            set north to (vertical - top)
-            set east to (west + width)
-            set south to (north + height)
-            draw texture from x west, y north to x east, y south in color red color's red, green color's green and blue color's blue in frame
-
-        # Advance is in 26.6 fixed point, so divide it by 64.
-        return a successful font rendering at horizontal position ((horizontal + advance / 64) as an integer)
+local function [the result of drawing cached glyph] {a pointer to a font glyph:glyph} [at x] {a value:horizontal} [y] {a value:vertical} [in color] {font color:color} [on] {graphics frame:frame}:
+    execute:
+        if glyph's width > 0 and glyph's height > 0:
+            set west to horizontal + glyph's left
+            set north to vertical - glyph's top
+            draw glyph's texture from x west, y north to x (west + glyph's width), y (north + glyph's height) in color red color's red, green color's green and blue color's blue in frame
+        return a successful font rendering at horizontal position ((horizontal + glyph's advance) as an integer)
 
 flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     replacement:
@@ -266,6 +293,7 @@ function the result of setting {font:typeface}'s pixel size to {a value:size}:
         set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
         if error != 0:
             return a failed font operation status for "FT_Set_Pixel_Sizes" with error code error
+        clear cached glyphs in typeface's cache
         return a successful font operation status
 
 # --- Number rendering ---
@@ -327,7 +355,10 @@ function the result of releasing {a pointer to a font:typeface}:
             if error != 0:
                 set status to a failed font operation status for "FT_Done_FreeType" with error code error
             else:
-                release typeface's texture
+                if typeface's cache != (0 as a pointer to a font cache):
+                    clear cached glyphs in typeface's cache
+                    @intrinsic("call", "libc", "free", nothing, typeface's cache)
+                    set typeface's cache to 0 as a pointer to a font cache
                 set the library of typeface to 0 as a pointer to a byte
                 set the face of typeface to 0 as a pointer to a byte
         return status

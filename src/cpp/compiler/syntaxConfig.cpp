@@ -2,6 +2,7 @@
 #include "compiler.h"
 #include "parseContext.h"
 #include "pathUtils.h"
+#include "section/parseUtils.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -557,7 +558,7 @@ size_t findCommentStart(std::string_view line, std::string_view commentPrefix) {
 	bool inString = false;
 	for (size_t i = 0; i < line.size(); ++i) {
 		char c = line[i];
-		if (c == '"' && (i == 0 || line[i - 1] != '\\')) {
+		if (c == '"' && !isEscapedCharacter(line, i)) {
 			inString = !inString;
 			continue;
 		}

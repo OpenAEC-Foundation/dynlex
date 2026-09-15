@@ -1,0 +1,23 @@
+import lib/std.dl
+
+class:
+    patterns:
+        holder
+    members:
+        destination as a pointer to an integer
+
+set first to 0
+set second to 0
+set object to @intrinsic("construct", holder, the address of first)
+set link to the address of object
+set indirect to the address of link
+set triple to the address of indirect
+ignore @intrinsic("variadic call", "libc", "sscanf", an integer, 2, "17", "%d", triple's destination)
+if first = 17:
+    print "first updated" as a line
+set indirect's destination to the address of second
+ignore @intrinsic("variadic call", "libc", "sscanf", an integer, 2, "29", "%d", triple's destination)
+if second = 29:
+    print "second updated" as a line
+print first as a line
+print second as a line

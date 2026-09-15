@@ -1,0 +1,3 @@
+tests/required/sizeof_meta_type/main.dl:23-72: Error: size of requires a concrete runtime type with a complete memory layout
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", @intrinsic("type", "type"))' with arguments [a type] -> an unresolved value tests/required/sizeof_meta_type/main.dl:23-72
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("size of", @intrinsic("type", "type")))' with arguments [an unresolved value] -> an unresolved value tests/required/sizeof_meta_type/main.dl:1-73

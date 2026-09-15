@@ -138,9 +138,9 @@ std::string scalarTypeName(DataType::Kind kind, int numericSize) {
 	if (kind == DataType::Kind::Int && bitCount == 8)
 		return "a byte";
 	std::string article = bitCount == 8 ? "an " : "a ";
-	std::string category = kind == DataType::Kind::Int ? "integer"
-		: kind == DataType::Kind::UInt ? "unsigned integer"
-									 : "floating-point number";
+	std::string category = kind == DataType::Kind::Int	  ? "integer"
+						   : kind == DataType::Kind::UInt ? "unsigned integer"
+														  : "floating-point number";
 	return article + std::to_string(bitCount) + "-bit " + category;
 }
 
@@ -353,7 +353,7 @@ std::string DataType::toString() const {
 }
 
 uint64_t DataType::getByteSize(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const {
-	requireCompilerInvariant(isRuntimeValueType(), "byte size requires a concrete runtime value type");
+	requireCompilerInvariant(isConcrete() && isRuntimeValueType(), "byte size requires a concrete runtime value type");
 	llvm::Type *llvmType = toLLVM(llvmContext, dataLayout);
 	requireCompilerInvariant(llvmType->isSized(), "byte size requires a sized LLVM type");
 	return fixedAllocationSize(dataLayout, llvmType);

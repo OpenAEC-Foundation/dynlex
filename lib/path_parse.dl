@@ -1,0 +1,187 @@
+# Portable lexical path parsing. This never resolves filesystem links.
+import lib/platform.dl
+import lib/unicode.dl
+
+class:
+    patterns:
+        [a|] parsed path
+    members:
+        success as a boolean
+        text as a string
+        error as a string
+        rootKind as an integer
+        rootLength as an integer
+        components as an integer
+        sourceOffset as an integer
+
+function [a failed parsed path reporting] {C string:message}:
+    execute:
+        return @intrinsic("construct", a parsed path, false, the string form of "", the string form of message, 0, 0, 0, 0)
+
+function [path byte] {integer:code} [is a separator for style] {integer:style}:
+    execute:
+        return code = 47 or (style = 2 and code = 92)
+
+function [path byte] {integer:code} [is alphabetic]:
+    execute:
+        return (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
+
+function [path root kind] {integer:kind} [is a directory]:
+    execute:
+        return ((kind = 1 or kind = 2) or (kind = 4 or kind = 6)) or kind = 7
+
+function [path root kind] {integer:kind} [is fully absolute]:
+    execute:
+        return (kind = 1 or kind = 2) or (kind = 6 or kind = 7)
+
+function [path text] {string:left} [matches] {string:right} [for style] {integer:style}:
+    execute:
+        if left's length != right's length:
+            return false
+        set index to 0
+        loop while index < left's length:
+            set a to (the character at index in left) as an integer
+            set b to (the character at index in right) as an integer
+            if style = 2:
+                if a >= 65 and a <= 90:
+                    set a to a + 32
+                if b >= 65 and b <= 90:
+                    set b to b + 32
+            if a != b:
+                return false
+            increment index
+        return true
+
+function [the path root parsed from] {string:text} [for style] {integer:style}:
+    execute:
+        set result to @intrinsic("construct", a parsed path, true, the string form of "", the string form of "", 0, 0, 0, 0)
+        if style != 1 and style != 2:
+            return a failed parsed path reporting "Unknown path style"
+        set index to 0
+        loop while index < text's length:
+            if (the character at index in text) = (0 as a byte):
+                return a failed parsed path reporting "Path text contains a null byte"
+            increment index
+        set cursor to 0
+        if style = 1:
+            loop while cursor < text's length and (the character at cursor in text) = (47 as a byte):
+                increment cursor
+            if cursor > 0:
+                set result's rootKind to 2 if cursor = 2, else 1
+                set result's text to the string form of ("//" if cursor = 2, else "/")
+        else:
+            set result's rootKind to 3
+            if text's length >= 4:
+                if (path byte ((the character at 0 in text) as an integer) is a separator for style 2) and (path byte ((the character at 1 in text) as an integer) is a separator for style 2):
+                    set third to (the character at 2 in text) as an integer
+                    if (third = 63 or third = 46) and (path byte ((the character at 3 in text) as an integer) is a separator for style 2):
+                        return a failed parsed path reporting "Windows device namespace paths are not supported"
+            if (text's length >= 2 and ((the character at 1 in text) = (58 as a byte))) and (path byte ((the character at 0 in text) as an integer) is alphabetic):
+                set result's text to the substring of text from 0 spanning 2 bytes
+                set cursor to 2
+                set result's rootKind to 5
+                if cursor < text's length and (path byte ((the character at cursor in text) as an integer) is a separator for style 2):
+                    set result's rootKind to 6
+                    set result's text to result's text + "/"
+                    loop while cursor < text's length and (path byte ((the character at cursor in text) as an integer) is a separator for style 2):
+                        increment cursor
+            else if text's length > 0 and (path byte ((the character at 0 in text) as an integer) is a separator for style 2):
+                set unc to text's length >= 2 and (path byte ((the character at 1 in text) as an integer) is a separator for style 2)
+                if unc and text's length > 2:
+                    set unc to (path byte ((the character at 2 in text) as an integer) is a separator for style 2) = false
+                if unc:
+                    set cursor to 2
+                    loop while cursor < text's length and ((path byte ((the character at cursor in text) as an integer) is a separator for style 2) = false):
+                        increment cursor
+                    set server to the substring of text from 2 spanning (cursor - 2) bytes
+                    loop while cursor < text's length and (path byte ((the character at cursor in text) as an integer) is a separator for style 2):
+                        increment cursor
+                    set start to cursor
+                    loop while cursor < text's length and ((path byte ((the character at cursor in text) as an integer) is a separator for style 2) = false):
+                        increment cursor
+                    set share to the substring of text from start spanning (cursor - start) bytes
+                    if ((server's length = 0 or share's length = 0) or (server = "." or server = "?")) or (share = "." or share = ".."):
+                        return a failed parsed path reporting "A Windows UNC path requires a server and share"
+                    set result's rootKind to 7
+                    set result's text to (("//" + server) + "/") + share
+                else:
+                    set result's rootKind to 4
+                    set result's text to the string form of "/"
+                loop while cursor < text's length and (path byte ((the character at cursor in text) as an integer) is a separator for style 2):
+                    increment cursor
+        set result's rootLength to result's text's length
+        set result's sourceOffset to cursor
+        return result
+
+function [path] {string:text} [parsed for style] {integer:style} [normalizing dots] {boolean:normalize}:
+    execute:
+        if text is invalid:
+            return a failed parsed path reporting "Invalid path text"
+        set result to the path root parsed from text for style style
+        if result's success = false:
+            return result
+        set cursor to result's sourceOffset
+        set buffer to a new string buffer containing (text's length + 1) bytes
+        set output to the data of buffer
+        set length to result's rootLength
+        set index to 0
+        loop while index < length:
+            store (the character at index in result's text) into output at index
+            increment index
+        loop while cursor < text's length:
+            loop while cursor < text's length and (path byte ((the character at cursor in text) as an integer) is a separator for style style):
+                increment cursor
+            set start to cursor
+            loop while cursor < text's length and ((path byte ((the character at cursor in text) as an integer) is a separator for style style) = false):
+                increment cursor
+            set count to cursor - start
+            set append to count > 0
+            if normalize and count = 1:
+                if (the character at start in text) = (46 as a byte):
+                    set append to false
+            if normalize and count = 2:
+                if ((the character at start in text) = (46 as a byte)) and ((the character at (start + 1) in text) = (46 as a byte)):
+                    set append to false
+                    set previous to length
+                    loop while previous > result's rootLength and (the item at (previous - 1) in output) != (47 as a byte):
+                        decrement previous
+                    set parent to false
+                    if length - previous = 2:
+                        set parent to ((the item at previous in output) = (46 as a byte)) and ((the item at (previous + 1) in output) = (46 as a byte))
+                    if result's components > 0 and parent = false:
+                        set length to previous
+                        if length > result's rootLength:
+                            decrement length
+                        set result's components to result's components - 1
+                    else if (path root kind result's rootKind is a directory) = false:
+                        set append to true
+            if append:
+                set driveFirst to result's rootKind = 5 and result's components = 0
+                if length > 0 and driveFirst = false:
+                    if (the item at (length - 1) in output) != (47 as a byte):
+                        store (47 as a byte) into output at length
+                        increment length
+                set index to start
+                loop while index < cursor:
+                    store (the character at index in text) into output at length
+                    increment length
+                    increment index
+                set result's components to result's components + 1
+        if length = 0:
+            store (46 as a byte) into output at 0
+            set length to 1
+        set result's text to the substring of buffer from 0 spanning length bytes
+        return result
+
+function [path] {C string:text} [parsed for style] {integer:style} [normalizing dots] {boolean:normalize}:
+    execute:
+        if text = (0 as a pointer):
+            return a failed parsed path reporting "Invalid path text"
+        return path (the string form of text) parsed for style style normalizing dots normalize
+
+function [the last component offset of path] {parsed path:path}:
+    execute:
+        set position to path's text's length
+        loop while position > path's rootLength and ((the character at (position - 1) in path's text) != (47 as a byte)):
+            decrement position
+        return position

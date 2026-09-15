@@ -1,0 +1,3 @@
+tests/required/sizeof_untyped_array/main.dl:23-68: Error: size of requires a concrete runtime type with a complete memory layout
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", @intrinsic("array", 3))' with arguments [a type] -> an unresolved value tests/required/sizeof_untyped_array/main.dl:23-68
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("size of", @intrinsic("array", 3)))' with arguments [an unresolved value] -> an unresolved value tests/required/sizeof_untyped_array/main.dl:1-69

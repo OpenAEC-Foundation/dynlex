@@ -1,0 +1,90 @@
+import lib/graphics_pipelines.dl
+import lib/vulkan_swapchain.dl
+import lib/graphics_builtin_shaders.dl
+
+function [create the built-in graphics pipelines in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set colorVertex to dynlex_graphics_color_vertex
+        set colorFragment to dynlex_graphics_color_fragment
+        set textureVertex to dynlex_graphics_texture_vertex
+        set textureFragment to dynlex_graphics_texture_fragment
+        set attributes to a new (VkVertexInputAttributeDescription array of 3 items)
+        set position to the address of (the item at 0 in attributes)
+        set position's format to 106
+        set color to the address of (the item at 1 in attributes)
+        set color's location to 1 as a 32 bit unsigned integer
+        set color's format to 109
+        set color's offset to 20 as a 32 bit unsigned integer
+        set coordinates to the address of (the item at 2 in attributes)
+        set coordinates' location to 2 as a 32 bit unsigned integer
+        set coordinates' format to 103
+        set coordinates' offset to 12 as a 32 bit unsigned integer
+        set index to 0
+        loop while index < (the length of state's builtins):
+            set builtin to the address of (the item at index in (state's builtins))
+            set builtin's textured to (index bitwise and 2) != 0
+            set builtin's depth to (index bitwise and 1) != 0
+            set layout to a new VkPipelineLayoutCreateInfo
+            set layout's sType to 30
+            if builtin's textured:
+                set binding to a new VkDescriptorSetLayoutBinding
+                set binding's descriptorType to 1
+                set binding's descriptorCount to 1 as a 32 bit unsigned integer
+                set binding's stageFlags to 16 as a 32 bit unsigned integer
+                set descriptor to a new VkDescriptorSetLayoutCreateInfo
+                set descriptor's sType to 32
+                set descriptor's bindingCount to 1 as a 32 bit unsigned integer
+                set descriptor's pBindings to the address of binding
+                require Vulkan status @intrinsic("call", "vulkan", "vkCreateDescriptorSetLayout", an integer, state's device, the address of descriptor, 0 as a pointer, the address of (builtin's descriptor_layout)) for "Creating a texture descriptor layout"
+                set layout's setLayoutCount to 1 as a 32 bit unsigned integer
+                set layout's pSetLayouts to the address of (builtin's descriptor_layout)
+            set constants to a new VkPushConstantRange
+            set constants' stageFlags to 1 as a 32 bit unsigned integer
+            set constants' size to 80 as a 32 bit unsigned integer
+            set layout's pushConstantRangeCount to 1 as a 32 bit unsigned integer
+            set layout's pPushConstantRanges to the address of constants
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreatePipelineLayout", an integer, state's device, the address of layout, 0 as a pointer, the address of (builtin's layout)) for "Creating a built-in pipeline layout"
+            set vertexWords to (textureVertex + 0) if builtin's textured, else (colorVertex + 0)
+            set vertexCount to (the length of textureVertex) if builtin's textured, else (the length of colorVertex)
+            set fragmentWords to (textureFragment + 0) if builtin's textured, else (colorFragment + 0)
+            set fragmentCount to (the length of textureFragment) if builtin's textured, else (the length of colorFragment)
+            set vertex to @intrinsic("construct", a graphics SPIR-V module, vertexWords, vertexCount as a word sized unsigned integer)
+            set fragment to @intrinsic("construct", a graphics SPIR-V module, fragmentWords, fragmentCount as a word sized unsigned integer)
+            set builtin's pipeline to a Vulkan pipeline for vertex vertex fragment fragment layout builtin's layout topology 3 stride ((the size of DynlexGraphicsVertex) as a 32 bit unsigned integer) attributes (attributes + 0) count (3 as a 32 bit unsigned integer) depth builtin's depth in state
+            increment index
+
+function [destroy the built-in graphics pipelines in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set index to 0
+        loop while index < (the length of state's builtins):
+            set builtin to the address of (the item at index in (state's builtins))
+            @intrinsic("call", "vulkan", "vkDestroyPipeline", nothing, state's device, builtin's pipeline, 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyPipelineLayout", nothing, state's device, builtin's layout, 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyDescriptorSetLayout", nothing, state's device, builtin's descriptor_layout, 0 as a pointer)
+            set builtin's pipeline to 0 as a pointer
+            set builtin's layout to 0 as a pointer
+            set builtin's descriptor_layout to 0 as a pointer
+            increment index
+
+function [recreate the graphics swapchain in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set previousFormat to state's swapchain_format
+        recreate the Vulkan swapchain resources in state
+        if previousFormat != state's swapchain_format:
+            destroy the built-in graphics pipelines in state
+            create the built-in graphics pipelines in state
+            set pipeline to state's pipelines
+            loop while pipeline != (0 as a pointer to DynlexGraphicsPipeline):
+                @intrinsic("call", "vulkan", "vkDestroyPipeline", nothing, state's device, pipeline's pipeline, 0 as a pointer)
+                build the custom graphics pipeline in pipeline
+                set pipeline to pipeline's next
+
+function [release all graphics pipelines in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active = false) reporting "Closing a window requires an idle graphics frame"
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to release graphics pipelines"
+        loop while state's pipelines != (0 as a pointer to DynlexGraphicsPipeline):
+            set pipeline to state's pipelines
+            set state's pipelines to pipeline's next
+            destroy the custom graphics pipeline resources in pipeline
+        destroy the built-in graphics pipelines in state

@@ -270,7 +270,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 					delete base;
 					return nullptr;
 				}
-				if (*(stringIt - 1) != '\\') {
+				if (!isEscapedCharacter(range.subString, stringIt - range.subString.begin())) {
 					index = stringIt - range.subString.begin();
 					break;
 				}

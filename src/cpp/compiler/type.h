@@ -257,6 +257,15 @@ struct DataType {
 		return result;
 	}
 
+	// Class properties follow every pointer level to the owning object.
+	// Other property-bearing types, such as C strings, retain their representation.
+	DataType propertyOwnerType() const {
+		DataType result = *this;
+		if (result.kind == Kind::Class)
+			result.pointerDepth = 0;
+		return result;
+	}
+
 	// Promote for arithmetic, including pointer + number -> pointer
 	static bool promoteArithmetic(const DataType &a, const DataType &b, DataType &result) {
 		DataType left = a;
@@ -380,10 +389,9 @@ struct DataType {
 		if (left.kind == right.kind)
 			result.kind = left.kind;
 		else
-			result.kind = (left.kind == Kind::Int ? left.numericSize > right.numericSize
-															 : right.numericSize > left.numericSize)
-				? Kind::Int
-				: Kind::UInt;
+			result.kind = (left.kind == Kind::Int ? left.numericSize > right.numericSize : right.numericSize > left.numericSize)
+							  ? Kind::Int
+							  : Kind::UInt;
 		result.numericSize = std::max(left.numericSize, right.numericSize);
 		return true;
 	}

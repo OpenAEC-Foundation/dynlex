@@ -1,0 +1,3 @@
+tests/required/sizeof_void/main.dl:23-75: Error: size of requires a concrete runtime type with a complete memory layout
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", @intrinsic("type", "nothing"))' with arguments [a type] -> an unresolved value tests/required/sizeof_void/main.dl:23-75
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("size of", @intrinsic("type", "nothing")))' with arguments [an unresolved value] -> an unresolved value tests/required/sizeof_void/main.dl:1-76

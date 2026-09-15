@@ -4,37 +4,7 @@ case Expression::Kind::IntrinsicCall: {
 		break;
 	if (info) {
 		switch (info->returnKind) {
-		case IntrinsicReturnKind::SameAsArgs:
-			if (expr->arguments.size() == 2) {
-				expr->type = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				ResolvedBindingLayers resolvedArgument =
-					resolveExpressionBindingWithCallerScope(expr->arguments[1], flexBindingFrameStack);
-				if (kind == IntrinsicKind::Negate && resolvedArgument.expression &&
-					std::holds_alternative<MinimumSignedIntegerMagnitude>(
-						context.lookupExpressionValue(resolvedArgument.expression)
-					))
-					expr->type = {DataType::Kind::Int, 8};
-			} else {
-				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				DataType result;
-				ArithmeticIntrinsicKind arithmeticOperation = arithmeticIntrinsicKind(expr->intrinsicName);
-				if (!promoteIntrinsicArithmetic(arithmeticOperation, leftType, rightType, result)) {
-					setConfiguredTypeFailure(
-						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
-					);
-					break;
-				}
-				int arrayOperandIndex = decayingArrayOperandIndex(arithmeticOperation, leftType, rightType);
-				if (arrayOperandIndex != 0 &&
-					!inferLValueAddressProvenance(expr->arguments[arrayOperandIndex], context, flexBindingFrameStack)) {
-					setConfiguredTypeFailure(expr->range, "fixed array pointer arithmetic requires an addressable array");
-					break;
-				}
-				expr->type = result;
-			}
-			break;
+#include "intrinsics/arithmetic_inference.inl"
 #include "intrinsics/bitwise_inference.inl"
 		case IntrinsicReturnKind::Bool: {
 			if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
@@ -555,8 +525,8 @@ case Expression::Kind::IntrinsicCall: {
 					failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type reference");
 					break;
 				}
-				if (typeArgType.referencedKind == DataType::Kind::Type ||
-					typeArgType.referencedKind == DataType::Kind::Unresolved) {
+				DataType valueType = typeArgType.toReferencedType();
+				if (!valueType.isConcrete() || !valueType.isRuntimeValueType()) {
 					setConfiguredTypeFailure(expr->range, "size of type invalid");
 					break;
 				}
@@ -939,13 +909,12 @@ case Expression::Kind::IntrinsicCall: {
 						expr->type = targetType;
 				}
 			} else if (kind == IntrinsicKind::Property) {
-				DataType instType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				DataType instType =
+					ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack).propertyOwnerType();
 				if (!instType.isDeduced()) {
 					context.typesValid = false;
 					break;
 				}
-				if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-					instType = instType.dereferenced();
 				std::string fieldName;
 				CompileTimeValue propertyValue =
 					resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context);
@@ -990,8 +959,9 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		}
 	}
-	if (context.typesValid)
+	if (context.typesValid) {
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-	context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+		context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+	}
 	break;
 }

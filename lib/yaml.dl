@@ -180,7 +180,7 @@ local function the YAML scalar decoded in {string:source} from {integer:start} t
             set current to the unsigned YAML byte at reader in source
             if quote = 34 and current = 92:
                 set escaped to (the unsigned YAML byte at reader + 1 in source)
-                store the YAML double-quote escape value for escaped as a byte into the data of text at writer
+                store (the YAML double-quote escape value for escaped) as a byte into the data of text at writer
                 set reader to (reader + 2)
             else if quote = 39 and current = 39:
                 store 39 as a byte into the data of text at writer

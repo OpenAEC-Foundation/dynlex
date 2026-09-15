@@ -1,0 +1,67 @@
+import lib/vulkan_memory.dl
+import lib/vulkan_image_types.dl
+
+function [a Vulkan image of width] {32 bit unsigned integer:width} [height] {32 bit unsigned integer:height} [format] {integer:format} [usage] {32 bit unsigned integer:usage} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set result to a new Vulkan allocation
+        set creation to a new VkImageCreateInfo
+        set creation's sType to 14
+        set creation's imageType to 1
+        set creation's format to format
+        set creation's extent's width to width
+        set creation's extent's height to height
+        set creation's extent's depth to 1 as a 32 bit unsigned integer
+        set creation's mipLevels to 1 as a 32 bit unsigned integer
+        set creation's arrayLayers to 1 as a 32 bit unsigned integer
+        set creation's samples to 1
+        set creation's usage to usage
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateImage", an integer, state's device, the address of creation, 0 as a pointer, the address of (result's handle)) for "Creating a graphics image"
+        set requirements to a new VkMemoryRequirements
+        @intrinsic("call", "vulkan", "vkGetImageMemoryRequirements", nothing, state's device, result's handle, the address of requirements)
+        set result's memory to Vulkan memory meeting requirements with flags (1 as a 32 bit unsigned integer) in state
+        require Vulkan status @intrinsic("call", "vulkan", "vkBindImageMemory", an integer, state's device, result's handle, result's memory, 0 as a 64 bit unsigned integer) for "Binding graphics image memory"
+        return result
+
+function [copy Vulkan buffer] {pointer:buffer} [to image] {pointer:image} [with width] {32 bit unsigned integer:width} [height] {32 bit unsigned integer:height} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set allocation to a new VkCommandBufferAllocateInfo
+        set allocation's sType to 40
+        set allocation's commandPool to state's command_pool
+        set allocation's commandBufferCount to 1 as a 32 bit unsigned integer
+        set commands to 0 as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkAllocateCommandBuffers", an integer, state's device, the address of allocation, the address of commands) for "Allocating image transfer commands"
+        set begin to a new VkCommandBufferBeginInfo
+        set begin's sType to 42
+        set begin's flags to 1 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkBeginCommandBuffer", an integer, commands, the address of begin) for "Beginning image transfer commands"
+        set barrier to a new VkImageMemoryBarrier
+        set barrier's sType to 45
+        set barrier's dstAccessMask to 4096 as a 32 bit unsigned integer
+        set barrier's newLayout to 7
+        set barrier's srcQueueFamilyIndex to 4294967295 as a 32 bit unsigned integer
+        set barrier's dstQueueFamilyIndex to 4294967295 as a 32 bit unsigned integer
+        set barrier's image to image
+        set barrier's subresourceRange's aspectMask to 1 as a 32 bit unsigned integer
+        set barrier's subresourceRange's levelCount to 1 as a 32 bit unsigned integer
+        set barrier's subresourceRange's layerCount to 1 as a 32 bit unsigned integer
+        @intrinsic("call", "vulkan", "vkCmdPipelineBarrier", nothing, commands, 1, 4096, 0, 0, 0 as a pointer, 0, 0 as a pointer, 1, the address of barrier)
+        set region to a new VkBufferImageCopy
+        set region's imageSubresource's aspectMask to 1 as a 32 bit unsigned integer
+        set region's imageSubresource's layerCount to 1 as a 32 bit unsigned integer
+        set region's imageExtent's width to width
+        set region's imageExtent's height to height
+        set region's imageExtent's depth to 1 as a 32 bit unsigned integer
+        @intrinsic("call", "vulkan", "vkCmdCopyBufferToImage", nothing, commands, buffer, image, 7, 1, the address of region)
+        set barrier's srcAccessMask to 4096 as a 32 bit unsigned integer
+        set barrier's dstAccessMask to 32 as a 32 bit unsigned integer
+        set barrier's oldLayout to 7
+        set barrier's newLayout to 5
+        @intrinsic("call", "vulkan", "vkCmdPipelineBarrier", nothing, commands, 4096, 128, 0, 0, 0 as a pointer, 0, 0 as a pointer, 1, the address of barrier)
+        require Vulkan status @intrinsic("call", "vulkan", "vkEndCommandBuffer", an integer, commands) for "Ending image transfer commands"
+        set submission to a new VkSubmitInfo
+        set submission's sType to 4
+        set submission's commandBufferCount to 1 as a 32 bit unsigned integer
+        set submission's pCommandBuffers to (the address of commands) as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkQueueSubmit", an integer, state's graphics_queue, 1, the address of submission, 0 as a pointer) for "Submitting an image transfer"
+        require Vulkan status @intrinsic("call", "vulkan", "vkQueueWaitIdle", an integer, state's graphics_queue) for "Waiting for an image transfer"
+        @intrinsic("call", "vulkan", "vkFreeCommandBuffers", nothing, state's device, state's command_pool, 1, the address of commands)

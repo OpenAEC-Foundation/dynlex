@@ -1,0 +1,52 @@
+import lib/std.dl
+
+class:
+    patterns:
+        box
+    members:
+        value as an integer
+
+class:
+    patterns:
+        envelope
+    members:
+        contents as box
+
+function counted pointer from address using counter:
+    execute:
+        @intrinsic("store at", counter, (the value at counter) + 1)
+        return address
+
+set object to @intrinsic("construct", box, 7)
+set link to the address of object
+set indirect to the address of link
+set triple to the address of indirect
+set fourth to the address of triple
+print indirect's value as a line
+set triple's value to 19
+print object's value as a line
+set address to the address of (fourth's value)
+store 23 at address
+print link's value as a line
+print ((the address of link)'s value) as a line
+set calls to 0
+print ((counted pointer from fourth using (the address of calls))'s value) as a line
+print calls as a line
+set outer to @intrinsic("construct", envelope, object)
+set outerPointer to the address of outer
+set outerIndirect to the address of outerPointer
+set outerIndirect's contents's value to 31
+print outer's contents's value as a line
+print object's value as a line
+
+class:
+    patterns:
+        samples
+    members:
+        entries as an integer array of 3 items
+
+set sample to @intrinsic("construct", samples, [2, 5, 9])
+set sampleLink to the address of sample
+set sampleIndirect to the address of sampleLink
+store 41 into (sampleIndirect's entries) at 1
+print (the item at 1 in (sample's entries)) as a line

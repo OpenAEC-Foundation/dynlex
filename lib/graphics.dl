@@ -6,7 +6,14 @@
 
 import lib/std.dl
 import lib/texture.dl
-import lib/graphics_error.dl
+import lib/graphics_window.dl
+import lib/graphics_native_types.dl
+import lib/graphics_transform.dl
+import lib/graphics_mesh.dl
+import lib/graphics_frames.dl
+import lib/graphics_shader_drawing.dl
+import lib/graphics_pipelines.dl
+import lib/graphics_context.dl
 
 # Key values follow the stable GLFW input ABI used inside the native runtime.
 # Naming them by user intent keeps the window-system implementation private.
@@ -145,133 +152,157 @@ function a mouse button numbered {integer:number}:
 	execute:
 		return @intrinsic("construct", a mouse button, number)
 
+local function [the GLFW window of] {pointer:window}:
+	execute:
+		set state to window as a pointer to DynlexGraphics
+		return state's window
+
+local function [the initialized graphics window at] {a pointer to DynlexGraphics:state}:
+	execute:
+		create the Vulkan graphics context in state
+		create the built-in graphics pipelines in state
+		set state's projection to an identity graphics matrix
+		set state's camera to an identity graphics matrix
+		set state's model to an identity graphics matrix
+		set graphics vertex color to red 255 green 255 blue 255 alpha 255 in state
+		return state as a pointer
+
 function a new window with width {integer:width} and height {integer:height}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, width, height, 1, 0, "DynLex")
+		set resource to a graphics window resource with width width height height visible true fullscreen false
+		return the initialized graphics window at resource
 
 function a new hidden window with width {integer:width} and height {integer:height}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, width, height, 0, 0, "DynLex")
+		set resource to a graphics window resource with width width height height visible false fullscreen false
+		return the initialized graphics window at resource
 
 function a new fullscreen window:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_create", a pointer to a byte, 0, 0, 1, 1, "DynLex")
+		set resource to a graphics window resource with width 0 height 0 visible true fullscreen true
+		return the initialized graphics window at resource
 
 function close [the|] {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_destroy", nothing, window)
+		release all graphics meshes in (window as a pointer to DynlexGraphics)
+		release all graphics textures in (window as a pointer to DynlexGraphics)
+		release all graphics pipelines in (window as a pointer to DynlexGraphics)
+		destroy the Vulkan graphics context in (window as a pointer to DynlexGraphics)
+		destroy graphics window resource (window as a pointer to DynlexGraphics)
 
 function set the title of {pointer:window} to {C string:title}:
 	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_title", an integer, window, title)
+		@intrinsic("call", "glfw", "glfwSetWindowTitle", nothing, the GLFW window of window, title)
 
 function show {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_visible", nothing, window, 1)
+		@intrinsic("call", "glfw", "glfwShowWindow", nothing, the GLFW window of window)
 
 function hide {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_visible", nothing, window, 0)
+		@intrinsic("call", "glfw", "glfwHideWindow", nothing, the GLFW window of window)
 
 function {pointer:window} is visible:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_is_visible", an integer, window) != 0
+		return @intrinsic("call", "glfw", "glfwGetWindowAttrib", an integer, the GLFW window of window, 131076) != 0
 
 function the cursor position of {pointer:window}:
 	execute:
 		set x to 0.0 as a floating-point number
 		set y to 0.0 as a floating-point number
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_cursor_position", nothing, window, the address of x, the address of y)
+		@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, the GLFW window of window, the address of x, the address of y)
 		return @intrinsic("construct", a cursor position, x, y)
 
 function {mouse button:button} is pressed in {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_mouse_button_down", an integer, window, button's number) != 0
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, the GLFW window of window, button's number) != 0
 
 function {mouse button:button} is released in {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_mouse_button_down", an integer, window, button's number) = 0
+		return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, the GLFW window of window, button's number) = 0
 
 function capture the mouse cursor in {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_cursor_captured", nothing, window, 1)
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208897, 212995)
 
 function release the mouse cursor in {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_cursor_captured", nothing, window, 0)
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208897, 212993)
 
 function preserve mouse clicks in {pointer:window}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_sticky_mouse_buttons", nothing, window, 1)
+		@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208899, 1)
 
-function set the application state of {pointer:window} to {pointer:data}:
+function [set the application state of] {pointer:window} [to] {pointer:data}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_application_state", nothing, window, data)
+		set state to window as a pointer to DynlexGraphics
+		set state's application_state to data
 
-function the application state of {pointer:window}:
+function [the application state of] {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_application_state", a pointer to a byte, window)
+		set state to window as a pointer to DynlexGraphics
+		return state's application_state
+
+local function [set the graphics scroll handler in] {a pointer to DynlexGraphics:context} [to] {pointer:handler}:
+	execute:
+		set context's scroll_callback to handler
 
 flex function register the graphics scroll callback named {fixed C string:callback} [of|for] {pointer:window}:
 	replacement:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_scroll_callback", nothing, window, the function named callback)
+		set the graphics scroll handler in (window as a pointer to DynlexGraphics) to ((the function named callback) as a pointer)
 
 function key {integer:number} is down in {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_key_down", an integer, window, number) != 0
+		return @intrinsic("call", "glfw", "glfwGetKey", an integer, the GLFW window of window, number) != 0
 
 function key {integer:number} is up in {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_key_down", an integer, window, number) = 0
+		return @intrinsic("call", "glfw", "glfwGetKey", an integer, the GLFW window of window, number) = 0
 
 function {pointer:window} should close:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_should_close", an integer, window) != 0
+		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, the GLFW window of window) != 0
 
 function {pointer:window} remains open:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_should_close", an integer, window) = 0
+		return @intrinsic("call", "glfw", "glfwWindowShouldClose", an integer, the GLFW window of window) = 0
 
 function request that {pointer:window} close:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_request_close", nothing, window)
+		@intrinsic("call", "glfw", "glfwSetWindowShouldClose", nothing, the GLFW window of window, 1)
 
 function the framebuffer width of {pointer:window}:
 	execute:
 		set horizontal to 0
 		set vertical to 0
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_framebuffer_size", nothing, window, the address of horizontal, the address of vertical)
+		@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
 		return horizontal
 
 function the framebuffer height of {pointer:window}:
 	execute:
 		set horizontal to 0
 		set vertical to 0
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_framebuffer_size", nothing, window, the address of horizontal, the address of vertical)
+		@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
 		return vertical
 
 function the time since start for {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_time_since_start", a floating-point number, window)
+		return @intrinsic("call", "glfw", "glfwGetTime", a floating-point number)
 
 function the Vulkan API version of {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_api_version", an integer, window)
+		set state to window as a pointer to DynlexGraphics
+		return state's physical_properties' apiVersion
 
 function Vulkan portability is enabled for {pointer:window}:
 	execute:
-		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_portability_enabled", an integer, window) != 0
+		set state to window as a pointer to DynlexGraphics
+		return state's portability_enabled
 
 function the graphics device name of {pointer:window}:
 	execute:
-		set length to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_device_name", a word sized integer, window, 0 as a pointer to a byte, 0 as a word sized integer)
-		set result to a new string buffer containing (length as an integer) bytes
-		ignore @intrinsic("call", "dynlex_graphics", "dynlex_graphics_device_name", a word sized integer, window, the data of result, length + 1)
-		return result
-
-function sleep for duration milliseconds:
-	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_sleep_milliseconds", an integer, duration)
+		set state to window as a pointer to DynlexGraphics
+		return the string form of ((state's physical_properties' deviceName + 0) as a C string)
 
 function a new graphics frame in {pointer:window}:
 	execute:
@@ -279,21 +310,15 @@ function a new graphics frame in {pointer:window}:
 
 function a new graphics frame in {pointer:window} with background red {floating-point number:red}, green {floating-point number:green}, blue {floating-point number:blue} and alpha {floating-point number:alpha}:
 	execute:
-		set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_frame", an integer, window, red, green, blue, alpha)
-		if status < 0:
-			print (the current graphics error message) as a line
-			@intrinsic("call", "libc", "abort", nothing)
-		return a graphics frame for window in drawable state (status = 1)
+		set drawable to begin a Vulkan frame cleared to red red green green blue blue alpha alpha in (window as a pointer to DynlexGraphics)
+		return a graphics frame for window in drawable state drawable
 
 flex function display {graphics frame:frame}:
 	replacement:
 		if frame's drawable:
-			set status to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_end_frame", an integer, frame's window)
-			if status < 0:
-				print (the current graphics error message) as a line
-				@intrinsic("call", "libc", "abort", nothing)
+			present the Vulkan frame in (frame's window as a pointer to DynlexGraphics)
 		else:
-			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_poll_events", nothing)
+			@intrinsic("call", "glfw", "glfwPollEvents", nothing)
 		set frame's drawable to false
 
 function use screen coordinates in {graphics frame:frame}:
@@ -301,124 +326,154 @@ function use screen coordinates in {graphics frame:frame}:
 		if frame's drawable:
 			set width to the framebuffer width of frame's window
 			set height to the framebuffer height of frame's window
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_orthographic_projection", an integer, frame's window, 0.0, width as a floating-point number, 0.0, height as a floating-point number, 0.0 - 1.0, 1.0)
+			set state to frame's window as a pointer to DynlexGraphics
+			set state's projection to a graphics orthographic projection from left 0.0 right (width as a floating-point number) top 0.0 bottom (height as a floating-point number) near -1.0 far 1.0
 
 function use perspective with a vertical field of view of {floating-point number:angle} degrees, a near plane of {floating-point number:near} and a far plane of {floating-point number:far} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_perspective_projection", an integer, frame's window, angle, near, far)
+			set state to frame's window as a pointer to DynlexGraphics
+			set extent to state's swapchain_extent
+			set aspect to (extent's width as a floating-point number) / (extent's height as a floating-point number)
+			set state's projection to a graphics perspective projection with angle angle aspect aspect near near far far
 
 function enable depth testing in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_depth_testing", nothing, frame's window, 1)
+		set state to frame's window as a pointer to DynlexGraphics
+		set state's depth_testing to true
 
 function disable depth testing in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_depth_testing", nothing, frame's window, 0)
+		set state to frame's window as a pointer to DynlexGraphics
+		set state's depth_testing to false
 
 function reset the camera in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_reset_camera", nothing, frame's window)
+		set state to frame's window as a pointer to DynlexGraphics
+		set state's camera to an identity graphics matrix
 
 function move the camera in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_translate_camera", nothing, frame's window, horizontal, vertical, depth)
+		set state to frame's window as a pointer to DynlexGraphics
+		set translation to a graphics translation by x horizontal y vertical z depth
+		set state's camera to the graphics product of state's camera and translation
 
 function rotate the camera in {graphics frame:frame} by {floating-point number:angle} degrees around x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_rotate_camera", an integer, frame's window, angle, horizontal, vertical, depth)
+		set state to frame's window as a pointer to DynlexGraphics
+		set rotation to a graphics rotation of angle degrees around x horizontal y vertical z depth
+		set state's camera to the graphics product of state's camera and rotation
 
 function reset the model in {graphics frame:frame}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_reset_model", nothing, frame's window)
+		set state to frame's window as a pointer to DynlexGraphics
+		set state's model to an identity graphics matrix
 
 function move the model in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_translate_model", nothing, frame's window, horizontal, vertical, depth)
+		set state to frame's window as a pointer to DynlexGraphics
+		set translation to a graphics translation by x horizontal y vertical z depth
+		set state's model to the graphics product of state's model and translation
 
-function scale the model in {graphics frame:frame} by x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
+function [scale the model in] {graphics frame:frame} [by x] {floating-point number:horizontal}[, y] {floating-point number:vertical} [and z] {floating-point number:depth}:
 	execute:
-		@intrinsic("call", "dynlex_graphics", "dynlex_graphics_scale_model", nothing, frame's window, horizontal, vertical, depth)
+		set state to frame's window as a pointer to DynlexGraphics
+		set scale to a graphics scale by x horizontal y vertical z depth
+		set state's model to the graphics product of state's model and scale
 
 function rotate the model in {graphics frame:frame} by {floating-point number:angle} degrees around x {floating-point number:horizontal}, y {floating-point number:vertical} and z {floating-point number:depth}:
 	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_rotate_model", an integer, frame's window, angle, horizontal, vertical, depth)
+		set state to frame's window as a pointer to DynlexGraphics
+		set rotation to a graphics rotation of angle degrees around x horizontal y vertical z depth
+		set state's model to the graphics product of state's model and rotation
 
 function save the model transform in {graphics frame:frame}:
 	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_push_model", an integer, frame's window)
+		set state to frame's window as a pointer to DynlexGraphics
+		require condition (state's model_stack_size < (the length of state's model_stack)) reporting "The graphics model transform stack is full"
+		store state's model into state's model_stack at state's model_stack_size
+		set state's model_stack_size to state's model_stack_size + 1
 
 function restore the model transform in {graphics frame:frame}:
 	execute:
-		require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pop_model", an integer, frame's window)
+		set state to frame's window as a pointer to DynlexGraphics
+		require condition (state's model_stack_size > 0) reporting "The graphics model transform stack is empty"
+		set state's model_stack_size to state's model_stack_size - 1
+		set state's model to the item at state's model_stack_size in state's model_stack
 
 function draw a rectangle at x {a value:horizontal} and y {a value:vertical} with width {a value:width} and height {a value:height} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_rectangle", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number, width as a floating-point number, height as a floating-point number, red, green, blue, 255)
+			draw a graphics quad from left (horizontal as a floating-point number) top (vertical as a floating-point number) right ((horizontal + width) as a floating-point number) bottom ((vertical + height) as a floating-point number) with texture (0 as a pointer to DynlexGraphicsTexture) tinted red red green green blue blue in (frame's window as a pointer to DynlexGraphics)
 
 function draw {graphics texture:texture} from x {a value:left}, y {a value:top} to x {a value:right}, y {a value:bottom} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_textured_rectangle", an integer, frame's window, texture's resource, left as a floating-point number, top as a floating-point number, right as a floating-point number, bottom as a floating-point number, red, green, blue, 255)
+			require condition (texture is loaded) reporting "Drawing a textured rectangle requires a loaded texture"
+			draw a graphics quad from left (left as a floating-point number) top (top as a floating-point number) right (right as a floating-point number) bottom (bottom as a floating-point number) with texture (texture's resource as a pointer to DynlexGraphicsTexture) tinted red red green green blue blue in (frame's window as a pointer to DynlexGraphics)
 
 function start triangles in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_triangles", an integer, frame's window, 0 as a pointer to a byte)
+			begin a graphics triangle stream with texture (0 as a pointer to DynlexGraphicsTexture) in (frame's window as a pointer to DynlexGraphics)
 
 function start triangles using {graphics texture:texture} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_begin_triangles", an integer, frame's window, texture's resource)
+			require condition (texture is loaded) reporting "Textured triangles require a loaded texture"
+			begin a graphics triangle stream with texture (texture's resource as a pointer to DynlexGraphicsTexture) in (frame's window as a pointer to DynlexGraphics)
 
 function use vertex color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_vertex_color", nothing, frame's window, red, green, blue, 255)
+			set graphics vertex color to red red green green blue blue alpha 255 in (frame's window as a pointer to DynlexGraphics)
 
 function use texture coordinates x {floating-point number:horizontal} and y {floating-point number:vertical} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			@intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_texture_coordinates", nothing, frame's window, horizontal, vertical)
+			set graphics texture coordinates to x horizontal y vertical in (frame's window as a pointer to DynlexGraphics)
 
 function add a vertex at x {a value:horizontal} and y {a value:vertical} to {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_append_vertex_2d", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number)
+			append a graphics vertex at x (horizontal as a floating-point number) y (vertical as a floating-point number) z 0.0 in (frame's window as a pointer to DynlexGraphics)
 
 function add a vertex at x {a value:horizontal}, y {a value:vertical} and z {a value:depth} to {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_append_vertex_3d", an integer, frame's window, horizontal as a floating-point number, vertical as a floating-point number, depth as a floating-point number)
+			append a graphics vertex at x (horizontal as a floating-point number) y (vertical as a floating-point number) z (depth as a floating-point number) in (frame's window as a pointer to DynlexGraphics)
 
 function finish triangles in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_finish_triangles", an integer, frame's window)
+			finish the graphics triangle stream in (frame's window as a pointer to DynlexGraphics)
 
 function a shader program for {pointer:window} using vertex shader at {C string:vertex} and fragment shader at {C string:fragment}:
 	execute:
-		set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pipeline_create", a pointer to a byte, window, vertex, fragment)
-		return a shader program with resource resource
+		set resource to a custom graphics pipeline using vertex file vertex and fragment file fragment in (window as a pointer to DynlexGraphics)
+		return a shader program with resource (resource as a pointer)
 
 function use {shader program:program} in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_use_pipeline", an integer, frame's window, program's resource)
+			set state to frame's window as a pointer to DynlexGraphics
+			set pipeline to program's resource as a pointer to DynlexGraphicsPipeline
+			if pipeline != (0 as a pointer to DynlexGraphicsPipeline):
+				require condition (pipeline's owner = state) reporting "The shader pipeline belongs to a different window"
+			set state's active_pipeline to pipeline
 
 function set uniform binding {integer:binding} in {graphics frame:frame} to value:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_set_uniform_float", an integer, frame's window, binding, value)
+			set graphics uniform binding binding to value in (frame's window as a pointer to DynlexGraphics)
 
 function draw a fullscreen surface in {graphics frame:frame}:
 	execute:
 		if frame's drawable:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_draw_fullscreen", an integer, frame's window)
+			draw a fullscreen graphics shader in (frame's window as a pointer to DynlexGraphics)
 
 flex function release {shader program:program}:
 	replacement:
 		if program's resource != 0 as a pointer to a byte:
-			require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_pipeline_destroy", an integer, program's resource)
+			release the custom graphics pipeline (program's resource as a pointer to DynlexGraphicsPipeline)
 		set program's resource to 0 as a pointer to a byte

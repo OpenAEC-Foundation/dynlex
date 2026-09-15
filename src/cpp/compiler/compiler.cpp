@@ -15,6 +15,7 @@
 #include "pattern/pattern_tree/patternMatch.h"
 #include "pattern/pattern_tree/patternTreeNode.h"
 #include "pattern/transformedPattern.h"
+#include "section/parseUtils.h"
 #include "section/variable.h"
 #include "sourceTransform.h"
 #include "stringFunctions.h"
@@ -256,7 +257,7 @@ static bool validateSourceCharacters(ParseContext &context, CodeLine *line, cons
 	std::vector<size_t> pendingStringArgumentCharacters;
 	for (size_t index = 0; index < line->fullText.size(); index++) {
 		char character = line->fullText[index];
-		if (index < commentStart && character == '"' && (index == 0 || line->fullText[index - 1] != '\\')) {
+		if (index < commentStart && character == '"' && !isEscapedCharacter(line->fullText, index)) {
 			insideString = !insideString;
 			if (!insideString)
 				pendingStringArgumentCharacters.clear();

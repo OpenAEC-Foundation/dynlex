@@ -146,21 +146,6 @@ std::filesystem::path runtimeLibraryPath() {
 	return path;
 }
 
-std::filesystem::path graphicsLibraryPath() {
-	static const std::filesystem::path path = [] {
-		const NativeInstallation installation = nativeInstallation();
-		const std::filesystem::path installedPath =
-			installation.prefix / DYNLEX_GRAPHICS_LIBRARY_INSTALL_DIR / DYNLEX_GRAPHICS_LIBRARY_FILENAME;
-		if (installation.installed)
-			return installedPath;
-		const std::filesystem::path buildPath(DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH);
-		if (std::filesystem::exists(buildPath))
-			return buildPath;
-		return installedPath;
-	}();
-	return path;
-}
-
 #ifdef _WIN32
 struct WindowsToolchain {
 	std::filesystem::path linker;
@@ -241,7 +226,7 @@ executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef
 }
 
 bool requiresExternalRuntimeLibraries(const std::unordered_set<std::string> &libraries) {
-	return libraries.contains("dynlex_graphics") || libraries.contains("glfw") || libraries.contains("freetype");
+	return libraries.contains("vulkan") || libraries.contains("glfw") || libraries.contains("freetype");
 }
 
 bool filesEqual(const std::filesystem::path &left, const std::filesystem::path &right) {
@@ -529,8 +514,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandStorage.push_back("-g");
 
 	for (const std::string &lib : context.requiredLibraries) {
-		std::vector<std::string> arguments =
-			nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string(), graphicsLibraryPath().string());
+		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string());
 		commandStorage.insert(
 			commandStorage.end(), std::make_move_iterator(arguments.begin()), std::make_move_iterator(arguments.end())
 		);
@@ -562,10 +546,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		std::vector<std::string> missingLibs;
 		for (const std::string &lib : context.requiredLibraries) {
 			if (linkerReportsMissingLibrary(
-					linkExecution->output,
-					nativeLibraryArguments(
-						parsedTargetTriple, lib, runtimeLibraryPath().string(), graphicsLibraryPath().string()
-					)
+					linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string())
 				)) {
 				missingLibs.push_back(lib);
 			}

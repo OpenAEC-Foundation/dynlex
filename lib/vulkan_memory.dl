@@ -1,0 +1,115 @@
+# Vulkan resource allocation and host mapping, implemented in DynLex.
+import lib/graphics_native_types.dl
+import lib/graphics_transform.dl
+
+class:
+    patterns:
+        VkBufferCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        flags as a 32 bit unsigned integer
+        size as a 64 bit unsigned integer
+        usage as a 32 bit unsigned integer
+        sharingMode as a 32 bit integer
+        queueFamilyIndexCount as a 32 bit unsigned integer
+        pQueueFamilyIndices as a pointer to a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkMemoryRequirements
+    members:
+        size as a 64 bit unsigned integer
+        alignment as a 64 bit unsigned integer
+        memoryTypeBits as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkMemoryAllocateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        allocationSize as a 64 bit unsigned integer
+        memoryTypeIndex as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkMemoryType
+    members:
+        propertyFlags as a 32 bit unsigned integer
+        heapIndex as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkMemoryHeap
+    members:
+        size as a 64 bit unsigned integer
+        flags as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPhysicalDeviceMemoryProperties
+    members:
+        memoryTypeCount as a 32 bit unsigned integer
+        memoryTypes as VkMemoryType array of 32 items
+        memoryHeapCount as a 32 bit unsigned integer
+        memoryHeaps as VkMemoryHeap array of 16 items
+
+class:
+    patterns:
+        [a|] Vulkan allocation
+    members:
+        handle as a pointer
+        memory as a pointer
+
+function [require Vulkan status] {integer:status} [for] {C string:operation}:
+    execute:
+        if status != 0:
+            print operation
+            print " failed with Vulkan status "
+            print status as a line
+            ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+            @intrinsic("call", "libc", "abort", nothing)
+
+function [a Vulkan memory type matching bits] {32 bit unsigned integer:bits} [and flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set properties to a new VkPhysicalDeviceMemoryProperties
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceMemoryProperties", nothing, state's physical_device, the address of properties)
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < properties' memoryTypeCount:
+            set kind to the item at index in (properties' memoryTypes)
+            if ((bits bitwise and ((1 as a 32 bit unsigned integer) shifted left by index)) != 0) and ((kind's propertyFlags bitwise and flags) = flags):
+                return index
+            increment index
+        require condition false reporting "No Vulkan memory type supports the requested resource properties"
+        return 0 as a 32 bit unsigned integer
+
+function [a Vulkan buffer of] {64 bit unsigned integer:size} [bytes with usage] {32 bit unsigned integer:usage} [and memory flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set result to a new Vulkan allocation
+        set creation to a new VkBufferCreateInfo
+        set creation's sType to 12
+        set creation's size to size
+        set creation's usage to usage
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateBuffer", an integer, state's device, the address of creation, 0 as a pointer, the address of (result's handle)) for "Creating a graphics buffer"
+        set requirements to a new VkMemoryRequirements
+        @intrinsic("call", "vulkan", "vkGetBufferMemoryRequirements", nothing, state's device, result's handle, the address of requirements)
+        set result's memory to Vulkan memory meeting requirements with flags flags in state
+        require Vulkan status @intrinsic("call", "vulkan", "vkBindBufferMemory", an integer, state's device, result's handle, result's memory, 0 as a 64 bit unsigned integer) for "Binding graphics buffer memory"
+        return result
+
+function [Vulkan memory meeting] {VkMemoryRequirements:requirements} [with flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set allocation to a new VkMemoryAllocateInfo
+        set allocation's sType to 5
+        set allocation's allocationSize to requirements' size
+        set allocation's memoryTypeIndex to a Vulkan memory type matching bits requirements' memoryTypeBits and flags flags in state
+        set memory to 0 as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkAllocateMemory", an integer, state's device, the address of allocation, 0 as a pointer, the address of memory) for "Allocating graphics memory"
+        return memory
+
+function [Vulkan memory] {pointer:memory} [mapped for] {64 bit unsigned integer:size} [bytes in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set mapped to 0 as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkMapMemory", an integer, state's device, memory, 0 as a 64 bit unsigned integer, size, 0, the address of mapped) for "Mapping graphics memory"
+        return mapped

@@ -295,9 +295,8 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			}
 		}
 		if (kind == IntrinsicKind::Property) {
-			DataType instType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-			if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-				instType = instType.dereferenced();
+			DataType instType =
+				resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack).propertyOwnerType();
 			std::string fieldName;
 			if (activeTypeResolutionParseContext) {
 				CompileTimeValue propertyValue =
@@ -412,9 +411,11 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return {DataType::Kind::Int, 4};
 		} else if (kind == IntrinsicKind::SizeOf) {
 			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
-			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
-				typeArgType.referencedKind != DataType::Kind::Unresolved)
-				return {DataType::Kind::Int, 8};
+			if (typeArgType.kind == DataType::Kind::Type) {
+				DataType valueType = typeArgType.toReferencedType();
+				if (valueType.isConcrete() && valueType.isRuntimeValueType())
+					return {DataType::Kind::Int, 8};
+			}
 		} else if (kind == IntrinsicKind::BuildInfo) {
 			Expression *keyExpr =
 				resolveInferenceBindingLayers(resolved->arguments[1], effectiveBindingFrameStack, inferenceContext).expression;

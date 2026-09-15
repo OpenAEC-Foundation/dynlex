@@ -1,0 +1,160 @@
+import lib/graphics_color.dl
+import lib/vulkan_images.dl
+
+function [destroy graphics texture handles in] {a value:texture} [owned by] {a pointer to DynlexGraphics:state}:
+    execute:
+        require Vulkan status @intrinsic("call", "vulkan", "vkFreeDescriptorSets", an integer, state's device, state's descriptor_pool, 1, the address of (texture's descriptor)) for "Releasing a texture descriptor"
+        @intrinsic("call", "vulkan", "vkDestroySampler", nothing, state's device, texture's sampler, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyImageView", nothing, state's device, texture's view, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyImage", nothing, state's device, texture's image, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, texture's memory, 0 as a pointer)
+
+function [destroy retired graphics textures from] {a pointer to DynlexGraphicsFrame:frame} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        loop while frame's retired_textures != (0 as a pointer to DynlexGraphicsRetiredTexture):
+            set retired to frame's retired_textures
+            set frame's retired_textures to retired's next
+            destroy graphics texture handles in retired owned by state
+            @intrinsic("call", "libc", "free", nothing, retired)
+
+function [retire the graphics texture resources in] {a pointer to DynlexGraphicsTexture:texture}:
+    execute:
+        set state to texture's owner
+        if state's frame_active:
+            set frame to the address of (the item at (state's frame_index) in (state's frames))
+            set retired to @intrinsic("call", "libc", "malloc", a pointer to DynlexGraphicsRetiredTexture, the size of DynlexGraphicsRetiredTexture)
+            require condition (retired != (0 as a pointer to DynlexGraphicsRetiredTexture)) reporting "Could not preserve a texture used by the active graphics frame"
+            set retired's next to frame's retired_textures
+            set retired's image to texture's image
+            set retired's memory to texture's memory
+            set retired's view to texture's view
+            set retired's sampler to texture's sampler
+            set retired's descriptor to texture's descriptor
+            set frame's retired_textures to retired
+        else:
+            require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to release a graphics texture"
+            destroy graphics texture handles in texture owned by state
+
+function [upload graphics pixels at] {a pointer to a byte:pixels} [with width] {integer:width} [height] {integer:height} [into] {a pointer to DynlexGraphicsTexture:texture}:
+    execute:
+        set state to texture's owner
+        require condition (width > 0 and height > 0) reporting "A graphics texture requires positive dimensions"
+        set texels to (width as a 64 bit unsigned integer) * (height as a 64 bit unsigned integer)
+        set channels to (4 as a 32 bit unsigned integer) if texture's channels = 3, else texture's channels
+        set size to texels * channels
+        set properties to a new VkFormatProperties
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceFormatProperties", nothing, state's physical_device, texture's format, the address of properties)
+        require condition ((properties' optimalTilingFeatures bitwise and 36865) = 36865) reporting "The Vulkan device cannot upload and linearly sample the requested texture format"
+        set staging to a Vulkan buffer of size bytes with usage (1 as a 32 bit unsigned integer) and memory flags (6 as a 32 bit unsigned integer) in state
+        set mapped to (Vulkan memory staging's memory mapped for size bytes in state) as a pointer to a byte
+        if texture's channels = 3:
+            set texel to 0 as a 64 bit unsigned integer
+            loop while texel < texels:
+                set source to pixels + (texel * 3)
+                set destination to mapped + (texel * 4)
+                set channel to 0
+                loop while channel < 3:
+                    @intrinsic("store at", destination + channel, @intrinsic("dereference", source + channel))
+                    increment channel
+                @intrinsic("store at", destination + 3, 255 as a byte)
+                increment texel
+        else:
+            ignore @intrinsic("call", "libc", "memcpy", a pointer, mapped, pixels, size as a word sized unsigned integer)
+        @intrinsic("call", "vulkan", "vkUnmapMemory", nothing, state's device, staging's memory)
+        set image to a Vulkan image of width (width as a 32 bit unsigned integer) height (height as a 32 bit unsigned integer) format texture's format usage (6 as a 32 bit unsigned integer) in state
+        set texture's image to image's handle
+        set texture's memory to image's memory
+        copy Vulkan buffer staging's handle to image image's handle with width (width as a 32 bit unsigned integer) height (height as a 32 bit unsigned integer) in state
+        @intrinsic("call", "vulkan", "vkDestroyBuffer", nothing, state's device, staging's handle, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, staging's memory, 0 as a pointer)
+        set view to a new VkImageViewCreateInfo
+        set view's sType to 15
+        set view's image to texture's image
+        set view's viewType to 1
+        set view's format to texture's format
+        set view's subresourceRange's aspectMask to 1 as a 32 bit unsigned integer
+        set view's subresourceRange's levelCount to 1 as a 32 bit unsigned integer
+        set view's subresourceRange's layerCount to 1 as a 32 bit unsigned integer
+        if texture's channels = 1:
+            set view's components' r to 2
+            set view's components' g to 2
+            set view's components' b to 2
+            set view's components' a to 3
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateImageView", an integer, state's device, the address of view, 0 as a pointer, the address of (texture's view)) for "Creating a texture image view"
+        set sampler to a new VkSamplerCreateInfo
+        set sampler's sType to 31
+        set sampler's magFilter to 1
+        set sampler's minFilter to 1
+        set sampler's addressModeU to 3 if texture's channels = 1, else 0
+        set sampler's addressModeV to sampler's addressModeU
+        set sampler's addressModeW to 2
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateSampler", an integer, state's device, the address of sampler, 0 as a pointer, the address of (texture's sampler)) for "Creating a texture sampler"
+        set builtin to the address of (the item at 2 in (state's builtins))
+        set allocation to a new VkDescriptorSetAllocateInfo
+        set allocation's sType to 34
+        set allocation's descriptorPool to state's descriptor_pool
+        set allocation's descriptorSetCount to 1 as a 32 bit unsigned integer
+        set allocation's pSetLayouts to the address of (builtin's descriptor_layout)
+        require Vulkan status @intrinsic("call", "vulkan", "vkAllocateDescriptorSets", an integer, state's device, the address of allocation, the address of (texture's descriptor)) for "Allocating a texture descriptor"
+        set information to a new VkDescriptorImageInfo
+        set information's sampler to texture's sampler
+        set information's imageView to texture's view
+        set information's imageLayout to 5
+        set write to a new VkWriteDescriptorSet
+        set write's sType to 35
+        set write's dstSet to texture's descriptor
+        set write's descriptorCount to 1 as a 32 bit unsigned integer
+        set write's descriptorType to 1
+        set write's pImageInfo to the address of information
+        @intrinsic("call", "vulkan", "vkUpdateDescriptorSets", nothing, state's device, 1, the address of write, 0, 0 as a pointer)
+        set texture's width to width as a 32 bit unsigned integer
+        set texture's height to height as a 32 bit unsigned integer
+
+function [a graphics texture resource from] {a pointer to a byte:pixels} [with width] {integer:width} [height] {integer:height} [channels] {32 bit unsigned integer:channels} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition ((channels = 1 or channels = 3) or channels = 4) reporting "Graphics textures require one, three, or four channels"
+        set texture to @intrinsic("call", "libc", "calloc", a pointer to DynlexGraphicsTexture, 1 as a word sized integer, the size of DynlexGraphicsTexture)
+        require condition (texture != (0 as a pointer to DynlexGraphicsTexture)) reporting "Could not allocate a graphics texture"
+        set texture's owner to state
+        set texture's channels to channels
+        set texture's format to 9 if channels = 1, else (43 if (the graphics surface uses sRGB in state), else 37)
+        upload graphics pixels at pixels with width width height height into texture
+        set texture's next to state's textures
+        set state's textures to texture
+        return texture
+
+function [update graphics texture resource] {a pointer to DynlexGraphicsTexture:texture} [with pixels at] {a pointer to a byte:pixels} [width] {integer:width} [height] {integer:height}:
+    execute:
+        set replacement to a new DynlexGraphicsTexture
+        set replacement's owner to texture's owner
+        set replacement's format to texture's format
+        set replacement's channels to texture's channels
+        set replacement's next to texture's next
+        upload graphics pixels at pixels with width width height height into (the address of replacement)
+        retire the graphics texture resources in texture
+        @intrinsic("store at", texture, replacement)
+
+function [release graphics texture resource] {a pointer to DynlexGraphicsTexture:texture}:
+    execute:
+        set state to texture's owner
+        require condition ((state's triangles_active = false) or (state's triangle_texture != texture)) reporting "A graphics texture cannot be released while its triangle stream is active"
+        retire the graphics texture resources in texture
+        set link to the address of (state's textures)
+        loop while @intrinsic("dereference", link) != texture:
+            set link to the address of (link's next)
+        @intrinsic("store at", link, texture's next)
+        @intrinsic("call", "libc", "free", nothing, texture)
+
+function [release all graphics textures in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active = false) reporting "Closing a window requires an idle graphics frame"
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to release graphics textures"
+        loop while state's textures != (0 as a pointer to DynlexGraphicsTexture):
+            set texture to state's textures
+            set state's textures to texture's next
+            destroy graphics texture handles in texture owned by state
+            @intrinsic("call", "libc", "free", nothing, texture)
+        set index to 0
+        loop while index < (the length of state's frames):
+            destroy retired graphics textures from (the address of (the item at index in (state's frames))) in state
+            increment index

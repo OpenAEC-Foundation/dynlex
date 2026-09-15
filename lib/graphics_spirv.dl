@@ -1,0 +1,64 @@
+import lib/graphics_transform.dl
+
+class:
+    patterns:
+        [a|] graphics SPIR-V module
+    members:
+        words as a pointer to a 32 bit unsigned integer
+        count as a word sized unsigned integer
+
+function [a graphics SPIR-V module loaded from] {C string:path}:
+    execute:
+        set stream to @intrinsic("call", "libc", "fopen", a pointer, path, "rb")
+        require condition (stream != (0 as a pointer)) reporting "Could not open the SPIR-V shader file"
+        require condition (@intrinsic("call", "libc", "fseek", an integer, stream, 0 as a C long integer, 2) = 0) reporting "Could not measure the SPIR-V shader file"
+        set size to @intrinsic("call", "libc", "ftell", a C long integer, stream)
+        require condition ((size >= 20) and ((the remainder of size divided by 4) = 0)) reporting "A SPIR-V shader must contain a complete module aligned to 32-bit words"
+        require condition (@intrinsic("call", "libc", "fseek", an integer, stream, 0 as a C long integer, 0) = 0) reporting "Could not seek to the SPIR-V shader header"
+        set words to @intrinsic("call", "libc", "malloc", a pointer to a 32 bit unsigned integer, size as a word sized unsigned integer)
+        require condition (words != (0 as a pointer to a 32 bit unsigned integer)) reporting "Could not allocate the SPIR-V shader module"
+        set received to @intrinsic("call", "libc", "fread", a word sized unsigned integer, words, 1 as a word sized unsigned integer, size as a word sized unsigned integer, stream)
+        set closed to @intrinsic("call", "libc", "fclose", an integer, stream)
+        require condition ((received = size) and (closed = 0)) reporting "Could not read a complete SPIR-V shader module"
+        require condition (@intrinsic("dereference", words) = 119734787) reporting "A shader file must contain little-endian SPIR-V"
+        return @intrinsic("construct", a graphics SPIR-V module, words, (size / 4) as a word sized unsigned integer)
+
+function [the graphics uniform bindings of] {a graphics SPIR-V module:module}:
+    execute:
+        set words to module's words
+        set bound to @intrinsic("dereference", words + 3)
+        set size to (bound as a word sized unsigned integer) * 4
+        set sets to @intrinsic("call", "libc", "malloc", a pointer to a 32 bit unsigned integer, size)
+        set bindings to @intrinsic("call", "libc", "malloc", a pointer to a 32 bit unsigned integer, size)
+        require condition ((sets != (0 as a pointer to a 32 bit unsigned integer)) and (bindings != (0 as a pointer to a 32 bit unsigned integer))) reporting "Could not allocate SPIR-V reflection state"
+        ignore @intrinsic("call", "libc", "memset", a pointer, sets, 255, size)
+        ignore @intrinsic("call", "libc", "memset", a pointer, bindings, 255, size)
+        set offset to 5 as a word sized unsigned integer
+        loop while offset < module's count:
+            set instruction to @intrinsic("dereference", words + offset)
+            set count to instruction shifted right by 16
+            set opcode to instruction bitwise and 65535
+            require condition ((count > 0) and ((offset + count) <= module's count)) reporting "A SPIR-V shader contains an invalid instruction size"
+            if opcode = 71 and count >= 3:
+                set identifier to @intrinsic("dereference", words + (offset + 1))
+                set decoration to @intrinsic("dereference", words + (offset + 2))
+                if decoration = 33 or decoration = 34:
+                    require condition ((count = 4) and (identifier < bound)) reporting "A SPIR-V binding decoration has an invalid target or size"
+                    set value to @intrinsic("dereference", words + (offset + 3))
+                    if decoration = 33:
+                        @intrinsic("store at", bindings + identifier, value)
+                    else:
+                        @intrinsic("store at", sets + identifier, value)
+            set offset to offset + count
+        set result to a new (boolean array of 32 items)
+        set identifier to 0 as a 32 bit unsigned integer
+        loop while identifier < bound:
+            set binding to @intrinsic("dereference", bindings + identifier)
+            if binding != (4294967295 as a 32 bit unsigned integer):
+                require condition (@intrinsic("dereference", sets + identifier) = 0) reporting "DynLex graphics supports SPIR-V resources only in descriptor set 0"
+                require condition (binding < (the length of result)) reporting "A SPIR-V uniform binding exceeds the DynLex graphics limit"
+                store true into result at binding
+            increment identifier
+        @intrinsic("call", "libc", "free", nothing, sets)
+        @intrinsic("call", "libc", "free", nothing, bindings)
+        return result

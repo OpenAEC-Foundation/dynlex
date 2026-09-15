@@ -23,6 +23,9 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 Every array element is parsed as a complete expression. A single-element array uses its entire interior text and nested
 bracket hierarchy, just as comma-separated elements do; a nested string or parenthesis is not the element by itself.
 
+String boundaries use backslash parity: a quote preceded by an odd run of backslashes is escaped; an even run leaves
+the quote unescaped. Bracket parsing, comment scanning, and source-character validation share this rule.
+
 Function declaration shorthands are normalized before section analysis. An action declaration using `to` and a value
 declaration using `to get` become ordinary function and `execute` sections. A one-line declaration using `means:` becomes
 an ordinary flex function and `replacement` section. Logical indentation and source slices preserve the authored nesting
@@ -105,6 +108,14 @@ We sort all expression arguments by their source position, since they did not ge
 Before type resolution starts, the compiler initializes the selected target's LLVM data layout. This does not generate or
 reorder code. It supplies the target ABI facts needed by compile-time operations such as `size of`; later code generation uses
 the same module and layout.
+
+`size of` requires a concrete runtime type with a complete layout. A class with uninferred members remains generic even
+after constructing instances of it; requesting its size reports a source diagnostic. Use the type of a particular instance
+to measure that instantiation. Pointers to generic classes are sized independently of their pointee layout.
+
+Class property access follows every pointer level to the owning object. Reading, writing, and taking a property's
+address use that same owner, and pointer provenance follows the same chain. The owner expression is evaluated once.
+Synthetic properties of other types, such as a C string's `data`, retain their existing representation.
 
 Declaration return contracts are checked on the inferred result of the ordinary function body: `to` requires `nothing`,
 while `to get` and `means:` require a value. The check participates in operand-grouping trials so the declaration error wins
@@ -218,6 +229,8 @@ All instantiations of a function have the same operand reordering for each code 
 
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
+Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
+
 ## Operand Reordering
 
 We iterate over all possible operand orders until we find a valid one.
@@ -301,7 +314,7 @@ layout to the same expression nodes.
 
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
-A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate with the same local ordering replaces the retained transaction, so the final accepted subgroupings are promoted together.
+A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate replaces the retained transaction only if its complete grouping snapshot is identical, including argument subtrees and explicit-group flags. A different valid grouping inside an enclosed argument is an ambiguity even when the surrounding call is unchanged; the first valid complete grouping is retained.
 
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
 
@@ -371,6 +384,11 @@ library function names. `@intrinsic("call", library, function, return type, argu
 receives C's default argument promotions: booleans and integers narrower than 32 bits become 32-bit integers, 32-bit floats become
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.
+
+`target is` accepts execution backends (`cpu`, `wasm`, `gpu`) and native operating systems (`windows`, `macos`, `linux`).
+Operating-system predicates use the same native host target as code generation and are false for WebAssembly and SPIR-V.
+These are compile-time predicates, so platform-specific native calls in unselected branches are not inferred or linked.
+`lib/platform.dl` exposes the operating-system checks as natural-language patterns.
 
 Runtime-loaded native symbols use `@intrinsic("call pointer", callee pointer, return type, arguments...)`. The callee is an
 opaque runtime pointer and the return type is a concrete compile-time type; the remaining operands define its fixed, nonvariadic C

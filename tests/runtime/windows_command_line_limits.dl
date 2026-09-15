@@ -1,0 +1,47 @@
+import lib/windows_command_line.dl
+import lib/check.dl
+
+function [the test text repeating] {string:text} {integer:count} [times]:
+    execute:
+        set output to a new string buffer containing (text's length * count) bytes
+        set index to 0
+        loop while index < count:
+            ignore @intrinsic("call", "libc", "memcpy", a pointer, (the data of output) + (index * text's length), the data of text, text's length as a word sized integer)
+            increment index
+        return output
+
+function [check command line limits for] {string:executable} [with] {string:argument} [arguments] {integer:count} [expecting] {integer:length}:
+    execute:
+        set encoded to the UTF-16 encoding of executable
+        set descriptor to @intrinsic("construct", a native process string, the data of argument, argument's length as a word sized integer)
+        set output to build the Windows command line for ((the data of encoded's storage) as a pointer to a 16 bit unsigned integer) with (the address of descriptor) counting (count as a word sized integer)
+        if length < 0:
+            require condition (output = (0 as a pointer to a 16 bit unsigned integer)) reporting "An invalid command line was accepted"
+            set error to a new string buffer containing 512 bytes
+            set copied to @intrinsic("call", "dynlex_runtime", "dynlex_runtime_error_message", a word sized integer, the data of error, 512 as a word sized integer)
+            require condition (copied > 0) reporting "A failed command line must report an error"
+        else:
+            require condition (output != (0 as a pointer to a 16 bit unsigned integer)) reporting "A valid command line was rejected"
+            set actual to 0
+            loop while (the item at actual in output) != (0 as a 16 bit unsigned integer):
+                increment actual
+            require condition (actual = length) reporting "Unexpected command-line length"
+        @intrinsic("call", "libc", "free", nothing, output)
+
+set empty to the string form of ""
+set x to the string form of "x"
+check command line limits for x with empty arguments 0 expecting 1
+check command line limits for (the test text repeating x 32766 times) with empty arguments 0 expecting 32766
+check command line limits for (the test text repeating x 32767 times) with empty arguments 0 expecting -1
+check command line limits for x with empty arguments 1 expecting 4
+check command line limits for x with (the test text repeating x 32764 times) arguments 1 expecting 32766
+check command line limits for x with (the test text repeating x 32765 times) arguments 1 expecting -1
+check command line limits for x with (the test text repeating (the string form of "日") 32764 times) arguments 1 expecting 32766
+check command line limits for x with (the test text repeating (the string form of "日") 32767 times) arguments 1 expecting -1
+check command line limits for x with (the test text repeating (the string form of "🌍") 16382 times) arguments 1 expecting 32766
+check command line limits for x with (the test text repeating (the string form of "🌍") 16383 times) arguments 1 expecting -1
+check command line limits for x with (the test text repeating (the string form of "\"") 16381 times) arguments 1 expecting 32766
+check command line limits for x with (the test text repeating (the string form of "\"") 16382 times) arguments 1 expecting -1
+set invalid to a new string buffer containing 1 bytes
+store (255 as a byte) into (the data of invalid) at 0
+check command line limits for x with invalid arguments 1 expecting -1

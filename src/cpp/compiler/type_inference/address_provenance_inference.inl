@@ -37,6 +37,16 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 
+static AddressProvenance dereferenceAddressProvenance(AddressProvenance address, int depth, InferenceContext &context) {
+	for (int level = 0; level < depth; level++) {
+		AddressProvenance value{.mayTargets = {}, .unknown = address.unknown};
+		for (VariableReference *target : address.mayTargets)
+			joinAddressProvenance(value, context.lookupAddressProvenance(target));
+		address = std::move(value);
+	}
+	return address;
+}
+
 static std::optional<AddressProvenance> inferLValueAddressProvenance(
 	Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack,
 	bool recordAddressTaken = true
@@ -72,8 +82,8 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 
 	Expression *ownerExpression = resolvedExpression->arguments[1];
 	DataType ownerType = resolveKnownExpressionType(ownerExpression, resolvedBindingFrameStack);
-	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
-	DataType classType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	bool ownerIsClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.isPointer();
+	DataType classType = ownerType.propertyOwnerType();
 	if (classType.kind != DataType::Kind::Class || classType.isPointer() || !classType.classDefinition ||
 		classType.classInstIndex < 0)
 		return std::nullopt;
@@ -94,8 +104,10 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 	if (!fieldExists)
 		return std::nullopt;
 
-	if (ownerIsDirectClassPointer)
-		return inferAddressProvenance(ownerExpression, context, resolvedBindingFrameStack);
+	if (ownerIsClassPointer)
+		return dereferenceAddressProvenance(
+			inferAddressProvenance(ownerExpression, context, resolvedBindingFrameStack), ownerType.pointerDepth - 1, context
+		);
 	return inferLValueAddressProvenance(ownerExpression, context, resolvedBindingFrameStack, recordAddressTaken);
 }
 
@@ -174,18 +186,12 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 		const DataType &ownerType = resolvedExpression->arguments[1]->type;
 		if (!ownerType.isPointer() || ownerType.kind != DataType::Kind::Class)
 			return owner;
-		AddressProvenance provenance{.mayTargets = {}, .unknown = owner.unknown};
-		for (VariableReference *ownerTarget : owner.mayTargets)
-			joinAddressProvenance(provenance, context.lookupAddressProvenance(ownerTarget));
-		return provenance;
+		return dereferenceAddressProvenance(std::move(owner), ownerType.pointerDepth, context);
 	}
 	if (kind == IntrinsicKind::Dereference) {
 		AddressProvenance pointerStorage =
 			inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
-		AddressProvenance provenance{.mayTargets = {}, .unknown = pointerStorage.unknown};
-		for (VariableReference *pointerVariable : pointerStorage.mayTargets)
-			joinAddressProvenance(provenance, context.lookupAddressProvenance(pointerVariable));
-		return provenance;
+		return dereferenceAddressProvenance(std::move(pointerStorage), 1, context);
 	}
 	if ((kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract) && resolvedExpression->arguments.size() > 2) {
 		int arrayOperandIndex = decayingArrayOperandIndex(

@@ -701,7 +701,7 @@ CodegenResult generateIntrinsicCode(
 		if (!generateRuntimeValue(args[1], val))
 			return CodegenResult::failure();
 		DataType valType = finalizedExpressionType(context, args[1]);
-		if (valType.kind == DataType::Kind::Float)
+		if (valType.numericElementType().kind == DataType::Kind::Float)
 			return builder.CreateFNeg(val, "fneg");
 		return builder.CreateNeg(val, "neg");
 	}

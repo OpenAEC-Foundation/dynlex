@@ -1,0 +1,148 @@
+# Native renderer state. Kept in DynLex so graphics algorithms can access their data directly.
+import lib/vulkan_types.dl
+
+class:
+    patterns:
+        DynlexGraphicsVertex
+    members:
+        position as (a 32 bit floating-point number) array of 3 items
+        texture_coordinates as (a 32 bit floating-point number) array of 2 items
+        color as (a 32 bit floating-point number) array of 4 items
+
+class:
+    patterns:
+        DynlexGraphicsMesh
+    members:
+        owner as a pointer to (DynlexGraphics)
+        next as a pointer to (DynlexGraphicsMesh)
+        buffer as a pointer
+        memory as a pointer
+        count as a 32 bit unsigned integer
+
+class:
+    patterns:
+        DynlexGraphicsFrame
+    members:
+        commands as a pointer
+        image_available as a pointer
+        completed as a pointer
+        upload_buffer as a pointer
+        upload_memory as a pointer
+        upload as a pointer to (a byte)
+        upload_offset as a 64 bit unsigned integer
+        retired_textures as a pointer to (DynlexGraphicsRetiredTexture)
+
+class:
+    patterns:
+        DynlexGraphicsRetiredTexture
+    members:
+        next as a pointer to (DynlexGraphicsRetiredTexture)
+        image as a pointer
+        memory as a pointer
+        view as a pointer
+        sampler as a pointer
+        descriptor as a pointer
+
+class:
+    patterns:
+        DynlexGraphicsPipeline
+    members:
+        owner as a pointer to (DynlexGraphics)
+        next as a pointer to (DynlexGraphicsPipeline)
+        pipeline as a pointer
+        layout as a pointer
+        descriptor_layout as a pointer
+        descriptor_sets as (a pointer) array of 2 items
+        descriptor_sets_allocated as a boolean
+        uniform_buffers as (a pointer) array of 2 items
+        uniform_memory as (a pointer) array of 2 items
+        uniform_maps as (a pointer to (a byte)) array of 2 items
+        bindings as (a 32 bit unsigned integer) array of 32 items
+        binding_count as a 32 bit unsigned integer
+        uniform_stride as a 64 bit unsigned integer
+        vertex_code as a pointer to (a 32 bit unsigned integer)
+        vertex_word_count as a word sized unsigned integer
+        fragment_code as a pointer to (a 32 bit unsigned integer)
+        fragment_word_count as a word sized unsigned integer
+
+class:
+    patterns:
+        DynlexGraphicsTexture
+    members:
+        owner as a pointer to (DynlexGraphics)
+        next as a pointer to (DynlexGraphicsTexture)
+        image as a pointer
+        memory as a pointer
+        view as a pointer
+        sampler as a pointer
+        descriptor as a pointer
+        format as a 32 bit integer
+        width as a 32 bit unsigned integer
+        height as a 32 bit unsigned integer
+        channels as a 32 bit unsigned integer
+
+class:
+    patterns:
+        DynlexGraphicsBuiltinPipeline
+    members:
+        pipeline as a pointer
+        layout as a pointer
+        descriptor_layout as a pointer
+        textured as a boolean
+        depth as a boolean
+
+class:
+    patterns:
+        DynlexGraphics
+    members:
+        window as a pointer
+        instance as a pointer
+        surface as a pointer
+        physical_device as a pointer
+        physical_properties as VkPhysicalDeviceProperties
+        device as a pointer
+        graphics_queue_family as a 32 bit unsigned integer
+        present_queue_family as a 32 bit unsigned integer
+        graphics_queue as a pointer
+        present_queue as a pointer
+        swapchain as a pointer
+        swapchain_format as a 32 bit integer
+        swapchain_color_space as a 32 bit integer
+        swapchain_extent as VkExtent2D
+        swapchain_images as a pointer to (a pointer)
+        swapchain_views as a pointer to (a pointer)
+        framebuffers as a pointer to (a pointer)
+        presentation_ready as a pointer to (a pointer)
+        swapchain_image_count as a 32 bit unsigned integer
+        depth_format as a 32 bit integer
+        depth_images as a pointer to (a pointer)
+        depth_memories as a pointer to (a pointer)
+        depth_views as a pointer to (a pointer)
+        render_pass as a pointer
+        command_pool as a pointer
+        descriptor_pool as a pointer
+        frames as (DynlexGraphicsFrame) array of 2 items
+        frame_index as a 32 bit unsigned integer
+        image_index as a 32 bit unsigned integer
+        frame_active as a boolean
+        swapchain_dirty as a boolean
+        portability_enabled as a boolean
+        depth_testing as a boolean
+        projection as (a 32 bit floating-point number) array of 16 items
+        camera as (a 32 bit floating-point number) array of 16 items
+        model as (a 32 bit floating-point number) array of 16 items
+        model_stack as ((a 32 bit floating-point number) array of 16 items) array of 64 items
+        model_stack_size as a 32 bit unsigned integer
+        current_vertex as DynlexGraphicsVertex
+        triangle_start as a 64 bit unsigned integer
+        triangle_vertex_count as a 32 bit unsigned integer
+        triangle_texture as a pointer to (DynlexGraphicsTexture)
+        triangles_active as a boolean
+        uniform_values as (a 32 bit floating-point number) array of 32 items
+        active_pipeline as a pointer to (DynlexGraphicsPipeline)
+        pipelines as a pointer to (DynlexGraphicsPipeline)
+        textures as a pointer to (DynlexGraphicsTexture)
+        meshes as a pointer to (DynlexGraphicsMesh)
+        builtins as (DynlexGraphicsBuiltinPipeline) array of 4 items
+        scroll_callback as a pointer
+        application_state as a pointer

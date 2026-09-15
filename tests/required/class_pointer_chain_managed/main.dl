@@ -1,0 +1,35 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] tracked value
+    members:
+        references as a pointer to an integer
+    retain:
+        set count to @intrinsic("dereference", the references of @intrinsic("lifecycle value"))
+        @intrinsic("store at", the references of @intrinsic("lifecycle value"), count + 1)
+    release:
+        set count to (@intrinsic("dereference", the references of @intrinsic("lifecycle value")) - 1)
+        @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
+
+class:
+    patterns:
+        [a|] managed container
+    members:
+        value as a tracked value
+
+set previous to 0
+set current to 0
+set container to @intrinsic("construct", a managed container, @intrinsic("construct", a tracked value, the address of previous))
+set link to the address of container
+set indirect to the address of link
+set triple to the address of indirect
+set address to the address of (the value of triple)
+@intrinsic("store at", address, @intrinsic("construct", a tracked value, the address of current))
+print previous as a line
+print current as a line
+set copy to triple's value
+print current as a line
+set indirect's value to @intrinsic("construct", a tracked value, the address of previous)
+print previous as a line
+print current as a line

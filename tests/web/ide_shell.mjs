@@ -122,7 +122,7 @@ assert.doesNotMatch(compilerWorker, /await import\(\/\* @vite-ignore \*\/ compil
 assert.match(compilerWorker, /new URL\("\.\.\/wgsl-translator\.js", compilerBaseUrl\)/);
 assert.match(compilerWorker, /createWgslTranslator\(compilerAssetUrl\("dynlex_wgsl_translator\.wasm"\)\)/);
 assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeFilesystem\.js"\)/);
-assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimePathHost\.js"\)/);
+assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeHost\.js"\)/);
 assert.match(runtimeImports, /runtimeDependencyUrl\("\.\/runtimeLayout\.js"\)/);
 assert.match(javascript, /import\.meta\.env\.BASE_URL/);
 assert.match(viteConfig, /base: process\.env\.DYNLEX_WEB_BASE \?\? "\/"/);

@@ -176,7 +176,7 @@ dynlex options:
         unknown build target: "Unknown build target '{target}'"
         shader stage must be string literal: "shader stage must be a compile-time string literal"
         unknown shader stage: "Unknown shader stage '{stage}'"
-        size of type invalid: "size of 'type' is invalid"
+        size of type invalid: "size of requires a concrete runtime type with a complete memory layout"
         pointer to type invalid: "pointer to 'type' is invalid"
         undeduced argument type in trial inference: "Undeduced argument type encountered during trial pattern-call inference"
         variable usage warning:
@@ -184,6 +184,7 @@ dynlex options:
             variable read before assigned: "Variable '{name}' may be read before being assigned"
             related argument definition: "Defined as argument here"
             related assignment: "Assigned here"
+        arithmetic operator operand invalid: "Arithmetic operator '{operator}' requires a numeric scalar or vector operand, got '{value_type}'"
         incompatible operand types: "Incompatible operand types '{left_type}' and '{right_type}'"
         logical operator operands invalid: "Logical operator '{operator}' requires boolean operands, got '{left_type}' and '{right_type}'"
         logical operator operand invalid: "Logical operator '{operator}' requires a boolean operand, got '{value_type}'"

@@ -1,0 +1,195 @@
+import lib/path_types.dl
+
+function [the result of parsed path] {parsed path:parsed}:
+    execute:
+        return @intrinsic("construct", a path result, parsed's success, parsed's text, parsed's error)
+
+function [a path result containing] {a value:text}:
+    execute:
+        return @intrinsic("construct", a path result, true, the string form of text, the string form of "")
+
+function [a path result failing with] {C string:message}:
+    execute:
+        return @intrinsic("construct", a path result, false, the string form of "", the string form of message)
+
+function [the native path style]:
+    execute:
+        if the build target is WebAssembly:
+            return @intrinsic("construct", a native path style result, false, false, @intrinsic("construct", a path style, 0), the string form of "Native path mapping is not available in the browser")
+        set style to the Windows path style if the build target is Windows, else the POSIX path style
+        return @intrinsic("construct", a native path style result, true, true, style, the string form of "")
+
+function [the joined parsed paths] {parsed path:left} [and] {parsed path:right} [for style] {integer:style}:
+    execute:
+        if path root kind right's rootKind is fully absolute:
+            return the result of parsed path right
+        if style = 2 and right's rootKind = 4:
+            if left's rootLength = 0 or left's rootKind = 3:
+                return the result of parsed path right
+            set root to the substring of left's text from 0 spanning left's rootLength bytes
+            return the result of parsed path (path (root + right's text) parsed for style style normalizing dots true)
+        if style = 2 and right's rootKind = 5:
+            set same to false
+            if left's rootKind = 5 or left's rootKind = 6:
+                set same to path text (the substring of left's text from 0 spanning 2 bytes) matches (the substring of right's text from 0 spanning 2 bytes) for style style
+            if same = false:
+                return the result of parsed path right
+            set relative to the substring of right's text from 2 spanning (right's text's length - 2) bytes
+            set separator to "/" if (relative's length > 0 and (left's rootKind != 5 or left's components > 0)), else ""
+            return the result of parsed path (path ((left's text + separator) + relative) parsed for style style normalizing dots true)
+        if left's rootLength = 0 and left's components = 0:
+            return the result of parsed path right
+        if right's rootLength = 0 and right's components = 0:
+            return the result of parsed path left
+        set separator to "" if (left's rootKind = 5 and left's components = 0), else "/"
+        return the result of parsed path (path ((left's text + separator) + right's text) parsed for style style normalizing dots true)
+
+function {a value:left} [joined with] {a value:right} [using] {path style:style}:
+    execute:
+        set first to path left parsed for style style's value normalizing dots true
+        if first's success = false:
+            return the result of parsed path first
+        set second to path right parsed for style style's value normalizing dots true
+        if second's success = false:
+            return the result of parsed path second
+        return the joined parsed paths first and second for style style's value
+
+function [the parent path of] {a value:input} [using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots false
+        if parsed's success = false or parsed's components = 0:
+            return the result of parsed path parsed
+        set length to the last component offset of path parsed
+        if length > parsed's rootLength:
+            decrement length
+        if length = 0:
+            return a path result containing "."
+        return a path result containing (the substring of parsed's text from 0 spanning length bytes)
+
+function [the filename of] {a value:input} [using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots false
+        if parsed's success = false:
+            return the result of parsed path parsed
+        if parsed's components = 0:
+            return a path result containing ""
+        set start to the last component offset of path parsed
+        return a path result containing (the substring of parsed's text from start spanning (parsed's text's length - start) bytes)
+
+function [the base name of] {a value:input} [using] {path style:style}:
+    replacement:
+        the filename of input using style
+
+function [the suffix offset in filename] {string:text}:
+    execute:
+        if text = "." or text = "..":
+            return text's length
+        set cursor to text's length
+        loop while cursor > 1:
+            decrement cursor
+            if (the character at cursor in text) = (46 as a byte):
+                return cursor
+        return text's length
+
+function [the stem of] {a value:input} [using] {path style:style}:
+    execute:
+        set filename to the filename of input using style
+        if filename failed:
+            return filename
+        return a path result containing (the substring of filename's value from 0 spanning (the suffix offset in filename filename's value) bytes)
+
+function [the suffix of] {a value:input} [using] {path style:style}:
+    execute:
+        set filename to the filename of input using style
+        if filename failed:
+            return filename
+        set start to the suffix offset in filename filename's value
+        return a path result containing (the substring of filename's value from start spanning (filename's value's length - start) bytes)
+
+function [the extension of] {a value:input} [using] {path style:style}:
+    replacement:
+        the suffix of input using style
+
+function [whether] {a value:input} [is an absolute path using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots true
+        set absolute to (path root kind parsed's rootKind is fully absolute) or parsed's rootKind = 4
+        return @intrinsic("construct", a path truth result, parsed's success, absolute, parsed's error)
+
+function {a value:input} [lexically normalized using] {path style:style}:
+    execute:
+        return the result of parsed path (path input parsed for style style's value normalizing dots true)
+
+function [the path obtained by resolving] {a value:input} [against] {a value:foundation} [using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots true
+        if parsed's success = false:
+            return the result of parsed path parsed
+        set base to path foundation parsed for style style's value normalizing dots true
+        if base's success = false:
+            return the result of parsed path base
+        if (path root kind base's rootKind is fully absolute) = false:
+            return a path result failing with "Path resolution requires an absolute base path"
+        if style's value = 2 and parsed's rootKind = 5:
+            set drive to the substring of parsed's text from 0 spanning 2 bytes
+            if base's rootKind != 6 or ((path text drive matches (the substring of base's text from 0 spanning 2 bytes) for style 2) = false):
+                return a path result failing with "A drive-relative path requires an absolute base on the same drive"
+            set base's text to drive + (the substring of base's text from 2 spanning (base's text's length - 2) bytes)
+        return the joined parsed paths base and parsed for style style's value
+
+function [the next component end in] {string:text} [starting at] {integer:start}:
+    execute:
+        set cursor to start
+        loop while cursor < text's length and (the character at cursor in text) != (47 as a byte):
+            increment cursor
+        return cursor
+
+function [the path from] {a value:input} [relative to] {a value:foundation} [using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots true
+        if parsed's success = false:
+            return the result of parsed path parsed
+        set base to path foundation parsed for style style's value normalizing dots true
+        if base's success = false:
+            return the result of parsed path base
+        if ((path root kind parsed's rootKind is fully absolute) = false) or ((path root kind base's rootKind is fully absolute) = false):
+            return a path result failing with "Relative path calculation requires absolute target and base paths"
+        set root to the substring of parsed's text from 0 spanning parsed's rootLength bytes
+        set baseRoot to the substring of base's text from 0 spanning base's rootLength bytes
+        if parsed's rootKind != base's rootKind or ((path text root matches baseRoot for style style's value) = false):
+            return a path result failing with "Target and base paths have different roots"
+        set a to parsed's rootLength
+        set b to base's rootLength
+        set common to 0
+        set matching to true
+        loop while matching and (common < parsed's components and common < base's components):
+            if (the character at a in parsed's text) = (47 as a byte):
+                increment a
+            if (the character at b in base's text) = (47 as a byte):
+                increment b
+            set aEnd to the next component end in parsed's text starting at a
+            set bEnd to the next component end in base's text starting at b
+            set first to the substring of parsed's text from a spanning (aEnd - a) bytes
+            set second to the substring of base's text from b spanning (bEnd - b) bytes
+            if path text first matches second for style style's value:
+                increment common
+                set a to aEnd
+                set b to bEnd
+            else:
+                set matching to false
+        set output to the string form of ""
+        set index to common
+        loop while index < base's components:
+            if output's length > 0:
+                set output to output + "/"
+            set output to output + ".."
+            increment index
+        if common < parsed's components:
+            if (the character at a in parsed's text) = (47 as a byte):
+                increment a
+            if output's length > 0:
+                set output to output + "/"
+            set output to output + (the substring of parsed's text from a spanning (parsed's text's length - a) bytes)
+        if output's length = 0:
+            set output to the string form of "."
+        return a path result containing output

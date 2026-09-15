@@ -1,0 +1,19 @@
+import lib/path.dl
+
+function check failure {file URI result:result}:
+    execute:
+        print ((result failed) and (result's error message is not empty)) as a line
+
+set windows to the Windows path style
+set posix to the POSIX path style
+check failure (the path from "file://[1:2:3:4:5:6:7:8:]/share" interpreted as a file URI using windows)
+check failure (the path from "file://[::ffff:192.168.01.1]/share" interpreted as a file URI using windows)
+check failure (the path from "file:///tmp/%FF" interpreted as a file URI using posix)
+check failure (the path from "file:///tmp/%C0%80" interpreted as a file URI using posix)
+check failure (the path from "file:///tmp/%ED%A0%80" interpreted as a file URI using posix)
+check failure (the path from "file:///tmp/%F4%90%80%80" interpreted as a file URI using posix)
+set native to the native path style
+print (native's support = (the inverse of (the build target is WebAssembly))) as a line
+set input to the string form of "file:///tmp/test"
+set converted to the path from input interpreted as a file URI
+print (converted's support = (the inverse of (the build target is WebAssembly))) as a line

@@ -304,11 +304,11 @@ assert.match(releaseWorkflow, /lipo -verify_arch arm64 x86_64/);
 assert.match(releaseWorkflow, /stage-macos-dependencies\.sh/);
 assert.match(
   releaseWorkflow,
-  /test -f build\/macos-stage\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a/,
+  /test -f build\/macos-stage\/usr\/local\/lib\/dynlex\/libdynlex_runtime\.a/,
 );
 assert.match(
   releaseWorkflow,
-  /usr\/local\/lib\/dynlex\/libdynlex_graphics\.a\|[\s\S]*lipo -create[\s\S]*ARM64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a[\s\S]*X64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a[\s\S]*lipo -verify_arch arm64 x86_64[\s\S]*UNIVERSAL_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_graphics\.a/,
+  /usr\/local\/lib\/dynlex\/libdynlex_runtime\.a\|[\s\S]*lipo -create[\s\S]*ARM64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_runtime\.a[\s\S]*X64_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_runtime\.a[\s\S]*lipo -verify_arch arm64 x86_64[\s\S]*UNIVERSAL_ROOT\/usr\/local\/lib\/dynlex\/libdynlex_runtime\.a/,
 );
 for (const macosRuntimeArtifact of [
   "libvulkan.dylib",

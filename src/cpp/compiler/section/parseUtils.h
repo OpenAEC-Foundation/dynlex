@@ -4,6 +4,14 @@
 #include <string_view>
 #include <unordered_map>
 
+// A character is escaped only by an odd run of preceding backslashes.
+inline bool isEscapedCharacter(std::string_view text, size_t index) {
+	size_t start = index;
+	while (start > 0 && text[start - 1] == '\\')
+		--start;
+	return (index - start) % 2 != 0;
+}
+
 // Decode the escape sequences accepted in source string literals.
 inline std::string processEscapeSequences(std::string_view input) {
 	static const std::unordered_map<char, char> escapes = {{'n', '\n'}, {'t', '\t'}, {'r', '\r'},  {'a', '\a'}, {'b', '\b'},

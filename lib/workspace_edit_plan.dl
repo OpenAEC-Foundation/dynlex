@@ -298,7 +298,7 @@ local function simulate workspace rename change {a pointer to a normalized works
                         set the relative path of candidate to relative's value
             set position to (position + 1)
         if plan is valid:
-            append workspace resource operation at protocol of kind the workspace rename change kind skipped false for path an empty workspace edit text identified by an empty workspace edit text, old path normalized's old path identified by normalized's old identity, new path normalized's new path identified by normalized's new identity, which is a directory if (origin's filesystem kind = the workspace directory resource kind), and overwrite target (request's overwrite and distinct and (destination != (0 as a pointer to a workspace resource snapshot)) and destination's filesystem presence) to plan
+            append workspace resource operation at protocol of kind the workspace rename change kind skipped false for path an empty workspace edit text identified by an empty workspace edit text, old path normalized's old path identified by normalized's old identity, new path normalized's new path identified by normalized's new identity, which is a directory if (origin's filesystem kind = the workspace directory resource kind), and overwrite target (((request's overwrite and distinct) and (destination != (0 as a pointer to a workspace resource snapshot))) and destination's filesystem presence) to plan
 
 local function simulate workspace delete change {a pointer to a normalized workspace change:normalized} at {integer:protocol} using {a pointer to a workspace edit context:context} in {a pointer to a workspace edit plan:plan}:
     execute:

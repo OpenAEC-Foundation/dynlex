@@ -1,0 +1,146 @@
+# Vulkan pipeline ABI declarations from the Khronos registry.
+import lib/vulkan_pipeline_types.dl
+
+class:
+    patterns:
+        VkBufferImageCopy
+    members:
+        bufferOffset as a 64 bit unsigned integer
+        bufferRowLength as a 32 bit unsigned integer
+        bufferImageHeight as a 32 bit unsigned integer
+        imageSubresource as VkImageSubresourceLayers
+        imageOffset as VkOffset3D
+        imageExtent as VkExtent3D
+
+class:
+    patterns:
+        VkCommandBufferAllocateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        commandPool as a pointer
+        level as a 32 bit integer
+        commandBufferCount as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkComponentMapping
+    members:
+        r as a 32 bit integer
+        g as a 32 bit integer
+        b as a 32 bit integer
+        a as a 32 bit integer
+
+class:
+    patterns:
+        VkExtent3D
+    members:
+        width as a 32 bit unsigned integer
+        height as a 32 bit unsigned integer
+        depth as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkFormatProperties
+    members:
+        linearTilingFeatures as a 32 bit unsigned integer
+        optimalTilingFeatures as a 32 bit unsigned integer
+        bufferFeatures as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkImageCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        imageType as a 32 bit integer
+        format as a 32 bit integer
+        extent as VkExtent3D
+        mipLevels as a 32 bit unsigned integer
+        arrayLayers as a 32 bit unsigned integer
+        samples as a 32 bit integer
+        tiling as a 32 bit integer
+        usage as a 32 bit unsigned integer
+        sharingMode as a 32 bit integer
+        queueFamilyIndexCount as a 32 bit unsigned integer
+        pQueueFamilyIndices as a pointer to (a 32 bit unsigned integer)
+        initialLayout as a 32 bit integer
+
+class:
+    patterns:
+        VkImageMemoryBarrier
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        srcAccessMask as a 32 bit unsigned integer
+        dstAccessMask as a 32 bit unsigned integer
+        oldLayout as a 32 bit integer
+        newLayout as a 32 bit integer
+        srcQueueFamilyIndex as a 32 bit unsigned integer
+        dstQueueFamilyIndex as a 32 bit unsigned integer
+        image as a pointer
+        subresourceRange as VkImageSubresourceRange
+
+class:
+    patterns:
+        VkImageSubresourceLayers
+    members:
+        aspectMask as a 32 bit unsigned integer
+        mipLevel as a 32 bit unsigned integer
+        baseArrayLayer as a 32 bit unsigned integer
+        layerCount as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkImageSubresourceRange
+    members:
+        aspectMask as a 32 bit unsigned integer
+        baseMipLevel as a 32 bit unsigned integer
+        levelCount as a 32 bit unsigned integer
+        baseArrayLayer as a 32 bit unsigned integer
+        layerCount as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkImageViewCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        image as a pointer
+        viewType as a 32 bit integer
+        format as a 32 bit integer
+        components as VkComponentMapping
+        subresourceRange as VkImageSubresourceRange
+
+class:
+    patterns:
+        VkOffset3D
+    members:
+        x as a 32 bit integer
+        y as a 32 bit integer
+        z as a 32 bit integer
+
+class:
+    patterns:
+        VkSamplerCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        magFilter as a 32 bit integer
+        minFilter as a 32 bit integer
+        mipmapMode as a 32 bit integer
+        addressModeU as a 32 bit integer
+        addressModeV as a 32 bit integer
+        addressModeW as a 32 bit integer
+        mipLodBias as a 32 bit floating-point number
+        anisotropyEnable as a 32 bit unsigned integer
+        maxAnisotropy as a 32 bit floating-point number
+        compareEnable as a 32 bit unsigned integer
+        compareOp as a 32 bit integer
+        minLod as a 32 bit floating-point number
+        maxLod as a 32 bit floating-point number
+        borderColor as a 32 bit integer
+        unnormalizedCoordinates as a 32 bit unsigned integer

@@ -11,8 +11,8 @@ function the vector component width of {a 64 bit floating-point number:value}:
     replacement:
         "float64"
 
-set left to a new vector with x -1.5 as a 32 bit floating-point number, y 2.0 as a 32 bit floating-point number and z 3.25 as a 32 bit floating-point number
-set right to a new vector with x 2.0 as a 32 bit floating-point number, y -4.0 as a 32 bit floating-point number and z 0.5 as a 32 bit floating-point number
+set left to a new vector with x (-1.5) as a 32 bit floating-point number, y 2.0 as a 32 bit floating-point number and z 3.25 as a 32 bit floating-point number
+set right to a new vector with x 2.0 as a 32 bit floating-point number, y (-4.0) as a 32 bit floating-point number and z 0.5 as a 32 bit floating-point number
 print the vector component width of (the x of (left + right)) as a line
 print left + right as a line
 print left - right as a line

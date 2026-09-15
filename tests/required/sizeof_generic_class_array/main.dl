@@ -1,0 +1,7 @@
+class:
+    patterns:
+        box
+    members:
+        value
+
+@intrinsic("discard", @intrinsic("size of", @intrinsic("array", 3, box)))

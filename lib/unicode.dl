@@ -440,3 +440,35 @@ function free {text line index result:outcome}:
         set catalogue to outcome's line index
         if catalogue != (0 as a pointer to a text line index):
             free catalogue
+
+# UTF-16 buffers include a trailing zero code unit for native APIs.
+class:
+    patterns:
+        [a|] UTF-16 encoding
+    members:
+        success as a boolean
+        storage as a string
+        length as an integer
+        error offset as an integer
+
+function [the UTF-16 encoding of] {string:text}:
+    execute:
+        validate text as UTF-8 and set validation to it
+        if validation failed:
+            return @intrinsic("construct", a UTF-16 encoding, false, the string form of "", 0, the error byte offset of validation)
+        set storage to a new string buffer containing ((text's length + 1) * 2) bytes
+        set output to (the data of storage) as a pointer to a 16 bit unsigned integer
+        set cursor to 0
+        set length to 0
+        loop while cursor < text's length:
+            set decoded to the raw UTF-8 code point in text at cursor
+            set point to the code point of decoded
+            if point >= 65536:
+                store ((((point - 65536) >> 10) + 55296) as a 16 bit unsigned integer) into output at length
+                increment length
+                set point to ((point - 65536) bitwise and 1023) + 56320
+            store (point as a 16 bit unsigned integer) into output at length
+            increment length
+            set cursor to the next byte offset of decoded
+        store (0 as a 16 bit unsigned integer) into output at length
+        return @intrinsic("construct", a UTF-16 encoding, true, storage, length, -1)

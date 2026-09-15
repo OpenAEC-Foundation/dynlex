@@ -282,7 +282,10 @@ static int spawn_from_path(
 	return access_error != 0 ? access_error : ENOENT;
 }
 
-int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCommand *command) {
+int dynlex_platform_process_launch(
+	DynlexProcess *process, const DynlexProcessCommand *command, DynlexWindowsCommandLineBuilder build_command_line
+) {
+	(void)build_command_line;
 	int input_pipe[2] = {-1, -1};
 	int output_pipe[2] = {-1, -1};
 	int error_pipe[2] = {-1, -1};

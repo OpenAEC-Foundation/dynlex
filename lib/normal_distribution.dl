@@ -32,7 +32,7 @@ function the next normal value from {a pointer to a normal distribution state:st
                 set verticalValue to ((2.0 as a 32 bit floating-point number) * (the next 32 bit unit fraction from enginePointer)) - (1.0 as a 32 bit floating-point number)
                 set squaredRadius to ((horizontalValue * horizontalValue) + (verticalValue * verticalValue))
                 set rejectedValue to squaredRadius > (1.0 as a 32 bit floating-point number) or squaredRadius = (0.0 as a 32 bit floating-point number)
-            set multiplierValue to the square root of (((-2.0 as a 32 bit floating-point number) * @intrinsic("log", squaredRadius)) / squaredRadius)
+            set multiplierValue to the square root of ((((-2.0) as a 32 bit floating-point number) * @intrinsic("log", squaredRadius)) / squaredRadius)
             set the cached standard value of statePointer to horizontalValue * multiplierValue
             set the cached standard value available of statePointer to true
             set standardValue to verticalValue * multiplierValue

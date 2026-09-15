@@ -23,4 +23,4 @@ set releasing to the result of releasing (the address of typeface)
 print releasing succeeded as a line
 print (typeface's library = 0 as a pointer to a byte) as a line
 print (typeface's face = 0 as a pointer to a byte) as a line
-print (typeface's texture is loaded = false) as a line
+print (typeface's cache = (0 as a pointer to a font cache)) as a line

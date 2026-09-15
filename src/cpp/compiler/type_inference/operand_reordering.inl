@@ -345,58 +345,6 @@ static bool startsWithArgument(Expression *expression);
 static bool endsWithArgument(Expression *expression);
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex);
 
-static const std::vector<Expression *> &snapshotArguments(const GroupingSnapshot &snapshot, Expression *expression) {
-	static const std::vector<Expression *> emptyArguments;
-	auto it = snapshot.nodes.find(expression);
-	return it != snapshot.nodes.end() ? it->second.arguments : emptyArguments;
-}
-
-static bool snapshotsHaveSameLocalOrdering(
-	const GroupingSnapshot &left, const GroupingSnapshot &right, Expression *leftExpr, Expression *rightExpr, bool isOnBoundary,
-	bool isRoot, bool forceLocal
-) {
-	auto isOpaqueAtCurrentLevel = [&](Expression *expression, const GroupingSnapshot & /*snapshot*/) -> bool {
-		if (!expressionHasGroupingShape(expression))
-			return true;
-		return !isRoot && (forceLocal || expression->isExplicitGroup || !isOnBoundary);
-	};
-
-	bool leftOpaque = isOpaqueAtCurrentLevel(leftExpr, left);
-	bool rightOpaque = isOpaqueAtCurrentLevel(rightExpr, right);
-	if (leftOpaque || rightOpaque)
-		return leftOpaque && rightOpaque;
-	if (leftExpr != rightExpr)
-		return false;
-
-	const std::vector<Expression *> &leftArguments = snapshotArguments(left, leftExpr);
-	const std::vector<Expression *> &rightArguments = snapshotArguments(right, rightExpr);
-	if (leftArguments.size() != rightArguments.size())
-		return false;
-
-	bool hasLeftEdge = startsWithArgument(leftExpr);
-	bool hasRightEdge = endsWithArgument(leftExpr);
-	size_t sourceArgumentCount = groupingArgumentCount(leftExpr);
-	for (size_t sourceArgumentIndex = 0; sourceArgumentIndex < sourceArgumentCount; sourceArgumentIndex++) {
-		int leftArgumentIndex = groupingArgumentIndex(leftExpr, sourceArgumentIndex);
-		int rightArgumentIndex = groupingArgumentIndex(rightExpr, sourceArgumentIndex);
-		if (leftArgumentIndex < 0 || rightArgumentIndex < 0)
-			return false;
-		bool isLeftBoundaryArgument = hasLeftEdge && sourceArgumentIndex == 0;
-		bool isRightBoundaryArgument = hasRightEdge && sourceArgumentIndex + 1 == sourceArgumentCount;
-		bool childForceLocal = argumentHasAdjacentSiblingSlot(leftExpr, sourceArgumentIndex);
-		if (!snapshotsHaveSameLocalOrdering(
-				left, right, leftArguments[leftArgumentIndex], rightArguments[rightArgumentIndex],
-				isLeftBoundaryArgument || isRightBoundaryArgument, false, childForceLocal
-			))
-			return false;
-	}
-	return true;
-}
-
-static bool snapshotsHaveSameLocalOrdering(const GroupingSnapshot &left, const GroupingSnapshot &right) {
-	return snapshotsHaveSameLocalOrdering(left, right, left.root, right.root, true, true, false);
-}
-
 static const GroupingSnapshot *codeLineGroupingForContext(CodeLine *line, const InferenceContext &context) {
 	if (!line)
 		return nullptr;

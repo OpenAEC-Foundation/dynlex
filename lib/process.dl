@@ -1,6 +1,7 @@
 # DynLex Process Library
 
 import lib/std.dl
+import lib/windows_command_line.dl
 
 local class:
     patterns:
@@ -406,7 +407,8 @@ local function the process launched from {process command:command}:
             "dynlex_runtime",
             "dynlex_process_launch",
             a pointer to a byte,
-            command's handle
+            command's handle,
+            the function named "build the Windows command line for $ with $ counting $"
         )
         return @intrinsic("construct", a process, handle)
 

@@ -5,7 +5,7 @@
 # it before closing the graphics window that created it.
 
 import lib/std.dl
-import lib/graphics_error.dl
+import lib/graphics_textures.dl
 
 class:
     patterns:
@@ -155,11 +155,9 @@ function a graphics texture loaded from PPM file at path for {pointer:window}:
             @intrinsic("call", "libc", "free", nothing, pixels)
             return an empty graphics texture
 
-        set resource to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_create_rgb8", a pointer to a byte, window, width, height, pixels)
+        set resource to a graphics texture resource from pixels with width width height height channels (3 as a 32 bit unsigned integer) in (window as a pointer to DynlexGraphics)
         @intrinsic("call", "libc", "free", nothing, pixels)
-        if resource = 0 as a pointer to a byte:
-            return an empty graphics texture
-        return a new graphics texture with resource resource, width width and height height
+        return a new graphics texture with resource (resource as a pointer), width width and height height
 
 function {graphics texture:texture} is loaded:
     execute:
@@ -168,7 +166,7 @@ function {graphics texture:texture} is loaded:
 flex function release {graphics texture:texture}:
     replacement:
         if texture is loaded:
-            require graphics operation status @intrinsic("call", "dynlex_graphics", "dynlex_graphics_texture_destroy", an integer, texture's resource)
+            release graphics texture resource (texture's resource as a pointer to DynlexGraphicsTexture)
         set texture's resource to 0 as a pointer to a byte
         set texture's width to 0
         set texture's height to 0

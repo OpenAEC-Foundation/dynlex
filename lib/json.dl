@@ -822,7 +822,7 @@ local function the position after writing escaped JSON {string:text} into {a poi
                 store 117 as a byte into output at writer + 1
                 store 48 as a byte into output at writer + 2
                 store 48 as a byte into output at writer + 3
-                store the JSON hex digit for octet / 16 into output at writer + 4
+                store the JSON hex digit for (octet / 16) into output at writer + 4
                 store the JSON hex digit for the remainder of octet divided by 16 into output at writer + 5
                 set writer to (writer + 6)
             else:

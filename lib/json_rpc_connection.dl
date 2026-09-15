@@ -327,7 +327,7 @@ local function the result of writing all {string:contents} to {a pointer to a JS
             if operation failed:
                 set message to operation's error message
                 if written > 0:
-                    set message to (the string form of "JSON-RPC frame was partially written: " + message)
+                    set message to ((the string form of "JSON-RPC frame was partially written: ") + message)
                 return the result of breaking connection with status the JSON-RPC I/O error status reporting message
             if count = 0:
                 return the result of breaking connection with status the JSON-RPC I/O error status reporting "JSON-RPC write made no progress"

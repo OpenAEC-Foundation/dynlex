@@ -1,5 +1,5 @@
 true
-dynlex_graphics_texture_create_red8
+creating the font texture
 true
 true
 true

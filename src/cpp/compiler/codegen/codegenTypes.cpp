@@ -461,8 +461,8 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 	requireCompilerInvariant(expr->arguments.size() > 2, "property lvalue is missing an owner or field name");
 	Expression *ownerExpression = expr->arguments[1];
 	DataType ownerType = finalizedExpressionType(context, ownerExpression);
-	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
-	DataType classType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	bool ownerIsClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.isPointer();
+	DataType classType = ownerType.propertyOwnerType();
 	if (classType.kind != DataType::Kind::Class || classType.isPointer() || !classType.classDefinition ||
 		classType.classInstIndex < 0)
 		return {};
@@ -492,12 +492,20 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 		return {};
 
 	llvm::Value *ownerAddress = nullptr;
-	if (ownerIsDirectClassPointer) {
+	if (ownerIsClassPointer) {
 		CodegenResult owner = generateExpressionCode(context, ownerExpression);
 		if (!owner)
 			return {nullptr, LValueAddressStatus::Failed};
 		requireCompilerInvariant(owner.value != nullptr, "class pointer lvalue owner produced no pointer value");
 		ownerAddress = owner.value;
+		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+		DataType pointerType = ownerType;
+		while (pointerType.pointerDepth > 1) {
+			pointerType = pointerType.dereferenced();
+			ownerAddress = builder.CreateAlignedLoad(
+				getLLVMType(context, pointerType), ownerAddress, getLLVMABIAlignment(context, pointerType), "property_owner"
+			);
+		}
 	} else {
 		LValueAddressResult owner = generateLValueAddress(context, ownerExpression);
 		if (owner.status != LValueAddressStatus::Addressable)
@@ -646,7 +654,7 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		if (fromType.isInteger() && toType.isInteger()) {
 			if (fromType.numericSize < toType.numericSize)
 				return fromType.isUnsignedInteger() ? builder.CreateZExt(val, targetLLVM, "zext")
-															 : builder.CreateSExt(val, targetLLVM, "sext");
+													: builder.CreateSExt(val, targetLLVM, "sext");
 			return builder.CreateTrunc(val, targetLLVM, "trunc");
 		}
 		if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
@@ -656,9 +664,9 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		}
 		if (fromType.isInteger() && toType.kind == DataType::Kind::Float)
 			return fromType.isUnsignedInteger() ? builder.CreateUIToFP(val, targetLLVM, "utof")
-													: builder.CreateSIToFP(val, targetLLVM, "itof");
+												: builder.CreateSIToFP(val, targetLLVM, "itof");
 		return toType.isUnsignedInteger() ? builder.CreateFPToUI(val, targetLLVM, "ftou")
-									 : builder.CreateFPToSI(val, targetLLVM, "ftoi");
+										  : builder.CreateFPToSI(val, targetLLVM, "ftoi");
 	}
 
 	// Numeric -> Bool

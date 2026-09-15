@@ -228,7 +228,7 @@ static bool inferExpression(
 			lastAcceptedTransaction = std::move(candidateTransaction);
 			return GroupingEnumerationProgress::EmittedContinue;
 		}
-		if (snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping)) {
+		if (candidateGrouping == selectedGrouping) {
 			selectedGrouping = std::move(candidateGrouping);
 			selectedGroupingWarnings = std::move(candidateGroupingWarnings);
 			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);

@@ -315,9 +315,6 @@ function print the city module statistics:
         print "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles" as a line
 
 set window to a new window with width 1280 and height 720
-if window = 0 as a pointer to a byte:
-    print (the current graphics error message) as a line
-    return 1
 print the city module statistics
 
 set view to a camera at (a position with x 0.0, y 8.0 and z 24.0) facing 0.0 degrees with speed 1.15 and turn rate 2.4

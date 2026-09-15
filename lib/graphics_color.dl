@@ -1,0 +1,20 @@
+# Integer drawing colors and RGB(A) image bytes use the sRGB color space.
+# Mesh vertex colors and floating-point shader outputs are linear.
+import lib/graphics_native_types.dl
+
+function [the linear value of sRGB channel] {floating-point number:value}:
+    execute:
+        if value <= 0.04045:
+            return value / 12.92
+        return ((value + 0.055) / 1.055) raised to the power of 2.4
+
+function [the graphics surface uses sRGB in] {a pointer to DynlexGraphics:state}:
+    execute:
+        return state's swapchain_format = 43 or state's swapchain_format = 50
+
+function [graphics color channel] {integer:value} [for] {a pointer to DynlexGraphics:state}:
+    execute:
+        set normalized to value / 255.0
+        if the graphics surface uses sRGB in state:
+            set normalized to the linear value of sRGB channel normalized
+        return normalized as a 32 bit floating-point number

@@ -1,0 +1,101 @@
+# Triangle streams and Vulkan command recording are implemented in DynLex.
+import lib/graphics_native_types.dl
+import lib/graphics_transform.dl
+import lib/graphics_color.dl
+
+class:
+    patterns:
+        [a|] graphics draw constants
+    members:
+        transform as a graphics matrix
+        tint as (a 32 bit floating-point number) array of 4 items
+
+function [record graphics triangles from] {pointer:buffer} [at byte offset] {64 bit unsigned integer:offset} [count] {32 bit unsigned integer:count} [with texture] {a pointer to DynlexGraphicsTexture:texture} [and tint] {a graphics draw constants:constants} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        set index to 1 if state's depth_testing, else 0
+        if texture != (0 as a pointer to DynlexGraphicsTexture):
+            set index to index + 2
+        set pipeline to the item at index in (state's builtins)
+        @intrinsic("call", "vulkan", "vkCmdBindPipeline", nothing, frame's commands, 0, pipeline's pipeline)
+        @intrinsic("call", "vulkan", "vkCmdBindVertexBuffers", nothing, frame's commands, 0, 1, the address of buffer, the address of offset)
+        @intrinsic("call", "vulkan", "vkCmdPushConstants", nothing, frame's commands, pipeline's layout, 1, 0, (the size of a graphics draw constants) as a 32 bit unsigned integer, the address of constants)
+        if texture != (0 as a pointer to DynlexGraphicsTexture):
+            @intrinsic("call", "vulkan", "vkCmdBindDescriptorSets", nothing, frame's commands, 0, pipeline's layout, 0, 1, the address of (texture's descriptor), 0, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkCmdDraw", nothing, frame's commands, count, 1, 0, 0)
+
+function [graphics draw constants tinted red] {integer:red} [green] {integer:green} [blue] {integer:blue} [alpha] {integer:alpha} [for] {a pointer to DynlexGraphics:state}:
+    execute:
+        set constants to a new graphics draw constants
+        set viewModel to the graphics product of state's camera and state's model
+        set constants' transform to the graphics product of state's projection and viewModel
+        store (graphics color channel red for state) into constants' tint at 0
+        store (graphics color channel green for state) into constants' tint at 1
+        store (graphics color channel blue for state) into constants' tint at 2
+        store ((alpha as a 32 bit floating-point number) / (255.0 as a 32 bit floating-point number)) into constants' tint at 3
+        return constants
+
+function [begin a graphics triangle stream with texture] {a pointer to DynlexGraphicsTexture:texture} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active and state's triangles_active = false) reporting "Beginning triangles requires an active graphics frame and no unfinished triangles"
+        if texture != (0 as a pointer to DynlexGraphicsTexture):
+            require condition (texture's owner = state) reporting "The graphics texture belongs to a different window"
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        set state's triangle_start to frame's upload_offset
+        set state's triangle_vertex_count to 0 as a 32 bit unsigned integer
+        set state's triangle_texture to texture
+        set state's triangles_active to true
+
+function [set graphics vertex color to red] {integer:red} [green] {integer:green} [blue] {integer:blue} [alpha] {integer:alpha} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        store (graphics color channel red for state) into state's current_vertex's color at 0
+        store (graphics color channel green for state) into state's current_vertex's color at 1
+        store (graphics color channel blue for state) into state's current_vertex's color at 2
+        store ((alpha as a 32 bit floating-point number) / (255.0 as a 32 bit floating-point number)) into state's current_vertex's color at 3
+
+function [set graphics texture coordinates to x] {floating-point number:x} [y] {floating-point number:y} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        store (x as a 32 bit floating-point number) into state's current_vertex's texture_coordinates at 0
+        store (y as a 32 bit floating-point number) into state's current_vertex's texture_coordinates at 1
+
+function [append a graphics vertex at x] {floating-point number:x} [y] {floating-point number:y} [z] {floating-point number:z} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition state's triangles_active reporting "Appending a vertex requires an active triangle stream"
+        require condition (((x is finite) and (y is finite)) and (z is finite)) reporting "Graphics vertex positions must be finite"
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        set size to (the size of DynlexGraphicsVertex) as a 64 bit unsigned integer
+        require condition (frame's upload_offset <= (33554432 - size)) reporting "The graphics frame exceeds its transient vertex capacity"
+        store (x as a 32 bit floating-point number) into state's current_vertex's position at 0
+        store (y as a 32 bit floating-point number) into state's current_vertex's position at 1
+        store (z as a 32 bit floating-point number) into state's current_vertex's position at 2
+        set destination to (frame's upload + frame's upload_offset) as a pointer to DynlexGraphicsVertex
+        @intrinsic("store at", destination, state's current_vertex)
+        set frame's upload_offset to frame's upload_offset + size
+        set state's triangle_vertex_count to state's triangle_vertex_count + 1
+
+function [finish the graphics triangle stream in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition state's triangles_active reporting "Finishing triangles requires an active triangle stream"
+        require condition (state's triangle_vertex_count > 0 and (the remainder of state's triangle_vertex_count divided by 3) = 0) reporting "A triangle stream requires a positive multiple of three vertices"
+        set frame to the address of (the item at (state's frame_index) in (state's frames))
+        set constants to graphics draw constants tinted red 255 green 255 blue 255 alpha 255 for state
+        record graphics triangles from frame's upload_buffer at byte offset state's triangle_start count state's triangle_vertex_count with texture state's triangle_texture and tint constants in state
+        set state's triangles_active to false
+        set state's triangle_texture to 0 as a pointer to DynlexGraphicsTexture
+
+function [draw a graphics quad from left] {floating-point number:left} [top] {floating-point number:top} [right] {floating-point number:right} [bottom] {floating-point number:bottom} [with texture] {a pointer to DynlexGraphicsTexture:texture} [tinted red] {integer:red} [green] {integer:green} [blue] {integer:blue} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        begin a graphics triangle stream with texture texture in state
+        set graphics vertex color to red red green green blue blue alpha 255 in state
+        set corners to [0, 1, 2, 0, 2, 3]
+        set index to 0
+        loop while index < 6:
+            set corner to the item at index in corners
+            set u to 1.0 if (corner = 1 or corner = 2), else 0.0
+            set v to 1.0 if (corner = 2 or corner = 3), else 0.0
+            set x to right if u = 1.0, else left
+            set y to bottom if v = 1.0, else top
+            set graphics texture coordinates to x u y v in state
+            append a graphics vertex at x x y y z 0.0 in state
+            increment index
+        finish the graphics triangle stream in state

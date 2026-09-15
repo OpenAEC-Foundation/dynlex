@@ -1,0 +1,145 @@
+import lib/mesh.dl
+
+class:
+    patterns:
+        [a|] scroll reading
+    members:
+        horizontal as a floating-point number
+        vertical as a floating-point number
+
+exposed function [record graphics test scroll in] {pointer:window} [x] {floating-point number:x} [y] {floating-point number:y}:
+    execute:
+        set reading to (the application state of window) as a pointer to a scroll reading
+        set reading's horizontal to x
+        set reading's vertical to y
+
+set arguments to the command line arguments
+set scenario to the argument at 0 in arguments
+set emptyTexture to an empty graphics texture
+release emptyTexture
+set emptyProgram to a new shader program
+release emptyProgram
+if scenario = "invalid-window-width":
+    ignore a new hidden window with width 0 and height 64
+if scenario = "invalid-fullscreen":
+    ignore a graphics window resource with width 64 height 64 visible false fullscreen true
+if scenario = "negative-sleep":
+    sleep for -1 milliseconds
+set window to a new hidden window with width 64 and height 64
+require condition (window != (0 as a pointer)) reporting "Graphics creation failed"
+require condition (window is visible = false) reporting "A hidden window was reported visible"
+require condition ((the Vulkan API version of window) >= 4206592) reporting "The device does not provide Vulkan 1.3"
+set deviceName to the graphics device name of window
+require condition (deviceName's length > 0) reporting "The device name is empty"
+set reading to a new scroll reading
+set the application state of window to (the address of reading) as a pointer
+register the graphics scroll callback named "record graphics test scroll in $ x $ y $" for window
+set state to window as a pointer to DynlexGraphics
+set scrollCallback to @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, 0 as a pointer)
+ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, scrollCallback)
+@intrinsic("call pointer", scrollCallback, nothing, state's window, 2.0, -3.0)
+require condition (reading's horizontal = 2.0 and reading's vertical = -3.0) reporting "The GLFW scroll callback did not forward the context and offsets"
+set started to the time since start for window
+sleep for 20 milliseconds
+require condition (((the time since start for window) - started) >= 0.015) reporting "Sleep returned too early"
+
+set vertices to a new (graphics vertex array of 3 items)
+set index to 0
+loop while index < 3:
+    set vertex to a new graphics vertex
+    store ((32.0 if index = 1, else 0.0) as a 32 bit floating-point number) into vertex's position at 0
+    store ((32.0 if index = 2, else 0.0) as a 32 bit floating-point number) into vertex's position at 1
+    set channel to 0
+    loop while channel < 4:
+        store (1.0 as a 32 bit floating-point number) into vertex's color at channel
+        increment channel
+    store vertex into vertices at index
+    increment index
+if scenario = "invalid-mesh-count":
+    ignore a graphics mesh containing 2 vertices at (vertices + 0) for window
+set mesh to a graphics mesh containing 3 vertices at (vertices + 0) for window
+set redPixel to [255 as a byte]
+set rgbPixel to [255 as a byte, 127 as a byte, 0 as a byte]
+set redResource to a graphics texture resource from (redPixel + 0) with width 1 height 1 channels (1 as a 32 bit unsigned integer) in (window as a pointer to DynlexGraphics)
+set rgbResource to a graphics texture resource from (rgbPixel + 0) with width 1 height 1 channels (3 as a 32 bit unsigned integer) in (window as a pointer to DynlexGraphics)
+require condition ((redResource != (0 as a pointer to DynlexGraphicsTexture)) and (rgbResource != (0 as a pointer to DynlexGraphicsTexture))) reporting "Texture creation failed"
+set redTexture to @intrinsic("construct", a graphics texture, redResource as a pointer, 1, 1)
+set rgbTexture to @intrinsic("construct", a graphics texture, rgbResource as a pointer, 1, 1)
+
+set frame to a new graphics frame in window
+require condition frame's drawable reporting "A hidden window did not begin a frame"
+use screen coordinates in frame
+save the model transform in frame
+move the model in frame by x 1.0, y 2.0 and z 0.0
+scale the model in frame by x 2.0, y 3.0 and z 1.0
+rotate the model in frame by 30.0 degrees around x 0.0, y 0.0 and z 1.0
+restore the model transform in frame
+if scenario = "invalid-mesh-range":
+    draw mesh from vertex 0 for 6 vertices in color red 255, green 255 and blue 255 in frame
+if scenario = "negative-mesh-range":
+    draw mesh from vertex -1 for 3 vertices in color red 255, green 255 and blue 255 in frame
+if scenario = "release-active-mesh":
+    release mesh
+draw mesh from vertex 0 for 3 vertices in color red 64, green 128 and blue 255 in frame
+start triangles using redTexture in frame
+if scenario = "release-active-texture":
+    release redTexture
+set index to 0
+loop while index < 3:
+    add a vertex at x index and y index to frame
+    increment index
+finish triangles in frame
+draw a rectangle at x 1 and y 1 with width 10 and height 10 in color red 255, green 0 and blue 0 in frame
+draw redTexture from x 12, y 1 to x 22, y 11 in color red 0, green 255 and blue 0 in frame
+set resizedRed to [0 as a byte, 255 as a byte]
+update graphics texture resource redResource with pixels at (resizedRed + 0) width 2 height 1
+draw redTexture from x 24, y 1 to x 34, y 11 in color red 0, green 0 and blue 255 in frame
+draw rgbTexture from x 36, y 1 to x 46, y 11 in color red 255, green 255 and blue 255 in frame
+set resizedRGB to [0 as a byte, 127 as a byte, 255 as a byte, 255 as a byte, 255 as a byte, 255 as a byte]
+update graphics texture resource rgbResource with pixels at (resizedRGB + 0) width 2 height 1
+display frame
+set index to 0
+loop while index < 3:
+    set frame to a new graphics frame in window
+    require condition frame's drawable reporting "A reused frame was not drawable"
+    draw a rectangle at x 1 and y 1 with width 2 and height 2 in color red 255, green 255 and blue 255 in frame
+    display frame
+    increment index
+
+set vertexPath to the argument at 1 in arguments
+set fragmentPath to the argument at 2 in arguments
+set program to a shader program for window using vertex shader at (the data of vertexPath) and fragment shader at (the data of fragmentPath)
+set frame to a new graphics frame in window
+use program in frame
+set uniform binding 0 in frame to 1.0
+draw a fullscreen surface in frame
+if scenario = "release-active-pipeline":
+    release program
+display frame
+release program
+request that window close
+require condition (window should close) reporting "Requesting closure did not update the window state"
+release redTexture
+release rgbTexture
+release mesh
+# Leave a mesh owned by the window to exercise automatic destruction.
+ignore a graphics mesh containing 3 vertices at (vertices + 0) for window
+set secondWindow to a new hidden window with width 48 and height 48
+close window
+set secondState to secondWindow as a pointer to DynlexGraphics
+@intrinsic("call", "glfw", "glfwSetWindowSize", nothing, secondState's window, 80, 40)
+set attempts to 0
+loop while (secondState's swapchain_dirty = false) and attempts < 100:
+    @intrinsic("call", "glfw", "glfwPollEvents", nothing)
+    sleep for 1 milliseconds
+    increment attempts
+require condition secondState's swapchain_dirty reporting "The framebuffer resize callback did not invalidate the swapchain"
+set resizedFrame to a new graphics frame in secondWindow
+require condition resizedFrame's drawable reporting "Closing the first window prevented the second from drawing"
+require condition ((secondState's swapchain_extent' width = 80) and (secondState's swapchain_extent' height = 40)) reporting "The swapchain was not recreated at the resized framebuffer dimensions"
+display resizedFrame
+close secondWindow
+set fullscreen to a new fullscreen window
+require condition (((the framebuffer width of fullscreen) > 0) and ((the framebuffer height of fullscreen) > 0)) reporting "Fullscreen dimensions were not taken from the monitor"
+close fullscreen
+print "Graphics integration passed" as a line
