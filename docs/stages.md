@@ -50,6 +50,12 @@ full resolved-pattern stage. Language tooling may consume only data guaranteed b
 the latest completed boundary; failed later work does not make its partial state
 observable.
 
+After the pattern trees stabilize, definitions connected through shared trie
+endpoints form one syntax family, including transitive connections through choice
+alternatives. Precedence is a partial order between these families. Each family's
+membership and successor reachability are computed once; typed overloads share
+that order. Operand grouping consumes the family order during type inference.
+
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.

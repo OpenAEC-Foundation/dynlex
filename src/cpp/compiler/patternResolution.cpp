@@ -16,9 +16,10 @@
 #include <functional>
 #include <iostream>
 #include <list>
+#include <queue>
 #include <ranges>
-#include <set>
 #include <sstream>
+#include <stack>
 #include <tuple>
 #include <unordered_set>
 
@@ -238,37 +239,6 @@ static bool referenceComesBefore(const PatternReference *left, const PatternRefe
 	std::string leftText = left ? left->pattern.text : "";
 	std::string rightText = right ? right->pattern.text : "";
 	return leftText < rightText;
-}
-
-static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition *definition) {
-	std::vector<PatternDefinition *> family;
-	std::vector<PatternDefinition *> pending{definition};
-	std::unordered_set<PatternDefinition *> visited;
-	while (!pending.empty()) {
-		PatternDefinition *current = pending.back();
-		pending.pop_back();
-		if (!visited.insert(current).second)
-			continue;
-		family.push_back(current);
-		for (PatternTreeNode *endNode : current->endNodes)
-			pending.insert(pending.end(), endNode->matchingDefinitions.begin(), endNode->matchingDefinitions.end());
-	}
-	return family;
-}
-
-static void collectGeneratedPropertyAccessorFamilies(
-	Section *section, std::unordered_set<PatternDefinition *> &accessors,
-	std::unordered_set<PatternDefinition *> &familyDefinitions
-) {
-	for (PatternDefinition *definition : section->patternDefinitions) {
-		if (!definition->isGeneratedClassPropertyAccessor)
-			continue;
-		accessors.insert(definition);
-		for (PatternDefinition *familyDefinition : connectedPatternFamily(definition))
-			familyDefinitions.insert(familyDefinition);
-	}
-	for (Section *child : section->children)
-		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions);
 }
 
 static bool resolutionTraceEnabled() {
@@ -884,5 +854,6 @@ findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *matc
 }
 } // namespace
 
+#include "patternPrecedence.inl"
 #include "patternResolutionExpansion.inl"
 #include "patternResolutionMatching.inl"

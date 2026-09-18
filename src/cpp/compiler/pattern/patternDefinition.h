@@ -1,13 +1,13 @@
 #pragma once
 #include "codeLine.h"
 #include "dependentTypeConstraint.h"
+#include "patternFamily.h"
 #include "pattern_tree/patternElement.h"
 #include "range.h"
 #include "sectionType.h"
 #include <climits>
 #include <functional>
 #include <string_view>
-#include <unordered_set>
 struct Section;
 struct Instantiation;
 struct PatternTreeNode;
@@ -41,9 +41,8 @@ struct PatternDefinition {
 	std::vector<PatternPathSignature> signaturePaths;
 	// the exact trie endpoint nodes this definition currently ends at
 	std::vector<PatternTreeNode *> endNodes;
-	// Definitions which this pattern must bind before. Precedence is a partial
-	// order: sharing a predecessor does not create an ordering between peers.
-	std::unordered_set<PatternDefinition *> precedenceSuccessors;
+	// Assigned once the pattern trees are stable; owned by ParseContext.
+	PatternFamily *family{};
 	PatternDefinition(Range range, Section *section);
 
 	std::string toString() const {

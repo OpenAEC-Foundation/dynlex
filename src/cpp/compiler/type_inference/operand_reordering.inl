@@ -605,30 +605,25 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 	return false;
 }
 
-static std::vector<PatternDefinition *> expressionPrecedenceDefinitions(Expression *expression) {
+static const PatternFamily *expressionPrecedenceFamily(Expression *expression) {
 	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
 		!expression->patternMatch->matchedEndNode)
-		return {};
-	std::vector<PatternDefinition *> definitions;
-	for (PatternDefinition *definition : expression->patternMatch->matchingDefinitions) {
-		if (definition && countMatchedParameters(expression, definition) == static_cast<int>(expression->arguments.size()))
-			definitions.push_back(definition);
-	}
-	return definitions;
+		return nullptr;
+	// All candidates share the matched endpoint and therefore the same family
+	// and parameter positions, regardless of their type constraints.
+	const auto &definitions = expression->patternMatch->matchingDefinitions;
+	requireCompilerInvariant(!definitions.empty(), "matched expression has no pattern definitions");
+	PatternDefinition *definition = definitions.front();
+	requireCompilerInvariant(definition->family, "operand grouping requires resolved pattern families");
+	if (countMatchedParameters(expression, definition) != static_cast<int>(expression->arguments.size()))
+		return nullptr;
+	return definition->family;
 }
 
 static bool expressionMustEvaluateBefore(Expression *left, Expression *right) {
-	std::vector<PatternDefinition *> leftDefinitions = expressionPrecedenceDefinitions(left);
-	std::vector<PatternDefinition *> rightDefinitions = expressionPrecedenceDefinitions(right);
-	if (leftDefinitions.empty() || rightDefinitions.empty())
-		return false;
-	for (PatternDefinition *leftDefinition : leftDefinitions) {
-		for (PatternDefinition *rightDefinition : rightDefinitions) {
-			if (!leftDefinition->precedenceSuccessors.contains(rightDefinition))
-				return false;
-		}
-	}
-	return true;
+	const PatternFamily *leftFamily = expressionPrecedenceFamily(left);
+	const PatternFamily *rightFamily = expressionPrecedenceFamily(right);
+	return leftFamily && rightFamily && leftFamily->precedenceSuccessors.contains(rightFamily);
 }
 
 class GroupingInferenceTransaction {

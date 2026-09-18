@@ -77,7 +77,7 @@ struct ParseContext {
 	// - AnalyzedSections: mainSection exists and the section tree / CodeLine.section assignments are valid.
 	// - ResolvedFunctionPatterns: pattern definitions and references inside definition bodies are valid.
 	// - ResolvedGlobalPatterns: top-level pattern references are also valid.
-	// - ResolvedPatternPrecedence: the source-declared precedence graph is valid.
+	// - ResolvedPatternPrecedence: syntax families and their precedence partial order are valid.
 	// - ResolvedPatterns: patternTrees, pattern definitions, variable references, and pattern matches are valid.
 	// - Validated: validation diagnostics that depend on resolved symbols have been emitted.
 	// - InferredTypes: inferred expression / variable / return types are valid for the compiled program.
@@ -225,6 +225,7 @@ struct ParseContext {
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
+	std::vector<std::unique_ptr<PatternFamily>> patternFamilies;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// Owns all VariableReference instances for this compilation.
