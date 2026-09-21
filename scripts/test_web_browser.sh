@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]; then
+    DYNLEX_TEST_WEB_SERVER=static \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/homepage_navigation_browser.mjs" "$0"
     DYNLEX_TEST_WEB_SERVER=static "$0"
     DYNLEX_TEST_WEB_SERVER=static \
         DYNLEX_TEST_GRAPHICS=webgl \
@@ -79,13 +81,13 @@ SERVER_PID="$!"
 if [[ "$GRAPHICS_BACKEND" = webgpu ]]; then
     VULKAN_ICD="$(python3 "$SCRIPT_DIR/find_vulkan_icd.py")"
     VK_DRIVER_FILES="$VULKAN_ICD" VK_ICD_FILENAMES="$VULKAN_ICD" setsid xvfb-run -a -s "-screen 0 1440x1000x24" \
-        google-chrome --no-sandbox --no-first-run --no-default-browser-check \
+        google-chrome --no-sandbox --no-first-run --no-default-browser-check --mute-audio \
         --disable-background-networking --enable-unsafe-webgpu \
         --enable-features=Vulkan,WebGPU --use-vulkan=native --use-angle=vulkan \
         --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
         --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &
 elif [[ "$GRAPHICS_BACKEND" = webgl ]]; then
-    setsid google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader \
+    setsid google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader --mute-audio \
         --no-first-run --no-default-browser-check --disable-background-networking \
         --remote-debugging-port="$DEBUG_PORT" --user-data-dir="$BROWSER_PROFILE" \
         --window-size=1440,1000 about:blank >"$BROWSER_LOG" 2>&1 &

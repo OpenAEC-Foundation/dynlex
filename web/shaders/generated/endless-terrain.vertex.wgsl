@@ -161,7 +161,7 @@ fn left1_4331_43right_f32_f32_(left_6: ptr<function, f32>, right_6: ptr<function
     return (_e116 + _e117);
 }
 
-fn the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_(offset: ptr<function, class_>, permutation: ptr<function, f32>) -> f32 {
+fn the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(offset: ptr<function, class_>, permutation: ptr<function, f32>) -> f32 {
     var tmp46_: f32;
     var tmp45_: f32;
     var tmp44_: f32;
@@ -308,7 +308,7 @@ fn the_simplex_permutation_of_value_f32_(value_2: ptr<function, f32>) -> f32 {
     return _e131;
 }
 
-fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point: ptr<function, class_>, phase: ptr<function, f32>) -> f32 {
+fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point: ptr<function, class_>, phase: ptr<function, f32>) -> f32 {
     var tmp204_: f32;
     var tmp203_: f32;
     var tmp202_: f32;
@@ -593,11 +593,11 @@ fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32
     tmp201_ = _e413;
     let _e414 = the_simplex_permutation_of_value_f32_((&tmp201_));
     final_ = _e414;
-    let _e415 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_((&offset_1), (&initial));
+    let _e415 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&offset_1), (&initial));
     leading = _e415;
-    let _e416 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_((&middle), (&following));
+    let _e416 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&middle), (&following));
     central = _e416;
-    let _e417 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_((&third), (&final_));
+    let _e417 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_((&third), (&final_));
     trailing = _e417;
     let _e418 = left1_4331_43right_f32_f32_((&leading), (&central));
     tmp202_ = _e418;
@@ -608,7 +608,7 @@ fn the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32
     return _e420;
 }
 
-fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: ptr<function, class_u002e_0_>) -> f32 {
+fn the_terrain_height_at_3terrain_coordinate8position5_a_20_point(position: ptr<function, class_u002e_0_>) -> f32 {
     var tmp242_: f32;
     var tmp241_: f32;
     var tmp240_: f32;
@@ -780,7 +780,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e287 = class_tmp_1;
     tmp9_ = _e287;
     tmp10_1 = 1.7f;
-    let _e288 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp9_), (&tmp10_1));
+    let _e288 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp9_), (&tmp10_1));
     continental = _e288;
     let _e290 = (*position).member;
     tmp16_1 = _e290.x;
@@ -801,7 +801,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e306 = class_tmp12_;
     tmp31_2 = _e306;
     tmp32_2 = 4.1f;
-    let _e307 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp31_2), (&tmp32_2));
+    let _e307 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp31_2), (&tmp32_2));
     let _e311 = vec3<f32>(_e307, vec3<f32>().y, vec3<f32>().z);
     let _e315 = vec3<f32>(_e311.x, 0f, _e311.z);
     let _e317 = (*position).member;
@@ -833,7 +833,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e342 = class_tmp35_;
     tmp65_1 = _e342;
     tmp66_ = 8.3f;
-    let _e343 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp65_1), (&tmp66_));
+    let _e343 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp65_1), (&tmp66_));
     class_tmp11_.member = vec3<f32>(_e315.x, _e315.y, _e343);
     let _e349 = class_tmp11_;
     warp = _e349;
@@ -885,7 +885,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e405 = class_tmp96_;
     tmp125_ = _e405;
     tmp126_ = 2.3f;
-    let _e406 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp125_), (&tmp126_));
+    let _e406 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp125_), (&tmp126_));
     mountain = _e406;
     let _e408 = bent.member;
     tmp131_1 = _e408.x;
@@ -916,7 +916,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e433 = class_tmp127_1;
     tmp157_ = _e433;
     tmp158_ = 6.9f;
-    let _e434 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp157_), (&tmp158_));
+    let _e434 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp157_), (&tmp158_));
     crossing = _e434;
     let _e436 = bent.member;
     tmp163_ = _e436.x;
@@ -945,7 +945,7 @@ fn the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(position: p
     let _e460 = class_tmp159_;
     tmp188_ = _e460;
     tmp189_ = 9.7f;
-    let _e461 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp188_), (&tmp189_));
+    let _e461 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp188_), (&tmp189_));
     broken = _e461;
     tmp190_ = 0.6f;
     let _e462 = left1_4321_43right_f32_f32_((&mountain), (&tmp190_));
@@ -1507,7 +1507,7 @@ fn main_1() {
             tmp80_1 = 0.62f;
             let _e583 = the_negative_of_4the_opposite_of_453value_f32_((&tmp80_1));
             level = _e583;
-            let _e584 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&world));
+            let _e584 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&world));
             tmp81_ = _e584;
             let _e585 = left1_4351_43right_f32_f32_((&level), (&tmp81_));
             tmp82_ = _e585;
@@ -1696,7 +1696,7 @@ fn main_1() {
             phi_730_ = _e586;
         } else {
             stride = 0.34f;
-            let _e432 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&world));
+            let _e432 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&world));
             elevation_1 = _e432;
             let _e434 = world.member;
             tmp268_ = _e434.x;
@@ -1707,7 +1707,7 @@ fn main_1() {
             class_tmp264_.member = vec3<f32>(_e444.x, _e444.y, _e446.z);
             let _e453 = class_tmp264_;
             tmp277_ = _e453;
-            let _e454 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&tmp277_));
+            let _e454 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp277_));
             west = _e454;
             let _e456 = world.member;
             tmp282_ = _e456.x;
@@ -1718,7 +1718,7 @@ fn main_1() {
             class_tmp278_.member = vec3<f32>(_e466.x, _e466.y, _e468.z);
             let _e475 = class_tmp278_;
             tmp291_ = _e475;
-            let _e476 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&tmp291_));
+            let _e476 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp291_));
             east = _e476;
             let _e478 = world.member;
             let _e483 = vec3<f32>(_e478.x, vec3<f32>().y, vec3<f32>().z);
@@ -1729,7 +1729,7 @@ fn main_1() {
             class_tmp292_.member = vec3<f32>(_e487.x, _e487.y, _e491);
             let _e497 = class_tmp292_;
             tmp305_ = _e497;
-            let _e498 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&tmp305_));
+            let _e498 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp305_));
             south = _e498;
             let _e500 = world.member;
             let _e505 = vec3<f32>(_e500.x, vec3<f32>().y, vec3<f32>().z);
@@ -1740,7 +1740,7 @@ fn main_1() {
             class_tmp306_.member = vec3<f32>(_e509.x, _e509.y, _e513);
             let _e519 = class_tmp306_;
             tmp319_ = _e519;
-            let _e520 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point((&tmp319_));
+            let _e520 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point((&tmp319_));
             north = _e520;
             let _e522 = normal.member;
             let _e523 = left1_4351_43right_f32_f32_((&west), (&east));
@@ -1765,7 +1765,7 @@ fn main_1() {
             let _e560 = class_tmp333_;
             tmp348_ = _e560;
             tmp349_ = 13.7f;
-            let _e561 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp348_), (&tmp349_));
+            let _e561 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp348_), (&tmp349_));
             tmp350_ = _e561;
             tmp351_ = 0.5f;
             let _e562 = left1_4321_43right_f32_f32_((&tmp350_), (&tmp351_));
@@ -1785,7 +1785,7 @@ fn main_1() {
             let _e579 = class_tmp354_;
             tmp369_ = _e579;
             tmp370_ = 16.2f;
-            let _e580 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp369_), (&tmp370_));
+            let _e580 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp369_), (&tmp370_));
             tmp371_ = _e580;
             tmp372_ = 0.5f;
             let _e581 = left1_4321_43right_f32_f32_((&tmp371_), (&tmp372_));

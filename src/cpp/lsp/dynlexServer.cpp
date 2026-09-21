@@ -21,6 +21,8 @@
 #include <filesystem>
 #include <regex>
 #include <sstream>
+#include <stack>
+#include <tuple>
 using namespace std::literals;
 
 namespace lsp {

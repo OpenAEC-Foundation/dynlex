@@ -1,0 +1,20 @@
+f {@intrinsic("type", "int"):x} means: @intrinsic("add", x, 0)
+f {@intrinsic("type", "float"):x} means: @intrinsic("add", x, 0.0)
+g x means: f x
+function h x:
+    execute:
+        @intrinsic("return", f x)
+        @intrinsic("discard", f "unreachable")
+
+@intrinsic("discard", g 8)
+@intrinsic("discard", g 9)
+@intrinsic("discard", g 8.5)
+@intrinsic("discard", h 8)
+@intrinsic("discard", h 8.5)
+
+function k x:
+    replacement:
+        @intrinsic("discard", f x)
+        f x
+
+@intrinsic("discard", k 8)

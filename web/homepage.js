@@ -656,7 +656,9 @@ reducedMotion.addEventListener("change", syncFieldMotion);
 resizeCanvas();
 syncFieldMotion();
 
-window.addEventListener("pagehide", () => {
+window.addEventListener("pagehide", (event) => {
+  // A cached page resumes with the same compiler worker and animation state.
+  if (event.persisted) return;
   cancelAnimationFrame(frameHandle);
   if (snippetLsp) {
     void queueCompilerTask(async () => {
@@ -666,4 +668,4 @@ window.addEventListener("pagehide", () => {
       console.error("Homepage DynLex language server shutdown failed", error);
     });
   }
-}, { once: true });
+});

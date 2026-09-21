@@ -167,7 +167,7 @@ float left1_4331_43right_f32_f32_(inout float left_6, inout float right_6) {
     return (_e116 + _e117);
 }
 
-float the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_(inout class_ offset, inout float permutation) {
+float the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(inout class_ offset, inout float permutation) {
     float tmp46_ = 0.0;
     float tmp45_ = 0.0;
     float tmp44_ = 0.0;
@@ -312,7 +312,7 @@ float the_simplex_permutation_of_value_f32_(inout float value_2) {
     return _e131;
 }
 
-float the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(inout class_ point, inout float phase) {
+float the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(inout class_ point, inout float phase) {
     float tmp204_ = 0.0;
     float tmp203_ = 0.0;
     float tmp202_ = 0.0;
@@ -596,11 +596,11 @@ float the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_
     tmp201_ = _e413;
     float _e414 = the_simplex_permutation_of_value_f32_(tmp201_);
     final = _e414;
-    float _e415 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_(offset_1, initial);
+    float _e415 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(offset_1, initial);
     leading = _e415;
-    float _e416 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_(middle, following);
+    float _e416 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(middle, following);
     central = _e416;
-    float _e417 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_u0020_point_f32_(third, final);
+    float _e417 = the_simplex_corner_at_3a_point8offset5_with_permutation_3a_value8permutation5_a_20_point_f32_(third, final);
     trailing = _e417;
     float _e418 = left1_4331_43right_f32_f32_(leading, central);
     tmp202_ = _e418;
@@ -611,7 +611,7 @@ float the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_
     return _e420;
 }
 
-float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout class_u002e_0_ position) {
+float the_terrain_height_at_3terrain_coordinate8position5_a_20_point(inout class_u002e_0_ position) {
     float tmp242_ = 0.0;
     float tmp241_ = 0.0;
     float tmp240_ = 0.0;
@@ -782,7 +782,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e287 = class_tmp_1;
     tmp9_ = _e287;
     tmp10_1 = 1.7;
-    float _e288 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp9_, tmp10_1);
+    float _e288 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp9_, tmp10_1);
     continental = _e288;
     vec3 _e290 = position.member;
     tmp16_1 = _e290.x;
@@ -803,7 +803,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e306 = class_tmp12_;
     tmp31_2 = _e306;
     tmp32_2 = 4.1;
-    float _e307 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp31_2, tmp32_2);
+    float _e307 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp31_2, tmp32_2);
     vec3 _e311 = vec3(_e307, vec3(0.0).y, vec3(0.0).z);
     vec3 _e315 = vec3(_e311.x, 0.0, _e311.z);
     vec3 _e317 = position.member;
@@ -835,7 +835,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e342 = class_tmp35_;
     tmp65_1 = _e342;
     tmp66_ = 8.3;
-    float _e343 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp65_1, tmp66_);
+    float _e343 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp65_1, tmp66_);
     class_tmp11_.member = vec3(_e315.x, _e315.y, _e343);
     class_u002e_0_ _e349 = class_tmp11_;
     warp = _e349;
@@ -887,7 +887,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e405 = class_tmp96_;
     tmp125_ = _e405;
     tmp126_ = 2.3;
-    float _e406 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp125_, tmp126_);
+    float _e406 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp125_, tmp126_);
     mountain = _e406;
     vec3 _e408 = bent.member;
     tmp131_1 = _e408.x;
@@ -918,7 +918,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e433 = class_tmp127_1;
     tmp157_ = _e433;
     tmp158_ = 6.9;
-    float _e434 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp157_, tmp158_);
+    float _e434 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp157_, tmp158_);
     crossing = _e434;
     vec3 _e436 = bent.member;
     tmp163_ = _e436.x;
@@ -947,7 +947,7 @@ float the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(inout cl
     class_ _e460 = class_tmp159_;
     tmp188_ = _e460;
     tmp189_ = 9.7;
-    float _e461 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp188_, tmp189_);
+    float _e461 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp188_, tmp189_);
     broken = _e461;
     tmp190_ = 0.6;
     float _e462 = left1_4321_43right_f32_f32_(mountain, tmp190_);
@@ -1507,7 +1507,7 @@ void main_1() {
             tmp80_1 = 0.62;
             float _e583 = the_negative_of_4the_opposite_of_453value_f32_(tmp80_1);
             level = _e583;
-            float _e584 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(world);
+            float _e584 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(world);
             tmp81_ = _e584;
             float _e585 = left1_4351_43right_f32_f32_(level, tmp81_);
             tmp82_ = _e585;
@@ -1696,7 +1696,7 @@ void main_1() {
             phi_730_ = _e586;
         } else {
             stride = 0.34;
-            float _e432 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(world);
+            float _e432 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(world);
             elevation_1 = _e432;
             vec3 _e434 = world.member;
             tmp268_ = _e434.x;
@@ -1707,7 +1707,7 @@ void main_1() {
             class_tmp264_.member = vec3(_e444.x, _e444.y, _e446.z);
             class_u002e_0_ _e453 = class_tmp264_;
             tmp277_ = _e453;
-            float _e454 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(tmp277_);
+            float _e454 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(tmp277_);
             west = _e454;
             vec3 _e456 = world.member;
             tmp282_ = _e456.x;
@@ -1718,7 +1718,7 @@ void main_1() {
             class_tmp278_.member = vec3(_e466.x, _e466.y, _e468.z);
             class_u002e_0_ _e475 = class_tmp278_;
             tmp291_ = _e475;
-            float _e476 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(tmp291_);
+            float _e476 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(tmp291_);
             east = _e476;
             vec3 _e478 = world.member;
             vec3 _e483 = vec3(_e478.x, vec3(0.0).y, vec3(0.0).z);
@@ -1729,7 +1729,7 @@ void main_1() {
             class_tmp292_.member = vec3(_e487.x, _e487.y, _e491);
             class_u002e_0_ _e497 = class_tmp292_;
             tmp305_ = _e497;
-            float _e498 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(tmp305_);
+            float _e498 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(tmp305_);
             south = _e498;
             vec3 _e500 = world.member;
             vec3 _e505 = vec3(_e500.x, vec3(0.0).y, vec3(0.0).z);
@@ -1740,7 +1740,7 @@ void main_1() {
             class_tmp306_.member = vec3(_e509.x, _e509.y, _e513);
             class_u002e_0_ _e519 = class_tmp306_;
             tmp319_ = _e519;
-            float _e520 = the_terrain_height_at_3terrain_coordinate8position5_a_u0020_point(tmp319_);
+            float _e520 = the_terrain_height_at_3terrain_coordinate8position5_a_20_point(tmp319_);
             north = _e520;
             vec3 _e522 = normal.member;
             float _e523 = left1_4351_43right_f32_f32_(west, east);
@@ -1765,7 +1765,7 @@ void main_1() {
             class_ _e560 = class_tmp333_;
             tmp348_ = _e560;
             tmp349_ = 13.7;
-            float _e561 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp348_, tmp349_);
+            float _e561 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp348_, tmp349_);
             tmp350_ = _e561;
             tmp351_ = 0.5;
             float _e562 = left1_4321_43right_f32_f32_(tmp350_, tmp351_);
@@ -1785,7 +1785,7 @@ void main_1() {
             class_ _e579 = class_tmp354_;
             tmp369_ = _e579;
             tmp370_ = 16.2;
-            float _e580 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(tmp369_, tmp370_);
+            float _e580 = the_simplex_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(tmp369_, tmp370_);
             tmp371_ = _e580;
             tmp372_ = 0.5;
             float _e581 = left1_4321_43right_f32_f32_(tmp371_, tmp372_);
