@@ -15,28 +15,20 @@ permissions:
   contents: read
 
 jobs:
-  verify-version-tag:
+  verify-release-ref:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Verify tag matches metadata/VERSION
+        with:
+          fetch-depth: 0
+      - name: Verify release ref is accepted and matches metadata/VERSION
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-            echo "Validating release builds without publication."
-            exit 0
-          fi
-          TAG="${GITHUB_REF#refs/tags/}"
-          TAG_VERSION="${TAG#v}"
-          FILE_VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
-          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
-            echo "Tag version ($TAG_VERSION) does not match metadata/VERSION ($FILE_VERSION)." >&2
-            exit 1
-          fi
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: bash ./scripts/verify-release-ref.sh
 
   build-linux:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:
@@ -110,7 +102,7 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:
@@ -311,7 +303,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:

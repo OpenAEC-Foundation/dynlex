@@ -641,6 +641,7 @@ if [[ "$is_windows" != "true" ]]; then
 fi
 run_auxiliary_test "macos_signature_verifier" 10 python3 -B "$SCRIPT_DIR/test_verify_macos_signature.py"
 run_auxiliary_test "release_executable_architecture" 10 python3 -B "$PROJECT_DIR/tests/release/test_executable_architecture.py"
+run_auxiliary_test "release_ref" 10 python3 -B "$PROJECT_DIR/tests/release/test_release_ref.py"
 run_auxiliary_test "windows_runtime_dependencies" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_runtime_dependencies.py"
 run_auxiliary_test "windows_upgrade_metadata_cmake" 10 cmake -P "$PROJECT_DIR/tests/release/windows_upgrade_metadata.cmake"
 run_auxiliary_test "windows_upgrade_metadata" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_upgrade_metadata.py"
