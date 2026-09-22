@@ -3,6 +3,12 @@ name: Auto-assign issues to product owner
 on:
   issues:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Existing issue number to assign
+        required: true
+        type: number
 
 permissions:
   issues: write
@@ -12,3 +18,4 @@ jobs:
     uses: OpenAEC-Foundation/conventions/.github/workflows/auto-assign-issues.yml@main
     with:
       assignees: '["JohnHeikens"]'
+      issue_number: ${{ inputs.issue_number || github.event.issue.number }}
