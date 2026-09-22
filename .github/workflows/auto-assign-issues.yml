@@ -18,4 +18,4 @@ jobs:
     uses: OpenAEC-Foundation/conventions/.github/workflows/auto-assign-issues.yml@main
     with:
       assignees: '["JohnHeikens"]'
-      issue_number: ${{ inputs.issue_number || github.event.issue.number }}
+      issue_number: ${{ fromJSON(format('{0}', inputs.issue_number || github.event.issue.number)) }}
