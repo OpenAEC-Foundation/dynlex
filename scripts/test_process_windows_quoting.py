@@ -40,7 +40,7 @@ loop while {prefix}Index < {len(expected) + 1}:
 '''
 
 
-source = (project / "tests/runtime/windows_command_line_limits.dl").read_text() + "\n"
+source = (project / "tests/runtime/windows_command_line_limits.dl").read_text(encoding="utf-8") + "\n"
 for index, (original, expected) in enumerate(cases):
     prefix = f"case{index}"
     source += f'''set {prefix}Text to the string form of {literal(original)}
@@ -71,7 +71,7 @@ source += '@intrinsic("call", "libc", "free", nothing, output)\n'
 with tempfile.TemporaryDirectory(prefix="dynlex-windows-quoting-") as directory:
     temporary = Path(directory)
     path = temporary / "quoting.dl"
-    path.write_text(source)
+    path.write_text(source, encoding="utf-8")
     executable = temporary / ("quoting.exe" if sys.platform == "win32" else "quoting.out")
     built = subprocess.run([str(compiler), str(path), "-o", str(executable)], cwd=project, capture_output=True, text=True)
     assert built.returncode == 0, built.stdout + built.stderr

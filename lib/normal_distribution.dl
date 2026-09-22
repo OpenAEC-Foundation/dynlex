@@ -1,7 +1,7 @@
 # Caller-owned single-precision normal distribution state.
 #
-# This is the Marsaglia polar method used by libstdc++'s
-# std::normal_distribution<float>.  The state deliberately contains only the
+# This uses the Marsaglia polar method, returning the vertical variate first
+# and caching the horizontal variate. The state deliberately contains only the
 # cached standard-normal variate; mean and standard deviation are call
 # parameters, so changing them does not disturb the cache.
 

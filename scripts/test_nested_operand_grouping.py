@@ -21,7 +21,7 @@ function [pair] first [with] second [done]:
 
 function [show] value:
     execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "printf", @intrinsic("type", "int"), "%d\\n", value))
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\\n", value))
 
 '''
 cases = [

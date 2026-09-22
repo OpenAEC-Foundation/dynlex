@@ -4,13 +4,13 @@
 from __future__ import annotations
 
 import os
-import re
-import resource
 import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from native_abi import C_SYMBOL_MACROS, exposed_symbol
 
 
 LIBRARY_SOURCE = """\
@@ -51,6 +51,8 @@ print the unsigned 64 bit integer value of outcome as a line
 
 
 def disable_core_dumps() -> None:
+    import resource
+
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
@@ -63,7 +65,7 @@ def run(
         text=True,
         capture_output=True,
         check=False,
-        preexec_fn=disable_core_dumps if disable_core_dump else None,
+        preexec_fn=disable_core_dumps if disable_core_dump and os.name == "posix" else None,
     )
 
 
@@ -73,23 +75,12 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
 
 
 def require_abort(result: subprocess.CompletedProcess[str]) -> None:
-    expected_return_code = -signal.SIGABRT
+    expected_return_code = 3 if os.name == "nt" else -signal.SIGABRT
     if result.returncode != expected_return_code:
         raise RuntimeError(
-            f"command {result.args} exited {result.returncode}, expected SIGABRT ({expected_return_code}):\\n"
+            f"command {result.args} exited {result.returncode}, expected abort ({expected_return_code}):\n"
             f"{result.stdout}{result.stderr}"
         )
-
-
-def exposed_symbol(llvm_ir: str, function_name: str) -> str:
-    match = re.search(
-        rf"^define .* @([^( ]*{function_name.replace(' ', '_')}[^ (]*_callable[^ (]*)\(",
-        llvm_ir,
-        re.MULTILINE,
-    )
-    if not match:
-        raise RuntimeError(f"LLVM output omitted exposed function {function_name!r}:\n{llvm_ir}")
-    return match.group(1)
 
 
 def main() -> int:
@@ -117,9 +108,10 @@ def main() -> int:
             caller = temporary / "caller.c"
             caller.write_text(
                 f"""\
+{C_SYMBOL_MACROS}
 #include <stdint.h>
-extern int64_t signed_round_trip(int64_t) __asm__("{signed_symbol}");
-extern uint64_t unsigned_round_trip(uint64_t) __asm__("{unsigned_symbol}");
+extern int64_t signed_round_trip(int64_t) __asm__(DYNLEX_SYMBOL("{signed_symbol}"));
+extern uint64_t unsigned_round_trip(uint64_t) __asm__(DYNLEX_SYMBOL("{unsigned_symbol}"));
 int main(void) {{
     if (signed_round_trip(INT64_MIN) != INT64_MIN) return 1;
     if (signed_round_trip(INT64_MAX) != INT64_MAX) return 2;
@@ -148,6 +140,14 @@ int main(void) {{
                 ("failed_signed_getter", FAILED_SIGNED_GETTER_SOURCE),
                 ("failed_unsigned_getter", FAILED_UNSIGNED_GETTER_SOURCE),
             ):
+                if os.name == "nt":
+                    # Disable CRT dialogs and Windows Error Reporting so abort exits with code 3.
+                    source = source.replace(
+                        "import json.dl\n",
+                        'import json.dl\n@intrinsic("discard", @intrinsic("call", "libc", '
+                        '"_set_abort_behavior", a 32 bit unsigned integer, '
+                        '0 as a 32 bit unsigned integer, 3 as a 32 bit unsigned integer))\n',
+                    )
                 failed_getter_source = temporary / f"{name}.dl"
                 failed_getter_source.write_text(source, encoding="utf-8")
                 failed_getter = temporary / name

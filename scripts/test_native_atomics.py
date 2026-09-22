@@ -10,6 +10,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from native_abi import C_SYMBOL_MACROS, exposed_symbol
+
 
 LIBRARY_SOURCE = """\
 import lib/atomic.dl
@@ -179,17 +181,6 @@ def require_failure(result: subprocess.CompletedProcess[str], expected: str) -> 
         raise RuntimeError(f"expected {expected!r} in compiler output:\n{output}")
 
 
-def exposed_symbol(llvm_ir: str, function_name: str) -> str:
-    match = re.search(
-        rf"^define .* @([^( ]*{function_name.replace(' ', '_')}[^ (]*_callable[^ (]*)\(",
-        llvm_ir,
-        re.MULTILINE,
-    )
-    if not match:
-        raise RuntimeError(f"LLVM output omitted exposed function {function_name!r}:\n{llvm_ir}")
-    return match.group(1)
-
-
 def require_atomic_ir(llvm_ir: str) -> None:
     patterns = (
         r"atomicrmw add ptr %slot_val, i8 %\d+ monotonic, align 1",
@@ -215,25 +206,26 @@ def require_atomic_ir(llvm_ir: str) -> None:
 
 def make_c_caller(symbols: dict[str, str]) -> str:
     return f'''\
+{C_SYMBOL_MACROS}
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <pthread.h>
-extern uint64_t increment(void *) __asm__("{symbols['increment']}");
-extern uint64_t load_count(void *) __asm__("{symbols['load count']}");
-extern void publish(void *) __asm__("{symbols['publish']}");
-extern bool is_ready(void *) __asm__("{symbols['is ready']}");
-extern bool exchange_boolean(void *, bool) __asm__("{symbols['exchange boolean']}");
-extern int8_t add_signed_octet(void *) __asm__("{symbols['add signed octet']}");
-extern uint8_t subtract_unsigned_octet(void *) __asm__("{symbols['subtract unsigned octet']}");
-extern float exchange_float(void *, float) __asm__("{symbols['exchange float']}");
-extern void *exchange_pointer(void *, void *) __asm__("{symbols['exchange pointer']}");
-extern bool *exchange_boolean_pointer(void *, bool *) __asm__("{symbols['exchange boolean pointer']}");
-extern uint32_t wrapped_exchange(void *, uint32_t) __asm__("{symbols['wrapped exchange']}");
-extern uint32_t wrapped_increment(void *) __asm__("{symbols['wrapped increment']}");
-extern uint32_t wrapped_load(void *) __asm__("{symbols['wrapped load']}");
-extern void wrapped_store(void *, uint32_t) __asm__("{symbols['wrapped store']}");
+extern uint64_t increment(void *) __asm__(DYNLEX_SYMBOL("{symbols['increment']}"));
+extern uint64_t load_count(void *) __asm__(DYNLEX_SYMBOL("{symbols['load count']}"));
+extern void publish(void *) __asm__(DYNLEX_SYMBOL("{symbols['publish']}"));
+extern bool is_ready(void *) __asm__(DYNLEX_SYMBOL("{symbols['is ready']}"));
+extern bool exchange_boolean(void *, bool) __asm__(DYNLEX_SYMBOL("{symbols['exchange boolean']}"));
+extern int8_t add_signed_octet(void *) __asm__(DYNLEX_SYMBOL("{symbols['add signed octet']}"));
+extern uint8_t subtract_unsigned_octet(void *) __asm__(DYNLEX_SYMBOL("{symbols['subtract unsigned octet']}"));
+extern float exchange_float(void *, float) __asm__(DYNLEX_SYMBOL("{symbols['exchange float']}"));
+extern void *exchange_pointer(void *, void *) __asm__(DYNLEX_SYMBOL("{symbols['exchange pointer']}"));
+extern bool *exchange_boolean_pointer(void *, bool *) __asm__(DYNLEX_SYMBOL("{symbols['exchange boolean pointer']}"));
+extern uint32_t wrapped_exchange(void *, uint32_t) __asm__(DYNLEX_SYMBOL("{symbols['wrapped exchange']}"));
+extern uint32_t wrapped_increment(void *) __asm__(DYNLEX_SYMBOL("{symbols['wrapped increment']}"));
+extern uint32_t wrapped_load(void *) __asm__(DYNLEX_SYMBOL("{symbols['wrapped load']}"));
+extern void wrapped_store(void *, uint32_t) __asm__(DYNLEX_SYMBOL("{symbols['wrapped store']}"));
 static _Atomic uint64_t count;
 static _Atomic bool flag;
 static int payload;

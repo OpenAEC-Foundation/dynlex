@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from native_abi import C_SYMBOL_MACROS, exposed_symbol
+
 
 LIBRARY_SOURCE = """\
 import lib/std.dl
@@ -111,15 +113,6 @@ def resolve_c_compiler(compiler: Path) -> str:
     return os.environ.get("CC", "cc")
 
 
-def exposed_symbol(llvm_ir: str, function_name: str) -> str:
-    match = re.search(
-        rf"^define .* @([^( ]*{function_name.replace(' ', '_')}[^ (]*_callable[^ (]*)\(", llvm_ir, re.MULTILINE
-    )
-    if not match:
-        raise RuntimeError(f"LLVM output omitted exposed function {function_name!r}:\n{llvm_ir}")
-    return match.group(1)
-
-
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: test_native_pointer_calls.py <compiler>", file=sys.stderr)
@@ -180,21 +173,22 @@ def main() -> int:
             caller = temporary / "caller.c"
             caller.write_text(
                 f"""\
+{C_SYMBOL_MACROS}
 #include <stdbool.h>
 #include <stdint.h>
 
-extern uint64_t zero(void *) __asm__("{zero_symbol}");
-extern int32_t add(void *, int32_t, int32_t) __asm__("{add_symbol}");
-extern void increment(void *, int32_t *) __asm__("{increment_symbol}");
-extern float float32(void *, float) __asm__("{float32_symbol}");
-extern double float64(void *, double) __asm__("{float64_symbol}");
-extern void *pointer_result(void *, void *) __asm__("{pointer_symbol}");
-extern bool predicate(void *, bool) __asm__("{predicate_symbol}");
-extern int8_t signed_octet_result(void *) __asm__("{signed_octet_symbol}");
-extern uint8_t unsigned_octet_result(void *) __asm__("{unsigned_octet_symbol}");
-extern int16_t signed_halfword_result(void *) __asm__("{signed_halfword_symbol}");
-extern uint16_t unsigned_halfword_result(void *) __asm__("{unsigned_halfword_symbol}");
-extern uint64_t scalar(void *, bool, int8_t, uint8_t, int16_t, uint16_t, uint64_t) __asm__("{scalar_symbol}");
+extern uint64_t zero(void *) __asm__(DYNLEX_SYMBOL("{zero_symbol}"));
+extern int32_t add(void *, int32_t, int32_t) __asm__(DYNLEX_SYMBOL("{add_symbol}"));
+extern void increment(void *, int32_t *) __asm__(DYNLEX_SYMBOL("{increment_symbol}"));
+extern float float32(void *, float) __asm__(DYNLEX_SYMBOL("{float32_symbol}"));
+extern double float64(void *, double) __asm__(DYNLEX_SYMBOL("{float64_symbol}"));
+extern void *pointer_result(void *, void *) __asm__(DYNLEX_SYMBOL("{pointer_symbol}"));
+extern bool predicate(void *, bool) __asm__(DYNLEX_SYMBOL("{predicate_symbol}"));
+extern int8_t signed_octet_result(void *) __asm__(DYNLEX_SYMBOL("{signed_octet_symbol}"));
+extern uint8_t unsigned_octet_result(void *) __asm__(DYNLEX_SYMBOL("{unsigned_octet_symbol}"));
+extern int16_t signed_halfword_result(void *) __asm__(DYNLEX_SYMBOL("{signed_halfword_symbol}"));
+extern uint16_t unsigned_halfword_result(void *) __asm__(DYNLEX_SYMBOL("{unsigned_halfword_symbol}"));
+extern uint64_t scalar(void *, bool, int8_t, uint8_t, int16_t, uint16_t, uint64_t) __asm__(DYNLEX_SYMBOL("{scalar_symbol}"));
 
 static uint64_t return_max(void) {{ return UINT64_MAX; }}
 static int32_t add_values(int32_t left, int32_t right) {{ return left + right; }}
