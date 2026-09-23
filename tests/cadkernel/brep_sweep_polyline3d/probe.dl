@@ -1,0 +1,69 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_polyline3d.dl
+
+function emit spatial number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set input to the argument at 0 in the command line arguments
+set case to @intrinsic("call", "libc", "atoi", integer, the data of input)
+set corners to [[0.0,0.0],[2.0,0.0],[2.0,2.0],[0.0,2.0]]
+set profile to an empty list of a cad curve2
+loop index from 0 to 4:
+    set first to the item at index in corners
+    set last to the item at (the remainder of (index + 1) divided by 4) in corners
+    set start to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+    set end to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+    append (the cad curve2 of (a cad line2 from start to end)) to profile
+if case = 8:
+    clear profile
+    append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 2.0 and y 0.0))) to profile
+
+set path to an empty list of a cad vector3
+if case = 1:
+    append (a cad vector3 with x 10.0, y 20.0 and z 30.0) to path
+    append (a cad vector3 with x 10.0, y 20.0 and z 33.0) to path
+else:
+    append (the cad zero vector3) to path
+    if case = 6:
+        append (the cad zero vector3) to path
+    else if case != 7:
+        set end to a cad vector3 with x 0.0, y 0.0 and z 3.0
+        if (case = 2) or (case = 4):
+            set end to a cad vector3 with x 0.0, y 0.0 and z 2.0
+        append end to path
+        if case = 2:
+            append (a cad vector3 with x 0.0, y 0.0 and z 4.0) to path
+        else if case = 3:
+            append (a cad vector3 with x 2.0, y 0.0 and z 3.0) to path
+        else if case = 4:
+            append (a cad vector3 with x 1.0, y 1.0 and z 3.0) to path
+        else if case = 5:
+            append (the cad zero vector3) to path
+
+set result to the cad spatial sweep of profile on (the cad xy plane) along path
+emit spatial number (result's valid as an integer)
+if result's valid:
+    set body to result's value
+    emit spatial number (the cad count of (body's vertices))
+    emit spatial number (the cad count of (body's edges))
+    emit spatial number (the cad count of (body's coedges))
+    emit spatial number (the cad count of (body's loops))
+    emit spatial number (the cad count of (body's faces))
+    emit spatial number (the cad count of (body's shells))
+    emit spatial number (the cad count of (body's lumps))
+    emit spatial number (the cad count of (body's surfaces))
+    emit spatial number (the cad count of (body's curves))
+    emit spatial number (the length of (body's roots))
+    set flaws to the cad flaws of body
+    emit spatial number (the length of flaws)
+    free flaws
+    set keys to the cad keys of (body's vertices)
+    loop index from 0 to the length of keys:
+        set vertex to the cad node pointer for (the item at index in keys) in (body's vertices)
+        emit spatial number (vertex's point's x)
+        emit spatial number (vertex's point's y)
+        emit spatial number (vertex's point's z)
+    free keys
+free path
+free profile

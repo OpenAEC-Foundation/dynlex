@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_polyline3d.dl
+
+function check spatial sweep {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set corners to [[0.0,0.0],[2.0,0.0],[2.0,2.0],[0.0,2.0]]
+set profile to an empty list of a cad curve2
+loop index from 0 to 4:
+    set first to the item at index in corners
+    set last to the item at (the remainder of (index + 1) divided by 4) in corners
+    set start to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+    set end to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+    append (the cad curve2 of (a cad line2 from start to end)) to profile
+
+set path to a list containing (the cad zero vector3)
+append (a cad vector3 with x 0.0, y 0.0 and z 3.0) to path
+set result to the cad spatial sweep of profile on (the cad xy plane) along path
+check spatial sweep (result's valid)
+check spatial sweep ((the cad count of (result's value's faces)) = 6)
+check spatial sweep ((the length of (result's value's roots)) = 1)
+set flaws to the cad flaws of result's value
+check spatial sweep ((the length of flaws) = 0)
+free flaws
+print "a_spatial_line_path_extrudes_a_closed_profile" as a line
+
+set elbowPath to a list containing (the cad zero vector3)
+append (a cad vector3 with x 0.0, y 0.0 and z 3.0) to elbowPath
+append (a cad vector3 with x 2.0, y 0.0 and z 3.0) to elbowPath
+set elbow to the cad spatial sweep of profile on (the cad xy plane) along elbowPath
+check spatial sweep (elbow's valid)
+check spatial sweep ((the cad count of (elbow's value's vertices)) = 28)
+check spatial sweep ((the cad count of (elbow's value's faces)) = 22)
+check spatial sweep ((the length of (elbow's value's roots)) = 1)
+set elbowFlaws to the cad flaws of elbow's value
+check spatial sweep ((the length of elbowFlaws) = 0)
+free elbowFlaws
+free elbowPath
+print "a_right_angle_path_turns_and_joins_the_profile" as a line
+
+set shortPath to a list containing (the cad zero vector3)
+check spatial sweep (((the cad spatial sweep of profile on (the cad xy plane) along shortPath)'s valid) = false)
+free shortPath
+set stillPath to a list containing (the cad zero vector3)
+append (the cad zero vector3) to stillPath
+check spatial sweep (((the cad spatial sweep of profile on (the cad xy plane) along stillPath)'s valid) = false)
+free stillPath
+append (the cad zero vector3) to path
+check spatial sweep (((the cad spatial sweep of profile on (the cad xy plane) along path)'s valid) = false)
+set openProfile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 1.0 and y 0.0)))
+check spatial sweep (((the cad spatial sweep of openProfile on (the cad xy plane) along path)'s valid) = false)
+free openProfile
+free path
+free profile
+print "short_stationary_reversed_and_open_paths_are_refused" as a line

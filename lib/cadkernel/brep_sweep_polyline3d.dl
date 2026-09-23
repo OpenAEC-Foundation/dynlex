@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/sweep.rs::sweep_along_polyline3d at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_bounds.dl
+
+local function cad sweep3 rotation of {cad vector3:vector} around {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set cosine to the cosine of angle
+        set sine to the sine of angle
+        set direct to vector scaled by cosine
+        set crosswise to (the cad cross of axis and vector) scaled by sine
+        set axial to axis scaled by ((the cad dot of axis and vector) * (1.0 - cosine))
+        return the cad sum of (the cad sum of direct and crosswise) and axial
+
+local function cad sweep3 turned {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set offset to the cad difference of (plane's origin) and pivot
+        set origin to the cad sum of pivot and (cad sweep3 rotation of offset around axis by angle)
+        set xAxis to cad sweep3 rotation of plane's xAxis around axis by angle
+        set yAxis to cad sweep3 rotation of plane's yAxis around axis by angle
+        return a cad plane with origin origin, x axis xAxis and y axis yAxis
+
+function the cad spatial sweep of {a pointer to a list:profile} on {cad plane:profilePlane} along {a pointer to a list:path}:
+    execute:
+        if (the length of path) < 2:
+            return no cad body
+        set senses to the cad profile senses of profile
+        if senses's valid = false:
+            return no cad body
+
+        set profileCentre to the cad zero vector3
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set point to the cad point at (the cad point on piece at 0.0) on profilePlane
+            set profileCentre to the cad sum of profileCentre and point
+        set profileCentre to profileCentre scaled by (1.0 / ((the length of profile) as a 64 bit floating-point number))
+        set shift to the cad difference of profileCentre and (the item at 0 in path)
+        set points to an empty list of a cad vector3
+        loop index from 0 to the length of path:
+            set point to the cad sum of (the item at index in path) and shift
+            if ((the cad length of point) <= 1.7976931348623157e308) = false:
+                free points
+                return no cad body
+            append point to points
+
+        set currentPlane to profilePlane
+        set previousDirection to the cad zero vector3
+        set hasPrevious to false
+        set body to an empty cad body
+        set hasBody to false
+        loop index from 0 to ((the length of points) - 1):
+            set direction to the cad difference of (the item at (index + 1) in points) and (the item at index in points)
+            set normalized to the cad normalization of direction
+            if normalized's valid = false:
+                free points
+                return no cad body
+            set tangent to normalized's value
+            if hasPrevious:
+                set crosswise to the cad cross of previousDirection and tangent
+                set crossLength to the cad length of crosswise
+                set dot to the cad dot of previousDirection and tangent
+                clamp dot between -1.0 and 1.0
+                if crossLength <= 1e-12:
+                    if dot <= 0.0:
+                        free points
+                        return no cad body
+                else:
+                    set axis to crosswise scaled by (1.0 / crossLength)
+                    set angle to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, crossLength, dot)
+                    set currentPlane to cad sweep3 turned currentPlane about (the item at index in points) along axis by angle
+            set segment to the cad extrusion of profile on currentPlane along direction
+            if segment's valid = false:
+                free points
+                return no cad body
+            set currentPlane's origin to the cad sum of (currentPlane's origin) and direction
+            if hasBody:
+                set toleranceBodies to a list containing body
+                append segment's value to toleranceBodies
+                set tolerance to the cad operation tolerance of toleranceBodies
+                free toleranceBodies
+                set combined to the cad combination of body and segment's value using cad union operation within tolerance
+                if combined's valid = false:
+                    free points
+                    return no cad body
+                set body to combined's value
+            else:
+                set body to segment's value
+                set hasBody to true
+            set previousDirection to tangent
+            set hasPrevious to true
+        free points
+        if (hasBody = false) or ((the length of (body's roots)) = 0):
+            return no cad body
+        return the validated cad body result of body
