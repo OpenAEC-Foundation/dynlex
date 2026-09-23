@@ -10,6 +10,7 @@ import lib/cadkernel/brep_place.dl
 import lib/cadkernel/brep_intersect.dl
 import lib/cadkernel/area2.dl
 import lib/cadkernel/brep_profile.dl
+import lib/cadkernel/brep_profile_pieces.dl
 import lib/cadkernel/brep_sweep.dl
 import lib/cadkernel/brep_boolean.dl
 import lib/cadkernel/transform2.dl
@@ -276,35 +277,6 @@ function the cad planar face at {cad vector3:worldPoint} in {cad body:sourceBody
         if foundFace:
             return @intrinsic("construct", a cad presspull face result, true, bestFace)
         return absent
-
-function the cad extrusion profile pieces of {a pointer to a list:ring}:
-    execute:
-        set result to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
-        loop curveIndex from 0 to the length of ring:
-            set curveValue to the item at curveIndex in ring
-            if curveValue's kind = cad circle curve2 kind:
-                loop quarter from 0 to 4:
-                    set firstParameter to (quarter as a 64 bit floating-point number) * 1.5707963267948966
-                    set secondParameter to ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
-                    append (the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from firstParameter to secondParameter)) to result
-            else if (curveValue's kind = cad arc curve2 kind) and ((the cad sweep of curveValue's arc) >= ((cad presspull tau) - 1e-12)):
-                loop quarter from 0 to 4:
-                    set firstParameter to curveValue's arc's startAngle + (quarter as a 64 bit floating-point number) * 1.5707963267948966
-                    set secondParameter to curveValue's arc's startAngle + ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
-                    append (the cad curve2 of (a cad arc2 at curveValue's arc's centre with radius curveValue's arc's radius from firstParameter to secondParameter)) to result
-            else if (curveValue's kind = cad ellipse curve2 kind) and ((the cad sweep of curveValue's ellipse) >= ((cad presspull tau) - 1e-12)):
-                loop quarter from 0 to 4:
-                    set firstParameter to curveValue's ellipse's startParameter + (quarter as a 64 bit floating-point number) * 1.5707963267948966
-                    set secondParameter to curveValue's ellipse's startParameter + ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
-                    append (the cad curve2 of (a cad ellipse arc2 on curveValue's ellipse's ellipse from firstParameter to secondParameter)) to result
-            else if curveValue's kind = cad polyline curve2 kind:
-                set segmentValues to the cad segments of curveValue
-                loop segmentIndex from 0 to the length of segmentValues:
-                    append (the cad clone of (the item at segmentIndex in segmentValues)) to result
-                free segmentValues
-            else:
-                append (the cad clone of curveValue) to result
-        return result
 
 local function the cad presspull lift of {cad curve2:piece} on {cad plane:basePlane}:
     execute:

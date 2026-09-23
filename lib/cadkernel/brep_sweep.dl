@@ -9,6 +9,8 @@ import lib/cadkernel/nurbs_builder.dl
 import lib/cadkernel/area2.dl
 import lib/cadkernel/offset2.dl
 import lib/cadkernel/brep_loft.dl
+import lib/cadkernel/brep_profile_pieces.dl
+import lib/cadkernel/brep_append.dl
 
 class:
     patterns:
@@ -1439,3 +1441,37 @@ function the cad extrusion sheet of {a pointer to a list:profile} on {cad plane:
         append shellKey to (lump's shells's values)
         append lumpKey to (body's roots)
         return the validated cad body result of body
+
+function the cad extrusion sheets of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
+    execute:
+        set combined to an empty cad body
+        loop index from 0 to the length of profiles:
+            set pieces to the cad extrusion profile pieces of (the item at index in profiles)
+            set sheet to the cad extrusion sheet of pieces on plane along direction
+            free pieces
+            if sheet's valid = false:
+                return no cad body
+            if (append cad body (sheet's value) into combined) = false:
+                return no cad body
+        if (the length of (combined's roots)) = 0:
+            return no cad body
+        return the validated cad body result of combined
+
+function the tapered cad extrusion sheets of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
+    execute:
+        set combined to an empty cad body
+        set angle to givenAngle as a 64 bit floating-point number
+        loop index from 0 to the length of profiles:
+            set pieces to the cad extrusion profile pieces of (the item at index in profiles)
+            set wallAngle to angle
+            if index > 0:
+                set wallAngle to the negative of angle
+            set sheet to the tapered cad extrusion sheet of pieces on plane along direction by wallAngle
+            free pieces
+            if sheet's valid = false:
+                return no cad body
+            if (append cad body (sheet's value) into combined) = false:
+                return no cad body
+        if (the length of (combined's roots)) = 0:
+            return no cad body
+        return the validated cad body result of combined

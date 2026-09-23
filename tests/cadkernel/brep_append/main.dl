@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_append.dl
+import lib/cadkernel/brep_sweep.dl
+
+function check append {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function an append sheet starting at {a 64 bit floating-point number:x}:
+    execute:
+        set profile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x x and y 0.0) to (a cad vector2 with x (x + 2.0) and y 0.0)))
+        set made to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+        free profile
+        return made
+
+set firstResult to an append sheet starting at 0.0
+set secondResult to an append sheet starting at 7.0
+check append firstResult's valid named "first sheet"
+check append secondResult's valid named "second sheet"
+set target to firstResult's value
+set source to secondResult's value
+check append ((the cad count of source's vertices) = 4) named "source vertices"
+set sourceVertexKeys to the cad keys of source's vertices
+set sourceFirstVertex to the cad node pointer for (the item at 0 in sourceVertexKeys) in source's vertices
+set sourceFirstVertex's provenance to the clean cad provenance of (a cad source reference for (37 as a 32 bit unsigned integer))
+free sourceVertexKeys
+check append (append cad body source into target) named "append once"
+check append ((the cad count of target's vertices) = 8) named "vertices after append"
+check append ((the cad count of target's edges) = 8) named "edges after append"
+check append ((the cad count of target's coedges) = 8) named "coedges after append"
+check append ((the cad count of target's loops) = 2) named "loops after append"
+check append ((the cad count of target's faces) = 2) named "faces after append"
+check append ((the cad count of target's shells) = 2) named "shells after append"
+check append ((the cad count of target's lumps) = 2) named "lumps after append"
+check append ((the cad count of target's surfaces) = 2) named "surfaces after append"
+check append ((the cad count of target's curves) = 8) named "curves after append"
+check append ((the length of target's roots) = 2) named "roots after append"
+set flaws to the cad flaws of target
+check append ((the length of flaws) = 0) named "first append topology"
+free flaws
+print "two_independent_open_sheets_append_with_valid_topology" as a line
+
+set targetVertexKeys to the cad keys of target's vertices
+set copiedVertex to the cad node pointer for (the item at 4 in targetVertexKeys) in target's vertices
+check append (copiedVertex's provenance = sourceFirstVertex's provenance) named "vertex provenance preserved"
+free targetVertexKeys
+check append ((the cad count of source's vertices) = 4) named "source remains unchanged"
+check append ((the length of source's roots) = 1) named "source root remains unchanged"
+check append (append cad body source into target) named "append twice"
+check append ((the cad count of target's vertices) = 12) named "repeated vertices"
+check append ((the cad count of target's edges) = 12) named "repeated edges"
+check append ((the cad count of target's coedges) = 12) named "repeated coedges"
+check append ((the cad count of target's loops) = 3) named "repeated loops"
+check append ((the cad count of target's faces) = 3) named "repeated faces"
+check append ((the cad count of target's shells) = 3) named "repeated shells"
+check append ((the cad count of target's lumps) = 3) named "repeated lumps"
+check append ((the cad count of target's surfaces) = 3) named "repeated surfaces"
+check append ((the cad count of target's curves) = 12) named "repeated curves"
+check append ((the length of target's roots) = 3) named "repeated roots"
+check append (((the item at 0 in target's roots) != (the item at 1 in target's roots)) and ((the item at 1 in target's roots) != (the item at 2 in target's roots))) named "distinct root keys"
+set flaws to the cad flaws of target
+check append ((the length of flaws) = 0) named "repeated append topology"
+free flaws
+set flaws to the cad flaws of source
+check append ((the length of flaws) = 0) named "source topology retained"
+free flaws
+print "repeated_append_remaps_keys_and_preserves_source" as a line
+
+set targetEdgeKeys to the cad keys of target's edges
+set copiedEdge to the cad node pointer for (the item at 4 in targetEdgeKeys) in target's edges
+clear copiedEdge's coedges's values
+set sourceEdgeKeys to the cad keys of source's edges
+set originalEdge to the cad node pointer for (the item at 0 in sourceEdgeKeys) in source's edges
+check append ((the length of originalEdge's coedges's values) = 1) named "deep adjacency ownership"
+free sourceEdgeKeys
+free targetEdgeKeys
+print "appended_nodes_own_their_adjacency" as a line
+
+set invalidResult to an append sheet starting at 20.0
+check append invalidResult's valid named "invalid fixture built"
+set invalid to invalidResult's value
+set invalidShellKeys to the cad keys of invalid's shells
+set invalidShell to the cad node pointer for (the item at 0 in invalidShellKeys) in invalid's shells
+set invalidShell's owner to @intrinsic("construct", a cad lump key, 999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+free invalidShellKeys
+check append ((append cad body invalid into target) = false) named "missing owner rejected"
+check append ((the cad count of target's lumps) = 3) named "rejection leaves target intact"
+print "dangling_source_references_are_rejected" as a line
+
+set controls to a list containing (the cad zero vector3)
+append (the cad x axis) to controls
+set knots to an empty list of a 64 bit floating-point number
+set nurbsCurve to the cad nurbs curve3 of degree 1 with controls controls, knots knots and weights knots
+check append nurbsCurve's valid named "nested curve fixture"
+set row to a list containing (the cad y axis)
+append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to row
+set net to a list containing controls
+append row to net
+set weights to an empty list of the type of knots
+set nurbsSurface to the cad nurbs surface3 of degrees 1 and 1 with controls net, knots knots and knots and weights weights
+check append nurbsSurface's valid named "nested surface fixture"
+set nestedSource to an empty cad body
+set sourceCurveKey to the cad body key after inserting (the cad edge curve3 of (nurbsCurve's value)) into nestedSource
+set sourceSurfaceKey to the cad body key after inserting (the cad surface of (nurbsSurface's value)) into nestedSource
+set nestedTarget to an empty cad body
+check append (append cad body nestedSource into nestedTarget) named "append nested geometry"
+set originalCurve to the cad value of (the cad lookup of sourceCurveKey in nestedSource)
+set originalSurface to the cad value of (the cad lookup of sourceSurfaceKey in nestedSource)
+set copiedCurveKeys to the cad keys of nestedTarget's curves
+set copiedSurfaceKeys to the cad keys of nestedTarget's surfaces
+set copiedCurve to the cad node pointer for (the item at 0 in copiedCurveKeys) in nestedTarget's curves
+set copiedSurface to the cad node pointer for (the item at 0 in copiedSurfaceKeys) in nestedTarget's surfaces
+check append (originalCurve's nurbs's controls != copiedCurve's nurbs's controls) named "curve control ownership"
+check append (originalSurface's nurbs's controls != copiedSurface's nurbs's controls) named "surface net ownership"
+check append ((the item at 0 in originalSurface's nurbs's controls) != (the item at 0 in copiedSurface's nurbs's controls)) named "surface row ownership"
+free copiedCurveKeys
+free copiedSurfaceKeys
+free controls
+free row
+free net
+free knots
+free weights
+print "nested_geometry_is_deeply_owned" as a line
+
+set largeSource to an empty cad body
+loop sheetIndex from 0 to 512:
+    set separateSheet to an append sheet starting at ((sheetIndex as a 64 bit floating-point number) * 5.0)
+    check append separateSheet's valid named "large source sheet"
+    check append (append cad body separateSheet's value into largeSource) named "build large source"
+set largeTarget to an empty cad body
+check append (append cad body largeSource into largeTarget) named "append large body"
+check append ((the cad count of largeTarget's vertices) = 2048) named "large vertex remap"
+check append ((the cad count of largeTarget's edges) = 2048) named "large edge remap"
+check append ((the cad count of largeTarget's faces) = 512) named "large face remap"
+check append ((the length of largeTarget's roots) = 512) named "large root remap"
+set flaws to the cad flaws of largeTarget
+check append ((the length of flaws) = 0) named "large body topology"
+free flaws
+print "thousands_of_linked_nodes_append_with_valid_topology" as a line

@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+# Lateral region sheets corresponding to cadkernel src/brep/sweep.rs.
+import tests/cadkernel/brep_sweep_extrude/main.dl
+
+set outer to extrusion square of size 8.0
+set inner to a list containing (the cad curve2 of (a cad circle2 at (extrusion point [4.0,4.0]) with radius 1.0))
+set profiles to a list containing outer
+append inner to profiles
+set direction to a cad vector3 with x 0.0, y 0.0 and z 2.0
+
+set sheets to the cad extrusion sheets of profiles on (the cad xy plane) along direction
+check extrusion (sheets's valid)
+check extrusion ((the length of (sheets's value's roots)) = 2)
+check extrusion ((the cad count of (sheets's value's faces)) = 8)
+set flaws to the cad flaws of (sheets's value)
+check extrusion ((the length of flaws) = 0)
+free flaws
+check extrusion ((the length of outer) = 4)
+check extrusion ((the length of inner) = 1)
+print "each_region_loop_makes_its_own_lateral_sheet" as a line
+
+set tapered to the tapered cad extrusion sheets of profiles on (the cad xy plane) along direction by 0.1
+check extrusion (tapered's valid)
+check extrusion ((the length of (tapered's value's roots)) = 2)
+check extrusion ((the cad count of (tapered's value's faces)) = 5)
+set flaws to the cad flaws of (tapered's value)
+check extrusion ((the length of flaws) = 0)
+free flaws
+print "tapered_region_sheets_preserve_separate_loops" as a line
+
+set emptyProfiles to an empty list of (the type of outer)
+set absent to the cad extrusion sheets of emptyProfiles on (the cad xy plane) along direction
+check extrusion ((absent's valid) = false)
+free emptyProfiles
+print "an_empty_region_has_no_lateral_sheet" as a line
+
+free profiles
+free outer
+free inner
