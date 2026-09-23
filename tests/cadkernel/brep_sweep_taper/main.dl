@@ -15,6 +15,18 @@ function taper cone surface count in {cad body:body}:
         free keys
         return total
 
+function taper nurbs surface count in {cad body:body}:
+    execute:
+        set keys to the cad keys of (body's surfaces)
+        set total to 0
+        loop index from 0 to the length of keys:
+            set node to the cad node pointer for (the item at index in keys) in (body's surfaces)
+            if node != (0 as the type of node):
+                if node's kind = 5:
+                    increment total
+        free keys
+        return total
+
 set taperOpenProfile to a list containing (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [10.0,0.0])))
 set taperDirection to a cad vector3 with x 0.0, y 0.0 and z 5.0
 set taperResult to the tapered cad extrusion sheet of taperOpenProfile on (the cad xy plane) along taperDirection by 1.5707963267948966
@@ -112,3 +124,45 @@ check extrusion ((the length of conicSheetFlaws) = 0)
 free conicSheetFlaws
 free conicSheetProfile
 print "a_tapered_circle_makes_an_analytic_cone_sheet" as a line
+
+set openLineProfile to a list containing (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [4.0,0.0])))
+set openLineSheet to the tapered cad extrusion sheet of openLineProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by 0.2
+check extrusion (openLineSheet's valid)
+check extrusion ((the cad count of (openLineSheet's value's faces)) = 1)
+check extrusion ((taper nurbs surface count in (openLineSheet's value)) = 1)
+set openLineFlaws to the cad flaws of (openLineSheet's value)
+check extrusion ((the length of openLineFlaws) = 0)
+free openLineFlaws
+set outwardLineSheet to the tapered cad extrusion sheet of openLineProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by -0.2
+check extrusion (outwardLineSheet's valid)
+check extrusion ((taper nurbs surface count in (outwardLineSheet's value)) = 1)
+set obliqueLineSheet to the tapered cad extrusion sheet of openLineProfile on (the cad xy plane) along (a cad vector3 with x 1.0, y 0.0 and z 3.0) by 0.2
+check extrusion (obliqueLineSheet's valid)
+set flatLineSheet to the tapered cad extrusion sheet of openLineProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 2.0 and z 0.0) by 0.2
+check extrusion ((flatLineSheet's valid) = false)
+free openLineProfile
+print "an_open_line_tapers_into_a_ruled_sheet" as a line
+
+set openArcProfile to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from 0.0 to 1.5707963267948966))
+set openArcSheet to the tapered cad extrusion sheet of openArcProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0) by 0.1
+check extrusion (openArcSheet's valid)
+check extrusion ((the cad count of (openArcSheet's value's faces)) = 1)
+check extrusion ((taper nurbs surface count in (openArcSheet's value)) = 1)
+set openArcFlaws to the cad flaws of (openArcSheet's value)
+check extrusion ((the length of openArcFlaws) = 0)
+free openArcFlaws
+free openArcProfile
+print "an_open_arc_tapers_into_a_ruled_sheet" as a line
+
+set openChain to an empty list of a cad curve2
+append (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [4.0,0.0]))) to openChain
+append (the cad curve2 of (a cad line2 from (extrusion point [4.0,4.0]) to (extrusion point [4.0,0.0]))) to openChain
+set chainSheet to the tapered cad extrusion sheet of openChain on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0) by 0.1
+check extrusion (chainSheet's valid)
+check extrusion ((the cad count of (chainSheet's value's faces)) = 2)
+check extrusion ((taper nurbs surface count in (chainSheet's value)) = 2)
+set chainFlaws to the cad flaws of (chainSheet's value)
+check extrusion ((the length of chainFlaws) = 0)
+free chainFlaws
+free openChain
+print "a_reversed_open_chain_tapers_without_losing_topology" as a line

@@ -1131,6 +1131,191 @@ local function cad sweep remove cap {cad face key:faceKey} from {cad body:body}:
             ignore the cad removal of surfaceKey from body
         return true
 
+local function cad sweep open taper profile of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a 64 bit floating-point number:angle}:
+    execute:
+        set absent to an empty list of a cad curve2
+        set senses to the cad path senses of profile
+        set normal to the cad normal of plane
+        if (senses's valid = false) or (normal's valid = false):
+            return absent
+        set height to the absolute value of (the cad dot of direction and (normal's value))
+        set offset to height * (the absolute value of (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)))
+        if ((cad sweep revolution scalar offset is finite) = false) or (offset <= 1e-12):
+            return absent
+        set vertices to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            if ((piece's kind = 0) or (piece's kind = 2)) = false:
+                free vertices
+                return absent
+            set forward to the item at index in (senses's value's values)
+            set startParameter to 1.0
+            if forward:
+                set startParameter to 0.0
+            set bulge to 0.0
+            if piece's kind = 2:
+                set signedSweep to the cad sweep of (piece's arc)
+                if forward = false:
+                    set signedSweep to the negative of signedSweep
+                set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, signedSweep * 0.25)
+            append (a cad polyline vertex2 at (the cad point on piece at startParameter) with bulge bulge) to vertices
+        set lastPiece to the last item of profile
+        set endParameter to 0.0
+        if the last item of (senses's value's values):
+            set endParameter to 1.0
+        append (a straight cad polyline vertex2 at (the cad point on lastPiece at endParameter)) to vertices
+        set source to the cad polyline2 with vertices vertices and closure false
+        free vertices
+        set firstPiece to the item at 0 in profile
+        set tangent to the cad tangent of firstPiece at 0.5
+        if (the item at 0 in (senses's value's values)) = false:
+            set tangent to tangent scaled by -1.0
+        set length to the cad length of tangent
+        if ((cad sweep revolution scalar length is finite) = false) or (length <= 1e-12):
+            free cad polyline source
+            return absent
+        set left to a cad vector2 with x ((the negative of tangent's y) / length) and y (tangent's x / length)
+        set sideSign to -1.0
+        if angle > 0.0:
+            set sideSign to 1.0
+        set side to the cad sum of (the cad point on firstPiece at 0.5) and (left scaled by (offset * sideSign))
+        set outlines to the cad offset polylines of source by offset toward side
+        free cad polyline source
+        set selected to -1
+        set longest to -1.0
+        loop candidateIndex from 0 to the length of outlines:
+            set candidate to the item at candidateIndex in outlines
+            if candidate's closed = false:
+                set pieces to the cad segments of (the cad curve2 of candidate)
+                set candidateLength to 0.0
+                loop pieceIndex from 0 to the length of pieces:
+                    set piece to the item at pieceIndex in pieces
+                    if piece's kind = 0:
+                        set candidateLength to candidateLength + (the cad length of (piece's line))
+                    else if piece's kind = 2:
+                        set candidateLength to candidateLength + ((piece's arc's radius) * (the cad sweep of (piece's arc)))
+                free pieces
+                if candidateLength >= longest:
+                    set longest to candidateLength
+                    set selected to candidateIndex
+        if selected < 0:
+            free outlines
+            return absent
+        set topOutline to the cad clone of (the item at selected in outlines)
+        free outlines
+        set topProfile to the cad segments of (the cad curve2 of topOutline)
+        free cad polyline topOutline
+        if (the length of topProfile) != (the length of profile):
+            free topProfile
+            return absent
+        return topProfile
+
+local function cad sweep open taper sheet of {a pointer to a list:baseProfile} on {cad plane:basePlane} to {a pointer to a list:topProfile} on {cad plane:topPlane}:
+    execute:
+        if ((the length of baseProfile) = 0) or ((the length of baseProfile) != (the length of topProfile)):
+            return no cad body
+        set baseSenses to the cad path senses of baseProfile
+        set topSenses to the cad path senses of topProfile
+        if (baseSenses's valid = false) or (topSenses's valid = false):
+            return no cad body
+        set basePoints to a cad topology list of a cad vector2
+        set topPoints to a cad topology list of a cad vector2
+        loop index from 0 to the length of baseProfile:
+            set baseParameter to 1.0
+            if the item at index in (baseSenses's value's values):
+                set baseParameter to 0.0
+            set topParameter to 1.0
+            if the item at index in (topSenses's value's values):
+                set topParameter to 0.0
+            append (the cad point on (the item at index in baseProfile) at baseParameter) to (basePoints's values)
+            append (the cad point on (the item at index in topProfile) at topParameter) to (topPoints's values)
+        set endParameter to 0.0
+        if the last item of (baseSenses's value's values):
+            set endParameter to 1.0
+        append (the cad point on (the last item of baseProfile) at endParameter) to (basePoints's values)
+        set endParameter to 0.0
+        if the last item of (topSenses's value's values):
+            set endParameter to 1.0
+        append (the cad point on (the last item of topProfile) at endParameter) to (topPoints's values)
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set baseVertices to a cad topology list of a cad vertex key
+        set topVertices to a cad topology list of a cad vertex key
+        loop index from 0 to the length of (basePoints's values):
+            append (cad sweep vertex at (the cad point at (the item at index in (basePoints's values)) on basePlane) in body) to (baseVertices's values)
+        loop index from 0 to the length of (topPoints's values):
+            append (cad sweep vertex at (the cad point at (the item at index in (topPoints's values)) on topPlane) in body) to (topVertices's values)
+        set baseEdges to a cad topology list of a cad edge key
+        set topEdges to a cad topology list of a cad edge key
+        loop index from 0 to the length of baseProfile:
+            set next to index + 1
+            set baseFrom to index
+            set baseTo to next
+            if (the item at index in (baseSenses's value's values)) = false:
+                set baseFrom to next
+                set baseTo to index
+            set topFrom to index
+            set topTo to next
+            if (the item at index in (topSenses's value's values)) = false:
+                set topFrom to next
+                set topTo to index
+            set baseEdge to cad sweep profile edge of (the item at index in baseProfile) on basePlane from (the item at baseFrom in (baseVertices's values)) to (the item at baseTo in (baseVertices's values)) in body
+            set topEdge to cad sweep profile edge of (the item at index in topProfile) on topPlane from (the item at topFrom in (topVertices's values)) to (the item at topTo in (topVertices's values)) in body
+            if (baseEdge's valid = false) or (topEdge's valid = false):
+                return no cad body
+            append (baseEdge's value) to (baseEdges's values)
+            append (topEdge's value) to (topEdges's values)
+        set rails to a cad topology list of a cad edge key
+        loop index from 0 to the length of (baseVertices's values):
+            set rail to cad sweep line from (the item at index in (baseVertices's values)) to (the item at index in (topVertices's values)) in body
+            if rail's valid = false:
+                return no cad body
+            append (rail's value) to (rails's values)
+        loop index from 0 to the length of baseProfile:
+            set baseBuilt to the cad rational builder of (the item at index in baseProfile)
+            set topBuilt to the cad rational builder of (the item at index in topProfile)
+            if (baseBuilt's valid = false) or (topBuilt's valid = false):
+                return no cad body
+            set baseCurve to baseBuilt's value
+            set topCurve to topBuilt's value
+            if (the item at index in (baseSenses's value's values)) = false:
+                set baseCurve to the cad reverse of baseCurve
+            if (the item at index in (topSenses's value's values)) = false:
+                set topCurve to the cad reverse of topCurve
+            set baseLifted to the cad lift of baseCurve onto basePlane
+            set topLifted to the cad lift of topCurve onto topPlane
+            if (baseLifted is cad compatible with topLifted) = false:
+                return no cad body
+            set ruled to the cad ruled surface from baseLifted to topLifted
+            if ruled's valid = false:
+                return no cad body
+            set surface to the cad surface of (ruled's value)
+            set normal to the cad normal of surface at parameters 0.5 and 0.5
+            if normal's valid = false:
+                return no cad body
+            set surfaceKey to the cad body key after inserting surface into body
+            set uses to a cad topology list of a cad sweep use
+            append (cad sweep use of (the item at index in (baseEdges's values)) forward (the item at index in (baseSenses's value's values))) to (uses's values)
+            append (cad sweep use of (the item at (index + 1) in (rails's values)) forward true) to (uses's values)
+            append (cad sweep use of (the item at index in (topEdges's values)) forward ((the item at index in (topSenses's value's values)) = false)) to (uses's values)
+            append (cad sweep use of (the item at index in (rails's values)) forward false) to (uses's values)
+            set corners to [[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]]
+            loop cornerIndex from 0 to 4:
+                set first to the item at cornerIndex in corners
+                set last to the item at (the remainder of (cornerIndex + 1) divided by 4) in corners
+                set p to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+                set q to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+                set use to the item at cornerIndex in (uses's values)
+                set use's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from p to q))
+                replace item at index cornerIndex in (uses's values) with use
+            if (cad sweep face in body within shellKey on surfaceKey forward true using uses) = false:
+                return no cad body
+        set lump to the cad node pointer for lumpKey in body
+        append shellKey to (lump's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body
+
 function the tapered cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
     execute:
         set angle to givenAngle as a 64 bit floating-point number
@@ -1140,7 +1325,14 @@ function the tapered cad extrusion sheet of {a pointer to a list:profile} on {ca
             return the cad extrusion sheet of profile on plane along direction
         set ordered to the cad profile senses of profile
         if ordered's valid = false:
-            return no cad body
+            set topProfile to cad sweep open taper profile of profile on plane along direction by angle
+            if (the length of topProfile) = 0:
+                free topProfile
+                return no cad body
+            set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+            set result to cad sweep open taper sheet of profile on plane to topProfile on far
+            free topProfile
+            return result
         set solid to the tapered cad extrusion of profile on plane along direction by angle
         if solid's valid = false:
             return no cad body
