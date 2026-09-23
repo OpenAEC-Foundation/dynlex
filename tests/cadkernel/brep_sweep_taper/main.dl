@@ -3,6 +3,18 @@
 # 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
 import tests/cadkernel/brep_sweep_extrude/main.dl
 
+function taper cone surface count in {cad body:body}:
+    execute:
+        set keys to the cad keys of (body's surfaces)
+        set total to 0
+        loop index from 0 to the length of keys:
+            set node to the cad node pointer for (the item at index in keys) in (body's surfaces)
+            if node != (0 as the type of node):
+                if node's kind = 2:
+                    increment total
+        free keys
+        return total
+
 set taperOpenProfile to a list containing (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [10.0,0.0])))
 set taperDirection to a cad vector3 with x 0.0, y 0.0 and z 5.0
 set taperResult to the tapered cad extrusion sheet of taperOpenProfile on (the cad xy plane) along taperDirection by 1.5707963267948966
@@ -39,3 +51,37 @@ check extrusion ((the length of taperFlaws) = 0)
 free taperFlaws
 free taperSquare
 print "a_tapered_profile_stops_before_inverting" as a line
+
+set circularProfile to a list containing (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 2.0))
+set circularResult to the tapered cad extrusion of circularProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by 0.2
+check extrusion (circularResult's valid)
+set circularBody to circularResult's value
+check extrusion ((the cad count of (circularBody's faces)) = 3)
+check extrusion ((taper cone surface count in circularBody) = 1)
+set circularFlaws to the cad flaws of circularBody
+check extrusion ((the length of circularFlaws) = 0)
+free circularFlaws
+set outwardCircle to the tapered cad extrusion of circularProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by -0.2
+check extrusion (outwardCircle's valid)
+check extrusion ((taper cone surface count in (outwardCircle's value)) = 1)
+set collapsedCircle to the tapered cad extrusion of circularProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by 0.7
+check extrusion ((collapsedCircle's valid) = false)
+set obliqueCircle to the tapered cad extrusion of circularProfile on (the cad xy plane) along (a cad vector3 with x 1.0, y 0.0 and z 3.0) by 0.2
+check extrusion ((obliqueCircle's valid) = false)
+free circularProfile
+print "a_circular_taper_preserves_an_analytic_cone" as a line
+
+set arcProfile to an empty list of a cad curve2
+loop quarter from 0 to 4:
+    set firstAngle to (quarter as a 64 bit floating-point number) * 1.5707963267948966
+    set lastAngle to firstAngle + 1.5707963267948966
+    append (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from firstAngle to lastAngle)) to arcProfile
+set arcResult to the tapered cad extrusion of arcProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by 0.2
+check extrusion (arcResult's valid)
+check extrusion ((the cad count of (arcResult's value's faces)) = 3)
+check extrusion ((taper cone surface count in (arcResult's value)) = 1)
+set arcFlaws to the cad flaws of (arcResult's value)
+check extrusion ((the length of arcFlaws) = 0)
+free arcFlaws
+free arcProfile
+print "a_segmented_circular_taper_preserves_an_analytic_cone" as a line

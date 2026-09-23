@@ -862,6 +862,60 @@ function the tapered cad extrusion of {a pointer to a list:profile} on {cad plan
         set normal to the cad normal of plane
         if normal's valid = false:
             return no cad body
+        set circular to false
+        set circularCentre to the cad zero vector2
+        set circularRadius to 0.0 as a 64 bit floating-point number
+        if (the length of profile) > 0:
+            set firstPiece to the item at 0 in profile
+            if ((the length of profile) = 1) and (firstPiece's kind = 1):
+                set circular to true
+                set circularCentre to firstPiece's circle's centre
+                set circularRadius to firstPiece's circle's radius
+            else if firstPiece's kind = 2:
+                set circular to true
+                set circularCentre to firstPiece's arc's centre
+                set circularRadius to firstPiece's arc's radius
+                set totalSweep to 0.0 as a 64 bit floating-point number
+                loop index from 0 to the length of profile:
+                    set piece to the item at index in profile
+                    if piece's kind != 2:
+                        set circular to false
+                    else:
+                        if (the cad distance from (piece's arc's centre) to circularCentre) > 1e-9:
+                            set circular to false
+                        if (the absolute value of (piece's arc's radius - circularRadius)) > 1e-9:
+                            set circular to false
+                        set totalSweep to totalSweep + (the cad sweep of (piece's arc))
+                if (the absolute value of (totalSweep - 6.283185307179586)) >= 1e-9:
+                    set circular to false
+                if circular:
+                    set ordered to the cad profile senses of profile
+                    if ordered's valid = false:
+                        set circular to false
+        if circular:
+            set axis to normal's value
+            set parallelError to the cad length of (the cad cross of direction and axis)
+            set parallelLimit to 1e-10 * (the maximum of (the cad length of direction) and 1.0)
+            if parallelError > parallelLimit:
+                return no cad body
+            set signedHeight to the cad dot of direction and axis
+            set radius to circularRadius
+            set topRadius to radius - ((the absolute value of signedHeight) * @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle))
+            if (topRadius <= 1e-12) or ((the absolute value of signedHeight) <= 1e-12):
+                return no cad body
+            set pivot to the cad point at circularCentre on plane
+            set sectionPlane to a cad plane with origin pivot, x axis (plane's xAxis) and y axis axis
+            set corners to [[0.0,0.0],[radius,0.0],[topRadius,signedHeight],[0.0,signedHeight]]
+            set section to an empty list of a cad curve2
+            loop index from 0 to 4:
+                set start to the item at index in corners
+                set finish to the item at (the remainder of (index + 1) divided by 4) in corners
+                set firstPoint to a cad vector2 with x (the item at 0 in start) and y (the item at 1 in start)
+                set lastPoint to a cad vector2 with x (the item at 0 in finish) and y (the item at 1 in finish)
+                append (the cad curve2 of (a cad line2 from firstPoint to lastPoint)) to section
+            set result to the cad revolution of section on sectionPlane about pivot along axis by 6.283185307179586
+            free section
+            return result
         set height to the absolute value of (the cad dot of direction and (normal's value))
         set tangentAngle to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
         set offsetDistance to height * (the absolute value of tangentAngle)
