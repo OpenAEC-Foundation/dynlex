@@ -69,6 +69,8 @@ class:
         radial as a cad vector3
         spin as a boolean
         tolerance as a 64 bit floating-point number
+        angle as a 64 bit floating-point number
+        full as a boolean
 class:
     patterns:
         [a|] cad sweep revolution piece
@@ -390,7 +392,7 @@ local function cad sweep projection bounds of {cad curve2:piece} on {cad plane:p
 
 local function no cad sweep revolution turn:
     execute:
-        return @intrinsic("construct", a cad sweep revolution turn, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, false, 0.0 as a 64 bit floating-point number)
+        return @intrinsic("construct", a cad sweep revolution turn, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, false)
 
 local function cad sweep complete revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
     execute:
@@ -405,8 +407,7 @@ local function cad sweep complete revolution turn of {a pointer to a list:profil
             set turnAngle to 0.0 - turnAngle
         if ((cad sweep revolution scalar turnAngle is finite) = false) or ((turnAngle <= 0.0) or (turnAngle > (6.283185307179586 + 1e-12))):
             return no cad sweep revolution turn
-        if (the absolute value of (6.283185307179586 - turnAngle)) > 1e-9:
-            return no cad sweep revolution turn
+        set full to (the absolute value of (6.283185307179586 - turnAngle)) <= 1e-9
         set planeDistance to the cad distance from pivot to plane
         if (planeDistance's valid) = false:
             return no cad sweep revolution turn
@@ -460,7 +461,7 @@ local function cad sweep complete revolution turn of {a pointer to a list:profil
         if reachesPositive = false:
             set radial to the cad negative of radial
             set spin to spin = false
-        return @intrinsic("construct", a cad sweep revolution turn, true, pivot, direction, radial, spin, tolerance)
+        return @intrinsic("construct", a cad sweep revolution turn, true, pivot, direction, radial, spin, tolerance, turnAngle, full)
 
 local function cad sweep revolution station at {cad vector2:uv} on {cad plane:plane} for {cad sweep revolution turn:turn}:
     execute:
@@ -581,6 +582,124 @@ local function cad sweep optional vertex at {cad vector3:point} in {cad body:bod
             return @intrinsic("construct", a cad sweep optional vertex, true, cad sweep vertex at point in body)
         return @intrinsic("construct", a cad sweep optional vertex, false, a new cad vertex key)
 
+local function cad sweep partial revolution of {a pointer to a list:profile} on {cad plane:plane} with senses {cad topology list:senses}, corners {cad topology list:corners} and stations {cad topology list:stations} for {cad sweep revolution turn:turn} handed {a 64 bit floating-point number:handed}:
+    execute:
+        set farPlane to a cad plane with origin (cad sweep revolution moved (plane's origin) by (turn's angle) for turn), x axis (cad sweep revolution turned (plane's xAxis) by (turn's angle) for turn) and y axis (cad sweep revolution turned (plane's yAxis) by (turn's angle) for turn)
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set nearCorners to a cad topology list of a cad vertex key
+        set farCorners to a cad topology list of a cad vertex key
+        loop index from 0 to the length of (corners's values):
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep vertex at point in body) to (nearCorners's values)
+        loop index from 0 to the length of (corners's values):
+            set station to the item at index in (stations's values)
+            if station's radius <= (turn's tolerance):
+                append (the item at index in (nearCorners's values)) to (farCorners's values)
+            else:
+                set point to the cad point at (the item at index in (corners's values)) on farPlane
+                append (cad sweep vertex at point in body) to (farCorners's values)
+        set nearEdges to cad sweep profile edges of profile on plane with senses senses and corners nearCorners in body
+        if (the length of (nearEdges's values)) != (the length of profile):
+            return no cad body
+        set pieces to a cad topology list of a cad sweep revolution piece
+        set farEdges to a cad topology list of a cad edge key
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set built to cad sweep revolution surface of piece on plane for turn in body
+            if built's valid = false:
+                return no cad body
+            append built to (pieces's values)
+            if built's kind = 0:
+                append (the item at index in (nearEdges's values)) to (farEdges's values)
+            else:
+                set next to the remainder of (index + 1) divided by (the length of profile)
+                set fromKey to the item at index in (farCorners's values)
+                set toKey to the item at next in (farCorners's values)
+                if (the item at index in (senses's values)) = false:
+                    set fromKey to the item at next in (farCorners's values)
+                    set toKey to the item at index in (farCorners's values)
+                set copied to cad sweep profile edge of piece on farPlane from fromKey to toKey in body
+                if copied's valid = false:
+                    return no cad body
+                append copied's value to (farEdges's values)
+        set rails to a cad topology list of a cad sweep edge result
+        loop index from 0 to the length of (stations's values):
+            set station to the item at index in (stations's values)
+            if station's radius <= (turn's tolerance):
+                append (@intrinsic("construct", a cad sweep edge result, false, a new cad edge key)) to (rails's values)
+            else:
+                set frame to cad sweep revolution circle at (station's height) for turn
+                if frame's valid = false:
+                    return no cad body
+                set curve to the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius (station's radius))
+                set edgeKey to cad sweep edge on curve from 0.0 to (turn's angle) between (the item at index in (nearCorners's values)) and (the item at index in (farCorners's values)) in body
+                append (@intrinsic("construct", a cad sweep edge result, true, edgeKey)) to (rails's values)
+        set outward to (turn's spin) = (handed > 0.0)
+        if (cad sweep cap in body within shellKey on plane with edges nearEdges and senses senses forward ((turn's spin) = false) along profile (outward = false)) = false:
+            return no cad body
+        if (cad sweep cap in body within shellKey on farPlane with edges farEdges and senses senses forward (turn's spin) along profile outward) = false:
+            return no cad body
+        loop index from 0 to the length of profile:
+            set pieceShape to the item at index in (pieces's values)
+            if pieceShape's kind = 1:
+                set next to the remainder of (index + 1) divided by (the length of profile)
+                set piece to the item at index in profile
+                set out to cad sweep outward of piece on plane forward (the item at index in (senses's values)) counterclockwise (handed > 0.0)
+                set baseSample to the cad point at (the cad point on piece at 0.5) on plane
+                set half to (turn's angle) * 0.5
+                set samplePoint to cad sweep revolution moved baseSample by half for turn
+                set sampleOut to cad sweep revolution turned out by half for turn
+                set surfaceNode to the cad node pointer for (pieceShape's surface) in body
+                if surfaceNode = (0 as the type of surfaceNode):
+                    return no cad body
+                set forwardResult to cad sweep sense of (@intrinsic("dereference", surfaceNode)) at samplePoint outward sampleOut
+                if forwardResult's valid = false:
+                    return no cad body
+                set circuit to a cad topology list of a cad sweep use
+                append (cad sweep use of (the item at index in (nearEdges's values)) forward (the item at index in (senses's values))) to (circuit's values)
+                set nextRail to the item at next in (rails's values)
+                if nextRail's valid:
+                    append (cad sweep use of (nextRail's value) forward true) to (circuit's values)
+                append (cad sweep use of (the item at index in (farEdges's values)) forward ((the item at index in (senses's values)) = false)) to (circuit's values)
+                set firstRail to the item at index in (rails's values)
+                if firstRail's valid:
+                    append (cad sweep use of (firstRail's value) forward false) to (circuit's values)
+                if (((pieceShape's surfaceKind) = 3) or ((pieceShape's surfaceKind) = 4)) and ((piece's kind) = 2):
+                    set parameters to cad sweep revolved parameters of (piece's arc) on plane for turn
+                    if parameters's valid = false:
+                        return no cad body
+                    set start to parameters's start
+                    set end to parameters's end
+                    if (the item at index in (senses's values)) = false:
+                        set start to parameters's end
+                        set end to parameters's start
+                    set near to parameters's around
+                    set far to near + (turn's angle)
+                    set uv to [[near,start],[near,end],[far,end],[far,start]]
+                    set uvIndex to 0
+                    loop useIndex from 0 to the length of (circuit's values):
+                        set first to the item at uvIndex in uv
+                        set last to the item at (the remainder of (uvIndex + 1) divided by 4) in uv
+                        if (useIndex = 1) and (nextRail's valid = false):
+                            increment uvIndex
+                            set first to the item at uvIndex in uv
+                            set last to the item at (the remainder of (uvIndex + 1) divided by 4) in uv
+                        set p to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+                        set q to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+                        set use to the item at useIndex in (circuit's values)
+                        set use's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from p to q))
+                        replace item at index useIndex in (circuit's values) with use
+                        increment uvIndex
+                set reordered to cad sweep reordered circuit outward outward
+                if (cad sweep face in body within shellKey on (pieceShape's surface) forward (forwardResult's value) using reordered) = false:
+                    return no cad body
+        set lumpNode to the cad node pointer for lumpKey in body
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body
+
 function the cad revolution of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a number:angle}:
     execute:
         set ordered to the cad profile senses of profile
@@ -607,6 +726,8 @@ function the cad revolution of {a pointer to a list:profile} on {cad plane:plane
         set stations to a cad topology list of a cad sweep revolution station
         loop index from 0 to the length of (corners's values):
             append (cad sweep revolution station at (the item at index in (corners's values)) on plane for turn) to (stations's values)
+        if turn's full = false:
+            return cad sweep partial revolution of profile on plane with senses senses, corners corners and stations stations for turn handed handed
         set outward to (turn's spin) != (handed > 0.0)
         set body to an empty cad body
         set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body

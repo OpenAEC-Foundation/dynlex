@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_revolve_sheet.dl
+
+function sheet probe argument {integer:index}:
+    execute:
+        set valueText to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of valueText, 0 as a pointer)
+
+function sheet probe point at {integer:index}:
+    execute:
+        return a cad vector2 with x (sheet probe argument index) and y (sheet probe argument (index + 1))
+
+function emit sheet probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit sheet probe flag {boolean:value}:
+    execute:
+        emit sheet probe number (value as an integer)
+
+function emit sheet probe body {cad body:body}:
+    execute:
+        emit sheet probe number (the cad count of (body's vertices))
+        emit sheet probe number (the cad count of (body's edges))
+        emit sheet probe number (the cad count of (body's coedges))
+        emit sheet probe number (the cad count of (body's loops))
+        emit sheet probe number (the cad count of (body's faces))
+        emit sheet probe number (the cad count of (body's shells))
+        emit sheet probe number (the cad count of (body's lumps))
+        emit sheet probe number (the cad count of (body's surfaces))
+        emit sheet probe number (the cad count of (body's curves))
+        emit sheet probe number (the length of (body's roots))
+        set flaws to the cad flaws of body
+        emit sheet probe number (the length of flaws)
+        free flaws
+        set surfaceKeys to the cad keys of (body's surfaces)
+        loop surfaceKind from 0 to 6:
+            set count to 0
+            loop surfaceIndex from 0 to the length of surfaceKeys:
+                set surfaceNode to the cad node pointer for (the item at surfaceIndex in surfaceKeys) in (body's surfaces)
+                if (surfaceNode's kind) = surfaceKind:
+                    increment count
+            emit sheet probe number count
+        free surfaceKeys
+        set edgeKeys to the cad edge keys of body
+        set boundaryCount to 0
+        set doubleCount to 0
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in body
+            if (the length of (edgeNode's coedges's values)) = 1:
+                increment boundaryCount
+            else if (the length of (edgeNode's coedges's values)) = 2:
+                increment doubleCount
+        free edgeKeys
+        emit sheet probe number boundaryCount
+        emit sheet probe number doubleCount
+        set coedgeKeys to the cad keys of (body's coedges)
+        set pcurveCount to 0
+        loop coedgeIndex from 0 to the length of coedgeKeys:
+            set coedgeNode to the cad node pointer for (the item at coedgeIndex in coedgeKeys) in (body's coedges)
+            if coedgeNode's pcurve's valid:
+                increment pcurveCount
+        free coedgeKeys
+        emit sheet probe number pcurveCount
+        loop rootIndex from 0 to the length of (body's roots):
+            set lumpNode to the cad node pointer for (the item at rootIndex in (body's roots)) in body
+            emit sheet probe number (the length of (lumpNode's shells's values))
+            loop shellIndex from 0 to the length of (lumpNode's shells's values):
+                set shellNode to the cad node pointer for (the item at shellIndex in (lumpNode's shells's values)) in body
+                emit sheet probe number (the length of (shellNode's faces's values))
+        set vertexKeys to the cad keys of (body's vertices)
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in (body's vertices)
+            emit sheet probe number (vertexNode's point's x)
+            emit sheet probe number (vertexNode's point's y)
+            emit sheet probe number (vertexNode's point's z)
+        free vertexKeys
+
+set operation to (sheet probe argument 0) as an integer
+set pivot to a cad vector3 with x (sheet probe argument 1), y (sheet probe argument 2) and z (sheet probe argument 3)
+set axis to a cad vector3 with x (sheet probe argument 4), y (sheet probe argument 5) and z (sheet probe argument 6)
+set angle to sheet probe argument 7
+set profileCount to (sheet probe argument 8) as an integer
+set cursor to 9
+set prototype to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2)))
+set profiles to an empty list of (the type of prototype)
+free prototype
+loop profileIndex from 0 to profileCount:
+    set pieceCount to (sheet probe argument cursor) as an integer
+    set cursor to cursor + 1
+    set profile to an empty list of a cad curve2
+    loop pieceIndex from 0 to pieceCount:
+        set kind to (sheet probe argument cursor) as an integer
+        set cursor to cursor + 1
+        set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+        if kind = 0:
+            set piece to the cad curve2 of (a cad line2 from (sheet probe point at cursor) to (sheet probe point at (cursor + 2)))
+            set cursor to cursor + 4
+        else if kind = 1:
+            set piece to the cad curve2 of (a cad circle2 at (sheet probe point at cursor) with radius (sheet probe argument (cursor + 2)))
+            set cursor to cursor + 3
+        else if kind = 2:
+            set piece to the cad curve2 of (a cad arc2 at (sheet probe point at cursor) with radius (sheet probe argument (cursor + 2)) from (sheet probe argument (cursor + 3)) to (sheet probe argument (cursor + 4)))
+            set cursor to cursor + 5
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+        append piece to profile
+    append profile to profiles
+set frame to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+set result to no cad body
+if frame's valid:
+    if operation = 0:
+        if profileCount > 0:
+            set result to the cad revolved sheet of (the item at 0 in profiles) on (frame's value) about pivot along axis by angle
+    else if operation = 1:
+        set result to the cad revolved sheets of (profiles) on (frame's value) about pivot along axis by angle
+    else:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+loop profileIndex from 0 to the length of profiles:
+    free (the item at profileIndex in profiles)
+free profiles
+emit sheet probe flag (result's valid)
+if result's valid:
+    emit sheet probe body (result's value)

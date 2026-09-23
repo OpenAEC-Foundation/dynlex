@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/sweep.rs::sweep_along at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_boolean.dl
+
+local function cad planar sweep rotation of {cad vector3:vector} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set cosine to the cosine of angle
+        set sine to the sine of angle
+        set direct to vector scaled by cosine
+        set crosswise to (the cad cross of axis and vector) scaled by sine
+        set axial to axis scaled by ((the cad dot of axis and vector) * (1.0 - cosine))
+        return the cad sum of (the cad sum of direct and crosswise) and axial
+
+local function cad planar sweep turned {cad plane:plane} around {cad vector3:pivot} on {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set offset to the cad difference of (plane's origin) and pivot
+        set origin to the cad sum of pivot and (cad planar sweep rotation of offset about axis by angle)
+        set xAxis to cad planar sweep rotation of plane's xAxis about axis by angle
+        set yAxis to cad planar sweep rotation of plane's yAxis about axis by angle
+        return a cad plane with origin origin, x axis xAxis and y axis yAxis
+
+local function cad planar sweep tangent of {cad curve2:piece} on {cad plane:plane} forward {boolean:forward} at end {boolean:atEnd}:
+    execute:
+        set parameter to 0.0
+        if atEnd = forward:
+            set parameter to 1.0
+        set alignedTangent to the cad vector at (the cad tangent of piece at parameter) on plane
+        if forward = false:
+            set alignedTangent to the cad negative of alignedTangent
+        return the cad normalization of alignedTangent
+
+function the cad planar sweep of {a pointer to a list:profile} on {cad plane:profilePlane} following {a pointer to a list:path} on {cad plane:pathPlane}:
+    execute:
+        set senses to the cad path senses of path
+        if senses's valid = false:
+            return no cad body
+        set normal to the cad normal of pathPlane
+        if normal's valid = false:
+            return no cad body
+        set axis to normal's value
+        set currentPlane to profilePlane
+        set previousTangent to the cad zero vector3
+        set hasPrevious to false
+        set body to an empty cad body
+        set hasBody to false
+        loop index from 0 to the length of path:
+            set piece to the item at index in path
+            set forward to the item at index in (senses's value's values)
+            set firstTangent to cad planar sweep tangent of piece on pathPlane forward forward at end false
+            if firstTangent's valid = false:
+                return no cad body
+            if hasPrevious:
+                set crosswise to the cad cross of previousTangent and (firstTangent's value)
+                set turnAngle to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, (the cad dot of axis and crosswise), (the cad dot of previousTangent and (firstTangent's value)))
+                if (the absolute value of turnAngle) > 1e-10:
+                    set parameter to 0.0
+                    if forward = false:
+                        set parameter to 1.0
+                    set joint to the cad point at (the cad point on piece at parameter) on pathPlane
+                    set currentPlane to cad planar sweep turned currentPlane around joint on axis by turnAngle
+            set segment to no cad body
+            if piece's kind = 0:
+                set start to piece's line's start
+                set end to piece's line's end
+                if forward = false:
+                    set start to piece's line's end
+                    set end to piece's line's start
+                set fromPoint to the cad point at start on pathPlane
+                set toPoint to the cad point at end on pathPlane
+                set direction to the cad difference of toPoint and fromPoint
+                set segment to the cad extrusion of profile on currentPlane along direction
+                if segment's valid:
+                    set currentPlane's origin to the cad sum of (currentPlane's origin) and direction
+            else if piece's kind = 2:
+                set pivot to the cad point at (piece's arc's centre) on pathPlane
+                set angle to the cad sweep of (piece's arc)
+                if forward = false:
+                    set angle to the negative of angle
+                set segment to the cad revolution of profile on currentPlane about pivot along axis by angle
+                if segment's valid:
+                    set currentPlane to cad planar sweep turned currentPlane around pivot on axis by angle
+            else:
+                return no cad body
+            if segment's valid = false:
+                return no cad body
+            set endTangent to cad planar sweep tangent of piece on pathPlane forward forward at end true
+            if endTangent's valid = false:
+                return no cad body
+            if hasBody:
+                set toleranceBodies to a list containing body
+                append segment's value to toleranceBodies
+                set tolerance to the cad operation tolerance of toleranceBodies
+                free toleranceBodies
+                set joined to the cad combination of body and segment's value using cad union operation within tolerance
+                if joined's valid = false:
+                    return no cad body
+                set body to joined's value
+            else:
+                set body to segment's value
+                set hasBody to true
+            set previousTangent to endTangent's value
+            set hasPrevious to true
+        if (hasBody = false) or ((the length of (body's roots)) = 0):
+            return no cad body
+        return the validated cad body result of body

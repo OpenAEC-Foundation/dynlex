@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_revolve_region.dl
+
+function check revolution region {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function revolution rectangle from {cad vector2:low} to {cad vector2:high}:
+    execute:
+        set points to a list containing low
+        append (a cad vector2 with x (high's x) and y (low's y)) to points
+        append high to points
+        append (a cad vector2 with x (low's x) and y (high's y)) to points
+        set result to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in points) to (the item at (the remainder of (index + 1) divided by 4) in points))) to result
+        free points
+        return result
+
+set frame to a cad plane with origin (the cad zero vector3), x axis (a cad vector3 with x 1.0, y 0.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+set axis to a cad vector3 with x 0.0, y 0.0 and z 1.0
+set outer to revolution rectangle from (a cad vector2 with x 2.0 and y 0.0) to (a cad vector2 with x 5.0 and y 4.0)
+set hole to revolution rectangle from (a cad vector2 with x 3.0 and y 1.0) to (a cad vector2 with x 4.0 and y 3.0)
+set profiles to a list containing outer
+append hole to profiles
+
+set full to the cad revolution region of profiles on frame about (the cad zero vector3) along axis by 6.283185307179586
+check revolution region (full's valid)
+check revolution region ((the cad count of (full's value's faces)) = 8)
+check revolution region ((the cad count of (full's value's shells)) = 2)
+check revolution region ((the length of (full's value's roots)) = 1)
+set flaws to the cad flaws of full's value
+check revolution region ((the length of flaws) = 0)
+free flaws
+print "full_turn_hole_becomes_a_void_shell" as a line
+
+set partial to the cad revolution region of profiles on frame about (the cad zero vector3) along axis by 3.141592653589793
+check revolution region (partial's valid)
+check revolution region ((the cad count of (partial's value's vertices)) = 32)
+check revolution region ((the cad count of (partial's value's faces)) = 28)
+check revolution region ((the cad count of (partial's value's shells)) = 1)
+set flaws to the cad flaws of partial's value
+check revolution region ((the length of flaws) = 0)
+free flaws
+set reversed to the cad revolution region of profiles on frame about (the cad zero vector3) along axis by -3.141592653589793
+check revolution region (reversed's valid)
+check revolution region ((the cad count of (reversed's value's faces)) = 28)
+print "partial_turns_have_caps_and_a_cut_region" as a line
+
+set open to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 2.0 and y 0.0) to (a cad vector2 with x 5.0 and y 0.0)))
+set bad to a list containing outer
+append open to bad
+check revolution region (((the cad revolution region of bad on frame about (the cad zero vector3) along axis by 6.283185307179586)'s valid) = false)
+check revolution region (((the cad revolution region of profiles on frame about (the cad zero vector3) along axis by 0.0)'s valid) = false)
+print "open_holes_and_zero_turns_are_refused" as a line

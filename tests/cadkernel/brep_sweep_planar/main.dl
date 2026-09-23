@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_planar.dl
+
+function check planar path {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set pathPlane to the cad xy plane
+set profilePlane to a cad plane with origin (the cad zero vector3), x axis (a cad vector3 with x 0.0, y 1.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+set zero to the cad zero vector2
+set first to a cad vector2 with x 1.0 and y 0.0
+set second to a cad vector2 with x 0.5 and y 1.0
+set profile to a list containing (the cad curve2 of (a cad line2 from zero to first))
+append (the cad curve2 of (a cad line2 from first to second)) to profile
+append (the cad curve2 of (a cad line2 from second to zero)) to profile
+set middle to a cad vector2 with x 1.0 and y 0.0
+set far to a cad vector2 with x 2.0 and y 0.0
+set path to a list containing (the cad curve2 of (a cad line2 from zero to far))
+set straight to the cad planar sweep of profile on profilePlane following path on pathPlane
+check planar path (straight's valid)
+check planar path ((the cad count of (straight's value's faces)) = 5)
+print "a_planar_line_path_extrudes_the_profile" as a line
+
+clear path
+append (the cad curve2 of (a cad line2 from zero to middle)) to path
+append (the cad curve2 of (a cad line2 from middle to (a cad vector2 with x 1.0 and y 1.0))) to path
+set bend to the cad planar sweep of profile on profilePlane following path on pathPlane
+check planar path (bend's valid)
+check planar path ((the cad count of (bend's value's faces)) = 13)
+check planar path ((the length of (bend's value's roots)) = 1)
+set flaws to the cad flaws of bend's value
+check planar path ((the length of flaws) = 0)
+free flaws
+print "two_line_segments_turn_and_join_as_one_body" as a line
+
+clear path
+append (the cad curve2 of (a cad line2 from zero to middle)) to path
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 3.0 and y 0.0) to far)) to path
+check planar path (((the cad planar sweep of profile on profilePlane following path on pathPlane)'s valid) = false)
+set openProfile to a list containing (the cad curve2 of (a cad line2 from zero to first))
+clear path
+append (the cad curve2 of (a cad line2 from zero to far)) to path
+check planar path (((the cad planar sweep of openProfile on profilePlane following path on pathPlane)'s valid) = false)
+print "disconnected_paths_and_open_profiles_are_refused" as a line

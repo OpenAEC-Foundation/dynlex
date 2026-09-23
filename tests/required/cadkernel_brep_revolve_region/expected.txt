@@ -1,0 +1,3 @@
+full_turn_hole_becomes_a_void_shell
+partial_turns_have_caps_and_a_cut_region
+open_holes_and_zero_turns_are_refused

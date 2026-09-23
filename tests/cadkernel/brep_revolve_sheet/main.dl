@@ -1,0 +1,219 @@
+# SPDX-License-Identifier: MPL-2.0
+# Sheet revolution from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_revolve_sheet.dl
+
+function check sheet {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function sheet point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function sheet line from {cad vector2:first} to {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+function sheet rectangle between {cad vector2:low} and {cad vector2:high}:
+    execute:
+        set points to a list containing low
+        append (a cad vector2 with x (high's x) and y (low's y)) to points
+        append high to points
+        append (a cad vector2 with x (low's x) and y (high's y)) to points
+        set result to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (sheet line from (the item at index in points) to (the item at (the remainder of (index + 1) divided by 4) in points)) to result
+        free points
+        return result
+
+function check sheet body {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check sheet ((the length of flaws) = 0)
+        free flaws
+        check sheet ((the cad worst vertex gap of body) < 1e-8)
+
+function check sheet coedges {cad body:body} with singles {integer:expectedSingles} and doubles {integer:expectedDoubles}:
+    execute:
+        set singleCount to 0
+        set doubleCount to 0
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in body
+            set uses to the length of (edgeNode's coedges's values)
+            if uses = 1:
+                increment singleCount
+            else if uses = 2:
+                increment doubleCount
+                set firstUse to the cad node pointer for (the item at 0 in (edgeNode's coedges's values)) in body
+                set lastUse to the cad node pointer for (the item at 1 in (edgeNode's coedges's values)) in body
+                check sheet ((firstUse's forward) != (lastUse's forward))
+            else:
+                check sheet false
+        free edgeKeys
+        check sheet (singleCount = expectedSingles)
+        check sheet (doubleCount = expectedDoubles)
+
+function sheet pcurve count of {cad body:body}:
+    execute:
+        set total to 0
+        set useKeys to the cad keys of (body's coedges)
+        loop index from 0 to the length of useKeys:
+            set node to the cad node pointer for (the item at index in useKeys) in (body's coedges)
+            if node's pcurve's valid:
+                increment total
+        free useKeys
+        return total
+
+set frame to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check sheet (frame's valid)
+set lineProfile to a list containing (sheet line from (sheet point 2 0) to (sheet point 2 4))
+set quarter to the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (quarter's valid)
+check sheet body (quarter's value)
+check sheet ((the cad count of (quarter's value's faces)) = 1)
+check sheet ((the cad count of (quarter's value's edges)) = 4)
+check sheet ((the cad count of (quarter's value's vertices)) = 4)
+check sheet coedges (quarter's value) with singles 4 and doubles 0
+print "an_open_line_makes_a_partial_cylindrical_sheet" as a line
+
+set full to the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (full's valid)
+check sheet body (full's value)
+check sheet ((the cad count of (full's value's faces)) = 1)
+check sheet ((the cad count of (full's value's edges)) = 3)
+check sheet coedges (full's value) with singles 2 and doubles 1
+print "an_open_line_makes_a_full_cylindrical_sheet" as a line
+
+set ring to sheet rectangle between (sheet point 2 0) and (sheet point 5 4)
+set closedPart to the cad revolved sheet of (ring) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (closedPart's valid)
+check sheet body (closedPart's value)
+check sheet ((the cad count of (closedPart's value's faces)) = 4)
+check sheet ((the cad count of (closedPart's value's edges)) = 12)
+check sheet coedges (closedPart's value) with singles 8 and doubles 4
+print "a_closed_profile_makes_four_open_partial_faces" as a line
+
+set closedFull to the cad revolved sheet of (ring) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (closedFull's valid)
+check sheet body (closedFull's value)
+check sheet ((the cad count of (closedFull's value's faces)) = 4)
+check sheet ((the cad count of (closedFull's value's edges)) = 6)
+check sheet coedges (closedFull's value) with singles 0 and doubles 6
+print "a_closed_profile_keeps_shared_rims_and_seams" as a line
+
+set inner to sheet rectangle between (sheet point 3 1) and (sheet point 4 3)
+set profiles to a list containing ring
+append inner to profiles
+set region to the cad revolved sheets of (profiles) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (region's valid)
+check sheet body (region's value)
+check sheet ((the length of (region's value's roots)) = 2)
+check sheet ((the cad count of (region's value's faces)) = 8)
+print "region_loops_remain_separate_sheets" as a line
+
+set partialRegion to the cad revolved sheets of (profiles) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (partialRegion's valid)
+check sheet body (partialRegion's value)
+check sheet ((the length of (partialRegion's value's roots)) = 2)
+check sheet ((the cad count of (partialRegion's value's faces)) = 8)
+set mixedRegion to a list containing ring
+append lineProfile to mixedRegion
+set mixedSheets to the cad revolved sheets of (mixedRegion) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (mixedSheets's valid)
+check sheet body (mixedSheets's value)
+check sheet ((the length of (mixedSheets's value's roots)) = 2)
+check sheet ((the cad count of (mixedSheets's value's faces)) = 5)
+print "partial_regions_and_mixed_chains_keep_separate_lumps" as a line
+
+set torusProfile to a list containing (the cad curve2 of (a cad arc2 at (sheet point 10 0) with radius 2.0 from -1.5707963267948966 to 1.5707963267948966))
+set torusPart to the cad revolved sheet of (torusProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (torusPart's valid)
+check sheet body (torusPart's value)
+check sheet ((the cad count of (torusPart's value's faces)) = 1)
+check sheet ((sheet pcurve count of (torusPart's value)) = 4)
+set torusFull to the cad revolved sheet of (torusProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (torusFull's valid)
+check sheet body (torusFull's value)
+check sheet ((sheet pcurve count of (torusFull's value)) = 4)
+print "circular_arcs_keep_torus_pcurves" as a line
+
+set sphereProfile to a list containing (the cad curve2 of (a cad arc2 at (sheet point 0 0) with radius 4.0 from -1.5707963267948966 to 1.5707963267948966))
+set spherePart to the cad revolved sheet of (sphereProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (spherePart's valid)
+check sheet body (spherePart's value)
+check sheet ((the cad count of (spherePart's value's edges)) = 2)
+check sheet ((sheet pcurve count of (spherePart's value)) = 2)
+set sphereFull to the cad revolved sheet of (sphereProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (sphereFull's valid)
+check sheet body (sphereFull's value)
+check sheet ((the cad count of (sphereFull's value's edges)) = 1)
+print "axis_ended_arcs_keep_sphere_topology" as a line
+
+set reverse to the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by -1.5707963267948966
+check sheet (reverse's valid)
+check sheet body (reverse's value)
+set farSide to a list containing (sheet line from (sheet point -2 0) to (sheet point -2 4))
+set farSheet to the cad revolved sheet of (farSide) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (farSheet's valid)
+check sheet body (farSheet's value)
+print "negative_turns_and_far_side_profiles_are_supported" as a line
+
+set coneProfile to a list containing (sheet line from (sheet point 2 0) to (sheet point 4 5))
+set coneSheet to the cad revolved sheet of (coneProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 4.71238898038469
+check sheet (coneSheet's valid)
+check sheet body (coneSheet's value)
+check sheet coedges (coneSheet's value) with singles 4 and doubles 0
+set planeProfile to a list containing (sheet line from (sheet point 2 1) to (sheet point 4 1))
+set planeSheet to the cad revolved sheet of (planeProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185306679586
+check sheet (planeSheet's valid)
+check sheet body (planeSheet's value)
+check sheet ((the cad count of (planeSheet's value's faces)) = 1)
+check sheet ((the cad count of (planeSheet's value's edges)) = 2)
+print "reflex_cones_and_near_full_annuli_keep_topology" as a line
+
+set splitPath to a list containing (sheet line from (sheet point 2 0) to (sheet point 0 0))
+append (sheet line from (sheet point 0 0) to (sheet point 0 3)) to splitPath
+append (sheet line from (sheet point 0 3) to (sheet point 2 3)) to splitPath
+set separated to the cad revolved sheet of (splitPath) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (separated's valid)
+check sheet body (separated's value)
+check sheet ((the length of (separated's value's roots)) = 2)
+check sheet ((the cad count of (separated's value's faces)) = 2)
+print "axis_collapsed_segments_split_independent_sheets" as a line
+
+set axisTouch to sheet rectangle between (sheet point 0 0) and (sheet point 3 4)
+set axisPart to the cad revolved sheet of (axisTouch) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check sheet (axisPart's valid)
+check sheet body (axisPart's value)
+check sheet ((the cad count of (axisPart's value's faces)) = 3)
+set axisFull to the cad revolved sheet of (axisTouch) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check sheet (axisFull's valid)
+check sheet body (axisFull's value)
+check sheet ((the cad count of (axisFull's value's faces)) = 3)
+print "collapsed_axis_edges_do_not_create_faces" as a line
+
+set emptyProfile to an empty list of (the type of (the item at 0 in lineProfile))
+set emptyResult to the cad revolved sheet of (emptyProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0
+check sheet ((emptyResult's valid) = false)
+set emptyProfiles to an empty list of (the type of ring)
+check sheet (((the cad revolved sheets of (emptyProfiles) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+check sheet (((the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 0.0)'s valid) = false)
+check sheet (((the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 7.0)'s valid) = false)
+check sheet (((the cad revolved sheet of (lineProfile) on (frame's value) about (the cad zero vector3) along (a cad vector3 with x 0.0, y 1.0 and z 1.0) by 1.0)'s valid) = false)
+set crossing to a list containing (sheet line from (sheet point -1 0) to (sheet point 2 0))
+check sheet (((the cad revolved sheet of (crossing) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+set axial to a list containing (sheet line from (sheet point 0 0) to (sheet point 0 2))
+check sheet (((the cad revolved sheet of (axial) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+set disconnected to a list containing (sheet line from (sheet point 2 0) to (sheet point 2 1))
+append (sheet line from (sheet point 3 0) to (sheet point 3 1)) to disconnected
+check sheet (((the cad revolved sheet of (disconnected) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+set ellipseProfile to a list containing (the cad curve2 of (a cad ellipse arc2 on (a cad ellipse at (sheet point 10 0) with radii 2.0 and 1.0 along (sheet point 1 0)) from 0.0 to 1.5707963267948966))
+check sheet (((the cad revolved sheet of (ellipseProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+set invalidRegion to a list containing ring
+append crossing to invalidRegion
+check sheet (((the cad revolved sheets of (invalidRegion) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+print "invalid_profiles_angles_and_axes_are_refused" as a line

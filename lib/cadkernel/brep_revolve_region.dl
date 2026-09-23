@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/sweep.rs::revolve_region at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_boolean.dl
+
+function the cad revolution region of {a pointer to a list:profiles} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a number:angle}:
+    execute:
+        if (the length of profiles) = 0:
+            return no cad body
+        set outer to the item at 0 in profiles
+        set made to the cad revolution of outer on plane about pivot along axis by angle
+        if made's valid = false:
+            return no cad body
+        set body to made's value
+        set full to (the absolute value of (6.283185307179586 - (the absolute value of angle))) <= 1e-9
+        loop index from 1 to the length of profiles:
+            set hole to the item at index in profiles
+            set cut to the cad revolution of hole on plane about pivot along axis by angle
+            if cut's valid = false:
+                return no cad body
+            set toleranceBodies to a list containing body
+            append cut's value to toleranceBodies
+            set tolerance to the cad operation tolerance of toleranceBodies
+            free toleranceBodies
+            if full:
+                if (the length of (body's roots)) != 1:
+                    return no cad body
+                set owner to the item at 0 in (body's roots)
+                set shellKey to the cad body key after inserting (a cad shell owned by owner with provenance (the synthesized cad provenance)) into body
+                set faces to the cad face keys of cut's value
+                loop faceIndex from 0 to the length of faces:
+                    if (copy cad boolean face (the item at faceIndex in faces) from cut's value into body owned by shellKey flipped true within tolerance) = false:
+                        free faces
+                        return no cad body
+                free faces
+                set lump to the cad node pointer for owner in body
+                if lump = (0 as the type of lump):
+                    return no cad body
+                append shellKey to (lump's shells's values)
+            else:
+                set difference to the cad combination of body and cut's value using cad difference operation within tolerance
+                if difference's valid = false:
+                    return no cad body
+                set body to difference's value
+        if (the length of (body's roots)) = 0:
+            return no cad body
+        return the validated cad body result of body

@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_revolve_region.dl
+
+function emit revolution number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function a revolution rectangle with low x {a number:x0}, low y {a number:y0}, high x {a number:x1} and high y {a number:y1}:
+    execute:
+        set corners to [[x0,y0],[x1,y0],[x1,y1],[x0,y1]]
+        set profile to an empty list of a cad curve2
+        loop index from 0 to 4:
+            set first to the item at index in corners
+            set last to the item at (the remainder of (index + 1) divided by 4) in corners
+            set start to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+            set end to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+            append (the cad curve2 of (a cad line2 from start to end)) to profile
+        return profile
+
+set input to the argument at 0 in the command line arguments
+set case to @intrinsic("call", "libc", "atoi", integer, the data of input)
+set prototype to a list containing (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+set profiles to an empty list of (the type of prototype)
+free prototype
+if case != 5:
+    set outer to a revolution rectangle with low x 2.0, low y 0.0, high x 5.0 and high y 4.0
+    if case = 7:
+        free outer
+        set outer to a revolution rectangle with low x -1.0, low y 0.0, high x 5.0 and high y 4.0
+    else if case = 9:
+        free outer
+        set outer to a revolution rectangle with low x 0.0, low y 0.0, high x 3.0 and high y 4.0
+    else if (case = 10) or (case = 11):
+        free outer
+        set radius to 2.0
+        set centre to a cad vector2 with x 10.0 and y 0.0
+        if case = 11:
+            set radius to 4.0
+            set centre to the cad zero vector2
+        set upper to a cad vector2 with x (centre's x) and y radius
+        set lower to a cad vector2 with x (centre's x) and y (the negative of radius)
+        set outer to an empty list of a cad curve2
+        append (the cad curve2 of (a cad arc2 at centre with radius radius from -1.5707963267948966 to 1.5707963267948966)) to outer
+        append (the cad curve2 of (a cad line2 from upper to centre)) to outer
+        append (the cad curve2 of (a cad line2 from centre to lower)) to outer
+    append outer to profiles
+    set hasHole to case > 0
+    if case = 7:
+        set hasHole to false
+    if (case >= 9) and (case <= 11):
+        set hasHole to false
+    if hasHole:
+        set hole to a revolution rectangle with low x 3.0, low y 1.0, high x 4.0 and high y 3.0
+        if (case = 3) or (case = 12):
+            free hole
+            set hole to a revolution rectangle with low x 7.0, low y 1.0, high x 8.0 and high y 3.0
+        else if case = 6:
+            free hole
+            set hole to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 2.0 and y 0.0) to (a cad vector2 with x 5.0 and y 0.0)))
+        append hole to profiles
+    if (case = 13) or (case = 14):
+        append (a revolution rectangle with low x 2.2, low y 1.0, high x 2.6 and high y 2.0) to profiles
+
+set angle to 6.283185307179586
+if case = 2:
+    set angle to 3.141592653589793
+else if case = 4:
+    set angle to -3.141592653589793
+else if case = 8:
+    set angle to 0.0
+else if (case >= 9) and (case <= 11):
+    set angle to 1.5707963267948966
+else if (case = 12) or (case = 14):
+    set angle to 3.141592653589793
+set plane to a cad plane with origin (the cad zero vector3), x axis (a cad vector3 with x 1.0, y 0.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+set result to the cad revolution region of profiles on plane about (the cad zero vector3) along (a cad vector3 with x 0.0, y 0.0 and z 1.0) by angle
+emit revolution number (result's valid as an integer)
+if result's valid:
+    set body to result's value
+    emit revolution number (the cad count of (body's vertices))
+    emit revolution number (the cad count of (body's edges))
+    emit revolution number (the cad count of (body's coedges))
+    emit revolution number (the cad count of (body's loops))
+    emit revolution number (the cad count of (body's faces))
+    emit revolution number (the cad count of (body's shells))
+    emit revolution number (the cad count of (body's lumps))
+    emit revolution number (the cad count of (body's surfaces))
+    emit revolution number (the cad count of (body's curves))
+    emit revolution number (the length of (body's roots))
+    set flaws to the cad flaws of body
+    emit revolution number (the length of flaws)
+    free flaws
+    set pcurveCount to 0
+    set coedgeKeys to the cad keys of (body's coedges)
+    loop index from 0 to the length of coedgeKeys:
+        set coedge to the cad node pointer for (the item at index in coedgeKeys) in (body's coedges)
+        if coedge's pcurve's valid:
+            increment pcurveCount
+    free coedgeKeys
+    emit revolution number pcurveCount
+    loop index from 0 to the length of (body's roots):
+        set root to the cad node pointer for (the item at index in (body's roots)) in body
+        emit revolution number (the length of (root's shells's values))
+    set keys to the cad keys of (body's vertices)
+    loop index from 0 to the length of keys:
+        set vertex to the cad node pointer for (the item at index in keys) in (body's vertices)
+        emit revolution number (vertex's point's x)
+        emit revolution number (vertex's point's y)
+        emit revolution number (vertex's point's z)
+    free keys
+loop index from 0 to the length of profiles:
+    free (the item at index in profiles)
+free profiles

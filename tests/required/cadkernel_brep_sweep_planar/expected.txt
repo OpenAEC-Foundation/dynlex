@@ -1,0 +1,3 @@
+a_planar_line_path_extrudes_the_profile
+two_line_segments_turn_and_join_as_one_body
+disconnected_paths_and_open_profiles_are_refused

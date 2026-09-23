@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_planar.dl
+
+function emit planar number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function a planar test line from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        return the cad curve2 of (a cad line2 from start to end)
+
+function a planar test triangle from {cad vector2:first} via {cad vector2:second} to {cad vector2:third}:
+    execute:
+        set result to a list containing (a planar test line from first to second)
+        append (a planar test line from second to third) to result
+        append (a planar test line from third to first) to result
+        return result
+
+set input to the argument at 0 in the command line arguments
+set case to @intrinsic("call", "libc", "atoi", integer, the data of input)
+set zero to the cad zero vector2
+set right to a cad vector2 with x 1.0 and y 0.0
+set east to a cad vector2 with x 2.0 and y 0.0
+set north to a cad vector2 with x 0.0 and y 1.0
+set corner to a cad vector2 with x 1.0 and y 1.0
+set pathPlane to the cad xy plane
+set plane to a cad plane with origin (the cad zero vector3), x axis (a cad vector3 with x 0.0, y 1.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+set profile to a planar test triangle from zero via right to (a cad vector2 with x 0.5 and y 1.0)
+set path to a list containing (a planar test line from zero to east)
+if case = 1:
+    clear path
+    append (a planar test line from east to zero) to path
+else if (case >= 2) and (case <= 4):
+    free profile
+    set profile to a planar test triangle from zero via (a cad vector2 with x 0.0 and y 1.0) to (a cad vector2 with x 1.0 and y 0.5)
+    set plane to a cad plane with origin (a cad vector3 with x 1.0, y 0.0 and z 0.0), x axis (a cad vector3 with x 0.0, y 0.0 and z 1.0) and y axis (a cad vector3 with x 1.0, y 0.0 and z 0.0)
+    clear path
+    if case = 2:
+        append (the cad curve2 of (a cad arc2 at zero with radius 1.0 from 0.0 to 1.5707963267948966)) to path
+    else if case = 3:
+        set plane's origin to a cad vector3 with x 0.0, y 1.0 and z 0.0
+        set plane's yAxis to a cad vector3 with x 0.0, y 1.0 and z 0.0
+        append (the cad curve2 of (a cad arc2 at zero with radius 1.0 from 1.5707963267948966 to 3.141592653589793)) to path
+    else:
+        set plane's origin to a cad vector3 with x 1.0, y -1.0 and z 0.0
+        append (a planar test line from (a cad vector2 with x 1.0 and y -1.0) to right) to path
+        append (the cad curve2 of (a cad arc2 at zero with radius 1.0 from 0.0 to 1.5707963267948966)) to path
+else if case = 5:
+    append (a planar test line from (a cad vector2 with x 3.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0)) to path
+else if case = 6:
+    clear profile
+    append (a planar test line from zero to north) to profile
+else if case = 7:
+    clear path
+    append (a planar test line from zero to zero) to path
+else if (case >= 8) and (case <= 10):
+    clear path
+    append (a planar test line from zero to right) to path
+    if case = 8:
+        append (a planar test line from right to east) to path
+    else if case = 9:
+        append (a planar test line from right to corner) to path
+    else:
+        append (a planar test line from right to zero) to path
+
+set result to the cad planar sweep of profile on plane following path on pathPlane
+emit planar number (result's valid as an integer)
+if result's valid:
+    set body to result's value
+    emit planar number (the cad count of (body's vertices))
+    emit planar number (the cad count of (body's edges))
+    emit planar number (the cad count of (body's coedges))
+    emit planar number (the cad count of (body's loops))
+    emit planar number (the cad count of (body's faces))
+    emit planar number (the cad count of (body's shells))
+    emit planar number (the cad count of (body's lumps))
+    emit planar number (the cad count of (body's surfaces))
+    emit planar number (the cad count of (body's curves))
+    emit planar number (the length of (body's roots))
+    set flaws to the cad flaws of body
+    emit planar number (the length of flaws)
+    free flaws
+    set keys to the cad keys of (body's vertices)
+    loop index from 0 to the length of keys:
+        set vertex to the cad node pointer for (the item at index in keys) in (body's vertices)
+        emit planar number (vertex's point's x)
+        emit planar number (vertex's point's y)
+        emit planar number (vertex's point's z)
+    free keys
+free profile
+free path
