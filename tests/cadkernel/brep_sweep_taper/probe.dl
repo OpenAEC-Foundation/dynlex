@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep.dl
+
+function emit taper number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit taper flag {boolean:value}:
+    execute:
+        emit taper number (value as an integer)
+function emit taper body {cad body:body}:
+    execute:
+        emit taper number (the cad count of (body's vertices))
+        emit taper number (the cad count of (body's edges))
+        emit taper number (the cad count of (body's coedges))
+        emit taper number (the cad count of (body's loops))
+        emit taper number (the cad count of (body's faces))
+        emit taper number (the cad count of (body's shells))
+        emit taper number (the cad count of (body's lumps))
+        emit taper number (the cad count of (body's surfaces))
+        emit taper number (the cad count of (body's curves))
+        emit taper number (the length of (body's roots))
+        set flaws to the cad flaws of body
+        emit taper number (the length of flaws)
+        free flaws
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            emit taper number (vertex's point's x)
+            emit taper number (vertex's point's y)
+            emit taper number (vertex's point's z)
+        free vertexKeys
+        set surfaceKeys to the cad keys of (body's surfaces)
+        loop index from 0 to the length of surfaceKeys:
+            set surface to the cad node pointer for (the item at index in surfaceKeys) in (body's surfaces)
+            emit taper number (surface's kind)
+            if surface's kind = 5:
+                set shape to surface's nurbs
+                emit taper number (shape's uDegree)
+                emit taper number (shape's vDegree)
+                emit taper number (the length of (shape's uKnots))
+                loop knot from 0 to the length of (shape's uKnots):
+                    emit taper number (the item at knot in (shape's uKnots))
+                emit taper number (the length of (shape's vKnots))
+                loop knot from 0 to the length of (shape's vKnots):
+                    emit taper number (the item at knot in (shape's vKnots))
+                emit taper number (the length of (shape's controls))
+                loop rowIndex from 0 to the length of (shape's controls):
+                    set controlRow to the item at rowIndex in (shape's controls)
+                    emit taper number (the length of controlRow)
+                    loop column from 0 to the length of controlRow:
+                        set point to the item at column in controlRow
+                        emit taper number (point's x)
+                        emit taper number (point's y)
+                        emit taper number (point's z)
+                emit taper number (the length of (shape's weights))
+                loop rowIndex from 0 to the length of (shape's weights):
+                    set weightRow to the item at rowIndex in (shape's weights)
+                    emit taper number (the length of weightRow)
+                    loop column from 0 to the length of weightRow:
+                        emit taper number (the item at column in weightRow)
+        free surfaceKeys
+        set faceKeys to the cad keys of (body's faces)
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in (body's faces)
+            emit taper flag (face's forward)
+            emit taper number (the length of (face's loops's values))
+        free faceKeys
+        set coedgeKeys to the cad keys of (body's coedges)
+        loop index from 0 to the length of coedgeKeys:
+            set coedge to the cad node pointer for (the item at index in coedgeKeys) in (body's coedges)
+            emit taper flag (coedge's forward)
+            set pcurve to coedge's pcurve
+            if pcurve's valid:
+                if pcurve's value's kind = 0:
+                    emit taper number 1
+                    set line to pcurve's value's line
+                    emit taper number (line's start's x)
+                    emit taper number (line's start's y)
+                    emit taper number (line's end's x)
+                    emit taper number (line's end's y)
+                else:
+                    emit taper number 0
+            else:
+                emit taper number 0
+        free coedgeKeys
+
+loop caseIndex from 0 to 3:
+    set profile to an empty list of a cad curve2
+    set direction to a cad vector3 with x 0.0, y 0.0 and z 1.0
+    set angle to 0.1
+    if caseIndex = 0:
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0))) to profile
+        set direction to a cad vector3 with x 0.0, y 0.0 and z 3.0
+        set angle to 0.2
+    else if caseIndex = 1:
+        append (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from 0.0 to 1.5707963267948966)) to profile
+    else:
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0))) to profile
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 4.0) to (a cad vector2 with x 4.0 and y 0.0))) to profile
+    set result to the tapered cad extrusion sheet of profile on (the cad xy plane) along direction by angle
+    free profile
+    emit taper number caseIndex
+    emit taper flag (result's valid)
+    if result's valid:
+        emit taper body (result's value)
