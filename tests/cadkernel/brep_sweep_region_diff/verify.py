@@ -106,6 +106,19 @@ def cases():
     yield "solid-zero-direction", encoded(2, [square], direction=(0.0, 0.0, 0.0)), 0
     yield "solid-empty", encoded(2, []), 0
 
+    yield "draft-one-square-hole", encoded(3, [square, square_hole]), 1
+    yield "draft-two-square-holes", encoded(3, [square, square_hole, second_hole]), 1
+    yield "draft-circular-hole", encoded(3, [square, inner_circle]), 1
+    yield "draft-negative-angle", encoded(3, [square, square_hole], angle=-0.1), 1
+    yield "draft-zero-angle", encoded(3, [square, square_hole], angle=0.0), 1
+    yield "draft-oblique-direction", encoded(3, [square, square_hole], direction=(1.0, 0.0, 2.0)), 1
+    yield "draft-invalid-angle", encoded(3, [square, square_hole], angle=math.pi / 2), 0
+    yield "draft-empty", encoded(3, []), 0
+    yield "draft-outside-hole", encoded(3, [square, polygon([(9.0, 2.0), (10.0, 2.0), (10.0, 3.0), (9.0, 3.0)])]), 0
+    yield "draft-growing-hole-breakthrough", encoded(3, [square, polygon([(1.0, 1.0), (7.0, 1.0), (7.0, 7.0), (1.0, 7.0)])], direction=(0.0, 0.0, 3.0), angle=0.2), 0
+    yield "draft-growing-holes-merge", encoded(3, [square, polygon([(2.0, 2.0), (3.0, 2.0), (3.0, 3.0), (2.0, 3.0)]), polygon([(4.0, 2.0), (5.0, 2.0), (5.0, 3.0), (4.0, 3.0)])], angle=0.4), 0
+    yield "draft-collapsed-outer", encoded(3, [[circle((0.0, 0.0), 0.5)]], direction=(0.0, 0.0, 3.0), angle=0.3), 0
+
 
 def numeric_output(binary: Path, arguments: list[str]) -> tuple[list[float], str]:
     output = process([binary, *arguments], timeout=30)

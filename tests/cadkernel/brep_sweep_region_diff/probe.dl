@@ -157,6 +157,8 @@ else if mode = 1:
     set result to the tapered cad extrusion sheets of profiles on (the cad xy plane) along direction by angle
 else if mode = 2:
     set result to the cad extrusion region of profiles on (the cad xy plane) along direction
+else if mode = 3:
+    set result to the tapered cad extrusion region of profiles on (the cad xy plane) along direction by angle
 else:
     @intrinsic("call", "libc", "exit", nothing, 3)
 loop loopIndex from 0 to the length of profiles:

@@ -6,6 +6,7 @@ import lib/cadkernel/brep_region_solid.dl
 function check region {boolean:condition}:
     execute:
         if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
             @intrinsic("call", "libc", "abort", nothing)
 
 function region point {a 64 bit floating-point number array of 2 items:values}:
@@ -39,6 +40,44 @@ function check region manifold {cad body:body}:
             set second to the cad node pointer for (the item at 1 in (edge's coedges's values)) in body
             check region ((first's forward) != (second's forward))
         free edges
+
+class:
+    patterns:
+        [a|] region cap areas result
+    members:
+        valid as a boolean
+        outerArea as a 64 bit floating-point number
+        holeArea as a 64 bit floating-point number
+
+function region area of {cad presspull curve loop:ring}:
+    execute:
+        set total to 0.0 as a 64 bit floating-point number
+        loop index from 0 to the length of (ring's values's values):
+            set total to total + (the cad enclosed area of (the item at index in (ring's values's values)))
+        return the absolute value of total
+
+function measure region cap of {cad body:body} at height {a 64 bit floating-point number:height}:
+    execute:
+        set absent to @intrinsic("construct", a region cap areas result, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
+        set target to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z height), x axis (the cad x axis) and y axis (the cad y axis)
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set faceKey to the item at index in faces
+            set face to the cad node pointer for faceKey in body
+            set surface to the cad node pointer for face's surface in body
+            if surface's kind = 0:
+                set gap to the cad distance from surface's plane's origin to target
+                if gap's valid:
+                    if (the absolute value of gap's value) <= 1e-7:
+                        set extracted to the cad planar face profile of body at faceKey
+                        if extracted's valid:
+                            if (the length of (extracted's value's loops's values)) >= 2:
+                                set outerRing to the item at 0 in (extracted's value's loops's values)
+                                set holeRing to the item at 1 in (extracted's value's loops's values)
+                                free faces
+                                return @intrinsic("construct", a region cap areas result, true, region area of outerRing, region area of holeRing)
+        free faces
+        return absent
 
 set outer to region square at [0.0,0.0] of size 10.0
 set oneHole to region square at [2.0,2.0] of size 2.0
@@ -125,6 +164,75 @@ free refused
 free nested
 free empty
 print "empty_outside_intersecting_touching_and_nested_regions_are_refused" as a line
+
+set draftAngle to 0.1 as a 64 bit floating-point number
+set draftOffset to 3.0 * @intrinsic("call", "libc", "tan", a 64 bit floating-point number, draftAngle)
+set tapered to the tapered cad extrusion region of profiles on (the cad xy plane) along direction by draftAngle
+check region (tapered's valid)
+check region ((the cad count of (tapered's value's faces)) = 14)
+check region manifold tapered's value
+set taperedBase to measure region cap of tapered's value at height 0.0
+set taperedTop to measure region cap of tapered's value at height 3.0
+check region (taperedBase's valid and taperedTop's valid)
+check region ((the absolute value of (taperedBase's outerArea - 100.0)) < 1e-5)
+check region ((the absolute value of (taperedBase's holeArea - 4.0)) < 1e-5)
+set wantedOuter to (10.0 - (2.0 * draftOffset)) * (10.0 - (2.0 * draftOffset))
+set wantedHole to (2.0 + (2.0 * draftOffset)) * (2.0 + (2.0 * draftOffset))
+check region ((the absolute value of (taperedTop's outerArea - wantedOuter)) < 1e-4)
+check region ((the absolute value of (taperedTop's holeArea - wantedHole)) < 1e-4)
+print "positive_draft_shrinks_the_outer_loop_and_widens_holes" as a line
+
+set outward to the tapered cad extrusion region of profiles on (the cad xy plane) along direction by (the negative of draftAngle)
+check region (outward's valid)
+check region manifold outward's value
+set outwardTop to measure region cap of outward's value at height 3.0
+check region (outwardTop's valid)
+set wantedOuter to (10.0 + (2.0 * draftOffset)) * (10.0 + (2.0 * draftOffset))
+set wantedHole to (2.0 - (2.0 * draftOffset)) * (2.0 - (2.0 * draftOffset))
+check region ((the absolute value of (outwardTop's outerArea - wantedOuter)) < 1e-4)
+check region ((the absolute value of (outwardTop's holeArea - wantedHole)) < 1e-4)
+print "negative_draft_widens_the_outer_loop_and_shrinks_holes" as a line
+
+set zeroDraft to the tapered cad extrusion region of profiles on (the cad xy plane) along direction by 0.0
+check region (zeroDraft's valid)
+check region manifold zeroDraft's value
+check region ((the cad count of (zeroDraft's value's faces)) = (the cad count of (multiple's value's faces)))
+set zeroTop to measure region cap of zeroDraft's value at height 3.0
+check region (zeroTop's valid)
+check region ((the absolute value of (zeroTop's outerArea - 100.0)) < 1e-5)
+check region ((the absolute value of (zeroTop's holeArea - 4.0)) < 1e-5)
+print "zero_draft_uses_the_untapered_region_geometry" as a line
+
+set taperedRoundProfiles to a list containing outer
+set taperedRoundHole to a list containing (the cad curve2 of (a cad circle2 at (region point [5.0,5.0]) with radius 1.0))
+append taperedRoundHole to taperedRoundProfiles
+set taperedRound to the tapered cad extrusion region of taperedRoundProfiles on (the cad xy plane) along direction by draftAngle
+check region (taperedRound's valid)
+check region manifold taperedRound's value
+free taperedRoundProfiles
+free taperedRoundHole
+print "a_tapered_circular_hole_keeps_a_manifold_wall" as a line
+
+set crossingTop to a list containing outer
+append oneHole to crossingTop
+check region (((the tapered cad extrusion region of crossingTop on (the cad xy plane) along direction by 0.35)'s valid) = false)
+free crossingTop
+set nearbyFirst to region square at [3.0,3.0] of size 1.0
+set nearbySecond to region square at [5.0,3.0] of size 1.0
+set nearbyProfiles to a list containing outer
+append nearbyFirst to nearbyProfiles
+append nearbySecond to nearbyProfiles
+check region (((the tapered cad extrusion region of nearbyProfiles on (the cad xy plane) along direction by 0.2)'s valid) = false)
+free nearbyProfiles
+free nearbyFirst
+free nearbySecond
+print "draft_refuses_top_cap_hole_collisions" as a line
+
+check region (((the tapered cad extrusion region of profiles on (the cad xy plane) along direction by 1.5707963267948966)'s valid) = false)
+set invalidAngle to 0.0 / 0.0
+check region (((the tapered cad extrusion region of profiles on (the cad xy plane) along direction by invalidAngle)'s valid) = false)
+check region (((the tapered cad extrusion region of profiles on (the cad xy plane) along direction by 1.1)'s valid) = false)
+print "draft_refuses_invalid_angles_and_collapsed_outer_profiles" as a line
 
 free profiles
 free outer

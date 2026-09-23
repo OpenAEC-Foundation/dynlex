@@ -134,13 +134,13 @@ local function cad region solid cap loops are valid {cad face key:cap} in {cad b
             append (copy region ring from (ring's values's values)) to (loops's values)
         return region rings are valid loops
 
-function the cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
+local function build region solid from {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction} with draft {a 64 bit floating-point number:angle}:
     execute:
         set loops to collect region rings from profiles
         if (region rings are valid loops) = false:
             return no cad body
         set outer to the item at 0 in (loops's values)
-        set built to the cad extrusion of (outer's values's values) on plane along direction
+        set built to the tapered cad extrusion of (outer's values's values) on plane along direction by angle
         if built's valid = false:
             return no cad body
         set body to built's value
@@ -162,7 +162,7 @@ function the cad extrusion region of {a pointer to a list:profiles} on {cad plan
         set shellKey to capFace's owner
         loop holeIndex from 1 to the length of (loops's values):
             set hole to the item at holeIndex in (loops's values)
-            set cutter to the cad extrusion of (hole's values's values) on plane along direction
+            set cutter to the tapered cad extrusion of (hole's values's values) on plane along direction by (the negative of angle)
             if cutter's valid = false:
                 return no cad body
             set holeBaseCap to cad region solid cap of cutter's value on plane within tolerance
@@ -207,3 +207,12 @@ function the cad extrusion region of {a pointer to a list:profiles} on {cad plan
                 return no cad body
         free edges
         return the validated cad body result of body
+
+function the cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
+    execute:
+        return build region solid from profiles on plane along direction with draft 0.0
+
+function the tapered cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
+    execute:
+        set angle to givenAngle as a 64 bit floating-point number
+        return build region solid from profiles on plane along direction with draft angle
