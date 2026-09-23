@@ -265,12 +265,23 @@ def positive_seconds(value: str) -> float:
     return number
 
 
+def fixture_compile_timeout(fixture: Path, override: float | None) -> float:
+    option = fixture / "compile_timeout_seconds.txt"
+    declared = 30.0
+    if option.is_file():
+        value = text(option).strip()
+        if not re.fullmatch(r"[1-9][0-9]{0,2}", value) or int(value) > 300:
+            raise FixtureFailure("invalid compile_timeout_seconds.txt")
+        declared = float(value)
+    return override if override is not None else declared
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", type=Path, default=Path("build/dynlex.exe" if os.name == "nt" else "build/dynlex"))
     parser.add_argument("--filter", action="append", dest="filters", metavar="GLOB", help="fixture-name glob; repeat to select the union")
     parser.add_argument("--optimization", action="append", choices=("O0", "O2"), help="repeatable; defaults to both O0 and O2")
-    parser.add_argument("--compile-timeout", type=positive_seconds, default=30.0, metavar="SECONDS")
+    parser.add_argument("--compile-timeout", type=positive_seconds, metavar="SECONDS", help="override each fixture's compilation budget")
     parser.add_argument("--run-timeout", type=positive_seconds, default=15.0, metavar="SECONDS")
     parser.add_argument("--list", action="store_true", help="list selected fixture names without compiling")
     parser.add_argument("--fail-fast", action="store_true")
@@ -304,7 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 detail = verify_fixture(
                     fixture, optimization, compiler, output_directory,
-                    args.compile_timeout, args.run_timeout, args.verbose,
+                    fixture_compile_timeout(fixture, args.compile_timeout), args.run_timeout, args.verbose,
                 )
             except (FixtureFailure, OSError, ValueError, subprocess.SubprocessError) as error:
                 failed += 1
