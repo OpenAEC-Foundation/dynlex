@@ -90,6 +90,22 @@ def cases():
     yield "oblique-circle-taper", encoded(1, small_circle, direction=(1.0, 0.0, 2.0)), 1
     yield "negative-taper", encoded(1, two_circles, angle=-0.1), 1
 
+    square_hole = polygon([(1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)])
+    second_hole = polygon([(5.0, 5.0), (6.0, 5.0), (6.0, 6.0), (5.0, 6.0)])
+    yield "solid-one-square-hole", encoded(2, [square, square_hole]), 1
+    yield "solid-one-loop", encoded(2, [square]), 1
+    yield "solid-two-square-holes", encoded(2, [square, square_hole, second_hole]), 1
+    yield "solid-circular-hole", encoded(2, [square, inner_circle]), 1
+    yield "solid-oblique-direction", encoded(2, [square, square_hole], direction=(1.0, 0.0, 2.0)), 1
+    yield "solid-reversed-direction", encoded(2, [square, square_hole], direction=(0.0, 0.0, -2.0)), 1
+    yield "solid-outside-hole", encoded(2, [square, polygon([(9.0, 2.0), (10.0, 2.0), (10.0, 3.0), (9.0, 3.0)])]), 0
+    yield "solid-intersecting-hole", encoded(2, [square, polygon([(7.0, 2.0), (9.0, 2.0), (9.0, 4.0), (7.0, 4.0)])]), 0
+    yield "solid-touching-hole", encoded(2, [square, polygon([(0.0, 2.0), (1.0, 2.0), (1.0, 3.0), (0.0, 3.0)])]), 0
+    yield "solid-nested-hole", encoded(2, [square, square_hole, polygon([(1.5, 1.5), (2.0, 1.5), (2.0, 2.0), (1.5, 2.0)])]), 0
+    yield "solid-empty-hole", encoded(2, [square, []]), 0
+    yield "solid-zero-direction", encoded(2, [square], direction=(0.0, 0.0, 0.0)), 0
+    yield "solid-empty", encoded(2, []), 0
+
 
 def numeric_output(binary: Path, arguments: list[str]) -> tuple[list[float], str]:
     output = process([binary, *arguments], timeout=30)

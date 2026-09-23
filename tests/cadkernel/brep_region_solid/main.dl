@@ -1,0 +1,132 @@
+# SPDX-License-Identifier: MPL-2.0
+# Solid region extrusion from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_region_solid.dl
+
+function check region {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function region point {a 64 bit floating-point number array of 2 items:values}:
+    execute:
+        return a cad vector2 with x (the item at 0 in values) and y (the item at 1 in values)
+
+function region square at {a 64 bit floating-point number array of 2 items:origin} of size {a 64 bit floating-point number:size}:
+    execute:
+        set x to the item at 0 in origin
+        set y to the item at 1 in origin
+        set points to a list containing (region point [x,y])
+        append (region point [x + size,y]) to points
+        append (region point [x + size,y + size]) to points
+        append (region point [x,y + size]) to points
+        set pieces to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in points) to (the item at (the remainder of (index + 1) divided by 4) in points))) to pieces
+        free points
+        return pieces
+
+function check region manifold {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check region ((the length of flaws) = 0)
+        free flaws
+        set edges to the cad edge keys of body
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in body
+            check region ((the length of (edge's coedges's values)) = 2)
+            set first to the cad node pointer for (the item at 0 in (edge's coedges's values)) in body
+            set second to the cad node pointer for (the item at 1 in (edge's coedges's values)) in body
+            check region ((first's forward) != (second's forward))
+        free edges
+
+set outer to region square at [0.0,0.0] of size 10.0
+set oneHole to region square at [2.0,2.0] of size 2.0
+set profiles to a list containing outer
+append oneHole to profiles
+set direction to a cad vector3 with x 0.0, y 0.0 and z 3.0
+set single to the cad extrusion region of profiles on (the cad xy plane) along direction
+check region (single's valid)
+check region ((the cad count of (single's value's faces)) = 10)
+check region ((the length of (single's value's roots)) = 1)
+check region manifold single's value
+set caps to the cad face keys of single's value
+set twoLoopCaps to 0
+loop index from 0 to the length of caps:
+    set face to the cad node pointer for (the item at index in caps) in single's value
+    if (the length of (face's loops's values)) = 2:
+        increment twoLoopCaps
+free caps
+check region (twoLoopCaps = 2)
+check region ((the length of outer) = 4)
+check region ((the length of oneHole) = 4)
+print "a_region_with_one_hole_is_a_manifold_solid" as a line
+
+set secondHole to region square at [6.0,6.0] of size 1.0
+append secondHole to profiles
+set multiple to the cad extrusion region of profiles on (the cad xy plane) along direction
+check region (multiple's valid)
+check region ((the cad count of (multiple's value's faces)) = 14)
+check region manifold multiple's value
+set caps to the cad face keys of multiple's value
+set threeLoopCaps to 0
+loop index from 0 to the length of caps:
+    set face to the cad node pointer for (the item at index in caps) in multiple's value
+    if (the length of (face's loops's values)) = 3:
+        increment threeLoopCaps
+free caps
+check region (threeLoopCaps = 2)
+print "multiple_holes_keep_both_cap_rings" as a line
+
+set roundHole to a list containing (the cad curve2 of (a cad circle2 at (region point [5.0,5.0]) with radius 1.0))
+set roundProfiles to a list containing outer
+append roundHole to roundProfiles
+set roundSolid to the cad extrusion region of roundProfiles on (the cad xy plane) along direction
+check region (roundSolid's valid)
+check region ((the cad count of (roundSolid's value's faces)) = 10)
+check region manifold roundSolid's value
+free roundProfiles
+free roundHole
+print "a_circular_hole_is_split_into_manifold_arc_walls" as a line
+
+set reverseDirection to a cad vector3 with x 0.0, y 0.0 and z -2.0
+set reverseSolid to the cad extrusion region of profiles on (the cad xy plane) along reverseDirection
+check region (reverseSolid's valid)
+check region ((the cad count of (reverseSolid's value's faces)) = 14)
+check region manifold reverseSolid's value
+print "a_region_can_extrude_against_the_plane_normal" as a line
+
+set empty to an empty list of (the type of outer)
+check region (((the cad extrusion region of empty on (the cad xy plane) along direction)'s valid) = false)
+set outside to region square at [11.0,2.0] of size 1.0
+set refused to a list containing outer
+append outside to refused
+check region (((the cad extrusion region of refused on (the cad xy plane) along direction)'s valid) = false)
+free refused
+free outside
+set intersecting to region square at [9.0,2.0] of size 2.0
+set refused to a list containing outer
+append intersecting to refused
+check region (((the cad extrusion region of refused on (the cad xy plane) along direction)'s valid) = false)
+free refused
+free intersecting
+set touching to region square at [0.0,2.0] of size 1.0
+set refused to a list containing outer
+append touching to refused
+check region (((the cad extrusion region of refused on (the cad xy plane) along direction)'s valid) = false)
+free refused
+free touching
+set nested to region square at [2.5,2.5] of size 0.5
+set refused to a list containing outer
+append oneHole to refused
+append nested to refused
+check region (((the cad extrusion region of refused on (the cad xy plane) along direction)'s valid) = false)
+free refused
+free nested
+free empty
+print "empty_outside_intersecting_touching_and_nested_regions_are_refused" as a line
+
+free profiles
+free outer
+free oneHole
+free secondHole

@@ -1,0 +1,209 @@
+# SPDX-License-Identifier: MPL-2.0
+# Solid region extrusion from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_presspull.dl
+import lib/cadkernel/brep_profile_pieces.dl
+import lib/cadkernel/containment2.dl
+import lib/cadkernel/brep_bounds.dl
+
+class:
+    patterns:
+        [a|] cad region solid loop
+    members:
+        values as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+
+class:
+    patterns:
+        [a|] cad region solid cap result
+    members:
+        valid as a boolean
+        key as a cad face key
+
+local function copy region ring from {a pointer to a list:pieces}:
+    execute:
+        set values to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to the length of pieces:
+            append (the cad clone of (the item at index in pieces)) to (values's values)
+        return @intrinsic("construct", a cad region solid loop, values)
+
+local function collect region rings from {a pointer to a list:profiles}:
+    execute:
+        set loops to a cad topology list of a cad region solid loop
+        loop index from 0 to the length of profiles:
+            set expanded to the cad extrusion profile pieces of (the item at index in profiles)
+            append (copy region ring from expanded) to (loops's values)
+            free expanded
+        return loops
+
+local function region rings are valid {cad topology list:profiles}:
+    execute:
+        if (the length of (profiles's values)) = 0:
+            return false
+        set outer to the item at 0 in (profiles's values)
+        if (the length of (outer's values's values)) = 0:
+            return false
+        set tolerance to a cad tolerance of 1e-9
+        loop holeIndex from 1 to the length of (profiles's values):
+            set hole to the item at holeIndex in (profiles's values)
+            if (the length of (hole's values's values)) = 0:
+                return false
+            set firstHolePoint to the cad point on (the item at 0 in (hole's values's values)) at 0.5
+            if (cad boundary (outer's values's values) contains firstHolePoint within tolerance) = false:
+                return false
+            loop previousIndex from 0 to holeIndex:
+                set previous to the item at previousIndex in (profiles's values)
+                loop curveIndex from 0 to the length of (hole's values's values):
+                    set curve to the item at curveIndex in (hole's values's values)
+                    set middle to the cad point on curve at 0.5
+                    loop otherIndex from 0 to the length of (previous's values's values):
+                        set other to the item at otherIndex in (previous's values's values)
+                        set crossings to the cad crossings of curve and other within tolerance
+                        set touching to ((the length of crossings) != 0) or ((the cad distance to other from middle) <= (tolerance's linear))
+                        free crossings
+                        if touching:
+                            return false
+            loop previousIndex from 1 to holeIndex:
+                set previous to the item at previousIndex in (profiles's values)
+                set firstPreviousPoint to the cad point on (the item at 0 in (previous's values's values)) at 0.5
+                if (cad boundary (previous's values's values) contains firstHolePoint within tolerance) or (cad boundary (hole's values's values) contains firstPreviousPoint within tolerance):
+                    return false
+        return true
+
+local function cad region solid cap of {cad body:body} on {cad plane:plane} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set absent to @intrinsic("construct", a cad region solid cap result, false, a new cad face key)
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return absent
+        set keys to the cad face keys of body
+        loop index from 0 to the length of keys:
+            set faceKey to the item at index in keys
+            set faceNode to the cad node pointer for faceKey in body
+            if faceNode != (0 as the type of faceNode):
+                set surfaceNode to the cad node pointer for faceNode's surface in body
+                if surfaceNode != (0 as the type of surfaceNode):
+                    if surfaceNode's kind = 0:
+                        set candidateNormal to the cad normal of surfaceNode's plane
+                        set gap to the cad distance from surfaceNode's plane's origin to plane
+                        if candidateNormal's valid and gap's valid:
+                            if ((the absolute value of (the cad dot of (normal's value) and (candidateNormal's value))) > (1.0 - 1e-9)) and ((the absolute value of gap's value) <= tolerance):
+                                free keys
+                                return @intrinsic("construct", a cad region solid cap result, true, faceKey)
+        free keys
+        return absent
+
+local function cad region solid copied cap {cad face key:copied} into {cad face key:destination} in {cad body:body} within {cad shell key:shellKey}:
+    execute:
+        set faceNode to the cad node pointer for copied in body
+        set destinationNode to the cad node pointer for destination in body
+        set shellNode to the cad node pointer for shellKey in body
+        if ((faceNode = (0 as the type of faceNode)) or (destinationNode = (0 as the type of destinationNode))) or (shellNode = (0 as the type of shellNode)):
+            return false
+        loop ringIndex from 0 to the length of (faceNode's loops's values):
+            set ringKey to the item at ringIndex in (faceNode's loops's values)
+            set ringNode to the cad node pointer for ringKey in body
+            if ringNode = (0 as the type of ringNode):
+                return false
+            set ringNode's owner to destination
+            loop useIndex from 0 to the length of (ringNode's coedges's values):
+                set useNode to the cad node pointer for (the item at useIndex in (ringNode's coedges's values)) in body
+                if useNode = (0 as the type of useNode):
+                    return false
+                set useNode's pcurve to no cad pcurve
+            append ringKey to (destinationNode's loops's values)
+        set remaining to a cad topology list of a cad face key
+        loop index from 0 to the length of (shellNode's faces's values):
+            set key to the item at index in (shellNode's faces's values)
+            if key != copied:
+                append key to (remaining's values)
+        set shellNode's faces to remaining
+        set removed to the cad removal of copied from body
+        return removed's valid
+
+local function cad region solid cap loops are valid {cad face key:cap} in {cad body:body}:
+    execute:
+        set extracted to the cad planar face profile of body at cap
+        if extracted's valid = false:
+            return false
+        set loops to a cad topology list of a cad region solid loop
+        loop index from 0 to the length of (extracted's value's loops's values):
+            set ring to the item at index in (extracted's value's loops's values)
+            append (copy region ring from (ring's values's values)) to (loops's values)
+        return region rings are valid loops
+
+function the cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
+    execute:
+        set loops to collect region rings from profiles
+        if (region rings are valid loops) = false:
+            return no cad body
+        set outer to the item at 0 in (loops's values)
+        set built to the cad extrusion of (outer's values's values) on plane along direction
+        if built's valid = false:
+            return no cad body
+        set body to built's value
+        if (the length of (loops's values)) = 1:
+            return the cad body result of body
+        set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+        set toleranceBodies to a list containing body
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set baseCap to cad region solid cap of body on plane within tolerance
+        set topCap to cad region solid cap of body on far within tolerance
+        if (baseCap's valid = false) or (topCap's valid = false):
+            return no cad body
+        if baseCap's key = topCap's key:
+            return no cad body
+        set capFace to the cad node pointer for baseCap's key in body
+        if capFace = (0 as the type of capFace):
+            return no cad body
+        set shellKey to capFace's owner
+        loop holeIndex from 1 to the length of (loops's values):
+            set hole to the item at holeIndex in (loops's values)
+            set cutter to the cad extrusion of (hole's values's values) on plane along direction
+            if cutter's valid = false:
+                return no cad body
+            set holeBaseCap to cad region solid cap of cutter's value on plane within tolerance
+            set holeTopCap to cad region solid cap of cutter's value on far within tolerance
+            if (holeBaseCap's valid = false) or (holeTopCap's valid = false):
+                return no cad body
+            set holeFaces to the cad face keys of cutter's value
+            loop faceIndex from 0 to the length of holeFaces:
+                set holeFace to the item at faceIndex in holeFaces
+                if (copy cad boolean face holeFace from cutter's value into body owned by shellKey flipped true within tolerance) = false:
+                    free holeFaces
+                    return no cad body
+                set destination to a new cad face key
+                set isCap to false
+                if holeFace = holeBaseCap's key:
+                    set destination to baseCap's key
+                    set isCap to true
+                else if holeFace = holeTopCap's key:
+                    set destination to topCap's key
+                    set isCap to true
+                if isCap:
+                    set shellNode to the cad node pointer for shellKey in body
+                    if shellNode = (0 as the type of shellNode):
+                        free holeFaces
+                        return no cad body
+                    set copied to the last item of (shellNode's faces's values)
+                    if (cad region solid copied cap copied into destination in body within shellKey) = false:
+                        free holeFaces
+                        return no cad body
+            free holeFaces
+        if (cad region solid cap loops are valid baseCap's key in body) = false:
+            return no cad body
+        if (cad region solid cap loops are valid topCap's key in body) = false:
+            return no cad body
+        if (the length of (body's roots)) = 0:
+            return no cad body
+        set edges to the cad edge keys of body
+        loop edgeIndex from 0 to the length of edges:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edges) in body
+            if (edgeNode = (0 as the type of edgeNode)) or ((the length of (edgeNode's coedges's values)) != 2):
+                free edges
+                return no cad body
+        free edges
+        return the validated cad body result of body

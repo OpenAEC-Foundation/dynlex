@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 // Pinned source: cadkernel src/brep/{sweep,presspull}.rs at
 // 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-use cadkernel::brep::{extrude_surface_region, extrude_surface_region_tapered, Body, Surface};
+use cadkernel::brep::{extrude_region, extrude_surface_region, extrude_surface_region_tapered, Body, Surface};
 use cadkernel::geom2d::{Arc, Circle, Curve as Curve2, Line, Polyline, PolylineVertex as Vertex2};
 use cadkernel::space::Plane;
 
@@ -143,6 +143,7 @@ fn main() {
     let result = match mode {
         0 => extrude_surface_region(plane, &profiles, direction),
         1 => extrude_surface_region_tapered(plane, &profiles, direction, angle),
+        2 => extrude_region(plane, &profiles, direction),
         _ => panic!("unsupported sweep mode"),
     };
     number(result.is_some() as u8 as f64);

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_region_solid.dl
 
 function region argument {integer:index}:
     execute:
@@ -154,6 +155,8 @@ if mode = 0:
     set result to the cad extrusion sheets of profiles on (the cad xy plane) along direction
 else if mode = 1:
     set result to the tapered cad extrusion sheets of profiles on (the cad xy plane) along direction by angle
+else if mode = 2:
+    set result to the cad extrusion region of profiles on (the cad xy plane) along direction
 else:
     @intrinsic("call", "libc", "exit", nothing, 3)
 loop loopIndex from 0 to the length of profiles:
