@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/nurbs3/support.dl
+
+set constructor to (the nurbs probe number at 0) as an integer
+set uDegree to (the nurbs probe number at 1) as an integer
+set vDegree to (the nurbs probe number at 2) as an integer
+set rows to (the nurbs probe number at 3) as an integer
+set uCount to (the nurbs probe number at 4) as an integer
+set vCount to (the nurbs probe number at 5) as an integer
+set weightRows to (the nurbs probe number at 6) as an integer
+set uClosed to (the nurbs probe number at 7) != 0.0
+set vClosed to (the nurbs probe number at 8) != 0.0
+set reversed to (the nurbs probe number at 9) != 0.0
+set u to the nurbs probe number at 10
+set v to the nurbs probe number at 11
+set s to the nurbs probe number at 12
+set t to the nurbs probe number at 13
+set axis to (the nurbs probe number at 14) as an integer
+set parameter to the nurbs probe number at 15
+set evaluate to (the nurbs probe number at 16) != 0.0
+set cursor to 17
+set controls to an empty list of the type of (an empty list of a cad vector3)
+loop row from 0 to rows:
+    set columns to (the nurbs probe number at cursor) as an integer
+    increment cursor
+    set across to an empty list of a cad vector3
+    loop column from 0 to columns:
+        append (the nurbs probe point at cursor) to across
+        set cursor to cursor + 3
+    append across to controls
+set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+loop row from 0 to weightRows:
+    set columns to (the nurbs probe number at cursor) as an integer
+    increment cursor
+    set acrossWeights to an empty list of a 64 bit floating-point number
+    loop column from 0 to columns:
+        append (the nurbs probe number at cursor) to acrossWeights
+        increment cursor
+    append acrossWeights to weights
+set uKnots to an empty list of a 64 bit floating-point number
+loop index from 0 to uCount:
+    append (the nurbs probe number at cursor) to uKnots
+    increment cursor
+set vKnots to an empty list of a 64 bit floating-point number
+loop index from 0 to vCount:
+    append (the nurbs probe number at cursor) to vKnots
+    increment cursor
+set result to the cad nurbs surface3 of degrees uDegree and vDegree with controls controls, knots uKnots and vKnots and weights weights
+if constructor = 1:
+    set result to the strict cad nurbs surface3 of degrees uDegree and vDegree with controls controls, knots uKnots and vKnots and weights weights
+else if constructor = 2:
+    set result to the cad nurbs surface3 of degrees uDegree and vDegree through control net controls with periodicity uClosed and vClosed
+if the valid of result:
+    set the value of result to ((the value of result) with cad u periodicity uClosed and v periodicity vClosed)
+    set the value of result to (the value of result) with cad v reversal reversed
+emit nurbs flag (the valid of result)
+if the valid of result:
+    set shape to the value of result
+    set degrees to the cad degrees of shape
+    emit nurbs scalar (the item at 0 in degrees)
+    emit nurbs scalar (the item at 1 in degrees)
+    set periodicity to the cad periodicity of shape
+    emit nurbs flag (the item at 0 in periodicity)
+    emit nurbs flag (the item at 1 in periodicity)
+    emit nurbs flag (the cad v reversal of shape)
+    set points to the cad control points of shape
+    emit nurbs scalar (the length of points)
+    loop row from 0 to the length of points:
+        set across to the item at row in points
+        emit nurbs scalar (the length of across)
+        loop column from 0 to the length of across:
+            emit nurbs point (the item at column in across)
+    set shapeWeights to the cad weights of shape
+    emit nurbs scalar (the length of shapeWeights)
+    loop row from 0 to the length of shapeWeights:
+        set acrossWeights to the item at row in shapeWeights
+        emit nurbs scalar (the length of acrossWeights)
+        loop column from 0 to the length of acrossWeights:
+            emit nurbs scalar (the item at column in acrossWeights)
+    set bothKnots to the cad knots of shape
+    loop knotAxis from 0 to 2:
+        set knots to the item at knotAxis in bothKnots
+        emit nurbs scalar (the length of knots)
+        loop index from 0 to the length of knots:
+            emit nurbs scalar (the item at index in knots)
+    set domain to the cad domain of shape
+    emit nurbs scalar (the start of the u of domain)
+    emit nurbs scalar (the end of the u of domain)
+    emit nurbs scalar (the start of the v of domain)
+    emit nurbs scalar (the end of the v of domain)
+    if evaluate:
+        emit nurbs point (the cad point on shape at knots u and v)
+        emit nurbs point (the cad point on shape at parameters s and t)
+        set tangents to the cad tangents of shape at knots u and v
+        emit nurbs flag (the valid of tangents)
+        if the valid of tangents:
+            emit nurbs point (the u of tangents)
+            emit nurbs point (the v of tangents)
+        set normal to the cad normal of shape at knots u and v
+        emit nurbs flag (the valid of normal)
+        if the valid of normal:
+            emit nurbs point (the value of normal)
+        set normal to the cad normal of shape at parameters s and t
+        emit nurbs flag (the valid of normal)
+        if the valid of normal:
+            emit nurbs point (the value of normal)
+        set iso to the cad isocurve of shape on axis axis at parameter
+        emit nurbs flag (the valid of iso)
+        if the valid of iso:
+            emit nurbs curve (the value of iso)
+            emit nurbs point (the cad point on (the value of iso) at s)
+loop row from 0 to the length of controls:
+    free (the item at row in controls)
+loop row from 0 to the length of weights:
+    free (the item at row in weights)
+free controls
+free weights
+free uKnots
+free vKnots

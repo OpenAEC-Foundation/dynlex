@@ -1,0 +1,53 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set target to value:
+    replacement:
+        @intrinsic("store", target, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class container:
+    members:
+        stored value
+
+class box:
+    members:
+        values
+
+function {container:items} contains value:
+    execute:
+        return @intrinsic("equal", the stored value of items, value)
+
+function {box:items} contains value:
+    execute:
+        return the values of items contains value
+
+function {container:items} does not contain value:
+    execute:
+        return @intrinsic("not", items contains value)
+
+function {box:items} does not contain value:
+    execute:
+        return the values of items does not contain value
+
+function add value to {box:items}:
+    execute:
+        if items does not contain value:
+            @intrinsic("discard", value)
+
+function initial scalar:
+    execute:
+        return 0
+
+set seed to initial scalar
+set values to @intrinsic("construct", container, 2)
+set object to @intrinsic("construct", box, values)
+add 1 to object
+if object does not contain 2:
+    @intrinsic("return", 1)
+if @intrinsic("not", object does not contain 1):
+    @intrinsic("return", 2)

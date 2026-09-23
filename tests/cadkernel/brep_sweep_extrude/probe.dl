@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+import lib/cadkernel/brep_sweep.dl
+
+function sweep probe point2 at {integer:position}:
+    execute:
+        return a cad vector2 with x (maker argument position) and y (maker argument (position + 1))
+function sweep probe point3 at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+set mode to (maker argument 0) as an integer
+set frame to a cad plane with origin (sweep probe point3 at 1), x axis (sweep probe point3 at 4) and y axis (sweep probe point3 at 7)
+set direction to sweep probe point3 at 10
+set count to (maker argument 13) as an integer
+set cursor to 14
+set profile to an empty list of a cad curve2
+set valid to true
+loop index from 0 to count:
+    set kind to (maker argument cursor) as an integer
+    set cursor to cursor + 1
+    set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+    if (kind = 0) or ((kind = 6) or (kind = 7)):
+        set start to sweep probe point2 at cursor
+        set end to sweep probe point2 at (cursor + 2)
+        set piece to the cad curve2 of (a cad line2 from start to end)
+        if kind = 6:
+            set piece to the cad curve2 of (a cad ray2 from start along end)
+        if kind = 7:
+            set piece to the cad curve2 of (a cad xline2 through start along end)
+        set cursor to cursor + 4
+    else if kind = 1:
+        set piece to the cad curve2 of (a cad circle2 at (sweep probe point2 at cursor) with radius (maker argument (cursor + 2)))
+        set cursor to cursor + 3
+    else if kind = 2:
+        set piece to the cad curve2 of (a cad arc2 at (sweep probe point2 at cursor) with radius (maker argument (cursor + 2)) from (maker argument (cursor + 3)) to (maker argument (cursor + 4)))
+        set cursor to cursor + 5
+    else if kind = 3:
+        set ellipse to a cad ellipse at (sweep probe point2 at cursor) with radii (maker argument (cursor + 2)) and (maker argument (cursor + 3)) along (sweep probe point2 at (cursor + 4))
+        set piece to the cad curve2 of (a cad ellipse arc2 on ellipse from (maker argument (cursor + 6)) to (maker argument (cursor + 7)))
+        set cursor to cursor + 8
+    else if (kind = 4) or (kind = 5):
+        set degree to (maker argument cursor) as an integer
+        set pointCount to (maker argument (cursor + 1)) as an integer
+        set cursor to cursor + 2
+        set points to an empty list of a cad vector2
+        set polyPoints to an empty list of a cad polyline vertex2
+        set weights to an empty list of a 64 bit floating-point number
+        loop pointIndex from 0 to pointCount:
+            set point to sweep probe point2 at cursor
+            append point to points
+            append (maker argument (cursor + 2)) to weights
+            append (a cad polyline vertex2 at point with bulge (maker argument (cursor + 2))) to polyPoints
+            set cursor to cursor + 3
+        set knotCount to (maker argument cursor) as an integer
+        set cursor to cursor + 1
+        set knots to an empty list of a 64 bit floating-point number
+        loop knotIndex from 0 to knotCount:
+            append (maker argument cursor) to knots
+            set cursor to cursor + 1
+        if kind = 4:
+            set piece to the cad curve2 of (the cad polyline2 with vertices polyPoints and closure (degree != 0))
+        else:
+            set made to the cad nurbs curve2 of degree degree with controls points, knots knots and weights weights
+            if made's valid:
+                set piece to the cad curve2 of (made's value)
+            else:
+                set valid to false
+        free points
+        free polyPoints
+        free knots
+        free weights
+    else:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+    append piece to profile
+set result to no cad body
+if valid:
+    if mode = 0:
+        set result to the cad extrusion of profile on frame along direction
+    else:
+        set result to the cad extrusion sheet of profile on frame along direction
+free profile
+emit maker flag (result's valid)
+if result's valid:
+    emit maker body (result's value)

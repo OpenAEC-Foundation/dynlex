@@ -1,0 +1,357 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/helix.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/helix.rs
+# Optional results expose valid/value. Generated NURBS values use nurbs3.dl:
+# copies retain shared storage, clones are independent, scope exit releases it.
+# Their list fields are read-only borrowed views, including on invalid results.
+import lib/cadkernel/nurbs3.dl
+
+class:
+    patterns:
+        [a|] cad helix direction
+    members:
+        clockwise as a boolean
+
+class:
+    patterns:
+        [a|] cad helix
+    members:
+        baseCenter as a cad vector3
+        axisDirection as a cad vector3
+        startDirection as a cad vector3
+        baseRadius as a 64 bit floating-point number
+        topRadius as a 64 bit floating-point number
+        height as a 64 bit floating-point number
+        turns as a 64 bit floating-point number
+        direction as a cad helix direction
+
+class:
+    patterns:
+        [a|] cad helix result
+    members:
+        valid as a boolean
+        value as a cad helix
+
+class:
+    patterns:
+        [a|] cad helix scalar result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad helix generating frame
+    members:
+        axis as a cad vector3
+        startDirection as a cad vector3
+        radius as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad helix generating frame result
+    members:
+        valid as a boolean
+        value as a cad helix generating frame
+
+class:
+    patterns:
+        [a|] cad helix axial frame
+    members:
+        center as a cad vector3
+        xAxis as a cad vector3
+        yAxis as a cad vector3
+        axis as a cad vector3
+
+class:
+    patterns:
+        [a|] cad helix axial frame result
+    members:
+        valid as a boolean
+        value as a cad helix axial frame
+
+class:
+    patterns:
+        [a|] cad helix evaluation
+    members:
+        point as a cad vector3
+        derivative as a cad vector3
+
+function the cad clockwise helix direction:
+    execute:
+        return @intrinsic("construct", a cad helix direction, true)
+
+function the cad counterclockwise helix direction:
+    execute:
+        return @intrinsic("construct", a cad helix direction, false)
+
+function a cad helix with center {cad vector3:baseCenter}, axis {cad vector3:axisDirection}, start {cad vector3:startDirection}, base radius {a number:baseRadius}, top radius {a number:topRadius}, height {a number:height}, turns {a number:turns} and direction {cad helix direction:direction}:
+    execute:
+        return @intrinsic("construct", a cad helix, baseCenter, axisDirection, startDirection, baseRadius as a 64 bit floating-point number, topRadius as a 64 bit floating-point number, height as a 64 bit floating-point number, turns as a 64 bit floating-point number, direction)
+
+local function cad helix scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function no cad helix scalar:
+    execute:
+        return @intrinsic("construct", a cad helix scalar result, false, 0.0 as a 64 bit floating-point number)
+
+local function the cad helix finite scalar {a 64 bit floating-point number:value}:
+    execute:
+        if cad helix scalar value is finite:
+            return @intrinsic("construct", a cad helix scalar result, true, value)
+        return no cad helix scalar
+
+local function no cad helix generating frame:
+    execute:
+        return @intrinsic("construct", a cad helix generating frame result, false, a new cad helix generating frame)
+
+function the cad helix frame from base {cad vector3:base}, axis {cad vector3:axis}, start {cad vector3:start} and tangent {cad vector3:tangent}:
+    execute:
+        if ((cad base is finite) = false) or ((cad axis is finite) = false):
+            return no cad helix generating frame
+        if ((cad start is finite) = false) or ((cad tangent is finite) = false):
+            return no cad helix generating frame
+        set normalized to the cad normalization of axis
+        if (the valid of normalized) = false:
+            return no cad helix generating frame
+        set unitAxis to the value of normalized
+        set delta to the cad difference of start and base
+        set radial to the cad difference of delta and (unitAxis scaled by (the cad dot of delta and unitAxis))
+        set radius to the cad length of radial
+        if (cad helix scalar radius is finite) = false:
+            return no cad helix generating frame
+        set phase to the cad normalization of radial
+        if radius <= 1e-12:
+            set phase to the cad normalization of (the cad difference of tangent and (unitAxis scaled by (the cad dot of tangent and unitAxis)))
+        if (the valid of phase) = false:
+            return no cad helix generating frame
+        set recovered to @intrinsic("construct", a cad helix generating frame, unitAxis, the value of phase, radius)
+        return @intrinsic("construct", a cad helix generating frame result, true, recovered)
+
+local function cad helix parameters of {cad helix:curve} are valid:
+    execute:
+        if ((cad (the baseCenter of curve) is finite) = false) or ((cad (the axisDirection of curve) is finite) = false):
+            return false
+        if (cad (the startDirection of curve) is finite) = false:
+            return false
+        if ((cad helix scalar (the baseRadius of curve) is finite) = false) or ((cad helix scalar (the topRadius of curve) is finite) = false):
+            return false
+        if ((cad helix scalar (the height of curve) is finite) = false) or ((cad helix scalar (the turns of curve) is finite) = false):
+            return false
+        if ((the baseRadius of curve) < 0.0) or ((the topRadius of curve) < 0.0):
+            return false
+        if ((the baseRadius of curve) = 0.0) and ((the topRadius of curve) = 0.0):
+            return false
+        if (the turns of curve) < 0.0:
+            return false
+        return ((the turns of curve) > 0.0) or ((the height of curve) = 0.0)
+
+local function the cad helix working frame of {cad helix:curve}:
+    execute:
+        set absent to @intrinsic("construct", a cad helix axial frame result, false, a new cad helix axial frame)
+        set normalized to the cad normalization of (the axisDirection of curve)
+        if (the valid of normalized) = false:
+            return absent
+        set axis to the value of normalized
+        set radial to the startDirection of curve
+        set unitX to the cad normalization of (the cad difference of radial and (axis scaled by (the cad dot of radial and axis)))
+        if (the valid of unitX) = false:
+            return absent
+        set unitY to the cad normalization of (the cad cross of axis and (the value of unitX))
+        if (the valid of unitY) = false:
+            return absent
+        set constructed to @intrinsic("construct", a cad helix axial frame, the baseCenter of curve, the value of unitX, the value of unitY, axis)
+        return @intrinsic("construct", a cad helix axial frame result, true, constructed)
+
+local function the cad helix total angle of {cad helix:curve}:
+    execute:
+        return the cad helix finite scalar ((the turns of curve) * (6.283185307179586 as a 64 bit floating-point number))
+
+local function the cad helix winding of {cad helix:curve}:
+    execute:
+        set orientation to the direction of curve
+        if the clockwise of orientation:
+            return (-1.0) as a 64 bit floating-point number
+        return 1.0 as a 64 bit floating-point number
+
+function the cad reversal of {cad helix:curve}:
+    execute:
+        set absent to @intrinsic("construct", a cad helix result, false, curve)
+        if (cad helix parameters of curve are valid) = false:
+            return absent
+        # Upstream returns a zero-turn value before attempting frame recovery.
+        if (the turns of curve) = 0.0:
+            return @intrinsic("construct", a cad helix result, true, curve)
+        set framed to the cad helix working frame of curve
+        if (the valid of framed) = false:
+            return absent
+        set frame to the value of framed
+        set total to the cad helix total angle of curve
+        if (the valid of total) = false:
+            return absent
+        set angle to the value of total
+        set center to the cad sum of (the center of frame) and ((the axis of frame) scaled by (the height of curve))
+        set axis to the cad negative of (the axis of frame)
+        set start to the cad sum of ((the xAxis of frame) scaled by (the cosine of angle)) and ((the yAxis of frame) scaled by ((the cad helix winding of curve) * (the sine of angle)))
+        set reversed to a cad helix with center center, axis axis, start start, base radius (the topRadius of curve), top radius (the baseRadius of curve), height (the height of curve), turns (the turns of curve) and direction (the direction of curve)
+        if (cad helix parameters of reversed are valid) = false:
+            return absent
+        set reversedFrame to the cad helix working frame of reversed
+        if (the valid of reversedFrame) = false:
+            return absent
+        return @intrinsic("construct", a cad helix result, true, reversed)
+
+local function the cad helix evaluation of {cad helix:curve} at angle {a 64 bit floating-point number:theta} with total {a 64 bit floating-point number:totalAngle} in {cad helix axial frame:frame}:
+    execute:
+        set fraction to theta / totalAngle
+        set radius to (the baseRadius of curve) + (((the topRadius of curve) - (the baseRadius of curve)) * fraction)
+        set radialRate to ((the topRadius of curve) - (the baseRadius of curve)) / totalAngle
+        set heightRate to (the height of curve) / totalAngle
+        set winding to the cad helix winding of curve
+        set cosine to the cosine of theta
+        set sine to the sine of theta
+        set point to the cad sum of (the center of frame) and ((the xAxis of frame) scaled by (radius * cosine))
+        set point to the cad sum of point and ((the yAxis of frame) scaled by ((winding * radius) * sine))
+        set point to the cad sum of point and ((the axis of frame) scaled by ((the height of curve) * fraction))
+        set derivative to (the xAxis of frame) scaled by ((radialRate * cosine) - (radius * sine))
+        set derivative to the cad sum of derivative and ((the yAxis of frame) scaled by (winding * ((radialRate * sine) + (radius * cosine))))
+        set derivative to the cad sum of derivative and ((the axis of frame) scaled by heightRate)
+        return @intrinsic("construct", a cad helix evaluation, point, derivative)
+
+local function the cad helix strict curve of degree {integer:degree} consuming controls {a pointer to a list:controls}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        # The public strict constructor copies its borrowed inputs. Release
+        # these generation buffers after construction, on success or refusal.
+        set result to the strict cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+        free controls
+        free knots
+        free weights
+        return result
+
+local function no cad helix nurbs:
+    execute:
+        set controls to an empty list of a cad vector3
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        return the cad helix strict curve of degree 0 consuming controls controls, knots knots and weights weights
+
+function the cad helix nurbs of {cad helix:curve}:
+    execute:
+        if (cad helix parameters of curve are valid) = false:
+            return no cad helix nurbs
+        set framed to the cad helix working frame of curve
+        if (the valid of framed) = false:
+            return no cad helix nurbs
+        set frame to the value of framed
+        if (the turns of curve) = 0.0:
+            set point to the cad sum of (the center of frame) and ((the xAxis of frame) scaled by (the baseRadius of curve))
+            set controls to an empty list of a cad vector3
+            set knots to an empty list of a 64 bit floating-point number
+            set weights to an empty list of a 64 bit floating-point number
+            append point to controls
+            append point to controls
+            append 0.0 to knots
+            append 0.0 to knots
+            append 1.0 to knots
+            append 1.0 to knots
+            append 1.0 to weights
+            append 1.0 to weights
+            return the cad helix strict curve of degree 1 consuming controls controls, knots knots and weights weights
+        set total to the cad helix total angle of curve
+        if (the valid of total) = false:
+            return no cad helix nurbs
+        set count to the ceiling of ((the turns of curve) * 6.0)
+        if (cad helix scalar count is finite) = false:
+            return no cad helix nurbs
+        if (count < 1.0) or (count > 100000.0):
+            return no cad helix nurbs
+        set segments to count as an integer
+        set totalAngle to the value of total
+        set angleStep to totalAngle / (segments as a 64 bit floating-point number)
+        # The bounded segment count makes both checked integer operations safe.
+        set controlCount to (segments * 3) + 1
+        set bytes to (controlCount as a 64 bit unsigned integer) * (the size of the type of the cad zero vector3)
+        # Match try_reserve_exact: allocation refusal is an invalid result.
+        set storage to (@intrinsic("call", "libc", "malloc", a pointer, bytes)) as a pointer to a cad vector3
+        if storage = (0 as a pointer to a cad vector3):
+            return no cad helix nurbs
+        set controls to an empty list of a cad vector3
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        set the data of controls to storage
+        set the capacity of controls to controlCount
+        loop segment from 0 to segments:
+            set from to (segment as a 64 bit floating-point number) * angleStep
+            set to to ((segment + 1) as a 64 bit floating-point number) * angleStep
+            set start to the cad helix evaluation of curve at angle from with total totalAngle in frame
+            set end to the cad helix evaluation of curve at angle to with total totalAngle in frame
+            if segment = 0:
+                append (the point of start) to controls
+            append (the cad sum of (the point of start) and ((the derivative of start) scaled by (angleStep / 3.0))) to controls
+            append (the cad difference of (the point of end) and ((the derivative of end) scaled by (angleStep / 3.0))) to controls
+            append (the point of end) to controls
+        loop repeat from 0 to 4:
+            append 0.0 to knots
+        loop span from 1 to segments:
+            loop repeat from 0 to 3:
+                append (span as a 64 bit floating-point number) to knots
+        loop repeat from 0 to 4:
+            append (segments as a 64 bit floating-point number) to knots
+        loop index from 0 to controlCount:
+            append 1.0 to weights
+        return the cad helix strict curve of degree 3 consuming controls controls, knots knots and weights weights
+
+local function the cad helix length primitive at {a 64 bit floating-point number:radius} with constant {a 64 bit floating-point number:constant}:
+    execute:
+        if constant <= 1e-15:
+            return (0.5 * radius) * (the absolute value of radius)
+        set norm to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, radius, constant)
+        set inverseSine to @intrinsic("call", "libc", "asinh", a 64 bit floating-point number, radius / constant)
+        return 0.5 * ((radius * norm) + ((constant * constant) * inverseSine))
+
+function the cad length of {cad helix:curve}:
+    execute:
+        if (cad helix parameters of curve are valid) = false:
+            return no cad helix scalar
+        set framed to the cad helix working frame of curve
+        if (the valid of framed) = false:
+            return no cad helix scalar
+        if (the turns of curve) = 0.0:
+            return @intrinsic("construct", a cad helix scalar result, true, 0.0 as a 64 bit floating-point number)
+        set total to the cad helix total angle of curve
+        if (the valid of total) = false:
+            return no cad helix scalar
+        set totalAngle to the value of total
+        set radiusDelta to (the topRadius of curve) - (the baseRadius of curve)
+        set radialRate to radiusDelta / totalAngle
+        set heightRate to (the height of curve) / totalAngle
+        set constant to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, radialRate, heightRate)
+        if radiusDelta = 0.0:
+            set norm to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, the baseRadius of curve, constant)
+            return the cad helix finite scalar (totalAngle * norm)
+        set radiusScale to the maximum of (the baseRadius of curve) and (the topRadius of curve)
+        set radiusScale to the maximum of radiusScale and constant
+        set radiusScale to the maximum of radiusScale and 1.0
+        set threshold to (the square root of (2.220446049250313e-16 as a 64 bit floating-point number)) * radiusScale
+        if (the absolute value of radiusDelta) <= threshold:
+            set midpoint to 0.5 * ((the baseRadius of curve) + (the topRadius of curve))
+            set norm to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, midpoint, constant)
+            set numerator to ((constant * constant) * radiusDelta) * radiusDelta
+            set denominator to ((24.0 * norm) * norm) * norm
+            set correction to numerator / denominator
+            return the cad helix finite scalar (totalAngle * (norm + correction))
+        set top to the cad helix length primitive at (the topRadius of curve) with constant constant
+        set base to the cad helix length primitive at (the baseRadius of curve) with constant constant
+        return the cad helix finite scalar (the absolute value of ((top - base) / radialRate))
+
+function the cad turn slope of {cad helix:curve}:
+    execute:
+        if (cad helix parameters of curve are valid) = false:
+            return no cad helix scalar
+        set framed to the cad helix working frame of curve
+        if (the valid of framed) = false:
+            return no cad helix scalar
+        set angle to @intrinsic("atan2", (the topRadius of curve) - (the baseRadius of curve), the absolute value of (the height of curve))
+        return @intrinsic("construct", a cad helix scalar result, true, angle)

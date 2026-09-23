@@ -1,0 +1,144 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_fillet_prismatic.dl
+import tests/cadkernel/brep_place/emit.dl
+import lib/cadkernel/brep_make.dl
+
+function fillet prismatic probe argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function fillet prismatic probe point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+function fillet prismatic probe planar point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+function fillet prismatic probe rounded body at {cad vector3:origin} with width {a number:width}, depth {a number:depth}, radius {a number:radius} and height {a number:height}:
+    execute:
+        if (((width > radius * 2.0) and (depth > radius * 2.0)) and (radius > 0.0)) = false:
+            return no cad body
+        set profile to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        append (the cad curve2 of (a cad line2 from (fillet prismatic probe planar point radius 0.0) to (fillet prismatic probe planar point (width - radius) 0.0))) to profile
+        append (the cad curve2 of (a cad arc2 at (fillet prismatic probe planar point (width - radius) radius) with radius radius from -1.5707963267948966 to 0.0)) to profile
+        append (the cad curve2 of (a cad line2 from (fillet prismatic probe planar point width radius) to (fillet prismatic probe planar point width (depth - radius)))) to profile
+        append (the cad curve2 of (a cad arc2 at (fillet prismatic probe planar point (width - radius) (depth - radius)) with radius radius from 0.0 to 1.5707963267948966)) to profile
+        append (the cad curve2 of (a cad line2 from (fillet prismatic probe planar point (width - radius) depth) to (fillet prismatic probe planar point radius depth))) to profile
+        append (the cad curve2 of (a cad arc2 at (fillet prismatic probe planar point radius (depth - radius)) with radius radius from 1.5707963267948966 to 3.141592653589793)) to profile
+        append (the cad curve2 of (a cad line2 from (fillet prismatic probe planar point 0.0 (depth - radius)) to (fillet prismatic probe planar point 0.0 radius))) to profile
+        append (the cad curve2 of (a cad arc2 at (fillet prismatic probe planar point radius radius) with radius radius from 3.141592653589793 to 4.71238898038469)) to profile
+        set frame to the cad orthonormal plane with origin origin, x axis (the cad x axis) and normal (the cad z axis)
+        if frame's valid = false:
+            free profile
+            return no cad body
+        set result to the cad extrusion of profile on frame's value along (fillet prismatic probe point 0.0 0.0 height)
+        free profile
+        return result
+
+set kind to (fillet prismatic probe argument 0) as an integer
+set origin to fillet prismatic probe point (fillet prismatic probe argument 1) (fillet prismatic probe argument 2) (fillet prismatic probe argument 3)
+set first to fillet prismatic probe argument 4
+set second to fillet prismatic probe argument 5
+set third to fillet prismatic probe argument 6
+set fourth to fillet prismatic probe argument 7
+set body to an empty cad body
+if kind = 0:
+    set made to the cad cuboid at origin with size (fillet prismatic probe point first second third)
+    if made's valid:
+        set body to made's value
+else if kind = 1:
+    set made to the cad cylinder body at origin with radius first and height second
+    if made's valid:
+        set body to made's value
+else if kind = 2:
+    set made to the cad sphere body at origin with radius first
+    if made's valid:
+        set body to made's value
+else if kind = 3:
+    set made to the cad cone body at origin with radius first and height second
+    if made's valid:
+        set body to made's value
+else if kind = 4:
+    set made to the cad wedge at origin with length first, width second and height third
+    if made's valid:
+        set body to made's value
+else if kind = 5:
+    set made to the cad polygonal frustum at origin with base radius first, top radius first, height second and sides (third as an integer)
+    if made's valid:
+        set body to made's value
+else if kind = 6:
+    set made to fillet prismatic probe rounded body at origin with width first, depth second, radius third and height fourth
+    if made's valid:
+        set body to made's value
+
+set edgeKeys to the cad edge keys of body
+set selected to an empty list of a cad edge key
+set selectionCount to (fillet prismatic probe argument 8) as an integer
+loop index from 0 to selectionCount:
+    if (the length of edgeKeys) > 0:
+        set requested to (fillet prismatic probe argument (9 + index)) as an integer
+        set slot to the remainder of (the absolute value of requested) divided by (the length of edgeKeys)
+        append (the item at slot in edgeKeys) to selected
+
+set damage to (fillet prismatic probe argument 13) as an integer
+if damage = 1:
+    clear body's roots
+else if (damage = 2) and ((the length of body's roots) > 0):
+    set lump to the cad node pointer for (the item at 0 in body's roots) in body
+    if lump != (0 as the type of lump):
+        clear lump's shells's values
+else if (damage = 3) and ((the length of body's roots) > 0):
+    set lump to the cad node pointer for (the item at 0 in body's roots) in body
+    if (lump != (0 as the type of lump)) and ((the length of lump's shells's values) > 0):
+        set shell to the cad node pointer for (the item at 0 in lump's shells's values) in body
+        if shell != (0 as the type of shell):
+            clear shell's faces's values
+else if damage = 4:
+    set faceKeys to the cad face keys of body
+    if (the length of faceKeys) > 0:
+        set face to the cad node pointer for (the item at 0 in faceKeys) in body
+        if face != (0 as the type of face):
+            clear face's loops's values
+    free faceKeys
+else if (damage = 5) and ((the length of edgeKeys) > 0):
+    set edge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if edge != (0 as the type of edge):
+        clear edge's coedges's values
+else if damage = 6:
+    set faceKeys to the cad face keys of body
+    if (the length of faceKeys) > 0:
+        set face to the cad node pointer for (the item at 0 in faceKeys) in body
+        if face != (0 as the type of face):
+            replace cad node face's surface in body with (the cad surface of (a cad torus with frame (the cad xy plane), major radius 3.0 and minor radius 1.0))
+    free faceKeys
+else if (damage = 7) and ((the length of edgeKeys) > 0):
+    set edge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if edge != (0 as the type of edge):
+        replace cad node edge's curve in body with (the cad edge curve3 of (a cad circle3 with plane (the cad xy plane) and radius 2.0))
+else if damage = 8:
+    set faceKeys to the cad face keys of body
+    if (the length of faceKeys) > 0:
+        set face to the cad node pointer for (the item at 0 in faceKeys) in body
+        if (face != (0 as the type of face)) and ((the length of face's loops's values) > 0):
+            append (the item at 0 in face's loops's values) to face's loops's values
+    free faceKeys
+else if (damage = 9) and ((the length of edgeKeys) > 0):
+    set edge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if (edge != (0 as the type of edge)) and ((the length of edge's coedges's values) > 0):
+        append (the item at 0 in edge's coedges's values) to edge's coedges's values
+else if (damage = 10) and ((the cad count of body's vertices) > 0):
+    set vertexKeys to the cad vertex keys of body
+    set vertex to the cad node pointer for (the item at 0 in vertexKeys) in body
+    if vertex != (0 as the type of vertex):
+        set vertex's point to the cad sum of vertex's point and (fillet prismatic probe point (fillet prismatic probe argument 14) 0.0 0.0)
+    free vertexKeys
+
+set result to the cad prismatic fillet of body along selected with radius (fillet prismatic probe argument 12)
+emit placement flag result's recognized
+emit placement flag result's valid
+emit placement number result's error's kind
+if result's valid:
+    emit placement body (result's value)
+    emit placement number (the cad worst vertex gap of (result's value))
+
+free selected
+free edgeKeys

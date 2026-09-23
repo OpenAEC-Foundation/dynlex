@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: MPL-2.0
+# Fixtures from pinned src/geom2d/polyline.rs, in source order.
+import lib/cadkernel/polyline2.dl
+
+function check polyline2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 91)
+function polyline2 point {cad vector2:left} is near {cad vector2:right} within {a number:slack}:
+    execute:
+        return ((the absolute value of (left's x - right's x)) < slack) and ((the absolute value of (left's y - right's y)) < slack)
+function polyline2 test point {a number:x} and {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+function polyline2 test vertices coordinates:
+    execute:
+        set result to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of coordinates:
+            set row to the item at index in coordinates
+            append (a cad polyline vertex2 at (polyline2 test point (the item at 0 in row) and (the item at 1 in row)) with bulge (the item at 2 in row)) to result
+        return result
+function polyline2 test shape coordinates with closure {boolean:closed}:
+    execute:
+        set vertices to polyline2 test vertices coordinates
+        set result to the cad polyline2 with vertices vertices and closure closed
+        free vertices
+        return result
+function polyline2 test arc x0 and y0 to x1 and y1 with bulge {a number:bulge}:
+    execute:
+        set result to the cad bulge arc2 from (polyline2 test point x0 and y0) to (polyline2 test point x1 and y1) with bulge bulge
+        check polyline2 result's valid
+        return result's value
+
+set arc to polyline2 test arc 0.0 and 0.0 to 2.0 and 0.0 with bulge 1.0
+check polyline2 ((the absolute value of (arc's radius - 1.0)) < 1e-12)
+check polyline2 (polyline2 point arc's centre is near (polyline2 test point 1.0 and 0.0) within 1e-12)
+check polyline2 ((the absolute value of (arc's sweep - 3.141592653589793)) < 1e-12)
+print "a_half_turn_bulge_gives_the_chord_as_diameter" as a line
+set clockwise to polyline2 test arc 0.0 and 0.0 to 2.0 and 0.0 with bulge -1.0
+check polyline2 ((arc's sweep > 0.0) and (clockwise's sweep < 0.0))
+check polyline2 ((the absolute value of (arc's radius - clockwise's radius)) < 1e-12)
+set below to the cad point on arc at 0.5
+set above to the cad point on clockwise at 0.5
+check polyline2 ((below's y < 0.0) and (above's y > 0.0))
+check polyline2 ((the absolute value of (below's y + above's y)) < 1e-12)
+print "the_bulge_sign_picks_the_side" as a line
+set arbitrary to polyline2 test arc 1.0 and 2.0 to 4.0 and 6.0 with bulge 0.4
+check polyline2 (polyline2 point (the cad point on arbitrary at 0.0) is near (polyline2 test point 1.0 and 2.0) within 1e-9)
+check polyline2 (polyline2 point (the cad point on arbitrary at 1.0) is near (polyline2 test point 4.0 and 6.0) within 1e-9)
+print "sampling_hits_the_endpoints" as a line
+set quarter to polyline2 test arc 1.0 and 0.0 to 0.0 and 1.0 with bulge 0.41421356237309503
+check polyline2 ((the absolute value of (quarter's sweep - 1.5707963267948966)) < 1e-9)
+check polyline2 (polyline2 point quarter's centre is near (polyline2 test point 0.0 and 0.0) within 1e-9)
+check polyline2 ((the absolute value of (quarter's radius - 1.0)) < 1e-9)
+print "a_quarter_turn_bulge_sweeps_a_quarter_turn" as a line
+set major to polyline2 test arc 0.0 and 0.0 to 2.0 and 0.0 with bulge 2.0
+check polyline2 ((major's sweep > 3.141592653589793) and (major's sweep < 6.283185307179586))
+print "a_bulge_over_one_sweeps_past_a_half_turn" as a line
+set invalid to the cad bulge arc2 from (polyline2 test point 1.0 and 1.0) to (polyline2 test point 1.0 and 1.0) with bulge 0.5
+check polyline2 (invalid's valid = false)
+set invalid to the cad bulge arc2 from (polyline2 test point 0.0 and 0.0) to (polyline2 test point 1.0 and 0.0) with bulge 0.0
+check polyline2 (invalid's valid = false)
+print "degenerate_input_has_no_arc" as a line
+set closed to polyline2 test shape [[0.0,0.0,0.0],[2.0,0.0,1.0]] with closure true
+set closing to the cad segment arc of closed at index 1
+check polyline2 closing's valid
+check polyline2 ((the absolute value of (closing's value's radius - 1.0)) < 1e-12)
+check polyline2 ((the valid of (the cad segment arc of closed at index 0)) = false)
+print "a_closed_polyline_arcs_back_from_its_last_vertex" as a line
+set open to polyline2 test shape [[0.0,0.0,0.0],[2.0,0.0,1.0]] with closure false
+check polyline2 ((the valid of (the cad segment arc of open at index 1)) = false)
+check polyline2 ((the valid of (the cad segment arc of open at index 5)) = false)
+print "an_open_polyline_has_no_closing_segment" as a line
+set corner to polyline2 test shape [[0.0,0.0,0.0],[1.0,0.0,0.0],[1.0,1.0,0.0]] with closure false
+set range to the cad range of corner from 0.25 to 0.75
+check polyline2 range's valid
+set expected to polyline2 test shape [[0.5,0.0,0.0],[1.0,0.0,0.0],[1.0,0.5,0.0]] with closure false
+check polyline2 (range's value's polyline = expected)
+set pieces to range's value's segments
+check polyline2 ((the length of pieces) = 2)
+set first to the item at 0 in pieces
+set second to the item at 1 in pieces
+check polyline2 (((first's sourceIndex = 0) and (first's from = 0.5)) and (first's to = 1.0))
+check polyline2 (((second's sourceIndex = 1) and (second's from = 0.0)) and (second's to = 0.5))
+set interval to the cad interpolation of first from 2.0 to 6.0
+check polyline2 (((the item at 0 in interval) = 4.0) and ((the item at 1 in interval) = 6.0))
+set interval to the cad interpolation of second from 6.0 to 10.0
+check polyline2 (((the item at 0 in interval) = 6.0) and ((the item at 1 in interval) = 8.0))
+print "a_range_keeps_segment_provenance_and_interpolation_parameters" as a line
+set signed to polyline2 test shape [[-1.0,0.0,-1.0],[1.0,0.0,0.0]] with closure false
+set original to the cad segment arc of signed at index 0
+check polyline2 original's valid
+set restricted to the cad range of signed from 0.25 to 0.75
+check polyline2 restricted's valid
+set partial to the cad segment arc of restricted's value's polyline at index 0
+check polyline2 partial's valid
+check polyline2 ((the cad distance from (the cad point on original's value at 0.5) to (the cad point on partial's value at 0.5)) < 1e-12)
+set vertex to the item at 0 in restricted's value's polyline's vertices
+check polyline2 ((the absolute value of (vertex's bulge - -0.41421356237309503)) < 1e-12)
+print "a_partial_signed_arc_remains_the_same_exact_arc" as a line
+set square to polyline2 test shape [[0.0,0.0,0.0],[1.0,0.0,0.0],[1.0,1.0,0.0],[0.0,1.0,0.0]] with closure true
+set wrapped to the cad range of square from 0.75 to 1.25
+check polyline2 wrapped's valid
+set expected to polyline2 test shape [[0.0,1.0,0.0],[0.0,0.0,0.0],[1.0,0.0,0.0]] with closure false
+check polyline2 (wrapped's value's polyline = expected)
+check polyline2 ((the length of wrapped's value's segments) = 2)
+check polyline2 ((the sourceIndex of (the item at 0 in wrapped's value's segments)) = 3)
+check polyline2 ((the sourceIndex of (the item at 1 in wrapped's value's segments)) = 0)
+print "a_closed_range_can_wrap_once_across_the_original_seam" as a line
+check polyline2 ((the valid of (the cad range of open from 0.5 to 0.5)) = false)
+check polyline2 ((the valid of (the cad range of open from (0.0 / 0.0) to 0.5)) = false)
+check polyline2 ((the valid of (the cad range of open from 0.5 to 1.5)) = false)
+set collapsed to polyline2 test shape [[0.0,0.0,1.0],[0.0,0.0,0.0]] with closure false
+check polyline2 ((the valid of (the cad range of collapsed from 0.0 to 1.0)) = false)
+print "invalid_ranges_and_geometry_are_rejected" as a line

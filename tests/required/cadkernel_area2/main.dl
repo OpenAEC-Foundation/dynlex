@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/area2/main.dl
+

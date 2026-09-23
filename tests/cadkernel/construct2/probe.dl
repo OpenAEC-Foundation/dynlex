@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+function construction input:
+    execute:
+        set buffer to a new (a byte array of 64 items)
+        set read to @intrinsic("variadic call", "libc", "scanf", an integer, 1, "%63s", the address of buffer)
+        if read != 1:
+            @intrinsic("call", "libc", "exit", nothing, 83)
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the address of buffer, 0 as a pointer)
+function construction point:
+    execute:
+        set x to construction input
+        set y to construction input
+        return a cad vector2 with x x and y y
+function emit construction scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit construction flag {boolean:value}:
+    execute:
+        if value:
+            emit construction scalar 1
+        else:
+            emit construction scalar 0
+function emit construction point {cad vector2:value}:
+    execute:
+        emit construction scalar value's x
+        emit construction scalar value's y
+function emit construction result {cad arc2 result:result}:
+    execute:
+        emit construction flag result's valid
+        if result's valid:
+            set arc to result's value
+            emit construction point arc's centre
+            emit construction scalar arc's radius
+            emit construction scalar arc's startAngle
+            emit construction scalar arc's endAngle
+            emit construction scalar (the cad sweep of arc)
+            set shape to the cad curve2 of arc
+            loop index from 0 to 5:
+                set parameter to (index - 1) / 2.0
+                emit construction point (the cad point on shape at parameter)
+                emit construction point (the cad tangent of shape at parameter)
+function construction case:
+    execute:
+        set kind to (construction input) as an integer
+        if kind < 7:
+            set first to construction point
+            set middle to construction point
+            set last to construction point
+            set a to construction input
+            set b to construction input
+            set c to construction input
+            if kind = 0:
+                emit construction result (the bounded cad arc2 at first with radius a from b to c)
+            else if kind = 1:
+                emit construction result (the cad arc2 from first to last with included angle a)
+            else if kind = 2:
+                emit construction result (the cad arc2 from first to last with signed radius a)
+            else if kind = 3:
+                emit construction result (the cad arc2 from first to last with sagitta a)
+            else if kind = 4:
+                emit construction result (the cad arc2 from first along tangent middle to last flipped (b != 0.0))
+            else if kind = 5:
+                emit construction result (the cad arc2 through first then middle to last)
+            else:
+                set result to the cad arc2 sweep for radius a and signed chord b
+                emit construction flag result's valid
+                if result's valid:
+                    emit construction scalar result's value
+        else:
+            set count to (construction input) as an integer
+            set closed to (construction input) != 0.0
+            set directionCount to (construction input) as an integer
+            set points to an empty list of a cad vector2
+            set directions to an empty list of a cad arc fit direction2
+            loop index from 0 to count:
+                append (construction point) to points
+            loop index from 0 to directionCount:
+                set specified to (construction input) != 0.0
+                set direction to construction point
+                set optional to an automatic cad arc fit direction2
+                if specified:
+                    set optional to a cad arc fit direction2 along direction
+                append optional to directions
+            set result to the cad arc chain2 through points with closure closed and directions directions
+            free points
+            free directions
+            emit construction flag result's valid
+            if result's valid:
+                emit construction scalar (the length of result's vertices)
+                loop index from 0 to the length of result's vertices:
+                    set vertex to the item at index in result's vertices
+                    emit construction point vertex's point
+                    emit construction scalar vertex's bulge
+                    emit construction scalar vertex's source
+                    emit construction scalar vertex's fraction
+                    emit construction flag vertex's inserted
+set count to (construction input) as an integer
+loop index from 0 to count:
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "case %d\n", index)
+    construction case
+

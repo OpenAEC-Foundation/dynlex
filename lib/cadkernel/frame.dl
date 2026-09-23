@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/geom2d/frame.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Upstream: https://github.com/HakanSeven12/cadkernel
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad frame
+    members:
+        origin as a cad vector3
+
+function a cad frame at {cad vector3:origin}:
+    execute:
+        return @intrinsic("construct", a cad frame, origin)
+
+function the cad identity frame:
+    execute:
+        return a cad frame at the cad zero vector3
+
+function the cad frame around {a pointer to a list:points}:
+    execute:
+        if the length of points = 0:
+            return the cad identity frame
+        set first to the item at 0 in points
+        set minx to the x of first
+        set miny to the y of first
+        set minz to the z of first
+        set maxx to minx
+        set maxy to miny
+        set maxz to minz
+        set cursor to 1
+        loop while cursor < the length of points:
+            set pointValue to the item at cursor in points
+            if (the x of pointValue) < minx:
+                set minx to the x of pointValue
+            if (the y of pointValue) < miny:
+                set miny to the y of pointValue
+            if (the z of pointValue) < minz:
+                set minz to the z of pointValue
+            if (the x of pointValue) > maxx:
+                set maxx to the x of pointValue
+            if (the y of pointValue) > maxy:
+                set maxy to the y of pointValue
+            if (the z of pointValue) > maxz:
+                set maxz to the z of pointValue
+            increment cursor
+        return a cad frame at (a cad vector3 with x (minx + ((maxx - minx) * 0.5)), y (miny + ((maxy - miny) * 0.5)) and z (minz + ((maxz - minz) * 0.5)))
+
+function the cad lift of {cad vector3:pointValue} through {cad frame:frame}:
+    execute:
+        return the cad difference of pointValue and (the origin of frame)
+
+function the cad lower of {cad vector3:pointValue} through {cad frame:frame}:
+    execute:
+        return the cad sum of pointValue and (the origin of frame)
+
+function the cad lift of {cad vector2:pointValue} through {cad frame:frame}:
+    execute:
+        set anchor to the origin of frame
+        return a cad vector2 with x ((the x of pointValue) - (the x of anchor)) and y ((the y of pointValue) - (the y of anchor))
+
+function the cad lower of {cad vector2:pointValue} through {cad frame:frame}:
+    execute:
+        set anchor to the origin of frame
+        return a cad vector2 with x ((the x of pointValue) + (the x of anchor)) and y ((the y of pointValue) + (the y of anchor))

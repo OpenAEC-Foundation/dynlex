@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep.dl
+
+function topology check {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+# a_clean_node_lowers_from_its_source
+set reference to a cad source reference for (7 as a 32 bit unsigned integer)
+set provenance to the clean cad provenance of reference
+topology check (cad (provenance) is reusable) named "clean reuse"
+set source to the cad source of provenance
+topology check source's valid named "clean source exists"
+topology check ((the cad index of source's value) = 7) named "source index"
+print "a_clean_node_lowers_from_its_source" as a line
+
+# soiling_blocks_reuse_but_keeps_the_reference
+soil cad provenance provenance
+topology check ((cad (provenance) is reusable) = false) named "dirty cannot reuse"
+set source to the cad source of provenance
+topology check source's valid named "dirty source retained"
+topology check ((the cad index of source's value) = 7) named "dirty source index"
+print "soiling_blocks_reuse_but_keeps_the_reference" as a line
+
+# soiling_is_idempotent
+set once to provenance
+soil cad provenance provenance
+topology check (provenance = once) named "soil idempotent"
+print "soiling_is_idempotent" as a line
+
+# synthesized_nodes_have_nothing_to_fall_back_on
+set generated to the synthesized cad provenance
+topology check ((cad generated is reusable) = false) named "synthesized cannot reuse"
+set missingSource to the cad source of generated
+topology check (missingSource's valid = false) named "synthesized has no source"
+soil cad provenance generated
+topology check (generated = the synthesized cad provenance) named "synthesized remains synthesized"
+set largest to a cad source reference for (4294967295 as a 32 bit unsigned integer)
+topology check ((the cad index of largest) = (4294967295 as a 32 bit unsigned integer)) named "full source index width"
+print "synthesized_nodes_have_nothing_to_fall_back_on" as a line
+

@@ -1,0 +1,10 @@
+import lib/cadkernel/arena.dl
+class:
+    patterns:
+        [an|] arena unclonable node
+    members:
+        number as an integer
+set nodes to a cad arena of an arena unclonable node
+set duplicated to the cad clone of nodes
+free cad arena nodes
+free cad arena duplicated

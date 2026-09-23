@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_shell.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function shell probe point at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+set shapeKind to (maker argument 0) as an integer
+set origin to shell probe point at 1
+set dimensions to shell probe point at 4
+set placement to a cad placement with axes (shell probe point at 7), (shell probe point at 10) and (shell probe point at 13) at origin
+set distance to maker argument 16
+set maskValue to (maker argument 17) as an integer
+
+set localMade to no cad body
+if shapeKind = 0:
+    set localMade to the cad cuboid at (the cad zero vector3) with size dimensions
+else if shapeKind = 1:
+    set localMade to the cad cylinder body at (the cad zero vector3) with radius dimensions's x and height dimensions's y
+else if shapeKind = 2:
+    set localMade to the cad sphere body at (the cad zero vector3) with radius dimensions's x
+else if shapeKind = 3:
+    set localMade to the cad cone body at (the cad zero vector3) with radius dimensions's x and height dimensions's y
+
+set body to an empty cad body
+if localMade's valid:
+    set placed to the cad transformed (localMade's value) by placement
+    if placed's valid:
+        set body to placed's value
+
+set selectionCount to 0
+if shapeKind = 0:
+    set selectionCount to 6
+else if shapeKind = 1:
+    set selectionCount to 3
+else if shapeKind = 2:
+    set selectionCount to 1
+set removedFaces to an empty list of a cad face key
+set remainingBits to maskValue
+loop selectionCursor from 0 to selectionCount:
+    if (the remainder of remainingBits divided by 2) != 0:
+        set localPick to the cad zero vector3
+        if shapeKind = 0:
+            set localPick to a cad vector3 with x (dimensions's x * 0.5), y (dimensions's y * 0.5) and z (dimensions's z * 0.5)
+            if selectionCursor = 0:
+                set localPick's x to 0.0
+            else if selectionCursor = 1:
+                set localPick's x to dimensions's x
+            else if selectionCursor = 2:
+                set localPick's y to 0.0
+            else if selectionCursor = 3:
+                set localPick's y to dimensions's y
+            else if selectionCursor = 4:
+                set localPick's z to 0.0
+            else:
+                set localPick's z to dimensions's z
+        else if shapeKind = 1:
+            if selectionCursor = 0:
+                set localPick to a cad vector3 with x dimensions's x, y 0.0 and z (dimensions's y * 0.5)
+            else if selectionCursor = 1:
+                set localPick to the cad zero vector3
+            else:
+                set localPick to a cad vector3 with x 0.0, y 0.0 and z dimensions's y
+        else if shapeKind = 2:
+            set localPick to a cad vector3 with x dimensions's x, y 0.0 and z 0.0
+        set picked to the cad shell face at (the cad image of localPick under placement) in body
+        if picked's valid:
+            append picked's value to removedFaces
+    set remainingBits to remainingBits / 2
+
+emit maker number (the length of removedFaces)
+set result to the cad shell of body removing removedFaces by distance
+emit maker flag result's valid
+emit maker number result's error
+emit maker number result's snag
+if result's valid:
+    emit maker body result's value
+else:
+    emit maker body (an empty cad body)
+free removedFaces

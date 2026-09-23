@@ -1,0 +1,133 @@
+import examples/dynedra/settings.dl
+
+class:
+    patterns:
+        [a|] lab state
+    members:
+        settings as a lab settings
+        yaw as a 64 bit floating-point number
+        pitch as a 64 bit floating-point number
+        zoom as a 64 bit floating-point number
+        controls as a boolean
+        changed as a boolean
+
+function the initial lab state:
+    execute:
+        return @intrinsic("construct", a lab state, the initial lab settings, 0.4, 0.7, 1.0, true, true)
+
+function lab settings {lab settings:first} equal {lab settings:second}:
+    execute:
+        if first's solidKind != second's solidKind:
+            return false
+        return ((((first's operation = second's operation) and (first's samples = second's samples)) and (first's weight = second's weight)) and (first's height = second's height)) and (first's turns = second's turns)
+
+# Actions are shared by mouse controls, keyboard controls and state tests.
+# 0..3 select a scenario; 4/5 adjust its primary parameter; 6/7 adjust sampling.
+# 8 resets all settings; 9 toggles controls; 10/11 zoom; 12..15 orbit.
+# 16/17 select planar scenarios; 18 selects solids; 19 cycles solid shape.
+# 20..27 select an individual solid shape while the solid scenario is active.
+function the lab scenario action for {integer:operation}:
+    execute:
+        if (operation >= 0) and (operation < 4):
+            return operation
+        if (operation = 4) or (operation = 5):
+            return operation + 12
+        if operation = 6:
+            return 18
+        return -1
+
+function the lab [state] after action {integer:action} from {lab state:previous}:
+    execute:
+        set state to previous
+        set settings to previous's settings
+        if (action >= 0) and (action < 4):
+            set settings's operation to action
+        else if (action = 16) or (action = 17):
+            set settings's operation to action - 12
+            if action = 16:
+                set settings's height to settings's height clamped between 0.0 and 4.0
+            else:
+                set settings's height to settings's height clamped between 0.1 and 3.0
+        else if action = 18:
+            set settings's operation to 6
+            set settings's height to settings's height clamped between 0.1 and 10.0
+        else if (action >= 19) and (action <= 27):
+            if settings's operation = 6:
+                if action = 19:
+                    set settings's solidKind to the remainder of (settings's solidKind + 1) divided by 8
+                else:
+                    set settings's solidKind to action - 20
+        else if (action = 4) or (action = 5):
+            set direction to -1.0
+            if action = 5:
+                set direction to 1.0
+            if settings's operation = 0:
+                set settings's weight to (settings's weight + (direction * 0.1)) clamped between 0.1 and 10.0
+            else if settings's operation = 2:
+                set settings's turns to (settings's turns + (direction * 0.25)) clamped between 0.25 and 8.0
+            else if settings's operation = 4:
+                set settings's height to (settings's height + (direction * 0.25)) clamped between 0.0 and 4.0
+            else if settings's operation = 5:
+                set settings's height to (settings's height + (direction * 0.1)) clamped between 0.1 and 3.0
+            else if settings's operation = 6:
+                set settings's height to (settings's height + (direction * 0.25)) clamped between 0.1 and 10.0
+            else:
+                set settings's height to (settings's height + (direction * 0.25)) clamped between 0.0 and 10.0
+        else if action = 6:
+            if settings's operation != 4:
+                set settings's samples to (settings's samples / 2) clamped between 8 and 512
+        else if action = 7:
+            if settings's operation != 4:
+                set settings's samples to (settings's samples * 2) clamped between 8 and 512
+        else if action = 8:
+            set state to the initial lab state
+            set settings to state's settings
+        else if action = 9:
+            set state's controls to the inverse of state's controls
+        else if action = 10:
+            set state's zoom to (state's zoom / 1.15) clamped between 0.2 and 5.0
+        else if action = 11:
+            set state's zoom to (state's zoom * 1.15) clamped between 0.2 and 5.0
+        else if action = 12:
+            set state's yaw to state's yaw - 0.04
+        else if action = 13:
+            set state's yaw to state's yaw + 0.04
+        else if action = 14:
+            set state's pitch to (state's pitch + 0.04) clamped between -1.5 and 1.5
+        else if action = 15:
+            set state's pitch to (state's pitch - 0.04) clamped between -1.5 and 1.5
+        if settings's operation != previous's settings's operation:
+            set state's zoom to 1.0
+            set state's yaw to 0.4
+            set state's pitch to 0.7
+            if (settings's operation = 4) or (settings's operation = 5):
+                set state's yaw to 0.0
+                set state's pitch to -1.5
+        set state's settings to settings
+        set state's changed to the inverse of (lab settings settings equal previous's settings)
+        return state
+
+function the lab view coordinates of {cad vector3:point} with {lab state:state}:
+    execute:
+        set cosine to the cosine of state's yaw
+        set sine to the sine of state's yaw
+        set horizontal to (cosine * point's x) - (sine * point's y)
+        set depth to (sine * point's x) + (cosine * point's y)
+        set vertical to ((the cosine of state's pitch) * point's z) - ((the sine of state's pitch) * depth)
+        set viewDepth to ((the sine of state's pitch) * point's z) + ((the cosine of state's pitch) * depth)
+        return a cad vector3 with x horizontal, y vertical and z viewDepth
+
+function the lab projection of {cad vector3:point} with {lab state:state}:
+    execute:
+        set viewPoint to the lab view coordinates of point with state
+        return a cad vector2 with x viewPoint's x and y viewPoint's y
+
+function the lab solid choice x for {integer:index}:
+    execute:
+        return 354 + ((the remainder of index divided by 4) * 130)
+function the lab solid choice y for {integer:index}:
+    execute:
+        return 100 + ((index / 4) * 42)
+function the lab solid choice width:
+    replacement:
+        116

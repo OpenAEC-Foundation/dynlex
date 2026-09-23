@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/source_join3.dl
+import tests/cadkernel/nurbs3/support.dl
+
+function source join3 input curve at {integer:offset}:
+    execute:
+        set degree to (the nurbs probe number at offset) as an integer
+        set count to (the nurbs probe number at (offset + 1)) as an integer
+        set knotCount to (the nurbs probe number at (offset + 2)) as an integer
+        set weightCount to (the nurbs probe number at (offset + 3)) as an integer
+        set closed to (the nurbs probe number at (offset + 4)) != 0.0
+        set cursor to offset + 5
+        set controls to an empty list of a cad vector3
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append (the nurbs probe point at cursor) to controls
+            set cursor to cursor + 3
+        loop index from 0 to knotCount:
+            append (the nurbs probe number at cursor) to knots
+            increment cursor
+        loop index from 0 to weightCount:
+            append (the nurbs probe number at cursor) to weights
+            increment cursor
+        set result to the cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+        free controls
+        free knots
+        free weights
+        if result's valid:
+            set result's value to result's value with cad periodicity closed
+        return result
+
+function emit source joined span {cad source span result:result}:
+    execute:
+        emit nurbs flag result's valid
+        if result's valid:
+            emit nurbs scalar result's start
+            emit nurbs scalar result's end
+
+set operation to (the nurbs probe number at 0) as an integer
+set tolerance to the nurbs probe number at 1
+if operation = 0:
+    set result to the cad joined line from (the nurbs probe point at 2) to (the nurbs probe point at 5) with (the nurbs probe point at 8) to (the nurbs probe point at 11) within tolerance
+    emit nurbs flag result's valid
+    if result's valid:
+        emit nurbs point result's start
+        emit nurbs point result's end
+if operation = 1:
+    emit source joined span (the cad joined span from (the nurbs probe number at 2) to (the nurbs probe number at 3) with (the nurbs probe number at 4) to (the nurbs probe number at 5))
+if operation = 2:
+    set source to a cad source arc3 at (the nurbs probe point at 2) normal (the nurbs probe point at 5) with radius (the nurbs probe number at 8) from (the nurbs probe number at 9) to (the nurbs probe number at 10)
+    set other to a cad source arc3 at (the nurbs probe point at 11) normal (the nurbs probe point at 14) with radius (the nurbs probe number at 17) from (the nurbs probe number at 18) to (the nurbs probe number at 19)
+    emit source joined span (the cad joined arc span of source and other within tolerance)
+if operation = 3:
+    set degree to (the nurbs probe number at 2) as an integer
+    set result to the cad line nurbs from (the nurbs probe point at 3) to (the nurbs probe point at 6) of degree degree
+    emit nurbs flag result's valid
+    if result's valid:
+        emit nurbs curve result's value
+if operation = 4:
+    set secondOffset to (the nurbs probe number at 2) as an integer
+    set source to source join3 input curve at 3
+    set other to source join3 input curve at secondOffset
+    emit nurbs flag source's valid
+    emit nurbs flag other's valid
+    if source's valid and other's valid:
+        set beforeSource to the cad clone of source's value
+        set beforeOther to the cad clone of other's value
+        set result to the cad joined nurbs of source's value and other's value within tolerance
+        emit nurbs flag result's valid
+        if result's valid:
+            emit nurbs curve result's value
+            set parameters to [0.0,0.13,0.25,0.5,0.75,0.87,1.0]
+            loop index from 0 to 7:
+                emit nurbs point (the cad point on result's value at (the item at index in parameters))
+            emit nurbs flag ((result's value's controls != source's value's controls) and (result's value's controls != other's value's controls))
+        emit nurbs flag (beforeSource = source's value)
+        emit nurbs flag (beforeOther = other's value)

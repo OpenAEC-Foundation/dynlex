@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/line_union3.dl
+set points to an empty list of a 32 bit floating-point number
+ignore the cad retained indices of linear chain points within 0.0
+free points

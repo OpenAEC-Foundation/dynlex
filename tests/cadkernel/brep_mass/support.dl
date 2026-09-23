@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_topology.dl
+import lib/cadkernel/brep_make.dl
+
+# A minimal two-face annular sector accepted by the source recognition rules.
+# Explicit rectangular pcurves keep this fixture independent of shell/boolean.
+function a cad mass cylindrical sector at {cad vector3:origin} with outer [radius] {a 64 bit floating-point number:outer}, inner [radius] {a 64 bit floating-point number:inner}, height {a 64 bit floating-point number:height} and angle {a 64 bit floating-point number:angle}:
+    execute:
+        set body to an empty cad body
+        set provenance to the synthesized cad provenance
+        set frame to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+        set vertex to the cad body key after inserting (a cad vertex at origin with provenance provenance) into body
+        set curve to the cad body key after inserting (the cad edge curve3 of (a cad line3 with origin origin and direction (the cad x axis))) into body
+        set radii to [outer,inner]
+        loop side from 0 to 2:
+            set radius to the item at side in radii
+            set surface to the cad body key after inserting (the cad surface of (a cad cylinder with base frame and radius radius)) into body
+            set face to the cad body key after inserting (a cad face on surface forward true owned by (a new cad shell key) with provenance provenance) into body
+            set ring to the cad body key after inserting (a cad loop owned by face with provenance provenance) into body
+            set faceNode to the cad node pointer for face in body
+            append ring to (faceNode's loops's values)
+            set corners to [[0.0,0.0],[angle,0.0],[angle,height],[0.0,height]]
+            loop edgeIndex from 0 to 4:
+                set next to the remainder of (edgeIndex + 1) divided by 4
+                set first to the item at edgeIndex in corners
+                set last to the item at next in corners
+                set start to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+                set end to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+                set edge to the cad body key after inserting (a cad edge on curve from 0.0 to 1.0 between vertex and vertex with provenance provenance) into body
+                set use to the cad body key after inserting (a cad coedge on edge forward true with pcurve (the cad pcurve of (the cad curve2 of (a cad line2 from start to end))) owned by ring with provenance provenance) into body
+                set edgeNode to the cad node pointer for edge in body
+                append use to (edgeNode's coedges's values)
+                append use to (edgeNode's coedges's values)
+                set ringNode to the cad node pointer for ring in body
+                append use to (ringNode's coedges's values)
+        return body
+
+function a cad mass spherical shell at {cad vector3:centre} with outer [radius] {a 64 bit floating-point number:outer} and inner [radius] {a 64 bit floating-point number:inner}:
+    execute:
+        set made to the cad sphere body at centre with radius outer
+        if (made's valid) = false:
+            return an empty cad body
+        set body to made's value
+        set faces to the cad face keys of body
+        if (the length of faces) != 1:
+            free faces
+            return an empty cad body
+        set outerFace to the cad node pointer for (the item at 0 in faces) in body
+        set frame to a cad plane with origin centre, x axis (the cad x axis) and y axis (the cad y axis)
+        set surface to the cad body key after inserting (the cad surface of (a cad sphere with frame frame and radius inner)) into body
+        set face to the cad body key after inserting (a cad face on surface forward false owned by (outerFace's owner) with provenance (the synthesized cad provenance)) into body
+        set shellNode to the cad node pointer for (outerFace's owner) in body
+        append face to (shellNode's faces's values)
+        free faces
+        return body

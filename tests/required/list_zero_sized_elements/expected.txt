@@ -1,0 +1,1 @@
+zero-sized list storage and lifecycle passed

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+set points to an empty list of a cad vector2
+set directions to an empty list of a cad normalization2
+set result to the cad arc chain2 through points with closure false and directions directions
+print result's valid
+

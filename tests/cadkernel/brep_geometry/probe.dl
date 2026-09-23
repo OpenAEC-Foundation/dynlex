@@ -1,0 +1,150 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_geometry.dl
+
+function geometry argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function geometry point argument {integer:index}:
+    execute:
+        return a cad vector3 with x (geometry argument index), y (geometry argument (index + 1)) and z (geometry argument (index + 2))
+function emit geometry scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit geometry point {cad vector3:value}:
+    execute:
+        emit geometry scalar value's x
+        emit geometry scalar value's y
+        emit geometry scalar value's z
+function emit geometry normalization {cad normalization3:value}:
+    execute:
+        emit geometry scalar (value's valid as an integer)
+        if value's valid:
+            emit geometry point value's value
+function the geometry probe curve2:
+    execute:
+        set points to a list containing (a cad vector2 with x 0.0 and y 0.0)
+        append (a cad vector2 with x 1.0 and y 2.0) to points
+        append (a cad vector2 with x 3.0 and y 0.0) to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.0 to weights
+        set result to the cad nurbs curve2 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return result's value
+function the geometry probe curve3:
+    execute:
+        set points to a list containing (a cad vector3 with x 0.0, y 0.0 and z 0.0)
+        append (a cad vector3 with x 1.0, y 2.0 and z 1.0) to points
+        append (a cad vector3 with x 3.0, y 0.0 and z -0.5) to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.0 to weights
+        set result to the cad nurbs curve3 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return result's value
+function the geometry probe surface:
+    execute:
+        set points to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 3:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 3:
+                set z to 0.0
+                if (row = 1) and (column = 1):
+                    set z to 1.0
+                append (a cad vector3 with x row, y column and z z) to across
+            append across to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        set result to the cad nurbs surface3 of degrees 2 and 2 with controls points, knots knots and knots and weights weights
+        loop row from 0 to 3:
+            free (the item at row in points)
+        free points
+        free knots
+        free weights
+        return result's value
+
+set mode to (geometry argument 0) as an integer
+set kind to (geometry argument 1) as an integer
+set plane to a cad plane with origin (geometry point argument 2), x axis (geometry point argument 5) and y axis (geometry point argument 8)
+set radius to geometry argument 11
+set minor to geometry argument 12
+set angle to geometry argument 13
+set u to geometry argument 14
+set v to geometry argument 15
+set point to geometry point argument 16
+set direction to geometry point argument 19
+if mode = 0:
+    set shape to the cad surface of plane
+    if kind = 1:
+        set shape to the cad surface of (a cad cylinder with base plane and radius radius)
+    else if kind = 2:
+        set shape to the cad surface of (a cad cone with base plane, radius radius and half angle angle)
+    else if kind = 3:
+        set shape to the cad surface of (a cad sphere with frame plane and radius radius)
+    else if kind = 4:
+        set shape to the cad surface of (a cad torus with frame plane, major radius radius and minor radius minor)
+    else if kind = 5:
+        set shape to the cad surface of the geometry probe surface
+    emit geometry point (the cad point on shape at parameters u and v)
+    set tangents to the cad tangents of shape at parameters u and v
+    emit geometry scalar (tangents's valid as an integer)
+    if tangents's valid:
+        emit geometry point tangents's u
+        emit geometry point tangents's v
+    emit geometry normalization (the cad normal of shape at parameters u and v)
+    set parameters to the cad parameters on shape nearest point
+    emit geometry scalar (parameters's valid as an integer)
+    if parameters's valid:
+        emit geometry scalar parameters's value's x
+        emit geometry scalar parameters's value's y
+    set hits to the cad ray hits of shape from point along direction
+    emit geometry scalar (hits's valid as an integer)
+    if hits's valid:
+        emit geometry scalar (the length of hits's values)
+        loop index from 0 to the length of hits's values:
+            emit geometry scalar (the item at index in hits's values)
+    emit geometry scalar (the cad distance from shape to point)
+    emit geometry scalar ((shape contains cad point point within (geometry argument 22)) as an integer)
+    set framed to the cad frame of shape
+    emit geometry scalar (framed's valid as an integer)
+    if framed's valid:
+        emit geometry point framed's value's origin
+        emit geometry point framed's value's xAxis
+        emit geometry point framed's value's yAxis
+    set clone to the cad clone of shape
+    emit geometry scalar ((clone = shape) as an integer)
+else:
+    set shape to the cad edge curve3 of (a cad line3 with origin plane's origin and direction plane's xAxis)
+    if kind = 1:
+        set shape to the cad edge curve3 of (a cad circle3 with plane plane and radius radius)
+    else if kind = 2:
+        set shape to the cad edge curve3 of (a cad ellipse3 with plane plane, major radius radius and minor radius minor)
+    else if kind = 3:
+        set shape to the cad edge curve3 of (a cad planar spline3 with plane plane and curve the geometry probe curve2)
+    else if kind = 4:
+        set shape to the cad edge curve3 of the geometry probe curve3
+    emit geometry point (the cad point on shape at u)
+    emit geometry point (the cad tangent of shape at u)
+    emit geometry scalar (the cad parameter on shape nearest point)
+    set clone to the cad clone of shape
+    emit geometry scalar ((clone = shape) as an integer)

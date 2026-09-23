@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs3.dl
+
+function ownership check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 90)
+
+function a detached nurbs curve:
+    execute:
+        set points to a list containing (the cad zero vector3)
+        append (a cad vector3 with x 4.0, y 2.0 and z 0.0) to points
+        set empty to an empty list of a 64 bit floating-point number
+        set built to the cad nurbs curve3 of degree 1 with controls points, knots empty and weights empty
+        set held to built's value
+        free points
+        free empty
+        return held
+
+set original to a detached nurbs curve
+set copy to original
+set clone to the cad clone of original
+ownership check (clone = original)
+ownership check ((clone != original) = false)
+ownership check (copy's owner = original's owner)
+ownership check (clone's owner != original's owner)
+ownership check (clone's controls != original's controls)
+ownership check (clone's knots != original's knots)
+ownership check (clone's weights != original's weights)
+ownership check ((@intrinsic("dereference", original's owner)) >= 2)
+# The clone has exclusive storage; this test mutates it to prove independence.
+replace item at index 1 in clone's controls with (a cad vector3 with x 40.0, y 20.0 and z 0.0)
+ownership check (clone != original)
+set originalEnd to the cad point on original at 1.0
+ownership check (originalEnd's x = 4.0)
+free cad nurbs original
+free cad nurbs original
+set copiedEnd to the cad point on copy at 1.0
+ownership check (copiedEnd's x = 4.0)
+set retained to a list containing copy
+free cad nurbs copy
+set throughList to the item at 0 in retained
+clear retained
+free retained
+set detachedEnd to the cad point on throughList at 1.0
+ownership check (detachedEnd's x = 4.0)
+free cad nurbs throughList
+free cad nurbs clone
+print "curve copied lifetime and deep clone" as a line
+
+set net to an empty list of the type of (an empty list of a cad vector3)
+loop row from 0 to 2:
+    set across to an empty list of a cad vector3
+    loop column from 0 to 2:
+        append (a cad vector3 with x row, y column and z 0.0) to across
+    append across to net
+set built to the cad nurbs surface3 of degrees 1 and 1 through control net net with periodicity false and false
+ownership check built's valid
+set surface to built's value
+set shared to surface
+set duplicate to the cad clone of surface
+ownership check (duplicate = surface)
+ownership check (duplicate's owner != surface's owner)
+ownership check (duplicate's controls != surface's controls)
+ownership check (duplicate's weights != surface's weights)
+ownership check (duplicate's uKnots != surface's uKnots)
+ownership check (duplicate's vKnots != surface's vKnots)
+loop row from 0 to 2:
+    ownership check ((the item at row in duplicate's controls) != (the item at row in surface's controls))
+    ownership check ((the item at row in duplicate's weights) != (the item at row in surface's weights))
+replace item at index 0 in (the item at 0 in duplicate's controls) with (a cad vector3 with x 20.0, y 10.0 and z 5.0)
+ownership check (duplicate != surface)
+replace item at index 0 in (the item at 0 in net) with (a cad vector3 with x 99.0, y 99.0 and z 99.0)
+loop row from 0 to 2:
+    free (the item at row in net)
+free net
+free cad nurbs surface
+free cad nurbs built's value
+set corner to the cad point on shared at parameters 0.0 and 0.0
+ownership check (((corner's x = 0.0) and (corner's y = 0.0)) and (corner's z = 0.0))
+free cad nurbs shared
+free cad nurbs duplicate
+free cad nurbs duplicate
+print "surface rows independently cloned and borrowed inputs detached" as a line
+
+set noPoints to an empty list of a cad vector3
+set empty to an empty list of a 64 bit floating-point number
+set invalid to the strict cad nurbs curve3 of degree 0 with controls noPoints, knots empty and weights empty
+ownership check (invalid's valid = false)
+set invalidCopy to invalid
+free cad nurbs invalid's value
+ownership check ((the length of invalidCopy's value's controls) = 0)
+free cad nurbs invalidCopy's value
+free noPoints
+free empty
+print "invalid results and repeated explicit release are safe" as a line

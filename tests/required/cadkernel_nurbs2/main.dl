@@ -1,0 +1,344 @@
+# SPDX-License-Identifier: MPL-2.0
+# Mathematical fixtures translated from pinned geom2d/nurbs.rs.
+import lib/cadkernel/nurbs2.dl
+
+function check nurbs2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 91)
+
+function nurbs2 point {cad vector2:a} is near {cad vector2:b} within {a number:slack}:
+    execute:
+        return ((the absolute value of (a's x - b's x)) < slack) and ((the absolute value of (a's y - b's y)) < slack)
+
+function test points2 coordinates:
+    execute:
+        set result to an empty list of a cad vector2
+        loop index from 0 to the length of coordinates:
+            set pair to the item at index in coordinates
+            append (a cad vector2 with x (the item at 0 in pair) and y (the item at 1 in pair)) to result
+        return result
+
+function test scalars2 coordinates:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of coordinates:
+            append (the item at index in coordinates) to result
+        return result
+
+function test curve2 of degree {integer:degree} from coordinates:
+    execute:
+        set points to test points2 coordinates
+        set empty to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve2 of degree degree with controls points, knots empty and weights empty
+        free points
+        free empty
+        check nurbs2 result's valid
+        return result's value
+
+function test linear2:
+    execute:
+        return test curve2 of degree 1 from [[0.0,0.0],[10.0,0.0],[10.0,10.0]]
+
+function test quarter2 of radius {a number:radius}:
+    execute:
+        set points to test points2 [[radius,0.0],[radius,radius],[0.0,radius]]
+        set knots to test scalars2 [0.0,0.0,0.0,1.0,1.0,1.0]
+        set weights to test scalars2 [1.0,the cosine of (3.141592653589793 / 4.0),1.0]
+        set result to the cad nurbs curve2 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        check nurbs2 result's valid
+        return result's value
+
+function test uneven2:
+    execute:
+        set points to test points2 [[0.0,0.0],[1.0,6.0],[4.0,6.0],[6.0,0.0],[9.0,4.0],[12.0,0.0]]
+        set knots to test scalars2 [0.0,0.0,0.0,0.0,0.2,0.9,1.0,1.0,1.0,1.0]
+        set weights to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve2 of degree 3 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        check nurbs2 result's valid
+        return result's value
+
+set source to test points2 [[0.0,0.0],[1.0,0.8],[2.0,-0.6],[3.0,0.0]]
+set fitted to the cad nurbs2 fit to polyline source within 0.4
+check nurbs2 fitted's valid
+set samples to the cad samples of fitted's value with 32 pieces per span
+loop index from 0 to the length of samples:
+    set point to the item at index in samples
+    set distance to (1.0 as a 64 bit floating-point number) / 0.0
+    loop segment from 0 to (the length of source) - 1:
+        set here to the cad distance from point to the segment from (the item at segment in source) to (the item at (segment + 1) in source)
+        set distance to the minimum of distance and here
+    check nurbs2 (distance <= 0.400000001)
+loop index from 0 to the length of source:
+    set point to the item at index in source
+    set nearest to the cad point on fitted's value at (the cad parameter on fitted's value nearest point)
+    check nurbs2 ((the cad distance from point to nearest) <= 0.400000001)
+free source
+free samples
+print "freehand_fit_stays_within_tolerance" as a line
+
+set source to test points2 [[0.0,0.0],[1.0,2.0],[3.0,1.0]]
+set fitted to the cad nurbs2 fit to polyline source within 0.0
+check nurbs2 fitted's valid
+check nurbs2 ((the cad degree of fitted's value) = 1)
+check nurbs2 ((the length of fitted's value's controls) = (the length of source))
+loop index from 0 to the length of source:
+    set exactActual to the item at index in fitted's value's controls
+    set exactExpected to the item at index in source
+    check nurbs2 ((exactActual's x = exactExpected's x) and (exactActual's y = exactExpected's y))
+free source
+print "zero_freehand_tolerance_keeps_the_polyline" as a line
+
+set line to test linear2
+set quarter to test quarter2 of radius 100.0
+set curves to a list containing line
+append quarter to curves
+loop index from 0 to 2:
+    set curve to the item at index in curves
+    set domain to the cad domain of curve
+    set width to domain's end - domain's start
+    set step to width * 1e-6
+    loop sample from 0 to 10:
+        set u to domain's start + width * (((sample as a 64 bit floating-point number) + 0.5) / 10.0)
+        set analytic to the cad derivative of curve at knot u
+        set before to the cad point on curve at knot (u - step)
+        set after to the cad point on curve at knot (u + step)
+        set numeric to (the cad difference of after and before) cad divided by (2.0 * step)
+        set scale to the maximum of (the maximum of (the absolute value of numeric's x) and (the absolute value of numeric's y)) and 1.0
+        check nurbs2 (nurbs2 point analytic is near numeric within (1e-4 * scale))
+free curves
+print "the_derivative_matches_a_difference_quotient" as a line
+loop index from 0 through 10:
+    set t to index / 10.0
+    set point to the cad point on quarter at t
+    set slope to the cad derivative of quarter at t
+    check nurbs2 ((the absolute value of ((the cad length of point) - 100.0)) < 1e-9)
+    set radial to the cad normalization of point
+    set tangent to the cad normalization of slope
+    check nurbs2 radial's valid
+    check nurbs2 tangent's valid
+    check nurbs2 ((the absolute value of (the cad dot of radial's value and tangent's value)) < 1e-9)
+print "the_derivative_of_a_circle_is_perpendicular_to_its_radius" as a line
+set domain to the cad domain of quarter
+set width to domain's end - domain's start
+check nurbs2 (nurbs2 point (the cad derivative of quarter at 0.5) is near ((the cad derivative of quarter at knot (domain's start + 0.5 * width)) scaled by width) within 1e-9)
+print "the_unit_parameter_derivative_scales_with_the_domain" as a line
+set first to the cad derivative of line at knot 0.25
+check nurbs2 (nurbs2 point first is near (the cad derivative of line at knot 0.4) within 1e-9)
+check nurbs2 ((the absolute value of first's y) < 1e-9)
+print "a_straight_run_has_a_constant_derivative" as a line
+
+set uneven to test uneven2
+set curves to a list containing line
+append uneven to curves
+append quarter to curves
+loop index from 0 to 3:
+    set curve to the item at index in curves
+    set reversed to the cad reversal of curve
+    loop sample from 0 through 20:
+        set t to sample / 20.0
+        check nurbs2 (nurbs2 point (the cad point on curve at t) is near (the cad point on reversed at (1.0 - t)) within 1e-9)
+print "reversing_traces_the_same_curve_backwards" as a line
+set reversePoints to an empty list of a cad vector2
+loop index from 5 down through 0:
+    append (the item at index in uneven's controls) to reversePoints
+set empty to an empty list of a 64 bit floating-point number
+set naive to the cad nurbs curve2 of degree 3 with controls reversePoints, knots empty and weights empty
+set worst to 0.0
+loop sample from 0 through 20:
+    set t to sample / 20.0
+    set distance to the cad distance from (the cad point on uneven at t) to (the cad point on naive's value at (1.0 - t))
+    set worst to the maximum of worst and distance
+check nurbs2 (worst > 0.1)
+free reversePoints
+print "regenerating_the_knots_instead_would_move_the_curve" as a line
+set returned to the cad reversal of (the cad reversal of uneven)
+loop index from 0 through 10:
+    check nurbs2 (nurbs2 point (the cad point on uneven at (index / 10.0)) is near (the cad point on returned at (index / 10.0)) within 1e-12)
+print "reversing_twice_is_the_original" as a line
+loop index from 0 to 3:
+    set curve to the item at index in curves
+    set raised to the cad elevation of curve by 1
+    check nurbs2 raised's valid
+    check nurbs2 (raised's value's degree = curve's degree + 1)
+    loop sample from 0 through 20:
+        set t to sample / 20.0
+        check nurbs2 (nurbs2 point (the cad point on curve at t) is near (the cad point on raised's value at t) within 1e-9)
+free curves
+print "elevating_the_degree_does_not_move_the_curve" as a line
+set raised to the cad elevation of quarter by 1
+check nurbs2 (raised's value is cad rational)
+loop index from 0 through 10:
+    check nurbs2 ((the absolute value of ((the cad length of (the cad point on raised's value at (index / 10.0))) - 100.0)) < 1e-9)
+print "elevating_a_rational_curve_keeps_it_rational" as a line
+set raised to the cad elevation of uneven by 3
+check nurbs2 raised's valid
+check nurbs2 (raised's value's degree = 6)
+loop index from 0 through 10:
+    check nurbs2 (nurbs2 point (the cad point on uneven at (index / 10.0)) is near (the cad point on raised's value at (index / 10.0)) within 1e-8)
+print "elevating_by_more_than_one_step_compounds" as a line
+set none to the cad elevation of uneven by 0
+check nurbs2 (none's valid = false)
+print "elevating_by_nothing_has_nothing_to_do" as a line
+
+set cubic to test curve2 of degree 3 from [[0.0,0.0],[1.0,5.0],[4.0,5.0],[5.0,0.0]]
+check nurbs2 (nurbs2 point (the cad point on cubic at 0.0) is near (the cad zero vector2) within 1e-9)
+check nurbs2 (nurbs2 point (the cad point on cubic at 1.0) is near (a cad vector2 with x 5.0 and y 0.0) within 1e-9)
+print "a_clamped_curve_starts_and_ends_on_its_outer_control_points" as a line
+set ts to [0.0,0.5,1.0,0.25]
+set expected to test points2 [[0.0,0.0],[10.0,0.0],[10.0,10.0],[5.0,0.0]]
+loop index from 0 to 4:
+    check nurbs2 (nurbs2 point (the cad point on line at (the item at index in ts)) is near (the item at index in expected) within 1e-9)
+free expected
+print "degree_one_reproduces_the_control_polygon" as a line
+loop index from 0 through 50:
+    set point to the cad point on cubic at (index / 50.0)
+    check nurbs2 ((point's x >= 0.0) and (point's x <= 5.0))
+    check nurbs2 ((point's y >= 0.0) and (point's y <= 5.0))
+print "a_curve_stays_inside_its_control_polygon_bounds" as a line
+set unitQuarter to test quarter2 of radius 1.0
+check nurbs2 (unitQuarter is cad rational)
+loop index from 0 through 20:
+    check nurbs2 ((the absolute value of ((the cad length of (the cad point on unitQuarter at (index / 20.0))) - 1.0)) < 1e-9)
+set polynomial to test curve2 of degree 2 from [[1.0,0.0],[1.0,1.0],[0.0,1.0]]
+check nurbs2 ((polynomial is cad rational) = false)
+check nurbs2 ((the absolute value of ((the cad length of (the cad point on polynomial at 0.5)) - 1.0)) > 0.05)
+print "weights_are_applied_rather_than_ignored" as a line
+set points to test points2 [[0.0,0.0],[1.0,2.0],[2.0,0.0],[3.0,2.0]]
+set short to test scalars2 [0.0,1.0]
+set malformed to the cad nurbs curve2 of degree 2 with controls points, knots short and weights empty
+check nurbs2 malformed's valid
+check nurbs2 (nurbs2 point (the cad point on malformed's value at 0.0) is near (the cad zero vector2) within 1e-9)
+check nurbs2 (nurbs2 point (the cad point on malformed's value at 1.0) is near (a cad vector2 with x 3.0 and y 2.0) within 1e-9)
+free short
+free points
+print "a_malformed_knot_vector_falls_back_to_a_clamped_uniform_one" as a line
+set points to test points2 [[0.0,0.0],[1.0,1.0]]
+set none to the cad nurbs curve2 of degree 3 with controls points, knots empty and weights empty
+check nurbs2 (none's valid = false)
+set none to the cad nurbs curve2 of degree 0 with controls points, knots empty and weights empty
+check nurbs2 (none's valid = false)
+free points
+print "too_few_control_points_is_not_a_curve" as a line
+set points to test points2 [[0.0,0.0],[1.0,2.0],[2.0,0.0]]
+set weights to test scalars2 [1.0,0.0,1.0]
+set nonsense to the cad nurbs curve2 of degree 2 with controls points, knots empty and weights weights
+check nurbs2 ((nonsense's value is cad rational) = false)
+set mid to the cad point on nonsense's value at 0.5
+check nurbs2 (mid's y = 1.0)
+free points
+free weights
+print "nonsense_weights_are_discarded_rather_than_dividing_by_zero" as a line
+
+set wandering to test curve2 of degree 3 from [[0.0,0.0],[1.0,5.0],[4.0,5.0],[5.0,0.0],[8.0,-3.0]]
+loop index from 1 to 10:
+    set t to index / 10.0
+    set point to the cad point on wandering at t
+    check nurbs2 ((the absolute value of ((the cad parameter on wandering nearest point) - t)) < 1e-4)
+print "the_parameter_inverts_the_evaluation" as a line
+set t to the cad parameter on line nearest (a cad vector2 with x 5.0 and y 3.0)
+check nurbs2 (nurbs2 point (the cad point on line at t) is near (a cad vector2 with x 5.0 and y 0.0) within 1e-3)
+print "a_point_off_the_curve_projects_onto_it" as a line
+set samples to the cad samples of wandering with 8 pieces per span
+check nurbs2 ((the length of samples) > 8)
+check nurbs2 (nurbs2 point (the item at 0 in samples) is near (the cad point on wandering at 0.0) within 1e-9)
+check nurbs2 (nurbs2 point (the last item of samples) is near (the cad point on wandering at 1.0) within 1e-9)
+free samples
+print "tessellation_keeps_both_ends_and_stays_on_the_curve" as a line
+check nurbs2 ((line is cad closed) = false)
+set closed to test curve2 of degree 1 from [[0.0,0.0],[10.0,0.0],[10.0,10.0],[0.0,0.0]]
+check nurbs2 (closed is cad closed)
+print "a_closed_curve_is_recognised" as a line
+set inserted to the cad clone of wandering
+insert cad nurbs knot 0.37 into inserted
+check nurbs2 ((the length of inserted's controls) = (the length of wandering's controls) + 1)
+loop index from 0 through 40:
+    set t to index / 40.0
+    check nurbs2 (nurbs2 point (the cad point on inserted at t) is near (the cad point on wandering at t) within 1e-9)
+print "inserting_a_knot_leaves_the_shape_alone" as a line
+set split to the cad split of wandering at 0.4
+check nurbs2 split's valid
+loop index from 0 through 20:
+    set f to index / 20.0
+    check nurbs2 (nurbs2 point (the cad point on split's left at f) is near (the cad point on wandering at (f * 0.4)) within 1e-9)
+    check nurbs2 (nurbs2 point (the cad point on split's right at f) is near (the cad point on wandering at (0.4 + f * 0.6)) within 1e-9)
+print "both_halves_of_a_split_lie_on_the_original" as a line
+set split to the cad split of unitQuarter at 0.5
+check nurbs2 split's valid
+loop index from 0 through 10:
+    check nurbs2 ((the absolute value of ((the cad length of (the cad point on split's left at (index / 10.0))) - 1.0)) < 1e-9)
+    check nurbs2 ((the absolute value of ((the cad length of (the cad point on split's right at (index / 10.0))) - 1.0)) < 1e-9)
+print "splitting_a_rational_curve_keeps_it_rational" as a line
+set split to the cad split of line at 0.0
+check nurbs2 (split's valid = false)
+set split to the cad split of line at 1.0
+check nurbs2 (split's valid = false)
+print "splitting_at_an_end_has_nothing_to_divide" as a line
+
+set fitPoints to test points2 [[0.0,0.0],[1.0,2.0],[3.0,1.0],[5.0,4.0]]
+set fit to the cad nurbs2 fit through fitPoints using (the cad chord parameterization)
+check nurbs2 fit's valid
+set fitDomain to the cad domain of fit's value
+check nurbs2 (nurbs2 point (the cad point on fit's value at knot fitDomain's start) is near (the item at 0 in fitPoints) within 1e-9)
+check nurbs2 (nurbs2 point (the cad point on fit's value at knot fitDomain's end) is near (the item at 3 in fitPoints) within 1e-9)
+loop index from 0 to 4:
+    set target to the item at index in fitPoints
+    check nurbs2 (nurbs2 point (the cad point on fit's value at (the cad parameter on fit's value nearest target)) is near target within 1e-6)
+print "an_interpolated_curve_passes_through_every_fit_point" as a line
+set two to test points2 [[0.0,0.0],[10.0,0.0]]
+set arch to the cad nurbs2 fit through two with start tangent (a cad spline tangent with value [0.0,1.0]) and end tangent (a cad spline tangent with value [0.0,-1.0]) using (the cad chord parameterization)
+check nurbs2 arch's valid
+check nurbs2 (arch's value's degree = 3)
+check nurbs2 ((the length of arch's value's controls) = 4)
+check nurbs2 (nurbs2 point (the cad point on arch's value at 0.0) is near (the cad zero vector2) within 1e-9)
+check nurbs2 (nurbs2 point (the cad point on arch's value at 1.0) is near (a cad vector2 with x 10.0 and y 0.0) within 1e-9)
+set middle to the cad point on arch's value at 0.5
+check nurbs2 (middle's y > 0.0)
+free two
+print "two_fit_points_with_tangents_make_one_cubic" as a line
+set three to test points2 [[0.0,0.0],[5.0,0.0],[10.0,0.0]]
+set arch to the cad nurbs2 fit through three with start tangent (a cad spline tangent with value [1.0,2.0]) and end tangent (a cad spline tangent with value [1.0,-2.0]) using (the cad chord parameterization)
+set a to the cad point on arch's value at 0.0
+set b to the cad point on arch's value at 0.001
+set c to the cad point on arch's value at 0.999
+set d to the cad point on arch's value at 1.0
+check nurbs2 ((the absolute value of (((b's y - a's y) / (b's x - a's x)) - 2.0)) < 0.05)
+check nurbs2 ((the absolute value of (((d's y - c's y) / (d's x - c's x)) + 2.0)) < 0.05)
+free three
+print "the_stored_tangents_are_followed_at_the_ends" as a line
+set three to test points2 [[0.0,0.0],[2.0,3.0],[4.0,-1.0]]
+set modes to [the cad uniform parameterization,the cad centripetal parameterization,the cad chord parameterization]
+loop mode from 0 to 3:
+    set natural to the cad nurbs2 fit through three using (the item at mode in modes)
+    loop index from 0 to 3:
+        set target to the item at index in three
+        check nurbs2 (nurbs2 point (the cad point on natural's value at (the cad parameter on natural's value nearest target)) is near target within 1e-6)
+free three
+print "interpolation_without_tangents_still_passes_through" as a line
+set split to the cad split of fit's value at 0.45
+check nurbs2 split's valid
+check nurbs2 (nurbs2 point (the cad point on split's left at 1.0) is near (the cad point on split's right at 0.0) within 1e-9)
+loop index from 0 through 10:
+    set f to index / 10.0
+    check nurbs2 (nurbs2 point (the cad point on split's left at f) is near (the cad point on fit's value at (f * 0.45)) within 1e-9)
+free fitPoints
+print "an_interpolated_curve_can_be_split_like_any_other" as a line
+set zero to an empty list of a cad vector2
+set fit to the cad nurbs2 fit through zero using (the cad chord parameterization)
+check nurbs2 (fit's valid = false)
+append (a cad vector2 with x 1.0 and y 1.0) to zero
+set fit to the cad nurbs2 fit through zero using (the cad chord parameterization)
+check nurbs2 (fit's valid = false)
+free zero
+print "fewer_than_two_fit_points_is_not_a_curve" as a line
+set survey to test curve2 of degree 3 from [[512345.678,4512345.678],[512346.678,4512350.678],[512349.678,4512350.678],[512350.678,4512345.678]]
+check nurbs2 (nurbs2 point (the cad point on survey at 0.0) is near (a cad vector2 with x 512345.678 and y 4512345.678) within 1e-6)
+check nurbs2 (nurbs2 point (the cad point on survey at 1.0) is near (a cad vector2 with x 512350.678 and y 4512345.678) within 1e-6)
+free empty
+print "survey_coordinates_evaluate_without_drift" as a line

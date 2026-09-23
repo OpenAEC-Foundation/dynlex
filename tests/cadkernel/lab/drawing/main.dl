@@ -1,0 +1,45 @@
+import examples/dynedra/model.dl
+
+function the lab snapshot coordinates of {cad vector3:point}:
+    execute:
+        set result to the string form of (point's x)
+        set result to (result + (the string form of ";")) + (the string form of (point's y))
+        return (result + (the string form of ";")) + (the string form of (point's z))
+
+function the lab snapshot {C string:prefix} for solid {integer:kind} from {cad vector3:start} to {cad vector3:end}:
+    execute:
+        set result to (the string form of prefix) + (the string form of ";")
+        set result to (result + (the string form of kind)) + (the string form of ";")
+        set result to (result + (the lab snapshot coordinates of start)) + (the string form of ";")
+        return result + (the lab snapshot coordinates of end)
+
+set settings to the initial lab settings
+set settings's operation to 6
+set settings's samples to 48
+set settings's height to 2.0
+
+loop kind from 6 to 8:
+    set settings's solidKind to kind
+    set scene to the lab scene for settings
+    if (scene's valid) = false:
+        print ((the string form of "X;") + (the string form of kind)) as a line
+        return 1
+    set header to (the string form of "S;") + (the string form of kind)
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's vertices))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's edges))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's faces))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's coedges))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's loops))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's flaws))
+    set header to (header + (the string form of ";")) + (the string form of (scene's solid's gap))
+    print header as a line
+    loop index from 0 to the length of (scene's guides):
+        set guide to the item at index in (scene's guides)
+        print (the lab snapshot "G" for solid kind from guide's start to guide's end) as a line
+    loop index from 0 to the length of (scene's segments):
+        set edgeSegment to the item at index in (scene's segments)
+        print (the lab snapshot "E" for solid kind from edgeSegment's start to edgeSegment's end) as a line
+    loop index from 0 to the length of (scene's controls):
+        set point to the item at index in (scene's controls)
+        set pointLine to (((the string form of "P;") + (the string form of kind)) + (the string form of ";")) + (the lab snapshot coordinates of point)
+        print pointLine as a line

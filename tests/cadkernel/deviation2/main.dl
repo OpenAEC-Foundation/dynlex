@@ -1,0 +1,112 @@
+# SPDX-License-Identifier: MPL-2.0
+# All sixteen fixtures from pinned geom2d/deviation.rs, in source order.
+import lib/cadkernel/deviation2.dl
+import tests/cadkernel/arclength2/support.dl
+
+function measure2 circle of radius {a number:radius}:
+    execute:
+        return the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius radius)
+function measure2 sample [count] of {cad curve2:shape} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set points to the cad samples of shape within deviation tolerance
+        set count to the length of points
+        free points
+        return count
+function measure2 [worst] sag of {cad curve2:shape} on {a pointer to a list:points}:
+    execute:
+        set worst to 0.0
+        loop index from 0 to ((the length of points) - 1):
+            set middle to the cad lerp from (the item at index in points) to (the item at (index + 1) in points) at 0.5
+            set nearest to the cad point on shape at (the cad parameter on shape nearest middle)
+            set worst to the maximum of worst and (the cad distance from middle to nearest)
+        return worst
+
+set radii to [0.5,10.0,1000.0,40000.0]
+set tolerances to [1.0,0.05,0.001]
+loop ri from 0 to 4:
+    set shape to measure2 circle of radius (the item at ri in radii)
+    loop ti from 0 to 3:
+        set tolerance to the item at ti in tolerances
+        set points to the cad samples of shape within deviation tolerance
+        check measure2 ((the length of points) <= 16384)
+        check measure2 ((measure2 worst sag of shape on points) <= (tolerance * 1.000001))
+        free points
+print "a_chord_never_sags_further_than_asked" as a line
+set shape to measure2 circle of radius 250000.0
+set points to the cad samples of shape within deviation 0.001
+check measure2 ((the length of points) = 16385)
+check measure2 ((measure2 worst sag of shape on points) > 0.001)
+free points
+print "the_cap_is_what_stops_an_unreasonable_request" as a line
+set small to measure2 sample count of (measure2 circle of radius 1.0) within 0.01
+set large to measure2 sample count of (measure2 circle of radius 10000.0) within 0.01
+check measure2 (large > (small * 50))
+print "a_bigger_circle_gets_more_points_at_the_same_tolerance" as a line
+set fine to measure2 sample count of (measure2 circle of radius 100.0) within 0.001
+set coarse to measure2 sample count of (measure2 circle of radius 100.0) within 0.5
+check measure2 (fine > (coarse * 10))
+print "a_slacker_tolerance_gets_fewer_points" as a line
+check measure2 ((measure2 sample count of (measure2 circle of radius 0.001) within 1.0) = 9)
+print "a_curve_smaller_than_the_tolerance_still_looks_round" as a line
+set invalid to [0.0,-1.0,0.0 / 0.0]
+loop index from 0 to 3:
+    check measure2 ((measure2 sample count of (measure2 circle of radius 10.0) within (the item at index in invalid)) = 16385)
+print "a_degenerate_tolerance_is_capped_rather_than_unbounded" as a line
+set line to the cad curve2 of (a cad line2 from (the cad zero vector2) to (measure2 point 1000.0 and 500.0))
+check measure2 ((measure2 sample count of line within 1e-12) = 2)
+print "a_straight_curve_is_two_points_however_fine_the_tolerance" as a line
+set arc to the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 100.0 from 0.0 to 1.5707963267948966)
+set a to (measure2 sample count of arc within 0.01) as a 64 bit floating-point number
+set b to (measure2 sample count of (measure2 circle of radius 100.0) within 0.01) as a 64 bit floating-point number
+check measure2 ((the absolute value of (a - (b / 4.0))) < 4.0)
+print "an_arc_spends_points_only_on_the_sweep_it_has" as a line
+set ellipse to measure2 ellipse at (the cad zero vector2) with radii 100.0 and 5.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+set points to the cad samples of ellipse within deviation 0.01
+loop index from 0 to ((the length of points) - 1):
+    set middle to the cad lerp from (the item at index in points) to (the item at (index + 1) in points) at 0.5
+    set guess to the cad angle of (measure2 point (middle's x / 100.0) and (middle's y / 5.0))
+    set sag to 1.0 / 0.0
+    loop probe from 0 through 4000:
+        set parameter to (guess - 0.05) + (0.1 * ((probe as a 64 bit floating-point number) / 4000.0))
+        set point to measure2 point (100.0 * (the cosine of parameter)) and (5.0 * (the sine of parameter))
+        set sag to the minimum of sag and (the cad distance from middle to point)
+    check measure2 (sag <= (0.01 * 1.05))
+free points
+print "an_ellipse_is_held_to_its_tightest_bend" as a line
+set ellipse to measure2 ellipse at (the cad zero vector2) with radii 100.0 and 100.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+set asCircle to measure2 sample count of (measure2 circle of radius 100.0) within 0.01
+set asEllipse to measure2 sample count of ellipse within 0.01
+check measure2 ((the absolute value of (asCircle - asEllipse)) <= 2)
+print "the_ellipse_bound_agrees_with_the_circle_it_degenerates_to" as a line
+set polyline to measure2 polyline [[0.0,0.0,0.0],[100.0,0.0,1.0],[200.0,0.0,0.0]] with closure false
+set points to the cad samples of polyline within deviation 0.01
+check measure2 ((the length of points) > 20)
+loop index from 0 to ((the length of points) - 1):
+    check measure2 ((measure2 (the item at index in points) exactly equals (the item at (index + 1) in points)) = false)
+check measure2 (measure2 (the item at 0 in points) exactly equals (the cad zero vector2))
+check measure2 (measure2 (the last item of points) exactly equals (measure2 point 200.0 and 0.0))
+free points
+print "a_polyline_holds_each_of_its_segments_and_shares_their_vertices" as a line
+set spline to measure2 quarter spline
+set points to the cad samples of spline within deviation 0.05
+loop index from 0 to ((the length of points) - 1):
+    set middle to the cad lerp from (the item at index in points) to (the item at (index + 1) in points) at 0.5
+    check measure2 ((the absolute value of ((the cad length of middle) - 100.0)) <= (0.05 * 1.5))
+free points
+print "a_spline_is_cut_where_it_bends" as a line
+set fine to measure2 sample count of spline within 0.001
+set coarse to measure2 sample count of spline within 1.0
+check measure2 (fine > coarse)
+check measure2 (coarse >= 5)
+print "a_spline_spends_fewer_points_when_the_tolerance_is_slack" as a line
+set points to the cad samples of spline within deviation 0.01
+check measure2 (measure2 (the item at 0 in points) exactly equals (the cad point on spline at 0.0))
+check measure2 (measure2 (the last item of points) exactly equals (the cad point on spline at 1.0))
+free points
+print "a_spline_keeps_both_ends" as a line
+set remote to the cad curve2 of (a cad circle2 at (measure2 point 512345.678 and 4512345.678) with radius 50.0)
+check measure2 ((measure2 sample count of (measure2 circle of radius 50.0) within 0.01) = (measure2 sample count of remote within 0.01))
+print "survey_coordinates_are_sampled_as_finely_as_local_ones" as a line
+set arc to the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1000.0 from 0.0 to 3.141592653589793)
+check measure2 ((measure2 sample count of arc within 0.1) = 113)
+print "a_half_turn_of_a_big_arc_matches_the_hand_computation" as a line

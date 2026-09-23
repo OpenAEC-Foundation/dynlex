@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MPL-2.0
+# Fixtures from pinned src/geom2d/curve.rs, in source order.
+import lib/cadkernel/curve2.dl
+function check curve2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 92)
+function curve2 test point {a number:x} and {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+function curve2 point {cad vector2:left} is near {cad vector2:right}:
+    execute:
+        return ((the absolute value of (left's x - right's x)) < 1e-9) and ((the absolute value of (left's y - right's y)) < 1e-9)
+function curve2 test polyline coordinates with closure {boolean:closed}:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of coordinates:
+            set row to the item at index in coordinates
+            append (a cad polyline vertex2 at (curve2 test point (the item at 0 in row) and (the item at 1 in row)) with bulge (the item at 2 in row)) to vertices
+        set result to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+        free vertices
+        return result
+set zero to the cad zero vector2
+set line to the cad curve2 of (a cad line2 from (curve2 test point 1.0 and 2.0) to (curve2 test point 5.0 and 7.0))
+set arc to the cad curve2 of (a cad arc2 at zero with radius 3.0 from 0.0 to 1.5707963267948966)
+set ellipse to a cad ellipse at (curve2 test point 2.0 and 2.0) with radii 4.0 and 1.0 along (curve2 test point 1.0 and 0.0)
+set elliptical to the cad curve2 of (a cad ellipse arc2 on ellipse from 0.0 to 1.0)
+set shapes to [line,arc,elliptical]
+loop index from 0 to 3:
+    set shape to the item at index in shapes
+    set start to the cad point on shape at 0.0
+    set middle to the cad point on shape at 0.5
+    set end to the cad point on shape at 1.0
+    check curve2 ((curve2 point start is near end) = false)
+    check curve2 (((curve2 point start is near middle) = false) and ((curve2 point middle is near end) = false))
+print "every_curve_runs_from_zero_to_one" as a line
+set line to the cad curve2 of (a cad line2 from zero to (curve2 test point 10.0 and 0.0))
+check curve2 (curve2 point (the cad point on line at 0.0) is near zero)
+check curve2 (curve2 point (the cad point on line at 0.25) is near (curve2 test point 2.5 and 0.0))
+check curve2 (curve2 point (the cad point on line at 1.0) is near (curve2 test point 10.0 and 0.0))
+print "a_line_parameter_is_the_fraction_along_it" as a line
+check curve2 (curve2 point (the cad point on line at 1.5) is near (curve2 test point 15.0 and 0.0))
+check curve2 (curve2 point (the cad point on line at -0.5) is near (curve2 test point -5.0 and 0.0))
+print "a_parameter_past_the_end_continues_the_line" as a line
+set arc to the cad curve2 of (a cad arc2 at zero with radius 1.0 from 0.0 to 1.5707963267948966)
+check curve2 (curve2 point (the cad point on arc at 0.0) is near (curve2 test point 1.0 and 0.0))
+check curve2 (curve2 point (the cad point on arc at 1.0) is near (curve2 test point 0.0 and 1.0))
+set middle to the cad point on arc at 0.5
+check curve2 ((the absolute value of (middle's x - middle's y)) < 1e-9)
+print "an_arc_parameter_walks_its_own_sweep" as a line
+check curve2 ((line is cad closed) = false)
+set circle to the cad curve2 of (a cad circle2 at zero with radius 1.0)
+check curve2 (circle is cad closed)
+set full to the cad curve2 of (a cad arc2 at zero with radius 1.0 from 1.0 to 1.0)
+check curve2 (full is cad closed)
+check curve2 ((arc is cad closed) = false)
+print "closedness_is_reported_per_shape" as a line
+set polyline to curve2 test polyline [[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[3.0,0.0,0.0]] with closure false
+check curve2 ((the cad segment count of polyline) = 3)
+check curve2 (curve2 point (the cad point on polyline at 0.0) is near zero)
+check curve2 (curve2 point (the cad point on polyline at (1.0 / 3.0)) is near (curve2 test point 1.0 and 0.0))
+check curve2 (curve2 point (the cad point on polyline at 0.5) is near (curve2 test point 1.5 and 0.0))
+check curve2 (curve2 point (the cad point on polyline at 1.0) is near (curve2 test point 3.0 and 0.0))
+print "a_polyline_shares_its_parameter_between_segments" as a line
+set closed to curve2 test polyline [[0.0,0.0,0.0],[1.0,0.0,0.0],[1.0,1.0,0.0]] with closure true
+check curve2 ((the cad segment count of closed) = 3)
+check curve2 (closed is cad closed)
+check curve2 (curve2 point (the cad point on closed at 1.0) is near zero)
+print "a_closed_polyline_has_a_segment_back_to_the_start" as a line
+set bulged to curve2 test polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+check curve2 (curve2 point (the cad point on bulged at 0.5) is near (curve2 test point 1.0 and -1.0))
+print "a_polyline_arc_segment_bulges" as a line
+set line to the cad curve2 of (a cad line2 from zero to (curve2 test point 4.0 and 3.0))
+set arc to the cad curve2 of (a cad arc2 at zero with radius 2.0 from 0.0 to 1.0)
+set pair to [line,arc]
+loop index from 0 to 2:
+    set shape to the item at index in pair
+    set points to the cad samples of shape with density 20.0
+    check curve2 (curve2 point (the item at 0 in points) is near (the cad point on shape at 0.0))
+    check curve2 (curve2 point (the last item of points) is near (the cad point on shape at 1.0))
+    free points
+print "tessellation_keeps_both_endpoints" as a line
+set line to the cad curve2 of (a cad line2 from zero to (curve2 test point 100.0 and 0.0))
+set points to the cad samples of line with density 50.0
+check curve2 ((the length of points) = 2)
+free points
+print "a_straight_line_needs_only_its_endpoints" as a line
+set arc to the cad curve2 of (a cad arc2 at (curve2 test point 3.0 and -4.0) with radius 2.5 from 0.5 to 4.0)
+set points to the cad samples of arc with density 20.0
+loop index from 0 to the length of points:
+    check curve2 ((the absolute value of ((the cad distance from (the item at index in points) to (curve2 test point 3.0 and -4.0)) - 2.5)) < 1e-9)
+free points
+print "a_tessellated_arc_stays_on_its_circle" as a line
+set lone to curve2 test polyline [[2.0,3.0,0.0]] with closure false
+check curve2 ((the cad segment count of lone) = 0)
+check curve2 (curve2 point (the cad point on lone at 0.5) is near (curve2 test point 2.0 and 3.0))
+set points to the cad samples of lone with density 20.0
+check curve2 ((the length of points) = 1)
+free points
+set empty to the cad curve2 of (an empty cad polyline2)
+check curve2 (curve2 point (the cad point on empty at 0.5) is near zero)
+set points to the cad samples of empty with density 20.0
+check curve2 ((the length of points) = 0)
+free points
+print "a_degenerate_polyline_does_not_panic" as a line

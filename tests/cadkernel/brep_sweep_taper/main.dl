@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MPL-2.0
+# Tapered extrusion source groups from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import tests/cadkernel/brep_sweep_extrude/main.dl
+
+set taperOpenProfile to a list containing (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [10.0,0.0])))
+set taperDirection to a cad vector3 with x 0.0, y 0.0 and z 5.0
+set taperResult to the tapered cad extrusion sheet of taperOpenProfile on (the cad xy plane) along taperDirection by 1.5707963267948966
+check extrusion ((taperResult's valid) = false)
+set taperResult to the tapered cad extrusion sheet of taperOpenProfile on (the cad xy plane) along taperDirection by -1.5707963267948966
+check extrusion ((taperResult's valid) = false)
+set taperNan to 0.0 / 0.0
+set taperResult to the tapered cad extrusion sheet of taperOpenProfile on (the cad xy plane) along taperDirection by taperNan
+check extrusion ((taperResult's valid) = false)
+free taperOpenProfile
+print "an_open_surface_rejects_invalid_taper_angles" as a line
+
+set taperLarge to extrusion square of size 100.0
+set taperResult to the tapered cad extrusion of taperLarge on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0) by 0.7853981633974483
+check extrusion (taperResult's valid)
+set taperFlaws to the cad flaws of (taperResult's value)
+check extrusion ((the length of taperFlaws) = 0)
+free taperFlaws
+free taperLarge
+
+set taperSquare to extrusion square of size 10.0
+set taperDirection to a cad vector3 with x 0.0, y 0.0 and z 10.0
+set taperResult to the tapered cad extrusion of taperSquare on (the cad xy plane) along taperDirection by 0.3490658503988659
+check extrusion (taperResult's valid)
+set taperFlaws to the cad flaws of (taperResult's value)
+check extrusion ((the length of taperFlaws) = 0)
+free taperFlaws
+set taperResult to the tapered cad extrusion of taperSquare on (the cad xy plane) along taperDirection by 0.5235987755982988
+check extrusion ((taperResult's valid) = false)
+set taperResult to the tapered cad extrusion of taperSquare on (the cad xy plane) along taperDirection by -0.7853981633974483
+check extrusion (taperResult's valid)
+set taperFlaws to the cad flaws of (taperResult's value)
+check extrusion ((the length of taperFlaws) = 0)
+free taperFlaws
+free taperSquare
+print "a_tapered_profile_stops_before_inverting" as a line

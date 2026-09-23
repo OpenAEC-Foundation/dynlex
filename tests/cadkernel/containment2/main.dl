@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 16 tests from src/geom2d/containment.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/containment2.dl
+import tests/cadkernel/cross2/support.dl
+
+set tolerance to a cad tolerance of 1e-6
+set segment to cross2 segment [0.0,0.0] to [10.0,0.0]
+set found to the cad closest point on segment to (cross2 point [4.0,3.0])
+check cross2 (((the absolute value of (found's point's x - 4.0)) < 1e-12) and ((the absolute value of found's point's y) < 1e-12))
+check cross2 ((the absolute value of (found's distance - 3.0)) < 1e-12)
+check cross2 ((the absolute value of (found's t - 0.4)) < 1e-12)
+print "the_nearest_point_on_a_segment_is_the_foot_of_the_perpendicular" as a line
+set found to the cad closest point on segment to (cross2 point [50.0,0.0])
+check cross2 (found's t = 1.0)
+check cross2 ((the absolute value of (found's point's x - 10.0)) < 1e-12)
+check cross2 ((the absolute value of (found's distance - 40.0)) < 1e-12)
+print "a_point_past_a_segment_snaps_to_its_end" as a line
+set ray to cross2 ray [0.0,0.0] along [1.0,0.0]
+set found to the cad closest point on ray to (cross2 point [-5.0,0.0])
+check cross2 (found's t = 0.0)
+set found to the cad closest point on ray to (cross2 point [500.0,0.0])
+check cross2 ((the absolute value of (found's t - 500.0)) < 1e-9)
+print "a_ray_keeps_its_origin_as_a_floor_but_no_ceiling" as a line
+set line to cross2 xline [0.0,0.0] along [1.0,0.0]
+set found to the cad closest point on line to (cross2 point [-500.0,3.0])
+check cross2 (found's t < 0.0)
+check cross2 ((the absolute value of ((the cad distance to line from (cross2 point [-500.0,3.0])) - 3.0)) < 1e-9)
+print "an_infinite_line_has_no_end_to_be_pulled_back_to" as a line
+set circle to cross2 circle [0.0,0.0] with radius 5.0
+check cross2 ((the absolute value of ((the cad distance to circle from (cross2 point [10.0,0.0])) - 5.0)) < 1e-9)
+check cross2 ((the absolute value of ((the cad distance to circle from (cross2 point [2.0,0.0])) - 3.0)) < 1e-9)
+print "the_nearest_point_on_a_circle_is_along_the_radius" as a line
+set arc to the cad curve2 of (a cad arc2 at (cross2 point [0.0,0.0]) with radius 5.0 from 0.0 to 1.5707963267948966)
+set found to the cad closest point on arc to (cross2 point [5.0,-10.0])
+check cross2 (((the absolute value of (found's point's x - 5.0)) < 1e-6) and ((the absolute value of found's point's y) < 1e-6))
+print "a_point_beyond_an_arc_snaps_to_the_nearer_end" as a line
+set curves to a list containing (cross2 segment [0.0,10.0] to [10.0,10.0])
+append segment to curves
+append (cross2 segment [0.0,-20.0] to [10.0,-20.0]) to curves
+set nearest to the cad nearest of curves to (cross2 point [5.0,1.0])
+check cross2 nearest's valid
+check cross2 (nearest's index = 1)
+check cross2 ((the absolute value of (nearest's value's distance - 1.0)) < 1e-12)
+free curves
+set curves to an empty list of a cad curve2
+check cross2 ((the valid of (the cad nearest of curves to (cross2 point [0.0,0.0]))) = false)
+free curves
+print "the_nearest_of_several_curves_is_reported_with_its_index" as a line
+set rectangle to cross2 polyline [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,6.0,0.0],[0.0,6.0,0.0]] with closure true
+set boundary to a list containing rectangle
+check cross2 (cad boundary boundary contains (cross2 point [5.0,3.0]) within tolerance)
+check cross2 (cad boundary boundary contains (cross2 point [0.5,0.5]) within tolerance)
+print "a_point_inside_a_rectangle_is_inside" as a line
+check cross2 ((cad boundary boundary contains (cross2 point [-1.0,3.0]) within tolerance) = false)
+check cross2 ((cad boundary boundary contains (cross2 point [5.0,20.0]) within tolerance) = false)
+check cross2 ((cad boundary boundary contains (cross2 point [50.0,50.0]) within tolerance) = false)
+print "a_point_outside_a_rectangle_is_outside" as a line
+check cross2 (cad boundary boundary contains (cross2 point [5.0,0.0]) within tolerance)
+check cross2 (cad boundary boundary contains (cross2 point [0.0,0.0]) within tolerance)
+print "a_point_on_the_boundary_counts_as_inside" as a line
+set pieces to a list containing segment
+append (cross2 segment [10.0,0.0] to [10.0,6.0]) to pieces
+append (cross2 segment [10.0,6.0] to [0.0,6.0]) to pieces
+append (cross2 segment [0.0,6.0] to [0.0,0.0]) to pieces
+check cross2 (cad boundary pieces contains (cross2 point [5.0,3.0]) within tolerance)
+check cross2 ((cad boundary pieces contains (cross2 point [15.0,3.0]) within tolerance) = false)
+free pieces
+print "a_boundary_given_as_separate_pieces_works_the_same" as a line
+set round to a list containing (cross2 circle [3.0,4.0] with radius 2.0)
+check cross2 (cad boundary round contains (cross2 point [3.0,4.0]) within tolerance)
+check cross2 (cad boundary round contains (cross2 point [4.5,4.0]) within tolerance)
+check cross2 ((cad boundary round contains (cross2 point [6.0,4.0]) within tolerance) = false)
+free round
+print "a_circle_contains_what_is_within_its_radius" as a line
+check cross2 (cad boundary boundary contains (cross2 point [5.0,5.999999999]) within tolerance)
+check cross2 ((cad boundary boundary contains (cross2 point [-5.0,6.0]) within tolerance) = false)
+check cross2 ((cad boundary boundary contains (cross2 point [-5.0,0.0]) within tolerance) = false)
+free boundary
+print "a_point_level_with_a_corner_is_still_judged_correctly" as a line
+set lshape to cross2 polyline [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,4.0,0.0],[4.0,4.0,0.0],[4.0,10.0,0.0],[0.0,10.0,0.0]] with closure true
+set boundary to a list containing lshape
+check cross2 (cad boundary boundary contains (cross2 point [2.0,8.0]) within tolerance)
+check cross2 (cad boundary boundary contains (cross2 point [8.0,2.0]) within tolerance)
+check cross2 ((cad boundary boundary contains (cross2 point [8.0,8.0]) within tolerance) = false)
+free boundary
+print "a_concave_boundary_excludes_its_notch" as a line
+set boundary to an empty list of a cad curve2
+check cross2 ((cad boundary boundary contains (cross2 point [0.0,0.0]) within tolerance) = false)
+free boundary
+print "an_empty_boundary_contains_nothing" as a line
+set far to cross2 polyline [[512345.678,4512345.678,0.0],[512355.678,4512345.678,0.0],[512355.678,4512351.678,0.0],[512345.678,4512351.678,0.0]] with closure true
+set boundary to a list containing far
+check cross2 (cad boundary boundary contains (cross2 point [512350.678,4512348.678]) within tolerance)
+check cross2 ((cad boundary boundary contains (cross2 point [512340.678,4512348.678]) within tolerance) = false)
+free boundary
+print "survey_coordinates_are_judged_the_same" as a line

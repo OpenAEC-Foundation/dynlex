@@ -1,0 +1,200 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs_builder.dl
+
+function the planar probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function the planar probe vector2 at {integer:index}:
+    execute:
+        return a cad vector2 with x (the planar probe number at index) and y (the planar probe number at (index + 1))
+function the planar probe vector3 at {integer:index}:
+    execute:
+        return a cad vector3 with x (the planar probe number at index), y (the planar probe number at (index + 1)) and z (the planar probe number at (index + 2))
+function emit planar number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit planar flag {boolean:value}:
+    execute:
+        if value:
+            emit planar number 1
+        else:
+            emit planar number 0
+function emit planar point {cad vector3:point}:
+    execute:
+        emit planar number (the x of point)
+        emit planar number (the y of point)
+        emit planar number (the z of point)
+function emit planar samples {a pointer to a list:points}:
+    execute:
+        emit planar number (the length of points)
+        loop index from 0 to the length of points:
+            emit planar point (the item at index in points)
+
+
+function emit rational2 {cad rational curve2:shape}:
+    execute:
+        emit planar number shape's degree
+        emit planar number (the length of shape's controls)
+        loop index from 0 to the length of shape's controls:
+            set point to the item at index in (shape's controls)
+            emit planar number point's x
+            emit planar number point's y
+        emit rational scalars shape's knots
+        emit rational scalars shape's weights
+function emit rational3 {cad rational curve3:shape}:
+    execute:
+        emit planar number shape's degree
+        emit planar samples shape's controls
+        emit rational scalars shape's knots
+        emit rational scalars shape's weights
+function emit rational scalars {a pointer to a list:values}:
+    execute:
+        emit planar number (the length of values)
+        loop index from 0 to the length of values:
+            emit planar number (the item at index in values)
+function copied rational probe list {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return result
+
+set mode to (the planar probe number at 0) as an integer
+set sweep to the planar probe number at 1
+set offset to the planar probe vector3 at 2
+set mutation to (the planar probe number at 5) as an integer
+set delta to the planar probe number at 6
+set cursor to 7
+set kind to (the planar probe number at cursor) as an integer
+set plane to a cad plane with origin (the planar probe vector3 at (cursor + 1)), x axis (the planar probe vector3 at (cursor + 4)) and y axis (the planar probe vector3 at (cursor + 7))
+set start to the planar probe vector2 at (cursor + 10)
+set end to the planar probe vector2 at (cursor + 12)
+set radius to the planar probe number at (cursor + 14)
+set first to the planar probe number at (cursor + 15)
+set last to the planar probe number at (cursor + 16)
+set minor to the planar probe number at (cursor + 17)
+set axis to the planar probe vector2 at (cursor + 18)
+set pointCount to (the planar probe number at (cursor + 20)) as an integer
+set closed to (the planar probe number at (cursor + 21)) != 0.0
+set degree to (the planar probe number at (cursor + 22)) as an integer
+set knotCount to (the planar probe number at (cursor + 23)) as an integer
+set weightCount to (the planar probe number at (cursor + 24)) as an integer
+set cursor to cursor + 25
+set vertices to an empty list of a cad polyline vertex2
+set controls to an empty list of a cad vector2
+loop i from 0 to pointCount:
+    set position to the planar probe vector2 at cursor
+    append position to controls
+    append (a cad polyline vertex2 at position with bulge (the planar probe number at (cursor + 2))) to vertices
+    set cursor to cursor + 3
+set knots to an empty list of a 64 bit floating-point number
+loop i from 0 to knotCount:
+    append (the planar probe number at cursor) to knots
+    increment cursor
+set weights to an empty list of a 64 bit floating-point number
+loop i from 0 to weightCount:
+    append (the planar probe number at cursor) to weights
+    increment cursor
+set shape to the cad curve2 of (a cad line2 from start to end)
+if kind = 1:
+    set shape to the cad curve2 of (a cad circle2 at start with radius radius)
+else if kind = 2:
+    set shape to the cad curve2 of (a cad arc2 at start with radius radius from first to last)
+else if kind = 3:
+    set ellipse to a cad ellipse at start with radii radius and minor along axis
+    set shape to the cad curve2 of (a cad ellipse arc2 on ellipse from first to last)
+else if kind = 4:
+    set shape to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+else if (kind = 5) and (mode = 0):
+    set result to the cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+    if (the valid of result) = false:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+    set shape to the cad curve2 of (the value of result)
+else if kind = 6:
+    set shape to the cad curve2 of (a cad ray2 from start along end)
+else if kind = 7:
+    set shape to the cad curve2 of (a cad xline2 through start along end)
+
+set made to the cad rational builder of shape
+if mode = 1:
+    set made to the cad rational unit arc with sweep sweep
+else if mode = 2:
+    set raw to the cad rational curve2 of degree degree with controls controls, knots knots and weights weights
+    set made to @intrinsic("construct", a cad rational builder result, true, raw)
+free controls
+free vertices
+free knots
+free weights
+emit planar flag made's valid
+if made's valid:
+    set builder to made's value
+    emit rational2 builder
+    emit rational2 (the cad reverse of builder)
+    set planar to the cad curve of builder
+    emit planar flag planar's valid
+    if planar's valid:
+        loop index from 0 to 5:
+            set point to the cad point on planar's value at ((index as a 64 bit floating-point number) / 4.0)
+            emit planar number point's x
+            emit planar number point's y
+    set lifted to the cad lift of builder onto plane
+    emit rational3 lifted
+    emit rational3 (the cad reverse of lifted)
+    set moved to the cad translation of lifted by offset
+    emit rational3 moved
+    set spatial to the cad curve of moved
+    emit planar flag spatial's valid
+    if spatial's valid:
+        loop index from 0 to 5:
+            emit planar point (the cad point on spatial's value at ((index as a 64 bit floating-point number) / 4.0))
+    set otherPoints to copied rational probe list moved's controls
+    set otherKnots to copied rational probe list moved's knots
+    set otherWeights to copied rational probe list moved's weights
+    set otherDegree to moved's degree
+    if mutation = 1:
+        increment otherDegree
+    else if mutation = 2:
+        append delta to otherKnots
+    else if mutation = 3:
+        if (the length of otherPoints) > 0:
+            remove item ((the length of otherPoints) - 1) from otherPoints
+    else if mutation = 4:
+        if (the length of otherWeights) > 0:
+            remove item ((the length of otherWeights) - 1) from otherWeights
+    else if mutation = 5:
+        if (the length of otherKnots) > 0:
+            replace item at index 0 in otherKnots with ((the item at 0 in otherKnots) + delta)
+    else if mutation = 6:
+        if (the length of otherWeights) > 0:
+            replace item at index 0 in otherWeights with delta
+    else if mutation = 7:
+        if (the length of otherPoints) > 0:
+            set changed to the item at 0 in otherPoints
+            set changed's x to delta
+            replace item at index 0 in otherPoints with changed
+    set other to the cad rational curve3 of degree otherDegree with controls otherPoints, knots otherKnots and weights otherWeights
+    free otherPoints
+    free otherKnots
+    free otherWeights
+    emit planar flag (lifted is cad compatible with other)
+    set surface to the cad ruled surface from lifted to other
+    emit planar flag surface's valid
+    if surface's valid:
+        set value to surface's value
+        emit planar number value's uDegree
+        emit planar number value's vDegree
+        emit rational scalars value's uKnots
+        emit rational scalars value's vKnots
+        emit planar number (the length of value's controls)
+        loop index from 0 to the length of value's controls:
+            emit planar samples (the item at index in (value's controls))
+        emit planar number (the length of value's weights)
+        loop index from 0 to the length of value's weights:
+            emit rational scalars (the item at index in (value's weights))
+        emit planar point (the cad point on value at parameters 0.0 and 0.0)
+        emit planar point (the cad point on value at parameters 0.0 and 1.0)
+        emit planar point (the cad point on value at parameters 0.5 and 0.5)
+        emit planar point (the cad point on value at parameters 1.0 and 0.0)
+        emit planar point (the cad point on value at parameters 1.0 and 1.0)

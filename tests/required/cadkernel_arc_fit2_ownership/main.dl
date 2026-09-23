@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+function ownership fit2 check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 84)
+function ownership fit2 source {a word sized unsigned integer:value}:
+    execute:
+        ownership fit2 check (value = 0)
+function the ownership fit2 [result] for {integer:scenario}:
+    execute:
+        set points to a list containing (the cad zero vector2)
+        append (a cad vector2 with x 1 and y 0) to points
+        append (a cad vector2 with x 2 and y 1) to points
+        set directions to a list containing (an automatic cad arc fit direction2)
+        append (an automatic cad arc fit direction2) to directions
+        append (an automatic cad arc fit direction2) to directions
+        if scenario = 1:
+            clear points
+        else if scenario = 2:
+            clear directions
+        else if scenario = 3:
+            set infinity to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, "inf", 0 as a pointer)
+            replace item at index 2 in points with (a cad vector2 with x infinity and y 1)
+        else if scenario = 4:
+            replace item at index 2 in points with (a cad vector2 with x 1 and y 0)
+        else if scenario = 5:
+            replace item at index 1 in directions with (a cad arc fit direction2 along (a cad vector2 with x 1e308 and y 1e308))
+        else if scenario = 6:
+            # The first span is appended before the tiny curved span refuses.
+            replace item at index 2 in points with (a cad vector2 with x 1.0000000001 and y 1e-10)
+            replace item at index 0 in directions with (a cad arc fit direction2 along (a cad vector2 with x 1 and y 0))
+            replace item at index 1 in directions with (a cad arc fit direction2 along (a cad vector2 with x 1 and y 0))
+            replace item at index 2 in directions with (a cad arc fit direction2 along (a cad vector2 with x 0 and y 1))
+        else if scenario = 7:
+            replace item at index 2 in directions with (a cad arc fit direction2 along (the cad zero vector2))
+        set result to the cad arc chain2 through points with closure false and directions directions
+        # Input storage is independent of the immutable output.
+        clear points
+        clear directions
+        free points
+        free directions
+        return result
+
+set original to the ownership fit2 result for 0
+ownership fit2 check original's valid
+set first to the item at 0 in original's vertices
+ownership fit2 source (first's source)
+set copied to original
+set cloned to the cad clone of original
+ownership fit2 check (original's storage's owner != cloned's storage's owner)
+ownership fit2 check (original's vertices != cloned's vertices)
+set original to a new (the type of original)
+set original to a new (the type of original)
+set retained to a list containing copied
+set copied to a new (the type of copied)
+set escaped to the item at 0 in retained
+clear retained
+free retained
+ownership fit2 check ((@intrinsic("dereference", escaped's storage's owner)) = 1)
+set first to the item at 0 in escaped's vertices
+ownership fit2 check ((first's point's x = 0.0) and (first's point's y = 0.0))
+ownership fit2 check ((the length of escaped's vertices) = (the length of cloned's vertices))
+set cloned to a new (the type of cloned)
+ownership fit2 check escaped's valid
+set escaped to a new (the type of escaped)
+print "arc_fit2: borrowed inputs, returned copies, deep clone, list retention and reset" as a line
+
+loop iteration from 0 to 140:
+    set scenario to (the remainder of iteration divided by 7) + 1
+    set original to the ownership fit2 result for scenario
+    ownership fit2 check (original's valid = false)
+    ownership fit2 check ((the length of original's vertices) = 0)
+    set copied to original
+    set original to a new (the type of original)
+    set retained to a list containing copied
+    set copied to a new (the type of copied)
+    set escaped to the item at 0 in retained
+    free retained
+    ownership fit2 check ((@intrinsic("dereference", escaped's storage's owner)) = 1)
+    set cloned to the cad clone of escaped
+    ownership fit2 check ((cloned's valid = false) and ((the length of cloned's vertices) = 0))
+    set escaped to a new (the type of escaped)
+    set cloned to a new (the type of cloned)
+print "arc_fit2: seven refusal paths retain no partial output and survive copying" as a line
+
+set original to the ownership fit2 result for 0
+set previous to original
+loop iteration from 0 to 40:
+    set original to the ownership fit2 result for (the remainder of iteration divided by 8)
+set original to a new (the type of original)
+ownership fit2 check previous's valid
+ownership fit2 check ((@intrinsic("dereference", previous's storage's owner)) = 1)
+set first to the item at 0 in previous's vertices
+ownership fit2 check (first's point's x = 0.0)
+set previous to a new (the type of previous)
+set cloned to the cad clone of previous
+ownership fit2 check ((cloned's valid = false) and ((the length of cloned's vertices) = 0))
+print "arc_fit2: retained fit survives regeneration; a reset result can be cloned" as a line

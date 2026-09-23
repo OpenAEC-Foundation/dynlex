@@ -1,0 +1,3 @@
+import lib/cadkernel/curve2.dl
+set shape to the cad curve2 of (the cad zero vector2)
+print shape's kind as a line

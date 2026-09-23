@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_intersect/helpers.dl
+function intersect local curves:
+    execute:
+        set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+        set other to intersect plane at [0.0,0.0,3.0] normal [0.0,0.0,1.0]
+        return the cad meeting of one and other within 1e-9
+function intersect local points:
+    execute:
+        set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+        set other to intersect plane at [0.0,0.0,5.0] normal [0.0,0.0,1.0]
+        return the cad meeting of one and other within 1e-9
+loop repetition from 0 to 100:
+    set original to intersect local curves
+    set retained to original
+    set copied to the cad clone of original
+    check intersect (original = copied)
+    check intersect (original's curves != copied's curves)
+    check intersect (original's points != copied's points)
+    free cad meeting original
+    check intersect (original = (no cad surface meeting))
+    check intersect ((the length of retained's curves) = 1)
+    set curve to the item at 0 in retained's curves
+    intersect near curve's circle's radius to 4.0
+    free cad meeting retained
+    check intersect ((the length of copied's curves) = 1)
+    set original to intersect local points
+    set retained to original
+    set copied to the cad clone of original
+    check intersect (original = copied)
+    check intersect (original's points != copied's points)
+    free cad meeting original
+    check intersect ((the length of retained's points) = 1)
+    free cad meeting retained
+    intersect near ((the item at 0 in copied's points)'s z) to 5.0
+    set heldValues to a list containing copied
+    free cad meeting copied
+    set returned to the item at 0 in heldValues
+    free heldValues
+    intersect near ((the item at 0 in returned's points)'s z) to 5.0
+print "curves_and_points_survive_returns_copies_clones_resets_and_lists" as a line
+set absent to no cad surface meeting
+set unknown to an unknown cad surface meeting
+set coincident to a coincident cad surface meeting
+check intersect ((absent = unknown) = false)
+check intersect ((absent = coincident) = false)
+check intersect ((unknown = coincident) = false)
+check intersect (unknown = (the cad clone of unknown))
+check intersect (coincident = (the cad clone of coincident))
+free cad meeting absent
+set cloned to the cad clone of absent
+check intersect (cloned = (no cad surface meeting))
+print "empty_and_zero_results_clone_and_remain_distinct" as a line

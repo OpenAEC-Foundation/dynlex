@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_chamfer_prismatic.dl
+import lib/cadkernel/brep_make.dl
+
+function check prismatic chamfer {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function prismatic chamfer point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+function prismatic chamfer {cad edge key:edgeKey} touches {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set edge to the cad node pointer for edgeKey in body
+        if edge = (0 as the type of edge):
+            return false
+        loop index from 0 to the length of edge's coedges's values:
+            set use to the cad node pointer for (the item at index in edge's coedges's values) in body
+            if use != (0 as the type of use):
+                set ring to the cad node pointer for use's owner in body
+                if ring != (0 as the type of ring):
+                    if ring's owner = faceKey:
+                        return true
+        return false
+
+set made to the cad cuboid at (prismatic chamfer point 0 0 0) with size (prismatic chamfer point 10 8 6)
+check prismatic chamfer made's valid
+set body to made's value
+set edgeKeys to the cad edge keys of body
+set verticalEdges to an empty list of a cad edge key
+set selectedEdge to a new cad edge key
+set found to false
+loop index from 0 to the length of edgeKeys:
+    set key to the item at index in edgeKeys
+    set edge to the cad node pointer for key in body
+    set start to the cad node pointer for edge's start in body
+    set end to the cad node pointer for edge's end in body
+    set delta to the cad difference of end's point and start's point
+    if ((the absolute value of delta's x) < 1e-12) and (((the absolute value of delta's y) < 1e-12) and ((the absolute value of delta's z) > 5.9)):
+        append key to verticalEdges
+        if found = false:
+            set selectedEdge to key
+            set found to true
+check prismatic chamfer found
+set selected to a list containing selectedEdge
+set edge to the cad node pointer for selectedEdge in body
+set use to the cad node pointer for (the item at 0 in edge's coedges's values) in body
+set ring to the cad node pointer for use's owner in body
+set baseFace to ring's owner
+
+set result to the cad prismatic chamfer of body along selected with base face baseFace, base distance 1.5 and other distance 0.75
+check prismatic chamfer result's recognized
+check prismatic chamfer result's valid
+set chamfered to result's value
+check prismatic chamfer ((the cad count of chamfered's vertices) = 10)
+check prismatic chamfer ((the cad count of chamfered's edges) = 15)
+check prismatic chamfer ((the cad count of chamfered's faces) = 7)
+check prismatic chamfer ((the cad euler characteristic of chamfered) = 2)
+set flaws to the cad flaws of chamfered
+check prismatic chamfer ((the length of flaws) = 0)
+free flaws
+check prismatic chamfer ((the cad worst vertex gap of chamfered) < 1e-9)
+print "a_longitudinal_box_edge_becomes_an_exact_bevel" as a line
+
+set emptySelection to an empty list of a cad edge key
+set result to the cad prismatic chamfer of body along emptySelection with base face baseFace, base distance 1.0 and other distance 1.0
+check prismatic chamfer ((result's recognized = false) and (result's valid = false))
+free emptySelection
+print "an_empty_selection_is_not_a_prismatic_case" as a line
+
+set faceKeys to the cad face keys of body
+set capFace to a new cad face key
+set foundCap to false
+loop index from 0 to the length of faceKeys:
+    set key to the item at index in faceKeys
+    set face to the cad node pointer for key in body
+    set surface to the cad node pointer for face's surface in body
+    set normal to the cad normal of surface's plane
+    if normal's valid:
+        if (the absolute value of normal's value's z) > 0.9:
+            if foundCap = false:
+                set capFace to key
+                set foundCap to true
+check prismatic chamfer foundCap
+set result to the cad prismatic chamfer of body along selected with base face capFace, base distance 1.0 and other distance 1.0
+check prismatic chamfer (result's recognized and ((result's valid = false) and (result's error's kind = cad chamfer edge outside base face error)))
+check prismatic chamfer (result's error's edge = selectedEdge)
+free faceKeys
+print "the_base_face_must_touch_each_selected_edge" as a line
+
+set result to the cad prismatic chamfer of body along selected with base face baseFace, base distance 8.0 and other distance 8.0
+check prismatic chamfer (result's recognized and ((result's valid = false) and (result's error's kind = cad chamfer distance interaction error)))
+print "distances_that_consume_the_profile_are_refused" as a line
+
+set adjacentEdge to a new cad edge key
+set foundAdjacent to false
+loop index from 0 to the length of verticalEdges:
+    set key to the item at index in verticalEdges
+    if (key != selectedEdge) and (prismatic chamfer key touches baseFace in body):
+        if foundAdjacent = false:
+            set adjacentEdge to key
+            set foundAdjacent to true
+check prismatic chamfer foundAdjacent
+append adjacentEdge to selected
+set result to the cad prismatic chamfer of body along selected with base face baseFace, base distance 1.0 and other distance 0.5
+check prismatic chamfer result's recognized
+check prismatic chamfer result's valid
+set chamfered to result's value
+check prismatic chamfer ((the cad count of chamfered's vertices) = 12)
+check prismatic chamfer ((the cad count of chamfered's edges) = 18)
+check prismatic chamfer ((the cad count of chamfered's faces) = 8)
+check prismatic chamfer ((the cad euler characteristic of chamfered) = 2)
+set flaws to the cad flaws of chamfered
+check prismatic chamfer ((the length of flaws) = 0)
+free flaws
+check prismatic chamfer ((the cad count of body's vertices) = 8)
+check prismatic chamfer ((the cad count of body's edges) = 12)
+check prismatic chamfer ((the cad count of body's faces) = 6)
+print "two_edges_on_one_base_face_make_two_bevels_without_mutating_the_source" as a line
+
+free selected
+free verticalEdges
+free edgeKeys

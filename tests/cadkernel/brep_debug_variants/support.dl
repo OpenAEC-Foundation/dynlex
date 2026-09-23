@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_debug/support.dl
+import tests/cadkernel/cross2/support.dl
+
+function check brep payload value beginning {C string:prefix}:
+    execute:
+        set text to the cad debug text of value
+        check brep debug (text has prefix at offset 0)
+        set copy to the cad clone of value
+        check brep debug ((the cad debug text of copy) = text)
+
+function check brep field {C string:fragment} in {string:text}:
+    execute:
+        loop index from 0 through the length of text:
+            if text has fragment at offset index:
+                return nothing
+        print fragment as a line
+        print text as a line
+        @intrinsic("call", "libc", "exit", nothing, 96)
+
+set controls2 to a list containing (cross2 point [0.0,0.0])
+append (cross2 point [1.0,1.0]) to controls2
+set debugKnots to a list containing 0.0
+append 0.0 to debugKnots
+append 1.0 to debugKnots
+append 1.0 to debugKnots
+set noWeights to an empty list of a 64 bit floating-point number
+set curve2Build to the cad nurbs curve2 of degree 1 with controls controls2, knots debugKnots and weights noWeights
+check brep debug curve2Build's valid
+free controls2
+
+set controls3 to a list containing the cad zero vector3
+append the cad x axis to controls3
+set curve3Build to the cad nurbs curve3 of degree 1 with controls controls3, knots debugKnots and weights noWeights
+check brep debug curve3Build's valid
+set upperRow to a list containing the cad y axis
+append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to upperRow
+set debugNet to a list containing controls3
+append upperRow to debugNet
+set noWeightRows to an empty list of the type of noWeights
+set surfaceBuild to the cad nurbs surface3 of degrees 1 and 1 with controls debugNet, knots debugKnots and debugKnots and weights noWeightRows
+check brep debug surfaceBuild's valid
+free controls3
+free upperRow
+free debugNet
+free noWeightRows
+free noWeights
+free debugKnots
+

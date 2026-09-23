@@ -13,6 +13,8 @@ static bool mergeArrayElementType(const DataType &current, const DataType &next,
 	return false;
 }
 
+struct InferredArgumentScope;
+
 // Wraps ParseContext with type validity tracking and trial mode for operand reordering.
 // During reordering trials, diagnostics are suppressed and failures only affect the current trial.
 struct InferenceContext {
@@ -50,6 +52,10 @@ struct InferenceContext {
 	};
 
 	struct TrialJournal {
+		struct BorrowedExpressionUndo {
+			Expression *expression;
+			Expression value;
+		};
 		enum class SectionInstantiationRetargetResult {
 			Updated,
 			MissingSourceRecord,
@@ -77,6 +83,8 @@ struct InferenceContext {
 		};
 
 		std::vector<VariableUndo> variableTypeUndo;
+		std::vector<BorrowedExpressionUndo> borrowedExpressionUndo;
+		std::unordered_set<Expression *> seenBorrowedExpressions;
 		std::unordered_set<Variable *> seenVariables;
 		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
 		std::unordered_set<ClassDefinition *> seenClassDefinitions;
@@ -105,6 +113,14 @@ struct InferenceContext {
 				return;
 			seenVariables.insert(var);
 			variableTypeUndo.push_back({var, var->type, var->typeOriginRange, var->typeOriginFloatLiteralReplacement});
+		}
+
+		void recordBorrowedExpressionWrite(Expression *expression) {
+			visitExpressionTree(expression, [&](Expression *node) {
+				if (seenBorrowedExpressions.insert(node).second)
+					borrowedExpressionUndo.push_back({node, *node});
+				return false;
+			});
 		}
 
 		void recordClassInstantiationAppend(ClassDefinition *classDef) {
@@ -143,6 +159,10 @@ struct InferenceContext {
 		}
 
 		void absorb(TrialJournal &&nested) {
+			for (BorrowedExpressionUndo &undo : nested.borrowedExpressionUndo) {
+				if (seenBorrowedExpressions.insert(undo.expression).second)
+					borrowedExpressionUndo.push_back(std::move(undo));
+			}
 			for (VariableUndo &undo : nested.variableTypeUndo) {
 				if (seenVariables.insert(undo.variable).second)
 					variableTypeUndo.push_back(std::move(undo));
@@ -177,8 +197,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -305,8 +324,24 @@ struct InferenceContext {
 		bool observed = false;
 	};
 
+	// Nested inference borrows the enclosing grouping decisions. Keep their
+	// scopes separate so a trial records only the roots it actually resolves.
+	struct FixedGroupingScope {
+		const std::unordered_set<Expression *> &roots;
+		const FixedGroupingScope *parent{};
+
+		bool contains(Expression *expression) const {
+			for (auto *scope = this; scope; scope = scope->parent) {
+				if (scope->roots.contains(expression))
+					return true;
+			}
+			return false;
+		}
+	};
+
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
+	const InferredArgumentScope *inferredArguments{};
 	RecursiveInferenceObservationFrame *recursiveInferenceObservationFrame{};
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
@@ -337,7 +372,7 @@ struct InferenceContext {
 	// expression. Encountering an overload whose own signature is unresolved
 	// defers the probe instead of choosing a declaration-order candidate.
 	std::shared_ptr<bool> unresolvedPatternConstraintSignal;
-	const std::unordered_set<Expression *> *fixedGroupingRoots{};
+	const FixedGroupingScope *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};

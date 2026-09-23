@@ -51,7 +51,8 @@ struct DefinitionPatternElement : public PatternElement {
 	std::vector<std::vector<DefinitionPatternElement>> alternatives;
 	// for Variable type: type constraint name from {type:name} syntax (empty if unconstrained)
 	std::string typeConstraintName;
-	// Resolved parameter requirement. An empty source constraint remains unresolved and means an unconstrained parameter.
+	// Resolved parameter requirement, including generated constraints without source text.
+	// An unauthored, unresolved requirement means an unconstrained parameter.
 	TypeConstraint resolvedTypeConstraint;
 	// Concrete runtime representation declared by the constraint expression, when it has one.
 	// Overload matching uses resolvedTypeConstraint; callable ABI generation uses this exact type.

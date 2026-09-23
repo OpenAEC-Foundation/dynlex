@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_topology/provenance.dl
+
+set body to an empty cad body
+topology check ((the cad euler characteristic of body) = 0) named "empty Euler"
+topology check ((the cad worst vertex gap of body) = 0.0) named "empty gap"
+set flaws to the cad flaws of body
+topology check ((the length of flaws) = 0) named "empty consistent"
+free flaws
+set faces to the cad face keys of body
+set edges to the cad edge keys of body
+topology check (((the length of faces) = 0) and ((the length of edges) = 0)) named "empty snapshots"
+free faces
+free edges
+
+set v0 to the cad body key after inserting (a cad vertex at the cad zero vector3 with provenance provenance) into body
+set v1 to the cad body key after inserting (a cad vertex at the cad x axis with provenance provenance) into body
+set curve to the cad body key after inserting (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis)) into body
+set edge to the cad body key after inserting (a cad edge on curve from 0.0 to 1.0 between v0 and v1 with provenance provenance) into body
+topology check ((the cad euler characteristic of body) = 1) named "vertex edge count"
+topology check ((the cad worst vertex gap of body) = 0.0) named "curve endpoints match vertices"
+set flaws to the cad flaws of body
+topology check ((the length of flaws) = 1) named "wire one flaw"
+topology check (((the item at 0 in flaws)'s kind) = cad unused edge flaw) named "wire unused edge"
+free flaws
+set endpoints to the cad edge endpoints of edge in body
+topology check endpoints's valid named "edge endpoints exist"
+topology check (endpoints's end's x = 1.0) named "endpoint from curve"
+set vertex to the cad node pointer for v1 in body
+set vertex's point's x to 1.25
+topology check ((the cad worst vertex gap of body) = 0.25) named "measured vertex gap"
+set cloned to the cad clone of body
+set vertex to the cad node pointer for v1 in cloned
+set vertex's point's x to 3.0
+topology check ((the cad worst vertex gap of body) = 0.25) named "body clone independent"
+topology check ((the cad worst vertex gap of cloned) = 2.0) named "clone mutation visible"
+set removed to the cad removal of v1 from cloned
+topology check removed's valid named "remove vertex"
+set absent to the cad lookup of v1 in cloned
+topology check (absent's valid = false) named "stale key rejected"
+set replacement to the cad body key after inserting (a cad vertex at the cad y axis with provenance generated) into cloned
+topology check (replacement != v1) named "reused slot generation differs"
+topology check ((the cad slot of replacement) = (the cad slot of v1)) named "vacancy reused"
+print "body graph queries clone and stale keys" as a line

@@ -76,8 +76,7 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	std::unordered_set<std::string> requiredParameters;
 	size_t bindingIndex = 0;
 	forEachPatternParameterName(
-		definition, pathIndex,
-		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		definition, pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(bindingIndex < argTypes.size(), "matched pattern has more parameters than call arguments");
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(parameterElement != nullptr, "matched pattern parameter has no definition element");
@@ -106,7 +105,8 @@ resolveInitialPatternConstraint(PatternDefinition *definition, size_t pathIndex,
 		}
 	});
 	requireCompilerInvariant(parameterElement != nullptr, "initial pattern constraint argument is absent from its path");
-	bool hasAuthoredConstraint = !parameterElement->typeConstraintName.empty();
+	bool hasAuthoredConstraint =
+		!parameterElement->typeConstraintName.empty() || parameterElement->resolvedTypeConstraint.isResolved();
 	const TypeConstraint *selectedConstraint = nullptr;
 	bool requiresCompileTimeValue = false;
 	if (hasAuthoredConstraint) {
@@ -171,10 +171,12 @@ PatternOverloadSelection selectOverload(
 		std::vector<TypeConstraint> constraints;
 	};
 	std::vector<ViableOverload> viableOverloads;
+	bool hasDeferredCandidate = false;
 
 	for (auto *candidate : definitions) {
 		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, candidate)) {
 			bool constraintFailed = false;
+			bool constraintDeferred = false;
 			std::vector<TypeConstraint> candidateConstraints;
 			candidateConstraints.reserve(argTypes.size());
 
@@ -192,11 +194,12 @@ PatternOverloadSelection selectOverload(
 					return;
 				}
 				TypeConstraint parameterConstraint = resolvedConstraint->effectiveConstraint();
+				constraintDeferred = constraintDeferred || !resolvedConstraint->complete;
 				const DataType &argType = argTypes[argIdx];
 				if (!argType.isDeduced()) {
 					bool acceptsUnset =
 						candidate->section && candidate->section->isFlex && resolvedConstraint->acceptsUnresolvedType;
-					if (!acceptsUnset)
+					if (!acceptsUnset && resolvedConstraint->complete)
 						constraintFailed = true;
 					candidateConstraints.push_back(std::move(parameterConstraint));
 					argIdx++;
@@ -217,10 +220,16 @@ PatternOverloadSelection selectOverload(
 				constraintFailed = true;
 			if (constraintFailed)
 				continue;
+			if (constraintDeferred) {
+				hasDeferredCandidate = true;
+				continue;
+			}
 			viableOverloads.push_back({candidate, pathIndex, std::move(candidateConstraints)});
 		}
 	}
 
+	if (hasDeferredCandidate)
+		return {nullptr, 0, false, true};
 	if (viableOverloads.empty())
 		return {};
 

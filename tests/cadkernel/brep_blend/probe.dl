@@ -1,0 +1,218 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_blend.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function blend probe point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+
+function blend probe {cad vector3:firstPoint} precedes {cad vector3:secondPoint}:
+    execute:
+        if firstPoint's x != secondPoint's x:
+            return firstPoint's x < secondPoint's x
+        if firstPoint's y != secondPoint's y:
+            return firstPoint's y < secondPoint's y
+        return firstPoint's z < secondPoint's z
+
+function sort blend probe points {a pointer to a list:points}:
+    execute:
+        loop index from 1 to the length of points:
+            set current to the item at index in points
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in points
+                if blend probe current precedes previous:
+                    replace item at index position in points with previous
+                    decrement position
+                else:
+                    set searching to false
+            replace item at index position in points with current
+
+function emit blend probe output {cad body:outputBody}:
+    execute:
+        emit maker number (the cad count of outputBody's vertices)
+        emit maker number (the cad count of outputBody's edges)
+        emit maker number (the cad count of outputBody's faces)
+        emit maker number (the cad euler characteristic of outputBody)
+        set flaws to the cad flaws of outputBody
+        emit maker number (the length of flaws)
+        free flaws
+        emit maker number (the cad worst vertex gap of outputBody)
+        set histogramEdges to the cad edge keys of outputBody
+        loop curveBucket from 0 to 5:
+            set curveTotal to 0
+            loop histogramIndex from 0 to the length of histogramEdges:
+                set histogramEdge to the cad node pointer for (the item at histogramIndex in histogramEdges) in outputBody
+                if histogramEdge != (0 as the type of histogramEdge):
+                    set curveNode to the cad node pointer for histogramEdge's curve in outputBody
+                    if curveNode != (0 as the type of curveNode):
+                        if curveNode's kind = curveBucket:
+                            increment curveTotal
+            emit maker number curveTotal
+        set histogramFaces to the cad face keys of outputBody
+        loop surfaceBucket from 0 to 6:
+            set surfaceTotal to 0
+            loop histogramIndex from 0 to the length of histogramFaces:
+                set histogramFace to the cad node pointer for (the item at histogramIndex in histogramFaces) in outputBody
+                if histogramFace != (0 as the type of histogramFace):
+                    set surfaceNode to the cad node pointer for histogramFace's surface in outputBody
+                    if surfaceNode != (0 as the type of surfaceNode):
+                        if surfaceNode's kind = surfaceBucket:
+                            increment surfaceTotal
+            emit maker number surfaceTotal
+        free histogramFaces
+        free histogramEdges
+        set points to an empty list of a cad vector3
+        set outputKeys to the cad vertex keys of outputBody
+        loop index from 0 to the length of outputKeys:
+            set vertexNode to the cad node pointer for (the item at index in outputKeys) in outputBody
+            append vertexNode's point to points
+        sort blend probe points points
+        emit maker number (the length of points)
+        loop index from 0 to the length of points:
+            emit maker point (the item at index in points)
+        free outputKeys
+        free points
+
+function emit blend probe chamfer {cad chamfer result:outcome} selected {a pointer to a list:choices}:
+    execute:
+        emit maker flag outcome's valid
+        emit maker number outcome's error's kind
+        set errorBelongs to false
+        set errorKind to outcome's error's kind
+        set edgeError to (errorKind = cad chamfer edge outside base face error) or ((errorKind >= cad chamfer unsupported edge curve error) and (errorKind <= cad chamfer degenerate geometry error))
+        if (outcome's valid = false) and edgeError:
+            loop index from 0 to the length of choices:
+                if outcome's error's edge = (the item at index in choices):
+                    set errorBelongs to true
+        emit maker flag errorBelongs
+        if outcome's valid:
+            emit blend probe output outcome's value
+
+function emit blend probe fillet {cad fillet result:outcome} selected {a pointer to a list:choices}:
+    execute:
+        emit maker flag outcome's valid
+        emit maker number outcome's error's kind
+        set errorBelongs to false
+        set errorKind to outcome's error's kind
+        set edgeError to ((errorKind >= cad fillet unsupported edge curve error) and (errorKind <= cad fillet adjacent selections error)) or (errorKind = cad fillet unsupported end condition error)
+        if (outcome's valid = false) and edgeError:
+            loop index from 0 to the length of choices:
+                set candidate to the item at index in choices
+                if (outcome's error's first = candidate) or (outcome's error's second = candidate):
+                    set errorBelongs to true
+        emit maker flag errorBelongs
+        if outcome's valid:
+            emit blend probe output outcome's value
+
+set kind to (maker argument 0) as an integer
+set first to maker argument 1
+set second to maker argument 2
+set third to maker argument 3
+set fourth to maker argument 4
+set origin to blend probe point (maker argument 5) (maker argument 6) (maker argument 7)
+set sourceBody to an empty cad body
+if kind = 0:
+    set made to the cad wedge at origin with length first, width second and height third
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 1:
+    set made to the cad pyramid body at origin with radius first, height second and sides (third as an integer)
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 2:
+    set made to the cad polygonal frustum at origin with base radius first, top radius second, height third and sides (fourth as an integer)
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 3:
+    set sheetProfile to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+    append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x first and y 0.0))) to sheetProfile
+    append (the cad curve2 of (a cad line2 from (a cad vector2 with x first and y 0.0) to (a cad vector2 with x first and y second))) to sheetProfile
+    set sheetPlane to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+    set made to the cad extrusion sheet of sheetProfile on sheetPlane along (blend probe point 0.0 0.0 third)
+    if made's valid:
+        set sourceBody to made's value
+    free sheetProfile
+else if kind = 4:
+    set made to the cad cuboid at origin with size (blend probe point first second third)
+    if made's valid:
+        set sourceBody to made's value
+
+set operation to (maker argument 15) as an integer
+set workingBody to sourceBody
+if (operation = 4) or (operation >= 5):
+    set firstEdges to the cad edge keys of sourceBody
+    set firstSelection to an empty list of a cad edge key
+    if (the length of firstEdges) > 0:
+        set firstSlot to the remainder of (the absolute value of (fourth as an integer)) divided by (the length of firstEdges)
+        set firstEdge to the item at firstSlot in firstEdges
+        append firstEdge to firstSelection
+        set firstEdgeNode to the cad node pointer for firstEdge in sourceBody
+        if firstEdgeNode != (0 as the type of firstEdgeNode):
+            set firstUseNode to the cad node pointer for (the item at 0 in firstEdgeNode's coedges's values) in sourceBody
+            if firstUseNode != (0 as the type of firstUseNode):
+                set firstLoopNode to the cad node pointer for firstUseNode's owner in sourceBody
+                if firstLoopNode != (0 as the type of firstLoopNode):
+                    set firstChamferPass to the cad chamfer of sourceBody along firstSelection with base face firstLoopNode's owner, base distance (maker argument 14) and other distance ((maker argument 14) * (2.0 / 3.0))
+                    if firstChamferPass's valid:
+                        set workingBody to firstChamferPass's value
+                        if operation >= 5:
+                            set cornerEdges to the cad edge keys of workingBody
+                            set cornerSelection to an empty list of a cad edge key
+                            if (the length of cornerEdges) > 13:
+                                append (the item at 2 in cornerEdges) to cornerSelection
+                                append (the item at 3 in cornerEdges) to cornerSelection
+                                append (the item at 13 in cornerEdges) to cornerSelection
+                            set cornerPass to the cad fillet of workingBody along cornerSelection with radius ((maker argument 14) * 0.5)
+                            if cornerPass's valid:
+                                set workingBody to cornerPass's value
+                            free cornerSelection
+                            free cornerEdges
+    free firstSelection
+    free firstEdges
+else if operation >= 2:
+    set firstEdges to the cad edge keys of sourceBody
+    set firstSelection to an empty list of a cad edge key
+    if (the length of firstEdges) > 0:
+        set firstSlot to the remainder of (the absolute value of (fourth as an integer)) divided by (the length of firstEdges)
+        append (the item at firstSlot in firstEdges) to firstSelection
+    set firstPass to the cad fillet of sourceBody along firstSelection with radius (maker argument 14)
+    if firstPass's valid:
+        set workingBody to firstPass's value
+    free firstSelection
+    free firstEdges
+
+set edgeKeys to the cad edge keys of workingBody
+set faceKeys to the cad face keys of workingBody
+set selected to an empty list of a cad edge key
+set selectionCount to (maker argument 8) as an integer
+loop index from 0 to selectionCount:
+    set requested to (maker argument (9 + index)) as an integer
+    if requested >= 100000:
+        append (@intrinsic("construct", a cad edge key, requested as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)) to selected
+    else if (the length of edgeKeys) > 0:
+        set slot to the remainder of (the absolute value of requested) divided by (the length of edgeKeys)
+        append (the item at slot in edgeKeys) to selected
+set faceRequest to (maker argument 12) as an integer
+set baseFace to a new cad face key
+if faceRequest >= 100000:
+    set baseFace to @intrinsic("construct", a cad face key, faceRequest as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+else if (the length of faceKeys) > 0:
+    set slot to the remainder of (the absolute value of faceRequest) divided by (the length of faceKeys)
+    set baseFace to the item at slot in faceKeys
+
+if ((operation = 0) or (operation = 3)) or (operation = 6):
+    set finalOtherDistance to maker argument 14
+    if operation = 6:
+        set finalOtherDistance to maker argument 13
+    set chamfered to the cad chamfer of workingBody along selected with base face baseFace, base distance (maker argument 13) and other distance finalOtherDistance
+    emit blend probe chamfer chamfered selected selected
+else:
+    set filleted to the cad fillet of workingBody along selected with radius (maker argument 13)
+    emit blend probe fillet filleted selected selected
+
+free selected
+free faceKeys
+free edgeKeys

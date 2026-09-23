@@ -1,0 +1,187 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 23 tests from src/geom2d/cross.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/cross2.dl
+import tests/cadkernel/cross2/support.dl
+
+set tolerance to a cad tolerance of 1e-6
+set hits to the cad crossings of (cross2 segment [0.0,0.0] to [10.0,0.0]) and (cross2 segment [5.0,-5.0] to [5.0,5.0]) within tolerance
+check cross2 ((the length of hits) = 1)
+set hit to the item at 0 in hits
+check cross2 ((the absolute value of (hit's point's x - 5.0)) < 1e-9)
+check cross2 ((the absolute value of (hit's tA - 0.5)) < 1e-9)
+check cross2 ((the absolute value of (hit's tB - 0.5)) < 1e-9)
+free hits
+print "two_crossing_segments_meet_once" as a line
+set hits to the cad crossings of (cross2 segment [0.0,0.0] to [10.0,0.0]) and (cross2 segment [50.0,-5.0] to [50.0,5.0]) within tolerance
+check cross2 ((the length of hits) = 0)
+free hits
+print "segments_that_would_only_meet_if_extended_do_not_count" as a line
+set line to cross2 segment [-10.0,0.0] to [10.0,0.0]
+set round to cross2 circle [0.0,0.0] with radius 5.0
+set hits to the cad crossings of line and round within tolerance
+check cross2 ((the length of hits) = 2)
+set first to the item at 0 in hits
+set last to the item at 1 in hits
+check cross2 (first's tA < last's tA)
+check cross2 ((the absolute value of (first's point's x + 5.0)) < 1e-6)
+check cross2 ((the absolute value of (last's point's x - 5.0)) < 1e-6)
+free hits
+print "a_segment_through_a_circle_meets_it_twice_in_order" as a line
+set forward to the cad crossings of line and round within tolerance
+set backward to the cad crossings of round and line within tolerance
+check cross2 ((the length of forward) = (the length of backward))
+loop index from 0 to the length of forward:
+    set hit to the item at index in forward
+    set found to false
+    loop otherIndex from 0 to the length of backward:
+        set other to the item at otherIndex in backward
+        if (the cad distance from hit's point to other's point) < 1e-6:
+            set found to true
+    check cross2 found
+free forward
+free backward
+print "the_order_of_the_arguments_does_not_change_the_hits" as a line
+set arc to the cad curve2 of (a cad arc2 at (cross2 point [0.0,0.0]) with radius 5.0 from 0.0 to 1.5707963267948966)
+set hits to the cad crossings of (cross2 segment [-10.0,3.0] to [10.0,3.0]) and arc within tolerance
+check cross2 ((the length of hits) = 1)
+check cross2 ((the point of (the item at 0 in hits))'s x > 0.0)
+free hits
+print "a_point_on_an_arcs_circle_but_off_the_arc_is_rejected" as a line
+set hits to the cad crossings of (cross2 circle [0.0,0.0] with radius 1.0) and (cross2 circle [1.0,0.0] with radius 1.0) within tolerance
+check cross2 ((the length of hits) = 2)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of (hit's point's x - 0.5)) < 1e-6)
+free hits
+print "two_circles_cross_at_two_points" as a line
+set hits to the cad crossings of (cross2 segment [-10.0,1.0] to [10.0,1.0]) and (cross2 ellipse [0.0,0.0] with radii 5.0 and 2.0) within tolerance
+check cross2 ((the length of hits) = 2)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of (hit's point's y - 1.0)) < 1e-6)
+free hits
+print "a_segment_across_an_ellipse_meets_it_twice" as a line
+set chain to cross2 polyline [[0.0,0.0,0.0],[1.0,0.0,0.0],[2.0,0.0,0.0],[3.0,0.0,0.0]] with closure false
+set hits to the cad crossings of chain and (cross2 segment [1.5,-1.0] to [1.5,1.0]) within tolerance
+check cross2 ((the length of hits) = 1)
+set hit to the item at 0 in hits
+check cross2 ((the absolute value of (hit's point's x - 1.5)) < 1e-12)
+check cross2 ((the absolute value of (hit's tA - 0.5)) < 1e-9)
+free hits
+print "a_polyline_is_taken_apart_rather_than_approximated" as a line
+set chain to cross2 polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+set hits to the cad crossings of chain and (cross2 segment [-1.0,-0.5] to [3.0,-0.5]) within tolerance
+check cross2 ((the length of hits) = 2)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of ((the cad distance from hit's point to (cross2 point [1.0,0.0])) - 1.0)) < 1e-9)
+free hits
+print "a_polyline_arc_segment_is_solved_as_an_arc" as a line
+set a to cross2 ellipse [0.0,0.0] with radii 5.0 and 2.0
+set b to cross2 ellipse [0.0,0.0] with radii 2.0 and 5.0
+set hits to the cad crossings of a and b within tolerance
+check cross2 ((the length of hits) = 4)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of ((the absolute value of hit's point's x) - (the absolute value of hit's point's y))) < 1e-5)
+free hits
+print "two_ellipses_cross_where_they_should" as a line
+set b to cross2 ellipse [3.0,1.0] with radii 4.0 and 3.0
+set hits to the cad crossings of a and b within tolerance
+check cross2 ((the length of hits) > 0)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the cad distance from (the cad point on a at hit's tA) to hit's point) < 1e-5)
+    check cross2 ((the cad distance from (the cad point on b at hit's tB) to hit's point) < 1e-5)
+free hits
+print "a_converged_crossing_lands_on_both_curves" as a line
+function cross2 crossing [error] of a and b within tolerance:
+    execute:
+        set hits to the cad crossings of a and b within tolerance
+        set error to 0.0
+        loop index from 0 to the length of hits:
+            set hit to the item at index in hits
+            set error to the maximum of error and (the cad distance from (the cad point on a at hit's tA) to (the cad point on b at hit's tB))
+        free hits
+        return error
+set b to cross2 ellipse [0.0,0.0] with radii 2.0 and 5.0
+set loose to cross2 crossing error of a and b within (a cad tolerance of 1e-3)
+set tight to cross2 crossing error of a and b within (a cad tolerance of 1e-10)
+check cross2 (tight <= loose)
+check cross2 (tight < 1e-9)
+print "a_tighter_tolerance_gives_a_closer_crossing" as a line
+set spline to cross2 interpolated spline
+set line to cross2 segment [-1.0,1.0] to [10.0,1.0]
+set hits to the cad crossings of spline and line within tolerance
+check cross2 ((the length of hits) > 0)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of (hit's point's y - 1.0)) < 1e-5)
+    check cross2 ((the cad distance from (the cad point on spline at hit's tA) to hit's point) < 1e-5)
+free hits
+print "a_spline_crossing_is_found_and_converged" as a line
+set hits to the cad crossings of (cross2 segment [-10.0,9.0] to [10.0,9.0]) and round within tolerance
+check cross2 ((the length of hits) = 0)
+free hits
+set hits to the cad crossings of (cross2 ellipse [0.0,0.0] with radii 1.0 and 1.0) and (cross2 ellipse [50.0,0.0] with radii 1.0 and 1.0) within tolerance
+check cross2 ((the length of hits) = 0)
+free hits
+print "curves_that_miss_report_nothing" as a line
+set hits to the cad crossings of (cross2 segment [0.0,0.0] to [10.0,0.0]) and (cross2 segment [0.0,3.0] to [10.0,3.0]) within tolerance
+check cross2 ((the length of hits) = 0)
+free hits
+print "parallel_segments_never_cross" as a line
+set hits to the cad crossings of (cross2 segment [-10.0,5.0] to [10.0,5.0]) and round within tolerance
+check cross2 ((the length of hits) = 1)
+free hits
+print "a_tangent_line_touches_once_rather_than_twice" as a line
+set ray to cross2 ray [0.0,0.0] along [1.0,0.0]
+set hits to the cad crossings of ray and (cross2 segment [5.0,-5.0] to [5.0,5.0]) within tolerance
+check cross2 ((the length of hits) = 1)
+set hit to the item at 0 in hits
+check cross2 ((the absolute value of (hit's point's x - 5.0)) < 1e-9)
+check cross2 ((the absolute value of (hit's tA - 5.0)) < 1e-9)
+free hits
+print "a_ray_crosses_ahead_of_its_origin" as a line
+set hits to the cad crossings of ray and (cross2 segment [-5.0,-5.0] to [-5.0,5.0]) within tolerance
+check cross2 ((the length of hits) = 0)
+free hits
+print "a_ray_does_not_cross_behind_its_origin" as a line
+set line to cross2 xline [0.0,0.0] along [1.0,0.0]
+set ahead to the cad crossings of line and (cross2 segment [5.0,-1.0] to [5.0,1.0]) within tolerance
+set behind to the cad crossings of line and (cross2 segment [-5.0,-1.0] to [-5.0,1.0]) within tolerance
+check cross2 ((the length of ahead) = 1)
+check cross2 ((the length of behind) = 1)
+check cross2 (((the tA of (the item at 0 in ahead)) > 0.0) and ((the tA of (the item at 0 in behind)) < 0.0))
+free ahead
+free behind
+print "an_infinite_line_crosses_on_both_sides" as a line
+set hits to the cad crossings of ray and round within tolerance
+check cross2 ((the length of hits) = 1)
+set hit to the item at 0 in hits
+check cross2 ((the absolute value of (hit's point's x - 5.0)) < 1e-6)
+free hits
+print "a_ray_through_a_circle_reports_only_what_is_ahead" as a line
+set hits to the cad crossings of line and round within tolerance
+check cross2 ((the length of hits) = 2)
+set first to the item at 0 in hits
+set last to the item at 1 in hits
+check cross2 ((the absolute value of (first's point's x + 5.0)) < 1e-6)
+check cross2 ((the absolute value of (last's point's x - 5.0)) < 1e-6)
+free hits
+print "an_infinite_line_through_a_circle_reports_both" as a line
+set hits to the cad crossings of (cross2 xline [-100.0,1.0] along [1.0,0.0]) and spline within tolerance
+check cross2 ((the length of hits) > 0)
+loop index from 0 to the length of hits:
+    set hit to the item at index in hits
+    check cross2 ((the absolute value of (hit's point's y - 1.0)) < 1e-5)
+free hits
+print "an_unbounded_curve_crosses_a_spline_without_being_sampled" as a line
+set hits to the cad crossings of (cross2 segment [512335.678,4512345.678] to [512355.678,4512345.678]) and (cross2 circle [512345.678,4512345.678] with radius 5.0) within tolerance
+check cross2 ((the length of hits) = 2)
+set first to the item at 0 in hits
+set last to the item at 1 in hits
+check cross2 ((the absolute value of (first's point's x - (512345.678 - 5.0))) < 1e-6)
+check cross2 ((the absolute value of (last's point's x - (512345.678 + 5.0))) < 1e-6)
+free hits
+print "survey_coordinates_still_cross_where_they_should" as a line

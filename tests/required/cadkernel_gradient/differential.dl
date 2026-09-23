@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime-input reference checks for cadkernel 953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/gradient.rs.
+import lib/cadkernel/gradient.dl
+
+function the cad gradient fixture number at {integer:index} in {argument list:arguments}:
+    execute:
+        return @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at index in arguments' data)
+
+function print cad gradient fixture scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value)
+
+set arguments to the command line arguments
+set angle to the cad gradient fixture number at 0 in arguments
+set shift to the cad gradient fixture number at 1 in arguments
+set tolerance to a cad tolerance of (the cad gradient fixture number at 2 in arguments)
+set boundary to an empty list of a cad vector2
+set index to 3
+loop while index < the length of arguments:
+    append (a cad vector2 with x (the cad gradient fixture number at index in arguments) and y (the cad gradient fixture number at (index + 1) in arguments)) to boundary
+    set index to index + 2
+set result to the cad gradient frame of boundary at angle angle with shift shift within tolerance
+print (the valid of result) as a line
+if the valid of result:
+    set frame to the value of result
+    print cad gradient fixture scalar (the x of the centre of frame)
+    print cad gradient fixture scalar (the y of the centre of frame)
+    print cad gradient fixture scalar (the projectionMinimum of frame)
+    print cad gradient fixture scalar (the projectionSpan of frame)
+    print cad gradient fixture scalar (the radius of frame)
+free boundary

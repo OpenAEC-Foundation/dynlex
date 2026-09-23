@@ -1,0 +1,308 @@
+import examples/dynedra/state.dl
+import examples/dynedra/model.dl
+import lib/font.dl
+
+class:
+    patterns:
+        [a|] lab viewport
+    members:
+        center as a cad vector3
+        scale as a 64 bit floating-point number
+        depthScale as a 64 bit floating-point number
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] lab framing bounds
+    members:
+        low as a cad vector3
+        high as a cad vector3
+        initialized as a boolean
+
+local function lab framing {lab framing bounds:box} including {cad vector3:point}:
+    execute:
+        set result to box
+        if result's initialized = false:
+            set result's low to point
+            set result's high to point
+            set result's initialized to true
+        set result's low's x to the minimum of result's low's x and point's x
+        set result's low's y to the minimum of result's low's y and point's y
+        set result's low's z to the minimum of result's low's z and point's z
+        set result's high's x to the maximum of result's high's x and point's x
+        set result's high's y to the maximum of result's high's y and point's y
+        set result's high's z to the maximum of result's high's z and point's z
+        return result
+
+function require lab font {font operation status:status}:
+    execute:
+        if status failed:
+            print status's operation as a line
+            print status's error code as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function draw lab [text] message at {a number:x} {a number:y} sized {integer:size} muted {boolean:muted} with {font:typeface} in {graphics frame:frame}:
+    execute:
+        set sizing to the result of setting typeface's pixel size to size
+        require lab font sizing
+        set text to the string form of message
+        set red to 35
+        set green to 48
+        set blue to 70
+        if muted:
+            set red to 107
+            set green to 123
+            set blue to 147
+        set rendering to the result of drawing text as text at x x and y y using typeface in color red red, green green and blue blue in frame
+        require lab font rendering's status
+
+local function the lab viewport for {lab scene:scene} with {lab state:state} sized {integer:width} {integer:height}:
+    execute:
+        set bounds to a new lab framing bounds
+        loop index from 0 to the length of scene's controls:
+            set bounds to lab framing bounds including (the item at index in scene's controls)
+        loop index from 0 to the length of scene's segments:
+            set segment to the item at index in scene's segments
+            set bounds to lab framing bounds including segment's start
+            set bounds to lab framing bounds including segment's end
+        loop index from 0 to the length of scene's guides:
+            set segment to the item at index in scene's guides
+            set bounds to lab framing bounds including segment's start
+            set bounds to lab framing bounds including segment's end
+        set center to (the cad sum of bounds's low and bounds's high) scaled by 0.5
+        set span to the maximum of 1.0 and (the cad length of (the cad difference of bounds's high and bounds's low))
+        set size to (the minimum of (width - 370) and (height - 180)) as a 64 bit floating-point number
+        if state's settings's operation = 6:
+            set size to (the minimum of (width - 370) and (height - 360)) as a 64 bit floating-point number
+        set scale to ((size * 0.8) / span) * state's zoom
+        set depthScale to 0.8 / span
+        if state's settings's operation = 6:
+            return @intrinsic("construct", a lab viewport, center, scale, depthScale, 330.0 + ((width - 330) as a 64 bit floating-point number) * 0.5, 300.0 + ((height - 340) as a 64 bit floating-point number) * 0.5)
+        return @intrinsic("construct", a lab viewport, center, scale, depthScale, 330.0 + ((width - 330) as a 64 bit floating-point number) * 0.5, 95.0 + ((height - 135) as a 64 bit floating-point number) * 0.5)
+
+local function the lab pixel for {cad vector3:point} in {lab viewport:viewport} with {lab state:state}:
+    execute:
+        set projected to the lab projection of (the cad difference of point and viewport's center) with state
+        return a cad vector2 with x (viewport's x + projected's x * viewport's scale) and y (viewport's y - projected's y * viewport's scale)
+
+local function the lab display point for {cad vector3:point} in {lab viewport:viewport} with {lab state:state}:
+    execute:
+        set viewed to the lab view coordinates of (the cad difference of point and viewport's center) with state
+        return a cad vector3 with x (viewport's x + viewed's x * viewport's scale), y (viewport's y - viewed's y * viewport's scale) and z (viewed's z * viewport's depthScale)
+
+local function the lab shade of {cad vector3:normal} with {lab state:state}:
+    execute:
+        set viewed to the lab view coordinates of normal with state
+        return (0.35 + (0.65 * (the maximum of 0.0 and viewed's z))) clamped between 0.0 and 1.0
+
+local function draw lab solid surface {lab scene:scene} in {lab viewport:viewport} with {lab state:state} in {graphics frame:frame}:
+    execute:
+        if (the length of scene's surface) = 0:
+            return nothing
+        enable depth testing in frame
+        start triangles in frame
+        loop index from 0 to the length of scene's surface:
+            set vertex to the item at index in scene's surface
+            set shade to the lab shade of vertex's normal with state
+            use vertex color red (36 + ((shade * 72.0) as an integer)), green (91 + ((shade * 92.0) as an integer)) and blue (145 + ((shade * 92.0) as an integer)) in frame
+            set point to the lab display point for vertex's position in viewport with state
+            add a vertex at x point's x, y point's y and z point's z to frame
+        finish triangles in frame
+        disable depth testing in frame
+
+# Six vertices form a constant-width screen-space stroke in the active batch.
+local function add lab stroke from {cad vector2:first} to {cad vector2:second} wide {a number:width} in {graphics frame:frame}:
+    execute:
+        set direction to the cad difference of second and first
+        set length to the cad length of direction
+        if length <= 0.000001:
+            return nothing
+        set x to (the negative of direction's y) * (width / (2.0 * length))
+        set y to direction's x * (width / (2.0 * length))
+        add a vertex at x (first's x + x) and y (first's y + y) to frame
+        add a vertex at x (first's x - x) and y (first's y - y) to frame
+        add a vertex at x (second's x + x) and y (second's y + y) to frame
+        add a vertex at x (second's x + x) and y (second's y + y) to frame
+        add a vertex at x (first's x - x) and y (first's y - y) to frame
+        add a vertex at x (second's x - x) and y (second's y - y) to frame
+
+local function add lab edge from {cad vector3:first} to {cad vector3:second} in {lab viewport:viewport} with {lab state:state} wide {a number:width} in {graphics frame:frame}:
+    execute:
+        add lab stroke from (the lab pixel for first in viewport with state) to (the lab pixel for second in viewport with state) wide width in frame
+
+local function draw lab geometry {lab scene:scene} with {lab state:state} sized {integer:width} {integer:height} in {graphics frame:frame}:
+    execute:
+        set viewport to the lab viewport for scene with state sized width height
+        if state's settings's operation = 6:
+            draw lab solid surface scene in viewport with state in frame
+        start triangles in frame
+        use vertex color red 221, green 228 and blue 239 in frame
+        loop index from -4 to 5:
+            set value to (index as a 64 bit floating-point number) * 0.5
+            add lab edge from (the lab point value -2.0 0.0) to (the lab point value 2.0 0.0) in viewport with state wide 1.0 in frame
+            add lab edge from (the lab point -2.0 value 0.0) to (the lab point 2.0 value 0.0) in viewport with state wide 1.0 in frame
+        use vertex color red 155, green 171 and blue 192 in frame
+        add lab edge from (the lab point 0.0 0.0 0.0) to (the lab point 2.0 0.0 0.0) in viewport with state wide 1.5 in frame
+        add lab edge from (the lab point 0.0 0.0 0.0) to (the lab point 0.0 2.0 0.0) in viewport with state wide 1.5 in frame
+        add lab edge from (the lab point 0.0 0.0 0.0) to (the lab point 0.0 0.0 2.0) in viewport with state wide 1.5 in frame
+        if state's controls:
+            use vertex color red 194, green 109 and blue 38 in frame
+            if state's settings's operation >= 4:
+                loop index from 0 to the length of scene's guides:
+                    set guide to the item at index in scene's guides
+                    add lab edge from guide's start to guide's end in viewport with state wide 1.0 in frame
+            else if state's settings's operation = 3:
+                loop row from 0 to 3:
+                    loop column from 0 to 2:
+                        set index to row * 3 + column
+                        add lab edge from (the item at index in scene's controls) to (the item at (index + 1) in scene's controls) in viewport with state wide 1.0 in frame
+                        set across to column * 3 + row
+                        add lab edge from (the item at across in scene's controls) to (the item at (across + 3) in scene's controls) in viewport with state wide 1.0 in frame
+            else:
+                loop index from 1 to the length of scene's controls:
+                    add lab edge from (the item at (index - 1) in scene's controls) to (the item at index in scene's controls) in viewport with state wide 1.0 in frame
+        use vertex color red 36, green 91 and blue 199 in frame
+        loop index from 0 to the length of scene's segments:
+            set segment to the item at index in scene's segments
+            add lab edge from segment's start to segment's end in viewport with state wide 2.0 in frame
+        finish triangles in frame
+        if state's controls:
+            loop index from 0 to the length of scene's controls:
+                set point to the lab pixel for (the item at index in scene's controls) in viewport with state
+                draw a rectangle at x (point's x - 3.0) and y (point's y - 3.0) with width 6 and height 6 in color red 194, green 109 and blue 38 in frame
+
+local function draw lab button message at {integer:x} {integer:y} wide {integer:width} selected {boolean:selected} with {font:typeface} in {graphics frame:frame}:
+    execute:
+        set red to 238
+        set green to 242
+        set blue to 248
+        if selected:
+            set red to 222
+            set green to 233
+            set blue to 255
+        draw a rectangle at x x and y y with width width and height 34 in color red red, green green and blue blue in frame
+        if selected:
+            draw a rectangle at x x and y y with width 3 and height 34 in color red 36, green 91 and blue 199 in frame
+        draw lab text message at (x + 12) (y + 23) sized 14 muted false with typeface in frame
+
+local function draw lab solid inspection {lab scene:scene} with {lab state:state} using {font:typeface} in {graphics frame:frame}:
+    execute:
+        set width to the framebuffer width of frame's window
+        draw a rectangle at x 342 and y 90 with width (width - 366) and height 214 in color red 255, green 255 and blue 255 in frame
+        loop index from 0 to 8:
+            draw lab button (the lab solid name for index) at (the lab solid choice x for index) (the lab solid choice y for index) wide (the lab solid choice width) selected (index = state's settings's solidKind) with typeface in frame
+        if (scene's solid's built) = false:
+            draw lab text "No solid available: choose a positive size" at 354 207 sized 14 muted false with typeface in frame
+            return nothing
+        set counts to (the string form of "Vertices ") + (the string form of (scene's solid's vertices))
+        set counts to (counts + (the string form of "   Edges ")) + (the string form of (scene's solid's edges))
+        set counts to (counts + (the string form of "   Faces ")) + (the string form of (scene's solid's faces))
+        set counts to (counts + (the string form of "   Triangles ")) + (the string form of (scene's solid's triangles))
+        draw lab text counts at 354 201 sized 14 muted false with typeface in frame
+        set topology to (the string form of "Loops ") + (the string form of (scene's solid's loops))
+        set topology to (topology + (the string form of "  Shells ")) + (the string form of (scene's solid's shells))
+        set topology to (topology + (the string form of "  Lumps ")) + (the string form of (scene's solid's lumps))
+        set topology to (topology + (the string form of "  Euler ")) + (the string form of (scene's solid's euler))
+        set topology to (topology + (the string form of "  Flaws ")) + (the string form of (scene's solid's flaws))
+        draw lab text topology at 354 223 sized 14 muted false with typeface in frame
+        if scene's solid's bounds's valid:
+            draw lab text ((the string form of "Bounds min (m): ") + (the lab coordinate text of (scene's solid's bounds's value's low))) at 354 245 sized 14 muted true with typeface in frame
+            draw lab text ((the string form of "Bounds max (m): ") + (the lab coordinate text of (scene's solid's bounds's value's high))) at 354 267 sized 14 muted true with typeface in frame
+        else:
+            draw lab text "Bounds unavailable" at 354 245 sized 14 muted false with typeface in frame
+        set gap to (the string form of "Max vertex gap (m): ") + (the string form of ((scene's solid's gap) as a floating-point number))
+        draw lab text gap at 354 289 sized 14 muted true with typeface in frame
+
+local function the lab coordinate text of {cad vector3:point}:
+    execute:
+        set result to the string form of ((point's x) as a floating-point number)
+        set result to (result + (the string form of ", ")) + (the string form of ((point's y) as a floating-point number))
+        return (result + (the string form of ", ")) + (the string form of ((point's z) as a floating-point number))
+
+function draw lab {lab scene:scene} with {lab state:state} using {font:typeface} in {graphics frame:frame}:
+    execute:
+        set width to the framebuffer width of frame's window
+        set height to the framebuffer height of frame's window
+        use screen coordinates in frame
+        if (width < 900) or (height < 750):
+            draw lab text "Enlarge the window to at least 900 x 750" at 24 48 sized 18 muted false with typeface in frame
+            return nothing
+        if scene's valid:
+            draw lab geometry scene with state sized width height in frame
+        draw a rectangle at x 0 and y 0 with width 320 and height height in color red 255, green 255 and blue 255 in frame
+        draw a rectangle at x 320 and y 0 with width 1 and height height in color red 221, green 228 and blue 239 in frame
+        draw a rectangle at x 0 and y 0 with width width and height 80 in color red 247, green 249 and blue 252 in frame
+        draw lab text "Dynedra Lab" at 24 46 sized 30 muted false with typeface in frame
+        draw lab text (the lab operation name for state's settings's operation) at 354 43 sized 18 muted false with typeface in frame
+        draw lab text "NATIVE GEOMETRY" at 24 115 sized 14 muted true with typeface in frame
+        loop index from 0 to 6:
+            set column to the remainder of index divided by 2
+            draw lab button (the lab operation name for index) at (24 + column * 144) (134 + (index / 2) * 42) wide 128 selected (index = state's settings's operation) with typeface in frame
+        draw lab button "B-rep solids  [7]" at 24 276 wide 272 selected (state's settings's operation = 6) with typeface in frame
+        if state's settings's operation = 6:
+            draw lab solid inspection scene with state using typeface in frame
+        set parameter to state's settings's height
+        set label to "Control height (m)"
+        if state's settings's operation = 0:
+            set parameter to state's settings's weight
+            set label to "Middle control weight"
+        else if state's settings's operation = 2:
+            set parameter to state's settings's turns
+            set label to "Turns"
+        else if state's settings's operation = 4:
+            set label to "Partition x (m)"
+        else if state's settings's operation = 5:
+            set label to "Starting width (m)"
+        else if state's settings's operation = 6:
+            set label to "Solid height (m)"
+            if state's settings's solidKind = 2:
+                set label to "Sphere radius (m)"
+        draw lab text label at 24 337 sized 14 muted true with typeface in frame
+        draw lab button "-" at 24 352 wide 42 selected false with typeface in frame
+        draw lab text (parameter as a floating-point number) at 88 376 sized 18 muted false with typeface in frame
+        draw lab button "+" at 254 352 wide 42 selected false with typeface in frame
+        if state's settings's operation = 4:
+            draw lab text "Exact line intersections" at 24 421 sized 14 muted true with typeface in frame
+            draw lab text "Tolerance: 0.000001 m" at 24 460 sized 14 muted false with typeface in frame
+        else:
+            set samplingLabel to "Samples per curve"
+            if state's settings's operation = 5:
+                set samplingLabel to "Samples per half turn"
+            if state's settings's operation = 6:
+                set samplingLabel to "Samples per curved edge"
+            draw lab text samplingLabel at 24 421 sized 14 muted true with typeface in frame
+            draw lab button "-" at 24 436 wide 42 selected false with typeface in frame
+            draw lab text state's settings's samples at 88 460 sized 18 muted false with typeface in frame
+            draw lab button "+" at 254 436 wide 42 selected false with typeface in frame
+        set guidesLabel to "Show guides  [C]"
+        if state's settings's operation = 6:
+            set guidesLabel to "Bounds + vertices  [C]"
+        draw lab button guidesLabel at 24 500 wide 272 selected state's controls with typeface in frame
+        draw lab button "Reset view and values  [0]" at 24 548 wide 272 selected false with typeface in frame
+        draw lab button "Zoom -" at 24 596 wide 128 selected false with typeface in frame
+        draw lab button "Zoom +" at 168 596 wide 128 selected false with typeface in frame
+        set lengthLabel to "Sampled length (m)"
+        set measurement to scene's length
+        if state's settings's operation = 3:
+            set lengthLabel to "Grid total length (m)"
+        else if state's settings's operation = 4:
+            set lengthLabel to "Enclosed area (m2)"
+            set measurement to scene's area
+        else if state's settings's operation = 5:
+            set lengthLabel to "Boundary length (m)"
+        else if state's settings's operation = 6:
+            set lengthLabel to "Edge/seam length (m)"
+        draw lab text lengthLabel at 24 667 sized 14 muted true with typeface in frame
+        draw lab text (measurement as a floating-point number) at 24 692 sized 18 muted false with typeface in frame
+        if state's settings's operation = 4:
+            draw lab text "Faces:" at 150 692 sized 14 muted true with typeface in frame
+            draw lab text scene's regions at 230 692 sized 14 muted false with typeface in frame
+        else if scene's exactLength >= 0.0:
+            set referenceLabel to "Analytic:"
+            if state's settings's operation = 5:
+                set referenceLabel to "Source:"
+            draw lab text referenceLabel at 150 692 sized 14 muted true with typeface in frame
+            draw lab text (scene's exactLength as a floating-point number) at 230 692 sized 14 muted false with typeface in frame
+        draw a rectangle at x 0 and y (height - 38) with width width and height 38 in color red 247, green 249 and blue 252 in frame
+        draw lab text "1-7 scenario  N solid  -/+ value  [/] samples  arrows orbit  Q/E zoom  Esc close" at 24 (height - 14) sized 14 muted true with typeface in frame
+        draw lab text scene's message at 354 76 sized 14 muted (scene's valid) with typeface in frame

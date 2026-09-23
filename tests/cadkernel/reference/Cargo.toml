@@ -1,0 +1,12 @@
+[package]
+name = "cadkernel-reference"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MPL-2.0"
+description = "Deterministic numerical reference for the pinned cadkernel main crate"
+
+[workspace]
+
+[dependencies]
+cadkernel = { git = "https://github.com/HakanSeven12/cadkernel", rev = "953d546b68aef4b6692566a1a9b077fc5bd9fb4f", default-features = false, features = ["geom2d", "brep"] }

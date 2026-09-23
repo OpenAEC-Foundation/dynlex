@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/alignment.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/alignment.rs
+# Matrix members mRC use row-major indexing, including the complete affine row.
+# Input lists borrow cad vector3 values. Invalid results have a zero matrix.
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad alignment matrix
+    members:
+        m00 as a 64 bit floating-point number
+        m01 as a 64 bit floating-point number
+        m02 as a 64 bit floating-point number
+        m03 as a 64 bit floating-point number
+        m10 as a 64 bit floating-point number
+        m11 as a 64 bit floating-point number
+        m12 as a 64 bit floating-point number
+        m13 as a 64 bit floating-point number
+        m20 as a 64 bit floating-point number
+        m21 as a 64 bit floating-point number
+        m22 as a 64 bit floating-point number
+        m23 as a 64 bit floating-point number
+        m30 as a 64 bit floating-point number
+        m31 as a 64 bit floating-point number
+        m32 as a 64 bit floating-point number
+        m33 as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad alignment result
+    members:
+        valid as a boolean
+        value as a cad alignment matrix
+
+local function no cad alignment:
+    execute:
+        return @intrinsic("construct", a cad alignment result, false, a new cad alignment matrix)
+
+local function cad alignment scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad alignment rotation of {cad vector3:basis} about {cad vector3:axis} with cosine {a 64 bit floating-point number:cosine} and sine {a 64 bit floating-point number:sine}:
+    execute:
+        set first to basis scaled by cosine
+        set second to (the cad cross of axis and basis) scaled by sine
+        set third to axis scaled by ((the cad dot of axis and basis) * (1.0 - cosine))
+        return the cad sum of (the cad sum of first and second) and third
+
+local function the cad alignment half turn of {cad vector3:basis} about {cad vector3:axis}:
+    execute:
+        return the cad difference of (axis scaled by (2.0 * (the cad dot of axis and basis))) and basis
+
+local function the cad alignment basis image of {cad vector3:basis} from {cad vector3:x}, {cad vector3:y}, {cad vector3:z} to {cad vector3:u}, {cad vector3:v}, {cad vector3:w}:
+    execute:
+        set first to u scaled by (the cad dot of x and basis)
+        set second to v scaled by (the cad dot of y and basis)
+        set third to w scaled by (the cad dot of z and basis)
+        return the cad sum of (the cad sum of first and second) and third
+
+function the cad alignment from {a pointer to a list:source} to {a pointer to a list:target} scaling two pairs {boolean:scaleTwoPairs}:
+    execute:
+        set count to the length of source
+        if (count != (the length of target)) or ((count < 1) or (count > 3)):
+            return no cad alignment
+        loop index from 0 to count:
+            if ((cad (the item at index in source) is finite) = false) or ((cad (the item at index in target) is finite) = false):
+                return no cad alignment
+        set sourceOrigin to the item at 0 in source
+        set targetOrigin to the item at 0 in target
+        set basisX to the cad x axis
+        set basisY to the cad y axis
+        set basisZ to the cad z axis
+        set columnX to basisX
+        set columnY to basisY
+        set columnZ to basisZ
+        if count >= 2:
+            set a to the cad difference of (the item at 1 in source) and sourceOrigin
+            set b to the cad difference of (the item at 1 in target) and targetOrigin
+            set aLength to the cad length of a
+            set bLength to the cad length of b
+            if ((cad alignment scalar aLength is finite) = false) or ((cad alignment scalar bLength is finite) = false):
+                return no cad alignment
+            if (aLength <= 1e-12) or (bLength <= 1e-12):
+                return no cad alignment
+            set x to a cad divided by aLength
+            set u to b cad divided by bLength
+            if count = 3:
+                set c to the cad normalization of (the cad difference of (the item at 2 in source) and sourceOrigin)
+                set d to the cad normalization of (the cad difference of (the item at 2 in target) and targetOrigin)
+                if ((the valid of c) = false) or ((the valid of d) = false):
+                    return no cad alignment
+                set sourceNormal to the cad cross of x and (the value of c)
+                set targetNormal to the cad cross of u and (the value of d)
+                if ((the cad length of sourceNormal) <= 1e-12) or ((the cad length of targetNormal) <= 1e-12):
+                    return no cad alignment
+                set normalizedSource to the cad normalization of sourceNormal
+                set normalizedTarget to the cad normalization of targetNormal
+                if ((the valid of normalizedSource) = false) or ((the valid of normalizedTarget) = false):
+                    return no cad alignment
+                set z to the value of normalizedSource
+                set w to the value of normalizedTarget
+                set y to the cad cross of z and x
+                set v to the cad cross of w and u
+                set columnX to the cad alignment basis image of basisX from x, y, z to u, v, w
+                set columnY to the cad alignment basis image of basisY from x, y, z to u, v, w
+                set columnZ to the cad alignment basis image of basisZ from x, y, z to u, v, w
+            else:
+                set cosine to the cad dot of x and u
+                if cosine < -1.0:
+                    set cosine to -1.0
+                if cosine > 1.0:
+                    set cosine to 1.0
+                set cross to the cad cross of x and u
+                set sine to the cad length of cross
+                if sine > 1e-12:
+                    set axis to cross cad divided by sine
+                    set columnX to the cad alignment rotation of basisX about axis with cosine cosine and sine sine
+                    set columnY to the cad alignment rotation of basisY about axis with cosine cosine and sine sine
+                    set columnZ to the cad alignment rotation of basisZ about axis with cosine cosine and sine sine
+                else:
+                    if cosine < 0.0:
+                        set preferred to basisY
+                        if (the absolute value of (the z of x)) < 0.9:
+                            set preferred to basisZ
+                        set normal to the cad normalization of (the cad difference of preferred and (x scaled by (the cad dot of x and preferred)))
+                        if (the valid of normal) = false:
+                            return no cad alignment
+                        set axis to the value of normal
+                        set columnX to the cad alignment half turn of basisX about axis
+                        set columnY to the cad alignment half turn of basisY about axis
+                        set columnZ to the cad alignment half turn of basisZ about axis
+                if scaleTwoPairs:
+                    set scale to bLength / aLength
+                    if (cad alignment scalar scale is finite) = false:
+                        return no cad alignment
+                    set columnX to columnX scaled by scale
+                    set columnY to columnY scaled by scale
+                    set columnZ to columnZ scaled by scale
+        set translation to the cad difference of targetOrigin and (columnX scaled by (the x of sourceOrigin))
+        set translation to the cad difference of translation and (columnY scaled by (the y of sourceOrigin))
+        set translation to the cad difference of translation and (columnZ scaled by (the z of sourceOrigin))
+        if ((cad columnX is finite) = false) or ((cad columnY is finite) = false):
+            return no cad alignment
+        if ((cad columnZ is finite) = false) or ((cad translation is finite) = false):
+            return no cad alignment
+        set matrix to @intrinsic("construct", a cad alignment matrix, the x of columnX, the x of columnY, the x of columnZ, the x of translation, the y of columnX, the y of columnY, the y of columnZ, the y of translation, the z of columnX, the z of columnY, the z of columnZ, the z of translation, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
+        return @intrinsic("construct", a cad alignment result, true, matrix)
+
+function the cad alignment of {cad vector3:point} through {cad alignment matrix:matrix}:
+    execute:
+        set x to ((((the m00 of matrix) * (the x of point)) + ((the m01 of matrix) * (the y of point))) + ((the m02 of matrix) * (the z of point))) + (the m03 of matrix)
+        set y to ((((the m10 of matrix) * (the x of point)) + ((the m11 of matrix) * (the y of point))) + ((the m12 of matrix) * (the z of point))) + (the m13 of matrix)
+        set z to ((((the m20 of matrix) * (the x of point)) + ((the m21 of matrix) * (the y of point))) + ((the m22 of matrix) * (the z of point))) + (the m23 of matrix)
+        return a cad vector3 with x x, y y and z z

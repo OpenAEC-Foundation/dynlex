@@ -1,0 +1,70 @@
+# A rejected outer grouping forces replay after the callee's conditional
+# and loop body have already established reusable line groupings.
+function integer:
+    replacement:
+        @intrinsic("type", "uint", 32)
+function slot:
+    replacement:
+        @intrinsic("add pointer depth", state)
+function type:
+    replacement:
+        @intrinsic("type", "type")
+function return value:
+    replacement:
+        @intrinsic("return", value)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+function value as {type:kind}:
+    execute:
+        return @intrinsic("cast", value, kind)
+function left > right:
+    execute:
+        return @intrinsic("greater than", left, right)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+class:
+    patterns:
+        state
+    members:
+        index as integer
+class:
+    patterns:
+        text
+    members:
+        digit as integer
+function format {integer:value}:
+    execute:
+        return @intrinsic("construct", text, value)
+function format {text:value}:
+    execute:
+        return value
+function value as a line:
+    execute:
+        set result to format value
+        return result
+function print value:
+    execute:
+        set message to format value
+        @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, message's digit))
+function the next number from {slot:source}:
+    execute:
+        if the index of source > 0 as integer:
+            set position to 0
+            loop while 2 > position:
+                if the index of source > 0 as integer:
+                    set the index of source to 54 as integer
+                set position to @intrinsic("add", position, 1)
+            set the index of source to 55 as integer
+        return the index of source
+function run:
+    execute:
+        set digit to @intrinsic("construct", state, (55 as integer))
+        set address to @intrinsic("address of", digit)
+        print the next number from address as a line
+        print the next number from address as a line
+run

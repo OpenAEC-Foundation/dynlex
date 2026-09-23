@@ -1,0 +1,5 @@
+import lib/cadkernel/curve2.dl
+set vertices to a list containing (the cad zero vector2)
+set shape to the cad polyline2 with vertices vertices and closure false
+print (the length of shape's vertices) as a line
+free vertices

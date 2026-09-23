@@ -55,8 +55,67 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 	});
 }
 
+// Inferring an argument determines its type even when the selected replacement
+// does not execute it. Restore only execution effects; keep inferred types,
+// overload selections and recursive inference dependencies.
+struct InferenceExecutionSnapshot {
+	KnownConstantState values;
+	AddressInferenceState addresses;
+	InferenceContext::SubjectState subject;
+	Instantiation *instantiation;
+	std::optional<InstantiationExecutionEffects> effects;
+
+	explicit InferenceExecutionSnapshot(const InferenceContext &context)
+		: values(context.currentVariableValues), addresses(context.currentAddressState), subject(context.currentSubject),
+		  instantiation(context.currentInstantiation) {
+		if (instantiation)
+			effects = *instantiation;
+	}
+
+	void restore(InferenceContext &context) const {
+		requireCompilerInvariant(context.currentInstantiation == instantiation, "argument inference changed its owner");
+		context.currentVariableValues = values;
+		context.currentAddressState = addresses;
+		context.currentSubject = subject;
+		if (effects) {
+			if (context.trial)
+				context.trialJournal->recordInstantiationWrite(instantiation);
+			static_cast<InstantiationExecutionEffects &>(*instantiation) = *effects;
+		}
+	}
+
+	bool matches(const InferenceContext &context) const {
+		return context.currentInstantiation == instantiation && context.currentVariableValues == values &&
+			   context.currentAddressState == addresses && context.currentSubject == subject &&
+			   (!effects || *effects == static_cast<const InstantiationExecutionEffects &>(*instantiation));
+	}
+};
+
+// Reuse a binding only when inferring it made no execution-state change and
+// that exact state still holds. Mutating arguments are replayed at their use.
+struct InferredArgumentScope {
+	InferenceContext &context;
+	const InferredArgumentScope *parent;
+	std::unordered_map<Expression *, InferenceExecutionSnapshot> unchanged;
+
+	explicit InferredArgumentScope(InferenceContext &context) : context(context), parent(context.inferredArguments) {
+		context.inferredArguments = this;
+	}
+	~InferredArgumentScope() { context.inferredArguments = parent; }
+
+	bool reusable(Expression *expression) const {
+		for (auto *scope = this; scope; scope = scope->parent) {
+			auto found = scope->unchanged.find(expression);
+			if (found != scope->unchanged.end() && found->second.matches(context))
+				return true;
+		}
+		return false;
+	}
+};
+
 struct InstantiationProgressSnapshot {
 	DataType returnType;
+	bool hasReturnIntrinsic;
 	std::vector<DataType> argumentTypes;
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
@@ -81,6 +140,7 @@ struct InstantiationProgressSnapshot {
 static std::unique_ptr<InstantiationProgressSnapshot> snapshotInstantiationProgress(const Instantiation &instantiation) {
 	auto snapshot = std::make_unique<InstantiationProgressSnapshot>();
 	snapshot->returnType = instantiation.returnType;
+	snapshot->hasReturnIntrinsic = instantiation.hasReturnIntrinsic;
 	snapshot->argumentTypes = instantiation.argumentTypes;
 	snapshot->parameterOutputTypesByName = instantiation.parameterOutputTypesByName;
 	snapshot->constantParameterValues = instantiation.constantParameterValues;
@@ -199,6 +259,25 @@ static void observeUnresolvedRecursiveDependency(InferenceContext &context) {
 	markInstantiationForReinference(context, frame->owner);
 }
 
+static void beginParameterOutputReinference(Instantiation &instantiation) {
+	instantiation.parameterSeedTypesByName = std::move(instantiation.parameterOutputTypesByName);
+	instantiation.parameterOutputTypesByName.clear();
+}
+
+static void finishParameterOutputReinference(InferenceContext &context, Instantiation &instantiation, bool passSucceeded) {
+	bool allSeedsConfirmed = true;
+	for (const auto &[name, seedType] : instantiation.parameterSeedTypesByName) {
+		auto confirmed = instantiation.parameterOutputTypesByName.find(name);
+		if (confirmed == instantiation.parameterOutputTypesByName.end() || confirmed->second != seedType) {
+			allSeedsConfirmed = false;
+			break;
+		}
+	}
+	instantiation.parameterSeedTypesByName.clear();
+	if (passSucceeded && context.typesValid && !allSeedsConfirmed)
+		observeUnresolvedRecursiveDependency(context);
+}
+
 static void
 propagateUnresolvedRecursiveDependencyToCaller(InferenceContext &callerContext, const Instantiation *callerInstantiation) {
 	requireCompilerInvariant(
@@ -217,7 +296,18 @@ template <typename InferPassFn>
 static InstantiationInferencePassResult
 runScopedInstantiationInferencePass(InferenceContext &context, Instantiation &instantiation, InferPassFn &&inferPass) {
 	ScopedRecursiveInferenceObservation passObservation(context, &instantiation);
+	if (context.trial) {
+		requireCompilerInvariant(context.trialJournal, "trial instantiation inference requires a rollback journal");
+		context.trialJournal->recordInstantiationWrite(&instantiation);
+	}
+	instantiation.hasReturnIntrinsic = false;
 	bool succeeded = inferPass();
+	// A completed body without a return establishes nothing even when its
+	// recursive calls still need another pass. An unresolved return operand
+	// does not provide that evidence.
+	if (succeeded && context.typesValid && !instantiation.hasReturnIntrinsic &&
+		instantiation.returnType.kind == DataType::Kind::Any)
+		instantiation.returnType = {DataType::Kind::Void};
 	bool observedUnresolvedDependency = passObservation.observed();
 	requireCompilerInvariant(
 		!observedUnresolvedDependency || instantiation.needsReinfer,
@@ -382,6 +472,8 @@ static bool runInstantiationReinferenceLoop(
 }
 
 static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
+	for (auto it = journal.borrowedExpressionUndo.rbegin(); it != journal.borrowedExpressionUndo.rend(); ++it)
+		*it->expression = std::move(it->value);
 	for (Section *section : journal.touchedSections)
 		resetSectionExpressionTypes(section);
 	for (auto it = journal.variableTypeUndo.rbegin(); it != journal.variableTypeUndo.rend(); ++it) {
@@ -851,6 +943,7 @@ static DataType requestKnownOrInferExpressionType(
 		return type;
 	if (!expr)
 		return {};
+	preserveCurrentGrouping |= context.fixedGroupingRoots && context.fixedGroupingRoots->contains(expr);
 	bool inferred = preserveCurrentGrouping ? inferExpressionWithCurrentGrouping(expr, context, bindingFrameStack)
 											: inferExpression(expr, context, false, bindingFrameStack);
 	if (!inferred)

@@ -1,0 +1,168 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_slice.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_presspull.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function slice probe point at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+function slice probe rectangle on {cad plane:basePlane} from {cad vector2:low} to {cad vector2:high}:
+    execute:
+        set boundary to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x low's x and y low's y) to (a cad vector2 with x high's x and y low's y))) to boundary
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x high's x and y low's y) to (a cad vector2 with x high's x and y high's y))) to boundary
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x high's x and y high's y) to (a cad vector2 with x low's x and y high's y))) to boundary
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x low's x and y high's y) to (a cad vector2 with x low's x and y low's y))) to boundary
+        set loops to a list containing (a cad presspull curve loop from boundary)
+        return the cad planar region on basePlane with loops
+
+function slice probe body using {cad surface:surfaceValue} with forward sense {boolean:forwardValue}:
+    execute:
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set surfaceKey to the cad body key after inserting surfaceValue into resultBody
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forwardValue owned by shellKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        set shellNode to the cad node pointer for shellKey in resultBody
+        append faceKey to (shellNode's faces's values)
+        append lumpKey to resultBody's roots
+        return resultBody
+
+function emit slice probe surface side for kind {integer:kind} with reversed orientation {boolean:reverseValue}:
+    execute:
+        set frameResult to the cad orthonormal plane with origin (slice probe point at 0), x axis (slice probe point at 9) and normal (slice probe point at 12)
+        if frameResult's valid = false:
+            emit maker flag false
+        else:
+            set size to slice probe point at 3
+            set surfaceValue to the cad surface of (frameResult's value)
+            if kind = 1:
+                set surfaceValue to the cad surface of (a cad cylinder with base (frameResult's value) and radius size's x)
+            if kind = 2:
+                set surfaceValue to the cad surface of (a cad cone with base (frameResult's value), radius size's x and half angle size's y)
+            if kind = 3:
+                set surfaceValue to the cad surface of (a cad sphere with frame (frameResult's value) and radius size's x)
+            if kind = 4:
+                set surfaceValue to the cad surface of (a cad torus with frame (frameResult's value), major radius size's x and minor radius size's y)
+            set cutter to slice probe body using surfaceValue with forward sense (reverseValue = false)
+            set sideResult to the cad surface side of cutter at (slice probe point at 6)
+            emit maker flag sideResult's valid
+            if sideResult's valid:
+                emit maker number sideResult's value
+
+function remove slice probe coedge {cad coedge key:coedgeKey} from {cad topology list:coedgeKeys}:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of (coedgeKeys's values):
+            if (the item at cursor in (coedgeKeys's values)) = coedgeKey:
+                remove item cursor from (coedgeKeys's values)
+            else:
+                increment cursor
+
+function slice probe retained surface kind {integer:wantedKind} from {cad body:sourceBody}:
+    execute:
+        set resultBody to sourceBody
+        set keepFound to false
+        set keepFace to a new cad face key
+        set faceKeys to the cad face keys of resultBody
+        loop faceCursor from 0 to the length of faceKeys:
+            set candidateFace to the item at faceCursor in faceKeys
+            set candidateNode to the cad node pointer for candidateFace in resultBody
+            set candidateSurface to the cad node pointer for candidateNode's surface in resultBody
+            if candidateSurface's kind = wantedKind:
+                set keepFound to true
+                set keepFace to candidateFace
+        if keepFound = false:
+            free faceKeys
+            return an empty cad body
+        loop faceCursor from 0 to the length of faceKeys:
+            set removeFace to the item at faceCursor in faceKeys
+            if removeFace != keepFace:
+                set removeFaceNode to the cad node pointer for removeFace in resultBody
+                loop loopCursor from 0 to the length of (removeFaceNode's loops's values):
+                    set removeLoop to the item at loopCursor in (removeFaceNode's loops's values)
+                    set removeLoopNode to the cad node pointer for removeLoop in resultBody
+                    loop useCursor from 0 to the length of (removeLoopNode's coedges's values):
+                        set removeUse to the item at useCursor in (removeLoopNode's coedges's values)
+                        set removeUseNode to the cad node pointer for removeUse in resultBody
+                        set removeEdgeNode to the cad node pointer for removeUseNode's edge in resultBody
+                        remove slice probe coedge removeUse from removeEdgeNode's coedges
+                        ignore the cad removal of removeUse from resultBody
+                    ignore the cad removal of removeLoop from resultBody
+                ignore the cad removal of removeFace from resultBody
+        free faceKeys
+        set keepNode to the cad node pointer for keepFace in resultBody
+        set ownerNode to the cad node pointer for keepNode's owner in resultBody
+        clear (ownerNode's faces's values)
+        append keepFace to (ownerNode's faces's values)
+        return resultBody
+
+function slice probe curved cutter of kind {integer:surfaceKind} around {cad vector3:origin} with dimensions {cad vector3:dimensions}:
+    execute:
+        set centre to a cad vector3 with x (origin's x + dimensions's x * 0.5), y (origin's y + dimensions's y * 0.5) and z (origin's z + dimensions's z * 0.5)
+        set radial to the minimum of dimensions's x and dimensions's y
+        set basePoint to a cad vector3 with x centre's x, y centre's y and z (origin's z - dimensions's z)
+        if surfaceKind = 15:
+            set made to the cad cylinder body at basePoint with radius (radial * 0.3) and height (dimensions's z * 3.0)
+            return slice probe retained surface kind 1 from made's value
+        if surfaceKind = 16:
+            set made to the cad cone body at basePoint with radius (radial * 0.45) and height (dimensions's z * 3.0)
+            return slice probe retained surface kind 2 from made's value
+        if surfaceKind = 17:
+            set largest to the maximum of dimensions's x and (the maximum of dimensions's y and dimensions's z)
+            set made to the cad sphere body at centre with radius (largest * 0.65)
+            return made's value
+        set frameResult to the cad orthonormal plane with origin centre, x axis (the cad x axis) and normal (the cad z axis)
+        set torusSurface to the cad surface of (a cad torus with frame frameResult's value, major radius (radial * 0.3) and minor radius (radial * 0.12))
+        return slice probe body using torusSurface with forward sense true
+
+function slice probe result for {cad body:body}:
+    execute:
+        set frameResult to the cad orthonormal plane with origin (slice probe point at 6), x axis (slice probe point at 9) and normal (slice probe point at 12)
+        if frameResult's valid = false:
+            return @intrinsic("construct", a cad slice result, false, false, cad imprint cut refused snag, an empty cad body, an empty cad body)
+        return the cad plane slice of body by (frameResult's value)
+
+function slice probe complete result:
+    execute:
+        set frameResult to the cad orthonormal plane with origin (slice probe point at 6), x axis (slice probe point at 9) and normal (slice probe point at 12)
+        if frameResult's valid = false:
+            return @intrinsic("construct", a cad slice result, false, false, cad imprint cut refused snag, an empty cad body, an empty cad body)
+        set mode to (maker argument 15) as an integer
+        set origin to slice probe point at 0
+        set size to slice probe point at 3
+        set made to the cad cuboid at origin with size size
+        if (mode = 1) or ((mode = 4) or ((mode = 17) or (mode = 18))):
+            set sheetOrigin to origin
+            if mode = 18:
+                set sheetOrigin to a cad vector3 with x origin's x, y origin's y and z (origin's z + size's z * 0.5)
+            set sourcePlane to a cad plane with origin sheetOrigin, x axis (the cad x axis) and y axis (the cad y axis)
+            set made to slice probe rectangle on sourcePlane from (the cad zero vector2) to (a cad vector2 with x size's x and y size's y)
+        if (mode = 0) or (mode = 1):
+            return the cad plane slice of (made's value) by (frameResult's value)
+        if mode >= 15:
+            set curvedCutter to slice probe curved cutter of kind mode around origin with dimensions size
+            return the cad surface slice of (made's value) by curvedCutter
+        set margin to ((the maximum of 1.0 and (the maximum of size's x and (the maximum of size's y and size's z))) * 4.0) + 1.0
+        set cutterMade to slice probe rectangle on (frameResult's value) from (a cad vector2 with x (-margin) and y (-margin)) to (a cad vector2 with x margin and y margin)
+        if mode = 3:
+            set cutterFaces to the cad face keys of (cutterMade's value)
+            set cutterFaceNode to the cad node pointer for (the item at 0 in cutterFaces) in (cutterMade's value)
+            set cutterFaceNode's forward to cutterFaceNode's forward = false
+            free cutterFaces
+        return the cad surface slice of (made's value) by (cutterMade's value)
+
+set probeMode to (maker argument 15) as an integer
+if (probeMode >= 5) and (probeMode < 15):
+    emit slice probe surface side for kind (the remainder of (probeMode - 5) divided by 5) with reversed orientation (probeMode >= 10)
+else:
+    set result to slice probe complete result
+    emit maker flag result's valid
+    emit maker flag result's divided
+    emit maker number result's snag
+    emit maker body result's negative
+    emit maker body result's positive

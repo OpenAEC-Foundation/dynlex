@@ -1,0 +1,293 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_blend.dl
+import lib/cadkernel/brep_make.dl
+
+function check public blend {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function public blend point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+function public blend {cad edge key:edgeKey} touches {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in body
+        if edgeNode = (0 as the type of edgeNode):
+            return false
+        loop index from 0 to the length of edgeNode's coedges's values:
+            set useNode to the cad node pointer for (the item at index in edgeNode's coedges's values) in body
+            if useNode != (0 as the type of useNode):
+                set loopNode to the cad node pointer for useNode's owner in body
+                if loopNode != (0 as the type of loopNode):
+                    if loopNode's owner = faceKey:
+                        return true
+        return false
+function the first public blend circular rim of {cad body:body}:
+    execute:
+        set edgeKeys to the cad edge keys of body
+        set result to a new cad edge key
+        set found to false
+        loop index from 0 to the length of edgeKeys:
+            set candidate to the item at index in edgeKeys
+            set edgeNode to the cad node pointer for candidate in body
+            if edgeNode != (0 as the type of edgeNode):
+                set curveNode to the cad node pointer for edgeNode's curve in body
+                if curveNode != (0 as the type of curveNode):
+                    if ((curveNode's kind) = 1) and ((the length of edgeNode's coedges's values) = 2):
+                        if found = false:
+                            set result to candidate
+                            set found to true
+        free edgeKeys
+        return result
+function the first public blend face of {cad edge key:edgeKey} in {cad body:body}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in body
+        set useNode to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in body
+        set loopNode to the cad node pointer for useNode's owner in body
+        return loopNode's owner
+function check public blend body {cad body:shape} has vertices {integer:vertices}, edges {integer:edges} and faces {integer:faces}:
+    execute:
+        check public blend ((the cad count of shape's vertices) = vertices)
+        check public blend ((the cad count of shape's edges) = edges)
+        check public blend ((the cad count of shape's faces) = faces)
+        check public blend ((the cad euler characteristic of shape) = 2)
+        set flaws to the cad flaws of shape
+        check public blend ((the length of flaws) = 0)
+        free flaws
+        check public blend ((the cad worst vertex gap of shape) < 1e-8)
+
+set made to the cad cuboid at (public blend point 0 0 0) with size (public blend point 10 8 6)
+check public blend made's valid
+set box to made's value
+set edgeKeys to the cad edge keys of box
+set verticalEdges to an empty list of a cad edge key
+loop index from 0 to the length of edgeKeys:
+    set candidate to the item at index in edgeKeys
+    set edgeNode to the cad node pointer for candidate in box
+    set startNode to the cad node pointer for edgeNode's start in box
+    set endNode to the cad node pointer for edgeNode's end in box
+    set delta to the cad difference of endNode's point and startNode's point
+    if ((the absolute value of delta's x) < 1e-12) and (((the absolute value of delta's y) < 1e-12) and ((the absolute value of delta's z) > 5.9)):
+        append candidate to verticalEdges
+check public blend ((the length of verticalEdges) = 4)
+set firstEdge to the item at 0 in verticalEdges
+set baseFace to the first public blend face of firstEdge in box
+set secondEdge to a new cad edge key
+set foundSecond to false
+loop index from 1 to the length of verticalEdges:
+    set candidate to the item at index in verticalEdges
+    if (public blend candidate touches baseFace in box) and (foundSecond = false):
+        set secondEdge to candidate
+        set foundSecond to true
+check public blend foundSecond
+set selected to a list containing secondEdge
+append firstEdge to selected
+append secondEdge to selected
+
+set filleted to the cad fillet of box along selected with radius 0.5
+check public blend filleted's valid
+check public blend body filleted's value has vertices 12, edges 18 and faces 8
+set chamfered to the cad chamfer of box along selected with base face baseFace, base distance 1.0 and other distance 0.5
+check public blend chamfered's valid
+check public blend body chamfered's value has vertices 12, edges 18 and faces 8
+print "public_blends_dispatch_prismatic_multi_edge_operations_atomically" as a line
+
+set singleFillet to the cad fillet of box along firstEdge with radius 0.5
+check public blend singleFillet's valid
+check public blend body singleFillet's value has vertices 10, edges 15 and faces 7
+set singleChamfer to the cad chamfer of box along firstEdge with distance 0.5
+check public blend singleChamfer's valid
+check public blend body singleChamfer's value has vertices 10, edges 15 and faces 7
+print "public_blends_offer_single_edge_convenience_operations" as a line
+
+set pressed to the cad presspull of box at baseFace by 0.5
+check public blend pressed's valid
+check public blend body pressed's value has vertices 8, edges 12 and faces 6
+print "public_blend_forwards_planar_face_offsets" as a line
+
+set firstPassSelection to a list containing (the item at 0 in edgeKeys)
+set firstPassFillet to the cad fillet of box along firstPassSelection with radius 0.3
+check public blend firstPassFillet's valid
+check public blend body firstPassFillet's value has vertices 10, edges 15 and faces 7
+set firstPassEdges to the cad edge keys of firstPassFillet's value
+set secondPassSelection to a list containing (the item at 2 in firstPassEdges)
+set secondPassFillet to the cad fillet of firstPassFillet's value along secondPassSelection with radius 0.2
+check public blend secondPassFillet's valid
+check public blend body secondPassFillet's value has vertices 12, edges 18 and faces 8
+print "public_fillet_restores_existing_cylindrical_blends" as a line
+
+set cornerSeedSelection to a list containing (the item at 0 in edgeKeys)
+set cornerSeedFace to the first public blend face of (the item at 0 in edgeKeys) in box
+set cornerSeed to the cad chamfer of box along cornerSeedSelection with base face cornerSeedFace, base distance 0.3 and other distance 0.2
+check public blend cornerSeed's valid
+set cornerSeedEdges to the cad edge keys of cornerSeed's value
+set pairSelection to a list containing (the item at 2 in cornerSeedEdges)
+append (the item at 3 in cornerSeedEdges) to pairSelection
+set pairFillet to the cad fillet of cornerSeed's value along pairSelection with radius 0.15
+check public blend pairFillet's valid
+check public blend body pairFillet's value has vertices 13, edges 20 and faces 9
+set tripleSelection to a list containing (the item at 2 in cornerSeedEdges)
+append (the item at 3 in cornerSeedEdges) to tripleSelection
+append (the item at 13 in cornerSeedEdges) to tripleSelection
+set tripleFillet to the cad fillet of cornerSeed's value along tripleSelection with radius 0.15
+check public blend tripleFillet's valid
+check public blend body tripleFillet's value has vertices 15, edges 24 and faces 11
+print "public_fillet_builds_elliptical_seams_and_spherical_corners" as a line
+set existingCornerEdges to the cad edge keys of tripleFillet's value
+set existingCornerFilletSelection to a list containing (the item at 11 in existingCornerEdges)
+set existingCornerFillet to the cad fillet of tripleFillet's value along existingCornerFilletSelection with radius 0.1
+check public blend existingCornerFillet's valid
+check public blend body existingCornerFillet's value has vertices 17, edges 27 and faces 12
+set existingCornerChamferEdge to the item at 12 in existingCornerEdges
+set existingCornerChamferSelection to a list containing existingCornerChamferEdge
+set existingCornerChamferFace to the first public blend face of existingCornerChamferEdge in tripleFillet's value
+set existingCornerChamfer to the cad chamfer of tripleFillet's value along existingCornerChamferSelection with base face existingCornerChamferFace, base distance 0.1 and other distance 0.1
+check public blend existingCornerChamfer's valid
+check public blend body existingCornerChamfer's value has vertices 17, edges 27 and faces 12
+print "public_blends_restore_existing_spherical_corners" as a line
+
+set cylinderMade to the cad cylinder body at (public blend point 0 0 0) with radius 2.0 and height 5.0
+check public blend cylinderMade's valid
+set cylinder to cylinderMade's value
+set rim to the first public blend circular rim of cylinder
+set circularSelected to a list containing rim
+set circularFace to the first public blend face of rim in cylinder
+set circularFillet to the cad fillet of cylinder along circularSelected with radius 0.4
+check public blend circularFillet's valid
+check public blend body circularFillet's value has vertices 3, edges 5 and faces 4
+set circularChamfer to the cad chamfer of cylinder along circularSelected with base face circularFace, base distance 0.4 and other distance 0.3
+check public blend circularChamfer's valid
+check public blend body circularChamfer's value has vertices 3, edges 5 and faces 4
+print "public_blends_dispatch_circular_rims_to_exact_reconstruction" as a line
+
+set wedgeMade to the cad wedge at (public blend point 0 0 0) with length 4.0, width 3.0 and height 2.0
+check public blend wedgeMade's valid
+set wedge to wedgeMade's value
+set wedgeEdges to the cad edge keys of wedge
+set wedgeEdge to the item at 0 in wedgeEdges
+set wedgeFace to the first public blend face of wedgeEdge in wedge
+set wedgeSelection to a list containing wedgeEdge
+set wedgeChamfer to the cad chamfer of wedge along wedgeSelection with base face wedgeFace, base distance 0.2 and other distance 0.15
+check public blend wedgeChamfer's valid
+check public blend body wedgeChamfer's value has vertices 8, edges 12 and faces 6
+set oversizedWedgeChamfer to the cad chamfer of wedge along wedgeSelection with base face wedgeFace, base distance 20.0 and other distance 15.0
+check public blend ((oversizedWedgeChamfer's valid = false) and (oversizedWedgeChamfer's error's kind = cad chamfer distance interaction error))
+
+set pyramidMade to the cad pyramid body at (public blend point 0 0 0) with radius 3.0, height 4.0 and sides 5
+check public blend pyramidMade's valid
+set pyramid to pyramidMade's value
+set pyramidEdges to the cad edge keys of pyramid
+set pyramidEdge to the item at 0 in pyramidEdges
+set pyramidFace to the first public blend face of pyramidEdge in pyramid
+set pyramidSelection to a list containing pyramidEdge
+set pyramidChamfer to the cad chamfer of pyramid along pyramidSelection with base face pyramidFace, base distance 0.2 and other distance 0.15
+check public blend pyramidChamfer's valid
+check public blend body pyramidChamfer's value has vertices 8, edges 13 and faces 7
+
+set frustumMade to the cad polygonal frustum at (public blend point 0 0 0) with base radius 3.0, top radius 1.5, height 4.0 and sides 5
+check public blend frustumMade's valid
+set frustum to frustumMade's value
+set frustumEdges to the cad edge keys of frustum
+set frustumEdge to the item at 0 in frustumEdges
+set frustumFace to the first public blend face of frustumEdge in frustum
+set frustumSelection to a list containing frustumEdge
+set frustumChamfer to the cad chamfer of frustum along frustumSelection with base face frustumFace, base distance 0.2 and other distance 0.15
+check public blend frustumChamfer's valid
+check public blend body frustumChamfer's value has vertices 12, edges 18 and faces 8
+print "public_chamfer_handles_general_convex_planar_solids" as a line
+
+set wedgeFilletEdge to the item at 6 in wedgeEdges
+set wedgeFilletSelection to a list containing wedgeFilletEdge
+set wedgeFillet to the cad fillet of wedge along wedgeFilletSelection with radius 0.2
+check public blend wedgeFillet's valid
+check public blend body wedgeFillet's value has vertices 8, edges 12 and faces 6
+set unsupportedWedgeFilletSelection to a list containing wedgeEdge
+set unsupportedWedgeFillet to the cad fillet of wedge along unsupportedWedgeFilletSelection with radius 0.2
+check public blend ((unsupportedWedgeFillet's valid = false) and (unsupportedWedgeFillet's error's kind = cad fillet unsupported end condition error))
+print "public_fillet_handles_supported_general_convex_planar_edges" as a line
+
+set sheetProfile to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 3.0 and y 0.0))) to sheetProfile
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 3.0 and y 0.0) to (a cad vector2 with x 3.0 and y 2.0))) to sheetProfile
+set sheetMade to the cad extrusion sheet of sheetProfile on (the cad xy plane) along (public blend point 0 0 4)
+check public blend sheetMade's valid
+set sheetBody to sheetMade's value
+set sheetEdges to the cad edge keys of sheetBody
+set sharedSheetEdge to a new cad edge key
+set foundSharedSheetEdge to false
+loop index from 0 to the length of sheetEdges:
+    set candidate to the item at index in sheetEdges
+    set edgeNode to the cad node pointer for candidate in sheetBody
+    if (the length of edgeNode's coedges's values) = 2:
+        set sharedSheetEdge to candidate
+        set foundSharedSheetEdge to true
+check public blend foundSharedSheetEdge
+set sheetFace to the first public blend face of sharedSheetEdge in sheetBody
+set sheetSelection to a list containing sharedSheetEdge
+set sheetChamfer to the cad chamfer of sheetBody along sheetSelection with base face sheetFace, base distance 0.2 and other distance 0.15
+check public blend sheetChamfer's valid
+check public blend ((the cad count of sheetChamfer's value's vertices) = 8)
+check public blend ((the cad count of sheetChamfer's value's edges) = 10)
+check public blend ((the cad count of sheetChamfer's value's faces) = 3)
+check public blend ((the cad euler characteristic of sheetChamfer's value) = 1)
+set sheetFlaws to the cad flaws of sheetChamfer's value
+check public blend ((the length of sheetFlaws) = 0)
+free sheetFlaws
+check public blend ((the cad worst vertex gap of sheetChamfer's value) < 1e-8)
+print "public_chamfer_preserves_open_planar_sheets" as a line
+
+set emptySelection to an empty list of a cad edge key
+set failedFillet to the cad fillet of box along emptySelection with radius 0.5
+check public blend ((failedFillet's valid = false) and (failedFillet's error's kind = cad fillet empty selection error))
+set failedFillet to the cad fillet of box along selected with radius 0.0
+check public blend ((failedFillet's valid = false) and (failedFillet's error's kind = cad fillet invalid radius error))
+set unknownEdge to @intrinsic("construct", a cad edge key, 999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+set unknownEdges to a list containing unknownEdge
+set failedFillet to the cad fillet of box along unknownEdges with radius 0.5
+check public blend ((failedFillet's valid = false) and (failedFillet's error's kind = cad fillet unknown edge error))
+set failedChamfer to the cad chamfer of box along emptySelection with base face baseFace, base distance 0.5 and other distance 0.5
+check public blend ((failedChamfer's valid = false) and (failedChamfer's error's kind = cad chamfer empty selection error))
+set failedChamfer to the cad chamfer of box along selected with base face baseFace, base distance -1.0 and other distance 0.5
+check public blend ((failedChamfer's valid = false) and (failedChamfer's error's kind = cad chamfer invalid distance error))
+set unknownFace to @intrinsic("construct", a cad face key, 999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+set failedChamfer to the cad chamfer of box along selected with base face unknownFace, base distance 0.5 and other distance 0.5
+check public blend ((failedChamfer's valid = false) and (failedChamfer's error's kind = cad chamfer unknown base face error))
+print "public_blends_report_input_errors_before_shape_dispatch" as a line
+
+check public blend body box has vertices 8, edges 12 and faces 6
+check public blend body cylinder has vertices 2, edges 3 and faces 3
+check public blend body wedge has vertices 6, edges 9 and faces 5
+check public blend body pyramid has vertices 6, edges 10 and faces 6
+check public blend body frustum has vertices 10, edges 15 and faces 7
+check public blend ((the cad count of sheetBody's vertices) = 6)
+check public blend ((the cad count of sheetBody's edges) = 7)
+check public blend ((the cad count of sheetBody's faces) = 2)
+print "public_blends_leave_sources_and_duplicate_selections_unchanged" as a line
+
+free sheetSelection
+free sheetEdges
+free sheetProfile
+free frustumSelection
+free frustumEdges
+free pyramidSelection
+free pyramidEdges
+free unsupportedWedgeFilletSelection
+free wedgeFilletSelection
+free wedgeSelection
+free wedgeEdges
+free unknownEdges
+free emptySelection
+free circularSelected
+free secondPassSelection
+free firstPassEdges
+free firstPassSelection
+free tripleSelection
+free pairSelection
+free cornerSeedEdges
+free cornerSeedSelection
+free existingCornerChamferSelection
+free existingCornerFilletSelection
+free existingCornerEdges
+free selected
+free verticalEdges
+free edgeKeys

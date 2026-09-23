@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/polyline_approximation3/main.dl
+
+# The first source curve has already left scope through reassignment in the
+# source fixture. Both approximations still own their independent point data.
+check approximation3 (coarse's points != fine's points)
+set copy to fine
+set fine to a new (the type of fine)
+check approximation3 copy's valid
+check approximation3 ((the length of copy's points) > 2)
+set point to the last item of (copy's points)
+check approximation3 (((point's x = 4.0) and (point's y = 0.0)) and (point's z = 3.0))
+set invalidCopy to refused
+set refused to a new (the type of refused)
+check approximation3 (invalidCopy's valid = false)
+
+function approximation3 returned local result:
+    execute:
+        set points to a list containing the cad zero vector3
+        append the cad x axis to points
+        set values to an empty list of a 64 bit floating-point number
+        set source to the cad nurbs curve3 of degree 1 with controls points, knots values and weights values
+        free points
+        free values
+        return the cad spline polyline of source's value at precision 99
+set retained to approximation3 returned local result
+check approximation3 retained's valid
+check approximation3 ((the length of retained's points) = 2)
+set point to the last item of (retained's points)
+check approximation3 (((point's x = 1.0) and (point's y = 0.0)) and (point's z = 0.0))
+print "independent approximation buffers survive source and result reset" as a line

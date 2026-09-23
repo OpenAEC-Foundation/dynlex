@@ -159,17 +159,31 @@ static void inferOrderedExpression(
 	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
 		failIntrinsicArgumentRequirement(argumentIndex, requirement);
 	};
-	// Recurse into arguments first (bottom-up)
+	bool typeQuery =
+		expr->kind == Expression::Kind::IntrinsicCall && (intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeOf ||
+														  intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeExtent);
+	std::optional<InferenceExecutionSnapshot> argumentEffects;
+	if (expr->kind == Expression::Kind::PatternCall || typeQuery)
+		argumentEffects.emplace(context);
+	InferredArgumentScope argumentScope(context);
+	// Recurse into arguments first (bottom-up).
 	for (size_t i = 0; i < expr->arguments.size(); i++) {
 		Expression *arg = expr->arguments[i];
+		std::optional<InferenceExecutionSnapshot> beforeArgument;
+		if (expr->kind == Expression::Kind::PatternCall)
+			beforeArgument.emplace(context);
 		bool preserveArgumentGrouping =
 			preserveCurrentGrouping && (!context.fixedGroupingRoots || context.fixedGroupingRoots->contains(arg));
 		bool inferred = preserveArgumentGrouping ? inferExpressionWithCurrentGrouping(arg, context, flexBindingFrameStack)
 												 : inferExpression(arg, context, false, flexBindingFrameStack);
+		expr->arguments[i] = arg;
 		if (!inferred)
 			return;
-		expr->arguments[i] = arg;
+		if (beforeArgument && beforeArgument->matches(context))
+			argumentScope.unchanged.emplace(arg, std::move(*beforeArgument));
 	}
+	if (typeQuery)
+		argumentEffects->restore(context);
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
@@ -231,17 +245,18 @@ static void inferOrderedExpression(
 			ResolvedBindingLayers resolvedBinding = resolveVariableBindingWithCallerScope(expr, flexBindingFrameStack);
 			Expression *flexBinding = resolvedBinding.expression;
 			if (flexBinding && flexBinding != expr) {
-				CompileTimeValue boundValue =
-					resolveStoredCompileTimeValue(flexBinding, resolvedBinding.bindingFrameStack, &context);
-				bool requiresInference =
-					!flexBinding->type.isDeduced() || (flexBinding->type.isMetaType() && !isCompileTimeKnown(boundValue));
-				if (requiresInference && flexBinding != expr) {
+				bool reusable = flexBinding->type.isDeduced() && context.inferredArguments->reusable(flexBinding);
+				if (!reusable) {
+					// A binding belongs to the caller, outside this expression's
+					// grouping snapshot. Rejected trials must restore its selected
+					// expansion together with the expansion's compile-time values.
+					if (context.trial)
+						context.trialJournal->recordBorrowedExpressionWrite(flexBinding);
 					bool preserveBindingGrouping =
-						context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding);
+						flexBinding->type.isDeduced() ||
+						(context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding));
 					bool inferred =
-						preserveBindingGrouping
-							? inferExpressionWithCurrentGrouping(flexBinding, context, resolvedBinding.bindingFrameStack)
-							: inferExpression(flexBinding, context, false, resolvedBinding.bindingFrameStack);
+						inferExpression(flexBinding, context, preserveBindingGrouping, resolvedBinding.bindingFrameStack);
 					if (!inferred)
 						return;
 				}

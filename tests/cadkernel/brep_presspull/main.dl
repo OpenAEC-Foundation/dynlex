@@ -1,0 +1,174 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_presspull.dl
+import lib/cadkernel/brep_make.dl
+
+function check cad presspull {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a cad presspull test rectangle from {cad vector2:low} to {cad vector2:high}:
+    execute:
+        set boundary to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set firstPoint to a cad vector2 with x low's x and y low's y
+        set secondPoint to a cad vector2 with x high's x and y low's y
+        set thirdPoint to a cad vector2 with x high's x and y high's y
+        set fourthPoint to a cad vector2 with x low's x and y high's y
+        append (the cad curve2 of (a cad line2 from firstPoint to secondPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from secondPoint to thirdPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from thirdPoint to fourthPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from fourthPoint to firstPoint)) to boundary
+        set loops to a list containing (a cad presspull curve loop from boundary)
+        set madeRegion to the cad planar region on (the cad xy plane) with loops
+        free loops
+        free boundary
+        return madeRegion
+
+set made to the cad cuboid at (a cad vector3 with x 0.0, y 0.0 and z 0.0) with size (a cad vector3 with x 4.0, y 3.0 and z 2.0)
+check cad presspull made's valid
+set sourceBody to made's value
+set faces to the cad face keys of sourceBody
+set selectedFace to the item at 0 in faces
+set moved to the cad presspull of sourceBody at selectedFace by 0.5
+check cad presspull moved's valid
+check cad presspull ((the cad count of moved's value's vertices) = 8)
+check cad presspull ((the cad count of moved's value's edges) = 12)
+check cad presspull ((the cad count of moved's value's faces) = 6)
+check cad presspull ((the cad euler characteristic of moved's value) = 2)
+set flaws to the cad flaws of moved's value
+check cad presspull ((the length of flaws) = 0)
+free flaws
+check cad presspull ((the cad worst vertex gap of moved's value) < 1e-8)
+set sourceVertices to the cad vertex keys of sourceBody
+set movedVertices to the cad vertex keys of moved's value
+set sourceMinimum to 1e100
+set movedMinimum to 1e100
+loop index from 0 to the length of sourceVertices:
+    set sourceNode to the cad node pointer for (the item at index in sourceVertices) in sourceBody
+    set movedNode to the cad node pointer for (the item at index in movedVertices) in moved's value
+    set sourceMinimum to the minimum of sourceMinimum and sourceNode's point's x
+    set movedMinimum to the minimum of movedMinimum and movedNode's point's x
+check cad presspull (sourceMinimum = 0.0)
+check cad presspull ((the absolute value of (movedMinimum + 0.5)) < 1e-12)
+print "presspull_offsets_a_planar_face_without_mutating_the_source" as a line
+
+set extruded to the cad presspull of sourceBody at selectedFace by 0.5 in mode (cad presspull extrude mode)
+check cad presspull extruded's valid
+set extrudedBounds to the cad bounds of extruded's value
+check cad presspull extrudedBounds's valid
+check cad presspull ((the absolute value of (extrudedBounds's value's low's x + 0.5)) < 1e-9)
+check cad presspull ((the absolute value of (extrudedBounds's value's high's x - 4.0)) < 1e-9)
+set extrudedFlaws to the cad flaws of extruded's value
+check cad presspull ((the length of extrudedFlaws) = 0)
+free extrudedFlaws
+check cad presspull ((the cad count of sourceBody's faces) = 6)
+print "presspull_extrudes_a_planar_face_without_mutating_the_source" as a line
+
+set picked to the cad planar face at (a cad vector3 with x 0.0, y 1.0 and z 1.0) in sourceBody within 1e-9
+check cad presspull picked's valid
+check cad presspull (picked's value = selectedFace)
+set outsidePick to the cad planar face at (a cad vector3 with x 0.0, y -10.0 and z -10.0) in sourceBody within 1e-9
+check cad presspull (outsidePick's valid = false)
+set invalidPick to the cad planar face at (a cad vector3 with x 0.0, y 1.0 and z 1.0) in sourceBody within -1.0
+check cad presspull (invalidPick's valid = false)
+print "presspull_picks_trimmed_planar_faces_instead_of_supporting_planes" as a line
+
+set circularProfile to a list containing (the cad curve2 of (a cad circle2 at (a cad vector2 with x 2.0 and y 3.0) with radius 4.0))
+set circularPieces to the cad extrusion profile pieces of circularProfile
+check cad presspull ((the length of circularPieces) = 4)
+loop index from 0 to the length of circularPieces:
+    set piece to the item at index in circularPieces
+    check cad presspull (piece's kind = cad arc curve2 kind)
+    check cad presspull ((the absolute value of ((the cad sweep of piece's arc) - 1.5707963267948966)) < 1e-12)
+set ellipseValue to a cad ellipse at (a cad vector2 with x 0.0 and y 0.0) with radii 5.0 and 2.0 along (a cad vector2 with x 1.0 and y 0.0)
+set ellipticalProfile to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipseValue))
+set ellipticalPieces to the cad extrusion profile pieces of ellipticalProfile
+check cad presspull ((the length of ellipticalPieces) = 4)
+loop index from 0 to the length of ellipticalPieces:
+    check cad presspull ((the item at index in ellipticalPieces)'s kind = cad ellipse curve2 kind)
+print "presspull_splits_closed_conics_into_exact_extrusion_pieces" as a line
+
+set rectangleCurves to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 3.0 and y 0.0))) to rectangleCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 3.0 and y 0.0) to (a cad vector2 with x 3.0 and y 2.0))) to rectangleCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 3.0 and y 2.0) to (a cad vector2 with x 0.0 and y 2.0))) to rectangleCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 2.0) to (a cad vector2 with x 0.0 and y 0.0))) to rectangleCurves
+set rectangleLoops to a list containing (a cad presspull curve loop from rectangleCurves)
+set rectangleRegion to the cad planar region on (the cad xy plane) with rectangleLoops
+check cad presspull rectangleRegion's valid
+check cad presspull ((the cad count of rectangleRegion's value's vertices) = 4)
+check cad presspull ((the cad count of rectangleRegion's value's edges) = 4)
+check cad presspull ((the cad count of rectangleRegion's value's faces) = 1)
+set rectangleFlaws to the cad flaws of rectangleRegion's value
+check cad presspull ((the length of rectangleFlaws) = 0)
+free rectangleFlaws
+set regionPick to the cad planar face at (a cad vector3 with x 1.0, y 1.0 and z 0.0) in rectangleRegion's value within 1e-9
+check cad presspull regionPick's valid
+print "presspull_builds_bounded_planar_sheet_regions" as a line
+
+set booleanLeft to a cad presspull test rectangle from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 2.0 and y 2.0)
+set booleanRight to a cad presspull test rectangle from (a cad vector2 with x 1.0 and y 0.0) to (a cad vector2 with x 3.0 and y 2.0)
+set booleanBodies to a list containing booleanLeft's value
+append booleanRight's value to booleanBodies
+set planarUnion to the cad union of planar regions booleanBodies within 1e-9
+check cad presspull planarUnion's valid
+check cad presspull ((the cad count of planarUnion's value's faces) = 1)
+set planarIntersection to the cad intersection of planar regions booleanBodies within 1e-9
+check cad presspull planarIntersection's valid
+check cad presspull (planarIntersection's kind = cad planar intersection area kind)
+check cad presspull ((the cad count of planarIntersection's value's faces) = 1)
+set booleanBases to a list containing booleanLeft's value
+set booleanCutters to a list containing booleanRight's value
+set planarSubtraction to the cad subtraction of planar regions booleanBases by booleanCutters within 1e-9
+check cad presspull planarSubtraction's valid
+check cad presspull ((the cad count of planarSubtraction's value's faces) = 1)
+print "planar_region_booleans_return_valid_sheets" as a line
+
+set touchingRegion to a cad presspull test rectangle from (a cad vector2 with x 2.0 and y 0.0) to (a cad vector2 with x 3.0 and y 2.0)
+set touchingBodies to a list containing booleanLeft's value
+append touchingRegion's value to touchingBodies
+set touchingIntersection to the cad intersection of planar regions touchingBodies within 1e-9
+check cad presspull touchingIntersection's valid
+check cad presspull (touchingIntersection's kind = cad planar intersection touching kind)
+set separateRegion to a cad presspull test rectangle from (a cad vector2 with x 3.0 and y 0.0) to (a cad vector2 with x 4.0 and y 2.0)
+set separateBodies to a list containing booleanLeft's value
+append separateRegion's value to separateBodies
+set separateIntersection to the cad intersection of planar regions separateBodies within 1e-9
+check cad presspull separateIntersection's valid
+check cad presspull (separateIntersection's kind = cad planar intersection disjoint kind)
+print "planar_intersection_distinguishes_contact_from_separation" as a line
+
+set cuttingPlane to a cad plane with origin (a cad vector3 with x 1.0, y 0.0 and z 0.0), x axis (the cad y axis) and y axis (the cad z axis)
+set circleCurve to the cad edge curve3 of (a cad circle3 with plane (the cad xy plane) and radius 2.0)
+set circleParameters to the cad presspull parameters where cuttingPlane meets circleCurve
+check cad presspull circleParameters's valid
+check cad presspull ((the length of (circleParameters's values's values)) = 10)
+set circleAngle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, 0.5 as a 64 bit floating-point number)
+check cad presspull ((the absolute value of ((the item at 4 in (circleParameters's values's values)) + circleAngle)) < 1e-12)
+check cad presspull ((the absolute value of ((the item at 5 in (circleParameters's values's values)) - circleAngle)) < 1e-12)
+set ellipseCurve to the cad edge curve3 of (a cad ellipse3 with plane (the cad xy plane), major radius 4.0 and minor radius 2.0)
+set ellipseParameters to the cad presspull parameters where cuttingPlane meets ellipseCurve
+check cad presspull ellipseParameters's valid
+check cad presspull ((the length of (ellipseParameters's values's values)) = 10)
+set ellipseAngle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, 0.25 as a 64 bit floating-point number)
+check cad presspull ((the absolute value of ((the item at 4 in (ellipseParameters's values's values)) + ellipseAngle)) < 1e-12)
+check cad presspull ((the absolute value of ((the item at 5 in (ellipseParameters's values's values)) - ellipseAngle)) < 1e-12)
+set parallelPlane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 1.0), x axis (the cad x axis) and y axis (the cad y axis)
+set parallelParameters to the cad presspull parameters where parallelPlane meets circleCurve
+check cad presspull (parallelParameters's valid = false)
+print "presspull_solves_circle_and_ellipse_plane_parameters" as a line
+
+free movedVertices
+free sourceVertices
+free faces
+free ellipticalPieces
+free ellipticalProfile
+free circularPieces
+free circularProfile
+free rectangleLoops
+free rectangleCurves
+free separateBodies
+free touchingBodies
+free booleanCutters
+free booleanBases
+free booleanBodies

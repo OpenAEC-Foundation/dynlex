@@ -1,0 +1,53 @@
+import lib/json_rpc.dl
+
+function the buffered error test interpreter:
+    execute:
+        return "python" if the process platform is Windows, else "python3"
+
+function check buffered error {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function check buffered errors with limit {integer:maximum}:
+    execute:
+        set command to a process command for the buffered error test interpreter
+        add "-u" as an argument to command
+        add "-c" as an argument to command
+        add "import sys;sys.stderr.buffer.write(b'notice\\n');sys.stderr.buffer.flush();sys.stdout.buffer.write(b'ready');sys.stdout.buffer.flush()" as an argument to command
+        launch command and set child to it
+        check buffered error (child was launched)
+        # Windows captures the streams on independent threads. Process completion
+        # joins the readers, establishing that the stderr bytes are available.
+        read the standard output of child and set ready to it
+        check buffered error (ready succeeded)
+        check buffered error (ready's contents = "ready")
+        wait up to 2000 milliseconds for child and set finished to it
+        check buffered error (finished succeeded)
+        check buffered error (finished reports completion)
+        set limits to the default JSON-RPC limit configuration
+        set limits's maximum standard error length to maximum
+        set opened to the result of connecting JSON-RPC to child under limits
+        check buffered error (opened succeeded)
+        set connection to opened's connection
+        # A complete buffered frame must obey the same stderr contract as a new read.
+        set payload to the string form of "{\"jsonrpc\":\"2.0\",\"method\":\"ready\"}"
+        set header to (the string form of "Content-Length: ") + (the string form of the length of payload)
+        set connection's buffered output to (header + (the string form of "\r\n\r\n")) + payload
+        set received to the next JSON-RPC message from connection waiting up to 2000 milliseconds
+        if maximum = 100:
+            check buffered error (received succeeded)
+            check buffered error ((take the JSON-RPC standard error from connection) = "notice\n")
+            check buffered error (connection's standard error = "")
+        else:
+            check buffered error (received failed)
+            check buffered error (received's status = the JSON-RPC limit exceeded status)
+            check buffered error (connection's state = the JSON-RPC broken state)
+            check buffered error (connection's standard error = "not")
+        free received
+        ignore the result of closing connection
+        free connection
+
+check buffered errors with limit 100
+check buffered errors with limit 3
+print "buffered delivery drains stderr and enforces its limit" as a line

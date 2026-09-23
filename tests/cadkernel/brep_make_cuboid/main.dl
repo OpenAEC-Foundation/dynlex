@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_make.dl
+
+function check solid maker {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function a maker point {a 64 bit floating-point number array of 3 items:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+function check consistent solid {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check solid maker ((the length of flaws) = 0)
+        free flaws
+
+set made to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,1.0,1.0])
+check solid maker (made's valid)
+set body to (made's value)
+check solid maker ((the cad count of (body's vertices)) = 8)
+check solid maker ((the cad count of (body's edges)) = 12)
+check solid maker ((the cad count of (body's faces)) = 6)
+check solid maker ((the cad count of (body's coedges)) = 24)
+check solid maker ((the cad count of (body's loops)) = 6)
+check solid maker ((the cad count of (body's shells)) = 1)
+check solid maker ((the cad count of (body's lumps)) = 1)
+print "a_box_has_the_parts_a_box_has" as a line
+check solid maker ((the cad euler characteristic of body) = 2)
+print "a_box_is_a_closed_surface" as a line
+check consistent solid body
+print "a_box_has_nothing_wrong_with_it" as a line
+check solid maker ((the cad worst vertex gap of body) < 1e-12)
+print "every_vertex_sits_where_its_edges_end" as a line
+
+set edges to the cad edge keys of body
+loop index from 0 to the length of edges:
+    set edge to the cad node pointer for (the item at index in edges) in body
+    check solid maker ((the length of (edge's coedges's values)) = 2)
+    set firstKey to the item at 0 in ((edge's coedges's values))
+    set lastKey to the item at 1 in ((edge's coedges's values))
+    set first to the cad node pointer for firstKey in body
+    set last to the cad node pointer for lastKey in body
+    check solid maker ((first's forward) != (last's forward))
+    set partner to the cad partner of firstKey in body
+    check solid maker (partner's valid)
+    check solid maker ((partner's value) = lastKey)
+free edges
+print "every_edge_is_shared_by_two_faces_running_it_opposite_ways" as a line
+
+set enlarged to the cad cuboid at (the cad zero vector3) with size (a maker point [2.0,4.0,6.0])
+check solid maker (enlarged's valid)
+set faces to the cad face keys of (enlarged's value)
+loop index from 0 to the length of faces:
+    set key to the item at index in faces
+    set face to the cad node pointer for key in (enlarged's value)
+    set surface to the cad node pointer for (face's surface) in (enlarged's value)
+    check solid maker ((surface's kind) = 0)
+    set normal to the cad normal of (surface's plane)
+    check solid maker (normal's valid)
+    set outward to the cad difference of (surface's plane's origin) and (a maker point [1.0,2.0,3.0])
+    check solid maker ((the cad dot of (normal's value) and outward) > 0.0)
+free faces
+print "every_face_normal_points_out_of_the_box" as a line
+
+set survey to the cad cuboid at (a maker point [512345.678,4512345.678,91.5]) with size (a maker point [0.5,0.5,0.5])
+check solid maker (survey's valid)
+check consistent solid (survey's value)
+check solid maker ((the cad euler characteristic of (survey's value)) = 2)
+check solid maker ((the cad worst vertex gap of (survey's value)) < 1e-9)
+print "a_box_at_survey_coordinates_is_still_a_box" as a line
+
+set bad to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,0.0,1.0])
+check solid maker ((bad's valid) = false)
+set bad to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,-2.0,1.0])
+check solid maker ((bad's valid) = false)
+set bad to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,0.0 / 0.0,1.0])
+check solid maker ((bad's valid) = false)
+print "a_box_with_no_thickness_is_refused" as a line

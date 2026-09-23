@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/construct2.dl
+print (the cad construct2 remainder of 1.0)
+

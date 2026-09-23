@@ -1,0 +1,69 @@
+import lib/cadkernel/bounds2.dl
+
+function bounds input {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function bounds input point {integer:index}:
+    execute:
+        return a cad vector2 with x (bounds input index) and y (bounds input (index + 1))
+function emit bounds {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set curves to an empty list of a cad curve2
+set offset to 1
+loop curveIndex from 0 to ((bounds input 0) as an integer):
+    set kind to (bounds input offset) as an integer
+    set centre to bounds input point (offset + 1)
+    set end to bounds input point (offset + 3)
+    set radius to bounds input (offset + 5)
+    set minor to bounds input (offset + 6)
+    set axis to bounds input point (offset + 7)
+    set startParameter to bounds input (offset + 9)
+    set endParameter to bounds input (offset + 10)
+    set closed to (bounds input (offset + 11)) != 0.0
+    set count to (bounds input (offset + 12)) as an integer
+    set offset to offset + 13
+    set vertices to an empty list of a cad polyline vertex2
+    loop index from 0 to count:
+        append (a cad polyline vertex2 at (bounds input point offset) with bulge (bounds input (offset + 2))) to vertices
+        set offset to offset + 3
+    set shape to the cad curve2 of (a cad line2 from centre to end)
+    if kind = 1:
+        set shape to the cad curve2 of (a cad circle2 at centre with radius radius)
+    if kind = 2:
+        set shape to the cad curve2 of (a cad arc2 at centre with radius radius from startParameter to endParameter)
+    if kind = 3:
+        set ellipse to a cad ellipse at centre with radii radius and minor along axis
+        set shape to the cad curve2 of (a cad ellipse arc2 on ellipse from startParameter to endParameter)
+    if kind = 4:
+        set shape to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+    if kind = 5:
+        set controls to a list containing the cad zero vector2
+        append (a cad vector2 with x 1 and y 1) to controls
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to an empty list of a 64 bit floating-point number
+        set built to the cad nurbs curve2 of degree 1 with controls controls, knots knots and weights weights
+        set shape to the cad curve2 of built's value
+        free controls
+        free knots
+        free weights
+    if kind = 6:
+        set shape to the cad curve2 of (a cad ray2 from centre along end)
+    if kind = 7:
+        set shape to the cad curve2 of (a cad xline2 through centre along end)
+    free vertices
+    append shape to curves
+set result to the cad analytic bounds of curves
+emit bounds (result's valid as an integer)
+if result's valid:
+    emit bounds result's low's x
+    emit bounds result's low's y
+    emit bounds result's high's x
+    emit bounds result's high's y
+free curves

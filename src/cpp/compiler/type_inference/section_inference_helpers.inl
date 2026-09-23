@@ -14,7 +14,9 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 		Variable *parameterVariable = findOwnSectionVariable(section, name);
 		if (!parameterVariable || parameterVariable->isGlobal)
 			continue;
-		parameterVariable->type = parameterType;
+		auto seedType = context.currentInstantiation->parameterSeedTypesByName.find(name);
+		parameterVariable->type =
+			seedType != context.currentInstantiation->parameterSeedTypesByName.end() ? seedType->second : parameterType;
 		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
 		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}

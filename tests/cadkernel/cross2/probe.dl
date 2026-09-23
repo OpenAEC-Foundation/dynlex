@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/containment2.dl
+import tests/cadkernel/cross2/input.dl
+
+function emit pair2 closest {cad closest2:value}:
+    execute:
+        emit measure2 scalar value's t
+        emit measure2 point value's point
+        emit measure2 scalar value's distance
+
+function run pair2 probe:
+    execute:
+        set tolerance to a cad tolerance of (measure2 input 1)
+        set target to measure2 input point 2
+        set count to (measure2 input 4) as an integer
+        set base to 5
+        set curves to an empty list of a cad curve2
+        loop index from 0 to count:
+            set size to (measure2 input base) as an integer
+            set shape to pair2 input curve at base
+            append shape to curves
+            free cad curve shape
+            set base to (base + size) + 1
+        loop index from 0 to count:
+            set shape to the item at index in curves
+            emit pair2 closest (the cad closest point on shape to target)
+            emit measure2 scalar (the cad distance to shape from target)
+        set nearest to the cad nearest of curves to target
+        emit measure2 flag nearest's valid
+        if nearest's valid:
+            emit measure2 scalar nearest's index
+            emit pair2 closest nearest's value
+        emit measure2 flag (cad boundary curves contains target within tolerance)
+        if count = 2:
+            set first to the item at 0 in curves
+            set second to the item at 1 in curves
+            set hits to the cad crossings of first and second within tolerance
+            emit measure2 scalar (the length of hits)
+            loop index from 0 to the length of hits:
+                set hit to the item at index in hits
+                emit measure2 point hit's point
+                emit measure2 scalar hit's tA
+                emit measure2 scalar hit's tB
+            free hits
+        free curves
+
+run pair2 probe

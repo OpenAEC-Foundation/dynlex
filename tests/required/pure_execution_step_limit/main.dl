@@ -1,0 +1,12 @@
+section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+function the counted value for limit:
+    execute:
+        @intrinsic("store", counter, 0)
+        while @intrinsic("less than", counter, limit):
+            @intrinsic("store", counter, @intrinsic("add", counter, 1))
+        @intrinsic("return", counter)
+
+@intrinsic("discard", @intrinsic("array", the counted value for 2000000))

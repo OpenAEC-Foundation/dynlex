@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+set points to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1.0 and y 2.0) to points
+set result to the cad nurbs2 fit through points with start tangent (a cad spline tangent with value [0.0,0.0,0.0]) and end tangent (no cad spline tangent matching [0.0,0.0]) using (the cad chord parameterization)

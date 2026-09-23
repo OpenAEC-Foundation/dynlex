@@ -1,0 +1,41 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+class:
+    patterns:
+        holder
+    members:
+        length as integer
+class:
+    patterns:
+        other
+    members:
+        length as integer
+function sample:
+    execute:
+        @intrinsic("store", value, @intrinsic("construct", holder))
+        @intrinsic("store", the length of value, 17)
+        @intrinsic("return", the length of value)
+class:
+    patterns:
+        container
+    members:
+        value as the type of sample
+function consume {container:item}:
+    execute:
+        @intrinsic("return", item's value)
+@intrinsic("store", item, @intrinsic("construct", container))
+@intrinsic("store", item's value, sample)
+if @intrinsic("not equal", consume item, 17):
+    @intrinsic("return", 1)
+@intrinsic("store", second, @intrinsic("construct", other))
+@intrinsic("store", the length of second, 29)
+if @intrinsic("not equal", the length of second, 29):
+    @intrinsic("return", 2)
+@intrinsic("return", 0)

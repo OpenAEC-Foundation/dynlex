@@ -1,0 +1,144 @@
+# SPDX-License-Identifier: MPL-2.0
+# All eight endpoint_join.rs tests at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/endpoint_join3.dl
+
+function endpoint check {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function endpoint point {cad vector3:actual} equals {cad vector3:expected}:
+    execute:
+        endpoint check (((the x of actual) = (the x of expected)) and (((the y of actual) = (the y of expected)) and ((the z of actual) = (the z of expected)))) named "joint coordinates"
+
+function endpoint vector {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+set a to [endpoint vector 0.0 0.0 0.0,endpoint vector 1.0 0.0 0.0]
+set b to [endpoint vector 2.0 2.0 0.0,endpoint vector 2.0 1.0 0.0]
+set joint to the cad extension joint of a and b within 1.0
+endpoint check (the valid of joint) named "extension at limit"
+endpoint point (the value of joint) equals (endpoint vector 2.0 0.0 0.0)
+set refused to the cad extension joint of a and b within 0.99
+endpoint check ((the valid of refused) = false) named "extension over limit"
+print "intersecting_terminals_move_only_within_the_limit" as a line
+
+set shortened to [endpoint vector 2.0 -2.0 0.0,endpoint vector 2.0 1.0 0.0]
+set reversed to [endpoint vector 2.0 0.5 0.0,endpoint vector 2.0 1.0 0.0]
+set joint to the cad extension joint of a and shortened within 1.0
+endpoint check (the valid of joint) named "shortening accepted"
+endpoint point (the value of joint) equals (endpoint vector 2.0 0.0 0.0)
+set refused to the cad extension joint of a and reversed within 1.0
+endpoint check ((the valid of refused) = false) named "fixed point reversal rejected"
+print "shortening_is_allowed_but_reversing_through_the_fixed_point_is_not" as a line
+
+set parallel to [endpoint vector 0.0 1.0 0.0,endpoint vector 1.0 1.0 0.0]
+set skew to [endpoint vector 2.0 2.0 0.1,endpoint vector 2.0 1.0 0.1]
+set degenerate to [endpoint vector 2.0 1.0 0.0,endpoint vector 2.0 1.0 0.0]
+set refused to the cad extension joint of a and parallel within 2.0
+endpoint check ((the valid of refused) = false) named "parallel rejected"
+set refused to the cad extension joint of a and skew within 2.0
+endpoint check ((the valid of refused) = false) named "skew rejected"
+set refused to the cad extension joint of a and degenerate within 2.0
+endpoint check ((the valid of refused) = false) named "degenerate rejected"
+set refused to the cad extension joint of a and b within (0.0 / 0.0)
+endpoint check ((the valid of refused) = false) named "nonfinite distance rejected"
+print "parallel_skew_degenerate_and_invalid_terminals_fail" as a line
+
+set origin to 1000000000000.0
+set surveyA to [endpoint vector origin origin 0.0,endpoint vector (origin + 1.0) origin 0.0]
+set surveyB to [endpoint vector (origin + 2.0) (origin + 2.0) 0.0,endpoint vector (origin + 2.0) (origin + 1.0) 0.0]
+set joint to the cad extension joint of surveyA and surveyB within 1.0
+endpoint check (the valid of joint) named "survey extension"
+endpoint point (the value of joint) equals (endpoint vector (origin + 2.0) origin 0.0)
+print "survey_scale_coordinates_keep_the_same_intersection" as a line
+
+set selection to a list containing (a cad vector2 with x -2.0 and y 3.0)
+append (a cad vector2 with x 10.0 and y -4.0) to selection
+set distance to the cad planar connector distance of selection with fuzz 0.05
+endpoint check ((the valid of distance) and ((the value of distance) = 0.5)) named "selected coordinate scale"
+clear selection
+append (the cad zero vector2) to selection
+set distance to the cad planar connector distance of selection with fuzz 0.0
+endpoint check ((the valid of distance) and ((the value of distance) = 0.0)) named "zero connector distance"
+clear selection
+set distance to the cad planar connector distance of selection with fuzz 0.1
+endpoint check ((the valid of distance) = false) named "empty selection rejected"
+append (a cad vector2 with x (0.0 / 0.0) and y 0.0) to selection
+set distance to the cad planar connector distance of selection with fuzz 0.1
+endpoint check ((the valid of distance) = false) named "nonfinite selection rejected"
+replace item at index 0 in selection with (a cad vector2 with x 1.7976931348623157e308 and y 0.0)
+set distance to the cad planar connector distance of selection with fuzz 2.0
+endpoint check ((the valid of distance) = false) named "connector overflow rejected"
+free selection
+print "connector_distance_uses_selected_planar_coordinate_scale" as a line
+
+set connectorB to [endpoint vector 3.0 1.0 0.0,endpoint vector 3.0 0.0 0.0]
+set joined to the cad endpoint join of a and connectorB with fuzz 0.1, connector distance 2.0 and kind (the cad add join kind)
+endpoint check ((the valid of joined) and ((the valid of the value of joined) = false)) named "Some None connector"
+set refusedJoin to the cad endpoint join of a and connectorB with fuzz 0.0, connector distance 2.0 and kind (the cad add join kind)
+endpoint check ((the valid of refusedJoin) = false) named "zero fuzz preserves endpoints"
+set refusedJoin to the cad endpoint join of a and connectorB with fuzz 0.1, connector distance 1.99 and kind (the cad add join kind)
+endpoint check ((the valid of refusedJoin) = false) named "connector gap limit"
+print "add_preserves_endpoints_only_for_a_small_positive_gap" as a line
+
+set first to a list containing a
+set second to a list containing b
+set closest to the cad closest endpoint join of first and second with fuzz 1.0, connector distance 2.0 and kind (the cad both join kind)
+endpoint check (the valid of closest) named "both closest valid"
+set found to the value of closest
+endpoint check (((the first of found) = 0) and ((the second of found) = 0)) named "both closest indices"
+endpoint check (the valid of the joint of found) named "both prefers intersection"
+endpoint point (the value of the joint of found) equals (endpoint vector 2.0 0.0 0.0)
+print "both_prefers_an_extension_intersection_to_a_connector" as a line
+
+append [endpoint vector 10.0 0.0 0.0,endpoint vector 11.0 0.0 0.0] to first
+clear second
+append [endpoint vector 4.0 0.0 0.0,endpoint vector 3.0 0.0 0.0] to second
+append [endpoint vector 13.0 0.0 0.0,endpoint vector 12.0 0.0 0.0] to second
+set closest to the cad closest endpoint join of first and second with fuzz 0.1, connector distance 3.0 and kind (the cad add join kind)
+endpoint check (the valid of closest) named "smallest gap valid"
+set found to the value of closest
+endpoint check (((the first of found) = 1) and ((the second of found) = 1)) named "smallest gap indices"
+endpoint check ((the valid of the joint of found) = false) named "smallest gap connector"
+print "closest_join_chooses_the_smallest_terminal_gap" as a line
+
+# Both searches all extension pairs before considering even closer connectors.
+clear first
+append a to first
+clear second
+append [endpoint vector 0.0 0.1 0.0,endpoint vector 1.0 0.1 0.0] to second
+append b to second
+set closest to the cad closest endpoint join of first and second with fuzz 1.0, connector distance 2.0 and kind (the cad both join kind)
+endpoint check ((the valid of closest) and ((the second of the value of closest) = 1)) named "global extension priority"
+endpoint check (the valid of the joint of the value of closest) named "global phase result"
+clear second
+append connectorB to second
+append connectorB to second
+append a to first
+set closest to the cad closest endpoint join of first and second with fuzz 0.1, connector distance 2.0 and kind (the cad add join kind)
+endpoint check (((the first of the value of closest) = 0) and ((the second of the value of closest) = 0)) named "stable first pair on tie"
+clear first
+set closest to the cad closest endpoint join of first and second with fuzz 1.0, connector distance 2.0 and kind (the cad both join kind)
+endpoint check ((the valid of closest) = false) named "empty terminal list"
+free first
+free second
+print "phase priority, ties and empty lists" as a line
+
+set exactEnd to [endpoint vector 1.0 1.0 0.0,endpoint vector 1.0 0.0 0.0]
+set joint to the cad extension joint of a and exactEnd within -0.0
+endpoint check (the valid of joint) named "extension allows zero displacement"
+set joined to the cad endpoint join of a and exactEnd with fuzz 1.0, connector distance 1.0 and kind (the cad add join kind)
+endpoint check ((the valid of joined) = false) named "add rejects zero gap"
+set touchingFixed to [endpoint vector 2.0 0.0 0.0,endpoint vector 2.0 1.0 0.0]
+set joint to the cad extension joint of a and touchingFixed within 1.0
+endpoint check ((the valid of joint) = false) named "fixed point equality rejected"
+set nearlyParallel to [endpoint vector 0.0 1e-12 0.0,endpoint vector 1.0 0.0 0.0]
+set joint to the cad extension joint of a and nearlyParallel within 0.0
+endpoint check ((the valid of joint) = false) named "angular denominator threshold inclusive"
+set aboveParallel to [endpoint vector 0.0 1.0000000000000002e-12 0.0,endpoint vector 1.0 0.0 0.0]
+set joint to the cad extension joint of a and aboveParallel within 0.0
+endpoint check (the valid of joint) named "above angular denominator threshold"
+print "exact endpoint and angular thresholds" as a line

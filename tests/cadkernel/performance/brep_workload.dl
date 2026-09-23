@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: MPL-2.0
+# Deterministic construction, validation and bounds workload for performance
+# comparison with the pinned source implementation.
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_bounds.dl
+
+set iterationText to the argument at 0 in the command line arguments
+set iterations to @intrinsic("call", "libc", "atoi", integer, the data of iterationText)
+if iterations <= 0:
+    @intrinsic("call", "libc", "exit", nothing, 2)
+
+set discrete to 0 as a 64 bit integer
+set metric to 0.0 as a 64 bit floating-point number
+
+loop index from 0 to iterations:
+    set kind to the remainder of index divided by 6
+    set height to 1.0 + (((the remainder of index divided by 17) as a 64 bit floating-point number) * 0.03125)
+    set radius to 0.75 + (((the remainder of index divided by 13) as a 64 bit floating-point number) * 0.015625)
+    set origin to a cad vector3 with x (((the remainder of index divided by 7) as a 64 bit floating-point number) * 0.01), y (((the remainder of index divided by 11) as a 64 bit floating-point number) * -0.02) and z (((the remainder of index divided by 5) as a 64 bit floating-point number) * 0.03)
+    set made to no cad body
+    if kind = 0:
+        set made to the cad cuboid at origin with size (a cad vector3 with x (radius * 2.0), y (radius + 0.5) and z height)
+    else if kind = 1:
+        set made to the cad cylinder body at origin with radius radius and height height
+    else if kind = 2:
+        set made to the cad sphere body at origin with radius radius
+    else if kind = 3:
+        set made to the cad cone body at origin with radius radius and height height
+    else if kind = 4:
+        set made to the cad pyramid body at origin with radius radius, height height and sides 6
+    else:
+        set made to the cad polygonal frustum at origin with base radius radius, top radius (radius * 0.5), height height and sides 6
+    if (made's valid) = false:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+    set body to made's value
+    set flaws to the cad flaws of body
+    set discrete to discrete + (((the cad count of body's vertices) as a 64 bit integer) * 3)
+    set discrete to discrete + (((the cad count of body's edges) as a 64 bit integer) * 5)
+    set discrete to discrete + (((the cad count of body's coedges) as a 64 bit integer) * 7)
+    set discrete to discrete + (((the cad count of body's loops) as a 64 bit integer) * 11)
+    set discrete to discrete + (((the cad count of body's faces) as a 64 bit integer) * 13)
+    set discrete to discrete + (((the cad count of body's shells) as a 64 bit integer) * 17)
+    set discrete to discrete + (((the cad count of body's lumps) as a 64 bit integer) * 19)
+    set discrete to discrete + (((the cad count of body's surfaces) as a 64 bit integer) * 23)
+    set discrete to discrete + (((the cad count of body's curves) as a 64 bit integer) * 29)
+    set discrete to discrete + ((the cad euler characteristic of body) * 31)
+    set discrete to discrete + (((the length of flaws) as a 64 bit integer) * 37)
+    set discrete to discrete + (kind as a 64 bit integer)
+    free flaws
+    set gap to the cad worst vertex gap of body
+    set bounds to the cad bounds of body
+    if (bounds's valid) = false:
+        @intrinsic("call", "libc", "exit", nothing, 4)
+    set metric to metric + gap
+    set metric to metric + (bounds's value's low's x)
+    set metric to metric + (bounds's value's low's y)
+    set metric to metric + (bounds's value's low's z)
+    set metric to metric + (bounds's value's high's x)
+    set metric to metric + (bounds's value's high's y)
+    set metric to metric + (bounds's value's high's z)
+
+ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%lld %.17g\n", discrete, metric)

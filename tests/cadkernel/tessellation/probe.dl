@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/tessellation.dl
+
+function sampling argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function emit sampling {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function probe [directions] in {fixed integer:dimension} dimensions:
+    execute:
+        set left to a new (a 64 bit floating-point number array of dimension items)
+        set right to left
+        loop axis from 0 to dimension:
+            store (sampling argument (axis + 3)) at left + axis
+            store (sampling argument (axis + dimension + 3)) at right + axis
+        emit sampling (the cad direction angle between left and right)
+        set directions to an empty list of the type of left
+        emit sampling (the cad maximum direction angle of directions)
+        append left to directions
+        emit sampling (the cad maximum direction angle of directions)
+        append right to directions
+        append left to directions
+        emit sampling (the cad maximum direction angle of directions)
+        free directions
+
+class:
+    patterns:
+        [a|] sampling probe curve
+    members:
+        kind as an integer
+        turns as a 64 bit floating-point number
+        pointCalls as an integer
+        tangentCalls as an integer
+        firstTangent as a 64 bit floating-point number
+        lastTangent as a 64 bit floating-point number
+
+function the cad curve point of {a pointer to a sampling probe curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set the pointCalls of curve to (the pointCalls of curve) + 1
+        if the kind of curve = 0:
+            return a cad vector3 with x parameter, y 0.0 and z 0.0
+        set angle to (parameter * (the turns of curve)) * 6.283185307179586
+        return a cad vector3 with x (@intrinsic("cos", angle)), y (@intrinsic("sin", angle)) and z parameter
+
+function the cad curve tangent of {a pointer to a sampling probe curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if the tangentCalls of curve = 0:
+            set the firstTangent of curve to parameter
+        set the lastTangent of curve to parameter
+        set the tangentCalls of curve to (the tangentCalls of curve) + 1
+        if the kind of curve = 0:
+            return the cad x axis
+        if the kind of curve = 2:
+            return the cad zero vector3
+        if the kind of curve = 3:
+            return a cad vector3 with x (@intrinsic("sqrt", -1.0)), y 1.0 and z 0.0
+        set rate to (the turns of curve) * 6.283185307179586
+        set angle to parameter * rate
+        return a cad vector3 with x ((the negative of @intrinsic("sin", angle)) * rate), y (@intrinsic("cos", angle) * rate) and z 1.0
+
+if (sampling argument 0) = 0.0:
+    set value to sampling argument 2
+    emit sampling (the cad default sampling angle)
+    emit sampling (the cad display sampling angle)
+    emit sampling (the cad fine sampling angle)
+    emit sampling (the cad sampling angle for value)
+    emit sampling (the cad sampling angle at resolution value)
+    emit sampling (the cad display angle at resolution value)
+    set dimension to (sampling argument 1) as an integer
+    if dimension = 0:
+        probe directions in 0 dimensions
+    else if dimension = 1:
+        probe directions in 1 dimensions
+    else if dimension = 2:
+        probe directions in 2 dimensions
+    else if dimension = 3:
+        probe directions in 3 dimensions
+    else if dimension = 5:
+        probe directions in 5 dimensions
+    else if dimension = 17:
+        probe directions in 17 dimensions
+    else:
+        @intrinsic("call", "libc", "abort", nothing)
+else:
+    set initial to @intrinsic("construct", a sampling probe curve, (sampling argument 1) as an integer, sampling argument 2, 0, 0, 0.0, 0.0)
+    allocate one slot of initial and set curve to it
+    set points to the cad angular samples of curve with maximum angle (sampling argument 3)
+    emit sampling (the length of points)
+    emit sampling (the pointCalls of curve)
+    emit sampling (the tangentCalls of curve)
+    emit sampling (the firstTangent of curve)
+    emit sampling (the lastTangent of curve)
+    loop index from 0 to the length of points:
+        set point to the item at index in points
+        emit sampling (the x of point)
+        emit sampling (the y of point)
+        emit sampling (the z of point)
+    free points
+    @intrinsic("destroy at", curve)
+    @intrinsic("call", "libc", "free", nothing, curve)

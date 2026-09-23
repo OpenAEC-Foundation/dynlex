@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function mesh probe point starting at {integer:index}:
+    execute:
+        return a cad vector3 with x (maker argument index), y (maker argument (index + 1)) and z (maker argument (index + 2))
+
+set shape to (maker argument 0) as an integer
+set origin to mesh probe point starting at 1
+set made to no cad body
+if shape = 0:
+    set made to the cad cuboid at origin with size (mesh probe point starting at 4)
+else if shape = 1:
+    set made to the cad cylinder body at origin with radius (maker argument 4) and height (maker argument 5)
+else if shape = 2:
+    set made to the cad sphere body at origin with radius (maker argument 4)
+else if shape = 4:
+    set made to the cad cone body at origin with radius (maker argument 4) and height (maker argument 5)
+else if shape = 5:
+    set made to the cad torus at origin with major radius (maker argument 4) and minor radius (maker argument 5)
+else if shape = 6:
+    set made to the cad frustum at origin with base x radius (maker argument 4), base y radius (maker argument 5), top radius (maker argument 6) and height (maker argument 12)
+else if shape = 7:
+    set made to the cad wedge at origin with length (maker argument 4), width (maker argument 5) and height (maker argument 6)
+else if shape = 8:
+    set made to the cad pyramid body at origin with radius (maker argument 4), height (maker argument 5) and sides ((maker argument 6) as an integer)
+else:
+    set made to the cad body result of (an empty cad body)
+
+set meshValue to the cad mesh of made's value with maximum angle (maker argument 7) within (maker argument 8)
+emit maker number (the cad triangle count of meshValue)
+emit maker number (the length of meshValue's positions)
+set surfaceProperties to the cad surface properties of meshValue
+set areaValue to 0.0
+set surfaceCentroid to the cad zero vector3
+if surfaceProperties's valid:
+    set areaValue to surfaceProperties's value's area
+    set surfaceCentroid to surfaceProperties's value's centroid
+emit maker number areaValue
+emit maker point surfaceCentroid
+
+set minimumWinding to 1.7976931348623157e308
+loop triangleIndex from 0 to the length of meshValue's triangles:
+    set triangleValue to the item at triangleIndex in meshValue's triangles
+    set firstPoint to the item at triangleValue's first in meshValue's positions
+    set secondPoint to the item at triangleValue's second in meshValue's positions
+    set thirdPoint to the item at triangleValue's third in meshValue's positions
+    set firstEdge to the cad difference of secondPoint and firstPoint
+    set secondEdge to the cad difference of thirdPoint and firstPoint
+    set closingEdge to the cad difference of thirdPoint and secondPoint
+    set edgeScale to the maximum of (the maximum of (the cad length of firstEdge) and (the cad length of secondEdge)) and (the cad length of closingEdge)
+    set crossValue to the cad cross of firstEdge and secondEdge
+    if (the cad length of crossValue) > ((2.842170943040401e-14 * edgeScale) * edgeScale):
+        set wound to the cad normalization of crossValue
+        if wound's valid:
+            set storedNormal to the item at triangleValue's first in meshValue's normals
+            set minimumWinding to the minimum of minimumWinding and (the cad dot of wound's value and storedNormal)
+if minimumWinding = 1.7976931348623157e308:
+    set minimumWinding to 0.0
+emit maker number minimumWinding
+
+set lowPoint to the cad zero vector3
+set highPoint to the cad zero vector3
+if (the length of meshValue's positions) > 0:
+    set lowPoint to the item at 0 in meshValue's positions
+    set highPoint to lowPoint
+    loop positionIndex from 1 to the length of meshValue's positions:
+        set pointValue to the item at positionIndex in meshValue's positions
+        set lowPoint's x to the minimum of lowPoint's x and pointValue's x
+        set lowPoint's y to the minimum of lowPoint's y and pointValue's y
+        set lowPoint's z to the minimum of lowPoint's z and pointValue's z
+        set highPoint's x to the maximum of highPoint's x and pointValue's x
+        set highPoint's y to the maximum of highPoint's y and pointValue's y
+        set highPoint's z to the maximum of highPoint's z and pointValue's z
+emit maker point lowPoint
+emit maker point highPoint
+
+set angleKeys to an empty list of a 64 bit integer
+loop positionIndex from 0 to the length of meshValue's positions:
+    set pointValue to the item at positionIndex in meshValue's positions
+    set angleValue to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, pointValue's y - origin's y, pointValue's x - origin's x)
+    set angleKey to ((angleValue * 1000000.0) as a 64 bit integer)
+    set foundAngle to false
+    loop angleIndex from 0 to the length of angleKeys:
+        if (the item at angleIndex in angleKeys) = angleKey:
+            set foundAngle to true
+    if foundAngle = false:
+        append angleKey to angleKeys
+emit maker number (the length of angleKeys)
+free angleKeys
+set inertialProperties to the cad inertial properties of meshValue
+emit maker flag inertialProperties's valid
+if inertialProperties's valid:
+    emit maker number inertialProperties's value's volume
+    emit maker point inertialProperties's value's centroid
+    emit maker point inertialProperties's value's principalMoments
+else:
+    loop missingIndex from 0 to 7:
+        emit maker number 0.0
+
+set toleranceValue to a cad tessellation tolerance with maximum angle (maker argument 7) within (maker argument 8)
+if (maker argument 9) > 0.0:
+    set toleranceValue to toleranceValue with chordal cad deflection (maker argument 9)
+set toleranceValue to toleranceValue with ((maker argument 10) as an integer) cad u isolines and ((maker argument 11) as an integer) cad v isolines
+set displayValue to the cad tessellation of made's value with tolerance toleranceValue
+emit maker number (the cad triangle count of displayValue's mesh)
+emit maker number (the length of displayValue's triangleFaces)
+emit maker number (the length of displayValue's edges)
+set edgePointCount to 0
+loop edgeIndex from 0 to the length of displayValue's edges:
+    set edgePointCount to edgePointCount + (the length of (the item at edgeIndex in displayValue's edges)'s positions)
+emit maker number edgePointCount
+emit maker number (the length of displayValue's isolines)
+emit maker number (the length of displayValue's missingFaces)
+emit maker flag (cad body mesh displayValue is complete)
+
+set wireValue to the cad wireframe of made's value with tolerance toleranceValue
+emit maker number (the length of wireValue's edges)
+set wirePointCount to 0
+loop edgeIndex from 0 to the length of wireValue's edges:
+    set wirePointCount to wirePointCount + (the length of (the item at edgeIndex in wireValue's edges)'s positions)
+emit maker number wirePointCount
+emit maker number (the length of wireValue's isolines)
+emit maker number (the length of wireValue's missingFaces)
+
+set sourceValue to the cad silhouette source of displayValue
+set contourValues to the cad silhouette of sourceValue viewed along the cad z axis
+emit maker number (the length of contourValues)
+set contourLow to the cad zero vector3
+set contourHigh to the cad zero vector3
+if (the length of contourValues) > 0:
+    set contourLow to the item at 0 in contourValues
+    set contourHigh to contourLow
+    loop contourIndex from 1 to the length of contourValues:
+        set contourPoint to the item at contourIndex in contourValues
+        set contourLow's x to the minimum of contourLow's x and contourPoint's x
+        set contourLow's y to the minimum of contourLow's y and contourPoint's y
+        set contourLow's z to the minimum of contourLow's z and contourPoint's z
+        set contourHigh's x to the maximum of contourHigh's x and contourPoint's x
+        set contourHigh's y to the maximum of contourHigh's y and contourPoint's y
+        set contourHigh's z to the maximum of contourHigh's z and contourPoint's z
+emit maker point contourLow
+emit maker point contourHigh
+emit maker number displayValue's precision
+
+free contourValues
+free cad silhouette source sourceValue
+free cad body wireframe wireValue
+free cad body mesh displayValue
+free cad mesh meshValue

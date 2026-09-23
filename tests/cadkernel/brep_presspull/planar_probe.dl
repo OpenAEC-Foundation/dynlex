@@ -1,0 +1,232 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_presspull.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function a planar presspull probe rectangle loop from {cad vector2:low} to {cad vector2:high}:
+    execute:
+        set boundary to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set firstPoint to a cad vector2 with x low's x and y low's y
+        set secondPoint to a cad vector2 with x high's x and y low's y
+        set thirdPoint to a cad vector2 with x high's x and y high's y
+        set fourthPoint to a cad vector2 with x low's x and y high's y
+        append (the cad curve2 of (a cad line2 from firstPoint to secondPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from secondPoint to thirdPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from thirdPoint to fourthPoint)) to boundary
+        append (the cad curve2 of (a cad line2 from fourthPoint to firstPoint)) to boundary
+        set ring to a cad presspull curve loop from boundary
+        free boundary
+        return ring
+
+function a planar presspull probe region kind {integer:kind} with {cad vector2:low} and {cad vector2:high} at z {a number:z}:
+    execute:
+        set regionLoops to an empty list of a cad presspull curve loop
+        if kind = 1:
+            set regionCurves to a list containing (the cad curve2 of (a cad circle2 at low with radius high's x))
+            append (a cad presspull curve loop from regionCurves) to regionLoops
+            free regionCurves
+        else if kind = 2:
+            set ellipseValue to a cad ellipse at low with radii high's x and high's y along (a cad vector2 with x 1.0 and y 0.0)
+            set regionCurves to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipseValue))
+            append (a cad presspull curve loop from regionCurves) to regionLoops
+            free regionCurves
+        else:
+            append (a planar presspull probe rectangle loop from low to high) to regionLoops
+            if kind = 3:
+                set width to the absolute value of (high's x - low's x)
+                set height to the absolute value of (high's y - low's y)
+                set margin to 0.2 * (the minimum of width and height)
+                set holeLow to a cad vector2 with x (low's x + margin) and y (low's y + margin)
+                set holeHigh to a cad vector2 with x (high's x - margin) and y (high's y - margin)
+                append (a planar presspull probe rectangle loop from holeLow to holeHigh) to regionLoops
+        set regionOrigin to a cad vector3 with x 0.0, y 0.0 and z z
+        set regionPlane to a cad plane with origin regionOrigin, x axis (the cad x axis) and y axis (the cad y axis)
+        set made to the cad planar region on regionPlane with regionLoops
+        free regionLoops
+        return made
+
+function planar presspull probe {cad vector3:firstPoint} precedes {cad vector3:secondPoint}:
+    execute:
+        if firstPoint's x != secondPoint's x:
+            return firstPoint's x < secondPoint's x
+        if firstPoint's y != secondPoint's y:
+            return firstPoint's y < secondPoint's y
+        return firstPoint's z < secondPoint's z
+
+function sort planar presspull probe points {a pointer to a list:pointValues}:
+    execute:
+        loop pointIndex from 1 to the length of pointValues:
+            set currentPoint to the item at pointIndex in pointValues
+            set position to pointIndex
+            set searching to true
+            loop while searching and (position > 0):
+                set previousPoint to the item at (position - 1) in pointValues
+                if planar presspull probe currentPoint precedes previousPoint:
+                    replace item at index position in pointValues with previousPoint
+                    decrement position
+                else:
+                    set searching to false
+            replace item at index position in pointValues with currentPoint
+
+function sort planar presspull probe integers {a pointer to a list:values}:
+    execute:
+        loop valueIndex from 1 to the length of values:
+            set currentValue to the item at valueIndex in values
+            set position to valueIndex
+            set searching to true
+            loop while searching and (position > 0):
+                set previousValue to the item at (position - 1) in values
+                if currentValue < previousValue:
+                    replace item at index position in values with previousValue
+                    decrement position
+                else:
+                    set searching to false
+            replace item at index position in values with currentValue
+
+function emit planar presspull probe degrees {a pointer to a list:values}:
+    execute:
+        sort planar presspull probe integers values
+        emit maker number (the length of values)
+        loop valueIndex from 0 to the length of values:
+            emit maker number (the item at valueIndex in values)
+
+function emit planar presspull probe body {cad body:outputBody}:
+    execute:
+        emit maker number (the length of outputBody's roots)
+        emit maker number (the cad count of outputBody's vertices)
+        emit maker number (the cad count of outputBody's edges)
+        emit maker number (the cad count of outputBody's coedges)
+        emit maker number (the cad count of outputBody's loops)
+        emit maker number (the cad count of outputBody's faces)
+        emit maker number (the cad count of outputBody's shells)
+        emit maker number (the cad count of outputBody's lumps)
+        emit maker number (the cad count of outputBody's curves)
+        emit maker number (the cad count of outputBody's surfaces)
+        emit maker number (the cad euler characteristic of outputBody)
+        set flaws to the cad flaws of outputBody
+        emit maker number (the length of flaws)
+        free flaws
+        emit maker number (the cad worst vertex gap of outputBody)
+
+        set samplePoints to an empty list of a cad vector3
+        set edgeKeys to the cad edge keys of outputBody
+        loop curveKind from 0 to 5:
+            set curveCount to 0
+            loop edgeIndex from 0 to the length of edgeKeys:
+                set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in outputBody
+                if edgeNode != (0 as the type of edgeNode):
+                    set curveNode to the cad node pointer for edgeNode's curve in outputBody
+                    if curveNode != (0 as the type of curveNode):
+                        if curveNode's kind = curveKind:
+                            increment curveCount
+            emit maker number curveCount
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in outputBody
+            set curveNode to the cad node pointer for edgeNode's curve in outputBody
+            loop step from 0 to 5:
+                set fraction to (step as a 64 bit floating-point number) / 4.0
+                set parameter to edgeNode's startParameter + (fraction * (edgeNode's endParameter - edgeNode's startParameter))
+                append (the cad point on (@intrinsic("dereference", curveNode)) at parameter) to samplePoints
+
+        set faceKeys to the cad face keys of outputBody
+        loop surfaceKind from 0 to 6:
+            set surfaceCount to 0
+            loop faceIndex from 0 to the length of faceKeys:
+                set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in outputBody
+                if faceNode != (0 as the type of faceNode):
+                    set surfaceNode to the cad node pointer for faceNode's surface in outputBody
+                    if surfaceNode != (0 as the type of surfaceNode):
+                        if surfaceNode's kind = surfaceKind:
+                            increment surfaceCount
+            emit maker number surfaceCount
+
+        set vertexPoints to an empty list of a cad vector3
+        set vertexKeys to the cad vertex keys of outputBody
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in outputBody
+            append vertexNode's point to vertexPoints
+        sort planar presspull probe points vertexPoints
+        sort planar presspull probe points samplePoints
+        emit maker number (the length of vertexPoints)
+        loop vertexIndex from 0 to the length of vertexPoints:
+            emit maker point (the item at vertexIndex in vertexPoints)
+        emit maker number (the length of samplePoints)
+        loop sampleIndex from 0 to the length of samplePoints:
+            emit maker point (the item at sampleIndex in samplePoints)
+
+        set loopDegrees to an empty list of integer
+        set loopKeys to the cad keys of outputBody's loops
+        loop loopIndex from 0 to the length of loopKeys:
+            set loopNode to the cad node pointer for (the item at loopIndex in loopKeys) in outputBody's loops
+            append (the length of (loopNode's coedges's values)) to loopDegrees
+        emit planar presspull probe degrees loopDegrees
+        set faceDegrees to an empty list of integer
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in outputBody
+            append (the length of (faceNode's loops's values)) to faceDegrees
+        emit planar presspull probe degrees faceDegrees
+        set shellDegrees to an empty list of integer
+        set shellKeys to the cad keys of outputBody's shells
+        loop shellIndex from 0 to the length of shellKeys:
+            set shellNode to the cad node pointer for (the item at shellIndex in shellKeys) in outputBody's shells
+            append (the length of (shellNode's faces's values)) to shellDegrees
+        emit planar presspull probe degrees shellDegrees
+        set lumpDegrees to an empty list of integer
+        set lumpKeys to the cad keys of outputBody's lumps
+        loop lumpIndex from 0 to the length of lumpKeys:
+            set lumpNode to the cad node pointer for (the item at lumpIndex in lumpKeys) in outputBody's lumps
+            append (the length of (lumpNode's shells's values)) to lumpDegrees
+        emit planar presspull probe degrees lumpDegrees
+
+        free lumpKeys
+        free lumpDegrees
+        free shellKeys
+        free shellDegrees
+        free faceDegrees
+        free loopKeys
+        free loopDegrees
+        free vertexKeys
+        free vertexPoints
+        free faceKeys
+        free edgeKeys
+        free samplePoints
+
+function emit planar presspull probe failure {integer:snag}:
+    execute:
+        emit maker flag false
+        emit maker number snag
+
+function emit planar presspull probe success {cad body:body} kind {integer:kind}:
+    execute:
+        emit maker flag true
+        emit maker number kind
+        emit planar presspull probe body body
+
+set operation to (maker argument 0) as an integer
+set left to a planar presspull probe region kind ((maker argument 10) as an integer) with (a cad vector2 with x (maker argument 1) and y (maker argument 2)) and (a cad vector2 with x (maker argument 3) and y (maker argument 4)) at z (maker argument 12)
+set right to a planar presspull probe region kind ((maker argument 11) as an integer) with (a cad vector2 with x (maker argument 5) and y (maker argument 6)) and (a cad vector2 with x (maker argument 7) and y (maker argument 8)) at z (maker argument 13)
+set tolerance to maker argument 9
+set bodies to a list containing left's value
+append right's value to bodies
+if operation = 0:
+    set united to the cad union of planar regions bodies within tolerance
+    if united's valid:
+        emit planar presspull probe success united's value kind 0
+    else:
+        emit planar presspull probe failure united's snag
+else if operation = 1:
+    set intersected to the cad intersection of planar regions bodies within tolerance
+    if intersected's valid:
+        emit planar presspull probe success intersected's value kind intersected's kind
+    else:
+        emit planar presspull probe failure intersected's snag
+else:
+    set bases to a list containing left's value
+    set cutters to a list containing right's value
+    set subtracted to the cad subtraction of planar regions bases by cutters within tolerance
+    if subtracted's valid:
+        emit planar presspull probe success subtracted's value kind 0
+    else:
+        emit planar presspull probe failure subtracted's snag
+    free cutters
+    free bases
+free bodies

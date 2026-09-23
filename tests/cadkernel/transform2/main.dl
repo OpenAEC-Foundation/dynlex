@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 18 tests from geom2d/transform.rs at the pinned source revision.
+import lib/cadkernel/transform2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check transform2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 97)
+
+function near transform2 {cad vector2:first} to {cad vector2:second}:
+    execute:
+        check transform2 ((the cad distance from first to second) < 1e-9)
+
+function check transform2 {cad curve2:shape} under {cad transform2:by}:
+    execute:
+        set moved to the cad transformed shape by by
+        check transform2 moved's valid
+        loop index from 0 through 20:
+            set parameter to (index as a 64 bit floating-point number) / 20.0
+            set direct to the cad image of (the cad point on shape at parameter) under by
+            set projected to the cad parameter on moved's value nearest direct
+            near transform2 (the cad point on moved's value at projected) to direct
+
+near transform2 (the cad image of (cross2 point [3.0,-4.0]) under the cad identity transform2) to (cross2 point [3.0,-4.0])
+print "the_identity_leaves_points_where_they_are" as a line
+
+set by to a cad translation2 by (cross2 point [10.0,5.0])
+near transform2 (the cad image of (cross2 point [1.0,1.0]) under by) to (cross2 point [11.0,6.0])
+near transform2 (the cad direction of (cross2 point [1.0,1.0]) under by) to (cross2 point [1.0,1.0])
+print "a_translation_moves_points_but_not_directions" as a line
+
+set by to a cad rotation2 through 1.5707963267948966
+near transform2 (the cad direction of (cross2 point [1.0,0.0]) under by) to (cross2 point [0.0,1.0])
+near transform2 (the cad direction of (cross2 point [0.0,1.0]) under by) to (cross2 point [-1.0,0.0])
+print "a_rotation_turns_the_axes" as a line
+
+set by to a cad insertion2 at (cross2 point [100.0,0.0]) scaling (cross2 point [2.0,2.0]) through 0.0
+near transform2 (the cad image of the cad zero vector2 under by) to (cross2 point [100.0,0.0])
+near transform2 (the cad image of (cross2 point [1.0,0.0]) under by) to (cross2 point [102.0,0.0])
+print "an_insertion_scales_about_the_block_origin_then_places_it" as a line
+
+set scale to a cad scale2 by 2.0 and 2.0
+set shift to a cad translation2 by (cross2 point [10.0,0.0])
+near transform2 (the cad image of (cross2 point [1.0,0.0]) under (the cad composition of shift after scale)) to (cross2 point [12.0,0.0])
+near transform2 (the cad image of (cross2 point [1.0,0.0]) under (the cad composition of scale after shift)) to (cross2 point [22.0,0.0])
+print "composition_applies_the_first_map_first" as a line
+
+check transform2 (the cad identity transform2 preserves cad circles)
+check transform2 ((a cad rotation2 through 0.7) preserves cad circles)
+check transform2 ((a cad scale2 by 3.0 and 3.0) preserves cad circles)
+check transform2 ((a cad scale2 by -2.0 and 2.0) preserves cad circles)
+check transform2 (((a cad scale2 by 2.0 and 1.0) preserves cad circles) = false)
+print "a_similarity_is_recognised_and_an_uneven_scale_is_not" as a line
+
+check transform2 (cross2 segment [1.0,2.0] to [7.0,-3.0]) under (a cad insertion2 at (cross2 point [5.0,5.0]) scaling (cross2 point [2.0,3.0]) through 0.4)
+print "a_line_follows_any_map" as a line
+
+set circle to cross2 circle [1.0,2.0] with radius 3.0
+set moved to the cad transformed circle by (a cad insertion2 at (cross2 point [10.0,0.0]) scaling (cross2 point [2.0,2.0]) through 0.5)
+check transform2 moved's valid
+check transform2 (moved's value's kind = cad circle curve2 kind)
+check transform2 ((the absolute value of (moved's value's circle's radius - 6.0)) < 1e-9)
+print "a_circle_stays_a_circle_under_an_even_scale" as a line
+
+set circle to cross2 circle [0.0,0.0] with radius 1.0
+set by to a cad scale2 by 3.0 and 1.0
+set moved to the cad transformed circle by by
+check transform2 moved's valid
+check transform2 (moved's value's kind = cad ellipse curve2 kind)
+check transform2 ((the absolute value of (moved's value's ellipse's ellipse's majorRadius - 3.0)) < 1e-9)
+check transform2 ((the absolute value of (moved's value's ellipse's ellipse's minorRadius - 1.0)) < 1e-9)
+check transform2 circle under by
+print "a_circle_becomes_an_ellipse_under_an_uneven_one" as a line
+
+set arc to the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 5.0 from 0.0 to 1.5707963267948966)
+check transform2 arc under (a cad insertion2 at (cross2 point [3.0,-2.0]) scaling (cross2 point [2.0,2.0]) through 0.9)
+print "an_arc_follows_an_even_scale_and_a_turn" as a line
+
+set arc to the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 2.0 from 0.2 to 2.0)
+set by to a cad scale2 by 4.0 and 1.0
+set moved to the cad transformed arc by by
+check transform2 moved's valid
+check transform2 (moved's value's kind = cad ellipse curve2 kind)
+check transform2 arc under by
+print "an_arc_becomes_an_elliptical_arc_under_an_uneven_scale" as a line
+
+set ellipse to the cad curve2 of (the full cad ellipse arc2 on (a cad ellipse at (cross2 point [1.0,1.0]) with radii 5.0 and 2.0 along (cross2 point [0.6,0.8])))
+check transform2 ellipse under (a cad insertion2 at (cross2 point [2.0,3.0]) scaling (cross2 point [1.5,0.5]) through 0.3)
+print "an_ellipse_follows_a_general_map" as a line
+
+set spline to cross2 interpolated spline
+check transform2 spline under (a cad insertion2 at (cross2 point [1.0,1.0]) scaling (cross2 point [2.0,0.5]) through 0.7)
+print "a_spline_follows_any_map_exactly" as a line
+
+set chain to cross2 polyline [[0.0,0.0,0.0],[2.0,0.0,0.0],[2.0,2.0,0.0]] with closure false
+check transform2 chain under (a cad scale2 by 3.0 and 0.5)
+print "a_straight_polyline_follows_any_map" as a line
+
+set chain to cross2 polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+set moved to the cad transformed chain by (a cad scale2 by 3.0 and 1.0)
+check transform2 (moved's valid = false)
+check transform2 chain under (a cad insertion2 at (cross2 point [5.0,5.0]) scaling (cross2 point [2.0,2.0]) through 0.6)
+print "a_bulged_polyline_cannot_be_squashed" as a line
+
+set chain to cross2 polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+set moved to the cad transformed chain by (a cad scale2 by 1.0 and -1.0)
+check transform2 moved's valid
+check transform2 ((the cad point on chain at 0.5)'s y < 0.0)
+check transform2 ((the cad point on moved's value at 0.5)'s y > 0.0)
+print "a_mirror_flips_which_way_a_bulge_bows" as a line
+
+set ray to cross2 ray [1.0,0.0] along [1.0,0.0]
+set moved to the cad transformed ray by (a cad rotation2 through 1.5707963267948966)
+check transform2 moved's valid
+check transform2 (moved's value's kind = cad ray curve2 kind)
+near transform2 moved's value's ray's origin to (cross2 point [0.0,1.0])
+near transform2 moved's value's ray's direction to (cross2 point [0.0,1.0])
+print "a_ray_keeps_its_direction_through_a_turn" as a line
+
+set line to cross2 segment [512345.678,4512345.678] to [512355.678,4512345.678]
+set moved to the cad transformed line by (a cad translation2 by (cross2 point [1000.0,0.0]))
+check transform2 moved's valid
+near transform2 (the cad point on moved's value at 0.0) to (cross2 point [513345.678,4512345.678])
+near transform2 (the cad point on moved's value at 1.0) to (cross2 point [513355.678,4512345.678])
+print "survey_coordinates_transform_without_drift" as a line

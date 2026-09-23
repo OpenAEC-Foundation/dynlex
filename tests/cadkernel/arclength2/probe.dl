@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength2.dl
+import tests/cadkernel/arclength2/input.dl
+set shape to measure2 input curve
+set parameter to measure2 input 2
+set distance to measure2 input 3
+emit measure2 scalar (the cad length of shape)
+emit measure2 scalar (the cad length of shape to parameter parameter)
+emit measure2 scalar (the cad parameter on shape at distance distance)
+emit measure2 point (the cad point on shape at distance distance)
+emit measure2 point (the cad tangent of shape at parameter)
+if shape's kind = 1:
+    emit measure2 scalar (the cad length of (shape's circle))
+if shape's kind = 2:
+    emit measure2 scalar (the cad length of (shape's arc))
+if shape's kind = 3:
+    emit measure2 scalar (the cad length of (shape's ellipse))

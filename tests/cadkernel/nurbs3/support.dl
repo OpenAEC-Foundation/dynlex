@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs3.dl
+
+function the nurbs probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function the nurbs probe point at {integer:index}:
+    execute:
+        return a cad vector3 with x (the nurbs probe number at index), y (the nurbs probe number at (index + 1)) and z (the nurbs probe number at (index + 2))
+
+function emit nurbs scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit nurbs flag {boolean:value}:
+    execute:
+        if value:
+            emit nurbs scalar 1
+        else:
+            emit nurbs scalar 0
+
+function emit nurbs point {cad vector3:value}:
+    execute:
+        emit nurbs scalar (the x of value)
+        emit nurbs scalar (the y of value)
+        emit nurbs scalar (the z of value)
+
+function emit nurbs curve {cad nurbs curve3:shape}:
+    execute:
+        emit nurbs scalar (the cad degree of shape)
+        emit nurbs scalar (the length of the cad control points of shape)
+        emit nurbs scalar (the length of the cad knots of shape)
+        emit nurbs scalar (the length of the cad weights of shape)
+        emit nurbs flag (the cad periodicity of shape)
+        emit nurbs flag (shape is cad rational)
+        loop index from 0 to the length of the controls of shape:
+            emit nurbs point (the item at index in the controls of shape)
+        loop index from 0 to the length of the knots of shape:
+            emit nurbs scalar (the item at index in the knots of shape)
+        loop index from 0 to the length of the weights of shape:
+            emit nurbs scalar (the item at index in the weights of shape)
+        set domain to the cad domain of shape
+        emit nurbs scalar (the start of domain)
+        emit nurbs scalar (the end of domain)
+

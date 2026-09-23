@@ -1,0 +1,2155 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/blend.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Public validation and specialized dispatch are kept here; recognized
+# operations return an owned reconstructed body and never mutate the source.
+import lib/cadkernel/brep_fillet_circular.dl
+import lib/cadkernel/brep_fillet_prismatic.dl
+import lib/cadkernel/brep_chamfer_circular.dl
+import lib/cadkernel/brep_chamfer_prismatic.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_presspull.dl
+
+class:
+    patterns:
+        [a|] cad fillet result
+    members:
+        valid as a boolean
+        error as a cad fillet error
+        value as the type of (an empty cad body)
+class:
+    patterns:
+        [a|] cad chamfer result
+    members:
+        valid as a boolean
+        error as a cad chamfer error
+        value as the type of (an empty cad body)
+class:
+    patterns:
+        [a|] cad blend halfspace
+    members:
+        origin as a cad vector3
+        normal as a cad vector3
+        offset as a 64 bit floating-point number
+        added as a boolean
+class:
+    patterns:
+        [a|] cad blend edge frame
+    members:
+        point as a cad vector3
+        axis as a cad vector3
+        firstFace as a cad face key
+        secondFace as a cad face key
+        firstNormal as a cad vector3
+        secondNormal as a cad vector3
+        firstInward as a cad vector3
+        secondInward as a cad vector3
+        halfspaces as the type of (a cad topology list of a cad blend halfspace)
+class:
+    patterns:
+        [a|] cad blend edge frame result
+    members:
+        valid as a boolean
+        value as a cad blend edge frame
+class:
+    patterns:
+        [a|] cad blend point result
+    members:
+        valid as a boolean
+        value as a cad vector3
+class:
+    patterns:
+        [a|] cad blend halfspace result
+    members:
+        valid as a boolean
+        value as a cad blend halfspace
+class:
+    patterns:
+        [a|] cad blend face result
+    members:
+        valid as a boolean
+        value as a cad face key
+class:
+    patterns:
+        [a|] cad blend fillet geometry
+    members:
+        cut as a cad blend halfspace
+        cylinder as a cad cylinder
+class:
+    patterns:
+        [a|] cad blend fillet geometry result
+    members:
+        valid as a boolean
+        value as a cad blend fillet geometry
+class:
+    patterns:
+        [a|] cad blend existing fillet
+    members:
+        cut as a cad blend halfspace
+        cylinder as a cad cylinder
+        forward as a boolean
+class:
+    patterns:
+        [a|] cad blend existing fillets
+    members:
+        valid as a boolean
+        values as the type of (a cad topology list of a cad blend existing fillet)
+class:
+    patterns:
+        [a|] cad blend target
+    members:
+        edge as a cad edge key
+        cut as a cad blend halfspace
+        cylinder as a cad cylinder
+class:
+    patterns:
+        [a|] cad blend located target
+    members:
+        edge as a cad edge key
+        face as a cad face key
+        cylinder as a cad cylinder
+class:
+    patterns:
+        [a|] cad blend corner patch
+    members:
+        cut as a cad blend halfspace
+        sphere as a cad sphere
+class:
+    patterns:
+        [a|] cad blend corner patches
+    members:
+        valid as a boolean
+        first as a cad edge key
+        second as a cad edge key
+        values as the type of (a cad topology list of a cad blend corner patch)
+class:
+    patterns:
+        [a|] cad blend existing corners
+    members:
+        valid as a boolean
+        values as the type of (a cad topology list of a cad blend corner patch)
+class:
+    patterns:
+        [a|] cad blend curve result
+    members:
+        valid as a boolean
+        value as the type of (the cad edge curve3 of (a new cad line3))
+class:
+    patterns:
+        [a|] cad blend segment
+    members:
+        edge as a cad edge key
+        start as a cad vector3
+        end as a cad vector3
+class:
+    patterns:
+        [a|] cad blend interval result
+    members:
+        valid as a boolean
+        first as a 64 bit floating-point number
+        second as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad blend sheet support
+    members:
+        face as a cad face key
+        space as a cad blend halfspace
+class:
+    patterns:
+        [a|] cad blend sheet spaces
+    members:
+        valid as a boolean
+        supports as the type of (a cad topology list of a cad blend sheet support)
+        boundaries as the type of (a cad topology list of a cad blend halfspace)
+
+local function cad public fillet failure {cad fillet error:error}:
+    execute:
+        return @intrinsic("construct", a cad fillet result, false, error, an empty cad body)
+local function cad public fillet success {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad fillet result, true, a cad fillet error of kind (cad fillet no error), value)
+local function cad public chamfer failure {cad chamfer error:error}:
+    execute:
+        return @intrinsic("construct", a cad chamfer result, false, error, an empty cad body)
+local function cad public chamfer success {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad chamfer result, true, a cad chamfer error of kind (cad chamfer no error), value)
+
+local function cad public blend scalar {a 64 bit floating-point number:value} is finite and positive:
+    execute:
+        return (value > 0.0) and ((the absolute value of value) <= 1.7976931348623157e308)
+local function cad public blend {a pointer to a list:values} contains {cad edge key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function sort cad public blend edge keys {a pointer to a list:values}:
+    execute:
+        loop index from 1 to the length of values:
+            set current to the item at index in values
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in values
+                if (the cad slot of previous) <= (the cad slot of current):
+                    set searching to false
+                else:
+                    replace item at index position in values with previous
+                    decrement position
+            replace item at index position in values with current
+local function the cad public blend normalized selection from {a pointer to a list:source}:
+    execute:
+        set result to a cad topology list of a cad edge key
+        loop sourceIndex from 0 to the length of source:
+            set candidate to the item at sourceIndex in source
+            if (cad public blend result's values contains candidate) = false:
+                append candidate to result's values
+        sort cad public blend edge keys result's values
+        return result
+local function cad public blend body {cad body:sourceBody} is valid:
+    execute:
+        set flaws to the cad flaws of sourceBody
+        set accepted to (the length of flaws) = 0
+        free flaws
+        return accepted
+local function cad public blend all {a pointer to a list:selected} belong to {cad body:body}:
+    execute:
+        loop index from 0 to the length of selected:
+            set edgeNode to the cad node pointer for (the item at index in selected) in body
+            if edgeNode = (0 as the type of edgeNode):
+                return false
+        return true
+
+local function cad blend body {cad body:sourceBody} is an open sheet:
+    execute:
+        set edgeKeys to the cad edge keys of sourceBody
+        set foundBoundary to false
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free edgeKeys
+                return false
+            set useCount to the length of edgeNode's coedges's values
+            if (useCount < 1) or (useCount > 2):
+                free edgeKeys
+                return false
+            if useCount = 1:
+                set foundBoundary to true
+        free edgeKeys
+        return foundBoundary
+
+local function cad blend {cad blend halfspace:candidateSpace} matches normal {cad vector3:targetNormal} and offset {a 64 bit floating-point number:targetOffset} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        return ((the cad dot of candidateSpace's normal and targetNormal) > (1.0 - 1e-8)) and ((the absolute value of (candidateSpace's offset - targetOffset)) <= tolerance)
+
+local function the cad blend sheet spaces of {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set vertexKeys to the cad vertex keys of sourceBody
+        if (the length of vertexKeys) = 0:
+            free vertexKeys
+            return no cad blend sheet spaces
+        set centre to the cad zero vector3
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in sourceBody
+            if vertexNode = (0 as the type of vertexNode):
+                free vertexKeys
+                return no cad blend sheet spaces
+            set centre to the cad sum of centre and vertexNode's point
+        set centre to centre cad divided by ((the length of vertexKeys) as a 64 bit floating-point number)
+        free vertexKeys
+        set supportValues to a cad topology list of a cad blend sheet support
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad blend sheet spaces
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return no cad blend sheet spaces
+            if surfaceNode's kind != 0:
+                free faceKeys
+                return no cad blend sheet spaces
+            set normalResult to the cad normal of surfaceNode's plane
+            if normalResult's valid = false:
+                free faceKeys
+                return no cad blend sheet spaces
+            set supportNormal to normalResult's value
+            set supportOffset to the cad dot of supportNormal and surfaceNode's plane's origin
+            if (the cad dot of supportNormal and centre) > supportOffset:
+                set supportNormal to the cad negative of supportNormal
+                set supportOffset to the negative of supportOffset
+            set supportSpace to a cad blend halfspace at surfaceNode's plane's origin with normal supportNormal, offset supportOffset and added false
+            append (@intrinsic("construct", a cad blend sheet support, faceKey, supportSpace)) to supportValues's values
+        free faceKeys
+        set boundaryValues to a cad topology list of a cad blend halfspace
+        set edgeKeys to the cad edge keys of sourceBody
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free edgeKeys
+                return no cad blend sheet spaces
+            if (the length of edgeNode's coedges's values) = 1:
+                set useNode to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in sourceBody
+                if useNode = (0 as the type of useNode):
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set loopNode to the cad node pointer for useNode's owner in sourceBody
+                if loopNode = (0 as the type of loopNode):
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set ownerFace to loopNode's owner
+                set faceNormal to the cad zero vector3
+                set foundSupport to false
+                loop supportIndex from 0 to the length of supportValues's values:
+                    set supportValue to the item at supportIndex in supportValues's values
+                    if supportValue's face = ownerFace:
+                        set faceNormal to supportValue's space's normal
+                        set foundSupport to true
+                if foundSupport = false:
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set startNode to the cad node pointer for edgeNode's start in sourceBody
+                set endNode to the cad node pointer for edgeNode's end in sourceBody
+                if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set axisResult to the cad normalization of (the cad difference of endNode's point and startNode's point)
+                if axisResult's valid = false:
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set faceCentre to the cad zero vector3
+                set facePointCount to 0
+                set faceUses to the cad face coedges of ownerFace in sourceBody
+                loop faceUseIndex from 0 to the length of faceUses:
+                    set faceUseNode to the cad node pointer for (the item at faceUseIndex in faceUses) in sourceBody
+                    if faceUseNode != (0 as the type of faceUseNode):
+                        set faceEdgeNode to the cad node pointer for faceUseNode's edge in sourceBody
+                        if faceEdgeNode != (0 as the type of faceEdgeNode):
+                            set firstVertex to the cad node pointer for faceEdgeNode's start in sourceBody
+                            set secondVertex to the cad node pointer for faceEdgeNode's end in sourceBody
+                            if (firstVertex != (0 as the type of firstVertex)) and (secondVertex != (0 as the type of secondVertex)):
+                                set faceCentre to the cad sum of faceCentre and firstVertex's point
+                                set faceCentre to the cad sum of faceCentre and secondVertex's point
+                                set facePointCount to facePointCount + 2
+                free faceUses
+                if facePointCount = 0:
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set faceCentre to faceCentre cad divided by (facePointCount as a 64 bit floating-point number)
+                set boundaryNormalResult to the cad normalization of (the cad cross of faceNormal and axisResult's value)
+                if boundaryNormalResult's valid = false:
+                    free edgeKeys
+                    return no cad blend sheet spaces
+                set boundaryNormal to boundaryNormalResult's value
+                set boundaryOffset to the cad dot of boundaryNormal and startNode's point
+                if (the cad dot of boundaryNormal and faceCentre) > (boundaryOffset + tolerance):
+                    set boundaryNormal to the cad negative of boundaryNormal
+                    set boundaryOffset to the negative of boundaryOffset
+                set duplicate to false
+                loop supportIndex from 0 to the length of supportValues's values:
+                    if cad blend (the item at supportIndex in supportValues's values)'s space matches normal boundaryNormal and offset boundaryOffset within tolerance:
+                        set duplicate to true
+                loop boundaryIndex from 0 to the length of boundaryValues's values:
+                    if cad blend (the item at boundaryIndex in boundaryValues's values) matches normal boundaryNormal and offset boundaryOffset within tolerance:
+                        set duplicate to true
+                if duplicate = false:
+                    append (a cad blend halfspace at startNode's point with normal boundaryNormal, offset boundaryOffset and added false) to boundaryValues's values
+        free edgeKeys
+        return cad blend sheet spaces with supportValues and boundaries boundaryValues
+
+local function a cad blend halfspace at {cad vector3:origin} with normal {cad vector3:normal}, offset {a number:offset} and added {boolean:added}:
+    execute:
+        return @intrinsic("construct", a cad blend halfspace, origin, normal, offset as a 64 bit floating-point number, added)
+local function no cad blend point:
+    execute:
+        return @intrinsic("construct", a cad blend point result, false, the cad zero vector3)
+local function the cad blend point {cad vector3:value}:
+    execute:
+        return @intrinsic("construct", a cad blend point result, true, value)
+local function no cad blend halfspace:
+    execute:
+        set empty to a cad blend halfspace at (the cad zero vector3) with normal (the cad zero vector3), offset 0.0 and added false
+        return @intrinsic("construct", a cad blend halfspace result, false, empty)
+local function the cad blend halfspace {cad blend halfspace:value}:
+    execute:
+        return @intrinsic("construct", a cad blend halfspace result, true, value)
+local function no cad blend face:
+    execute:
+        return @intrinsic("construct", a cad blend face result, false, a new cad face key)
+local function the cad blend face {cad face key:value}:
+    execute:
+        return @intrinsic("construct", a cad blend face result, true, value)
+local function no cad blend fillet geometry:
+    execute:
+        set emptyCut to a cad blend halfspace at (the cad zero vector3) with normal (the cad zero vector3), offset 0.0 and added false
+        set emptyCylinder to a cad cylinder with base (the cad xy plane) and radius 0.0
+        set emptyGeometry to @intrinsic("construct", a cad blend fillet geometry, emptyCut, emptyCylinder)
+        return @intrinsic("construct", a cad blend fillet geometry result, false, emptyGeometry)
+local function the cad blend fillet geometry with cut {cad blend halfspace:cut} and cylinder {cad cylinder:cylinder}:
+    execute:
+        set value to @intrinsic("construct", a cad blend fillet geometry, cut, cylinder)
+        return @intrinsic("construct", a cad blend fillet geometry result, true, value)
+local function no cad blend existing fillets:
+    execute:
+        return @intrinsic("construct", a cad blend existing fillets, false, a cad topology list of a cad blend existing fillet)
+local function the cad blend existing fillets {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad blend existing fillets, true, values)
+local function a cad blend existing fillet cut by {cad blend halfspace:cut} on {cad cylinder:cylinder} forward {boolean:forward}:
+    execute:
+        return @intrinsic("construct", a cad blend existing fillet, cut, cylinder, forward)
+local function a cad blend target for {cad edge key:edgeKey} cut by {cad blend halfspace:cut} on {cad cylinder:cylinder}:
+    execute:
+        return @intrinsic("construct", a cad blend target, edgeKey, cut, cylinder)
+local function a cad blend located target for {cad edge key:edgeKey} at {cad face key:faceKey} on {cad cylinder:cylinder}:
+    execute:
+        return @intrinsic("construct", a cad blend located target, edgeKey, faceKey, cylinder)
+local function a cad blend corner cut by {cad blend halfspace:cut} on {cad sphere:sphere}:
+    execute:
+        return @intrinsic("construct", a cad blend corner patch, cut, sphere)
+local function no cad blend corner patches between {cad edge key:firstEdge} and {cad edge key:secondEdge}:
+    execute:
+        return @intrinsic("construct", a cad blend corner patches, false, firstEdge, secondEdge, a cad topology list of a cad blend corner patch)
+local function the cad blend corner patches {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad blend corner patches, true, a new cad edge key, a new cad edge key, values)
+local function no cad blend existing corners:
+    execute:
+        return @intrinsic("construct", a cad blend existing corners, false, a cad topology list of a cad blend corner patch)
+local function the cad blend existing corners {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad blend existing corners, true, values)
+local function no cad blend curve:
+    execute:
+        set emptyCurve to the cad edge curve3 of (a new cad line3)
+        return @intrinsic("construct", a cad blend curve result, false, emptyCurve)
+local function the cad blend curve {cad edge curve3:value}:
+    execute:
+        return @intrinsic("construct", a cad blend curve result, true, value)
+local function no cad blend interval:
+    execute:
+        return @intrinsic("construct", a cad blend interval result, false, 0.0, 0.0)
+local function the cad blend interval from {a number:first} to {a number:second}:
+    execute:
+        return @intrinsic("construct", a cad blend interval result, true, first as a 64 bit floating-point number, second as a 64 bit floating-point number)
+local function no cad blend sheet spaces:
+    execute:
+        set supports to a cad topology list of a cad blend sheet support
+        set boundaries to a cad topology list of a cad blend halfspace
+        return @intrinsic("construct", a cad blend sheet spaces, false, supports, boundaries)
+local function cad blend sheet spaces with {cad topology list:supportValues} and boundaries {cad topology list:boundaryValues}:
+    execute:
+        return @intrinsic("construct", a cad blend sheet spaces, true, supportValues, boundaryValues)
+local function no cad blend edge frame:
+    execute:
+        set emptyHalfspaces to a cad topology list of a cad blend halfspace
+        set emptyFrame to @intrinsic("construct", a cad blend edge frame, the cad zero vector3, the cad zero vector3, a new cad face key, a new cad face key, the cad zero vector3, the cad zero vector3, the cad zero vector3, the cad zero vector3, emptyHalfspaces)
+        return @intrinsic("construct", a cad blend edge frame result, false, emptyFrame)
+local function the cad blend edge frame {cad blend edge frame:value}:
+    execute:
+        return @intrinsic("construct", a cad blend edge frame result, true, value)
+
+local function the cad blend outward normal of {cad face key:faceKey} in {cad body:sourceBody}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in sourceBody
+        if faceNode = (0 as the type of faceNode):
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+        if surfaceNode = (0 as the type of surfaceNode):
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        if surfaceNode's kind != 0:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set result to the cad normal of surfaceNode's plane
+        if result's valid:
+            if faceNode's forward = false:
+                return @intrinsic("construct", a cad normalization3, true, the cad negative of result's value)
+        return result
+
+local function the cad blend closed planar error of {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the length of sourceBody's roots) != 1:
+            return cad chamfer unsupported body topology error
+        set lumpNode to the cad node pointer for (the item at 0 in sourceBody's roots) in sourceBody
+        if lumpNode = (0 as the type of lumpNode):
+            return cad chamfer invalid body topology error
+        if (the length of lumpNode's shells's values) != 1:
+            return cad chamfer unsupported body topology error
+        set shellNode to the cad node pointer for (the item at 0 in lumpNode's shells's values) in sourceBody
+        if shellNode = (0 as the type of shellNode):
+            return cad chamfer invalid body topology error
+        if (the length of shellNode's faces's values) != (the cad count of sourceBody's faces):
+            return cad chamfer unsupported body topology error
+        set faceKeys to the cad face keys of sourceBody
+        set vertexKeys to the cad vertex keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free vertexKeys
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if (the length of faceNode's loops's values) != 1:
+                free vertexKeys
+                free faceKeys
+                return cad chamfer unsupported body topology error
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free vertexKeys
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if surfaceNode's kind != 0:
+                free vertexKeys
+                free faceKeys
+                return cad chamfer unsupported surface error
+            set normalResult to the cad blend outward normal of faceKey in sourceBody
+            if normalResult's valid = false:
+                free vertexKeys
+                free faceKeys
+                return cad chamfer unsupported surface error
+            set planeOrigin to surfaceNode's plane's origin
+            set planeOffset to the cad dot of normalResult's value and planeOrigin
+            loop vertexIndex from 0 to the length of vertexKeys:
+                set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in sourceBody
+                if vertexNode = (0 as the type of vertexNode):
+                    free vertexKeys
+                    free faceKeys
+                    return cad chamfer invalid body topology error
+                if (the cad dot of normalResult's value and vertexNode's point) > (planeOffset + tolerance):
+                    free vertexKeys
+                    free faceKeys
+                    return cad chamfer non convex body error
+        free vertexKeys
+        free faceKeys
+        return cad chamfer no error
+
+local function the cad blend supported body error of {cad body:sourceBody} preserving {a pointer to a list:existingValues} and {a pointer to a list:cornerValues} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the length of sourceBody's roots) != 1:
+            return cad chamfer unsupported body topology error
+        set lumpNode to the cad node pointer for (the item at 0 in sourceBody's roots) in sourceBody
+        if lumpNode = (0 as the type of lumpNode):
+            return cad chamfer invalid body topology error
+        if (the length of lumpNode's shells's values) != 1:
+            return cad chamfer unsupported body topology error
+        set shellNode to the cad node pointer for (the item at 0 in lumpNode's shells's values) in sourceBody
+        if shellNode = (0 as the type of shellNode):
+            return cad chamfer invalid body topology error
+        if (the length of shellNode's faces's values) != (the cad count of sourceBody's faces):
+            return cad chamfer unsupported body topology error
+        set cylinderCount to 0
+        set cornerCount to 0
+        set faceKeys to the cad face keys of sourceBody
+        set vertexKeys to the cad vertex keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free vertexKeys
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if (the length of faceNode's loops's values) != 1:
+                free vertexKeys
+                free faceKeys
+                return cad chamfer unsupported body topology error
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free vertexKeys
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if surfaceNode's kind = 1:
+                increment cylinderCount
+            else if surfaceNode's kind = 3:
+                increment cornerCount
+            else if surfaceNode's kind != 0:
+                free vertexKeys
+                free faceKeys
+                return cad chamfer unsupported surface error
+            if surfaceNode's kind = 0:
+                set normalResult to the cad blend outward normal of faceKey in sourceBody
+                if normalResult's valid = false:
+                    free vertexKeys
+                    free faceKeys
+                    return cad chamfer unsupported surface error
+                set planeOffset to the cad dot of normalResult's value and surfaceNode's plane's origin
+                loop vertexIndex from 0 to the length of vertexKeys:
+                    set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in sourceBody
+                    if vertexNode = (0 as the type of vertexNode):
+                        free vertexKeys
+                        free faceKeys
+                        return cad chamfer invalid body topology error
+                    if (the cad dot of normalResult's value and vertexNode's point) > (planeOffset + tolerance):
+                        free vertexKeys
+                        free faceKeys
+                        return cad chamfer non convex body error
+        free vertexKeys
+        free faceKeys
+        if cylinderCount != (the length of existingValues):
+            return cad chamfer unsupported existing fillet error
+        if cornerCount != (the length of cornerValues):
+            return cad chamfer unsupported existing fillet error
+        return cad chamfer no error
+
+local function the cad blend sheet topology error of {cad body:sourceBody}:
+    execute:
+        if (the length of sourceBody's roots) != 1:
+            return cad chamfer unsupported body topology error
+        set lumpNode to the cad node pointer for (the item at 0 in sourceBody's roots) in sourceBody
+        if lumpNode = (0 as the type of lumpNode):
+            return cad chamfer invalid body topology error
+        if (the length of lumpNode's shells's values) != 1:
+            return cad chamfer unsupported body topology error
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if (the length of faceNode's loops's values) != 1:
+                free faceKeys
+                return cad chamfer unsupported body topology error
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return cad chamfer invalid body topology error
+            if surfaceNode's kind != 0:
+                free faceKeys
+                return cad chamfer unsupported body topology error
+        free faceKeys
+        return cad chamfer no error
+
+local function the cad blend edge error of {cad edge key:edgeKey} in {cad body:sourceBody}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in sourceBody
+        if edgeNode = (0 as the type of edgeNode):
+            return cad chamfer unknown edge error
+        set curveNode to the cad node pointer for edgeNode's curve in sourceBody
+        if curveNode = (0 as the type of curveNode):
+            return cad chamfer invalid body topology error
+        if curveNode's kind != 0:
+            return cad chamfer unsupported edge curve error
+        if (the length of edgeNode's coedges's values) != 2:
+            return cad chamfer non manifold edge error
+        set startNode to the cad node pointer for edgeNode's start in sourceBody
+        set endNode to the cad node pointer for edgeNode's end in sourceBody
+        if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+            return cad chamfer invalid body topology error
+        set direction to the cad normalization of (the cad difference of endNode's point and startNode's point)
+        if direction's valid = false:
+            return cad chamfer degenerate geometry error
+        loop index from 0 to 2:
+            set useNode to the cad node pointer for (the item at index in edgeNode's coedges's values) in sourceBody
+            if useNode = (0 as the type of useNode):
+                return cad chamfer invalid body topology error
+            set loopNode to the cad node pointer for useNode's owner in sourceBody
+            if loopNode = (0 as the type of loopNode):
+                return cad chamfer invalid body topology error
+            set faceNode to the cad node pointer for loopNode's owner in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                return cad chamfer invalid body topology error
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                return cad chamfer invalid body topology error
+            if surfaceNode's kind != 0:
+                return cad chamfer unsupported adjacent surface error
+            set normalResult to the cad normal of surfaceNode's plane
+            if normalResult's valid = false:
+                return cad chamfer degenerate geometry error
+        return cad chamfer no error
+
+local function the cad blend frame of {cad edge key:edgeKey} in {cad body:sourceBody}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in sourceBody
+        if edgeNode = (0 as the type of edgeNode):
+            return no cad blend edge frame
+        if (the length of edgeNode's coedges's values) != 2:
+            return no cad blend edge frame
+        set startNode to the cad node pointer for edgeNode's start in sourceBody
+        set endNode to the cad node pointer for edgeNode's end in sourceBody
+        if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+            return no cad blend edge frame
+        set axisResult to the cad normalization of (the cad difference of endNode's point and startNode's point)
+        if axisResult's valid = false:
+            return no cad blend edge frame
+        set firstUse to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in sourceBody
+        set secondUse to the cad node pointer for (the item at 1 in edgeNode's coedges's values) in sourceBody
+        if (firstUse = (0 as the type of firstUse)) or (secondUse = (0 as the type of secondUse)):
+            return no cad blend edge frame
+        set firstLoop to the cad node pointer for firstUse's owner in sourceBody
+        set secondLoop to the cad node pointer for secondUse's owner in sourceBody
+        if (firstLoop = (0 as the type of firstLoop)) or (secondLoop = (0 as the type of secondLoop)):
+            return no cad blend edge frame
+        set firstFace to firstLoop's owner
+        set secondFace to secondLoop's owner
+        set firstNormalResult to the cad blend outward normal of firstFace in sourceBody
+        set secondNormalResult to the cad blend outward normal of secondFace in sourceBody
+        if (firstNormalResult's valid = false) or (secondNormalResult's valid = false):
+            return no cad blend edge frame
+        set firstNormal to firstNormalResult's value
+        set secondNormal to secondNormalResult's value
+        set cosine to the cad dot of firstNormal and secondNormal
+        if (the absolute value of cosine) > (1.0 - 1e-9):
+            return no cad blend edge frame
+        set firstDirection to the cad difference of secondNormal and (firstNormal scaled by cosine)
+        set secondDirection to the cad difference of firstNormal and (secondNormal scaled by cosine)
+        set firstInwardResult to the cad normalization of (the cad negative of firstDirection)
+        set secondInwardResult to the cad normalization of (the cad negative of secondDirection)
+        if (firstInwardResult's valid = false) or (secondInwardResult's valid = false):
+            return no cad blend edge frame
+        set halfspaces to a cad topology list of a cad blend halfspace
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad blend edge frame
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return no cad blend edge frame
+            if surfaceNode's kind = 0:
+                set normalResult to the cad blend outward normal of faceKey in sourceBody
+                if normalResult's valid = false:
+                    free faceKeys
+                    return no cad blend edge frame
+                set planeOrigin to surfaceNode's plane's origin
+                set planeOffset to the cad dot of normalResult's value and planeOrigin
+                append (a cad blend halfspace at planeOrigin with normal normalResult's value, offset planeOffset and added false) to halfspaces's values
+        free faceKeys
+        set framed to @intrinsic("construct", a cad blend edge frame, startNode's point, axisResult's value, firstFace, secondFace, firstNormal, secondNormal, firstInwardResult's value, secondInwardResult's value, halfspaces)
+        return the cad blend edge frame framed
+
+local function the cad blend sheet frame of {cad edge key:edgeKey} in {cad body:sourceBody} using {cad topology list:supportValues} and {cad topology list:allSpaces}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in sourceBody
+        if edgeNode = (0 as the type of edgeNode):
+            return no cad blend edge frame
+        if (the length of edgeNode's coedges's values) != 2:
+            return no cad blend edge frame
+        set startNode to the cad node pointer for edgeNode's start in sourceBody
+        set endNode to the cad node pointer for edgeNode's end in sourceBody
+        if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+            return no cad blend edge frame
+        set axisResult to the cad normalization of (the cad difference of endNode's point and startNode's point)
+        if axisResult's valid = false:
+            return no cad blend edge frame
+        set firstUse to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in sourceBody
+        set secondUse to the cad node pointer for (the item at 1 in edgeNode's coedges's values) in sourceBody
+        if (firstUse = (0 as the type of firstUse)) or (secondUse = (0 as the type of secondUse)):
+            return no cad blend edge frame
+        set firstLoop to the cad node pointer for firstUse's owner in sourceBody
+        set secondLoop to the cad node pointer for secondUse's owner in sourceBody
+        if (firstLoop = (0 as the type of firstLoop)) or (secondLoop = (0 as the type of secondLoop)):
+            return no cad blend edge frame
+        set firstFace to firstLoop's owner
+        set secondFace to secondLoop's owner
+        set firstNormal to the cad zero vector3
+        set secondNormal to the cad zero vector3
+        set foundFirst to false
+        set foundSecond to false
+        loop supportIndex from 0 to the length of supportValues's values:
+            set supportValue to the item at supportIndex in supportValues's values
+            if supportValue's face = firstFace:
+                set firstNormal to supportValue's space's normal
+                set foundFirst to true
+            if supportValue's face = secondFace:
+                set secondNormal to supportValue's space's normal
+                set foundSecond to true
+        if (foundFirst = false) or (foundSecond = false):
+            return no cad blend edge frame
+        set cosine to the cad dot of firstNormal and secondNormal
+        if (the absolute value of cosine) > (1.0 - 1e-9):
+            return no cad blend edge frame
+        set firstInwardResult to the cad normalization of (the cad negative of (the cad difference of secondNormal and (firstNormal scaled by cosine)))
+        set secondInwardResult to the cad normalization of (the cad negative of (the cad difference of firstNormal and (secondNormal scaled by cosine)))
+        if (firstInwardResult's valid = false) or (secondInwardResult's valid = false):
+            return no cad blend edge frame
+        set copiedSpaces to a cad topology list of a cad blend halfspace
+        loop spaceIndex from 0 to the length of allSpaces's values:
+            append (the item at spaceIndex in allSpaces's values) to copiedSpaces's values
+        set framed to @intrinsic("construct", a cad blend edge frame, startNode's point, axisResult's value, firstFace, secondFace, firstNormal, secondNormal, firstInwardResult's value, secondInwardResult's value, copiedSpaces)
+        return the cad blend edge frame framed
+
+local function the cad blend cut for {cad blend edge frame:framed} with first setback {a 64 bit floating-point number:firstSetback}, second setback {a 64 bit floating-point number:secondSetback} and tolerance {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad public blend scalar firstSetback is finite and positive) and (cad public blend scalar secondSetback is finite and positive)) = false:
+            return no cad blend halfspace
+        set firstPoint to the cad sum of framed's point and (framed's firstInward scaled by firstSetback)
+        set secondPoint to the cad sum of framed's point and (framed's secondInward scaled by secondSetback)
+        set chord to the cad difference of secondPoint and firstPoint
+        set normalResult to the cad normalization of (the cad cross of framed's axis and chord)
+        if normalResult's valid = false:
+            return no cad blend halfspace
+        set cutNormal to normalResult's value
+        if (the cad dot of cutNormal and (the cad sum of framed's firstNormal and framed's secondNormal)) < 0.0:
+            set cutNormal to the cad negative of cutNormal
+        set cutOffset to 0.5 * ((the cad dot of cutNormal and firstPoint) + (the cad dot of cutNormal and secondPoint))
+        if (the cad dot of cutNormal and framed's point) <= (cutOffset + tolerance):
+            return no cad blend halfspace
+        return the cad blend halfspace (a cad blend halfspace at firstPoint with normal cutNormal, offset cutOffset and added true)
+
+local function the cad blend fillet geometry for {cad blend edge frame:framed} with radius {a 64 bit floating-point number:radius} and tolerance {a 64 bit floating-point number:tolerance}:
+    execute:
+        set cosine to the cad dot of framed's firstNormal and framed's secondNormal
+        set cosine to the maximum of -1.0 and (the minimum of 1.0 and cosine)
+        set normalsAngle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, cosine)
+        set interior to 3.141592653589793 - normalsAngle
+        set divisor to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, interior * 0.5)
+        set setback to radius / divisor
+        set cutResult to the cad blend cut for framed with first setback setback, second setback setback and tolerance tolerance
+        if cutResult's valid = false:
+            return no cad blend fillet geometry
+        set cut to cutResult's value
+        if (the cad dot of cut's normal and (the cad sum of framed's firstNormal and framed's secondNormal)) <= 0.0:
+            return no cad blend fillet geometry
+        set tangent to the cad sum of framed's point and (framed's firstInward scaled by setback)
+        set centre to the cad difference of tangent and (framed's firstNormal scaled by radius)
+        set planeResult to the cad orthonormal plane with origin centre, x axis framed's firstNormal and normal framed's axis
+        if planeResult's valid = false:
+            return no cad blend fillet geometry
+        set cylinder to a cad cylinder with base planeResult's value and radius radius
+        return the cad blend fillet geometry with cut cut and cylinder cylinder
+
+local function the cad blend segment distance between {cad blend segment:firstSegment} and {cad blend segment:secondSegment}:
+    execute:
+        set firstDirection to the cad difference of firstSegment's end and firstSegment's start
+        set secondDirection to the cad difference of secondSegment's end and secondSegment's start
+        set offset to the cad difference of firstSegment's start and secondSegment's start
+        set firstLength to the cad dot of firstDirection and firstDirection
+        set secondLength to the cad dot of secondDirection and secondDirection
+        set crossValue to the cad dot of firstDirection and secondDirection
+        set firstOffset to the cad dot of firstDirection and offset
+        set secondOffset to the cad dot of secondDirection and offset
+        set denominator to (firstLength * secondLength) - (crossValue * crossValue)
+        set firstParameter to 0.0
+        if denominator > (2.220446049250313e-16 * (the maximum of (the maximum of firstLength and secondLength) and 1.0)):
+            set firstParameter to ((crossValue * secondOffset) - (secondLength * firstOffset)) / denominator
+            set firstParameter to the maximum of 0.0 and (the minimum of 1.0 and firstParameter)
+        set secondParameter to ((crossValue * firstParameter) + secondOffset) / secondLength
+        if secondParameter < 0.0:
+            set secondParameter to 0.0
+            set firstParameter to the maximum of 0.0 and (the minimum of 1.0 and ((the negative of firstOffset) / firstLength))
+        else if secondParameter > 1.0:
+            set secondParameter to 1.0
+            set firstParameter to the maximum of 0.0 and (the minimum of 1.0 and ((crossValue - firstOffset) / firstLength))
+        set closestOffset to the cad sum of offset and (firstDirection scaled by firstParameter)
+        set closestOffset to the cad difference of closestOffset and (secondDirection scaled by secondParameter)
+        return the cad length of closestOffset
+
+local function cad blend selected {a pointer to a list:selected} stay separate in {cad body:sourceBody} with radius {a 64 bit floating-point number:radius} and tolerance {a 64 bit floating-point number:tolerance}:
+    execute:
+        set segments to a cad topology list of a cad blend segment
+        loop selectedIndex from 0 to the length of selected:
+            set edgeKey to the item at selectedIndex in selected
+            set edgeNode to the cad node pointer for edgeKey in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                return false
+            set startNode to the cad node pointer for edgeNode's start in sourceBody
+            set endNode to the cad node pointer for edgeNode's end in sourceBody
+            if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+                return false
+            append (@intrinsic("construct", a cad blend segment, edgeKey, startNode's point, endNode's point)) to segments's values
+        loop firstIndex from 0 to the length of segments's values:
+            loop secondIndex from (firstIndex + 1) to the length of segments's values:
+                set firstSegment to the item at firstIndex in segments's values
+                set secondSegment to the item at secondIndex in segments's values
+                set firstEdge to the cad node pointer for firstSegment's edge in sourceBody
+                set secondEdge to the cad node pointer for secondSegment's edge in sourceBody
+                if (firstEdge = (0 as the type of firstEdge)) or (secondEdge = (0 as the type of secondEdge)):
+                    return false
+                set sharedStart to (firstEdge's start = secondEdge's start) or (firstEdge's start = secondEdge's end)
+                set sharedEnd to (firstEdge's end = secondEdge's start) or (firstEdge's end = secondEdge's end)
+                if (sharedStart or sharedEnd) = false:
+                    if (the cad blend segment distance between firstSegment and secondSegment) <= ((radius * 2.0) + tolerance):
+                        return false
+        return true
+
+local function the cad blend corner patches of {cad body:sourceBody} along {a pointer to a list:selected} with radius {a 64 bit floating-point number:radius} and tolerance {a 64 bit floating-point number:tolerance}:
+    execute:
+        set ownerVertices to an empty list of a cad vertex key
+        loop selectedIndex from 0 to the length of selected:
+            set edgeNode to the cad node pointer for (the item at selectedIndex in selected) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free ownerVertices
+                return no cad blend corner patches between (the item at 0 in selected) and (the item at 0 in selected)
+            set endpoints to [edgeNode's start,edgeNode's end]
+            loop endpointIndex from 0 to 2:
+                set candidateVertex to the item at endpointIndex in endpoints
+                set knownVertex to false
+                loop ownerIndex from 0 to the length of ownerVertices:
+                    if (the item at ownerIndex in ownerVertices) = candidateVertex:
+                        set knownVertex to true
+                if knownVertex = false:
+                    append candidateVertex to ownerVertices
+        set cornerValues to a cad topology list of a cad blend corner patch
+        set bodyEdges to the cad edge keys of sourceBody
+        loop ownerIndex from 0 to the length of ownerVertices:
+            set ownerVertex to the item at ownerIndex in ownerVertices
+            set ownerEdges to an empty list of a cad edge key
+            loop selectedIndex from 0 to the length of selected:
+                set selectedEdge to the item at selectedIndex in selected
+                set edgeNode to the cad node pointer for selectedEdge in sourceBody
+                if edgeNode != (0 as the type of edgeNode):
+                    if (edgeNode's start = ownerVertex) or (edgeNode's end = ownerVertex):
+                        append selectedEdge to ownerEdges
+            if (the length of ownerEdges) >= 2:
+                set firstOwnerEdge to the item at 0 in ownerEdges
+                set secondOwnerEdge to the item at 1 in ownerEdges
+                set incidentCount to 0
+                loop bodyEdgeIndex from 0 to the length of bodyEdges:
+                    set bodyEdge to the cad node pointer for (the item at bodyEdgeIndex in bodyEdges) in sourceBody
+                    if bodyEdge != (0 as the type of bodyEdge):
+                        if (bodyEdge's start = ownerVertex) or (bodyEdge's end = ownerVertex):
+                            increment incidentCount
+                if (incidentCount != 3) or ((the length of ownerEdges) > 3):
+                    free ownerEdges
+                    free bodyEdges
+                    free ownerVertices
+                    return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                set normals to an empty list of a cad vector3
+                loop ownerEdgeIndex from 0 to the length of ownerEdges:
+                    set frameResult to the cad blend frame of (the item at ownerEdgeIndex in ownerEdges) in sourceBody
+                    if frameResult's valid = false:
+                        free normals
+                        free ownerEdges
+                        free bodyEdges
+                        free ownerVertices
+                        return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                    set frameNormals to [frameResult's value's firstNormal,frameResult's value's secondNormal]
+                    loop normalIndex from 0 to 2:
+                        set candidateNormal to the item at normalIndex in frameNormals
+                        set knownNormal to false
+                        loop knownIndex from 0 to the length of normals:
+                            if (the cad dot of candidateNormal and (the item at knownIndex in normals)) >= (1.0 - 1e-8):
+                                set knownNormal to true
+                        if knownNormal = false:
+                            append candidateNormal to normals
+                set orthogonal to (the length of normals) = 3
+                loop firstNormalIndex from 0 to the length of normals:
+                    loop secondNormalIndex from (firstNormalIndex + 1) to the length of normals:
+                        if (the absolute value of (the cad dot of (the item at firstNormalIndex in normals) and (the item at secondNormalIndex in normals))) > 1e-8:
+                            set orthogonal to false
+                if orthogonal = false:
+                    free normals
+                    free ownerEdges
+                    free bodyEdges
+                    free ownerVertices
+                    return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                if (the length of ownerEdges) = 3:
+                    set vertexNode to the cad node pointer for ownerVertex in sourceBody
+                    if vertexNode = (0 as the type of vertexNode):
+                        free normals
+                        free ownerEdges
+                        free bodyEdges
+                        free ownerVertices
+                        return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                    set normalSum to the cad sum of (the cad sum of (the item at 0 in normals) and (the item at 1 in normals)) and (the item at 2 in normals)
+                    set cornerCentre to the cad difference of vertexNode's point and (normalSum scaled by radius)
+                    set cornerNormalResult to the cad normalization of normalSum
+                    set poleResult to the cad normalization of (the cad difference of (the item at 0 in normals) and (the item at 1 in normals))
+                    if (cornerNormalResult's valid = false) or (poleResult's valid = false):
+                        free normals
+                        free ownerEdges
+                        free bodyEdges
+                        free ownerVertices
+                        return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                    set cornerOrigin to the cad sum of cornerCentre and ((the item at 0 in normals) scaled by radius)
+                    if (the cad dot of cornerNormalResult's value and (the cad difference of vertexNode's point and cornerOrigin)) <= tolerance:
+                        free normals
+                        free ownerEdges
+                        free bodyEdges
+                        free ownerVertices
+                        return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                    set sphereFrame to the cad orthonormal plane with origin cornerCentre, x axis cornerNormalResult's value and normal poleResult's value
+                    if sphereFrame's valid = false:
+                        free normals
+                        free ownerEdges
+                        free bodyEdges
+                        free ownerVertices
+                        return no cad blend corner patches between firstOwnerEdge and secondOwnerEdge
+                    set cornerCut to a cad blend halfspace at cornerOrigin with normal cornerNormalResult's value, offset (the cad dot of cornerNormalResult's value and cornerOrigin) and added true
+                    set cornerSphere to a cad sphere with frame sphereFrame's value and radius radius
+                    append (a cad blend corner cut by cornerCut on cornerSphere) to cornerValues's values
+                free normals
+            free ownerEdges
+        free bodyEdges
+        free ownerVertices
+        return the cad blend corner patches cornerValues
+
+local function the cad blend face on {cad blend halfspace:space} in {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode != (0 as the type of faceNode):
+                set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+                if surfaceNode != (0 as the type of surfaceNode):
+                    if surfaceNode's kind = 0:
+                        set normalResult to the cad blend outward normal of faceKey in sourceBody
+                        if normalResult's valid:
+                            set alignment to the cad dot of normalResult's value and space's normal
+                            set onSpace to true
+                            set faceUses to the cad face coedges of faceKey in sourceBody
+                            loop useIndex from 0 to the length of faceUses:
+                                set useNode to the cad node pointer for (the item at useIndex in faceUses) in sourceBody
+                                if useNode = (0 as the type of useNode):
+                                    set onSpace to false
+                                else:
+                                    set edgeNode to the cad node pointer for useNode's edge in sourceBody
+                                    if edgeNode = (0 as the type of edgeNode):
+                                        set onSpace to false
+                                    else:
+                                        set startNode to the cad node pointer for edgeNode's start in sourceBody
+                                        set endNode to the cad node pointer for edgeNode's end in sourceBody
+                                        if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+                                            set onSpace to false
+                                        else:
+                                            set startGap to the absolute value of ((the cad dot of space's normal and startNode's point) - space's offset)
+                                            set endGap to the absolute value of ((the cad dot of space's normal and endNode's point) - space's offset)
+                                            if (startGap > tolerance) or (endGap > tolerance):
+                                                set onSpace to false
+                            free faceUses
+                            if (alignment > (1.0 - 1e-8)) and onSpace:
+                                free faceKeys
+                                return the cad blend face faceKey
+        free faceKeys
+        return no cad blend face
+
+local function the cad blend existing fillets of {cad body:sourceBody}:
+    execute:
+        set foundValues to a cad topology list of a cad blend existing fillet
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad blend existing fillets
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return no cad blend existing fillets
+            if surfaceNode's kind = 1:
+                set axisResult to the cad normal of surfaceNode's cylinder's base
+                if axisResult's valid = false:
+                    free faceKeys
+                    return no cad blend existing fillets
+                set sideNormals to an empty list of a cad vector3
+                set boundaryPoints to an empty list of a cad vector3
+                set lineEdges to 0
+                set cylinderValid to true
+                set faceUses to the cad face coedges of faceKey in sourceBody
+                loop useIndex from 0 to the length of faceUses:
+                    if cylinderValid:
+                        set useNode to the cad node pointer for (the item at useIndex in faceUses) in sourceBody
+                        if useNode = (0 as the type of useNode):
+                            set cylinderValid to false
+                        else:
+                            set edgeNode to the cad node pointer for useNode's edge in sourceBody
+                            if edgeNode = (0 as the type of edgeNode):
+                                set cylinderValid to false
+                            else:
+                                set startNode to the cad node pointer for edgeNode's start in sourceBody
+                                set curveNode to the cad node pointer for edgeNode's curve in sourceBody
+                                if (startNode = (0 as the type of startNode)) or (curveNode = (0 as the type of curveNode)):
+                                    set cylinderValid to false
+                                else:
+                                    append startNode's point to boundaryPoints
+                                    if curveNode's kind = 0:
+                                        increment lineEdges
+                                        set otherFace to a new cad face key
+                                        set foundOther to false
+                                        loop edgeUseIndex from 0 to the length of edgeNode's coedges's values:
+                                            set edgeUse to the cad node pointer for (the item at edgeUseIndex in edgeNode's coedges's values) in sourceBody
+                                            if edgeUse != (0 as the type of edgeUse):
+                                                set ownerLoop to the cad node pointer for edgeUse's owner in sourceBody
+                                                if ownerLoop != (0 as the type of ownerLoop):
+                                                    if ownerLoop's owner != faceKey:
+                                                        set otherFace to ownerLoop's owner
+                                                        set foundOther to true
+                                        if foundOther = false:
+                                            set cylinderValid to false
+                                        else:
+                                            set otherNormal to the cad blend outward normal of otherFace in sourceBody
+                                            if otherNormal's valid = false:
+                                                set cylinderValid to false
+                                            else if (the absolute value of (the cad dot of otherNormal's value and axisResult's value)) <= 1e-8:
+                                                append otherNormal's value to sideNormals
+                free faceUses
+                if cylinderValid = false:
+                    free boundaryPoints
+                    free sideNormals
+                    free faceKeys
+                    return no cad blend existing fillets
+                if ((lineEdges = 2) and ((the length of sideNormals) = 2)) and ((the length of boundaryPoints) > 0):
+                    set cutNormalResult to the cad normalization of (the cad sum of (the item at 0 in sideNormals) and (the item at 1 in sideNormals))
+                    if cutNormalResult's valid = false:
+                        free boundaryPoints
+                        free sideNormals
+                        free faceKeys
+                        return no cad blend existing fillets
+                    set cutOffset to 0.0
+                    loop pointIndex from 0 to the length of boundaryPoints:
+                        set cutOffset to cutOffset + (the cad dot of cutNormalResult's value and (the item at pointIndex in boundaryPoints))
+                    set cutOffset to cutOffset / ((the length of boundaryPoints) as a 64 bit floating-point number)
+                    set cutSpace to a cad blend halfspace at (the item at 0 in boundaryPoints) with normal cutNormalResult's value, offset cutOffset and added true
+                    append (a cad blend existing fillet cut by cutSpace on surfaceNode's cylinder forward faceNode's forward) to foundValues's values
+                free boundaryPoints
+                free sideNormals
+        free faceKeys
+        return the cad blend existing fillets foundValues
+
+local function the cad blend existing corners of {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set cornerValues to a cad topology list of a cad blend corner patch
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad blend existing corners
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return no cad blend existing corners
+            if surfaceNode's kind = 3:
+                if (faceNode's forward = false) or ((the length of faceNode's loops's values) != 1):
+                    free faceKeys
+                    return no cad blend existing corners
+                set sphereValue to surfaceNode's sphere
+                set centre to sphereValue's frame's origin
+                set boundaryPoints to an empty list of a cad vector3
+                set faceUses to the cad face coedges of faceKey in sourceBody
+                loop useIndex from 0 to the length of faceUses:
+                    set useNode to the cad node pointer for (the item at useIndex in faceUses) in sourceBody
+                    if useNode = (0 as the type of useNode):
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set edgeNode to the cad node pointer for useNode's edge in sourceBody
+                    if edgeNode = (0 as the type of edgeNode):
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set endpointKeys to [edgeNode's start,edgeNode's end]
+                    loop endpointIndex from 0 to 2:
+                        set vertexNode to the cad node pointer for (the item at endpointIndex in endpointKeys) in sourceBody
+                        if vertexNode = (0 as the type of vertexNode):
+                            free faceUses
+                            free boundaryPoints
+                            free faceKeys
+                            return no cad blend existing corners
+                        set uniquePoint to true
+                        loop pointIndex from 0 to the length of boundaryPoints:
+                            if (the cad distance from (the item at pointIndex in boundaryPoints) to vertexNode's point) <= tolerance:
+                                set uniquePoint to false
+                        if uniquePoint:
+                            append vertexNode's point to boundaryPoints
+                    set otherFace to a new cad face key
+                    set foundOther to false
+                    loop edgeUseIndex from 0 to the length of edgeNode's coedges's values:
+                        set edgeUse to the cad node pointer for (the item at edgeUseIndex in edgeNode's coedges's values) in sourceBody
+                        if edgeUse != (0 as the type of edgeUse):
+                            set ownerLoop to the cad node pointer for edgeUse's owner in sourceBody
+                            if ownerLoop != (0 as the type of ownerLoop):
+                                if ownerLoop's owner != faceKey:
+                                    set otherFace to ownerLoop's owner
+                                    set foundOther to true
+                    if foundOther = false:
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set otherFaceNode to the cad node pointer for otherFace in sourceBody
+                    if otherFaceNode = (0 as the type of otherFaceNode):
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set otherSurfaceNode to the cad node pointer for otherFaceNode's surface in sourceBody
+                    if (otherSurfaceNode = (0 as the type of otherSurfaceNode)) or (otherSurfaceNode's kind != 1):
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set axisResult to the cad normal of otherSurfaceNode's cylinder's base
+                    if axisResult's valid = false:
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                    set centreOffset to the cad difference of centre and otherSurfaceNode's cylinder's base's origin
+                    set radialOffset to the cad difference of centreOffset and (axisResult's value scaled by (the cad dot of centreOffset and axisResult's value))
+                    if ((the absolute value of (otherSurfaceNode's cylinder's radius - sphereValue's radius)) > tolerance) or ((the cad length of radialOffset) > tolerance):
+                        free faceUses
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                free faceUses
+                if (the length of boundaryPoints) != 3:
+                    free boundaryPoints
+                    free faceKeys
+                    return no cad blend existing corners
+                set radialSum to the cad zero vector3
+                loop pointIndex from 0 to the length of boundaryPoints:
+                    set radialSum to the cad sum of radialSum and (the cad difference of (the item at pointIndex in boundaryPoints) and centre)
+                set normalResult to the cad normalization of radialSum
+                if normalResult's valid = false:
+                    free boundaryPoints
+                    free faceKeys
+                    return no cad blend existing corners
+                set cornerOrigin to the item at 0 in boundaryPoints
+                loop pointIndex from 0 to the length of boundaryPoints:
+                    set candidatePoint to the item at pointIndex in boundaryPoints
+                    set planeGap to the absolute value of (the cad dot of normalResult's value and (the cad difference of candidatePoint and cornerOrigin))
+                    set radiusGap to the absolute value of ((the cad distance from candidatePoint to centre) - sphereValue's radius)
+                    if (planeGap > tolerance) or (radiusGap > tolerance):
+                        free boundaryPoints
+                        free faceKeys
+                        return no cad blend existing corners
+                set cornerCut to a cad blend halfspace at cornerOrigin with normal normalResult's value, offset (the cad dot of normalResult's value and cornerOrigin) and added true
+                append (a cad blend corner cut by cornerCut on sphereValue) to cornerValues's values
+                free boundaryPoints
+        free faceKeys
+        return the cad blend existing corners cornerValues
+
+local function the cad blend positive turn of {a 64 bit floating-point number:value}:
+    execute:
+        set result to the remainder of value divided by 6.283185307179586
+        if result < 0.0:
+            set result to result + 6.283185307179586
+        return result
+
+local function the cad blend circle parameters on {cad plane:plane} from {cad vector3:startPoint} to {cad vector3:endPoint}:
+    execute:
+        set startProjection to the cad projection of startPoint onto plane
+        set endProjection to the cad projection of endPoint onto plane
+        if (startProjection's valid = false) or (endProjection's valid = false):
+            return no cad blend interval
+        set firstAngle to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, startProjection's value's y, startProjection's value's x)
+        set lastAngle to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, endProjection's value's y, endProjection's value's x)
+        set span to the cad blend positive turn of (lastAngle - firstAngle)
+        if span <= 1e-12:
+            return no cad blend interval
+        return the cad blend interval from firstAngle to (firstAngle + span)
+
+local function the cad blend cylinder seam between {cad cylinder:firstCylinder} and {cad cylinder:secondCylinder} from {cad vector3:startPoint} to {cad vector3:endPoint} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the absolute value of (firstCylinder's radius - secondCylinder's radius)) > tolerance:
+            return no cad blend curve
+        set firstAxisResult to the cad normal of firstCylinder's base
+        set secondAxisResult to the cad normal of secondCylinder's base
+        if (firstAxisResult's valid = false) or (secondAxisResult's valid = false):
+            return no cad blend curve
+        set firstAxis to firstAxisResult's value
+        set secondAxis to secondAxisResult's value
+        set axesCosine to the cad dot of firstAxis and secondAxis
+        if (the absolute value of axesCosine) > (1.0 - 1e-8):
+            return no cad blend curve
+        set originDelta to the cad difference of secondCylinder's base's origin and firstCylinder's base's origin
+        set along to ((the cad dot of firstAxis and originDelta) - (axesCosine * (the cad dot of secondAxis and originDelta))) / (1.0 - (axesCosine * axesCosine))
+        set centre to the cad sum of firstCylinder's base's origin and (firstAxis scaled by along)
+        set secondDelta to the cad difference of centre and secondCylinder's base's origin
+        set radialDelta to the cad difference of secondDelta and (secondAxis scaled by (the cad dot of secondDelta and secondAxis))
+        if (the cad length of radialDelta) > tolerance:
+            return no cad blend curve
+        set bisectors to [the cad sum of firstAxis and secondAxis,the cad difference of firstAxis and secondAxis]
+        loop bisectorIndex from 0 to 2:
+            set normalResult to the cad normalization of (the item at bisectorIndex in bisectors)
+            if normalResult's valid:
+                set seamNormal to normalResult's value
+                set startGap to the absolute value of (the cad dot of seamNormal and (the cad difference of startPoint and centre))
+                set endGap to the absolute value of (the cad dot of seamNormal and (the cad difference of endPoint and centre))
+                if (startGap <= tolerance) and (endGap <= tolerance):
+                    set seamCosine to the absolute value of (the cad dot of seamNormal and firstAxis)
+                    if seamCosine >= 1e-8:
+                        set majorResult to the cad normalization of (the cad difference of firstAxis and (seamNormal scaled by (the cad dot of seamNormal and firstAxis)))
+                        if majorResult's valid:
+                            set planeResult to the cad orthonormal plane with origin centre, x axis majorResult's value and normal seamNormal
+                            if planeResult's valid:
+                                set ellipse to a cad ellipse3 with plane planeResult's value, major radius (firstCylinder's radius / seamCosine) and minor radius firstCylinder's radius
+                                return the cad blend curve (the cad edge curve3 of ellipse)
+        return no cad blend curve
+
+local function cad blend set round {cad edge key:edgeKey} in {cad body:outputBody} to {cad edge curve3:curveValue} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in outputBody
+        if edgeNode = (0 as the type of edgeNode):
+            return false
+        set startNode to the cad node pointer for edgeNode's start in outputBody
+        set endNode to the cad node pointer for edgeNode's end in outputBody
+        if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+            return false
+        set beginParameter to the cad parameter on curveValue nearest startNode's point
+        set span to the cad blend positive turn of ((the cad parameter on curveValue nearest endNode's point) - beginParameter)
+        if span > 3.141592653589793:
+            if curveValue's kind = 2:
+                set ellipseValue to curveValue's ellipse
+                set planeValue to ellipseValue's plane
+                set planeValue's yAxis to the cad negative of planeValue's yAxis
+                set ellipseValue's plane to planeValue
+                set curveValue's ellipse to ellipseValue
+            else if curveValue's kind = 1:
+                set circleValue to curveValue's circle
+                set planeValue to circleValue's plane
+                set planeValue's yAxis to the cad negative of planeValue's yAxis
+                set circleValue's plane to planeValue
+                set curveValue's circle to circleValue
+            else:
+                return false
+            set beginParameter to the cad parameter on curveValue nearest startNode's point
+            set span to the cad blend positive turn of ((the cad parameter on curveValue nearest endNode's point) - beginParameter)
+        if (span <= 1e-12) or (span > (3.141592653589793 + 1e-8)):
+            return false
+        set firstPoint to the cad point on curveValue at beginParameter
+        set lastPoint to the cad point on curveValue at (beginParameter + span)
+        if ((the cad distance from firstPoint to startNode's point) > tolerance) or ((the cad distance from lastPoint to endNode's point) > tolerance):
+            return false
+        replace cad node edgeNode's curve in outputBody with curveValue
+        set edgeNode's startParameter to beginParameter
+        set edgeNode's endParameter to beginParameter + span
+        return true
+
+local function the cad blend rounded boundary count for {cad face key:faceKey} in {cad body:outputBody} on {cad cylinder:cylinder} forward {boolean:forwardValue} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set axisResult to the cad normal of cylinder's base
+        if axisResult's valid = false:
+            return -1
+        set axis to axisResult's value
+        set centre to cylinder's base's origin
+        set faceNode to the cad node pointer for faceKey in outputBody
+        if faceNode = (0 as the type of faceNode):
+            return -1
+        replace cad node faceNode's surface in outputBody with (the cad surface of cylinder)
+        set faceNode's forward to forwardValue
+        if (the length of faceNode's loops's values) < 1:
+            return -1
+        set loopNode to the cad node pointer for (the item at 0 in faceNode's loops's values) in outputBody
+        if loopNode = (0 as the type of loopNode):
+            return -1
+        set edgeKeys to an empty list of a cad edge key
+        loop useIndex from 0 to the length of loopNode's coedges's values:
+            set useNode to the cad node pointer for (the item at useIndex in loopNode's coedges's values) in outputBody
+            if useNode = (0 as the type of useNode):
+                free edgeKeys
+                return -1
+            append useNode's edge to edgeKeys
+        set roundedCount to 0
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeKey to the item at edgeIndex in edgeKeys
+            set edgeNode to the cad node pointer for edgeKey in outputBody
+            if edgeNode = (0 as the type of edgeNode):
+                free edgeKeys
+                return -1
+            set startNode to the cad node pointer for edgeNode's start in outputBody
+            set endNode to the cad node pointer for edgeNode's end in outputBody
+            if (startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode)):
+                free edgeKeys
+                return -1
+            set edgeDirection to the cad normalization of (the cad difference of endNode's point and startNode's point)
+            if edgeDirection's valid = false:
+                free edgeKeys
+                return -1
+            if (the absolute value of (the cad dot of edgeDirection's value and axis)) <= (1.0 - 1e-8):
+                set otherFace to a new cad face key
+                set foundOther to false
+                loop useIndex from 0 to the length of edgeNode's coedges's values:
+                    set useNode to the cad node pointer for (the item at useIndex in edgeNode's coedges's values) in outputBody
+                    if useNode != (0 as the type of useNode):
+                        set ownerLoop to the cad node pointer for useNode's owner in outputBody
+                        if ownerLoop != (0 as the type of ownerLoop):
+                            if ownerLoop's owner != faceKey:
+                                set otherFace to ownerLoop's owner
+                                set foundOther to true
+                if foundOther = false:
+                    free edgeKeys
+                    return -1
+                set otherFaceNode to the cad node pointer for otherFace in outputBody
+                if otherFaceNode = (0 as the type of otherFaceNode):
+                    free edgeKeys
+                    return -1
+                set otherSurfaceNode to the cad node pointer for otherFaceNode's surface in outputBody
+                if otherSurfaceNode = (0 as the type of otherSurfaceNode):
+                    free edgeKeys
+                    return -1
+                if otherSurfaceNode's kind = 1:
+                    set seamResult to the cad blend cylinder seam between cylinder and otherSurfaceNode's cylinder from startNode's point to endNode's point within tolerance
+                    if seamResult's valid = false:
+                        free edgeKeys
+                        return -1
+                    if (cad blend set round edgeKey in outputBody to seamResult's value within tolerance) = false:
+                        free edgeKeys
+                        return -1
+                    increment roundedCount
+                else:
+                    set startDelta to the cad difference of startNode's point and centre
+                    set endDelta to the cad difference of endNode's point and centre
+                    set startHeight to the cad dot of startDelta and axis
+                    set endHeight to the cad dot of endDelta and axis
+                    if (the absolute value of (startHeight - endHeight)) > tolerance:
+                        free edgeKeys
+                        return -1
+                    set crossCentre to the cad sum of centre and (axis scaled by ((startHeight + endHeight) * 0.5))
+                    set circlePlaneResult to the cad orthonormal plane with origin crossCentre, x axis cylinder's base's xAxis and normal axis
+                    if circlePlaneResult's valid = false:
+                        free edgeKeys
+                        return -1
+                    set circlePlane to circlePlaneResult's value
+                    set parameters to the cad blend circle parameters on circlePlane from startNode's point to endNode's point
+                    if parameters's valid = false:
+                        free edgeKeys
+                        return -1
+                    if (parameters's second - parameters's first) > (3.141592653589793 + 1e-9):
+                        set circlePlaneResult to the cad orthonormal plane with origin crossCentre, x axis cylinder's base's xAxis and normal (the cad negative of axis)
+                        if circlePlaneResult's valid = false:
+                            free edgeKeys
+                            return -1
+                        set circlePlane to circlePlaneResult's value
+                        set parameters to the cad blend circle parameters on circlePlane from startNode's point to endNode's point
+                        if parameters's valid = false:
+                            free edgeKeys
+                            return -1
+                    set roundCurve to the cad edge curve3 of (a cad circle3 with plane circlePlane and radius cylinder's radius)
+                    replace cad node edgeNode's curve in outputBody with roundCurve
+                    set edgeNode's startParameter to parameters's first
+                    set edgeNode's endParameter to parameters's second
+                    increment roundedCount
+        free edgeKeys
+        return roundedCount
+
+local function cad blend restore {a pointer to a list:existingValues} and {a pointer to a list:cornerValues} in {cad body:outputBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set targetFaces to an empty list of a cad face key
+        loop filletIndex from 0 to the length of existingValues:
+            set preserved to the item at filletIndex in existingValues
+            set target to the cad blend face on preserved's cut in outputBody within tolerance
+            if target's valid = false:
+                free targetFaces
+                return false
+            append target's value to targetFaces
+        loop cornerIndex from 0 to the length of cornerValues:
+            set cornerValue to the item at cornerIndex in cornerValues
+            set cornerFace to the cad blend face on cornerValue's cut in outputBody within tolerance
+            if cornerFace's valid = false:
+                free targetFaces
+                return false
+            set cornerNode to the cad node pointer for cornerFace's value in outputBody
+            if cornerNode = (0 as the type of cornerNode):
+                free targetFaces
+                return false
+            replace cad node cornerNode's surface in outputBody with (the cad surface of cornerValue's sphere)
+        loop filletIndex from 0 to the length of existingValues:
+            set preserved to the item at filletIndex in existingValues
+            set targetFace to the item at filletIndex in targetFaces
+            set targetNode to the cad node pointer for targetFace in outputBody
+            if targetNode = (0 as the type of targetNode):
+                free targetFaces
+                return false
+            replace cad node targetNode's surface in outputBody with (the cad surface of preserved's cylinder)
+            set targetNode's forward to preserved's forward
+        loop filletIndex from 0 to the length of existingValues:
+            set preserved to the item at filletIndex in existingValues
+            set targetFace to the item at filletIndex in targetFaces
+            set roundedCount to the cad blend rounded boundary count for targetFace in outputBody on preserved's cylinder forward preserved's forward within tolerance
+            if roundedCount != 2:
+                free targetFaces
+                return false
+        free targetFaces
+        return true
+
+local function cad blend boundaries of {cad body:sourceBody} fit within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set edgeKeys to the cad edge keys of sourceBody
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free edgeKeys
+                return false
+            set curveNode to the cad node pointer for edgeNode's curve in sourceBody
+            if curveNode = (0 as the type of curveNode):
+                free edgeKeys
+                return false
+            loop useIndex from 0 to the length of edgeNode's coedges's values:
+                set useNode to the cad node pointer for (the item at useIndex in edgeNode's coedges's values) in sourceBody
+                if useNode = (0 as the type of useNode):
+                    free edgeKeys
+                    return false
+                set loopNode to the cad node pointer for useNode's owner in sourceBody
+                if loopNode = (0 as the type of loopNode):
+                    free edgeKeys
+                    return false
+                set faceNode to the cad node pointer for loopNode's owner in sourceBody
+                if faceNode = (0 as the type of faceNode):
+                    free edgeKeys
+                    return false
+                set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+                if surfaceNode = (0 as the type of surfaceNode):
+                    free edgeKeys
+                    return false
+                loop sample from 0 to 9:
+                    set fraction to (sample as a 64 bit floating-point number) / 8.0
+                    set parameter to edgeNode's startParameter + ((edgeNode's endParameter - edgeNode's startParameter) * fraction)
+                    set point to the cad point on (@intrinsic("dereference", curveNode)) at parameter
+                    set coordinates to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest point
+                    if coordinates's valid = false:
+                        free edgeKeys
+                        return false
+                    set nearest to the cad point on (@intrinsic("dereference", surfaceNode)) at parameters coordinates's value's x and coordinates's value's y
+                    if (the cad distance from point to nearest) > tolerance:
+                        free edgeKeys
+                        return false
+        free edgeKeys
+        return true
+
+local function cad blend faces {cad face key:firstFace} and {cad face key:secondFace} touch in {cad body:sourceBody}:
+    execute:
+        set firstUses to the cad face coedges of firstFace in sourceBody
+        set secondUses to the cad face coedges of secondFace in sourceBody
+        loop firstIndex from 0 to the length of firstUses:
+            set firstUse to the cad node pointer for (the item at firstIndex in firstUses) in sourceBody
+            if firstUse != (0 as the type of firstUse):
+                set firstEdge to the cad node pointer for firstUse's edge in sourceBody
+                if firstEdge != (0 as the type of firstEdge):
+                    loop secondIndex from 0 to the length of secondUses:
+                        set secondUse to the cad node pointer for (the item at secondIndex in secondUses) in sourceBody
+                        if secondUse != (0 as the type of secondUse):
+                            set secondEdge to the cad node pointer for secondUse's edge in sourceBody
+                            if secondEdge != (0 as the type of secondEdge):
+                                set sharedStart to (firstEdge's start = secondEdge's start) or (firstEdge's start = secondEdge's end)
+                                set sharedEnd to (firstEdge's end = secondEdge's start) or (firstEdge's end = secondEdge's end)
+                                if sharedStart or sharedEnd:
+                                    free secondUses
+                                    free firstUses
+                                    return true
+        free secondUses
+        free firstUses
+        return false
+
+local function the cad blend intersection of {cad blend halfspace:firstSpace}, {cad blend halfspace:secondSpace} and {cad blend halfspace:thirdSpace}:
+    execute:
+        set secondCrossThird to the cad cross of secondSpace's normal and thirdSpace's normal
+        set denominator to the cad dot of firstSpace's normal and secondCrossThird
+        if (the absolute value of denominator) <= 1e-12:
+            return no cad blend point
+        set reference to firstSpace's origin
+        set firstLocalOffset to the cad dot of firstSpace's normal and (the cad difference of firstSpace's origin and reference)
+        set secondLocalOffset to the cad dot of secondSpace's normal and (the cad difference of secondSpace's origin and reference)
+        set thirdLocalOffset to the cad dot of thirdSpace's normal and (the cad difference of thirdSpace's origin and reference)
+        set firstTerm to secondCrossThird scaled by firstLocalOffset
+        set secondTerm to (the cad cross of thirdSpace's normal and firstSpace's normal) scaled by secondLocalOffset
+        set thirdTerm to (the cad cross of firstSpace's normal and secondSpace's normal) scaled by thirdLocalOffset
+        set numerator to the cad sum of (the cad sum of firstTerm and secondTerm) and thirdTerm
+        return the cad blend point (the cad sum of reference and (numerator cad divided by denominator))
+
+local function the cad blend angle of point {integer:pointIndex} among {a pointer to a list:points} around {cad vector3:centre} with x axis {cad vector3:xAxis} and y axis {cad vector3:yAxis}:
+    execute:
+        set delta to the cad difference of (the item at pointIndex in points) and centre
+        set alongX to the cad dot of delta and xAxis
+        set alongY to the cad dot of delta and yAxis
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, alongY, alongX)
+
+local function sort cad blend {a pointer to a list:indices} among {a pointer to a list:points} around {cad vector3:centre} with x axis {cad vector3:xAxis} and y axis {cad vector3:yAxis}:
+    execute:
+        loop index from 1 to the length of indices:
+            set current to the item at index in indices
+            set currentAngle to the cad blend angle of point current among points around centre with x axis xAxis and y axis yAxis
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in indices
+                set previousAngle to the cad blend angle of point previous among points around centre with x axis xAxis and y axis yAxis
+                if previousAngle <= currentAngle:
+                    set searching to false
+                else:
+                    replace item at index position in indices with previous
+                    decrement position
+            replace item at index position in indices with current
+
+local function remove cad blend collinear points from {a pointer to a list:indices} among {a pointer to a list:points} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set searching to true
+        loop while searching and ((the length of indices) >= 3):
+            set searching to false
+            set removeAt to -1
+            set count to the length of indices
+            loop index from 0 to count:
+                if searching = false:
+                    set beforeIndex to the item at (the remainder of (index + count - 1) divided by count) in indices
+                    set hereIndex to the item at index in indices
+                    set afterIndex to the item at (the remainder of (index + 1) divided by count) in indices
+                    set beforePoint to the item at beforeIndex in points
+                    set herePoint to the item at hereIndex in points
+                    set afterPoint to the item at afterIndex in points
+                    set firstDirection to the cad difference of herePoint and beforePoint
+                    set secondDirection to the cad difference of afterPoint and herePoint
+                    set turn to the cad length of (the cad cross of firstDirection and secondDirection)
+                    set scale to the maximum of (the cad length of firstDirection) and (the cad length of secondDirection)
+                    if turn <= (tolerance * scale):
+                        set removeAt to index
+                        set searching to true
+            if searching:
+                remove item removeAt from indices
+
+local function the cad blend convex body from {cad topology list:spaces} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set points to an empty list of a cad vector3
+        loop firstIndex from 0 to the length of spaces's values:
+            loop secondIndex from (firstIndex + 1) to the length of spaces's values:
+                loop thirdIndex from (secondIndex + 1) to the length of spaces's values:
+                    set crossing to the cad blend intersection of (the item at firstIndex in spaces's values), (the item at secondIndex in spaces's values) and (the item at thirdIndex in spaces's values)
+                    if crossing's valid:
+                        set inside to true
+                        loop spaceIndex from 0 to the length of spaces's values:
+                            set candidateSpace to the item at spaceIndex in spaces's values
+                            if (the cad dot of candidateSpace's normal and crossing's value) > (candidateSpace's offset + tolerance):
+                                set inside to false
+                        if inside:
+                            set unique to true
+                            loop pointIndex from 0 to the length of points:
+                                if (the cad distance from (the item at pointIndex in points) to crossing's value) <= tolerance:
+                                    set unique to false
+                            if unique:
+                                append crossing's value to points
+        if (the length of points) < 4:
+            free points
+            return no cad body
+        set rings to an empty list of the type of (an empty list of an integer)
+        set addedFace to false
+        loop spaceIndex from 0 to the length of spaces's values:
+            set currentSpace to the item at spaceIndex in spaces's values
+            set indices to an empty list of an integer
+            set centre to the cad zero vector3
+            loop pointIndex from 0 to the length of points:
+                set candidatePoint to the item at pointIndex in points
+                if (the absolute value of ((the cad dot of currentSpace's normal and candidatePoint) - currentSpace's offset)) <= tolerance:
+                    append pointIndex to indices
+                    set centre to the cad sum of centre and candidatePoint
+            if (the length of indices) >= 3:
+                set centre to centre cad divided by ((the length of indices) as a 64 bit floating-point number)
+                set seed to the cad y axis
+                if (the absolute value of currentSpace's normal's x) < 0.8:
+                    set seed to the cad x axis
+                set xResult to the cad normalization of (the cad cross of currentSpace's normal and seed)
+                if xResult's valid = false:
+                    loop ringIndex from 0 to the length of rings:
+                        free (the item at ringIndex in rings)
+                    free rings
+                    free indices
+                    free points
+                    return no cad body
+                set xAxis to xResult's value
+                set yAxis to the cad cross of currentSpace's normal and xAxis
+                sort cad blend indices among points around centre with x axis xAxis and y axis yAxis
+                remove cad blend collinear points from indices among points within tolerance
+            if (the length of indices) >= 3:
+                append indices to rings
+                if currentSpace's added:
+                    set addedFace to true
+            else:
+                free indices
+        if addedFace = false:
+            loop ringIndex from 0 to the length of rings:
+                free (the item at ringIndex in rings)
+            free rings
+            free points
+            return no cad body
+        set built to the cad faceted solid with vertices points and faces rings within tolerance
+        loop ringIndex from 0 to the length of rings:
+            free (the item at ringIndex in rings)
+        free rings
+        free points
+        return built
+
+local function the cad blend stitched vertex for {cad vector3:point} in {cad body:outputBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set vertexKeys to the cad vertex keys of outputBody
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexKey to the item at vertexIndex in vertexKeys
+            set vertexNode to the cad node pointer for vertexKey in outputBody
+            if vertexNode != (0 as the type of vertexNode):
+                if (the cad distance from vertexNode's point to point) <= tolerance:
+                    free vertexKeys
+                    return vertexKey
+        free vertexKeys
+        set value to a cad vertex at point with provenance (the synthesized cad provenance)
+        return the cad body key after inserting value into outputBody
+
+local function the cad blend stitched edge copied from {cad edge key:sourceEdgeKey} in {cad body:sourceBody} between {cad vertex key:destinationStart} and {cad vertex key:destinationEnd} into {cad body:outputBody}:
+    execute:
+        set edgeKeys to the cad edge keys of outputBody
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeKey to the item at edgeIndex in edgeKeys
+            set edgeNode to the cad node pointer for edgeKey in outputBody
+            if edgeNode != (0 as the type of edgeNode):
+                set sameOrder to (edgeNode's start = destinationStart) and (edgeNode's end = destinationEnd)
+                set reverseOrder to (edgeNode's start = destinationEnd) and (edgeNode's end = destinationStart)
+                if sameOrder or reverseOrder:
+                    free edgeKeys
+                    return edgeKey
+        free edgeKeys
+        set sourceEdgeNode to the cad node pointer for sourceEdgeKey in sourceBody
+        if sourceEdgeNode = (0 as the type of sourceEdgeNode):
+            return a new cad edge key
+        set sourceCurveNode to the cad node pointer for sourceEdgeNode's curve in sourceBody
+        if sourceCurveNode = (0 as the type of sourceCurveNode):
+            return a new cad edge key
+        set curveKey to the cad body key after inserting (@intrinsic("dereference", sourceCurveNode)) into outputBody
+        set copiedEdge to a cad edge on curveKey from sourceEdgeNode's startParameter to sourceEdgeNode's endParameter between destinationStart and destinationEnd with provenance (the synthesized cad provenance)
+        return the cad body key after inserting copiedEdge into outputBody
+
+local function cad blend copy {cad face key:sourceFaceKey} from {cad body:sourceBody} into {cad body:outputBody} owned by {cad shell key:destinationShell} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set sourceFaceNode to the cad node pointer for sourceFaceKey in sourceBody
+        if sourceFaceNode = (0 as the type of sourceFaceNode):
+            return false
+        if (the length of sourceFaceNode's loops's values) != 1:
+            return false
+        set sourceSurfaceNode to the cad node pointer for sourceFaceNode's surface in sourceBody
+        if sourceSurfaceNode = (0 as the type of sourceSurfaceNode):
+            return false
+        set destinationSurface to the cad body key after inserting (@intrinsic("dereference", sourceSurfaceNode)) into outputBody
+        set destinationFaceValue to a cad face on destinationSurface forward sourceFaceNode's forward owned by destinationShell with provenance (the synthesized cad provenance)
+        set destinationFace to the cad body key after inserting destinationFaceValue into outputBody
+        set destinationLoopValue to a cad loop owned by destinationFace with provenance (the synthesized cad provenance)
+        set destinationLoop to the cad body key after inserting destinationLoopValue into outputBody
+        set sourceLoopNode to the cad node pointer for (the item at 0 in sourceFaceNode's loops's values) in sourceBody
+        if sourceLoopNode = (0 as the type of sourceLoopNode):
+            return false
+        loop useIndex from 0 to the length of sourceLoopNode's coedges's values:
+            set sourceUseNode to the cad node pointer for (the item at useIndex in sourceLoopNode's coedges's values) in sourceBody
+            if sourceUseNode = (0 as the type of sourceUseNode):
+                return false
+            set sourceEdgeNode to the cad node pointer for sourceUseNode's edge in sourceBody
+            if sourceEdgeNode = (0 as the type of sourceEdgeNode):
+                return false
+            set sourceStartNode to the cad node pointer for sourceEdgeNode's start in sourceBody
+            set sourceEndNode to the cad node pointer for sourceEdgeNode's end in sourceBody
+            if (sourceStartNode = (0 as the type of sourceStartNode)) or (sourceEndNode = (0 as the type of sourceEndNode)):
+                return false
+            set destinationStart to the cad blend stitched vertex for sourceStartNode's point in outputBody within tolerance
+            set destinationEnd to the cad blend stitched vertex for sourceEndNode's point in outputBody within tolerance
+            set destinationEdge to the cad blend stitched edge copied from sourceUseNode's edge in sourceBody between destinationStart and destinationEnd into outputBody
+            set destinationEdgeNode to the cad node pointer for destinationEdge in outputBody
+            if destinationEdgeNode = (0 as the type of destinationEdgeNode):
+                return false
+            set reversed to destinationEdgeNode's start != destinationStart
+            set destinationForward to sourceUseNode's forward != reversed
+            set destinationUseValue to a cad coedge on destinationEdge forward destinationForward with pcurve (no cad pcurve) owned by destinationLoop with provenance (the synthesized cad provenance)
+            set destinationUse to the cad body key after inserting destinationUseValue into outputBody
+            append destinationUse to destinationEdgeNode's coedges's values
+            set destinationLoopNode to the cad node pointer for destinationLoop in outputBody
+            append destinationUse to destinationLoopNode's coedges's values
+        set destinationFaceNode to the cad node pointer for destinationFace in outputBody
+        append destinationLoop to destinationFaceNode's loops's values
+        set destinationShellNode to the cad node pointer for destinationShell in outputBody
+        append destinationFace to destinationShellNode's faces's values
+        return true
+
+local function sort cad blend face keys {a pointer to a list:faceKeys}:
+    execute:
+        loop index from 1 to the length of faceKeys:
+            set current to the item at index in faceKeys
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in faceKeys
+                if (the cad slot of previous) <= (the cad slot of current):
+                    set searching to false
+                else:
+                    replace item at index position in faceKeys with previous
+                    decrement position
+            replace item at index position in faceKeys with current
+
+local function the cad blend open body copied from {cad body:closedBody} keeping {a pointer to a list:faceKeys} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set outputBody to an empty cad body
+        set destinationLump to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into outputBody
+        set destinationShell to the cad body key after inserting (a cad shell owned by destinationLump with provenance (the synthesized cad provenance)) into outputBody
+        loop faceIndex from 0 to the length of faceKeys:
+            if (cad blend copy (the item at faceIndex in faceKeys) from closedBody into outputBody owned by destinationShell within tolerance) = false:
+                return no cad body
+        set destinationLumpNode to the cad node pointer for destinationLump in outputBody
+        if destinationLumpNode = (0 as the type of destinationLumpNode):
+            return no cad body
+        append destinationShell to destinationLumpNode's shells's values
+        append destinationLump to outputBody's roots
+        set flaws to the cad flaws of outputBody
+        set accepted to (the length of flaws) = 0
+        free flaws
+        if accepted = false:
+            return no cad body
+        return the cad body result of outputBody
+
+local function the cad blend fillet body error corresponding to {integer:chamferError}:
+    execute:
+        if chamferError = cad chamfer no error:
+            return cad fillet no error
+        if chamferError = cad chamfer invalid body topology error:
+            return cad fillet invalid body topology error
+        if chamferError = cad chamfer unsupported body topology error:
+            return cad fillet unsupported body topology error
+        if chamferError = cad chamfer non convex body error:
+            return cad fillet non convex body error
+        if chamferError = cad chamfer unsupported existing fillet error:
+            return cad fillet unsupported existing fillet error
+        return cad fillet unsupported body surface error
+
+local function the cad blend fillet edge error corresponding to {integer:chamferError}:
+    execute:
+        if chamferError = cad chamfer no error:
+            return cad fillet no error
+        if chamferError = cad chamfer unknown edge error:
+            return cad fillet unknown edge error
+        if chamferError = cad chamfer invalid body topology error:
+            return cad fillet invalid body topology error
+        if chamferError = cad chamfer unsupported edge curve error:
+            return cad fillet unsupported edge curve error
+        if chamferError = cad chamfer non manifold edge error:
+            return cad fillet non manifold edge error
+        if chamferError = cad chamfer unsupported adjacent surface error:
+            return cad fillet unsupported adjacent surface error
+        return cad fillet degenerate geometry error
+
+local function the cad blend planar fillet of {cad body:sourceBody} along {a pointer to a list:selected} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set existingScan to the cad blend existing fillets of sourceBody
+        if existingScan's valid = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet unsupported existing fillet error))
+        set existingCornerScan to the cad blend existing corners of sourceBody within tolerance
+        if existingCornerScan's valid = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet unsupported existing fillet error))
+        set bodyError to the cad blend supported body error of sourceBody preserving existingScan's values's values and existingCornerScan's values's values within tolerance
+        set filletBodyError to the cad blend fillet body error corresponding to bodyError
+        if filletBodyError != cad fillet no error:
+            return cad public fillet failure (a cad fillet error of kind filletBodyError)
+        set spaces to a cad topology list of a cad blend halfspace
+        set targets to a cad topology list of a cad blend target
+        loop selectedIndex from 0 to the length of selected:
+            set edgeKey to the item at selectedIndex in selected
+            set edgeError to the cad blend edge error of edgeKey in sourceBody
+            set filletEdgeError to the cad blend fillet edge error corresponding to edgeError
+            if filletEdgeError != cad fillet no error:
+                return cad public fillet failure (a cad fillet error of kind filletEdgeError at edgeKey)
+            set frameResult to the cad blend frame of edgeKey in sourceBody
+            if frameResult's valid = false:
+                return cad public fillet failure (a cad fillet error of kind (cad fillet degenerate geometry error) at edgeKey)
+            if selectedIndex = 0:
+                loop spaceIndex from 0 to the length of frameResult's value's halfspaces's values:
+                    append (the item at spaceIndex in frameResult's value's halfspaces's values) to spaces's values
+                loop existingIndex from 0 to the length of existingScan's values's values:
+                    append (the item at existingIndex in existingScan's values's values)'s cut to spaces's values
+                loop existingCornerIndex from 0 to the length of existingCornerScan's values's values:
+                    append (the item at existingCornerIndex in existingCornerScan's values's values)'s cut to spaces's values
+            set geometryResult to the cad blend fillet geometry for frameResult's value with radius radius and tolerance tolerance
+            if geometryResult's valid = false:
+                return cad public fillet failure (a cad fillet error of kind (cad fillet degenerate geometry error) at edgeKey)
+            append geometryResult's value's cut to spaces's values
+            append (a cad blend target for edgeKey cut by geometryResult's value's cut on geometryResult's value's cylinder) to targets's values
+        if (cad blend selected selected stay separate in sourceBody with radius radius and tolerance tolerance) = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+        set cornerResult to the cad blend corner patches of sourceBody along selected with radius radius and tolerance tolerance
+        if cornerResult's valid = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet adjacent selections error) between cornerResult's first and cornerResult's second)
+        loop cornerIndex from 0 to the length of cornerResult's values's values:
+            append (the item at cornerIndex in cornerResult's values's values)'s cut to spaces's values
+        set built to the cad blend convex body from spaces within tolerance
+        if built's valid = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+        set outputBody to built's value
+        set existingFaces to an empty list of a cad face key
+        loop existingIndex from 0 to the length of existingScan's values's values:
+            set preservedFace to the cad blend face on (the item at existingIndex in existingScan's values's values)'s cut in outputBody within tolerance
+            if preservedFace's valid = false:
+                free existingFaces
+                return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            set duplicateFace to false
+            loop faceIndex from 0 to the length of existingFaces:
+                if (the item at faceIndex in existingFaces) = preservedFace's value:
+                    set duplicateFace to true
+            if duplicateFace:
+                free existingFaces
+                return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            append preservedFace's value to existingFaces
+        set locatedTargets to a cad topology list of a cad blend located target
+        set occupiedFaces to an empty list of a cad face key
+        loop existingIndex from 0 to the length of existingFaces:
+            append (the item at existingIndex in existingFaces) to occupiedFaces
+        loop targetIndex from 0 to the length of targets's values:
+            set targetValue to the item at targetIndex in targets's values
+            set targetFace to the cad blend face on targetValue's cut in outputBody within tolerance
+            if targetFace's valid = false:
+                free occupiedFaces
+                free existingFaces
+                return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            set duplicateFace to false
+            loop occupiedIndex from 0 to the length of occupiedFaces:
+                if (the item at occupiedIndex in occupiedFaces) = targetFace's value:
+                    set duplicateFace to true
+            if duplicateFace:
+                free occupiedFaces
+                free existingFaces
+                return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            loop existingIndex from 0 to the length of existingFaces:
+                if cad blend faces (the item at existingIndex in existingFaces) and targetFace's value touch in outputBody:
+                    free occupiedFaces
+                    free existingFaces
+                    return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            append targetFace's value to occupiedFaces
+            append (a cad blend located target for targetValue's edge at targetFace's value on targetValue's cylinder) to locatedTargets's values
+        free occupiedFaces
+        free existingFaces
+        if (cad blend restore existingScan's values's values and existingCornerScan's values's values in outputBody within tolerance) = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet unsupported existing fillet error))
+        loop targetIndex from 0 to the length of locatedTargets's values:
+            set targetValue to the item at targetIndex in locatedTargets's values
+            set targetNode to the cad node pointer for targetValue's face in outputBody
+            if targetNode = (0 as the type of targetNode):
+                return cad public fillet failure (a cad fillet error of kind (cad fillet invalid result error))
+            replace cad node targetNode's surface in outputBody with (the cad surface of targetValue's cylinder)
+        loop cornerIndex from 0 to the length of cornerResult's values's values:
+            set cornerValue to the item at cornerIndex in cornerResult's values's values
+            set cornerFace to the cad blend face on cornerValue's cut in outputBody within tolerance
+            if cornerFace's valid = false:
+                return cad public fillet failure (a cad fillet error of kind (cad fillet radius interaction error))
+            set cornerNode to the cad node pointer for cornerFace's value in outputBody
+            if cornerNode = (0 as the type of cornerNode):
+                return cad public fillet failure (a cad fillet error of kind (cad fillet invalid result error))
+            replace cad node cornerNode's surface in outputBody with (the cad surface of cornerValue's sphere)
+        loop targetIndex from 0 to the length of locatedTargets's values:
+            set targetValue to the item at targetIndex in locatedTargets's values
+            set roundedCount to the cad blend rounded boundary count for targetValue's face in outputBody on targetValue's cylinder forward true within tolerance
+            if roundedCount != 2:
+                return cad public fillet failure (a cad fillet error of kind (cad fillet unsupported end condition error) at targetValue's edge)
+        set flaws to the cad flaws of outputBody
+        set accepted to ((the length of flaws) = 0) and ((the cad worst vertex gap of outputBody) <= tolerance)
+        free flaws
+        if accepted:
+            set accepted to cad blend boundaries of outputBody fit within tolerance
+        if accepted = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet invalid result error))
+        return cad public fillet success outputBody
+
+local function the cad blend sheet chamfer of {cad body:sourceBody} along {a pointer to a list:selected} with base face {cad face key:baseFace}, base distance {a 64 bit floating-point number:baseDistance} and other distance {a 64 bit floating-point number:otherDistance}:
+    execute:
+        set topologyError to the cad blend sheet topology error of sourceBody
+        if topologyError != cad chamfer no error:
+            return cad public chamfer failure (a cad chamfer error of kind topologyError)
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set sheetSpaces to the cad blend sheet spaces of sourceBody within tolerance
+        if sheetSpaces's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unsupported surface error))
+        set allSpaces to a cad topology list of a cad blend halfspace
+        loop supportIndex from 0 to the length of sheetSpaces's supports's values:
+            append (the item at supportIndex in sheetSpaces's supports's values)'s space to allSpaces's values
+        loop boundaryIndex from 0 to the length of sheetSpaces's boundaries's values:
+            append (the item at boundaryIndex in sheetSpaces's boundaries's values) to allSpaces's values
+        set cuts to a cad topology list of a cad blend halfspace
+        loop selectedIndex from 0 to the length of selected:
+            set edgeKey to the item at selectedIndex in selected
+            set edgeError to the cad blend edge error of edgeKey in sourceBody
+            if edgeError != cad chamfer no error:
+                return cad public chamfer failure (a cad chamfer error of kind edgeError at edgeKey)
+            set frameResult to the cad blend sheet frame of edgeKey in sourceBody using sheetSpaces's supports and allSpaces
+            if frameResult's valid = false:
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at edgeKey)
+            set framed to frameResult's value
+            if (framed's firstFace != baseFace) and (framed's secondFace != baseFace):
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer edge outside base face error) at edgeKey)
+            set firstDistance to baseDistance
+            set secondDistance to otherDistance
+            if framed's firstFace != baseFace:
+                set firstDistance to otherDistance
+                set secondDistance to baseDistance
+            set cutResult to the cad blend cut for framed with first setback firstDistance, second setback secondDistance and tolerance tolerance
+            if cutResult's valid = false:
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at edgeKey)
+            append cutResult's value to allSpaces's values
+            append cutResult's value to cuts's values
+        set closedResult to the cad blend convex body from allSpaces within tolerance
+        if closedResult's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer distance interaction error))
+        set keptFaces to an empty list of a cad face key
+        loop supportIndex from 0 to the length of sheetSpaces's supports's values:
+            set supportValue to the item at supportIndex in sheetSpaces's supports's values
+            set foundFace to the cad blend face on supportValue's space in closedResult's value within tolerance
+            if foundFace's valid:
+                set duplicate to false
+                loop keptIndex from 0 to the length of keptFaces:
+                    if (the item at keptIndex in keptFaces) = foundFace's value:
+                        set duplicate to true
+                if duplicate = false:
+                    append foundFace's value to keptFaces
+        loop cutIndex from 0 to the length of cuts's values:
+            set foundFace to the cad blend face on (the item at cutIndex in cuts's values) in closedResult's value within tolerance
+            if foundFace's valid:
+                set duplicate to false
+                loop keptIndex from 0 to the length of keptFaces:
+                    if (the item at keptIndex in keptFaces) = foundFace's value:
+                        set duplicate to true
+                if duplicate = false:
+                    append foundFace's value to keptFaces
+        set requiredFaces to (the length of sheetSpaces's supports's values) + (the length of selected)
+        if (the length of keptFaces) < requiredFaces:
+            free keptFaces
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer distance interaction error))
+        sort cad blend face keys keptFaces
+        set copied to the cad blend open body copied from closedResult's value keeping keptFaces within tolerance
+        free keptFaces
+        if copied's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer invalid result error))
+        set flaws to the cad flaws of copied's value
+        set accepted to ((the length of flaws) = 0) and ((the cad worst vertex gap of copied's value) <= tolerance)
+        free flaws
+        if accepted:
+            set accepted to cad blend boundaries of copied's value fit within tolerance
+        if accepted = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer invalid result error))
+        return cad public chamfer success copied's value
+
+local function the cad blend planar chamfer of {cad body:sourceBody} along {a pointer to a list:selected} with base face {cad face key:baseFace}, base distance {a 64 bit floating-point number:baseDistance} and other distance {a 64 bit floating-point number:otherDistance}:
+    execute:
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set existingScan to the cad blend existing fillets of sourceBody
+        if existingScan's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unsupported existing fillet error))
+        set existingCornerScan to the cad blend existing corners of sourceBody within tolerance
+        if existingCornerScan's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unsupported existing fillet error))
+        set bodyError to the cad blend supported body error of sourceBody preserving existingScan's values's values and existingCornerScan's values's values within tolerance
+        if bodyError != cad chamfer no error:
+            return cad public chamfer failure (a cad chamfer error of kind bodyError)
+        set firstEdgeKey to the item at 0 in selected
+        set firstEdgeError to the cad blend edge error of firstEdgeKey in sourceBody
+        if firstEdgeError != cad chamfer no error:
+            return cad public chamfer failure (a cad chamfer error of kind firstEdgeError at firstEdgeKey)
+        set firstFrameResult to the cad blend frame of firstEdgeKey in sourceBody
+        if firstFrameResult's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at firstEdgeKey)
+        set spaces to a cad topology list of a cad blend halfspace
+        loop spaceIndex from 0 to the length of firstFrameResult's value's halfspaces's values:
+            append (the item at spaceIndex in firstFrameResult's value's halfspaces's values) to spaces's values
+        loop existingIndex from 0 to the length of existingScan's values's values:
+            append (the item at existingIndex in existingScan's values's values)'s cut to spaces's values
+        loop existingCornerIndex from 0 to the length of existingCornerScan's values's values:
+            append (the item at existingCornerIndex in existingCornerScan's values's values)'s cut to spaces's values
+        loop selectedIndex from 0 to the length of selected:
+            set edgeKey to the item at selectedIndex in selected
+            set edgeError to the cad blend edge error of edgeKey in sourceBody
+            if edgeError != cad chamfer no error:
+                return cad public chamfer failure (a cad chamfer error of kind edgeError at edgeKey)
+            set frameResult to the cad blend frame of edgeKey in sourceBody
+            if frameResult's valid = false:
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at edgeKey)
+            set framed to frameResult's value
+            if (framed's firstFace != baseFace) and (framed's secondFace != baseFace):
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer edge outside base face error) at edgeKey)
+            set firstDistance to baseDistance
+            set secondDistance to otherDistance
+            if framed's firstFace != baseFace:
+                set firstDistance to otherDistance
+                set secondDistance to baseDistance
+            set cutResult to the cad blend cut for framed with first setback firstDistance, second setback secondDistance and tolerance tolerance
+            if cutResult's valid = false:
+                return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at edgeKey)
+            append cutResult's value to spaces's values
+        set built to the cad blend convex body from spaces within tolerance
+        if built's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer distance interaction error))
+        set outputBody to built's value
+        if (cad blend restore existingScan's values's values and existingCornerScan's values's values in outputBody within tolerance) = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unsupported existing fillet error))
+        set flaws to the cad flaws of outputBody
+        set accepted to ((the length of flaws) = 0) and ((the cad worst vertex gap of outputBody) <= tolerance)
+        free flaws
+        if accepted:
+            set accepted to cad blend boundaries of outputBody fit within tolerance
+        if accepted = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer invalid result error))
+        return cad public chamfer success outputBody
+
+function the cad [fillet] of {cad body:body} along {a pointer to a list:selected} with [radius] {a number:radius}:
+    execute:
+        set exactRadius to radius as a 64 bit floating-point number
+        if (cad public blend scalar exactRadius is finite and positive) = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet invalid radius error))
+        if (the length of selected) = 0:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet empty selection error))
+        if (cad public blend body body is valid) = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet invalid body topology error))
+        if (cad public blend all selected belong to body) = false:
+            return cad public fillet failure (a cad fillet error of kind (cad fillet unknown edge error))
+        set normalized to the cad public blend normalized selection from selected
+        set circular to the cad circular fillet of body along normalized's values with radius exactRadius
+        if circular's recognized:
+            if circular's valid:
+                return cad public fillet success circular's value
+            return cad public fillet failure circular's error
+        set prismatic to the cad prismatic fillet of body along normalized's values with radius exactRadius
+        if prismatic's recognized:
+            if prismatic's valid:
+                return cad public fillet success prismatic's value
+            return cad public fillet failure prismatic's error
+        return the cad blend planar fillet of body along normalized's values with radius exactRadius
+
+function the cad [chamfer] of {cad body:body} along {a pointer to a list:selected} with [base] [face] {cad face key:baseFace}, [base] [distance] {a number:baseDistance} and [other] [distance] {a number:otherDistance}:
+    execute:
+        set exactBase to baseDistance as a 64 bit floating-point number
+        set exactOther to otherDistance as a 64 bit floating-point number
+        if ((cad public blend scalar exactBase is finite and positive) and (cad public blend scalar exactOther is finite and positive)) = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer invalid distance error))
+        if (the length of selected) = 0:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer empty selection error))
+        if (cad public blend body body is valid) = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer invalid body topology error))
+        set baseNode to the cad node pointer for baseFace in body
+        if baseNode = (0 as the type of baseNode):
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unknown base face error))
+        if (cad public blend all selected belong to body) = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer unknown edge error))
+        set normalized to the cad public blend normalized selection from selected
+        set circular to the cad circular chamfer of body along normalized's values with base face baseFace, base distance exactBase and other distance exactOther
+        if circular's recognized:
+            if circular's valid:
+                return cad public chamfer success circular's value
+            return cad public chamfer failure circular's error
+        set prismatic to the cad prismatic chamfer of body along normalized's values with base face baseFace, base distance exactBase and other distance exactOther
+        if prismatic's recognized:
+            if prismatic's valid:
+                return cad public chamfer success prismatic's value
+            return cad public chamfer failure prismatic's error
+        if cad blend body body is an open sheet:
+            return the cad blend sheet chamfer of body along normalized's values with base face baseFace, base distance exactBase and other distance exactOther
+        return the cad blend planar chamfer of body along normalized's values with base face baseFace, base distance exactBase and other distance exactOther
+
+function the cad [fillet] of {cad body:body} along {cad edge key:selected} with [radius] {a number:radius}:
+    execute:
+        set selection to a list containing selected
+        set result to the cad fillet of body along selection with radius radius
+        free selection
+        return result
+
+function the cad [chamfer] of {cad body:body} along {cad edge key:selected} with [distance] {a number:distance}:
+    execute:
+        set frameResult to the cad blend frame of selected in body
+        if frameResult's valid = false:
+            return cad public chamfer failure (a cad chamfer error of kind (cad chamfer degenerate geometry error) at selected)
+        set selection to a list containing selected
+        set result to the cad chamfer of body along selection with base face frameResult's value's firstFace, base distance distance and other distance distance
+        free selection
+        return result

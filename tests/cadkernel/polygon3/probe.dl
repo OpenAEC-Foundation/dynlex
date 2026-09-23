@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/polygon3.dl
+
+function polygon argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function emit polygon {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set ring to an empty list of a cad vector3
+set count to (polygon argument 0) as an integer
+set index to 0
+loop while index < count:
+    set offset to 1 + (index * 3)
+    append (a cad vector3 with x (polygon argument offset), y (polygon argument (offset + 1)) and z (polygon argument (offset + 2))) to ring
+    set index to (index + 1)
+set vector to the cad ring area vector of ring
+emit polygon (the x of vector)
+emit polygon (the y of vector)
+emit polygon (the z of vector)
+emit polygon (the cad ring area of ring)
+set normal to the cad ring normal of ring
+emit polygon ((the valid of normal) as an integer)
+if the valid of normal:
+    emit polygon (the x of (the value of normal))
+    emit polygon (the y of (the value of normal))
+    emit polygon (the z of (the value of normal))
+emit polygon (the cad ring perimeter of ring)
+emit polygon (the cad chain length of ring)
+free ring

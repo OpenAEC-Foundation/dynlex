@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength2.dl
+import lib/cadkernel/deviation2.dl
+import tests/cadkernel/arclength2/support.dl
+
+function check measurement {boolean:condition} labelled {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function verify measurement storage of {cad curve2:source}:
+    execute:
+        set shape to source
+        set owner to shape's polyline's storage's owner
+        if shape's kind = 5:
+            set owner to shape's nurbs's owner
+        set baseline to @intrinsic("dereference", owner)
+        set start to the cad point on shape at 0.0
+        set finish to the cad point on shape at 1.0
+        loop index from 0 to 20:
+            check measurement ((the cad length of shape) > 0.0) labelled "positive length"
+            set parameter to the cad parameter on shape at distance 1.0
+            check measurement ((parameter >= 0.0) and (parameter <= 1.0)) labelled "bounded parameter"
+            set points to the cad samples of shape within deviation 0.1
+            check measurement ((the length of points) > 1) labelled "sample count"
+            free points
+        check measurement ((@intrinsic("dereference", owner)) = baseline) labelled "balanced owners"
+        check measurement (measure2 (the cad point on shape at 0.0) exactly equals start) labelled "unchanged start"
+        check measurement (measure2 (the cad point on shape at 1.0) exactly equals finish) labelled "unchanged finish"
+
+        set first to the cad samples of shape within deviation 0.1
+        set second to the cad samples of shape within deviation 0.1
+        check measurement (first != second) labelled "independent sample lists"
+        replace item at index 0 in first with (measure2 point 123.0 and 456.0)
+        check measurement (measure2 (the item at 0 in second) exactly equals start) labelled "independent sample start"
+        check measurement (measure2 (the cad point on shape at 0.0) exactly equals start) labelled "independent source start"
+        free first
+        free cad curve shape
+        check measurement (measure2 (the item at 0 in second) exactly equals start) labelled "retained sample start"
+        check measurement (measure2 (the last item of second) exactly equals finish) labelled "retained sample finish"
+        free second
+
+function detached measurement samples:
+    execute:
+        set curve to measure2 quarter spline
+        set output to the cad samples of curve within deviation 0.1
+        free cad curve curve
+        return output
+
+set polyline to measure2 polyline [[0.0,0.0,0.0],[3.0,0.0,0.0],[3.0,4.0,0.0]] with closure false
+verify measurement storage of polyline
+check measurement ((the cad length of polyline) = 7.0) labelled "borrowed polyline preserved"
+free cad curve polyline
+set spline to measure2 quarter spline
+verify measurement storage of spline
+check measurement ((the cad length of spline) > 150.0) labelled "borrowed spline preserved"
+free cad curve spline
+set detached to detached measurement samples
+check measurement (measure2 (the item at 0 in detached) exactly equals (measure2 point 100.0 and 0.0)) labelled "detached start"
+check measurement (measure2 (the last item of detached) exactly equals (measure2 point 0.0 and 100.0)) labelled "detached finish"
+free detached
+print "measurement ownership passed" as a line

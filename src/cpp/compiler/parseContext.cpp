@@ -135,7 +135,9 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 }
 
 namespace {
-Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expression, bool preserveInferenceMetadata) {
+Expression *cloneExpressionTreeImpl(
+	ParseContext &context, Expression *expression, bool preserveInferenceMetadata, InstantiatedSectionBody *owningBody
+) {
 	if (!expression)
 		return nullptr;
 	Expression *clone = new Expression();
@@ -144,6 +146,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->range = expression->range;
 	clone->literalValue = expression->literalValue;
 	clone->variable = expression->variable;
+	clone->owningSectionBody = owningBody;
 	clone->patternMatch = expression->patternMatch;
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
@@ -154,7 +157,8 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : Expression::SectionOutcome{};
 	clone->executionFallsThrough = preserveInferenceMetadata ? expression->executionFallsThrough : std::nullopt;
 	clone->sectionBodyReachable = !preserveInferenceMetadata || expression->sectionBodyReachable;
-	clone->sectionBodyInferred = preserveInferenceMetadata && expression->sectionBodyInferred;
+	clone->sectionBodyExecution =
+		preserveInferenceMetadata ? expression->sectionBodyExecution : Expression::SectionBodyExecution::None;
 	clone->sectionBodyFallsThrough = !preserveInferenceMetadata || expression->sectionBodyFallsThrough;
 	clone->branchSelection = preserveInferenceMetadata ? expression->branchSelection : std::nullopt;
 	clone->reusableTemplateExpression =
@@ -175,13 +179,15 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata));
+		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata, owningBody));
 	return clone;
 }
 } // namespace
 
 Expression *ParseContext::cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata) {
-	return cloneExpressionTreeImpl(*this, expression, preserveInferenceMetadata);
+	return cloneExpressionTreeImpl(
+		*this, expression, preserveInferenceMetadata, expression ? expression->owningSectionBody : nullptr
+	);
 }
 
 CodeLine *ParseContext::createCodeLine(
@@ -196,18 +202,22 @@ CodeLine *ParseContext::createCodeLine(
 	return result;
 }
 
-std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata) {
+std::shared_ptr<InstantiatedSectionBody>
+ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata, InstantiatedSectionBody *parentBody) {
 	if (!section)
 		return {};
 	auto body = std::make_shared<InstantiatedSectionBody>();
 	body->sourceSection = section;
+	body->parentBody = parentBody;
 	body->lineExpressions.reserve(section->codeLines.size());
 	for (CodeLine *line : section->codeLines) {
-		body->lineExpressions.push_back(cloneExpressionTree(line ? line->expression : nullptr, preserveInferenceMetadata));
+		body->lineExpressions.push_back(
+			cloneExpressionTreeImpl(*this, line ? line->expression : nullptr, preserveInferenceMetadata, body.get())
+		);
 	}
 	body->childBodies.reserve(section->children.size());
 	for (Section *child : section->children)
-		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata));
+		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata, body.get()));
 	return body;
 }
 

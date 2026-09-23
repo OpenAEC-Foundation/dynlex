@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft.dl
+class:
+    patterns:
+        [a|] loft input reader
+    members:
+        position as an integer
+function loft next {a pointer to a loft input reader:reader}:
+    execute:
+        set text to the argument at (reader's position) in the command line arguments
+        set reader's position to (reader's position) + 1
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function loft read vector2 from {a pointer to a loft input reader:reader}:
+    execute:
+        set x to loft next reader
+        set y to loft next reader
+        return a cad vector2 with x x and y y
+function loft read vector3 from {a pointer to a loft input reader:reader}:
+    execute:
+        set x to loft next reader
+        set y to loft next reader
+        set z to loft next reader
+        return a cad vector3 with x x, y y and z z
+function loft read [curve] from {a pointer to a loft input reader:reader}:
+    execute:
+        set kind to (loft next reader) as an integer
+        if ((kind = 0) or (kind = 6)) or (kind = 7):
+            set start to loft read vector2 from reader
+            set end to loft read vector2 from reader
+            if kind = 6:
+                return the cad curve2 of (a cad ray2 from start along end)
+            if kind = 7:
+                return the cad curve2 of (a cad xline2 through start along end)
+            return the cad curve2 of (a cad line2 from start to end)
+        if (kind = 1) or (kind = 4):
+            set centre to loft read vector2 from reader
+            set radius to loft next reader
+            if kind = 4:
+                return the cad curve2 of (a cad circle2 at centre with radius radius)
+            set start to loft next reader
+            set end to loft next reader
+            return the cad curve2 of (a cad arc2 at centre with radius radius from start to end)
+        if kind = 2:
+            set centre to loft read vector2 from reader
+            set major to loft next reader
+            set minor to loft next reader
+            set axis to loft read vector2 from reader
+            set start to loft next reader
+            set end to loft next reader
+            return the cad curve2 of (a cad ellipse arc2 on (a cad ellipse at centre with radii major and minor along axis) from start to end)
+        set degree to (loft next reader) as an integer
+        set count to (loft next reader) as an integer
+        set points to an empty list of a cad vector2
+        loop index from 0 to count:
+            append (loft read vector2 from reader) to points
+        set count to (loft next reader) as an integer
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append (loft next reader) to knots
+        set count to (loft next reader) as an integer
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append (loft next reader) to weights
+        set curve to the cad nurbs curve2 of degree degree with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        if (curve's valid) = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        return the cad curve2 of (curve's value)
+function loft read sections from {a pointer to a loft input reader:reader}:
+    execute:
+        set count to (loft next reader) as an integer
+        set result to a cad topology list of the type of (a cad loft section on (the cad xy plane) with profile ((a cad topology list of the type of (the cad curve2 of (a new cad line2)))'s values))
+        loop row from 0 to count:
+            set origin to loft read vector3 from reader
+            set x to loft read vector3 from reader
+            set y to loft read vector3 from reader
+            set frame to a cad plane with origin origin, x axis x and y axis y
+            set pieces to (loft next reader) as an integer
+            set profile to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+            loop index from 0 to pieces:
+                append (loft read curve from reader) to (profile's values)
+            append (a cad loft section on frame with profile (profile's values)) to (result's values)
+        return result

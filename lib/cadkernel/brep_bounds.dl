@@ -1,0 +1,254 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/bounds.rs.
+# Bounds borrow bodies and point lists. Scalar box values own no allocations.
+# An absent face bound means the face cannot be excluded, not that it is empty.
+# Point-set and sampled bounds retain the source's permissive NaN/min/max rules.
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad box3
+    members:
+        low as a cad vector3
+        high as a cad vector3
+class:
+    patterns:
+        [a|] cad box3 result
+    members:
+        valid as a boolean
+        value as a cad box3
+function a cad box3 from {cad vector3:low} to {cad vector3:high}:
+    execute:
+        return @intrinsic("construct", a cad box3, low, high)
+function the cad box at {cad vector3:point}:
+    execute:
+        return a cad box3 from point to point
+function the cad clone of {cad box3:bounds}:
+    execute:
+        return bounds
+function {cad box3:left} = {cad box3:right}:
+    execute:
+        if ((left's low's x) = (right's low's x)) = false:
+            return false
+        if ((left's low's y) = (right's low's y)) = false:
+            return false
+        if ((left's low's z) = (right's low's z)) = false:
+            return false
+        if ((left's high's x) = (right's high's x)) = false:
+            return false
+        if ((left's high's y) = (right's high's y)) = false:
+            return false
+        if ((left's high's z) = (right's high's z)) = false:
+            return false
+        return true
+local function cad bounds3 absent:
+    execute:
+        return @intrinsic("construct", a cad box3 result, false, a new cad box3)
+local function cad bounds3 success {cad box3:value}:
+    execute:
+        return @intrinsic("construct", a cad box3 result, true, value)
+local function cad bounds3 components of {cad vector3:value}:
+    execute:
+        return [(value's x),(value's y),(value's z)]
+local function cad bounds3 scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad bounds3 point {cad vector3:value} is finite:
+    execute:
+        return ((cad bounds3 scalar (value's x) is finite) and (cad bounds3 scalar (value's y) is finite)) and (cad bounds3 scalar (value's z) is finite)
+local function check cad bounds3 point {cad vector3:value}:
+    execute:
+        ignore value
+
+function the cad box after absorbing {cad vector3:point} into {cad box3:bounds}:
+    execute:
+        set low to a cad vector3 with x (the minimum of (bounds's low's x) and (point's x)), y (the minimum of (bounds's low's y) and (point's y)) and z (the minimum of (bounds's low's z) and (point's z))
+        set high to a cad vector3 with x (the maximum of (bounds's high's x) and (point's x)), y (the maximum of (bounds's high's y) and (point's y)) and z (the maximum of (bounds's high's z) and (point's z))
+        return a cad box3 from low to high
+function absorb cad point {cad vector3:point} into {cad box3:bounds}:
+    replacement:
+        set bounds to the cad box after absorbing point into bounds
+function the cad union of {cad box3:first} and {cad box3:second}:
+    execute:
+        set result to the cad box after absorbing (second's low) into first
+        return the cad box after absorbing (second's high) into result
+function merge cad box {cad box3:other} into {cad box3:bounds}:
+    replacement:
+        set bounds to the cad union of bounds and other
+function the cad box around {a pointer to a list:points}:
+    execute:
+        check cad bounds3 point (a new (the type of (the item at 0 in points)))
+        if (the length of points) = 0:
+            return cad bounds3 absent
+        set bounds to the cad box at (the item at 0 in points)
+        loop index from 1 to the length of points:
+            set bounds to the cad box after absorbing (the item at index in points) into bounds
+        return cad bounds3 success bounds
+function the cad box {cad box3:bounds} grown by {a 64 bit floating-point number:padding}:
+    execute:
+        set low to a cad vector3 with x ((bounds's low's x) - padding), y ((bounds's low's y) - padding) and z ((bounds's low's z) - padding)
+        set high to a cad vector3 with x ((bounds's high's x) + padding), y ((bounds's high's y) + padding) and z ((bounds's high's z) + padding)
+        return a cad box3 from low to high
+function {cad box3:first} overlaps cad box {cad box3:second}:
+    execute:
+        if (((first's low's x) <= (second's high's x)) and ((second's low's x) <= (first's high's x))) = false:
+            return false
+        if (((first's low's y) <= (second's high's y)) and ((second's low's y) <= (first's high's y))) = false:
+            return false
+        if (((first's low's z) <= (second's high's z)) and ((second's low's z) <= (first's high's z))) = false:
+            return false
+        return true
+function {cad box3:bounds} holds cad point {cad vector3:point}:
+    execute:
+        if (((point's x) >= (bounds's low's x)) and ((point's x) <= (bounds's high's x))) = false:
+            return false
+        if (((point's y) >= (bounds's low's y)) and ((point's y) <= (bounds's high's y))) = false:
+            return false
+        if (((point's z) >= (bounds's low's z)) and ((point's z) <= (bounds's high's z))) = false:
+            return false
+        return true
+function the cad centre of {cad box3:bounds}:
+    execute:
+        set x to (bounds's low's x) + (((bounds's high's x) - (bounds's low's x)) * 0.5)
+        set y to (bounds's low's y) + (((bounds's high's y) - (bounds's low's y)) * 0.5)
+        set z to (bounds's low's z) + (((bounds's high's z) - (bounds's low's z)) * 0.5)
+        return a cad vector3 with x x, y y and z z
+function the cad size of {cad box3:bounds}:
+    execute:
+        return the cad difference of (bounds's high) and (bounds's low)
+function the cad separation of {cad box3:first} and {cad box3:second}:
+    execute:
+        set x to the maximum of (the maximum of ((second's low's x) - (first's high's x)) and ((first's low's x) - (second's high's x))) and 0.0
+        set y to the maximum of (the maximum of ((second's low's y) - (first's high's y)) and ((first's low's y) - (second's high's y))) and 0.0
+        set z to the maximum of (the maximum of ((second's low's z) - (first's high's z)) and ((first's low's z) - (second's high's z))) and 0.0
+        return the cad length of (a cad vector3 with x x, y y and z z)
+
+local function cad bounds3 centred at {cad vector3:centre} with extent {cad vector3:extent}:
+    execute:
+        set low to the cad difference of centre and extent
+        set high to the cad sum of centre and extent
+        if ((cad bounds3 point low is finite) and (cad bounds3 point high is finite)) = false:
+            return cad bounds3 absent
+        return cad bounds3 success (a cad box3 from low to high)
+local function cad bounds3 extent on axis {integer:axis} of {cad surface:surface} in {cad plane:frame} with normal {cad vector3:normal}:
+    execute:
+        set xs to cad bounds3 components of (frame's xAxis)
+        set ys to cad bounds3 components of (frame's yAxis)
+        set ns to cad bounds3 components of normal
+        set radial to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, the item at axis in xs, the item at axis in ys)
+        set total to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, radial, the item at axis in ns)
+        if (surface's kind) = 3:
+            return (the absolute value of (surface's sphere's radius)) * total
+        return ((the absolute value of (surface's torus's majorRadius)) * radial) + ((the absolute value of (surface's torus's minorRadius)) * total)
+
+function the cad [bounds] of {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return cad bounds3 absent
+        set surfacePointer to the cad node pointer for (face's surface) in body
+        if surfacePointer = (0 as the type of surfacePointer):
+            return cad bounds3 absent
+        set surface to @intrinsic("dereference", surfacePointer)
+        if ((surface's kind) = 3) or ((surface's kind) = 4):
+            set frame to (surface's sphere's frame)
+            if (surface's kind) = 4:
+                set frame to (surface's torus's frame)
+            set normal to the cad normal of frame
+            if (normal's valid) = false:
+                return cad bounds3 absent
+            set x to cad bounds3 extent on axis 0 of surface in frame with normal (normal's value)
+            set y to cad bounds3 extent on axis 1 of surface in frame with normal (normal's value)
+            set z to cad bounds3 extent on axis 2 of surface in frame with normal (normal's value)
+            return cad bounds3 centred at (frame's origin) with extent (a cad vector3 with x x, y y and z z)
+        if (surface's kind) = 5:
+            set nurbs to (surface's nurbs)
+            loop row from 0 to the length of (nurbs's weights):
+                set weights to the item at row in (nurbs's weights)
+                loop column from 0 to the length of weights:
+                    set weight to the item at column in weights
+                    if ((cad bounds3 scalar weight is finite) and (weight > 0.0)) = false:
+                        return cad bounds3 absent
+            set result to cad bounds3 absent
+            loop row from 0 to the length of (nurbs's controls):
+                set points to the item at row in (nurbs's controls)
+                loop column from 0 to the length of points:
+                    set point to the item at column in points
+                    if (cad bounds3 point point is finite) = false:
+                        return cad bounds3 absent
+                    if (result's valid):
+                        set result to cad bounds3 success (the cad box after absorbing point into (result's value))
+                    else:
+                        set result to cad bounds3 success (the cad box at point)
+            return result
+        set result to cad bounds3 absent
+        set uses to the cad face coedges of faceKey in body
+        loop index from 0 to the length of uses:
+            set coedge to the cad node pointer for (the item at index in uses) in body
+            if coedge = (0 as the type of coedge):
+                free uses
+                return cad bounds3 absent
+            set edge to the cad node pointer for (coedge's edge) in body
+            if edge = (0 as the type of edge):
+                free uses
+                return cad bounds3 absent
+            set curve to the cad node pointer for (edge's curve) in body
+            if curve = (0 as the type of curve):
+                free uses
+                return cad bounds3 absent
+            set span to (edge's endParameter) - (edge's startParameter)
+            loop step from 0 to 17:
+                set parameter to (edge's startParameter) + ((span * (step as a 64 bit floating-point number)) / 16.0)
+                set point to the cad point on (@intrinsic("dereference", curve)) at parameter
+                if (result's valid):
+                    set result to cad bounds3 success (the cad box after absorbing point into (result's value))
+                else:
+                    set result to cad bounds3 success (the cad box at point)
+        free uses
+        return result
+
+function the cad [bounds] of {cad body:body}:
+    execute:
+        set result to cad bounds3 absent
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set bounds to the cad bounds of (the item at index in faces) in body
+            if (bounds's valid) = false:
+                free faces
+                return cad bounds3 absent
+            if (result's valid):
+                set result to cad bounds3 success (the cad union of (result's value) and (bounds's value))
+            else:
+                set result to bounds
+        free faces
+        return result
+
+local function check cad bounds3 body {cad body:value}:
+    execute:
+        ignore value
+function the cad operation tolerance of {a pointer to a list:bodies}:
+    execute:
+        check cad bounds3 body (a new (the type of (the item at 0 in bodies)))
+        set infinity to 1.0 / 0.0
+        set negative to the negative of infinity
+        set bounds to a cad box3 from (a cad vector3 with x infinity, y infinity and z infinity) to (a cad vector3 with x negative, y negative and z negative)
+        set coordinateScale to 1.0
+        loop index from 0 to the length of bodies:
+            set body to the item at index in bodies
+            set keys to the cad keys of (body's vertices)
+            loop vertexIndex from 0 to the length of keys:
+                set node to the cad node pointer for (the item at vertexIndex in keys) in (body's vertices)
+                set point to (node's point)
+                set bounds to the cad box after absorbing point into bounds
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (point's x))
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (point's y))
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (point's z))
+            free keys
+        set extents to cad bounds3 components of (the cad size of bounds)
+        set extent to 1.0
+        loop axis from 0 to 3:
+            set value to the item at axis in extents
+            if cad bounds3 scalar value is finite:
+                set extent to the maximum of extent and value
+        return (extent * 1e-8) + ((2.220446049250313e-16 * coordinateScale) * 64.0)

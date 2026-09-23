@@ -1,0 +1,237 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of space/polyline_approximation.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f. Positive rational Bezier hulls
+# bound every accepted chord. Source limits are enforced without relaxing
+# tolerance. Input buffers and returned point views are read-only borrows.
+import lib/cadkernel/nurbs3.dl
+
+class:
+    patterns:
+        [a|] cad approximation3 storage
+    members:
+        values
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+class:
+    patterns:
+        [a|] cad spline polyline3 result
+    members:
+        valid as a boolean
+        points
+        tolerance as a 64 bit floating-point number
+        storage as a cad approximation3 storage
+
+local function cad approximation3 ownership of {a pointer to a list:values}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad approximation3 storage, values, owner)
+
+local function cad approximation3 copied list {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return cad approximation3 ownership of result
+
+local function cad approximation3 absent result:
+    execute:
+        set points to an empty list of a cad vector3
+        return @intrinsic("construct", a cad spline polyline3 result, false, points, 0.0, cad approximation3 ownership of points)
+
+local function cad approximation3 scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad approximation3 cartesian {a 64 bit floating-point number array of 4 items:point}:
+    execute:
+        set weight to the item at 3 in point
+        if weight <= 0.0:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set value to a cad vector3 with x ((the item at 0 in point) / weight), y ((the item at 1 in point) / weight) and z ((the item at 2 in point) / weight)
+        return @intrinsic("construct", a cad normalization3, cad value is finite, value)
+
+local function refine cad approximation3 {a pointer to a list:net} within {a 64 bit floating-point number:tolerance} at depth {integer:depth} spending {a pointer to an integer:budget} into {a pointer to a list:points}:
+    execute:
+        set count to the length of net
+        set cost to count * count
+        set remaining to @intrinsic("dereference", budget)
+        if remaining < cost:
+            return false
+        @intrinsic("store at", budget, remaining - cost)
+        set startResult to cad approximation3 cartesian (the item at 0 in net)
+        set endResult to cad approximation3 cartesian (the last item of net)
+        if (startResult's valid and endResult's valid) = false:
+            return false
+        set start to startResult's value
+        set end to endResult's value
+        set chord to the cad difference of end and start
+        set length to the cad length of chord
+        if (cad approximation3 scalar length is finite) = false:
+            return false
+        set direction to the cad zero vector3
+        if length > 0.0:
+            set direction to chord cad divided by length
+        set flat to true
+        loop index from 0 to count:
+            set projected to cad approximation3 cartesian (the item at index in net)
+            if projected's valid = false:
+                return false
+            set point to projected's value
+            set parameter to the cad dot of (the cad difference of point and start) and direction
+            clamp parameter between 0.0 and length
+            set nearest to the cad sum of start and (direction scaled by parameter)
+            set distance to the cad distance from point to nearest
+            if (cad approximation3 scalar distance is finite) = false:
+                return false
+            if distance > tolerance:
+                set flat to false
+        if flat:
+            if (the length of points) >= 1000000:
+                return false
+            append end to points
+            return true
+        if (depth >= 32) or ((the length of points) >= 1000000):
+            return false
+        set work to cad approximation3 copied list net
+        set left to cad approximation3 ownership of (a list containing (the item at 0 in net))
+        set right to cad approximation3 ownership of (a list containing (the last item of net))
+        set width to count - 1
+        while width > 0:
+            loop index from 0 to width:
+                set a to the item at index in work's values
+                set b to the item at (index + 1) in work's values
+                set value to a new (a 64 bit floating-point number array of 4 items)
+                loop axis from 0 to 4:
+                    store (((the item at axis in a) * 0.5) + ((the item at axis in b) * 0.5)) at value + axis
+                replace item at index index in work's values with value
+            append (the item at 0 in work's values) to left's values
+            append (the item at (width - 1) in work's values) to right's values
+            decrement width
+        set reversed to cad approximation3 ownership of (an empty list of the type of (the item at 0 in net))
+        loop index from 0 to count:
+            append (the item at ((count - 1) - index) in right's values) to reversed's values
+        if (refine cad approximation3 (left's values) within tolerance at depth (depth + 1) spending budget into points) = false:
+            return false
+        return refine cad approximation3 (reversed's values) within tolerance at depth (depth + 1) spending budget into points
+
+function the cad spline polyline of {cad nurbs curve3:shape} at precision {integer:precision}:
+    execute:
+        set count to the length of shape's controls
+        if ((precision < 0) or (precision > 99)) or (count > 1000000):
+            return cad approximation3 absent result
+        set degree to shape's degree
+        set knotCount to the length of shape's knots
+        if (knotCount > 2000000) or (degree >= count):
+            return cad approximation3 absent result
+        set remaining to 16000000
+        set budget to @intrinsic("address of", remaining)
+        set domain to the cad domain of shape
+        if (degree <= 0) or (degree > 64):
+            return cad approximation3 absent result
+        loop index from 0 through degree:
+            if ((the item at index in shape's knots) != domain's start) or ((the item at ((knotCount - 1) - index) in shape's knots) != domain's end):
+                return cad approximation3 absent result
+        set low to the item at 0 in shape's controls
+        set high to low
+        loop index from 0 to count:
+            set point to the item at index in shape's controls
+            set low's x to the minimum of low's x and point's x
+            set low's y to the minimum of low's y and point's y
+            set low's z to the minimum of low's z and point's z
+            set high's x to the maximum of high's x and point's x
+            set high's y to the maximum of high's y and point's y
+            set high's z to the maximum of high's z and point's z
+        set scale to the cad distance from high to low
+        set factor to (precision as a 64 bit floating-point number) + 1.0
+        set tolerance to scale / (32.0 * (factor * factor))
+        if ((cad approximation3 scalar tolerance is finite) = false) or (tolerance <= 0.0):
+            return cad approximation3 absent result
+        set weightScale to 0.0
+        loop index from 0 to the length of shape's weights:
+            set weightScale to the maximum of weightScale and (the item at index in shape's weights)
+        set net to cad approximation3 ownership of (an empty list of a 64 bit floating-point number array of 4 items)
+        loop index from 0 to the minimum of count and (the length of shape's weights):
+            set point to the item at index in shape's controls
+            set weight to (the item at index in shape's weights) / weightScale
+            set value to [point's x * weight,point's y * weight,point's z * weight,weight]
+            if weight <= 0.0:
+                return cad approximation3 absent result
+            loop axis from 0 to 4:
+                if (cad approximation3 scalar (the item at axis in value) is finite) = false:
+                    return cad approximation3 absent result
+            append value to net's values
+        set knots to cad approximation3 copied list (shape's knots)
+        set interior to cad approximation3 ownership of (an empty list of a 64 bit floating-point number)
+        set multiplicities to cad approximation3 ownership of (an empty list of an integer)
+        loop index from 0 to knotCount:
+            set knot to the item at index in knots's values
+            if (knot > domain's start) and (knot < domain's end):
+                set size to the length of interior's values
+                set repeated to false
+                if size > 0:
+                    if (the last item of interior's values) = knot:
+                        set repeated to true
+                if repeated:
+                    replace item at index (size - 1) in multiplicities's values with ((the last item of multiplicities's values) + 1)
+                else:
+                    append knot to interior's values
+                    append 1 to multiplicities's values
+        loop group from 0 to the length of interior's values:
+            set knot to the item at group in interior's values
+            set multiplicity to the item at group in multiplicities's values
+            if multiplicity > degree:
+                return cad approximation3 absent result
+            while multiplicity < degree:
+                set count to the length of net's values
+                if count >= 1000000:
+                    return cad approximation3 absent result
+                set cost to count + degree
+                if remaining < cost:
+                    return cad approximation3 absent result
+                set remaining to remaining - cost
+                set span to the cad span of degree degree with knots knots's values and last (count - 1) at knot
+                set next to cad approximation3 ownership of (an empty list of a 64 bit floating-point number array of 4 items)
+                loop index from 0 through (span - degree):
+                    append (the item at index in net's values) to next's values
+                loop index from ((span - degree) + 1) through (span - multiplicity):
+                    set width to (the item at (index + degree) in knots's values) - (the item at index in knots's values)
+                    if width <= 0.0:
+                        return cad approximation3 absent result
+                    set alpha to (knot - (the item at index in knots's values)) / width
+                    set before to the item at (index - 1) in net's values
+                    set after to the item at index in net's values
+                    set value to a new (a 64 bit floating-point number array of 4 items)
+                    loop axis from 0 to 4:
+                        store (((1.0 - alpha) * (the item at axis in before)) + (alpha * (the item at axis in after))) at value + axis
+                    append value to next's values
+                loop index from (span - multiplicity) to count:
+                    append (the item at index in net's values) to next's values
+                set net to next
+                insert knot into knots's values at index (span + 1)
+                increment multiplicity
+        set output to cad approximation3 ownership of (an empty list of a cad vector3)
+        set first to cad approximation3 cartesian (the item at 0 in net's values)
+        if first's valid = false:
+            return cad approximation3 absent result
+        append first's value to output's values
+        set offset to 0
+        while (offset + degree) < (the length of net's values):
+            set piece to cad approximation3 ownership of (an empty list of a 64 bit floating-point number array of 4 items)
+            loop index from 0 through degree:
+                append (the item at (offset + index) in net's values) to piece's values
+            if (refine cad approximation3 (piece's values) within tolerance at depth 0 spending budget into (output's values)) = false:
+                return cad approximation3 absent result
+            set offset to offset + degree
+        return @intrinsic("construct", a cad spline polyline3 result, true, output's values, tolerance, output)

@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_classify.dl
+import lib/cadkernel/brep_make.dl
+
+function classify probe number {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function classify probe point {integer:index}:
+    execute:
+        return a cad vector3 with x (classify probe number index), y (classify probe number (index + 1)) and z (classify probe number (index + 2))
+
+set kind to (classify probe number 0) as an integer
+set origin to classify probe point 1
+set a to classify probe number 4
+set b to classify probe number 5
+set c to classify probe number 6
+set sides to (classify probe number 7) as an integer
+set made to no cad body
+if (kind = 0) or (kind = 6):
+    set made to the cad cuboid at origin with size (a cad vector3 with x a, y b and z c)
+else if kind = 1:
+    set made to the cad cylinder body at origin with radius a and height b
+else if kind = 2:
+    set made to the cad sphere body at origin with radius a
+else if kind = 3:
+    set made to the cad cone body at origin with radius a and height b
+else if kind = 4:
+    set made to the cad pyramid body at origin with radius a, height b and sides sides
+else if kind = 5:
+    set made to the cad polygonal frustum at origin with base radius a, top radius c, height b and sides sides
+if (made's valid) = false:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+if kind = 6:
+    set faces to the cad face keys of (made's value)
+    set face to the cad node pointer for (the item at 0 in faces) in (made's value)
+    replace cad node (face's surface) in (made's value) with (the cad surface of (a cad torus with frame (the cad xy plane), major radius 10.0 and minor radius 2.0))
+    free faces
+set result to the cad containment of (classify probe point 8) in (made's value) within (classify probe number 11)
+ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", result's kind)

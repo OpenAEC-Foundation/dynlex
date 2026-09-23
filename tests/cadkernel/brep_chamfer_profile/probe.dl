@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_chamfer_profile.dl
+
+function cad chamfer probe number {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function cad chamfer probe exact {integer:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%lld\n", value)
+function cad chamfer probe scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value)
+function cad chamfer probe point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+function cad chamfer probe [face] [key] {integer:index}:
+    execute:
+        set key to a new cad face key
+        set key's index to index as a 32 bit unsigned integer
+        set key's generation to 0 as a 32 bit unsigned integer
+        return key
+function cad chamfer probe [edge] [key] {integer:index}:
+    execute:
+        set key to a new cad edge key
+        set key's index to index as a 32 bit unsigned integer
+        set key's generation to 0 as a 32 bit unsigned integer
+        return key
+
+set segmentCount to (cad chamfer probe number 0) as an integer
+set pointCount to (cad chamfer probe number 1) as an integer
+set faceCount to (cad chamfer probe number 2) as an integer
+set baseDistance to cad chamfer probe number 3
+set otherDistance to cad chamfer probe number 4
+set tolerance to cad chamfer probe number 5
+set avoidAxis to (cad chamfer probe number 6) != 0.0
+
+set segments to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+set faceCodes to an empty list of an integer
+set selected to an empty list of a cad chamfer profile selection
+loop index from 0 to segmentCount:
+    set offset to 7 + index * 8
+    set kind to (cad chamfer probe number offset) as an integer
+    set a to cad chamfer probe number (offset + 1)
+    set b to cad chamfer probe number (offset + 2)
+    set c to cad chamfer probe number (offset + 3)
+    set d to cad chamfer probe number (offset + 4)
+    set e to cad chamfer probe number (offset + 5)
+    if kind = 0:
+        append (the cad curve2 of (a cad line2 from (cad chamfer probe point a b) to (cad chamfer probe point c d))) to segments
+    else if kind = 1:
+        append (the cad curve2 of (a cad arc2 at (cad chamfer probe point a b) with radius c from d to e)) to segments
+    else:
+        append (the cad curve2 of (a cad circle2 at (cad chamfer probe point a b) with radius c)) to segments
+    append ((cad chamfer probe number (offset + 6)) as an integer) to faceCodes
+    set edgeCode to (cad chamfer probe number (offset + 7)) as an integer
+    if edgeCode >= 0:
+        append (a cad chamfer profile selection at node index for edge (cad chamfer probe edge key edgeCode)) to selected
+
+set points to an empty list of a cad vector2
+loop index from 0 to pointCount:
+    append the cad zero vector2 to points
+set faces to an empty list of a cad chamfer face
+loop index from 0 to faceCount:
+    set faceCode to 0
+    if index < segmentCount:
+        set faceCode to the item at index in faceCodes
+    if faceCode < 0:
+        append no cad chamfer face to faces
+    else:
+        append (the cad chamfer face (cad chamfer probe face key faceCode)) to faces
+
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face (cad chamfer probe face key 0), base distance baseDistance, other distance otherDistance, tolerance tolerance, avoiding axis avoidAxis
+cad chamfer probe exact (result's valid as an integer)
+if result's valid = false:
+    cad chamfer probe exact result's error's kind
+    if result's error's kind = cad chamfer edge outside base face error:
+        cad chamfer probe exact (result's error's edge's index as an integer)
+    else:
+        cad chamfer probe exact 0
+else:
+    cad chamfer probe exact (the length of result's value's values)
+    loop index from 0 to the length of result's value's values:
+        set curve to the item at index in result's value's values
+        if curve's kind = cad line curve2 kind:
+            cad chamfer probe exact 0
+            cad chamfer probe scalar curve's line's start's x
+            cad chamfer probe scalar curve's line's start's y
+            cad chamfer probe scalar curve's line's end's x
+            cad chamfer probe scalar curve's line's end's y
+        else:
+            cad chamfer probe exact 1
+            cad chamfer probe scalar curve's arc's centre's x
+            cad chamfer probe scalar curve's arc's centre's y
+            cad chamfer probe scalar curve's arc's radius
+            cad chamfer probe scalar curve's arc's startAngle
+            cad chamfer probe scalar curve's arc's endAngle
+
+free faces
+free points
+free selected
+free faceCodes
+free segments

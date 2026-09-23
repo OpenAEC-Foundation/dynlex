@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_pcurve.dl
+
+function pc point {a 64 bit floating-point number array of 3 items:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+function pc uv {a 64 bit floating-point number array of 2 items:values}:
+    execute:
+        return a cad vector2 with x (the item at 0 in values) and y (the item at 1 in values)
+function check pc {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function pc plane at {cad vector3:origin} normal {cad vector3:normal}:
+    execute:
+        set seed to the cad x axis
+        if (the absolute value of (normal's x)) >= 0.9:
+            set seed to the cad y axis
+        set made to the cad orthonormal plane with origin origin, x axis seed and normal normal
+        check pc (made's valid)
+        return (made's value)
+function pc round trip {cad surface:surface} with {cad edge curve3:curve} projected {cad pcurve result:flat} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        check pc (flat's valid)
+        loop index from 0 to 11:
+            set t to first + (((last - first) * (index as a 64 bit floating-point number)) / 10.0)
+            set uv to the cad point on ((flat's value)) at t
+            set lifted to the cad point on surface at parameters ((uv's x)) and ((uv's y))
+            set back to the cad point on curve at (the cad parameter on curve nearest lifted)
+            check pc ((the cad distance from lifted to back) < 1e-6)
+function pc one edge on {cad surface:surface} with {cad edge curve3:curve} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        set body to an empty cad body
+        set source to the synthesized cad provenance
+        set sk to the cad body key after inserting surface into body
+        set ck to the cad body key after inserting curve into body
+        set fk to the cad body key after inserting (a cad face on sk forward true owned by (a new cad shell key) with provenance source) into body
+        set lk to the cad body key after inserting (a cad loop owned by fk with provenance source) into body
+        set ek to the cad body key after inserting (a cad edge on ck from first to last between (a new cad vertex key) and (a new cad vertex key) with provenance source) into body
+        set uk to the cad body key after inserting (a cad coedge on ek forward true with pcurve (no cad pcurve) owned by lk with provenance source) into body
+        set faceNode to the cad node pointer for fk in body
+        append lk to (faceNode's loops's values)
+        set loopNode to the cad node pointer for lk in body
+        append uk to (loopNode's coedges's values)
+        return body
+

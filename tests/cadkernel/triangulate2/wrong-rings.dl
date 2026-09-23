@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/triangulate2.dl
+set points to an empty list of a cad vector2
+ignore the cad ring nesting depths of points
+free points

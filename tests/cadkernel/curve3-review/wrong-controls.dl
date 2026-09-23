@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+# Empty wrong-precision controls must not bypass the cad vector3 input contract.
+import lib/cadkernel/curve3.dl
+set controls to an empty list of a 32 bit floating-point number
+ignore the cad bezier point of controls at 0.5
+free controls

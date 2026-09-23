@@ -1,0 +1,207 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/snap.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# These are geometric candidates; screen-space picking belongs to the caller.
+# Input curves are borrowed. Candidate lists are caller-owned scalar records.
+import lib/cadkernel/containment2.dl
+
+class:
+    patterns:
+        [a|] cad snap kind
+    members:
+        code as an integer
+class:
+    patterns:
+        [a|] cad snap point2
+    members:
+        kind as a cad snap kind
+        point as a cad vector2
+        t as a 64 bit floating-point number
+
+function the cad endpoint snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 0)
+function the cad midpoint snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 1)
+function the cad centre snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 2)
+function the cad quadrant snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 3)
+function the cad perpendicular snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 4)
+function the cad tangent snap kind:
+    replacement:
+        @intrinsic("construct", a cad snap kind, 5)
+function {cad snap kind:left} = {cad snap kind:right}:
+    execute:
+        return left's code = right's code
+function {cad snap point2:left} = {cad snap point2:right}:
+    execute:
+        return ((left's kind = right's kind) and (left's t = right's t)) and ((left's point's x = right's point's x) and (left's point's y = right's point's y))
+function the cad clone of {cad snap point2:point}:
+    execute:
+        return point
+
+local function cad snap2 at {cad vector2:point} of kind {cad snap kind:kind} with parameter {a 64 bit floating-point number:parameter}:
+    execute:
+        return @intrinsic("construct", a cad snap point2, kind, point, parameter)
+local function cad snap2 turn remainder of {a 64 bit floating-point number:value}:
+    execute:
+        set rest to the remainder of value divided by 6.283185307179586
+        if rest < 0.0:
+            return rest + 6.283185307179586
+        return rest
+
+local function append cad snap2 circular quadrants of {cad curve2:shape} at {cad vector2:centre} into {a pointer to a list:output}:
+    execute:
+        loop index from 0 to 4:
+            set angle to (index as a 64 bit floating-point number) * 1.5707963267948966
+            set accepted to true
+            if shape's kind = 2:
+                set accepted to cad angle angle within arc from shape's arc's startAngle to shape's arc's endAngle
+            if accepted:
+                set radius to the cad distance from (the cad point on shape at 0.0) to centre
+                set direction to a cad vector2 with x (the cosine of angle) and y (the sine of angle)
+                set point to the cad sum of centre and (direction scaled by radius)
+                append (cad snap2 at point of kind (the cad quadrant snap kind) with parameter (the cad parameter on shape nearest point)) to output
+
+local function append cad snap2 elliptical quadrants of {cad ellipse arc2:arc} into {a pointer to a list:output}:
+    execute:
+        set sweep to the cad sweep of arc
+        loop index from 0 to 4:
+            set parameter to (index as a 64 bit floating-point number) * 1.5707963267948966
+            set travelled to cad snap2 turn remainder of (parameter - arc's startParameter)
+            if travelled <= (sweep + 1e-9):
+                set point to the cad point on arc's ellipse at parameter
+                append (cad snap2 at point of kind (the cad quadrant snap kind) with parameter (travelled / sweep)) to output
+
+function the cad characteristic [points] of {cad curve2:shape}:
+    execute:
+        set output to an empty list of a cad snap point2
+        if shape's kind = 4:
+            set segments to the cad segments of shape
+            set count to the length of segments
+            loop index from 0 to count:
+                set segment to the item at index in segments
+                set startParameter to (index as a 64 bit floating-point number) / (count as a 64 bit floating-point number)
+                set middleParameter to ((index as a 64 bit floating-point number) + 0.5) / (count as a 64 bit floating-point number)
+                append (cad snap2 at (the cad point on segment at 0.0) of kind (the cad endpoint snap kind) with parameter startParameter) to output
+                append (cad snap2 at (the cad point on segment at 0.5) of kind (the cad midpoint snap kind) with parameter middleParameter) to output
+                if segment's kind = 2:
+                    append (cad snap2 at segment's arc's centre of kind (the cad centre snap kind) with parameter 0.0) to output
+            if (shape's polyline's closed = false) and (count > 0):
+                set last to the last item of segments
+                append (cad snap2 at (the cad point on last at 1.0) of kind (the cad endpoint snap kind) with parameter 1.0) to output
+            free segments
+        else:
+            set extent to the cad extent of shape
+            if ((shape is cad closed) = false) and (extent = (the cad bounded extent2)):
+                append (cad snap2 at (the cad point on shape at 0.0) of kind (the cad endpoint snap kind) with parameter 0.0) to output
+                append (cad snap2 at (the cad point on shape at 1.0) of kind (the cad endpoint snap kind) with parameter 1.0) to output
+                append (cad snap2 at (the cad point on shape at 0.5) of kind (the cad midpoint snap kind) with parameter 0.5) to output
+            else if extent = (the cad forward extent2):
+                append (cad snap2 at (the cad point on shape at 0.0) of kind (the cad endpoint snap kind) with parameter 0.0) to output
+            if shape's kind = 1:
+                append (cad snap2 at shape's circle's centre of kind (the cad centre snap kind) with parameter 0.0) to output
+                append cad snap2 circular quadrants of shape at shape's circle's centre into output
+            else if shape's kind = 2:
+                append (cad snap2 at shape's arc's centre of kind (the cad centre snap kind) with parameter 0.0) to output
+                append cad snap2 circular quadrants of shape at shape's arc's centre into output
+            else if shape's kind = 3:
+                append (cad snap2 at shape's ellipse's ellipse's centre of kind (the cad centre snap kind) with parameter 0.0) to output
+                append cad snap2 elliptical quadrants of shape's ellipse into output
+        return output
+
+local function cad snap2 slope on {cad curve2:shape} at {a 64 bit floating-point number:parameter} from {cad vector2:target}:
+    execute:
+        set before to the cad point on shape at (the maximum of (parameter - 1e-7) and 0.0)
+        set after to the cad point on shape at (the minimum of (parameter + 1e-7) and 1.0)
+        return (the cad distance from after to target) - (the cad distance from before to target)
+local function cad snap2 stationary distances on {cad curve2:shape} from {cad vector2:target}:
+    execute:
+        set output to an empty list of a 64 bit floating-point number
+        set previous to cad snap2 slope on shape at 0.0 from target
+        loop index from 1 to 129:
+            set parameter to (index as a 64 bit floating-point number) / 128.0
+            set current to cad snap2 slope on shape at parameter from target
+            if (previous = 0.0) or ((previous < 0.0) != (current < 0.0)):
+                set low to ((index - 1) as a 64 bit floating-point number) / 128.0
+                set high to parameter
+                loop iteration from 0 to 60:
+                    set middle to (low + high) * 0.5
+                    set lowSlope to cad snap2 slope on shape at low from target
+                    set middleSlope to cad snap2 slope on shape at middle from target
+                    if (lowSlope < 0.0) = (middleSlope < 0.0):
+                        set low to middle
+                    else:
+                        set high to middle
+                append ((low + high) * 0.5) to output
+            set previous to current
+        return output
+
+function the cad perpendicular [points] on {cad curve2:shape} from {cad vector2:target}:
+    execute:
+        set feet to an empty list of a 64 bit floating-point number
+        if shape is cad straight:
+            append (the cad parameter on shape nearest target) to feet
+        else if shape's kind = 1 or shape's kind = 2:
+            set centre to shape's circle's centre
+            set radius to shape's circle's radius
+            if shape's kind = 2:
+                set centre to shape's arc's centre
+                set radius to shape's arc's radius
+            set direction to the cad normalization of (the cad difference of target and centre)
+            if direction's valid:
+                set sides to [1.0,-1.0]
+                loop index from 0 to 2:
+                    set side to the item at index in sides
+                    set point to the cad sum of centre and (direction's value scaled by (radius * side))
+                    append (the cad parameter on shape nearest point) to feet
+        else:
+            free feet
+            set feet to cad snap2 stationary distances on shape from target
+        set output to an empty list of a cad snap point2
+        set extent to the cad extent of shape
+        loop index from 0 to the length of feet:
+            set parameter to the item at index in feet
+            if extent holds cad parameter parameter:
+                if extent = (the cad bounded extent2):
+                    clamp parameter between 0.0 and 1.0
+                append (cad snap2 at (the cad point on shape at parameter) of kind (the cad perpendicular snap kind) with parameter parameter) to output
+        free feet
+        return output
+
+function the cad tangent [points] on {cad curve2:shape} from {cad vector2:target}:
+    execute:
+        set output to an empty list of a cad snap point2
+        if (shape's kind != 1) and (shape's kind != 2):
+            return output
+        set centre to shape's circle's centre
+        set radius to shape's circle's radius
+        if shape's kind = 2:
+            set centre to shape's arc's centre
+            set radius to shape's arc's radius
+        set away to the cad difference of target and centre
+        set distance to the cad length of away
+        if distance <= (radius + 1e-12):
+            return output
+        set base to the cad angle of away
+        set offset to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, radius / distance)
+        set angles to [base + offset, base - offset]
+        loop index from 0 to 2:
+            set angle to the item at index in angles
+            set direction to a cad vector2 with x (the cosine of angle) and y (the sine of angle)
+            set point to the cad sum of centre and (direction scaled by radius)
+            set parameter to the cad parameter on shape nearest point
+            set onCurve to (the cad distance from (the cad point on shape at parameter) to point) < 1e-6
+            if onCurve:
+                append (cad snap2 at point of kind (the cad tangent snap kind) with parameter parameter) to output
+        return output
+
+function the cad nearest snap point on {cad curve2:shape} to {cad vector2:target}:
+    execute:
+        set found to the cad closest point on shape to target
+        return cad snap2 at found's point of kind (the cad perpendicular snap kind) with parameter found's t

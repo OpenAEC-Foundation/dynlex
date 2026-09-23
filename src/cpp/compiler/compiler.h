@@ -77,6 +77,7 @@ struct PatternOverloadSelection {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
 	bool ambiguous = false;
+	bool deferred = false;
 
 	explicit operator bool() const { return definition != nullptr; }
 };
@@ -86,6 +87,8 @@ struct ResolvedPatternConstraint {
 	bool requiresCompileTimeValue = false;
 	bool acceptsUnresolvedType = false;
 	bool acceptsNothing = false;
+	// An incomplete domain can exclude arguments, but cannot select an overload.
+	bool complete = true;
 
 	TypeConstraint effectiveConstraint() const {
 		TypeConstraint result = constraint;

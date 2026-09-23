@@ -1,0 +1,232 @@
+# SPDX-License-Identifier: MPL-2.0
+# Deliberately non-geometric test graphs exercise all placement dispatch branches.
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/brep_make.dl
+
+function place test point {a 64 bit floating-point number array of 3 items:items}:
+    execute:
+        return a cad vector3 with x (the item at 0 in items), y (the item at 1 in items) and z (the item at 2 in items)
+function place test uv {a 64 bit floating-point number array of 2 items:items}:
+    execute:
+        return a cad vector2 with x (the item at 0 in items) and y (the item at 1 in items)
+function place test spline2:
+    execute:
+        set points to a list containing (place test uv [0.0,0.0])
+        append (place test uv [1.0,3.0]) to points
+        append (place test uv [3.0,-1.0]) to points
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.3 to weights
+        set result to the cad nurbs curve2 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return result's value
+function place test spline3:
+    execute:
+        set points to a list containing (place test point [0.0,0.0,0.0])
+        append (place test point [1.0,3.0,2.0]) to points
+        append (place test point [3.0,-1.0,1.0]) to points
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.3 to weights
+        set result to the cad nurbs curve3 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return (result's value) with cad periodicity true
+function place test spline surface:
+    execute:
+        set first to a list containing (place test point [0.0,0.0,0.0])
+        append (place test point [1.0,2.0,3.0]) to first
+        set last to a list containing (place test point [4.0,5.0,1.0])
+        append (place test point [6.0,7.0,2.0]) to last
+        set points to a list containing first
+        append last to points
+        set weights0 to a list containing 1.0
+        append 2.0 to weights0
+        set weights1 to a list containing 3.0
+        append 1.0 to weights1
+        set weights to a list containing weights0
+        append weights1 to weights
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set result to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+        free first
+        free last
+        free points
+        free weights0
+        free weights1
+        free weights
+        free knots
+        set value to (result's value) with cad u periodicity true and v periodicity true
+        return value with cad v reversal true
+function place test pcurve {integer:kind}:
+    execute:
+        set first to place test uv [0.2,0.3]
+        set last to place test uv [1.4,2.5]
+        if kind = 1:
+            return the cad curve2 of (a cad circle2 at first with radius 2.0)
+        if kind = 2:
+            return the cad curve2 of (a cad arc2 at first with radius 2.0 from 0.2 to 2.7)
+        if kind = 3:
+            set ellipse to a cad ellipse at first with radii 3.0 and 1.0 along (place test uv [0.6,0.8])
+            return the cad curve2 of (a cad ellipse arc2 on ellipse from 0.2 to 2.7)
+        if kind = 4:
+            set vertices to a list containing (a cad polyline vertex2 at first with bulge 0.4)
+            append (a cad polyline vertex2 at last with bulge -0.3) to vertices
+            set poly to the cad polyline2 with vertices vertices and closure false
+            free vertices
+            return the cad curve2 of poly
+        if kind = 5:
+            return the cad curve2 of (place test spline2)
+        if kind = 6:
+            return the cad curve2 of (a cad ray2 from first along last)
+        if kind = 7:
+            return the cad curve2 of (a cad xline2 through first along last)
+        return the cad curve2 of (a cad line2 from first to last)
+function place test [body] {integer:kind} with pcurves {integer:pcurveKind} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        set body to an empty cad body
+        if kind = 0:
+            set made to the cad cuboid at (the cad zero vector3) with size (place test point [2.0,3.0,4.0])
+            set body to made's value
+        else if kind = 1:
+            set made to the cad cylinder body at (place test point [1.0,2.0,3.0]) with radius 2.0 and height 4.0
+            set body to made's value
+        else if kind = 2:
+            set made to the cad sphere body at (place test point [1.0,2.0,3.0]) with radius 2.0
+            set body to made's value
+        else if kind = 3:
+            set made to the cad cone body at (place test point [1.0,2.0,3.0]) with radius 2.0 and height 4.0
+            set body to made's value
+        else if kind = 4:
+            set provenance to the clean cad provenance of (a cad source reference for (17 as a 32 bit unsigned integer))
+            set body's provenance to provenance
+            set vertex to the cad body key after inserting (a cad vertex at (place test point [1.0,2.0,3.0]) with provenance provenance) into body
+            set lump to the cad body key after inserting (a cad lump with provenance provenance) into body
+            set shell to the cad body key after inserting (a cad shell owned by lump with provenance provenance) into body
+            set lumpNode to the cad node pointer for lump in body
+            append shell to (lumpNode's shells's values)
+            append lump to (body's roots)
+            set plane to a cad plane with origin (place test point [1.0,2.0,3.0]), x axis (place test point [0.6,0.8,0.0]) and y axis (place test point [-0.8,0.6,0.0])
+            loop index from 0 to 6:
+                set surface to the cad surface of plane
+                if index = 1:
+                    set surface to the cad surface of (a cad cylinder with base plane and radius 2.0)
+                else if index = 2:
+                    set surface to the cad surface of (a cad cone with base plane, radius 2.0 and half angle 0.4)
+                else if index = 3:
+                    set surface to the cad surface of (a cad sphere with frame plane and radius 2.0)
+                else if index = 4:
+                    set surface to the cad surface of (a cad torus with frame plane, major radius 3.0 and minor radius 1.0)
+                else if index = 5:
+                    set surface to the cad surface of (place test spline surface)
+                set surfaceKey to the cad body key after inserting surface into body
+                set face to the cad body key after inserting (a cad face on surfaceKey forward true owned by shell with provenance provenance) into body
+                set ring to the cad body key after inserting (a cad loop owned by face with provenance provenance) into body
+                set faceNode to the cad node pointer for face in body
+                append ring to (faceNode's loops's values)
+                set shellNode to the cad node pointer for shell in body
+                append face to (shellNode's faces's values)
+                set curve to the cad edge curve3 of (a cad line3 with origin (plane's origin) and direction (plane's xAxis))
+                if index = 1:
+                    set curve to the cad edge curve3 of (a cad circle3 with plane plane and radius 2.0)
+                else if index = 2:
+                    set curve to the cad edge curve3 of (a cad ellipse3 with plane plane, major radius 3.0 and minor radius 1.0)
+                else if index = 3:
+                    set curve to the cad edge curve3 of (a cad planar spline3 with plane plane and curve (place test spline2))
+                else if index >= 4:
+                    set curve to the cad edge curve3 of (place test spline3)
+                set curveKey to the cad body key after inserting curve into body
+                set edge to the cad body key after inserting (a cad edge on curveKey from first to last between vertex and vertex with provenance provenance) into body
+                set use to the cad body key after inserting (a cad coedge on edge forward true with pcurve (no cad pcurve) owned by ring with provenance provenance) into body
+                set ringNode to the cad node pointer for ring in body
+                append use to (ringNode's coedges's values)
+                set edgeNode to the cad node pointer for edge in body
+                append use to (edgeNode's coedges's values)
+        if kind = 6:
+            set provenance to the synthesized cad provenance
+            set curve to the cad body key after inserting (the cad edge curve3 of (a cad planar spline3 with plane (the cad xy plane) and curve (place test spline2))) into body
+            set a to the cad body key after inserting (a cad vertex at (the cad zero vector3) with provenance provenance) into body
+            set b to the cad body key after inserting (a cad vertex at (place test point [3.0,-1.0,0.0]) with provenance provenance) into body
+            set edge to the cad body key after inserting (a cad edge on curve from first to last between a and b with provenance provenance) into body
+        set coedges to the cad keys of (body's coedges)
+        loop index from 0 to the length of coedges:
+            set node to the cad node pointer for (the item at index in coedges) in (body's coedges)
+            if pcurveKind >= 0:
+                set node's pcurve to the cad pcurve of (place test pcurve pcurveKind)
+        free coedges
+        return body
+function damage place test {cad body:body} with {integer:damage} and {a 64 bit floating-point number:value}:
+    execute:
+        set faces to the cad face keys of body
+        if (the length of faces) = 0:
+            free faces
+            return nothing
+        set faceKey to the item at 0 in faces
+        set face to the cad node pointer for faceKey in body
+        set surfaceKey to face's surface
+        set ringKey to the item at 0 in (face's loops's values)
+        set ring to the cad node pointer for ringKey in body
+        set useKey to the item at 0 in (ring's coedges's values)
+        set use to the cad node pointer for useKey in body
+        set edgeKey to use's edge
+        set edge to the cad node pointer for edgeKey in body
+        set curveKey to edge's curve
+        if damage = 1:
+            set removed to the cad removal of faceKey from body
+        else if damage = 2:
+            set removed to the cad removal of surfaceKey from body
+        else if damage = 3:
+            set removed to the cad removal of edgeKey from body
+        else if damage = 4:
+            set removed to the cad removal of curveKey from body
+        else if damage = 5:
+            set removed to the cad removal of useKey from body
+        else if damage = 6:
+            set removed to the cad removal of ringKey from body
+        else if damage = 7:
+            clear (face's loops's values)
+        else if damage = 8:
+            clear (ring's coedges's values)
+        else if damage = 9:
+            set absentRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+            set removedRing to the cad removal of absentRing from body
+            set use's owner to absentRing
+        else if damage = 10:
+            set absentFace to the cad body key after inserting (a cad face on surfaceKey forward true owned by (face's owner) with provenance (the synthesized cad provenance)) into body
+            set removedFace to the cad removal of absentFace from body
+            set ring's owner to absentFace
+        else if damage = 11:
+            set frame to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (place test point [0.0,value,0.0])
+            replace cad node curveKey in body with (the cad edge curve3 of (a cad circle3 with plane frame and radius 2.0))
+        else if damage = 12:
+            set frame to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (place test point [0.0,value,0.0])
+            replace cad node surfaceKey in body with (the cad surface of frame)
+        else if damage = 13:
+            set edge's startParameter to value
+            set edge's endParameter to value + 1.0
+        else if damage = 14:
+            replace cad node curveKey in body with (the cad edge curve3 of (a cad circle3 with plane (the cad xy plane) and radius value))
+        else if damage = 15:
+            set removed to the cad removal of (edge's start) from body
+        else if damage = 16:
+            set use's forward to use's forward = false
+        else if damage = 17:
+            append useKey to (ring's coedges's values)
+        free faces

@@ -1,0 +1,408 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/slice.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# A successful result owns two independent bodies and leaves its source unchanged.
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_place.dl
+
+class:
+    patterns:
+        [a|] cad slice result
+    members:
+        valid as a boolean
+        divided as a boolean
+        snag as an integer
+        negative as a cad body
+        positive as a cad body
+class:
+    patterns:
+        [a|] cad slice cutters result
+    members:
+        valid as a boolean
+        negative as a cad body
+        positive as a cad body
+class:
+    patterns:
+        [a|] cad slice face result
+    members:
+        valid as a boolean
+        value as a cad face key
+class:
+    patterns:
+        [a|] cad slice side result
+    members:
+        valid as a boolean
+        value as an integer
+class:
+    patterns:
+        [a|] cad slice distance result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+local function cad slice failure {integer:snag}:
+    execute:
+        return @intrinsic("construct", a cad slice result, false, false, snag, an empty cad body, an empty cad body)
+local function cad slice absent:
+    execute:
+        return @intrinsic("construct", a cad slice result, true, false, 0, an empty cad body, an empty cad body)
+local function cad slice success negative {cad body:negativeBody} positive {cad body:positiveBody}:
+    execute:
+        return @intrinsic("construct", a cad slice result, true, true, 0, negativeBody, positiveBody)
+local function cad slice cutters failure:
+    execute:
+        return @intrinsic("construct", a cad slice cutters result, false, an empty cad body, an empty cad body)
+local function cad slice cutters success negative {cad body:negativeBody} positive {cad body:positiveBody}:
+    execute:
+        return @intrinsic("construct", a cad slice cutters result, true, negativeBody, positiveBody)
+local function cad slice scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad slice face failure:
+    execute:
+        return @intrinsic("construct", a cad slice face result, false, a new cad face key)
+local function cad slice face success {cad face key:value}:
+    execute:
+        return @intrinsic("construct", a cad slice face result, true, value)
+local function cad slice side failure:
+    execute:
+        return @intrinsic("construct", a cad slice side result, false, 0)
+local function cad slice side success {integer:value}:
+    execute:
+        return @intrinsic("construct", a cad slice side result, true, value)
+local function cad slice distance failure:
+    execute:
+        return @intrinsic("construct", a cad slice distance result, false, 0.0)
+local function cad slice distance success {a 64 bit floating-point number:value}:
+    execute:
+        return @intrinsic("construct", a cad slice distance result, true, value)
+
+local function the cad slice projected bounds of {cad box3:givenBounds} in {cad plane:framePlane} with {cad vector3:unitNormal}:
+    execute:
+        set corners to a cad topology list of a cad vector3
+        append (a cad vector3 with x givenBounds's low's x, y givenBounds's low's y and z givenBounds's low's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's high's x, y givenBounds's low's y and z givenBounds's low's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's low's x, y givenBounds's high's y and z givenBounds's low's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's high's x, y givenBounds's high's y and z givenBounds's low's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's low's x, y givenBounds's low's y and z givenBounds's high's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's high's x, y givenBounds's low's y and z givenBounds's high's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's low's x, y givenBounds's high's y and z givenBounds's high's z) to (corners's values)
+        append (a cad vector3 with x givenBounds's high's x, y givenBounds's high's y and z givenBounds's high's z) to (corners's values)
+        set infinity to 1.0 / 0.0
+        set lowPoint to a cad vector3 with x infinity, y infinity and z infinity
+        set highPoint to a cad vector3 with x (-infinity), y (-infinity) and z (-infinity)
+        loop cornerCursor from 0 to the length of (corners's values):
+            set worldPoint to the item at cornerCursor in (corners's values)
+            set delta to the cad difference of worldPoint and framePlane's origin
+            set localPoint to a cad vector3 with x (the cad dot of delta and framePlane's xAxis), y (the cad dot of delta and framePlane's yAxis) and z (the cad dot of delta and unitNormal)
+            if (((cad slice scalar localPoint's x is finite) and (cad slice scalar localPoint's y is finite)) and (cad slice scalar localPoint's z is finite)) = false:
+                return @intrinsic("construct", a cad box3 result, false, a new cad box3)
+            set lowPoint's x to the minimum of lowPoint's x and localPoint's x
+            set lowPoint's y to the minimum of lowPoint's y and localPoint's y
+            set lowPoint's z to the minimum of lowPoint's z and localPoint's z
+            set highPoint's x to the maximum of highPoint's x and localPoint's x
+            set highPoint's y to the maximum of highPoint's y and localPoint's y
+            set highPoint's z to the maximum of highPoint's z and localPoint's z
+        return @intrinsic("construct", a cad box3 result, true, a cad box3 from lowPoint to highPoint)
+
+local function cad slice body {cad body:sourceBody} is closed:
+    execute:
+        set isClosed to true
+        set edgeKeys to the cad edge keys of sourceBody
+        loop edgeCursor from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeCursor in edgeKeys) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                set isClosed to false
+            else if ((the length of (edgeNode's coedges's values)) > 0) and ((the length of (edgeNode's coedges's values)) != 2):
+                set isClosed to false
+        free edgeKeys
+        return isClosed
+
+local function the cad slice single face of {cad body:sourceBody}:
+    execute:
+        set faceKeys to the cad face keys of sourceBody
+        if (the length of faceKeys) != 1:
+            free faceKeys
+            return cad slice face failure
+        set onlyFace to the item at 0 in faceKeys
+        free faceKeys
+        return cad slice face success onlyFace
+
+local function the cad slice surface distance from {cad body:cutterBody} to {cad vector3:worldPoint}:
+    execute:
+        set onlyFaceResult to the cad slice single face of cutterBody
+        if onlyFaceResult's valid = false:
+            return cad slice distance failure
+        set faceNode to the cad node pointer for onlyFaceResult's value in cutterBody
+        if faceNode = (0 as the type of faceNode):
+            return cad slice distance failure
+        set surfaceNode to the cad node pointer for faceNode's surface in cutterBody
+        if (surfaceNode = (0 as the type of surfaceNode)) or (surfaceNode's kind = 5):
+            return cad slice distance failure
+        set measured to the cad distance from (@intrinsic("dereference", surfaceNode)) to worldPoint
+        if faceNode's forward = false:
+            set measured to -measured
+        if (cad slice scalar measured is finite) = false:
+            return cad slice distance failure
+        return cad slice distance success measured
+
+function the cad surface side of {cad body:cutterBody} at {cad vector3:worldPoint}:
+    execute:
+        return the cad slice surface distance from cutterBody to worldPoint
+
+local function the cad slice side of {cad face key:faceKey} in {cad body:sourceBody} against {cad plane:framePlane} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set lowDistance to 1.0 / 0.0
+        set highDistance to -lowDistance
+        set foundPoint to false
+        set faceUses to the cad face coedges of faceKey in sourceBody
+        loop useCursor from 0 to the length of faceUses:
+            set useNode to the cad node pointer for (the item at useCursor in faceUses) in sourceBody
+            if useNode = (0 as the type of useNode):
+                free faceUses
+                return cad slice side failure
+            set edgeNode to the cad node pointer for useNode's edge in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free faceUses
+                return cad slice side failure
+            set startNode to the cad node pointer for edgeNode's start in sourceBody
+            set endNode to the cad node pointer for edgeNode's end in sourceBody
+            set curveNode to the cad node pointer for edgeNode's curve in sourceBody
+            if ((startNode = (0 as the type of startNode)) or (endNode = (0 as the type of endNode))) or (curveNode = (0 as the type of curveNode)):
+                free faceUses
+                return cad slice side failure
+            set samplePoints to a cad topology list of a cad vector3
+            append startNode's point to (samplePoints's values)
+            append endNode's point to (samplePoints's values)
+            append (the cad point on (@intrinsic("dereference", curveNode)) at (0.5 * (edgeNode's startParameter + edgeNode's endParameter))) to (samplePoints's values)
+            loop sampleCursor from 0 to the length of (samplePoints's values):
+                set measured to the cad distance from (the item at sampleCursor in (samplePoints's values)) to framePlane
+                if measured's valid = false:
+                    free faceUses
+                    return cad slice side failure
+                set lowDistance to the minimum of lowDistance and measured's value
+                set highDistance to the maximum of highDistance and measured's value
+                set foundPoint to true
+        free faceUses
+        if foundPoint = false:
+            return cad slice side failure
+        if highDistance <= tolerance:
+            return cad slice side success -1
+        if lowDistance >= (-tolerance):
+            return cad slice side success 1
+        return cad slice side failure
+
+local function the cad slice copy of {cad topology list:faceKeys} from {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to resultBody's roots
+        loop faceCursor from 0 to the length of (faceKeys's values):
+            if (copy cad boolean face (the item at faceCursor in (faceKeys's values)) from sourceBody into resultBody owned by shellKey flipped false within tolerance) = false:
+                return no cad body
+        set flaws to the cad flaws of resultBody
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if validBody:
+            return the cad body result of resultBody
+        return no cad body
+
+local function the cad slice closed copy of {cad topology list:faceKeys} from {cad body:sourceBody} capped by {cad topology list:capKeys} from {cad body:cutterBody} flipped {boolean:flipCaps} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to resultBody's roots
+        loop faceCursor from 0 to the length of (faceKeys's values):
+            if (copy cad boolean face (the item at faceCursor in (faceKeys's values)) from sourceBody into resultBody owned by shellKey flipped false within tolerance) = false:
+                return no cad body
+        loop capCursor from 0 to the length of (capKeys's values):
+            if (copy cad boolean face (the item at capCursor in (capKeys's values)) from cutterBody into resultBody owned by shellKey flipped flipCaps within tolerance) = false:
+                return no cad body
+        if (orient cad boolean shell resultBody) = false:
+            return no cad body
+        set edgeKeys to the cad edge keys of resultBody
+        loop edgeCursor from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeCursor in edgeKeys) in resultBody
+            if (edgeNode = (0 as the type of edgeNode)) or ((the length of (edgeNode's coedges's values)) != 2):
+                free edgeKeys
+                return no cad body
+        free edgeKeys
+        set flaws to the cad flaws of resultBody
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if validBody = false:
+            return no cad body
+        if (regroup cad boolean shells in resultBody replacing shellKey and lumpKey within tolerance) = false:
+            return no cad body
+        return the cad body result of resultBody
+
+local function the cad slice half boxes for {cad plane:framePlane} within {cad box3:frameBounds} and {a 64 bit floating-point number:tolerance}:
+    execute:
+        set xSpan to frameBounds's high's x - frameBounds's low's x
+        set ySpan to frameBounds's high's y - frameBounds's low's y
+        set zSpan to frameBounds's high's z - frameBounds's low's z
+        set spanValue to the maximum of 1.0 and (the maximum of xSpan and (the maximum of ySpan and zSpan))
+        set margin to (spanValue * 2.0) + (tolerance * 64.0)
+        set lowX to frameBounds's low's x - margin
+        set lowY to frameBounds's low's y - margin
+        set sizeX to xSpan + (margin * 2.0)
+        set sizeY to ySpan + (margin * 2.0)
+        set lowZ to frameBounds's low's z - margin
+        set highZ to frameBounds's high's z + margin
+        set negativeMade to the cad cuboid at (a cad vector3 with x lowX, y lowY and z lowZ) with size (a cad vector3 with x sizeX, y sizeY and z (-lowZ))
+        set positiveMade to the cad cuboid at (a cad vector3 with x lowX, y lowY and z 0.0) with size (a cad vector3 with x sizeX, y sizeY and z highZ)
+        if (negativeMade's valid and positiveMade's valid) = false:
+            return cad slice cutters failure
+        set unitNormalResult to the cad normal of framePlane
+        if unitNormalResult's valid = false:
+            return cad slice cutters failure
+        set placement to a cad placement with axes framePlane's xAxis, framePlane's yAxis and unitNormalResult's value at framePlane's origin
+        set negativeMoved to the cad transformed (negativeMade's value) by placement
+        set positiveMoved to the cad transformed (positiveMade's value) by placement
+        if (negativeMoved's valid and positiveMoved's valid) = false:
+            return cad slice cutters failure
+        return cad slice cutters success negative negativeMoved's value positive positiveMoved's value
+
+function the cad plane slice of {cad body:sourceBody} by {cad plane:givenPlane}:
+    execute:
+        if (the cad count of sourceBody's faces) = 0:
+            return cad slice absent
+        set initialNormal to the cad normal of givenPlane
+        if initialNormal's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set normalizedResult to the cad orthonormal plane with origin givenPlane's origin, x axis givenPlane's xAxis and normal initialNormal's value
+        if normalizedResult's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set bodyBounds to the cad bounds of sourceBody
+        if bodyBounds's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set unitNormalResult to the cad normal of normalizedResult's value
+        if unitNormalResult's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set frameResult to the cad slice projected bounds of (bodyBounds's value) in (normalizedResult's value) with (unitNormalResult's value)
+        if frameResult's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        if (frameResult's value's low's z >= (-tolerance)) or (frameResult's value's high's z <= tolerance):
+            return cad slice absent
+        set cuttersResult to the cad slice half boxes for (normalizedResult's value) within (frameResult's value) and tolerance
+        if cuttersResult's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        if cad slice body sourceBody is closed:
+            set negativeResult to the cad combination of sourceBody and (cuttersResult's negative) using cad intersection operation within tolerance
+            if negativeResult's valid = false:
+                return cad slice failure negativeResult's snag
+            set positiveResult to the cad combination of sourceBody and (cuttersResult's positive) using cad intersection operation within tolerance
+            if positiveResult's valid = false:
+                return cad slice failure positiveResult's snag
+            if ((the cad count of negativeResult's value's faces) = 0) or ((the cad count of positiveResult's value's faces) = 0):
+                return cad slice absent
+            return cad slice success negative negativeResult's value positive positiveResult's value
+
+        set dividedBody to the cad clone of sourceBody
+        set dividingBody to the cad clone of (cuttersResult's positive)
+        set imprintResult to the cad imprint of dividedBody and dividingBody within tolerance
+        if imprintResult's valid = false:
+            return cad slice failure imprintResult's snag
+        if imprintResult's cuts = 0:
+            return cad slice absent
+        set negativeFaces to a cad topology list of a cad face key
+        set positiveFaces to a cad topology list of a cad face key
+        set dividedFaceKeys to the cad face keys of dividedBody
+        loop faceCursor from 0 to the length of dividedFaceKeys:
+            set sideResult to the cad slice side of (the item at faceCursor in dividedFaceKeys) in dividedBody against (normalizedResult's value) within tolerance
+            if sideResult's valid = false:
+                free dividedFaceKeys
+                return cad slice failure cad imprint cut refused snag
+            if sideResult's value < 0:
+                append (the item at faceCursor in dividedFaceKeys) to (negativeFaces's values)
+            else:
+                append (the item at faceCursor in dividedFaceKeys) to (positiveFaces's values)
+        free dividedFaceKeys
+        if ((the length of (negativeFaces's values)) = 0) or ((the length of (positiveFaces's values)) = 0):
+            return cad slice absent
+        set negativeCopy to the cad slice copy of negativeFaces from dividedBody within tolerance
+        set positiveCopy to the cad slice copy of positiveFaces from dividedBody within tolerance
+        if (negativeCopy's valid and positiveCopy's valid) = false:
+            return cad slice failure cad imprint cut refused snag
+        return cad slice success negative negativeCopy's value positive positiveCopy's value
+
+function the cad surface slice of {cad body:sourceBody} by {cad body:cutterBody}:
+    execute:
+        set cutterFaceResult to the cad slice single face of cutterBody
+        if cutterFaceResult's valid = false:
+            return cad slice failure cad imprint cut refused snag
+        set cutterFaceNode to the cad node pointer for cutterFaceResult's value in cutterBody
+        if cutterFaceNode = (0 as the type of cutterFaceNode):
+            return cad slice failure cad imprint cut refused snag
+        set cutterSurfaceNode to the cad node pointer for cutterFaceNode's surface in cutterBody
+        if cutterSurfaceNode = (0 as the type of cutterSurfaceNode):
+            return cad slice failure cad imprint cut refused snag
+        if cutterSurfaceNode's kind = 5:
+            return cad slice failure cad imprint no closed form snag
+        set toleranceBodies to a list containing sourceBody
+        append cutterBody to toleranceBodies
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set dividedBody to the cad clone of sourceBody
+        set dividedCutter to the cad clone of cutterBody
+        set imprintResult to the cad imprint of dividedBody and dividedCutter within tolerance
+        if imprintResult's valid = false:
+            return cad slice failure imprintResult's snag
+        if imprintResult's cuts = 0:
+            return cad slice absent
+
+        set negativeFaces to a cad topology list of a cad face key
+        set positiveFaces to a cad topology list of a cad face key
+        set dividedFaceKeys to the cad face keys of dividedBody
+        loop faceCursor from 0 to the length of dividedFaceKeys:
+            set interiorResult to the cad interior point of (the item at faceCursor in dividedFaceKeys) in dividedBody within tolerance
+            if interiorResult's valid = false:
+                free dividedFaceKeys
+                return cad slice failure cad imprint cut refused snag
+            set distanceResult to the cad slice surface distance from cutterBody to interiorResult's value
+            if distanceResult's valid = false:
+                free dividedFaceKeys
+                return cad slice failure cad imprint cut refused snag
+            if distanceResult's value < (-tolerance):
+                append (the item at faceCursor in dividedFaceKeys) to (negativeFaces's values)
+            else if distanceResult's value > tolerance:
+                append (the item at faceCursor in dividedFaceKeys) to (positiveFaces's values)
+            else:
+                free dividedFaceKeys
+                return cad slice failure cad imprint cut refused snag
+        free dividedFaceKeys
+        if ((the length of (negativeFaces's values)) = 0) or ((the length of (positiveFaces's values)) = 0):
+            return cad slice absent
+
+        if (cad slice body sourceBody is closed) = false:
+            set negativeCopy to the cad slice copy of negativeFaces from dividedBody within tolerance
+            set positiveCopy to the cad slice copy of positiveFaces from dividedBody within tolerance
+            if (negativeCopy's valid and positiveCopy's valid) = false:
+                return cad slice failure cad imprint cut refused snag
+            return cad slice success negative negativeCopy's value positive positiveCopy's value
+
+        set capFaces to a cad topology list of a cad face key
+        set cutterFaceKeys to the cad face keys of dividedCutter
+        loop capCursor from 0 to the length of cutterFaceKeys:
+            set capKey to the item at capCursor in cutterFaceKeys
+            set classification to the cad side of capKey in dividedCutter against sourceBody within tolerance
+            if classification = the inside cad containment:
+                append capKey to (capFaces's values)
+        free cutterFaceKeys
+        if (the length of (capFaces's values)) = 0:
+            return cad slice failure cad imprint cut refused snag
+        set negativeCopy to the cad slice closed copy of negativeFaces from dividedBody capped by capFaces from dividedCutter flipped false within tolerance
+        set positiveCopy to the cad slice closed copy of positiveFaces from dividedBody capped by capFaces from dividedCutter flipped true within tolerance
+        if (negativeCopy's valid and positiveCopy's valid) = false:
+            return cad slice failure cad imprint cut refused snag
+        return cad slice success negative negativeCopy's value positive positiveCopy's value

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/construct2.dl
+set result to the bounded cad arc2 at (the cad zero vector2) with radius (1.0 as a 32 bit floating-point number) from 0.0 to 1.0
+print result's valid
+

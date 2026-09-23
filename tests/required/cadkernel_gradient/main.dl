@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+# Independent boundary fixtures for the complete gradient.rs port (no upstream unit tests).
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/gradient.rs
+import lib/cadkernel/gradient.dl
+
+function check cad gradient {boolean:passed} named {C string:label}:
+    execute:
+        if the inverse of passed:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function check cad gradient scalar {a 64 bit floating-point number:actual} against {a 64 bit floating-point number:expected}:
+    execute:
+        check cad gradient ((the absolute value of (actual - expected)) < 1e-12) named "gradient scalar mismatch"
+
+set tolerance to the default cad tolerance
+set boundary to an empty list of a cad vector2
+set missing to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance
+check cad gradient ((the valid of missing) = false) named "empty boundary rejected"
+append (a cad vector2 with x 0.0 and y 0.0) to boundary
+append (a cad vector2 with x 4.0 and y 0.0) to boundary
+append (a cad vector2 with x 4.0 and y 2.0) to boundary
+append (a cad vector2 with x 0.0 and y 2.0) to boundary
+set result to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance
+check cad gradient (the valid of result) named "rectangle accepted"
+set frame to the value of result
+check cad gradient scalar (the x of the centre of frame) against 2.0
+check cad gradient scalar (the y of the centre of frame) against 1.0
+check cad gradient scalar (the projectionMinimum of frame) against 0.0
+check cad gradient scalar (the projectionSpan of frame) against 4.0
+check cad gradient scalar (the radius of frame) against 2.23606797749979
+set shifted to the value of (the cad gradient frame of boundary at angle 0.0 with shift 1.0 within tolerance)
+check cad gradient scalar (the x of the centre of shifted) against 1.0
+check cad gradient scalar (the y of the centre of shifted) against 1.5
+check cad gradient scalar (the projectionMinimum of shifted) against (-1.0)
+check cad gradient scalar (the projectionSpan of shifted) against 4.0
+check cad gradient scalar (the radius of shifted) against 3.3541019662496847
+set lower to the value of (the cad gradient frame of boundary at angle 0.0 with shift (-4.0) within tolerance)
+set upper to the value of (the cad gradient frame of boundary at angle 0.0 with shift 4.0 within tolerance)
+check cad gradient (cad lower equals frame) named "shift lower clamp"
+check cad gradient (cad upper equals shifted) named "shift upper clamp"
+set rotated to the value of (the cad gradient frame of boundary at angle 1.5707963267948966 with shift 1.0 within tolerance)
+check cad gradient scalar (the projectionMinimum of rotated) against 0.5
+check cad gradient scalar (the projectionSpan of rotated) against 2.0
+set floored to the value of (the cad gradient frame of boundary at angle 0.0 with shift 0.0 within (a cad tolerance of 10.0))
+check cad gradient scalar (the radius of floored) against 10.0
+check cad gradient scalar (the projectionSpan of floored) against 10.0
+
+set notANumber to the square root of (-1.0)
+set infinity to 1e308 * 1e308
+set invalidValues to [notANumber, infinity, the negative of infinity]
+loop invalidIndex from 0 to 3:
+    set invalid to the item at invalidIndex in invalidValues
+    set badAngle to the cad gradient frame of boundary at angle invalid with shift 0.0 within tolerance
+    set badShift to the cad gradient frame of boundary at angle 0.0 with shift invalid within tolerance
+    check cad gradient ((the valid of badAngle) = false) named "nonfinite angle rejected"
+    check cad gradient ((the valid of badShift) = false) named "nonfinite shift rejected"
+append (a cad vector2 with x notANumber and y 100.0) to boundary
+append (a cad vector2 with x infinity and y 100.0) to boundary
+append (a cad vector2 with x 100.0 and y notANumber) to boundary
+set filtered to the value of (the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance)
+check cad gradient (cad filtered equals frame) named "nonfinite boundary points skipped"
+check cad gradient ((the length of boundary) = 7) named "boundary is borrowed without mutation"
+free boundary
+
+set single to a list containing (a cad vector2 with x 3.0 and y 4.0)
+set pointFrame to the value of (the cad gradient frame of single at angle 0.0 with shift 0.5 within tolerance)
+check cad gradient scalar (the x of the centre of pointFrame) against 3.0
+check cad gradient scalar (the y of the centre of pointFrame) against 4.0
+check cad gradient scalar (the projectionMinimum of pointFrame) against 3.0
+check cad gradient scalar (the projectionSpan of pointFrame) against 1e-7
+check cad gradient scalar (the radius of pointFrame) against 1e-7
+free single
+set invalidPoints to a list containing (a cad vector2 with x notANumber and y 0.0)
+set noFinitePoint to the cad gradient frame of invalidPoints at angle 0.0 with shift 0.0 within tolerance
+check cad gradient ((the valid of noFinitePoint) = false) named "all nonfinite points rejected"
+free invalidPoints
+
+set extreme to a list containing (a cad vector2 with x 1e308 and y 0.0)
+append (a cad vector2 with x 1.5e308 and y 0.0) to extreme
+set overflow to the cad gradient frame of extreme at angle 0.0 with shift 0.0 within tolerance
+check cad gradient (the valid of overflow) named "source midpoint overflow remains accepted"
+check cad gradient ((the x of the centre of the value of overflow) = infinity) named "midpoint source order retained"
+check cad gradient ((the radius of the value of overflow) = infinity) named "overflow radius retained"
+replace item at index 0 in extreme with (a cad vector2 with x (-1e308) and y 0.0)
+replace item at index 1 in extreme with (a cad vector2 with x 1e308 and y 0.0)
+set wide to the cad gradient frame of extreme at angle 0.0 with shift 0.0 within tolerance
+check cad gradient (the valid of wide) named "source extent overflow remains accepted"
+set wideFrame to the value of wide
+check cad gradient ((the x of the centre of wideFrame) != (the x of the centre of wideFrame)) named "zero times infinite extent remains NaN"
+check cad gradient scalar (the radius of wideFrame) against 1e-7
+check cad gradient ((cad wideFrame equals wideFrame) = false) named "record equality preserves NaN"
+free extreme
+
+set copy to frame
+set the radius of copy to 10.0
+check cad gradient ((cad copy equals frame) = false) named "record equality includes radius"
+check cad gradient scalar (the radius of frame) against 2.23606797749979
+print "cadkernel gradient: PASS" as a line

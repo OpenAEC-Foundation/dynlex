@@ -1,0 +1,44 @@
+import examples/dynedra/render.dl
+import examples/dynedra/input.dl
+
+function check lab input {boolean:condition}:
+    execute:
+        if condition = false:
+            print "Dynedra input assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+check lab input ((the lab click action at 30 150) = 0)
+check lab input ((the lab click action at 180 150) = 1)
+check lab input ((the lab click action at 30 192) = 2)
+check lab input ((the lab click action at 180 192) = 3)
+check lab input ((the lab click action at 30 234) = 16)
+check lab input ((the lab click action at 180 234) = 17)
+check lab input ((the lab click action at 160 150) = -1)
+check lab input ((the lab click action at 100 272) = -1)
+check lab input ((the lab click action at 280 365) = 5)
+check lab input ((the lab click action at 160 610) = -1)
+check lab input ((the lab click action at 100 443) = -1)
+check lab input ((the lab click action at 25 510) = 9)
+check lab input ((the lab click action at 900 510) = -1)
+set window to a new hidden window with width 1280 and height 820
+set loading to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 18 for window
+set typeface to loading's typeface
+if loading failed:
+    print loading's status's operation as a line
+    set releasing to the result of releasing (the address of typeface)
+    close window
+    return 1
+set state to the initial lab state
+loop index from 0 to 6:
+    set state to the lab state after action (the lab scenario action for index) from state
+    set scene to the lab scene for state's settings
+    set frame to a new graphics frame in window with background red 0.9686, green 0.9765, blue 0.9882 and alpha 1.0
+    check lab input frame's drawable
+    draw lab scene with state using typeface in frame
+    display frame
+set releasing to the result of releasing (the address of typeface)
+close window
+if releasing failed:
+    print releasing's operation as a line
+    return 1
+print "Dynedra graphics checks passed" as a line

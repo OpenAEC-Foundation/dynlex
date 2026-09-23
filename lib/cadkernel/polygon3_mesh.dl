@@ -1,0 +1,144 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/polygon.rs::triangulate and triangulate_rings.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/polygon.rs
+# Inputs are borrowed lists of cad vector3 (or lists of those ring pointers).
+# Each returned list owns its triangle soup, in ordered groups of three points.
+# Free that list once; its ordinary pointer copies are borrowed aliases.
+import lib/cadkernel/polygon3.dl
+import lib/cadkernel/plane.dl
+import lib/cadkernel/triangulate2.dl
+
+local function check cad spatial mesh point {cad vector3:pointValue}:
+    execute:
+        ignore pointValue
+
+local function check cad spatial mesh ring {a pointer to a list:vertices}:
+    execute:
+        check cad spatial mesh point (a new (the type of (the item at 0 in vertices)))
+
+local function check cad spatial mesh rings {a pointer to a list:boundaries}:
+    execute:
+        check cad spatial mesh ring (a new (the type of (the item at 0 in boundaries)))
+
+local function free cad spatial mesh rings {a pointer to a list:boundaries}:
+    execute:
+        loop index from 0 to the length of boundaries:
+            free (the item at index in boundaries)
+        free boundaries
+
+local function clean cad spatial mesh ring {a pointer to a list:input} into {a pointer to a list:cleaned} within {a 64 bit floating-point number:limit}:
+    execute:
+        loop index from 0 to the length of input:
+            set pointValue to the item at index in input
+            if (cad pointValue is finite) = false:
+                return false
+            if (the length of cleaned) = 0:
+                append pointValue to cleaned
+            else:
+                if (the cad distance from (the last item of cleaned) to pointValue) > limit:
+                    append pointValue to cleaned
+        # The spatial source removes the closing point once, after distance filtering.
+        if (the length of cleaned) > 1:
+            if (the cad distance from (the item at 0 in cleaned) to (the last item of cleaned)) <= limit:
+                remove item ((the length of cleaned) - 1) from cleaned
+        return true
+
+local function clean cad spatial mesh rings {a pointer to a list:input} into {a pointer to a list:cleaned} within {a 64 bit floating-point number:limit}:
+    execute:
+        loop index from 0 to the length of input:
+            set vertices to an empty list of a cad vector3
+            set valid to clean cad spatial mesh ring (the item at index in input) into vertices within limit
+            if valid = false:
+                free vertices
+                return false
+            if (the length of vertices) >= 3:
+                append vertices to cleaned
+            else:
+                free vertices
+        return true
+
+local function the cad spatial mesh plane of {a pointer to a list:vertices} within {a 64 bit floating-point number:limit}:
+    execute:
+        set normalized to the cad ring normal of vertices
+        if the valid of normalized:
+            set origin to the item at 0 in vertices
+            loop index from 1 to the length of vertices:
+                set direction to the cad difference of (the item at index in vertices) and origin
+                if (the cad length of direction) > limit:
+                    return the cad orthonormal plane with origin origin, x axis direction and normal (the value of normalized)
+        return @intrinsic("construct", a cad plane result, false, the cad xy plane)
+
+local function project cad spatial mesh rings {a pointer to a list:boundaries} on {cad plane:frame} within {a 64 bit floating-point number:limit} into {a pointer to a list:projected}:
+    execute:
+        loop ringIndex from 0 to the length of boundaries:
+            set vertices to the item at ringIndex in boundaries
+            # Complete the containment pass before projecting this ring.
+            loop index from 0 to the length of vertices:
+                if (cad frame contains (the item at index in vertices) within limit) = false:
+                    return false
+            set coordinates to an empty list of a cad vector2
+            append coordinates to projected
+            loop index from 0 to the length of vertices:
+                set coordinate to the cad projection of (the item at index in vertices) onto frame
+                if (the valid of coordinate) = false:
+                    return false
+                append (the value of coordinate) to coordinates
+        return true
+
+local function the cad spatial mesh triangulation of {a pointer to a list:projected} with even odd nesting {boolean:evenOdd}:
+    execute:
+        if evenOdd:
+            return the cad triangulation of rings projected
+        set holes to an empty list of the type of (an empty list of a cad vector2)
+        set triangulated to the cad triangulation of (the item at 0 in projected) with holes holes
+        free holes
+        return triangulated
+
+local function the cad spatial mesh soup of cleaned rings {a pointer to a list:boundaries} within {a 64 bit floating-point number:limit} with even odd nesting {boolean:evenOdd}:
+    execute:
+        set outputPoints to an empty list of a cad vector3
+        if (the length of boundaries) = 0:
+            return outputPoints
+        set planeResult to the cad spatial mesh plane of (the item at 0 in boundaries) within limit
+        if (the valid of planeResult) = false:
+            return outputPoints
+        set frame to the value of planeResult
+        set projected to an empty list of the type of (an empty list of a cad vector2)
+        set valid to project cad spatial mesh rings boundaries on frame within limit into projected
+        if valid:
+            set triangulated to the cad spatial mesh triangulation of projected with even odd nesting evenOdd
+            set vertices to the points of triangulated
+            set faces to the triangles of triangulated
+            loop index from 0 to the length of faces:
+                set face to the item at index in faces
+                append (the cad point at (the item at (the first of face) in vertices) on frame) to outputPoints
+                append (the cad point at (the item at (the second of face) in vertices) on frame) to outputPoints
+                append (the cad point at (the item at (the third of face) in vertices) on frame) to outputPoints
+            free cad triangulation triangulated
+        free cad spatial mesh rings projected
+        return outputPoints
+
+local function the cad spatial mesh soup of rings {a pointer to a list:boundaries} within {cad tolerance:tolerance} with even odd nesting {boolean:evenOdd}:
+    execute:
+        check cad spatial mesh rings boundaries
+        set limit to the cad linear tolerance of tolerance
+        set cleaned to an empty list of the type of (an empty list of a cad vector3)
+        set valid to clean cad spatial mesh rings boundaries into cleaned within limit
+        set outputPoints to an empty list of a cad vector3
+        if valid:
+            free outputPoints
+            set outputPoints to the cad spatial mesh soup of cleaned rings cleaned within limit with even odd nesting evenOdd
+        free cad spatial mesh rings cleaned
+        return outputPoints
+
+function the cad spatial triangle soup of {a pointer to a list:ring} within {cad tolerance:tolerance}:
+    execute:
+        check cad spatial mesh ring ring
+        set boundaries to a list containing ring
+        set outputPoints to the cad spatial mesh soup of rings boundaries within tolerance with even odd nesting false
+        free boundaries
+        return outputPoints
+
+function the cad spatial triangle soup of rings {a pointer to a list:boundaries} within {cad tolerance:tolerance}:
+    execute:
+        return the cad spatial mesh soup of rings boundaries within tolerance with even odd nesting true

@@ -1,0 +1,181 @@
+# SPDX-License-Identifier: MPL-2.0
+# All ten tests from cadkernel src/brep/arena.rs at 953d546b.
+import lib/cadkernel/arena.dl
+
+class:
+    patterns:
+        [an|] upstream arena node
+    members:
+        number as a 32 bit unsigned integer
+
+function an upstream arena node numbered {a 32 bit unsigned integer:number}:
+    execute:
+        return @intrinsic("construct", an upstream arena node, number)
+
+function the cad payload clone of {an upstream arena node:node}:
+    execute:
+        return node
+
+function check upstream arena condition:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function verify arena insertion:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set first to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        set second to the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into nodes
+        check upstream arena ((the number of the cad value of (the cad lookup of first in nodes)) = 1)
+        check upstream arena ((the number of the cad value of (the cad lookup of second in nodes)) = 2)
+        check upstream arena ((the cad count of nodes) = 2)
+        free cad arena nodes
+        print "what_goes_in_comes_back_out" as a line
+
+function verify arena removal:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set key to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        set removed to the cad removal of key from nodes
+        check upstream arena ((the number of the cad value of removed) = 1)
+        check upstream arena ((nodes contains cad key key) = false)
+        check upstream arena ((the valid of (the cad lookup of key in nodes)) = false)
+        check upstream arena (nodes is cad empty)
+        check upstream arena ((the valid of (the cad removal of key from nodes)) = false)
+        free cad arena nodes
+        print "a_removed_node_is_gone_and_its_key_stops_resolving" as a line
+
+function verify arena [stale] identity:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set stale to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        ignore the cad removal of stale from nodes
+        set fresh to the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into nodes
+        check upstream arena ((the cad slot of stale) = (the cad slot of fresh))
+        check upstream arena ((stale equals cad key fresh) = false)
+        check upstream arena ((the valid of (the cad lookup of stale in nodes)) = false)
+        check upstream arena ((the number of the cad value of (the cad lookup of fresh in nodes)) = 2)
+        free cad arena nodes
+        print "a_stale_key_does_not_resolve_to_whatever_took_the_slot" as a line
+
+function verify arena slot reuse:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set first to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        set second to the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into nodes
+        ignore the cad removal of first from nodes
+        set third to the cad key after inserting (an upstream arena node numbered (3 as a 32 bit unsigned integer)) into nodes
+        check upstream arena ((the cad slot of third) = (the cad slot of first))
+        check upstream arena ((the cad count of nodes) = 2)
+        check upstream arena ((the number of the cad value of (the cad lookup of second in nodes)) = 2)
+        free cad arena nodes
+        print "removing_frees_the_slot_for_the_next_insert" as a line
+
+function verify arena [foreign] identity:
+    execute:
+        set one to a cad arena of an upstream arena node
+        set other to a cad arena of an upstream arena node
+        ignore the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into one
+        ignore the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into one
+        set foreign to the cad key after inserting (an upstream arena node numbered (9 as a 32 bit unsigned integer)) into other
+        check upstream arena ((the number of the cad value of (the cad lookup of foreign in one)) = 1)
+        check upstream arena ((the number of the cad value of (the cad lookup of foreign in other)) = 9)
+        free cad arena one
+        free cad arena other
+        print "a_key_from_another_arena_does_not_resolve" as a line
+
+function verify arena range refusal:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set key to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        set elsewhere to a cad arena of an upstream arena node
+        set index to 0
+        loop while index < 5:
+            ignore the cad key after inserting (an upstream arena node numbered (index as a 32 bit unsigned integer)) into elsewhere
+            increment index
+        set keys to the cad keys of elsewhere
+        set far to the last item of keys
+        check upstream arena ((the valid of (the cad lookup of far in nodes)) = false)
+        check upstream arena ((the number of the cad value of (the cad lookup of key in nodes)) = 1)
+        free keys
+        free cad arena nodes
+        free cad arena elsewhere
+        print "an_out_of_range_key_is_refused_rather_than_panicking" as a line
+
+function verify arena mutation:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set key to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        set stored to the cad node pointer for key in nodes
+        set the number of stored to 42 as a 32 bit unsigned integer
+        check upstream arena ((the number of the cad value of (the cad lookup of key in nodes)) = 42)
+        set values to the cad mutable values of nodes
+        set index to 0
+        loop while index < (the length of values):
+            set node to the item at index in values
+            set the number of node to ((the number of node) + (1 as a 32 bit unsigned integer))
+            increment index
+        check upstream arena ((the number of the cad value of (the cad lookup of key in nodes)) = 43)
+        free values
+        free cad arena nodes
+        print "mutation_reaches_the_stored_node" as a line
+
+function verify arena iteration:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set index to 0
+        loop while index < 5:
+            ignore the cad key after inserting (an upstream arena node numbered (index as a 32 bit unsigned integer)) into nodes
+            increment index
+        set keys to the cad keys of nodes
+        ignore the cad removal of (the item at 1 in keys) from nodes
+        ignore the cad removal of (the item at 3 in keys) from nodes
+        set seen to the cad entries of nodes
+        check upstream arena ((the length of seen) = 3)
+        check upstream arena ((the number of the value of (the item at 0 in seen)) = 0)
+        check upstream arena ((the number of the value of (the item at 1 in seen)) = 2)
+        check upstream arena ((the number of the value of (the item at 2 in seen)) = 4)
+        set live to the cad keys of nodes
+        check upstream arena ((the length of live) = 3)
+        free keys
+        free seen
+        free live
+        free cad arena nodes
+        print "iteration_skips_the_holes" as a line
+
+function verify arena generation wrapping:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set key to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        ignore the cad removal of key from nodes
+        set slot to the data of the slots of nodes
+        set the generation of slot to 4294967295 as a 32 bit unsigned integer
+        set wrapped to the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into nodes
+        ignore the cad removal of wrapped from nodes
+        check upstream arena ((nodes contains cad key wrapped) = false)
+        free cad arena nodes
+        print "a_generation_that_wraps_still_moves_on" as a line
+
+function verify arena cloning:
+    execute:
+        set nodes to a cad arena of an upstream arena node
+        set stale to the cad key after inserting (an upstream arena node numbered (1 as a 32 bit unsigned integer)) into nodes
+        ignore the cad removal of stale from nodes
+        set live to the cad key after inserting (an upstream arena node numbered (2 as a 32 bit unsigned integer)) into nodes
+        set duplicate to the cad clone of nodes
+        check upstream arena ((the number of the cad value of (the cad lookup of live in duplicate)) = 2)
+        check upstream arena ((the valid of (the cad lookup of stale in duplicate)) = false)
+        free cad arena duplicate
+        free cad arena nodes
+        print "cloning_carries_the_generations_with_it" as a line
+
+verify arena insertion
+verify arena removal
+verify arena stale identity
+verify arena slot reuse
+verify arena foreign identity
+verify arena range refusal
+verify arena mutation
+verify arena iteration
+verify arena generation wrapping
+verify arena cloning

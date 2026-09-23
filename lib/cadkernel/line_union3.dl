@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: MPL-2.0
+# Complete port of cadkernel src/space/line_union.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/line_union.rs
+# Union results are allocation-free values. Chain inputs are borrowed; returned
+# retained-index lists belong to the caller and must be freed once.
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad line union kind
+    members:
+        code as an integer
+
+class:
+    patterns:
+        [a|] cad line union
+    members:
+        start as a cad vector3
+        end as a cad vector3
+        kind as a cad line union kind
+
+class:
+    patterns:
+        [a|] cad line union result
+    members:
+        valid as a boolean
+        value as a cad line union
+
+function the cad duplicate line union kind:
+    replacement:
+        @intrinsic("construct", a cad line union kind, 0)
+
+function the cad overlapping line union kind:
+    replacement:
+        @intrinsic("construct", a cad line union kind, 1)
+
+function the cad end to end line union kind:
+    replacement:
+        @intrinsic("construct", a cad line union kind, 2)
+
+function cad {cad line union kind:left} equals {cad line union kind:right}:
+    execute:
+        return (the code of left) = (the code of right)
+
+local function cad line union point {cad vector3:left} equals {cad vector3:right}:
+    execute:
+        return ((the x of left) = (the x of right)) and (((the y of left) = (the y of right)) and ((the z of left) = (the z of right)))
+
+function cad {cad line union:left} equals {cad line union:right}:
+    execute:
+        return (cad line union point (the start of left) equals (the start of right)) and ((cad line union point (the end of left) equals (the end of right)) and (cad (the kind of left) equals (the kind of right)))
+
+local function cad line union scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function no cad line union:
+    execute:
+        return @intrinsic("construct", a cad line union result, false, a new cad line union)
+
+function the cad line union from {cad vector3:firstStart} to {cad vector3:firstEnd} and from {cad vector3:secondStart} to {cad vector3:secondEnd} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad line union scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return no cad line union
+        if ((cad firstStart is finite) and ((cad firstEnd is finite) and ((cad secondStart is finite) and (cad secondEnd is finite)))) = false:
+            return no cad line union
+        set delta to the cad difference of firstEnd and firstStart
+        set span to the cad length of delta
+        set otherDelta to the cad difference of secondEnd and secondStart
+        if (span <= tolerance) or ((the cad length of otherDelta) <= tolerance):
+            return no cad line union
+        set direction to delta cad divided by span
+        set first to the cad difference of secondStart and firstStart
+        set last to the cad difference of secondEnd and firstStart
+        if ((the cad length of (the cad cross of first and direction)) > tolerance) or ((the cad length of (the cad cross of last and direction)) > tolerance):
+            return no cad line union
+        set s to the cad dot of first and direction
+        set e to the cad dot of last and direction
+        set low to the minimum of s and e
+        set high to the maximum of s and e
+        if (low > (span + tolerance)) or (high < (the negative of tolerance)):
+            return no cad line union
+        set relation to the cad end to end line union kind
+        if ((the absolute value of low) <= tolerance) and ((the absolute value of (high - span)) <= tolerance):
+            set relation to the cad duplicate line union kind
+        else:
+            if ((the minimum of high and span) - (the maximum of low and 0.0)) > tolerance:
+                set relation to the cad overlapping line union kind
+        set resultStart to the cad sum of firstStart and (direction scaled by (the minimum of low and 0.0))
+        set resultEnd to the cad sum of firstStart and (direction scaled by (the maximum of high and span))
+        set joined to @intrinsic("construct", a cad line union, resultStart, resultEnd, relation)
+        return @intrinsic("construct", a cad line union result, true, joined)
+
+function the cad retained indices of linear chain {a pointer to a list:points} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set unchanged to ((cad line union scalar tolerance is finite) = false) or (tolerance < 0.0)
+        loop index from 0 to the length of points:
+            set {cad vector3:pointValue} to the item at index in points
+            if (cad pointValue is finite) = false:
+                set unchanged to true
+        set kept to an empty list of an integer
+        if unchanged:
+            loop index from 0 to the length of points:
+                append index to kept
+            return kept
+        loop index from 0 to the length of points:
+            set pointValue to the item at index in points
+            set duplicate to false
+            if (the length of kept) > 0:
+                set previous to the item at (the last item of kept) in points
+                set duplicate to (the cad length of (the cad difference of pointValue and previous)) <= tolerance
+            if duplicate = false:
+                set reducing to true
+                loop while ((the length of kept) >= 2) and reducing:
+                    set a to the item at ((the length of kept) - 2) in kept
+                    set b to the last item of kept
+                    set joined to the cad line union from (the item at a in points) to (the item at b in points) and from (the item at b in points) to pointValue within tolerance
+                    if the valid of joined:
+                        if cad (the kind of the value of joined) equals (the cad end to end line union kind):
+                            remove item ((the length of kept) - 1) from kept
+                        else:
+                            set reducing to false
+                    else:
+                        set reducing to false
+                append index to kept
+        return kept

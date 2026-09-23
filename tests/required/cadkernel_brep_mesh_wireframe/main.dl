@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check mesh wireframe {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set solidResult to the cad cuboid at the cad zero vector3 with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
+check mesh wireframe (solidResult's valid) named "box"
+set toleranceValue to a cad tessellation tolerance with maximum angle (the cad default sampling angle) within 1e-9
+
+set defaultWireframe to the cad wireframe of solidResult's value with tolerance toleranceValue
+check mesh wireframe ((the length of defaultWireframe's edges) = 12) named "twelve visible edges"
+check mesh wireframe ((the length of defaultWireframe's isolines) = 0) named "no default isolines"
+check mesh wireframe ((the length of defaultWireframe's missingFaces) = 0) named "wireframe complete"
+free cad body wireframe defaultWireframe
+
+set hiddenPlanar to the cad wireframe of solidResult's value with tolerance (toleranceValue with 2 cad isolines)
+check mesh wireframe ((the length of hiddenPlanar's isolines) = 0) named "planar isolines opt in"
+free cad body wireframe hiddenPlanar
+
+set uTolerance to (toleranceValue with 1 cad u isolines and 0 cad v isolines) including planar cad isolines true
+set uWireframe to the cad wireframe of solidResult's value with tolerance uTolerance
+check mesh wireframe ((the length of uWireframe's isolines) = 6) named "one u line per face"
+loop uIndex from 0 to the length of uWireframe's isolines:
+    check mesh wireframe ((the length of (the item at uIndex in uWireframe's isolines)'s positions) = 2) named "planar u segment"
+free cad body wireframe uWireframe
+
+set vTolerance to (toleranceValue with 0 cad u isolines and 2 cad v isolines) including planar cad isolines true
+set vWireframe to the cad wireframe of solidResult's value with tolerance vTolerance
+check mesh wireframe ((the length of vWireframe's isolines) = 12) named "two v lines per face"
+free cad body wireframe vWireframe
+
+set bodyMesh to the cad tessellation of solidResult's value with tolerance toleranceValue
+check mesh wireframe (cad body mesh bodyMesh is complete) named "body mesh complete"
+check mesh wireframe ((the cad triangle count of bodyMesh's mesh) = 12) named "body triangles"
+check mesh wireframe ((the length of bodyMesh's triangleFaces) = 12) named "triangle provenance"
+check mesh wireframe ((the length of bodyMesh's edges) = 12) named "body edges"
+check mesh wireframe ((the length of bodyMesh's missingFaces) = 0) named "no missing faces"
+check mesh wireframe ((bodyMesh's precision) >= 1e-12) named "silhouette precision"
+free cad body mesh bodyMesh
+
+print "cadkernel brep mesh wireframe: PASS" as a line

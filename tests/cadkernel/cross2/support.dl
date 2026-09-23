@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+# Test-only constructors for pinned geom2d/cross.rs and containment.rs fixtures.
+import lib/cadkernel/curve2.dl
+
+function check cross2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function cross2 point {a 64 bit floating-point number array of 2 items:coordinates}:
+    execute:
+        return a cad vector2 with x (the item at 0 in coordinates) and y (the item at 1 in coordinates)
+
+function cross2 segment start to end:
+    execute:
+        return the cad curve2 of (a cad line2 from (cross2 point start) to (cross2 point end))
+
+function cross2 circle centre with radius {a 64 bit floating-point number:radius}:
+    execute:
+        return the cad curve2 of (a cad circle2 at (cross2 point centre) with radius radius)
+
+function cross2 ellipse centre with radii major and minor:
+    execute:
+        return the cad curve2 of (the full cad ellipse arc2 on (a cad ellipse at (cross2 point centre) with radii major and minor along (cross2 point [1.0,0.0])))
+
+function cross2 ray origin along direction:
+    execute:
+        return the cad curve2 of (a cad ray2 from (cross2 point origin) along (cross2 point direction))
+
+function cross2 xline origin along direction:
+    execute:
+        return the cad curve2 of (a cad xline2 through (cross2 point origin) along (cross2 point direction))
+
+function cross2 polyline vertices with closure {boolean:closed}:
+    execute:
+        set values to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of vertices:
+            set row to the item at index in vertices
+            set position to a cad vector2 with x (the item at 0 in row) and y (the item at 1 in row)
+            append (a cad polyline vertex2 at position with bulge (the item at 2 in row)) to values
+        set shape to the cad polyline2 with vertices values and closure closed
+        free values
+        return the cad curve2 of shape
+
+function cross2 interpolated spline:
+    execute:
+        set points to a list containing (cross2 point [0.0,0.0])
+        append (cross2 point [2.0,4.0]) to points
+        append (cross2 point [6.0,-2.0]) to points
+        append (cross2 point [9.0,3.0]) to points
+        set fitted to the cad nurbs2 fit through points using (the cad chord parameterization)
+        free points
+        check cross2 fitted's valid
+        return the cad curve2 of fitted's value

@@ -1,0 +1,28 @@
+import lib/std.dl
+
+set {an integer:explicitOuter} to 7
+set implicitOuter to 9
+class:
+    patterns:
+        [an|] explicit scope probe
+    members:
+        marker as an integer
+    retain:
+        set explicitOuter to 111
+        set {an integer:implicitOuter} to 222
+        if explicitOuter != 111 or implicitOuter != 222:
+            @intrinsic("call", "libc", "exit", nothing, 83)
+    release:
+        set {an integer:explicitOuter} to 333
+        set implicitOuter to 444
+        if explicitOuter != 333 or implicitOuter != 444:
+            @intrinsic("call", "libc", "exit", nothing, 84)
+
+function exercise explicit lifetime:
+    execute:
+        set held to @intrinsic("construct", an explicit scope probe, 0)
+        ignore held
+
+exercise explicit lifetime
+print explicitOuter as a line
+print implicitOuter as a line

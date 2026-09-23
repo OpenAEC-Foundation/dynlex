@@ -1,0 +1,18 @@
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function visit first depth:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int"), "first"))
+        if @intrinsic("less than", depth, 3):
+            visit second @intrinsic("add", depth, 1)
+
+function visit second depth:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int"), "second"))
+        if @intrinsic("less than", depth, 3):
+            visit first @intrinsic("add", depth, 1)
+
+visit first 0
+visit second 0

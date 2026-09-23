@@ -1,0 +1,3 @@
+import lib/cadkernel/curve2.dl
+set value to a cad line2 from (the cad zero vector3) to (the cad zero vector3)
+print value's start's x as a line

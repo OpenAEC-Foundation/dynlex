@@ -1,0 +1,156 @@
+# SPDX-License-Identifier: MPL-2.0
+# Complete port of cadkernel src/space/arc_union.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/arc_union.rs
+# All records are allocation-free values. A union result exposes valid/value;
+# only a valid result has usable union angles and a relation kind.
+import lib/cadkernel/core.dl
+
+class:
+    patterns:
+        [a|] cad circular arc
+    members:
+        centre as a cad vector3
+        normal as a cad vector3
+        radius as a 64 bit floating-point number
+        startAngle as a 64 bit floating-point number
+        endAngle as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad arc union kind
+    members:
+        code as an integer
+
+class:
+    patterns:
+        [a|] cad arc union
+    members:
+        startAngle as a 64 bit floating-point number
+        endAngle as a 64 bit floating-point number
+        fullCircle as a boolean
+        kind as a cad arc union kind
+
+class:
+    patterns:
+        [a|] cad arc union result
+    members:
+        valid as a boolean
+        value as a cad arc union
+
+function a cad circular arc at {cad vector3:centre} with normal {cad vector3:normal} and radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:startAngle} to {a 64 bit floating-point number:endAngle}:
+    execute:
+        return @intrinsic("construct", a cad circular arc, centre, normal, radius, startAngle, endAngle)
+
+function the cad duplicate arc union kind:
+    replacement:
+        @intrinsic("construct", a cad arc union kind, 0)
+
+function the cad overlapping arc union kind:
+    replacement:
+        @intrinsic("construct", a cad arc union kind, 1)
+
+function the cad end to end arc union kind:
+    replacement:
+        @intrinsic("construct", a cad arc union kind, 2)
+
+function cad {cad arc union kind:left} equals {cad arc union kind:right}:
+    execute:
+        return (the code of left) = (the code of right)
+
+local function cad arc union point {cad vector3:left} equals {cad vector3:right}:
+    execute:
+        return ((the x of left) = (the x of right)) and (((the y of left) = (the y of right)) and ((the z of left) = (the z of right)))
+
+local function cad arc union scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad arc union full turn:
+    replacement:
+        6.283185307179586 as a 64 bit floating-point number
+
+# Rust rem_euclid adds one turn only for a negative remainder. Unlike the
+# angle module's double remainder, this preserves -0 and can round up to TAU.
+local function the cad arc union euclidean remainder of {a 64 bit floating-point number:angle}:
+    execute:
+        set reduced to the remainder of angle divided by (the cad arc union full turn)
+        if reduced < 0.0:
+            return reduced + (the cad arc union full turn)
+        return reduced
+
+local function cad arc union arc {cad circular arc:shape} is finite:
+    execute:
+        return ((cad (the centre of shape) is finite) and (cad (the normal of shape) is finite)) and ((cad arc union scalar (the radius of shape) is finite) and ((cad arc union scalar (the startAngle of shape) is finite) and (cad arc union scalar (the endAngle of shape) is finite)))
+
+local function no cad arc union:
+    execute:
+        return @intrinsic("construct", a cad arc union result, false, a new cad arc union)
+
+function cad circle at {cad vector3:centre} with normal {cad vector3:normal} and radius {a 64 bit floating-point number:radius} contains {cad circular arc:shape}:
+    execute:
+        if ((cad arc union point centre equals (the centre of shape)) and ((cad arc union point normal equals (the normal of shape)) and (radius = (the radius of shape)))) = false:
+            return false
+        if (cad arc union arc shape is finite) = false:
+            return false
+        if radius <= 0.0:
+            return false
+        set direction to the cad normalization of normal
+        if (the valid of direction) = false:
+            return false
+        return (the cad arc union euclidean remainder of ((the endAngle of shape) - (the startAngle of shape))) > 0.0
+
+local function the cad arc union angular distance from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:second}:
+    execute:
+        set separation to the cad arc union euclidean remainder of (first - second)
+        return the minimum of separation and ((the cad arc union full turn) - separation)
+
+function the cad circular arc union of {cad circular arc:first} and {cad circular arc:second} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad arc union scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return no cad arc union
+        if ((cad arc union point (the centre of first) equals (the centre of second)) and ((cad arc union point (the normal of first) equals (the normal of second)) and ((the radius of first) = (the radius of second)))) = false:
+            return no cad arc union
+        set shapes to [first, second]
+        loop index from 0 to 2:
+            set shape to the item at index in shapes
+            if ((cad arc union arc shape is finite) = false) or ((the radius of shape) <= 0.0):
+                return no cad arc union
+            set direction to the cad normalization of (the normal of shape)
+            if (the valid of direction) = false:
+                return no cad arc union
+        set span to the cad arc union euclidean remainder of ((the endAngle of first) - (the startAngle of first))
+        set otherSpan to the cad arc union euclidean remainder of ((the endAngle of second) - (the startAngle of second))
+        if (((cad arc union scalar span is finite) = false) or ((cad arc union scalar otherSpan is finite) = false)) or ((span = 0.0) or (otherSpan = 0.0)):
+            return no cad arc union
+        set epsilon to the minimum of (tolerance / (the radius of first)) and 3.141592653589793
+        set offset to the cad arc union euclidean remainder of ((the startAngle of second) - (the startAngle of first))
+        if (cad arc union scalar offset is finite) = false:
+            return no cad arc union
+        if ((the cad arc union angular distance from (the startAngle of first) to (the startAngle of second)) <= epsilon) and (((the cad arc union angular distance from (the endAngle of first) to (the endAngle of second)) <= epsilon) and ((the absolute value of (span - otherSpan)) <= epsilon)):
+            set joined to @intrinsic("construct", a cad arc union, the cad arc union euclidean remainder of (the startAngle of first), the cad arc union euclidean remainder of (the endAngle of first), false, the cad duplicate arc union kind)
+            return @intrinsic("construct", a cad arc union result, true, joined)
+        set shifts to [the negative of (the cad arc union full turn), 0.0, the cad arc union full turn]
+        set found to false
+        set bestLow to 0.0
+        set bestHigh to 0.0
+        set bestOverlap to 0.0
+        loop index from 0 to 3:
+            set low to offset + (the item at index in shifts)
+            set high to low + otherSpan
+            set overlap to (the minimum of span and high) - (the maximum of 0.0 and low)
+            if (overlap < (the negative of epsilon)) = false:
+                if (found = false) or (overlap > bestOverlap):
+                    set bestLow to the minimum of low and 0.0
+                    set bestHigh to the maximum of high and span
+                    set bestOverlap to overlap
+                    set found to true
+        if found = false:
+            return no cad arc union
+        set relation to the cad end to end arc union kind
+        if bestOverlap > epsilon:
+            set relation to the cad overlapping arc union kind
+        set startAngle to the cad arc union euclidean remainder of ((the startAngle of first) + bestLow)
+        set endAngle to the cad arc union euclidean remainder of ((the startAngle of first) + bestHigh)
+        set fullCircle to (bestHigh - bestLow) >= ((the cad arc union full turn) - epsilon)
+        set joined to @intrinsic("construct", a cad arc union, startAngle, endAngle, fullCircle, relation)
+        return @intrinsic("construct", a cad arc union result, true, joined)

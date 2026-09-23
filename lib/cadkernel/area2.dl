@@ -1,0 +1,232 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/area.rs, revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Signed boundary contributions and centroids use the source's 16-panel,
+# five-node quadrature. Inputs are borrowed; results are scalar values.
+import lib/cadkernel/transform2.dl
+
+class:
+    patterns:
+        [a|] cad moments2
+    members:
+        area as a 64 bit floating-point number
+        firstX as a 64 bit floating-point number
+        firstY as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad area2 result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad centroid2 result
+    members:
+        valid as a boolean
+        value as a cad vector2
+
+local function cad circular area2 at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    execute:
+        set sweep to end - start
+        set along to radius * ((centre's x * ((the sine of end) - (the sine of start))) - (centre's y * ((the cosine of end) - (the cosine of start))))
+        return 0.5 * (along + ((radius * radius) * sweep))
+
+local function cad area2 nodes:
+    execute:
+        return [-0.906179845938664,-0.538469310105683,0.0,0.538469310105683,0.906179845938664]
+
+local function cad area2 weights:
+    execute:
+        return [0.236926885056189,0.478628670499366,0.568888888888889,0.478628670499366,0.236926885056189]
+
+local function cad area2 point on {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad point on shape at parameter
+local function cad area2 tangent on {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad tangent of shape at parameter
+local function cad area2 point on {cad line2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad sum of shape's start and ((the cad difference of shape's end and shape's start) scaled by parameter)
+local function cad area2 tangent on {cad line2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad difference of shape's end and shape's start
+local function cad area2 point on {cad bulge arc2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad curve point of shape at parameter
+local function cad area2 tangent on {cad bulge arc2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad curve tangent of shape at parameter
+
+local function cad integrated first moments2 of {shape}:
+    execute:
+        set nodes to cad area2 nodes
+        set weights to cad area2 weights
+        set width to 1.0 / 16.0
+        set firstX to 0.0
+        set firstY to 0.0
+        loop panel from 0 to 16:
+            set half to 0.5 * width
+            set middle to (width * (panel as a 64 bit floating-point number)) + half
+            loop index from 0 to 5:
+                set parameter to middle + (half * (the item at index in nodes))
+                set weight to the item at index in weights
+                set point to cad area2 point on shape at parameter
+                set step to cad area2 tangent on shape at parameter
+                set bx to ((((half * weight) * 0.5) * point's x) * point's x) * step's y
+                set by to (((((the negative of half) * weight) * 0.5) * point's y) * point's y) * step's x
+                set firstX to firstX + bx
+                set firstY to firstY + by
+        return a cad vector2 with x firstX and y firstY
+
+local function cad integrated area2 of {cad curve2:shape}:
+    execute:
+        set nodes to cad area2 nodes
+        set weights to cad area2 weights
+        set width to 1.0 / 16.0
+        set total to -0.0
+        loop panel from 0 to 16:
+            set half to 0.5 * width
+            set middle to (width * (panel as a 64 bit floating-point number)) + half
+            set subtotal to -0.0
+            loop index from 0 to 5:
+                set parameter to middle + (half * (the item at index in nodes))
+                set point to the cad point on shape at parameter
+                set step to the cad tangent of shape at parameter
+                set subtotal to subtotal + ((the item at index in weights) * (the cad cross of point and step))
+            set total to total + (half * subtotal)
+        return total * 0.5
+
+local function cad area2 segment count of {cad polyline2:shape}:
+    execute:
+        set count to the length of shape's vertices
+        if count < 2:
+            return 0
+        if shape's closed:
+            return count
+        return count - 1
+
+local function cad polyline area2 of {cad polyline2:shape}:
+    execute:
+        set count to the length of shape's vertices
+        set total to 0.0
+        loop index from 0 to cad area2 segment count of shape:
+            set next to the remainder of (index + 1) divided by count
+            set start to (the item at index in shape's vertices)'s position
+            set end to (the item at next in shape's vertices)'s position
+            set arc to the cad segment arc of shape at index index
+            set contribution to 0.5 * (the cad cross of start and end)
+            if arc's valid:
+                set value to arc's value
+                set contribution to cad circular area2 at value's centre with radius value's radius from value's startAngle to (value's startAngle + value's sweep)
+            set total to total + contribution
+        if (shape's closed = false) and (count >= 2):
+            set start to (the item at (count - 1) in shape's vertices)'s position
+            set end to (the item at 0 in shape's vertices)'s position
+            set total to total + (0.5 * (the cad cross of start and end))
+        return total
+
+function the cad enclosed area of {cad curve2:shape}:
+    execute:
+        if shape's kind = 0:
+            return 0.5 * (the cad cross of shape's line's start and shape's line's end)
+        if (shape's kind = 6) or (shape's kind = 7):
+            return 0.0
+        if shape's kind = 1:
+            return cad circular area2 at shape's circle's centre with radius shape's circle's radius from 0.0 to 6.283185307179586
+        if shape's kind = 2:
+            set start to the cad normalized angle of shape's arc's startAngle
+            return cad circular area2 at shape's arc's centre with radius shape's arc's radius from start to (start + (the cad sweep of shape's arc))
+        if shape's kind = 4:
+            return cad polyline area2 of (shape's polyline)
+        if (shape's kind = 3) or (shape's kind = 5):
+            return cad integrated area2 of shape
+        @intrinsic("call", "libc", "abort", nothing)
+        return 0.0
+
+local function cad summed moments2 of {cad moments2:first} and {cad moments2:second}:
+    execute:
+        return @intrinsic("construct", a cad moments2, first's area + second's area, first's firstX + second's firstX, first's firstY + second's firstY)
+
+local function cad [line] moments2 from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        set line to @intrinsic("construct", a cad line2, start, end)
+        set first to cad integrated first moments2 of line
+        return @intrinsic("construct", a cad moments2, 0.5 * (the cad cross of start and end), first's x, first's y)
+
+local function cad bulge moments2 of {cad bulge arc2:arc}:
+    execute:
+        set first to cad integrated first moments2 of arc
+        set contribution to cad circular area2 at arc's centre with radius arc's radius from arc's startAngle to (arc's startAngle + arc's sweep)
+        return @intrinsic("construct", a cad moments2, contribution, first's x, first's y)
+
+local function cad polyline moments2 of {cad polyline2:shape}:
+    execute:
+        set count to the length of shape's vertices
+        set total to @intrinsic("construct", a cad moments2, 0.0, 0.0, 0.0)
+        loop index from 0 to cad area2 segment count of shape:
+            set next to the remainder of (index + 1) divided by count
+            set start to (the item at index in shape's vertices)'s position
+            set end to (the item at next in shape's vertices)'s position
+            set arc to the cad segment arc of shape at index index
+            if arc's valid:
+                set total to cad summed moments2 of total and (cad bulge moments2 of (arc's value))
+            else:
+                set total to cad summed moments2 of total and (cad line moments2 from start to end)
+        if (shape's closed = false) and (count >= 2):
+            set start to (the item at (count - 1) in shape's vertices)'s position
+            set end to (the item at 0 in shape's vertices)'s position
+            set total to cad summed moments2 of total and (cad line moments2 from start to end)
+        return total
+
+local function cad enclosed moments2 of {cad curve2:shape}:
+    execute:
+        if shape's kind = 4:
+            return cad polyline moments2 of (shape's polyline)
+        set first to cad integrated first moments2 of shape
+        return @intrinsic("construct", a cad moments2, the cad enclosed area of shape, first's x, first's y)
+
+function the cad [chord] closed area of {cad curve2:shape}:
+    execute:
+        if (shape's kind = 6) or (shape's kind = 7):
+            return @intrinsic("construct", a cad area2 result, false, 0.0)
+        set start to the cad point on shape at 0.0
+        set end to the cad point on shape at 1.0
+        set chord to cad line moments2 from end to start
+        return @intrinsic("construct", a cad area2 result, true, (the cad enclosed area of shape) + chord's area)
+
+local function cad centroid2 from {cad moments2:contribution} at {cad vector2:origin}:
+    execute:
+        if ((the absolute value of contribution's area) <= 1.7976931348623157e308) and (contribution's area != 0.0):
+            if ((the absolute value of contribution's firstX) <= 1.7976931348623157e308) and ((the absolute value of contribution's firstY) <= 1.7976931348623157e308):
+                set value to a cad vector2 with x (origin's x + (contribution's firstX / contribution's area)) and y (origin's y + (contribution's firstY / contribution's area))
+                return @intrinsic("construct", a cad centroid2 result, true, value)
+        return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+
+function the cad enclosed centroid of {cad curve2:shape}:
+    execute:
+        if shape's kind = 4:
+            if (the length of shape's polyline's vertices) < 2:
+                return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+        else:
+            if (shape is cad closed) = false:
+                return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+        set origin to the cad point on shape at 0.0
+        set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
+        if local's valid = false:
+            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+        return cad centroid2 from (cad enclosed moments2 of (local's value)) at origin
+
+function the cad chord closed centroid of {cad curve2:shape}:
+    execute:
+        if (shape's kind = 6) or (shape's kind = 7):
+            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+        set origin to the cad point on shape at 0.0
+        set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
+        if local's valid = false:
+            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+        set start to the cad point on local's value at 0.0
+        set end to the cad point on local's value at 1.0
+        set contribution to cad summed moments2 of (cad enclosed moments2 of (local's value)) and (cad line moments2 from end to start)
+        return cad centroid2 from contribution at origin

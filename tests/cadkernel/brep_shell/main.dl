@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_shell.dl
+import lib/cadkernel/brep_mass.dl
+import lib/cadkernel/brep_make.dl
+
+function check cad shell {boolean:condition} code {integer:code}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, code)
+
+set sphereMade to the cad sphere body at (a cad vector3 with x 3.0, y -2.0 and z 5.0) with radius 4.0
+set noFaces to an empty list of a cad face key
+set sphereShell to the cad shell of sphereMade's value removing noFaces by 1.0
+check cad shell sphereShell's valid code 11
+set sphereFlaws to the cad flaws of sphereShell's value
+check cad shell ((the length of sphereFlaws) = 0) code 12
+free sphereFlaws
+check cad shell ((the cad count of sphereShell's value's shells) = 2) code 13
+set sphereMass to the cad analytic mass properties of sphereShell's value
+check cad shell sphereMass's valid code 14
+set expectedSphereVolume to ((4.0 * 3.141592653589793) * ((4.0 * 4.0 * 4.0) - (3.0 * 3.0 * 3.0))) / 3.0
+check cad shell ((the absolute value of (sphereMass's value's volume - expectedSphereVolume)) < 1e-8) code 15
+check cad shell ((the cad distance from sphereMass's value's centroid to (a cad vector3 with x 3.0, y -2.0 and z 5.0)) = 0.0) code 16
+print "a_sphere_shell_has_the_exact_annular_volume" as a line
+
+set boxMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 6.0, y 5.0 and z 4.0)
+set topFace to the cad shell face at (a cad vector3 with x 3.0, y 2.5 and z 4.0) in boxMade's value
+check cad shell topFace's valid code 21
+set removedTop to a list containing topFace's value
+set openedBox to the cad shell of boxMade's value removing removedTop by 0.5
+check cad shell openedBox's valid code 22
+set boxFlaws to the cad flaws of openedBox's value
+check cad shell ((the length of boxFlaws) = 0) code 23
+free boxFlaws
+check cad shell ((the length of openedBox's value's roots) = 1) code 24
+check cad shell ((the cad count of openedBox's value's lumps) = 1) code 25
+check cad shell ((the cad count of boxMade's value's faces) = 6) code 26
+print "removing_a_box_face_opens_a_valid_shell" as a line
+
+set cylinderMade to the cad cylinder body at (a cad vector3 with x 1.0, y -3.0 and z 2.0) with radius 4.0 and height 8.0
+set cylinderShell to the cad shell of cylinderMade's value removing noFaces by 1.0
+if cylinderShell's valid = false:
+    print cylinderShell's error as a line
+    print cylinderShell's snag as a line
+check cad shell cylinderShell's valid code 41
+set cylinderFlaws to the cad flaws of cylinderShell's value
+check cad shell ((the length of cylinderFlaws) = 0) code 42
+free cylinderFlaws
+check cad shell ((the cad count of cylinderShell's value's shells) = 2) code 43
+set cylinderMass to the cad analytic mass properties of cylinderShell's value
+check cad shell cylinderMass's valid code 44
+set expectedCylinderVolume to 3.141592653589793 * (((4.0 * 4.0) * 8.0) - ((3.0 * 3.0) * 6.0))
+check cad shell ((the absolute value of (cylinderMass's value's volume - expectedCylinderVolume)) < 1e-8) code 45
+check cad shell ((the cad distance from cylinderMass's value's centroid to (a cad vector3 with x 1.0, y -3.0 and z 6.0)) < 1e-8) code 46
+check cad shell ((the cad count of cylinderMade's value's faces) = 3) code 47
+print "a_cylinder_shell_has_exact_annular_mass" as a line
+
+set cylinderTop to the cad shell face at (a cad vector3 with x 1.0, y -3.0 and z 10.0) in cylinderMade's value
+check cad shell cylinderTop's valid code 51
+set removedCylinderTop to a list containing cylinderTop's value
+set openedCylinder to the cad shell of cylinderMade's value removing removedCylinderTop by 0.75
+if openedCylinder's valid = false:
+    print openedCylinder's error as a line
+    print openedCylinder's snag as a line
+check cad shell openedCylinder's valid code 52
+set openedCylinderFlaws to the cad flaws of openedCylinder's value
+check cad shell ((the length of openedCylinderFlaws) = 0) code 53
+free openedCylinderFlaws
+check cad shell ((the length of openedCylinder's value's roots) = 1) code 54
+check cad shell ((the cad count of openedCylinder's value's lumps) = 1) code 55
+check cad shell ((the cad count of cylinderMade's value's faces) = 3) code 56
+print "removing_a_cylinder_cap_opens_a_valid_shell" as a line
+
+set invalidZero to the cad shell of boxMade's value removing noFaces by 0.0
+set invalidNan to the cad shell of boxMade's value removing noFaces by (0.0 / 0.0)
+check cad shell ((invalidZero's valid = false) and (invalidZero's error = cad shell invalid distance error)) code 31
+check cad shell ((invalidNan's valid = false) and (invalidNan's error = cad shell invalid distance error)) code 32
+set unknownFace to @intrinsic("construct", a cad face key, 999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+set unknownFaces to a list containing unknownFace
+set unknownResult to the cad shell of boxMade's value removing unknownFaces by 0.5
+check cad shell ((unknownResult's valid = false) and (unknownResult's error = cad shell unknown face error)) code 33
+set duplicateFaces to a list containing topFace's value
+append topFace's value to duplicateFaces
+set duplicateResult to the cad shell of boxMade's value removing duplicateFaces by 0.5
+check cad shell ((duplicateResult's valid = false) and (duplicateResult's error = cad shell unknown face error)) code 34
+set nonfinitePick to the cad shell face at (a cad vector3 with x (0.0 / 0.0), y 0.0 and z 0.0) in boxMade's value
+check cad shell (nonfinitePick's valid = false) code 35
+print "invalid_shell_requests_are_refused_without_mutation" as a line

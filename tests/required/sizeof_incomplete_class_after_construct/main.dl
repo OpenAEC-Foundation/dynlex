@@ -1,0 +1,8 @@
+class:
+    patterns:
+        envelope
+    members:
+        payload
+
+@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", @intrinsic("size of", @intrinsic("type of", @intrinsic("construct", envelope, 3))))
+@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", @intrinsic("size of", envelope))

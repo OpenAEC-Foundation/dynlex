@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+# Owned boundary representation foundation. Additional operations import this layer.
+import lib/cadkernel/brep_topology.dl

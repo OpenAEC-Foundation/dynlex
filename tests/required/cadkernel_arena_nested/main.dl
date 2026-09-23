@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MPL-2.0
+# Default recursive managed-field lifecycle and independently mutable string clones.
+import lib/cadkernel/arena.dl
+
+class:
+    patterns:
+        [an|] arena named node
+    members:
+        name as a string
+        weight as a 64 bit floating-point number
+
+function the cad payload clone of {an arena named node:original}:
+    execute:
+        return @intrinsic("construct", an arena named node, the cad payload clone of the name of original, the weight of original)
+
+function the surviving arena name:
+    execute:
+        set initial to @intrinsic("construct", an arena named node, the string form of "alpha", 2.5)
+        set nodes to a cad arena of an arena named node
+        set key to the cad key after inserting initial into nodes
+        set duplicate to the cad clone of nodes
+        set copied to the cad node pointer for key in duplicate
+        store 65 as a byte into (the data of the name of copied) at 0
+        print the name of (the cad value of (the cad lookup of key in nodes)) as a line
+        print the name of copied as a line
+        set replacement to @intrinsic("construct", an arena named node, the string form of "beta", 3.5)
+        replace cad node key in nodes with replacement
+        print the name of (the cad value of (the cad lookup of key in nodes)) as a line
+        set removed to the cad removal of key from duplicate
+        free cad arena nodes
+        free cad arena duplicate
+        return removed
+
+set saved to the surviving arena name
+print the name of the cad value of saved as a line
+print whether (the weight of the cad value of saved) = 2.5 as a line

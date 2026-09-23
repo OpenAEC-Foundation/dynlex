@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/curve2.dl
+
+function check curve2 ownership {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 93)
+function owned curve2 polyline:
+    execute:
+        set vertices to a list containing (a cad polyline vertex2 at (the cad zero vector2) with bulge 1.0)
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+        set shape to the cad polyline2 with vertices vertices and closure false
+        replace item at index 0 in vertices with (a straight cad polyline vertex2 at (a cad vector2 with x 50.0 and y 50.0))
+        free vertices
+        set result to the cad curve2 of shape
+        free cad polyline shape
+        return result
+function owned curve2 nurbs:
+    execute:
+        set controls to a list containing (the cad zero vector2)
+        append (a cad vector2 with x 2.0 and y 0.0) to controls
+        set scalars to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve2 of degree 1 with controls controls, knots scalars and weights scalars
+        free controls
+        free scalars
+        set shape to the cad curve2 of result's value
+        set result to a new (the type of result)
+        return shape
+function check carried curve2 {cad curve2:shape}:
+    execute:
+        set point to the cad point on shape at 0.5
+        check curve2 ownership ((the absolute value of (point's x - 1.0)) < 1e-12)
+
+set primitive to the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 1.0))
+check curve2 ownership (primitive's nurbs's owner = (0 as a pointer to an integer))
+check curve2 ownership (primitive's polyline's storage's owner = (0 as a pointer to an integer))
+set first to owned curve2 polyline
+set shared to first
+set copied to the cad clone of first
+check curve2 ownership (first = shared)
+check curve2 ownership (first = copied)
+check curve2 ownership (first's polyline's vertices = shared's polyline's vertices)
+check curve2 ownership (first's polyline's vertices != copied's polyline's vertices)
+check curve2 ownership (first's polyline's storage's owner != copied's polyline's storage's owner)
+free cad curve first
+check carried curve2 shared
+check carried curve2 copied
+set curves to a list containing shared
+append copied to curves
+free cad curve shared
+free cad curve copied
+set retained to the item at 0 in curves
+remove item 0 from curves
+free curves
+check carried curve2 retained
+set rangeResult to the cad range of retained's polyline from 0.25 to 0.75
+check curve2 ownership rangeResult's valid
+set range to rangeResult's value
+set rangeClone to the cad clone of range
+check curve2 ownership (range = rangeClone)
+check curve2 ownership (range's segments != rangeClone's segments)
+check curve2 ownership (range's polyline's vertices != rangeClone's polyline's vertices)
+set child to range's polyline
+set rangeResult to a new (the type of rangeResult)
+free cad polyline range range
+free cad polyline range rangeClone
+free cad curve retained
+set midpoint to the cad point on child at 0.5
+check curve2 ownership ((the absolute value of (midpoint's y + 1.0)) < 1e-12)
+set invalid to the cad range of child from 0.5 to 0.5
+check curve2 ownership (invalid's valid = false)
+set invalidCopy to invalid
+set invalid to a new (the type of invalid)
+check curve2 ownership ((the length of invalidCopy's value's segments) = 0)
+free cad polyline child
+
+set original to owned curve2 nurbs
+set alias to original
+set deep to the cad clone of original
+check curve2 ownership (original = deep)
+check curve2 ownership (original's nurbs's controls = alias's nurbs's controls)
+check curve2 ownership (original's nurbs's controls != deep's nurbs's controls)
+check curve2 ownership (original's nurbs's knots != deep's nurbs's knots)
+check curve2 ownership (original's nurbs's weights != deep's nurbs's weights)
+set detached to original's nurbs
+insert cad nurbs knot 0.5 into detached
+check curve2 ownership ((the length of original's nurbs's controls) = 2)
+check curve2 ownership ((the length of detached's controls) = 3)
+free cad nurbs detached
+set holder to [original,alias,deep,primitive]
+free cad curve original
+free cad curve alias
+free cad curve deep
+loop index from 0 to 3:
+    check carried curve2 (the item at index in holder)
+loop iteration from 0 to 1000:
+    set temporary to owned curve2 polyline
+    set second to the cad clone of temporary
+    set intermediate to the cad range of temporary's polyline from 0.25 to 0.75
+    set keep to intermediate's value's polyline
+    set intermediate to a new (the type of intermediate)
+    check carried curve2 second
+    check curve2 ownership ((the length of keep's vertices) = 2)
+print "curve2_polyline2_managed_lifetimes" as a line

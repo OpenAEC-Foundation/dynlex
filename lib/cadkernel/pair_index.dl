@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MPL-2.0
+# Internal index for ordered signed-64-bit geometric keys. Values are nonnegative
+# native list indices; -1 denotes absence. A known upper bound sizes the table
+# before graph construction, keeping spatial bucket lookup independent of the
+# number of distinct buckets. Handles share mutable storage and retain it.
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad pair slot
+    members:
+        first as a 64 bit integer
+        second as a 64 bit integer
+        value as an integer
+class:
+    patterns:
+        [a|] cad pair index
+    members:
+        slots
+        mask as an integer
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the slots of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+function a cad pair [index] with room for {integer:count} entries:
+    execute:
+        if (count < 0) or (count > 536870912):
+            @intrinsic("call", "libc", "abort", nothing)
+        set capacity to 8
+        set required to count * 2
+        loop while capacity < required:
+            set capacity to capacity * 2
+        set slots to an empty list of a cad pair slot
+        ensure enough capacity in slots for capacity items
+        set empty to @intrinsic("construct", a cad pair slot, 0 as a 64 bit integer, 0 as a 64 bit integer, -1)
+        loop index from 0 to capacity:
+            append empty to slots
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad pair index, slots, capacity - 1, owner)
+
+local function cad pair bucket for {a 64 bit integer:first} and {a 64 bit integer:second} with mask {integer:mask}:
+    execute:
+        set left to first as a 64 bit unsigned integer
+        set right to second as a 64 bit unsigned integer
+        set prime to 1099511628211 as a 64 bit unsigned integer
+        set mixed to (left bitwise xor (left shifted right by 32)) * prime
+        set mixed to (mixed bitwise xor right) * prime
+        set mixed to mixed bitwise xor (mixed shifted right by 32)
+        return (mixed bitwise and (mask as a 64 bit unsigned integer)) as an integer
+
+# Returns an existing slot, the first free slot, or -1 for a full-table miss.
+local function cad pair [slot] for key {a 64 bit integer:first} and {a 64 bit integer:second} in {cad pair index:table}:
+    execute:
+        if table's owner = (0 as a pointer to an integer):
+            @intrinsic("call", "libc", "abort", nothing)
+        set position to cad pair bucket for first and second with mask table's mask
+        loop probe from 0 to (table's mask + 1):
+            set slot to the item at position in table's slots
+            if slot's value < 0:
+                return position
+            if (slot's first = first) and (slot's second = second):
+                return position
+            set position to (position + 1) bitwise and table's mask
+        return -1
+
+function the cad pair [value] for key {a 64 bit integer:first} and {a 64 bit integer:second} in {cad pair index:table}:
+    execute:
+        set position to cad pair slot for key first and second in table
+        if position < 0:
+            return -1
+        set slot to the item at position in table's slots
+        return slot's value
+
+function put cad pair [value] {integer:value} for key {a 64 bit integer:first} and {a 64 bit integer:second} in {cad pair index:table}:
+    execute:
+        if value < 0:
+            @intrinsic("call", "libc", "abort", nothing)
+        set position to cad pair slot for key first and second in table
+        if position < 0:
+            @intrinsic("call", "libc", "abort", nothing)
+        replace item at index position in table's slots with (@intrinsic("construct", a cad pair slot, first, second, value))

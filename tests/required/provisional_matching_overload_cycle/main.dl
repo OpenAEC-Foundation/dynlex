@@ -1,0 +1,18 @@
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function first equals second:
+    replacement:
+        @intrinsic("equal", first, second)
+function sample:
+    execute:
+        if 1 equals 1:
+            @intrinsic("return", 7)
+        @intrinsic("return", 0)
+function {the type of sample:first} equals {the type of sample:second}:
+    execute:
+        @intrinsic("return", @intrinsic("equal", first, second))
+@intrinsic("store", result, sample)

@@ -10,6 +10,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from native_test_support import resolve_c_compiler
+from process_error_mode import unattended_child_processes
+
 
 LIBRARY_SOURCE = """\
 import lib/atomic.dl
@@ -163,7 +166,10 @@ NEGATIVE_SOURCES = {
 
 
 def run(arguments: list[str], working_directory: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(arguments, cwd=working_directory, text=True, capture_output=True, check=False)
+    with unattended_child_processes():
+        return subprocess.run(
+            arguments, cwd=working_directory, text=True, capture_output=True, check=False, timeout=60
+        )
 
 
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
@@ -219,7 +225,39 @@ def make_c_caller(symbols: dict[str, str]) -> str:
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef HANDLE native_thread;
+typedef DWORD thread_result;
+#define THREAD_CALL WINAPI
+#else
 #include <pthread.h>
+typedef pthread_t native_thread;
+typedef void *thread_result;
+#define THREAD_CALL
+#endif
+typedef thread_result (THREAD_CALL *thread_function)(void *);
+static int start_thread(native_thread *thread, thread_function function) {{
+#ifdef _WIN32
+    *thread = CreateThread(NULL, 0, function, NULL, 0, NULL);
+    return *thread == NULL;
+#else
+    return pthread_create(thread, NULL, function, NULL);
+#endif
+}}
+static int join_thread(native_thread thread, thread_result *result) {{
+#ifdef _WIN32
+    DWORD status = 0;
+    int failed = WaitForSingleObject(thread, INFINITE) != WAIT_OBJECT_0;
+    if (!failed && !GetExitCodeThread(thread, &status)) failed = 1;
+    if (!CloseHandle(thread)) failed = 1;
+    if (result) *result = status;
+    return failed;
+#else
+    return pthread_join(thread, result);
+#endif
+}}
 extern uint64_t increment(void *) __asm__("{symbols['increment']}");
 extern uint64_t load_count(void *) __asm__("{symbols['load count']}");
 extern void publish(void *) __asm__("{symbols['publish']}");
@@ -247,29 +285,29 @@ static uint32_t float_bits(float value) {{
     memcpy(&bits, &value, sizeof(bits));
     return bits;
 }}
-static void *worker(void *unused) {{
+static thread_result THREAD_CALL worker(void *unused) {{
     (void)unused;
     for (int index = 0; index < 10000; ++index)
         increment(&count);
     return 0;
 }}
-static void *consumer(void *unused) {{
+static thread_result THREAD_CALL consumer(void *unused) {{
     (void)unused;
     while (!is_ready(&flag)) {{}}
-    return payload == 42 ? 0 : (void *)1;
+    return (thread_result)(uintptr_t)(payload != 42);
 }}
 int main(void) {{
-    pthread_t workers[4], reader;
+    native_thread workers[4], reader;
     for (int index = 0; index < 4; ++index)
-        if (pthread_create(&workers[index], 0, worker, 0)) return 1;
+        if (start_thread(&workers[index], worker)) return 1;
     for (int index = 0; index < 4; ++index)
-        if (pthread_join(workers[index], 0)) return 2;
+        if (join_thread(workers[index], NULL)) return 2;
     if (load_count(&count) != 40000) return 3;
-    if (pthread_create(&reader, 0, consumer, 0)) return 4;
+    if (start_thread(&reader, consumer)) return 4;
     payload = 42;
     publish(&flag);
-    void *result = 0;
-    if (pthread_join(reader, &result) || result) return 5;
+    thread_result result = 0;
+    if (join_thread(reader, &result) || result) return 5;
     _Atomic bool boolean = true;
     if (!exchange_boolean(&boolean, false) || atomic_load(&boolean)) return 6;
     _Atomic int8_t signed_octet = INT8_MAX;
@@ -307,7 +345,9 @@ def main() -> int:
         print(f"compiler not found: {compiler}", file=sys.stderr)
         return 2
     repo_root = Path(__file__).resolve().parent.parent
-    c_compiler = os.environ.get("CC", "cc")
+    c_compiler = resolve_c_compiler(compiler)
+    executable_suffix = ".exe" if os.name == "nt" else ""
+    thread_flags = [] if os.name == "nt" else ["-pthread"]
     try:
         with tempfile.TemporaryDirectory(prefix="dynlex-atomics-") as temporary_directory:
             temporary = Path(temporary_directory)
@@ -328,7 +368,7 @@ def main() -> int:
             caller = temporary / "caller.c"
             caller.write_text(make_c_caller(symbols), encoding="utf-8")
             object_output = temporary / "atomics.o"
-            executable = temporary / "caller"
+            executable = temporary / f"caller{executable_suffix}"
             for optimization in ("-O0", "-O2", "-O3"):
                 require_success(
                     run(
@@ -338,14 +378,14 @@ def main() -> int:
                 )
                 require_success(
                     run(
-                        [c_compiler, "-std=c11", "-O2", "-pthread", str(caller), str(object_output), "-o", str(executable)],
+                        [c_compiler, "-std=c11", optimization, *thread_flags, str(caller), str(object_output), "-o", str(executable)],
                         repo_root,
                     )
                 )
                 require_success(run([str(executable)], repo_root))
             state_source = temporary / "state.dl"
             state_source.write_text(STATE_TRACKING_SOURCE, encoding="utf-8")
-            state_executable = temporary / "state"
+            state_executable = temporary / f"state{executable_suffix}"
             require_success(run([str(compiler), str(state_source), "-o", str(state_executable)], repo_root))
             state_result = run([str(state_executable)], repo_root)
             require_success(state_result)
@@ -365,7 +405,7 @@ def main() -> int:
                     run([str(compiler), str(target), *arguments], repo_root),
                     "Atomic operations are only available when emitting native CPU code",
                 )
-    except RuntimeError as error:
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
         print(error, file=sys.stderr)
         return 1
     return 0

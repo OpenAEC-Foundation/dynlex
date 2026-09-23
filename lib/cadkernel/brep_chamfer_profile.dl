@@ -1,0 +1,261 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/chamfer_profile.rs.
+# Inputs are borrowed. A successful result owns its profile list and retains
+# managed curve payloads; errors own an empty profile list.
+import lib/cadkernel/arclength2.dl
+import lib/cadkernel/cross2.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad chamfer face
+    members:
+        valid as a boolean
+        value as a cad face key
+class:
+    patterns:
+        [a|] cad chamfer profile selection
+    members:
+        node as an integer
+        edge as a cad edge key
+class:
+    patterns:
+        [a|] cad chamfer error
+    members:
+        kind as an integer
+        edge as a cad edge key
+class:
+    patterns:
+        [a|] cad chamfer profile result
+    members:
+        valid as a boolean
+        error as a cad chamfer error
+        value as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+class:
+    patterns:
+        [a|] cad chamfer trim result
+    members:
+        valid as a boolean
+        value as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+
+function cad chamfer no error:
+    replacement:
+        0
+function cad chamfer edge outside base face error:
+    replacement:
+        1
+function cad chamfer distance interaction error:
+    replacement:
+        2
+function cad chamfer unsupported surface error:
+    replacement:
+        3
+function cad chamfer invalid result error:
+    replacement:
+        4
+function cad chamfer empty selection error:
+    replacement:
+        5
+function cad chamfer invalid distance error:
+    replacement:
+        6
+function cad chamfer unknown edge error:
+    replacement:
+        7
+function cad chamfer unknown base face error:
+    replacement:
+        8
+function cad chamfer invalid body topology error:
+    replacement:
+        9
+function cad chamfer unsupported body topology error:
+    replacement:
+        10
+function cad chamfer unsupported edge curve error:
+    replacement:
+        11
+function cad chamfer non manifold edge error:
+    replacement:
+        12
+function cad chamfer unsupported adjacent surface error:
+    replacement:
+        13
+function cad chamfer degenerate geometry error:
+    replacement:
+        14
+function cad chamfer non convex body error:
+    replacement:
+        15
+function cad chamfer unsupported existing fillet error:
+    replacement:
+        16
+
+function the cad chamfer [face] {cad face key:value}:
+    execute:
+        return @intrinsic("construct", a cad chamfer face, true, value)
+function no cad chamfer [face]:
+    execute:
+        return @intrinsic("construct", a cad chamfer face, false, a new cad face key)
+function a cad chamfer [profile] selection at [node] {integer:node} for [edge] {cad edge key:edge}:
+    execute:
+        return @intrinsic("construct", a cad chamfer profile selection, node, edge)
+
+function a cad chamfer error of [kind] {integer:kind} at {cad edge key:edge}:
+    execute:
+        return @intrinsic("construct", a cad chamfer error, kind, edge)
+function a cad chamfer error of [kind] {integer:kind}:
+    execute:
+        return a cad chamfer error of kind kind at (a new cad edge key)
+local function the cad chamfer [profile] failure of [kind] {integer:kind} at {cad edge key:edge}:
+    execute:
+        set empty to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set error to a cad chamfer error of kind kind at edge
+        return @intrinsic("construct", a cad chamfer profile result, false, error, empty)
+local function the cad chamfer [profile] failure of [kind] {integer:kind}:
+    execute:
+        return the cad chamfer profile failure of kind kind at (a new cad edge key)
+local function the cad chamfer [profile] success with {cad topology list:value}:
+    execute:
+        set error to a cad chamfer error of kind (cad chamfer no error) at (a new cad edge key)
+        return @intrinsic("construct", a cad chamfer profile result, true, error, value)
+local function the cad chamfer trim success with {cad curve2:value}:
+    execute:
+        return @intrinsic("construct", a cad chamfer trim result, true, value)
+local function no cad chamfer trim:
+    execute:
+        set empty to the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)
+        return @intrinsic("construct", a cad chamfer trim result, false, empty)
+local function cad chamfer scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad chamfer point from the [start] of {cad curve2:shape} by {a 64 bit floating-point number:distance}:
+    execute:
+        set parameter to the cad parameter on shape at distance distance
+        return the cad point on shape at parameter
+local function the cad chamfer point from the [end] of {cad curve2:shape} by {a 64 bit floating-point number:distance}:
+    execute:
+        set parameter to the cad parameter on shape at distance ((the cad length of shape) - distance)
+        return the cad point on shape at parameter
+local function the cad chamfer trim of {cad curve2:shape} from [start] {a 64 bit floating-point number:fromStart} and [end] {a 64 bit floating-point number:fromEnd}:
+    execute:
+        set length to the cad length of shape
+        set start to the cad parameter on shape at distance fromStart
+        set end to the cad parameter on shape at distance (length - fromEnd)
+        if shape's kind = cad line curve2 kind:
+            set line to a cad line2 from (the cad point on shape at start) to (the cad point on shape at end)
+            return the cad chamfer trim success with (the cad curve2 of line)
+        if shape's kind = cad arc curve2 kind:
+            set source to shape's arc
+            set sweep to the cad sweep of source
+            set arc to a cad arc2 at source's centre with radius source's radius from (source's startAngle + sweep * start) to (source's startAngle + sweep * end)
+            return the cad chamfer trim success with (the cad curve2 of arc)
+        return no cad chamfer trim
+local function cad chamfer {cad curve2:shape} has endpoint {cad vector2:point} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the cad distance from (the cad point on shape at 0.0) to point) <= tolerance:
+            return true
+        return (the cad distance from (the cad point on shape at 1.0) to point) <= tolerance
+local function cad chamfer node {integer:node} is selected in {a pointer to a list:selected}:
+    execute:
+        set found to false
+        loop index from 0 to the length of selected:
+            if (the item at index in selected)'s node = node:
+                set found to true
+        return found
+
+function the cad chamfer [profile] of {a pointer to a list:segments} through {a pointer to a list:points} with [selections] {a pointer to a list:selected} and [faces] {a pointer to a list:faces}, [base] [face] {cad face key:baseFace}, [base] [distance] {a number:baseDistance}, [other] [distance] {a number:otherDistance}, [tolerance] {a number:tolerance}, avoiding [axis] {boolean:avoidAxis}:
+    execute:
+        set count to the length of points
+        if (count < 3) or (((the length of segments) != count) or ((the length of faces) != count)):
+            return the cad chamfer profile failure of kind (cad chamfer invalid result error)
+
+        set trimStart to an empty list of a 64 bit floating-point number
+        set trimEnd to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append 0.0 to trimStart
+            append 0.0 to trimEnd
+
+        loop selectedIndex from 0 to the length of selected:
+            set choice to the item at selectedIndex in selected
+            set node to choice's node
+            if (node < 0) or (node >= count):
+                @intrinsic("call", "libc", "abort", nothing)
+            set previous to the remainder of (node + count - 1) divided by count
+            set previousFace to the item at previous in faces
+            set nextFace to the item at node in faces
+            if (previousFace's valid = false) or (nextFace's valid = false):
+                free trimStart
+                free trimEnd
+                return the cad chamfer profile failure of kind (cad chamfer edge outside base face error) at choice's edge
+            set previousDistance to 0.0
+            set nextDistance to 0.0
+            if (previousFace's value = baseFace) and (nextFace's value != baseFace):
+                set previousDistance to baseDistance as a 64 bit floating-point number
+                set nextDistance to otherDistance as a 64 bit floating-point number
+            else if (nextFace's value = baseFace) and (previousFace's value != baseFace):
+                set previousDistance to otherDistance as a 64 bit floating-point number
+                set nextDistance to baseDistance as a 64 bit floating-point number
+            else:
+                free trimStart
+                free trimEnd
+                return the cad chamfer profile failure of kind (cad chamfer edge outside base face error) at choice's edge
+            replace item at index previous in trimEnd with (the maximum of (the item at previous in trimEnd) and previousDistance)
+            replace item at index node in trimStart with (the maximum of (the item at node in trimStart) and nextDistance)
+
+        loop index from 0 to count:
+            set length to the cad length of (the item at index in segments)
+            set removes to (the item at index in trimStart) + (the item at index in trimEnd)
+            if ((cad chamfer scalar length is finite) = false) or ((length <= (tolerance as a 64 bit floating-point number)) or (removes >= (length - (tolerance as a 64 bit floating-point number)))):
+                free trimStart
+                free trimEnd
+                return the cad chamfer profile failure of kind (cad chamfer distance interaction error)
+
+        set profile to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to count:
+            if cad chamfer node index is selected in selected:
+                set previous to the remainder of (index + count - 1) divided by count
+                set incoming to the cad chamfer point from the end of (the item at previous in segments) by (the item at previous in trimEnd)
+                set outgoing to the cad chamfer point from the start of (the item at index in segments) by (the item at index in trimStart)
+                set invalid to (the cad distance from incoming to outgoing) <= (tolerance as a 64 bit floating-point number)
+                if avoidAxis:
+                    if (incoming's x <= (tolerance as a 64 bit floating-point number)) or ((outgoing's x <= (tolerance as a 64 bit floating-point number)) or ((incoming's x * outgoing's x) <= 0.0)):
+                        set invalid to true
+                if invalid:
+                    free trimStart
+                    free trimEnd
+                    return the cad chamfer profile failure of kind (cad chamfer distance interaction error)
+                append (the cad curve2 of (a cad line2 from incoming to outgoing)) to profile's values
+            set trimmed to the cad chamfer trim of (the item at index in segments) from start (the item at index in trimStart) and end (the item at index in trimEnd)
+            if trimmed's valid = false:
+                free trimStart
+                free trimEnd
+                return the cad chamfer profile failure of kind (cad chamfer unsupported surface error)
+            append trimmed's value to profile's values
+        free trimStart
+        free trimEnd
+
+        set interacting to false
+        set size to the length of profile's values
+        loop first from 0 to size:
+            loop second from (first + 1) to size:
+                set adjacent to second = (first + 1)
+                if (first = 0) and ((second + 1) = size):
+                    set adjacent to true
+                set firstCurve to the item at first in profile's values
+                set secondCurve to the item at second in profile's values
+                set hits to the cad crossings of firstCurve and secondCurve within (a cad tolerance of (tolerance as a 64 bit floating-point number))
+                loop hitIndex from 0 to the length of hits:
+                    set hit to the item at hitIndex in hits
+                    set allowed to adjacent
+                    if allowed:
+                        set allowed to cad chamfer firstCurve has endpoint hit's point within (tolerance as a 64 bit floating-point number)
+                    if allowed:
+                        set allowed to cad chamfer secondCurve has endpoint hit's point within (tolerance as a 64 bit floating-point number)
+                    if allowed = false:
+                        set interacting to true
+                free hits
+        if interacting:
+            return the cad chamfer profile failure of kind (cad chamfer distance interaction error)
+        return the cad chamfer profile success with profile

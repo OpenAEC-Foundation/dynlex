@@ -1,0 +1,7 @@
+function the cyclic value for depth:
+    execute:
+        @intrinsic("discard", depth)
+        @intrinsic("discard", the cyclic value for depth)
+        @intrinsic("return", 7)
+
+@intrinsic("discard", the cyclic value for 0)

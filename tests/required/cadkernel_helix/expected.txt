@@ -1,0 +1,7 @@
+cadkernel helix: zero base reversal
+cadkernel helix: zero turn point
+cadkernel helix: generating frame recovery
+cadkernel helix: cubic controls knots and winding
+cadkernel helix: exact length and slope
+cadkernel helix: degeneracies and independent limits
+cadkernel helix: IEEE validation

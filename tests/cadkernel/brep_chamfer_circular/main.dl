@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_chamfer_circular.dl
+
+function check circular chamfer {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function circular chamfer point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+function circular chamfer line from {cad vector2:first} to {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+set planeResult to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check circular chamfer planeResult's valid
+set profile to a list containing (circular chamfer line from (circular chamfer point 0 0) to (circular chamfer point 4 0))
+append (circular chamfer line from (circular chamfer point 4 0) to (circular chamfer point 4 6)) to profile
+append (circular chamfer line from (circular chamfer point 4 6) to (circular chamfer point 0 6)) to profile
+append (circular chamfer line from (circular chamfer point 0 6) to (circular chamfer point 0 0)) to profile
+set made to the cad revolution of profile on planeResult's value about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check circular chamfer made's valid
+set body to made's value
+set edgeKeys to the cad edge keys of body
+set rim to a new cad edge key
+set baseFace to a new cad face key
+set found to false
+loop edgeIndex from 0 to the length of edgeKeys:
+    set edgeKey to the item at edgeIndex in edgeKeys
+    set edge to the cad node pointer for edgeKey in body
+    if edge != (0 as the type of edge):
+        set curve to the cad node pointer for edge's curve in body
+        if curve != (0 as the type of curve):
+            if (curve's kind = 1) and ((the length of edge's coedges's values) = 2):
+                set use to the cad node pointer for (the item at 0 in edge's coedges's values) in body
+                if use != (0 as the type of use):
+                    set ring to the cad node pointer for use's owner in body
+                    if (ring != (0 as the type of ring)) and (found = false):
+                        set rim to edgeKey
+                        set baseFace to ring's owner
+                        set found to true
+check circular chamfer found
+set selected to a list containing rim
+set result to the cad circular chamfer of body along selected with base face baseFace, base distance 0.5 and other distance 0.75
+check circular chamfer result's recognized
+check circular chamfer result's valid
+set flaws to the cad flaws of result's value
+check circular chamfer ((the length of flaws) = 0)
+free flaws
+check circular chamfer ((the cad worst vertex gap of result's value) < 1e-8)
+print "a_circular_rim_becomes_an_exact_chamfer" as a line
+
+set emptySelection to an empty list of a cad edge key
+set result to the cad circular chamfer of body along emptySelection with base face baseFace, base distance 0.5 and other distance 0.5
+check circular chamfer ((result's recognized = false) and (result's valid = false))
+free emptySelection
+print "an_empty_selection_is_not_a_circular_chamfer_case" as a line
+
+set result to the cad circular chamfer of body along selected with base face baseFace, base distance 20.0 and other distance 20.0
+check circular chamfer (result's recognized and ((result's valid = false) and (result's error's kind = cad chamfer distance interaction error)))
+print "distances_that_consume_the_meridian_are_refused" as a line
+
+check circular chamfer ((the cad count of body's faces) = 3)
+print "the_chamfer_source_body_remains_unchanged" as a line
+
+free selected
+free edgeKeys
+free profile

@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make_cuboid/main.dl
+
+set facetPoints to a list containing (the cad zero vector3)
+append (the cad x axis) to facetPoints
+append (the cad y axis) to facetPoints
+append (the cad z axis) to facetPoints
+set facetRings to an empty list of the type of (an empty list of an integer)
+set triangles to [[0,2,1],[0,1,3],[1,2,3],[2,0,3]]
+loop index from 0 to 4:
+    set triangle to the item at index in triangles
+    set ring to an empty list of an integer
+    loop corner from 0 to 3:
+        append (the item at corner in triangle) to ring
+    append ring to facetRings
+set solid to the cad faceted solid with vertices facetPoints and faces facetRings
+check solid maker (solid's valid)
+check solid maker ((the cad count of (solid's value's faces)) = 4)
+check solid maker ((the cad euler characteristic of (solid's value)) = 2)
+check consistent solid (solid's value)
+print "a_closed_faceted_mesh_becomes_a_valid_solid" as a line
+free (the item at 3 in facetRings)
+remove item 3 from facetRings
+set open to the cad faceted solid with vertices facetPoints and faces facetRings
+check solid maker ((open's valid) = false)
+print "an_open_faceted_mesh_is_refused" as a line
+loop index from 0 to the length of facetRings:
+    free (the item at index in facetRings)
+free facetRings
+free facetPoints

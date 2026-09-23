@@ -274,6 +274,13 @@ local function the next JSON-RPC message from {a pointer to a JSON-RPC connectio
                         set detail to read's error message
                         return a failed JSON-RPC receive with status code reporting detail
                 else:
+                    # Stderr can arrive after the pre-read drain, or while a frame
+                    # is already buffered. Observe it before delivering that frame.
+                    set error to the result of draining JSON-RPC standard error from connection
+                    if error failed:
+                        set code to error's status
+                        set detail to error's error message
+                        return a failed JSON-RPC receive with status code reporting detail
                     set payload to the substring of connection's buffered output from offset spanning size bytes
                     validate payload as UTF-8 and set validation to it
                     if validation failed:

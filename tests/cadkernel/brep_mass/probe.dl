@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mass.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_mass/support.dl
+
+function emit cad mass scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value)
+function emit cad mass vector {cad vector3:value}:
+    execute:
+        emit cad mass scalar (value's x)
+        emit cad mass scalar (value's y)
+        emit cad mass scalar (value's z)
+function emit cad mass properties {cad mass properties result:result}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", (result's valid) as an integer)
+        if result's valid:
+            emit cad mass scalar (result's value's volume)
+            emit cad mass vector (result's value's centroid)
+            emit cad mass vector (result's value's momentOfInertia)
+            emit cad mass vector (result's value's principalDirectionX)
+            emit cad mass vector (result's value's principalDirectionY)
+            emit cad mass vector (result's value's principalDirectionZ)
+            emit cad mass vector (result's value's principalMoments)
+            emit cad mass vector (result's value's productOfInertia)
+            emit cad mass vector (result's value's radiiOfGyration)
+
+function cad mass probe number {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function cad mass probe point {integer:index}:
+    execute:
+        return a cad vector3 with x (cad mass probe number index), y (cad mass probe number (index + 1)) and z (cad mass probe number (index + 2))
+
+set kind to (cad mass probe number 0) as an integer
+set origin to cad mass probe point 1
+set a to cad mass probe number 4
+set b to cad mass probe number 5
+set c to cad mass probe number 6
+set d to cad mass probe number 7
+set body to an empty cad body
+if kind = 0:
+    set made to the cad sphere body at origin with radius a
+    if made's valid:
+        set body to made's value
+else if kind = 1:
+    set made to the cad cylinder body at origin with radius a and height b
+    if made's valid:
+        set body to made's value
+else if kind = 2:
+    set made to the cad cone body at origin with radius a and height b
+    if made's valid:
+        set body to made's value
+else if kind = 3:
+    set made to the cad cuboid at origin with size (a cad vector3 with x a, y b and z c)
+    if made's valid:
+        set body to made's value
+else if kind = 4:
+    set body to a cad mass cylindrical sector at origin with outer radius a, inner radius b, height c and angle d
+else if kind = 5:
+    set body to a cad mass spherical shell at origin with outer radius a and inner radius b
+set result to the cad analytic mass properties of body
+if result's valid:
+    set result's value to (result's value) translated by (cad mass probe point 8)
+emit cad mass properties result

@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_place/emit.dl
+function placement input vector at {integer:index}:
+    execute:
+        return a cad vector3 with x (placement argument index), y (placement argument (index + 1)) and z (placement argument (index + 2))
+set place to a cad placement with axes (placement input vector at 7), (placement input vector at 10) and (placement input vector at 13) at (placement input vector at 16)
+set scale to the cad scale of place
+emit placement flag (scale's valid)
+if scale's valid:
+    emit placement number (scale's value)
+emit placement flag (place reflects cad orientation)
+emit placement point (the cad image of (place test point [0.2,-0.3,0.7]) under place)
+emit placement point (the cad direction of (place test point [0.2,-0.3,0.7]) under place)
+emit placement flag (place = (the cad clone of place))
+emit placement flag (place = (the cad identity placement))
+set original to place test body ((placement argument 0) as an integer) with pcurves ((placement argument 2) as an integer) from (placement argument 4) to (placement argument 5)
+damage place test original with ((placement argument 1) as an integer) and (placement argument 6)
+emit placement body original
+emit placement samples of original within (placement argument 3)
+set moved to the cad transformed original by place
+emit placement flag (moved's valid)
+if moved's valid:
+    emit placement body (moved's value)
+    emit placement samples of (moved's value) within (placement argument 3)

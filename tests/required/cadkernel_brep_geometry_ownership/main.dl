@@ -1,0 +1,135 @@
+import lib/cadkernel/brep_geometry.dl
+function review check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 96)
+function the returned review spline [edge]:
+    execute:
+        set points to a list containing the cad zero vector3
+        append (a cad vector3 with x 4, y 0 and z 0) to points
+        set knots to a list containing 2.0
+        append 2.0 to knots
+        append 4.0 to knots
+        append 4.0 to knots
+        set weights to an empty list of a 64 bit floating-point number
+        set built to the cad nurbs curve3 of degree 1 with controls points, knots knots and weights weights
+        set edge to the cad edge curve3 of built's value
+        free points
+        free knots
+        free weights
+        return edge
+function the returned review planar [edge]:
+    execute:
+        set points to a list containing the cad zero vector2
+        append (a cad vector2 with x 4 and y 0) to points
+        set knots to a list containing 2.0
+        append 2.0 to knots
+        append 4.0 to knots
+        append 4.0 to knots
+        set weights to an empty list of a 64 bit floating-point number
+        set built to the cad nurbs curve2 of degree 1 with controls points, knots knots and weights weights
+        set edge to the cad edge curve3 of (a cad planar spline3 with plane the cad xy plane and curve built's value)
+        free points
+        free knots
+        free weights
+        return edge
+function the returned review spline surface:
+    execute:
+        set points to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 2:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 2:
+                append (a cad vector3 with x (4.0 * row), y (4.0 * column) and z 0) to across
+            append across to points
+        set u to a list containing 2.0
+        append 2.0 to u
+        append 4.0 to u
+        append 4.0 to u
+        set v to a list containing 5.0
+        append 5.0 to v
+        append 7.0 to v
+        append 7.0 to v
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        set built to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots u and v and weights weights
+        set shape to the cad surface of built's value
+        loop row from 0 to 2:
+            free (the item at row in points)
+        free points
+        free u
+        free v
+        free weights
+        return shape
+
+set edge to the returned review spline edge
+set saved to a list containing edge
+set clone to the cad clone of edge
+review check (clone = edge)
+review check (clone's nurbs's owner != edge's nurbs's owner)
+review check (edge's planar's curve's owner = (0 as a pointer to an integer))
+replace item at index 1 in clone's nurbs's controls with (a cad vector3 with x 40, y 0 and z 0)
+review check ((clone = edge) = false)
+set edge to the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis)
+set retained to the item at 0 in saved
+free saved
+review check ((@intrinsic("dereference", retained's nurbs's owner)) = 1)
+set middle to the cad point on retained at 3.0
+review check (middle's x = 2.0)
+set tangent to the cad tangent of retained at 3.0
+review check ((the absolute value of (tangent's x - 2.0)) < 1e-11)
+review check ((the absolute value of ((the cad parameter on retained nearest middle) - 3.0)) < 1e-6)
+set clone to edge
+set retained to edge
+print "native knot edge survives variant replacement, clone and list cleanup" as a line
+
+set edge to the returned review planar edge
+set clone to the cad clone of edge
+review check (clone = edge)
+review check (clone's planar's curve's owner != edge's planar's curve's owner)
+review check (edge's nurbs's owner = (0 as a pointer to an integer))
+set middle to the cad point on edge at 0.5
+set tangent to the cad tangent of edge at 0.5
+review check (middle's x = 2.0)
+review check (tangent's x = 4.0)
+review check ((the absolute value of ((the cad parameter on edge nearest middle) - 0.5)) < 1e-6)
+set retained to edge
+set edge to the cad edge curve3 of (a cad circle3 with plane the cad xy plane and radius 2)
+set middle to the cad point on retained at 0.5
+review check (middle's x = 2.0)
+set clone to edge
+set retained to edge
+print "planar edge preserves normalized parameter and derivative" as a line
+
+set surface to the returned review spline surface
+set cloneSurface to the cad clone of surface
+review check (cloneSurface = surface)
+review check (cloneSurface's nurbs's owner != surface's nurbs's owner)
+review check ((the item at 0 in cloneSurface's nurbs's controls) != (the item at 0 in surface's nurbs's controls))
+set savedSurfaces to a list containing surface
+set surface to the cad surface of the cad xy plane
+set held to the item at 0 in savedSurfaces
+free savedSurfaces
+review check ((@intrinsic("dereference", held's nurbs's owner)) = 1)
+set middle to the cad point on held at parameters 3 and 6
+review check ((middle's x = 2.0) and (middle's y = 2.0))
+set tangents to the cad tangents of held at parameters 3 and 6
+review check tangents's valid
+review check ((tangents's u's x = 2.0) and (tangents's v's y = 2.0))
+set normal to the cad normal of held at parameters 3 and 6
+review check normal's valid
+review check (normal's value's z = 1.0)
+review check ((the valid of the cad frame of held) = false)
+review check ((the valid of the cad parameters on held nearest middle) = false)
+review check ((the valid of the cad ray hits of held from the cad zero vector3 along the cad x axis) = false)
+set held to surface
+set cloneSurface to surface
+print "tensor spline surface retains owned rows and uses knot derivatives" as a line
+
+set nan to (0.0 as a 64 bit floating-point number) / 0.0
+set shape to the cad surface of (a cad cylinder with base the cad xy plane and radius nan)
+review check ((shape = shape) = false)
+set edge to the cad edge curve3 of (a cad circle3 with plane the cad xy plane and radius nan)
+review check ((edge = edge) = false)
+set shape to the cad surface of (a cad cylinder with base the cad xy plane and radius (-0.0))
+set other to the cad surface of (a cad cylinder with base the cad xy plane and radius 0.0)
+review check (shape = other)
+print "variant equality keeps NaN nonreflexivity and signed-zero equality" as a line

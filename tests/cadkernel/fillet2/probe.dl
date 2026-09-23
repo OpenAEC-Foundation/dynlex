@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/fillet2.dl
+import tests/cadkernel/cross2/input.dl
+
+function emit fillet2 {cad fillet2:shape}:
+    execute:
+        emit measure2 point shape's tangent1
+        emit measure2 point shape's tangent2
+        emit measure2 point shape's centre
+        emit measure2 scalar shape's startAngle
+        emit measure2 scalar shape's endAngle
+        set copy to the cad clone of shape
+        emit measure2 flag (copy = shape)
+
+set mode to (measure2 input 1) as an integer
+set radius to measure2 input 2
+if mode = 0:
+    set result to the cad fillet at (measure2 input point 4) along (measure2 input point 6) and (measure2 input point 8) with radius radius
+    emit measure2 flag result's valid
+    if result's valid:
+        emit fillet2 result's value
+else:
+    set tolerance to a cad tolerance of (measure2 input 3)
+    set size to (measure2 input 10) as an integer
+    set first to pair2 input curve at 10
+    set second to pair2 input curve at (11 + size)
+    set originalFirst to the cad clone of first
+    set originalSecond to the cad clone of second
+    set result to the cad fillets between first and second with radius radius within tolerance
+    emit measure2 scalar (the length of result)
+    loop index from 0 to the length of result:
+        emit fillet2 (the item at index in result)
+    emit measure2 flag (first = originalFirst)
+    emit measure2 flag (second = originalSecond)
+    free result

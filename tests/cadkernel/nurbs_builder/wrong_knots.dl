@@ -1,0 +1,9 @@
+import lib/cadkernel/nurbs_builder.dl
+set points to an empty list of a cad vector2
+set knots to an empty list of a 32 bit floating-point number
+set weights to an empty list of a 64 bit floating-point number
+set result to the cad rational curve2 of degree 1 with controls points, knots knots and weights weights
+print result's degree as a line
+free points
+free knots
+free weights

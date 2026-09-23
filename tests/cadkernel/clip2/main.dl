@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: MPL-2.0
+# The 14 source tests from geom2d/clip.rs at the pinned cadkernel revision.
+import lib/cadkernel/clip2.dl
+import tests/cadkernel/cross2/support.dl
+
+function clip2 square at {cad vector2:origin}:
+    execute:
+        set x to origin's x
+        set y to origin's y
+        set edges to a list containing (cross2 segment [x,y] to [(x + 10.0),y])
+        append (cross2 segment [(x + 10.0),y] to [(x + 10.0),(y + 10.0)]) to edges
+        append (cross2 segment [(x + 10.0),(y + 10.0)] to [x,(y + 10.0)]) to edges
+        append (cross2 segment [x,(y + 10.0)] to [x,y]) to edges
+        return edges
+
+function check clip2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function check clip2 spans {a pointer to a list:spans} equal pairs:
+    execute:
+        check clip2 (spans != (0 as the type of spans))
+        check clip2 ((the length of spans) = (the length of pairs))
+        loop index from 0 to the length of spans:
+            set span to the item at index in spans
+            set pair to the item at index in pairs
+            check clip2 ((the item at 0 in span) = (the item at 0 in pair))
+            check clip2 ((the item at 1 in span) = (the item at 1 in pair))
+        free spans
+
+set tolerance to a cad tolerance of 1e-6
+set boundary to clip2 square at (cross2 point [0.0,0.0])
+set across to cross2 xline [0.0,5.0] along [1.0,0.0]
+set pieces to the cad pieces inside boundary along across within tolerance
+check clip2 ((the length of pieces) = 1)
+set piece to the item at 0 in pieces
+check clip2 (((the absolute value of piece's start's x) < 1e-6) and ((the absolute value of (piece's end's x - 10.0)) < 1e-6))
+free pieces
+print "an_infinite_line_is_clipped_to_what_is_inside" as a line
+
+set hole to clip2 square at (cross2 point [0.0,0.0])
+append (cross2 segment [3.0,3.0] to [7.0,3.0]) to hole
+append (cross2 segment [7.0,3.0] to [7.0,7.0]) to hole
+append (cross2 segment [7.0,7.0] to [3.0,7.0]) to hole
+append (cross2 segment [3.0,7.0] to [3.0,3.0]) to hole
+set pieces to the cad pieces inside hole along across within tolerance
+check clip2 ((the length of pieces) = 2)
+set piece to the item at 0 in pieces
+check clip2 (((the absolute value of piece's start's x) < 1e-6) and ((the absolute value of (piece's end's x - 3.0)) < 1e-6))
+set piece to the item at 1 in pieces
+check clip2 (((the absolute value of (piece's start's x - 7.0)) < 1e-6) and ((the absolute value of (piece's end's x - 10.0)) < 1e-6))
+free pieces
+free hole
+print "a_hole_leaves_a_gap_in_the_middle" as a line
+
+set outside to cross2 xline [0.0,50.0] along [1.0,0.0]
+set pieces to the cad pieces inside boundary along outside within tolerance
+check clip2 ((the length of pieces) = 0)
+free pieces
+print "a_line_that_misses_entirely_yields_nothing" as a line
+set inside to cross2 segment [2.0,5.0] to [8.0,5.0]
+set spans to the cad spans inside boundary along inside within tolerance
+check clip2 spans spans equal [[0.0,1.0]]
+print "a_segment_wholly_inside_comes_back_whole" as a line
+set outside to cross2 segment [20.0,5.0] to [30.0,5.0]
+set spans to the cad spans inside boundary along outside within tolerance
+check clip2 ((the length of spans) = 0)
+free spans
+print "a_segment_wholly_outside_yields_nothing" as a line
+set half to cross2 segment [5.0,5.0] to [25.0,5.0]
+set pieces to the cad pieces inside boundary along half within tolerance
+check clip2 ((the length of pieces) = 1)
+set piece to the item at 0 in pieces
+check clip2 ((the absolute value of (piece's start's x - 5.0)) < 1e-6)
+check clip2 ((the absolute value of (piece's end's x - 10.0)) < 1e-6)
+free pieces
+print "a_segment_half_in_is_cut_at_the_boundary" as a line
+
+set notched to a list containing (cross2 segment [0.0,0.0] to [10.0,0.0])
+append (cross2 segment [10.0,0.0] to [10.0,10.0]) to notched
+append (cross2 segment [10.0,10.0] to [6.0,5.0]) to notched
+append (cross2 segment [6.0,5.0] to [10.0,0.1]) to notched
+append (cross2 segment [10.0,0.1] to [10.0,0.0]) to notched
+append (cross2 segment [0.0,10.0] to [0.0,0.0]) to notched
+append (cross2 segment [10.0,10.0] to [0.0,10.0]) to notched
+set pieces to the cad pieces inside notched along across within tolerance
+loop index from 0 to the length of pieces:
+    set piece to the item at index in pieces
+    set middle to (the cad sum of piece's start and piece's end) scaled by 0.5
+    check clip2 (cad boundary notched contains middle within tolerance)
+free pieces
+free notched
+print "grazing_a_corner_does_not_invert_everything_after_it" as a line
+set round to a list containing (cross2 circle [0.0,0.0] with radius 10.0)
+set line to cross2 xline [0.0,6.0] along [1.0,0.0]
+set pieces to the cad pieces inside round along line within tolerance
+check clip2 ((the length of pieces) = 1)
+set piece to the item at 0 in pieces
+set width to the absolute value of (piece's end's x - piece's start's x)
+check clip2 ((the absolute value of (width - 16.0)) < 1e-4)
+free pieces
+free round
+print "a_curved_boundary_clips_as_well_as_a_straight_one" as a line
+set arc to the cad curve2 of (a cad arc2 at (cross2 point [10.0,5.0]) with radius 3.0 from 0.0 to 6.283185307179586)
+set spans to the cad spans inside boundary along arc within tolerance
+check clip2 ((the length of spans) > 0)
+loop index from 0 to the length of spans:
+    set span to the item at index in spans
+    set parameter to 0.5 * ((the item at 0 in span) + (the item at 1 in span))
+    set middle to the cad point on arc at parameter
+    check clip2 (cad boundary boundary contains middle within tolerance)
+    check clip2 (middle's x <= (10.0 + 1e-6))
+free spans
+print "a_curve_can_be_clipped_as_well_as_a_line" as a line
+set empty to an empty list of the type of across
+set spans to the cad spans inside empty along across within tolerance
+check clip2 ((the length of spans) = 0)
+free spans
+free empty
+print "an_empty_boundary_encloses_nothing" as a line
+
+set segment to cross2 segment [0.0,0.0] to [10.0,0.0]
+set spans to the cad break spans on segment from 0.8 to 0.2 within tolerance
+check clip2 spans spans equal [[0.0,0.2],[0.8,1.0]]
+set spans to the cad break spans on segment from 0.4 to 0.4 within tolerance
+check clip2 spans spans equal [[0.0,0.4],[0.4,1.0]]
+set spans to the cad break spans on segment from 0.0 to 0.0 within tolerance
+check clip2 spans spans equal [[0.0,1.0]]
+print "breaking_an_open_curve_keeps_both_outside_spans" as a line
+set circle to cross2 circle [0.0,0.0] with radius 2.0
+set spans to the cad break spans on circle from 0.25 to 0.75 within tolerance
+check clip2 spans spans equal [[0.75,1.25]]
+set spans to the cad break spans on circle from 0.75 to 0.25 within tolerance
+check clip2 spans spans equal [[0.25,0.75]]
+set spans to the cad break spans on circle from 0.25 to 0.25 within tolerance
+check clip2 (spans = (0 as the type of spans))
+set nan to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, "nan", 0 as a pointer)
+set spans to the cad break spans on circle from nan to 0.5 within tolerance
+check clip2 (spans = (0 as the type of spans))
+set spans to the cad break spans on across from 0.25 to 0.75 within tolerance
+check clip2 (spans = (0 as the type of spans))
+print "breaking_a_closed_curve_keeps_the_directed_complement" as a line
+set polyline to cross2 polyline [[0.0,0.0,0.0],[1.0,0.0,0.0],[1.0,1.0,0.0]] with closure true
+set spans to the cad break spans on polyline from 0.4 to 0.4 within tolerance
+check clip2 spans spans equal [[0.0,0.4],[0.4,1.0]]
+print "one_point_splits_a_closed_polyline_at_its_original_seam_too" as a line
+set shifted to clip2 square at (cross2 point [512345.678,4512345.678])
+set surveyLine to cross2 xline [512345.678,4512350.678] along [1.0,0.0]
+set pieces to the cad pieces inside shifted along surveyLine within tolerance
+check clip2 ((the length of pieces) = 1)
+set piece to the item at 0 in pieces
+set width to the absolute value of (piece's end's x - piece's start's x)
+check clip2 ((the absolute value of (width - 10.0)) < 1e-4)
+free pieces
+free shifted
+free boundary
+free cad curve polyline
+print "survey_coordinates_clip_to_the_same_lengths" as a line

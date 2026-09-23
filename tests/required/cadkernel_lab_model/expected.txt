@@ -1,0 +1,4 @@
+Dynedra model checks passed
+Dynedra eight solid topology and bounds checks passed
+Dynedra edge sampling and retained solid scenes passed
+Dynedra solid parameter refusals passed

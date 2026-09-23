@@ -1,0 +1,216 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 12 source tests plus polygon-frame, nesting, component and clone checks.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/triangulate.rs
+import lib/cadkernel/triangulate2.dl
+
+function check triangulation {boolean:passed} named {C string:label}:
+    execute:
+        if the inverse of passed:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function a triangulation fixture ring from {an array:coordinates}:
+    execute:
+        set result to an empty list of a cad vector2
+        loop index from 0 to the length of coordinates:
+            set pair to the item at index in coordinates
+            append (a cad vector2 with x (the item at 0 in pair) and y (the item at 1 in pair)) to result
+        return result
+
+function a triangulation fixture circle at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} and {integer:count} vertices:
+    execute:
+        set result to an empty list of a cad vector2
+        loop step from 0 to count:
+            set angle to (6.283185307179586 * (step as a 64 bit floating-point number)) / (count as a 64 bit floating-point number)
+            append (a cad vector2 with x ((the x of centre) + radius * (the cosine of angle)) and y ((the y of centre) + radius * (the sine of angle))) to result
+        return result
+
+function the triangulation fixture area of {cad triangulation2:mesh}:
+    execute:
+        set result to 0.0
+        loop index from 0 to the length of the triangles of mesh:
+            set face to the item at index in the triangles of mesh
+            set a to the item at (the first of face) in the points of mesh
+            set b to the item at (the second of face) in the points of mesh
+            set c to the item at (the third of face) in the points of mesh
+            set twice to the cad cross of (the cad difference of b and a) and (the cad difference of c and a)
+            set result to result + ((the absolute value of twice) * 0.5)
+        return result
+
+function check triangulation area of {cad triangulation2:mesh} against {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:limit}:
+    execute:
+        check triangulation ((the absolute value of ((the triangulation fixture area of mesh) - expected)) < limit) named "triangle area mismatch"
+
+set empty to an empty list of a cad vector2
+set holes to an empty list of the type of empty
+set square to a triangulation fixture ring from [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
+
+# a_square_becomes_two_triangles_covering_it
+set mesh to the cad triangulation of square with holes holes
+check triangulation ((the length of the triangles of mesh) = 2) named "square triangle count"
+check triangulation area of mesh against 100.0 within 1e-9
+set firstFace to the item at 0 in the triangles of mesh
+check triangulation (((the first of firstFace) = 3) and (((the second of firstFace) = 0) and ((the third of firstFace) = 1))) named "ear score ties retain first candidate"
+free cad triangulation mesh
+
+# winding_does_not_matter
+set backwards to a triangulation fixture ring from [[0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]
+set mesh to the cad triangulation of backwards with holes holes
+check triangulation area of mesh against 100.0 within 1e-9
+free cad triangulation mesh
+free backwards
+
+# a_ring_closed_by_repeating_its_first_point_is_not_counted_twice
+append (the item at 0 in square) to square
+set mesh to the cad triangulation of square with holes holes
+check triangulation ((the length of the triangles of mesh) = 2) named "closed ring triangle count"
+check triangulation area of mesh against 100.0 within 1e-9
+free cad triangulation mesh
+remove item 4 from square
+
+# a_concave_polygon_is_filled_without_leaving_its_outline
+set concave to a triangulation fixture ring from [[0.0, 0.0], [10.0, 0.0], [10.0, 4.0], [4.0, 4.0], [4.0, 10.0], [0.0, 10.0]]
+set mesh to the cad triangulation of concave with holes holes
+check triangulation ((the length of the triangles of mesh) = 4) named "concave count"
+check triangulation area of mesh against 64.0 within 1e-9
+
+# every_triangle_stays_inside_the_polygon
+loop index from 0 to the length of the triangles of mesh:
+    set face to the item at index in the triangles of mesh
+    set a to the item at (the first of face) in the points of mesh
+    set b to the item at (the second of face) in the points of mesh
+    set c to the item at (the third of face) in the points of mesh
+    set centre to (the cad sum of (the cad sum of a and b) and c) cad divided by 3.0
+    set x to the x of centre
+    set y to the y of centre
+    check triangulation ((((x <= 10.0) and (y <= 4.0)) or ((x <= 4.0) and (y <= 10.0))) and ((x >= 0.0) and (y >= 0.0))) named "centroid stays inside L"
+free cad triangulation mesh
+free concave
+
+# a_hole_is_left_empty
+set hole to a triangulation fixture ring from [[3.0, 3.0], [7.0, 3.0], [7.0, 7.0], [3.0, 7.0]]
+append hole to holes
+set mesh to the cad triangulation of square with holes holes
+check triangulation ((the length of the triangles of mesh) > 0) named "hole produces triangles"
+check triangulation area of mesh against 84.0 within 1e-9
+free cad triangulation mesh
+clear holes
+free hole
+
+# two_holes_are_both_left_empty
+set hole1 to a triangulation fixture ring from [[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0]]
+set hole2 to a triangulation fixture ring from [[6.0, 6.0], [9.0, 6.0], [9.0, 9.0], [6.0, 9.0]]
+append hole1 to holes
+append hole2 to holes
+set mesh to the cad triangulation of square with holes holes
+check triangulation area of mesh against 87.0 within 1e-9
+free cad triangulation mesh
+clear holes
+free hole1
+free hole2
+
+# two_aligned_holes_fit_inside_a_narrow_concave_arm
+set narrow to a triangulation fixture ring from [[0.0, 0.0], [12.0, 0.0], [12.0, 8.0], [11.0, 8.0], [11.0, 2.0], [2.0, 2.0], [1.8, 2.1], [1.8, 12.0], [0.0, 12.0]]
+set hole1 to a triangulation fixture circle at (a cad vector2 with x 1.68 and y 6.0) with radius 0.08 and 24 vertices
+set hole2 to a triangulation fixture circle at (a cad vector2 with x 1.68 and y 9.0) with radius 0.08 and 24 vertices
+append hole1 to holes
+append hole2 to holes
+set mesh to the cad triangulation of narrow with holes holes
+# Shoelace area of the fixed outer is 48.01; each regular hole has area 12*r*r*sin(TAU/24).
+set expected to 48.01 - (2.0 * ((12.0 * 0.0064) * (the sine of (6.283185307179586 / 24.0))))
+check triangulation ((the length of the triangles of mesh) > 0) named "aligned hole bridge succeeds"
+check triangulation area of mesh against expected within 1e-9
+free cad triangulation mesh
+clear holes
+free hole1
+free hole2
+free narrow
+
+# a_self_crossing_ring_terminates_rather_than_spinning
+set bowtie to a triangulation fixture ring from [[0.0, 0.0], [10.0, 10.0], [10.0, 0.0], [0.0, 10.0]]
+set mesh to the cad triangulation of bowtie with holes holes
+loop index from 0 to the length of the triangles of mesh:
+    set face to the item at index in the triangles of mesh
+    set a to the item at (the first of face) in the points of mesh
+    set b to the item at (the second of face) in the points of mesh
+    set c to the item at (the third of face) in the points of mesh
+    check triangulation ((the absolute value of (the cad cross of (the cad difference of b and a) and (the cad difference of c and a))) > 0.0) named "no collapsed bowtie triangles"
+free cad triangulation mesh
+
+# too_few_points_is_no_polygon
+set mesh to the cad triangulation of empty with holes holes
+check triangulation ((the length of the triangles of mesh) = 0) named "empty polygon"
+free cad triangulation mesh
+set short to a triangulation fixture ring from [[0.0, 0.0], [1.0, 0.0]]
+set mesh to the cad triangulation of short with holes holes
+check triangulation ((the length of the triangles of mesh) = 0) named "two points"
+free cad triangulation mesh
+free short
+
+# a_polygon_at_survey_coordinates_still_covers_itself
+set survey to a triangulation fixture ring from [[512345.678, 4512345.678], [512355.678, 4512345.678], [512355.678, 4512355.678], [512345.678, 4512355.678]]
+set mesh to the cad triangulation of survey with holes holes
+check triangulation area of mesh against 100.0 within 1e-6
+free cad triangulation mesh
+free survey
+
+# a_many_sided_ring_is_fully_triangulated
+set circle to a triangulation fixture circle at (the cad zero vector2) with radius 10.0 and 64 vertices
+set mesh to the cad triangulation of circle with holes holes
+check triangulation ((the length of the triangles of mesh) = 62) named "64 vertices produce 62 triangles"
+check triangulation area of mesh against ((0.5 * 64.0 * 100.0) * (the sine of (6.283185307179586 / 64.0))) within 1e-6
+free cad triangulation mesh
+free circle
+
+# polygon_frame cleans tolerance-close neighbors and repeated endpoints without moving points.
+set dirty to a triangulation fixture ring from [[0.0, 0.0], [5e-8, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0], [0.0, 0.0]]
+set framed to the cad polygon frame of dirty within (the default cad tolerance)
+check triangulation (the valid of framed) named "clean frame valid"
+check triangulation ((the length of the points of the value of framed) = 4) named "tolerance cleanup"
+check triangulation ((the x of the size of the value of framed) = 10.0) named "frame size"
+set cloned to the cad clone of (the value of framed)
+check triangulation (cad cloned equals (the value of framed)) named "deep frame clone equals"
+replace item at index 0 in the points of cloned with (a cad vector2 with x 9.0 and y 9.0)
+check triangulation ((cad cloned equals (the value of framed)) = false) named "frame clone is independent"
+free cad polygon frame cloned
+free cad polygon frame result framed
+free dirty
+set framed to the cad polygon frame of bowtie within (the default cad tolerance)
+check triangulation ((the valid of framed) = false) named "self crossing frame rejected"
+free cad polygon frame result framed
+
+# even-odd islands, arbitrary input order, and untouched borrowed rings.
+set hole to a triangulation fixture ring from [[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]]
+set island to a triangulation fixture ring from [[4.0, 4.0], [6.0, 4.0], [6.0, 6.0], [4.0, 6.0]]
+append island to holes
+append square to holes
+append hole to holes
+set depths to the cad ring nesting depths of holes
+check triangulation (((the item at 0 in depths) = 2) and (((the item at 1 in depths) = 0) and ((the item at 2 in depths) = 1))) named "nesting depths preserve input order"
+free depths
+set mesh to the cad triangulation of rings holes
+check triangulation area of mesh against 68.0 within 1e-9
+set copied to the cad clone of mesh
+replace item at index 0 in the points of copied with (a cad vector2 with x 99.0 and y 99.0)
+check triangulation ((the x of (the item at 0 in the points of mesh)) != 99.0) named "mesh clone is independent"
+free cad triangulation copied
+free cad triangulation mesh
+check triangulation ((the length of square) = 4) named "outer input unchanged"
+clear holes
+free hole
+free island
+
+# The invalid component is omitted, while an unrelated outer survives.
+set distant to a triangulation fixture ring from [[20.0, 20.0], [22.0, 20.0], [22.0, 22.0], [20.0, 22.0]]
+append square to holes
+append bowtie to holes
+append distant to holes
+set mesh to the cad triangulation of rings holes
+check triangulation area of mesh against 4.0 within 1e-9
+free cad triangulation mesh
+free distant
+free bowtie
+free square
+free holes
+free empty
+print "cadkernel triangulate2: PASS" as a line

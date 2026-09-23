@@ -1,0 +1,11 @@
+import lib/std.dl
+
+class:
+    patterns:
+        sample direction
+    members:
+        x as a 64 bit floating-point number
+
+set direction to a new sample direction
+set direction's x to 1.0
+ignore the negative of direction

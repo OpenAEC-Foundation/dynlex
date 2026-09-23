@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_fillet_prismatic.dl
+import lib/cadkernel/brep_make.dl
+
+function check prismatic fillet {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function prismatic fillet point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+function prismatic fillet {cad edge key:edgeKey} touches {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set edge to the cad node pointer for edgeKey in body
+        if edge = (0 as the type of edge):
+            return false
+        loop index from 0 to the length of edge's coedges's values:
+            set use to the cad node pointer for (the item at index in edge's coedges's values) in body
+            if use != (0 as the type of use):
+                set ring to the cad node pointer for use's owner in body
+                if ring != (0 as the type of ring):
+                    if ring's owner = faceKey:
+                        return true
+        return false
+
+set made to the cad cuboid at (prismatic fillet point 0 0 0) with size (prismatic fillet point 10 8 6)
+check prismatic fillet made's valid
+set body to made's value
+set edgeKeys to the cad edge keys of body
+set verticalEdges to an empty list of a cad edge key
+loop index from 0 to the length of edgeKeys:
+    set key to the item at index in edgeKeys
+    set edge to the cad node pointer for key in body
+    set start to the cad node pointer for edge's start in body
+    set end to the cad node pointer for edge's end in body
+    set delta to the cad difference of end's point and start's point
+    if ((the absolute value of delta's x) < 1e-12) and (((the absolute value of delta's y) < 1e-12) and ((the absolute value of delta's z) > 5.9)):
+        append key to verticalEdges
+check prismatic fillet ((the length of verticalEdges) = 4)
+set selectedEdge to the item at 0 in verticalEdges
+set selected to a list containing selectedEdge
+
+set result to the cad prismatic fillet of body along selected with radius 1.5
+check prismatic fillet result's recognized
+check prismatic fillet result's valid
+set rounded to result's value
+check prismatic fillet ((the cad count of rounded's vertices) = 10)
+check prismatic fillet ((the cad count of rounded's edges) = 15)
+check prismatic fillet ((the cad count of rounded's faces) = 7)
+check prismatic fillet ((the cad euler characteristic of rounded) = 2)
+set flaws to the cad flaws of rounded
+check prismatic fillet ((the length of flaws) = 0)
+free flaws
+check prismatic fillet ((the cad worst vertex gap of rounded) < 1e-9)
+print "a_longitudinal_box_edge_becomes_an_exact_round" as a line
+
+set emptySelection to an empty list of a cad edge key
+set result to the cad prismatic fillet of body along emptySelection with radius 1.0
+check prismatic fillet ((result's recognized = false) and (result's valid = false))
+free emptySelection
+print "an_empty_selection_is_not_a_prismatic_fillet_case" as a line
+
+set result to the cad prismatic fillet of body along selected with radius 20.0
+check prismatic fillet (result's recognized and ((result's valid = false) and (result's error's kind = cad fillet radius interaction error)))
+print "a_radius_that_consumes_the_profile_is_refused" as a line
+
+set firstEdge to the cad node pointer for selectedEdge in body
+set firstUse to the cad node pointer for (the item at 0 in firstEdge's coedges's values) in body
+set firstRing to the cad node pointer for firstUse's owner in body
+set commonFace to firstRing's owner
+set adjacentEdge to a new cad edge key
+set foundAdjacent to false
+loop index from 1 to the length of verticalEdges:
+    set key to the item at index in verticalEdges
+    if (prismatic fillet key touches commonFace in body) and (foundAdjacent = false):
+        set adjacentEdge to key
+        set foundAdjacent to true
+check prismatic fillet foundAdjacent
+append adjacentEdge to selected
+set result to the cad prismatic fillet of body along selected with radius 0.5
+check prismatic fillet result's recognized
+check prismatic fillet result's valid
+set rounded to result's value
+check prismatic fillet ((the cad count of rounded's vertices) = 12)
+check prismatic fillet ((the cad count of rounded's edges) = 18)
+check prismatic fillet ((the cad count of rounded's faces) = 8)
+check prismatic fillet ((the cad euler characteristic of rounded) = 2)
+print "two_edges_on_one_side_make_two_rounds" as a line
+
+check prismatic fillet ((the cad count of body's vertices) = 8)
+check prismatic fillet ((the cad count of body's edges) = 12)
+check prismatic fillet ((the cad count of body's faces) = 6)
+print "the_source_body_remains_unchanged" as a line
+
+free selected
+free verticalEdges
+free edgeKeys

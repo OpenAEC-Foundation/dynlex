@@ -1,0 +1,204 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_make.dl
+
+function maker argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function emit maker number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit maker flag {boolean:value}:
+    execute:
+        emit maker number (value as an integer)
+function emit maker point {cad vector3:point}:
+    execute:
+        emit maker number (point's x)
+        emit maker number (point's y)
+        emit maker number (point's z)
+function emit maker point {cad vector2:point}:
+    execute:
+        emit maker number (point's x)
+        emit maker number (point's y)
+function emit maker scalars {a pointer to a list:values}:
+    execute:
+        emit maker number (the length of values)
+        loop index from 0 to the length of values:
+            emit maker number (the item at index in values)
+function emit maker spline {cad nurbs curve2:curve}:
+    execute:
+        emit maker number (curve's degree)
+        emit maker flag (curve is cad closed)
+        emit maker scalars (curve's knots)
+        emit maker scalars (curve's weights)
+        emit maker number (the length of (curve's controls))
+        loop index from 0 to the length of (curve's controls):
+            emit maker point (the item at index in (curve's controls))
+function emit maker spline {cad nurbs curve3:curve}:
+    execute:
+        emit maker number (curve's degree)
+        emit maker flag (curve's closed)
+        emit maker scalars (curve's knots)
+        emit maker scalars (curve's weights)
+        emit maker number (the length of (curve's controls))
+        loop index from 0 to the length of (curve's controls):
+            emit maker point (the item at index in (curve's controls))
+function emit maker spline {cad nurbs surface3:surface}:
+    execute:
+        emit maker number (surface's uDegree)
+        emit maker number (surface's vDegree)
+        emit maker flag (surface's uClosed)
+        emit maker flag (surface's vClosed)
+        emit maker flag (surface's vReversed)
+        emit maker scalars (surface's uKnots)
+        emit maker scalars (surface's vKnots)
+        emit maker number (the length of (surface's weights))
+        loop index from 0 to the length of (surface's weights):
+            emit maker scalars (the item at index in (surface's weights))
+        emit maker number (the length of (surface's controls))
+        loop index from 0 to the length of (surface's controls):
+            set row to the item at index in (surface's controls)
+            emit maker number (the length of row)
+            loop column from 0 to the length of row:
+                emit maker point (the item at column in row)
+function emit maker plane {cad plane:plane}:
+    execute:
+        emit maker point (plane's origin)
+        emit maker point (plane's xAxis)
+        emit maker point (plane's yAxis)
+function emit maker provenance {cad provenance:value}:
+    execute:
+        emit maker number (value's kind)
+        emit maker number (value's reference's index)
+function emit maker keys {a pointer to a list:values}:
+    execute:
+        emit maker number (the length of values)
+        loop index from 0 to the length of values:
+            emit maker number (the cad slot of (the item at index in values))
+function emit maker arena {a pointer to a cad arena:nodes}:
+    execute:
+        emit maker number (the cad count of nodes)
+        set keys to the cad keys of nodes
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            emit maker number (key's index)
+            set nodeAddress to the cad node pointer for key in nodes
+            emit maker node (@intrinsic("dereference", nodeAddress))
+        free keys
+
+function emit maker node {cad vertex:value}:
+    execute:
+        emit maker point (value's point)
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad edge:value}:
+    execute:
+        emit maker number (the cad slot of (value's curve))
+        emit maker number (value's startParameter)
+        emit maker number (value's endParameter)
+        emit maker number (the cad slot of (value's start))
+        emit maker number (the cad slot of (value's end))
+        emit maker keys (value's coedges's values)
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad coedge:value}:
+    execute:
+        emit maker number (the cad slot of (value's edge))
+        emit maker flag (value's forward)
+        emit maker flag (value's pcurve's valid)
+        if value's pcurve's valid:
+            emit maker number (value's pcurve's value's kind)
+            if (value's pcurve's value's kind) != 0:
+                @intrinsic("call", "libc", "exit", nothing, 3)
+            emit maker point (value's pcurve's value's line's start)
+            emit maker point (value's pcurve's value's line's end)
+        emit maker number (the cad slot of (value's owner))
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad loop:value}:
+    execute:
+        emit maker keys (value's coedges's values)
+        emit maker number (the cad slot of (value's owner))
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad face:value}:
+    execute:
+        emit maker number (the cad slot of (value's surface))
+        emit maker flag (value's forward)
+        emit maker keys (value's loops's values)
+        emit maker number (the cad slot of (value's owner))
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad shell:value}:
+    execute:
+        emit maker keys (value's faces's values)
+        emit maker number (the cad slot of (value's owner))
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad lump:value}:
+    execute:
+        emit maker keys (value's shells's values)
+        emit maker provenance (value's provenance)
+
+function emit maker node {cad edge curve3:value}:
+    execute:
+        emit maker number (value's kind)
+        if (value's kind) = 0:
+            emit maker point (value's line's origin)
+            emit maker point (value's line's direction)
+        else if (value's kind) = 1:
+            emit maker plane (value's circle's plane)
+            emit maker number (value's circle's radius)
+        else if (value's kind) = 2:
+            emit maker plane (value's ellipse's plane)
+            emit maker number (value's ellipse's majorRadius)
+            emit maker number (value's ellipse's minorRadius)
+        else if (value's kind) = 3:
+            emit maker plane (value's planar's plane)
+            emit maker spline (value's planar's curve)
+        else if (value's kind) = 4:
+            emit maker spline (value's nurbs)
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+function emit maker node {cad surface:value}:
+    execute:
+        emit maker number (value's kind)
+        if (value's kind) = 0:
+            emit maker plane (value's plane)
+        else if (value's kind) = 1:
+            emit maker plane (value's cylinder's base)
+            emit maker number (value's cylinder's radius)
+        else if (value's kind) = 2:
+            emit maker plane (value's cone's base)
+            emit maker number (value's cone's radius)
+            emit maker number (value's cone's halfAngle)
+        else if (value's kind) = 3:
+            emit maker plane (value's sphere's frame)
+            emit maker number (value's sphere's radius)
+        else if (value's kind) = 4:
+            emit maker plane (value's torus's frame)
+            emit maker number (value's torus's majorRadius)
+            emit maker number (value's torus's minorRadius)
+        else if (value's kind) = 5:
+            emit maker spline (value's nurbs)
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+
+function emit maker body {cad body:body}:
+    execute:
+        emit maker provenance (body's provenance)
+        emit maker keys (body's roots)
+        emit maker arena (body's vertices)
+        emit maker arena (body's edges)
+        emit maker arena (body's coedges)
+        emit maker arena (body's loops)
+        emit maker arena (body's faces)
+        emit maker arena (body's shells)
+        emit maker arena (body's lumps)
+        emit maker arena (body's curves)
+        emit maker arena (body's surfaces)
+        emit maker number (the cad euler characteristic of body)
+        set flaws to the cad flaws of body
+        emit maker number (the length of flaws)
+        free flaws
+

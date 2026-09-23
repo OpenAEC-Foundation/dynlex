@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-17T03:29:10+00:00",
+  "workload": "six B-rep constructors plus topology validation, vertex gap and bounds",
+  "source_revision": "953d546b68aef4b6692566a1a9b077fc5bd9fb4f",
+  "settings": {
+    "iterations": 10000,
+    "warmups": 3,
+    "measured_runs": 11,
+    "includes_process_startup": true,
+    "alternating_order": true
+  },
+  "environment": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "",
+    "python": "3.12.14"
+  },
+  "dynlex": {
+    "repository_commit": "332dac1385edcbe6458386a5119b4cc62d010581",
+    "sha256": "38ebb889d576c9d9343f3a0cbbfa7025be611cef65a010e23662169b7457fc5a"
+  },
+  "rust": {
+    "version": "rustc 1.91.1 (ed61e7d7e 2025-11-07)\nbinary: rustc\ncommit-hash: ed61e7d7e242494fb7057f2657300d9e77bb4fcb\ncommit-date: 2025-11-07\nhost: x86_64-pc-windows-msvc\nrelease: 1.91.1\nLLVM version: 21.1.2"
+  },
+  "results": {
+    "O0": {
+      "checksum": {
+        "discrete": 7124018,
+        "metric": 15268.798750002847
+      },
+      "compile_seconds": {
+        "dynlex_total": 54.03809209994506,
+        "rust_library": 11.330542900017463,
+        "rust_driver": 0.7927007999969646,
+        "rust_total": 12.123243700014427
+      },
+      "runtime": {
+        "dynlex": {
+          "samples_seconds": [
+            0.8853857000358403,
+            0.9018394000595436,
+            0.924228599993512,
+            0.8703025999711826,
+            0.8999562999233603,
+            1.094167299917899,
+            0.9685331999789923,
+            0.9491136000724509,
+            0.907377399969846,
+            0.8523978999583051,
+            0.8569502999307588
+          ],
+          "minimum_seconds": 0.8523978999583051,
+          "median_seconds": 0.9018394000595436,
+          "p95_seconds": 1.094167299917899,
+          "iterations_per_second": 11088.448785160366
+        },
+        "rust": {
+          "samples_seconds": [
+            0.6596464000176638,
+            0.5936687999637797,
+            0.6102469000034034,
+            0.5979089000029489,
+            0.7155250000068918,
+            0.906548900064081,
+            0.6174519000342116,
+            0.596683599986136,
+            0.5988935000495985,
+            0.5848378000082448,
+            0.6460857999045402
+          ],
+          "minimum_seconds": 0.5848378000082448,
+          "median_seconds": 0.6102469000034034,
+          "p95_seconds": 0.906548900064081,
+          "iterations_per_second": 16386.809994355117
+        }
+      },
+      "dynlex_to_rust_median_ratio": 1.4778270894198953
+    },
+    "O2": {
+      "checksum": {
+        "discrete": 7124018,
+        "metric": 15268.798750002847
+      },
+      "compile_seconds": {
+        "dynlex_total": 53.037012699991465,
+        "rust_library": 26.303798800101504,
+        "rust_driver": 0.5106189999496564,
+        "rust_total": 26.81441780005116
+      },
+      "runtime": {
+        "dynlex": {
+          "samples_seconds": [
+            0.19491580000612885,
+            0.19123689993284643,
+            0.19019680004566908,
+            0.1918372999643907,
+            0.19214489997830242,
+            0.18938019999768585,
+            0.20292169996537268,
+            0.1909505999647081,
+            0.19161149999126792,
+            0.18984249990899116,
+            0.19284320005681366
+          ],
+          "minimum_seconds": 0.18938019999768585,
+          "median_seconds": 0.19161149999126792,
+          "p95_seconds": 0.20292169996537268,
+          "iterations_per_second": 52188.9343826217
+        },
+        "rust": {
+          "samples_seconds": [
+            0.06588450004346669,
+            0.0679923000279814,
+            0.06597480003256351,
+            0.0667383000254631,
+            0.07003659999463707,
+            0.06706789997406304,
+            0.06698459992185235,
+            0.0651078000664711,
+            0.06575800001155585,
+            0.06427259999327362,
+            0.06735619995743036
+          ],
+          "minimum_seconds": 0.06427259999327362,
+          "median_seconds": 0.0667383000254631,
+          "p95_seconds": 0.07003659999463707,
+          "iterations_per_second": 149838.99793948352
+        }
+      },
+      "dynlex_to_rust_median_ratio": 2.8710875152372943
+    }
+  }
+}

@@ -1,0 +1,106 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/helix.dl
+
+function the helix probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function the helix probe vector at {integer:index}:
+    execute:
+        return a cad vector3 with x (the helix probe number at index), y (the helix probe number at (index + 1)) and z (the helix probe number at (index + 2))
+
+function emit helix scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit helix flag {boolean:value}:
+    execute:
+        if value:
+            emit helix scalar 1
+        else:
+            emit helix scalar 0
+
+function emit helix vector {cad vector3:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "p %.17g %.17g %.17g\n", the x of value, the y of value, the z of value)
+
+function emit helix optional scalar {cad helix scalar result:result}:
+    execute:
+        emit helix flag (the valid of result)
+        if the valid of result:
+            emit helix scalar (the value of result)
+
+function emit helix parameters {cad helix:curve}:
+    execute:
+        emit helix vector (the baseCenter of curve)
+        emit helix vector (the axisDirection of curve)
+        emit helix vector (the startDirection of curve)
+        emit helix scalar (the baseRadius of curve)
+        emit helix scalar (the topRadius of curve)
+        emit helix scalar (the height of curve)
+        emit helix scalar (the turns of curve)
+        emit helix flag (the clockwise of the direction of curve)
+
+function emit helix [shape] {shape}:
+    execute:
+        emit helix scalar (the degree of shape)
+        emit helix scalar (the length of the controls of shape)
+        emit helix scalar (the length of the knots of shape)
+        emit helix scalar (the length of the weights of shape)
+        emit helix flag (the closed of shape)
+        set count to the length of the controls of shape
+        loop index from 0 to count:
+            if (((count <= 128) or (index < 4)) or (index >= (count - 4))) or (index = (count / 2)):
+                emit helix vector (the item at index in the controls of shape)
+        set count to the length of the knots of shape
+        loop index from 0 to count:
+            if (((count <= 128) or (index < 4)) or (index >= (count - 4))) or (index = (count / 2)):
+                emit helix scalar (the item at index in the knots of shape)
+        set count to the length of the weights of shape
+        loop index from 0 to count:
+            if (((count <= 128) or (index < 4)) or (index >= (count - 4))) or (index = (count / 2)):
+                emit helix scalar (the item at index in the weights of shape)
+        set samples to [-0.25, -0.0, 0.0, 0.01, 0.125, 0.37, 0.5, 0.83, 0.999, 1.0, 1.25]
+        loop index from 0 to 11:
+            set parameter to the item at index in samples
+            emit helix vector (the cad curve point of shape at parameter)
+            emit helix vector (the cad curve tangent of shape at parameter)
+
+if (the helix probe number at 0) = 2.0:
+    set angle to the helix probe number at 1
+    emit helix scalar (the sine of angle)
+    emit helix scalar (the cosine of angle)
+else if (the helix probe number at 0) = 1.0:
+    set recovered to the cad helix frame from base (the helix probe vector at 1), axis (the helix probe vector at 4), start (the helix probe vector at 7) and tangent (the helix probe vector at 10)
+    emit helix flag (the valid of recovered)
+    if the valid of recovered:
+        set frame to the value of recovered
+        emit helix vector (the axis of frame)
+        emit helix vector (the startDirection of frame)
+        emit helix scalar (the radius of frame)
+else:
+    set direction to @intrinsic("construct", a cad helix direction, (the helix probe number at 14) != 0.0)
+    set curve to a cad helix with center (the helix probe vector at 1), axis (the helix probe vector at 4), start (the helix probe vector at 7), base radius (the helix probe number at 10), top radius (the helix probe number at 11), height (the helix probe number at 12), turns (the helix probe number at 13) and direction direction
+    emit helix optional scalar (the cad length of curve)
+    emit helix optional scalar (the cad turn slope of curve)
+    set built to the cad helix nurbs of curve
+    emit helix flag (the valid of built)
+    if the valid of built:
+        emit helix shape (the value of built)
+    set reversed to the cad reversal of curve
+    emit helix flag (the valid of reversed)
+    if the valid of reversed:
+        set backward to the value of reversed
+        emit helix parameters backward
+        emit helix optional scalar (the cad length of backward)
+        emit helix optional scalar (the cad turn slope of backward)
+        set reverseBuilt to the cad helix nurbs of backward
+        emit helix flag (the valid of reverseBuilt)
+        if the valid of reverseBuilt:
+            emit helix shape (the value of reverseBuilt)
+        set twice to the cad reversal of backward
+        emit helix flag (the valid of twice)
+        if the valid of twice:
+            emit helix parameters (the value of twice)

@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_pcurve/support.dl
+import tests/cadkernel/brep_pcurve/input.dl
+
+function pc owned boundary:
+    execute:
+        set spline to the geometry probe curve2
+        set edge to the cad edge curve3 of (a cad planar spline3 with plane (the cad xy plane) and curve spline)
+        set body to pc one edge on (the cad surface of (the cad xy plane)) with edge from 0.0 to 1.0
+        set faces to the cad face keys of body
+        set key to the item at 0 in faces
+        set parts to the cad boundary parts of key in body within 1e-9
+        free faces
+        check pc (parts's valid)
+        return parts
+
+function check pc carried sampled curve {cad curve2:shape}:
+    execute:
+        set temporaryCurve to the cad pcurve of (the cad clone of shape)
+        set temporaryCurve to no cad pcurve
+        check pc (shape's kind = cad polyline curve2 kind)
+        check pc ((the length of (shape's polyline's vertices)) = 96)
+        set firstVertex to the item at 0 in shape's polyline's vertices
+        set lastVertex to the item at 95 in shape's polyline's vertices
+        check pc (firstVertex's bulge = 0.0)
+        check pc (lastVertex's bulge = 0.0)
+
+set parts to pc owned boundary
+set alias to parts
+set copied to the cad clone of parts
+set one to the item at 0 in (parts's parts's values)
+set two to the item at 0 in (copied's parts's values)
+check pc ((one's curve) = (two's curve))
+check pc ((one's curve's nurbs's controls) != (two's curve's nurbs's controls))
+check pc ((parts's parts's values) != (copied's parts's values))
+set parts to a new (the type of parts)
+set one to a new (the type of one)
+check pc (alias's valid)
+set retained to the item at 0 in (alias's parts's values)
+check pc ((the cad point on (retained's curve) at 0.5)'s y > 0.0)
+set snapshots to a list containing alias
+set alias to a new (the type of alias)
+set fromList to the item at 0 in snapshots
+free snapshots
+check pc (fromList's valid)
+print "boundary_snapshots_survive_body_and_container_release" as a line
+
+loop pass from 0 to 128:
+    set local to pc owned boundary
+    set localClone to the cad clone of local
+    check pc (localClone's valid)
+    set local to a new (the type of local)
+    set part to the item at 0 in (localClone's parts's values)
+    check pc ((part's curve's kind) = cad nurbs curve2 kind)
+print "repeated_nested_copies_clones_and_resets" as a line
+
+set spline to the geometry probe curve2
+set curve to the cad edge curve3 of (a cad planar spline3 with plane (the cad xy plane) and curve spline)
+set projected to the cad projection of curve onto (the cad surface of (the cad xy plane)) within 1e-9
+check pc (projected's valid)
+check pc ((projected's value's nurbs's controls) != (spline's controls))
+set projectedClone to the cad clone of projected
+check pc ((projectedClone's value's nurbs's controls) != (projected's value's nurbs's controls))
+set projected to no cad pcurve
+free cad nurbs spline
+set curve to a new (the type of curve)
+check pc ((the cad point on (projectedClone's value) at 0.5)'s y > 0.0)
+print "planar_projection_and_clone_own_independent_spline_storage" as a line
+
+set body to pc one edge on (the cad surface of (the cad xy plane)) with (the cad edge curve3 of (a cad line3 with origin (the cad zero vector3) and direction (the cad x axis))) from 0.0 to 1.0
+set faces to the cad face keys of body
+set key to the item at 0 in faces
+set uses to the cad face coedges of key in body
+set node to the cad node pointer for (the item at 0 in uses) in body
+set (node's pcurve) to projectedClone
+set boundary to the cad boundary of key in body within 1e-9
+set snapshot to the item at 0 in (boundary's curves's values)
+check pc ((snapshot's nurbs's controls) != (projectedClone's value's nurbs's controls))
+set (node's pcurve) to no cad pcurve
+ignore the cad removal of key from body
+set invalid to the cad boundary of key in body within 1e-9
+check pc ((invalid's valid) = false)
+check pc ((the length of (invalid's curves's values)) = 0)
+set invalidClone to the cad clone of invalid
+check pc ((invalidClone's valid) = false)
+free faces
+free uses
+set body to an empty cad body
+set boundaryClone to the cad clone of boundary
+check pc ((the length of (boundaryClone's curves's values)) = 1)
+set clonedCurve to the item at 0 in (boundaryClone's curves's values)
+check pc ((clonedCurve's nurbs's controls) != (snapshot's nurbs's controls))
+print "stored_pcurves_clone_and_invalid_results_release_safely" as a line
+
+set emptyBoundary to a cad topology list of (the type of snapshot)
+set surface to the cad surface of (a cad cylinder with base (the cad xy plane) and radius 3.0)
+set interior to the cad periodic band point on surface bounded by (emptyBoundary's values) within 1e-9
+check pc ((interior's valid) = false)
+check pc ((cad surface bounded by (emptyBoundary's values) contains parameter (the cad zero vector2) within (the default cad tolerance)) = false)
+print "empty_typed_boundary_is_borrowed_and_refused" as a line
+
+set sampleSphereCentre to pc point [-3.0,4.0,2.0]
+set sampleSphereFrame to pc plane at sampleSphereCentre normal (the cad z axis)
+set sampleSphere to the cad surface of (a cad sphere with frame sampleSphereFrame and radius 6.0)
+set sampleCirclePlane to pc plane at (pc point [2.0,4.0,2.0]) normal (the cad x axis)
+set sampleCircle to the cad edge curve3 of (a cad circle3 with plane sampleCirclePlane and radius 3.3166247903554)
+set sampledProjection to the cad projection of sampleCircle onto sampleSphere within 1e-8
+check pc (sampledProjection's valid)
+set carriedSample to the cad clone of (sampledProjection's value)
+check pc carried sampled curve carriedSample
+print "a_sampled_pcurve_survives_temporary_clone_release_and_argument_passing" as a line

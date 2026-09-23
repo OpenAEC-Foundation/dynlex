@@ -1,0 +1,83 @@
+normalize zero: true
+normalize full turn: true
+normalize negative quarter turn: true
+normalize multiple positive turns: true
+closed arc at zero: true
+closed arc at pi: true
+counterclockwise quarter span: true
+reversed span takes long way: true
+crossing arc contains zero: true
+crossing arc contains after zero: true
+crossing arc contains before zero: true
+crossing arc excludes opposite: true
+ordinary arc contains midpoint: true
+ordinary arc excludes opposite: true
+closed zero arc contains pi: true
+closed offset arc contains angle: true
+parameter starts at zero: true
+parameter midpoint: true
+parameter ends at one: true
+parameter clamps past end: true
+parameter increases toward zero: true
+parameter increases beyond zero: true
+normalize negative full turn: true
+normalize multiple negative turns: true
+normalize thousand turns: true
+normalize negative thousand turns: true
+normalize just above zero: true
+normalize just below zero: true
+normalize just past full turn: true
+normalize rounded tiny negative: true
+normalize negative zero becomes positive: true
+span accepts negative start: true
+multiple turns still form circle: true
+opposite turns form circle: true
+span retains sub tolerance sweep: true
+tiny reversed sweep spans almost circle: true
+ordinary arc includes start: true
+ordinary arc includes end: true
+ordinary start within tolerance: true
+ordinary start outside tolerance: true
+ordinary end within tolerance: true
+ordinary end outside tolerance: true
+crossing arc includes start: true
+crossing arc includes end: true
+crossing start within tolerance: true
+crossing start outside tolerance: true
+crossing end within tolerance: true
+crossing end outside tolerance: true
+near zero sweep covers circle: true
+near zero reverse sweep covers circle: true
+larger tiny sweep stays bounded: true
+near full sweep covers circle: true
+near full sweep outside epsilon: true
+tiny wrapped arc stays bounded: true
+inclusion normalizes negative angle: true
+inclusion normalizes all three angles: true
+multiple turn closed arc contains all: true
+ordinary start tolerance does not wrap: true
+crossing parameter start: true
+crossing parameter midpoint: true
+crossing parameter end: true
+crossing parameter outside: true
+parameter normalizes negative angle: true
+parameter normalizes all three angles: true
+closed arc seam parameter is zero: true
+closed arc half turn parameter: true
+closed arc negative angle parameter: true
+full turn endpoint normalizes to zero: true
+before start tolerance still clamps to one: true
+parameter does not snap near start: true
+parameter does not snap near end: true
+tiny arc parameter still reaches end: true
+tiny arc parameter still clamps: true
+normalization propagates NaN: true
+normalization of infinity is NaN: true
+span propagates NaN: true
+ordinary arc excludes NaN: true
+closed arc includes NaN by sweep: true
+NaN start follows wrapped end comparison: true
+NaN end follows wrapped start comparison: true
+parameter propagates NaN angle: true
+parameter propagates NaN start: true
+parameter propagates NaN end: true

@@ -1,0 +1,103 @@
+import tests/cadkernel/lab_model/main.dl
+
+set solidSettings to the initial lab settings
+set solidSettings's operation to 6
+set solidSettings's samples to 16
+set solidSettings's height to 2.0
+set wantedVertices to [8,2,2,2,7,12,3,3]
+set wantedEdges to [12,3,1,2,12,18,5,5]
+set wantedFaces to [6,3,1,2,7,8,4,4]
+set wantedUses to [24,6,2,4,24,36,10,10]
+set wantedSegments to [12,33,16,17,12,18,65,50]
+loop solidKind from 0 to 8:
+    set solidSettings's solidKind to solidKind
+    set solidScene to the lab scene for solidSettings
+    check lab (solidScene's valid)
+    check lab (solidScene's solid's built)
+    check lab ((solidScene's solid's vertices) = (the item at solidKind in wantedVertices))
+    check lab ((solidScene's solid's edges) = (the item at solidKind in wantedEdges))
+    check lab ((solidScene's solid's faces) = (the item at solidKind in wantedFaces))
+    check lab ((solidScene's solid's coedges) = (the item at solidKind in wantedUses))
+    check lab ((solidScene's solid's loops) = (solidScene's solid's faces))
+    check lab ((solidScene's solid's shells) = 1)
+    check lab ((solidScene's solid's lumps) = 1)
+    check lab ((solidScene's solid's euler) = 2)
+    check lab ((solidScene's solid's flaws) = 0)
+    check lab ((solidScene's solid's gap) < 1e-9)
+    check lab (solidScene's solid's bounds's valid)
+    check lab ((solidScene's solid's triangles) > 0)
+    check lab ((the length of (solidScene's surface)) = ((solidScene's solid's triangles) * 3))
+    check lab ((the length of (solidScene's segments)) = (the item at solidKind in wantedSegments))
+    check lab ((the length of (solidScene's controls)) = (solidScene's solid's vertices))
+    check lab ((the length of (solidScene's guides)) = 12)
+    set paddedBounds to the cad box (solidScene's solid's bounds's value) grown by 1e-9
+    loop solidIndex from 0 to the length of (solidScene's segments):
+        set solidSegment to the item at solidIndex in (solidScene's segments)
+        check lab (paddedBounds holds cad point (solidSegment's start))
+        check lab (paddedBounds holds cad point (solidSegment's end))
+    set low to solidScene's solid's bounds's value's low
+    set high to solidScene's solid's bounds's value's high
+    set expectedRadius to 1.0
+    set expectedY to 1.0
+    set expectedBottom to 0.0
+    if solidKind = 2:
+        set expectedRadius to 2.0
+        set expectedY to 2.0
+        set expectedBottom to -2.0
+    if (solidKind = 4) or (solidKind = 5):
+        set expectedY to the square root of 0.75
+    check lab ((the absolute value of ((low's x) + expectedRadius)) < 1e-9)
+    check lab ((the absolute value of ((high's x) - expectedRadius)) < 1e-9)
+    check lab ((the absolute value of ((low's y) + expectedY)) < 1e-9)
+    check lab ((the absolute value of ((high's y) - expectedY)) < 1e-9)
+    check lab ((the absolute value of ((low's z) - expectedBottom)) < 1e-9)
+    check lab ((the absolute value of ((high's z) - 2.0)) < 1e-9)
+    loop vertexIndex from 0 to the length of (solidScene's surface):
+        set surfaceVertex to the item at vertexIndex in (solidScene's surface)
+        check lab (paddedBounds holds cad point (surfaceVertex's position))
+        check lab (cad surfaceVertex's normal is finite)
+print "Dynedra eight solid topology and bounds checks passed" as a line
+
+set solidSettings's solidKind to 0
+set solidScene to the lab scene for solidSettings
+check lab ((the absolute value of ((solidScene's length) - 24.0)) < 1e-10)
+set solidRetained to solidScene
+set solidSettings's height to 4.0
+set solidScene to the lab scene for solidSettings
+check lab ((the absolute value of ((solidScene's length) - 32.0)) < 1e-10)
+check lab ((solidRetained's solid's bounds's value's high's z) = 2.0)
+check lab ((the length of (solidRetained's guides)) = 12)
+check lab ((the length of (solidRetained's surface)) = ((solidRetained's solid's triangles) * 3))
+loop solidKind from 1 to 4:
+    set solidSettings's solidKind to solidKind
+    set solidSettings's height to 2.0
+    set solidSettings's samples to 16
+    set coarse to the lab scene for solidSettings
+    set solidSettings's samples to 128
+    set fine to the lab scene for solidSettings
+    check lab ((fine's length) > (coarse's length))
+    set exact to 4.0 * 3.141592653589793 + 2.0
+    if solidKind = 2:
+        set exact to 2.0 * 3.141592653589793
+    if solidKind = 3:
+        set exact to 2.0 * 3.141592653589793 + (the square root of 5.0)
+    check lab ((fine's length) < exact)
+    check lab ((exact - (fine's length)) < 0.002)
+    check lab ((coarse's solid's edges) = (fine's solid's edges))
+print "Dynedra edge sampling and retained solid scenes passed" as a line
+
+loop solidKind from 0 to 8:
+    set solidSettings's solidKind to solidKind
+    set solidSettings's height to 0.0
+    set refusedSolid to the lab scene for solidSettings
+    check lab ((refusedSolid's valid) = false)
+    check lab ((the length of (refusedSolid's segments)) = 0)
+    check lab ((the length of (refusedSolid's surface)) = 0)
+set solidSettings's height to 2.0
+set solidSettings's solidKind to 8
+set refusedSolid to the lab scene for solidSettings
+check lab ((refusedSolid's valid) = false)
+set solidSettings's solidKind to -1
+set refusedSolid to the lab scene for solidSettings
+check lab ((refusedSolid's valid) = false)
+print "Dynedra solid parameter refusals passed" as a line

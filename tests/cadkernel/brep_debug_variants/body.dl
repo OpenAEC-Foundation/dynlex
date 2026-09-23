@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_debug/main.dl
+import tests/cadkernel/brep_debug_variants/support.dl
+set surfaces to a list containing (the cad surface of the cad xy plane)
+append (the cad surface of (a cad cylinder with base the cad xy plane and radius 2.0)) to surfaces
+append (the cad surface of (a cad cone with base the cad xy plane, radius 3.0 and half angle 0.25)) to surfaces
+append (the cad surface of (a cad sphere with frame the cad xy plane and radius 4.0)) to surfaces
+append (the cad surface of (a cad torus with frame the cad xy plane, major radius 5.0 and minor radius 1.0)) to surfaces
+append (the cad surface of surfaceBuild's value) to surfaces
+set surfaceNames to ["Plane {","Cylinder {","Cone {","Sphere {","Torus {","NurbsSurface3 {"]
+loop index from 0 to the length of surfaces:
+    set item to the item at index in surfaces
+    ignore the cad body key after inserting item into debugBody
+free surfaces
+
+set curves to a list containing (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+append (the cad edge curve3 of (a cad circle3 with plane the cad xy plane and radius 2.0)) to curves
+append (the cad edge curve3 of (a cad ellipse3 with plane the cad xy plane, major radius 3.0 and minor radius 1.0)) to curves
+append (the cad edge curve3 of (a cad planar spline3 with plane the cad xy plane and curve curve2Build's value)) to curves
+append (the cad edge curve3 of curve3Build's value) to curves
+set curveNames to ["Line3 {","Circle3 {","Ellipse3 {","PlanarSpline3 {","NurbsCurve3 {"]
+loop index from 0 to the length of curves:
+    set item to the item at index in curves
+    ignore the cad body key after inserting item into debugBody
+free curves
+
+set pcurves to a list containing (cross2 segment [0.0,0.0] to [1.0,2.0])
+append (cross2 circle [0.0,0.0] with radius 2.0) to pcurves
+append (the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 3.0 from 0.0 to 1.0)) to pcurves
+append (cross2 ellipse [0.0,0.0] with radii 4.0 and 2.0) to pcurves
+append (cross2 polyline [[0.0,0.0,0.0],[1.0,2.0,1.0]] with closure false) to pcurves
+append (the cad curve2 of curve2Build's value) to pcurves
+append (cross2 ray [0.0,0.0] along [1.0,0.0]) to pcurves
+append (cross2 xline [0.0,0.0] along [0.0,1.0]) to pcurves
+set pcurveNames to ["Line2 {","Circle2 {","Arc2 {","EllipseArc2 {","Polyline2 {","NurbsCurve2 {","Ray2 {","XLine2 {"]
+loop index from 0 to the length of pcurves:
+    set item to the item at index in pcurves
+    set use to a cad coedge on (a new cad edge key) forward true with pcurve (the cad pcurve of item) owned by (a new cad loop key) with provenance originTag
+    ignore the cad body key after inserting use into debugBody
+free pcurves
+
+set debugEdge to a cad edge on (a new cad curve key) from 0.0 to 1.0 between (a new cad vertex key) and (a new cad vertex key) with provenance originTag
+append (a new cad coedge key) to debugEdge's coedges's values
+ignore the cad body key after inserting debugEdge into debugBody
+set debugLoop to a cad loop owned by (a new cad face key) with provenance originTag
+append (a new cad coedge key) to debugLoop's coedges's values
+ignore the cad body key after inserting debugLoop into debugBody
+set debugFace to a cad face on (a new cad surface key) forward false owned by (a new cad shell key) with provenance originTag
+append (a new cad loop key) to debugFace's loops's values
+ignore the cad body key after inserting debugFace into debugBody
+set debugShell to a cad shell owned by (a new cad lump key) with provenance originTag
+append (a new cad face key) to debugShell's faces's values
+ignore the cad body key after inserting debugShell into debugBody
+set debugLump to a cad lump with provenance originTag
+append (a new cad shell key) to debugLump's shells's values
+set debugRoot to the cad body key after inserting debugLump into debugBody
+append debugRoot to debugBody's roots
+set fullText to the cad debug text of debugBody
+check brep payload debugBody beginning "Body {"
+check brep field "controls: [[[0, 0, 0], [1, 0, 0]], [[0, 1, 0], [1, 1, 0]]]" in fullText
+check brep field "pcurve: Some(NurbsCurve2 {" in fullText
+check brep field "coedges: [#0v0]" in fullText
+check brep field "roots: [#0v0]" in fullText
+check brep field "forward: false" in fullText
+# Constructors materialize omitted weights as ones, as in the source crate.
+check brep field "weights: [1, 1]" in fullText
+check brep field "weights: [[1, 1], [1, 1]]" in fullText
+check brep field "Vertex {" in savedText
+
+set flawNames to ["DanglingKey: ","BrokenOwnership: ","EmptyLump(","EmptyShell(","UnboundedFace(","DegenerateLoop(","OpenLoop(","UnusedEdge(","NonManifoldEdge(","SameSidedEdge("]
+loop kind from 0 to 10:
+    set flaw to a new cad topology flaw
+    set flaw's kind to kind
+    set flaw's message to the string form of "fixture"
+    set text to the cad debug text of flaw
+    check brep debug (text has (the item at kind in flawNames) at offset 0)
+print "all geometry variants, topology fields and flaw diagnostics" as a line

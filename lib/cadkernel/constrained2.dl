@@ -1,0 +1,585 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/constrained.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The mesh owns cleaned source rings, normalized constraint segments and vertices.
+# Copies share those mutable stores; callers mutate through a mesh pointer.
+import lib/cadkernel/arrangement2.dl
+import lib/cadkernel/triangulate2.dl
+
+class:
+    patterns:
+        [a|] cad constrained vertex2
+    members:
+        position as a cad vector2
+        parameters as a cad vector2
+
+class:
+    patterns:
+        [a|] cad constrained triangle2
+    members:
+        first as a cad vector2
+        second as a cad vector2
+        third as a cad vector2
+        firstConstrained as a boolean
+        secondConstrained as a boolean
+        thirdConstrained as a boolean
+
+class:
+    patterns:
+        [a|] cad constrained mesh2
+    members:
+        rings
+        segments
+        vertices
+        origin as a cad vector2
+        scale as a cad vector2
+        owner as a pointer to an integer
+    retain:
+        set storageOwner to the owner of @intrinsic("lifecycle value")
+        if storageOwner != (0 as a pointer to an integer):
+            store ((the value at storageOwner) + 1) at storageOwner
+    release:
+        set storageOwner to the owner of @intrinsic("lifecycle value")
+        if storageOwner != (0 as a pointer to an integer):
+            set references to the value at storageOwner
+            if references = 1:
+                set storedRings to the rings of @intrinsic("lifecycle value")
+                loop ringIndex from 0 to the length of storedRings:
+                    free (the item at ringIndex in storedRings)
+                free storedRings
+                free (the segments of @intrinsic("lifecycle value"))
+                free (the vertices of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, storageOwner)
+            else:
+                store (references - 1) at storageOwner
+
+class:
+    patterns:
+        [a|] cad constrained mesh result2
+    members:
+        valid as a boolean
+        value as a cad constrained mesh2
+
+class:
+    patterns:
+        [a|] cad constrained insertion result2
+    members:
+        valid as a boolean
+        inserted as a boolean
+
+class:
+    patterns:
+        [a|] cad constrained constraint result2
+    members:
+        valid as a boolean
+        added as an integer
+
+class:
+    patterns:
+        [a|] cad constrained cavity edge2
+    members:
+        first as a cad vector2
+        second as a cad vector2
+        count as an integer
+
+local function check cad constrained point {cad vector2:pointValue}:
+    execute:
+        ignore pointValue
+
+local function check cad constrained ring {a pointer to a list:ringValue}:
+    execute:
+        check cad constrained point (a new (the type of (the item at 0 in ringValue)))
+
+local function check cad constrained rings {a pointer to a list:ringValues}:
+    execute:
+        check cad constrained ring (a new (the type of (the item at 0 in ringValues)))
+
+local function cad constrained scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad constrained point {cad vector2:left} equals {cad vector2:right}:
+    execute:
+        return ((the x of left) = (the x of right)) and ((the y of left) = (the y of right))
+
+local function cad constrained normalized {cad vector2:parameters} from {cad vector2:originValue} at {cad vector2:scaleValue}:
+    execute:
+        set step to 2.220446049250313e-16
+        set nx to ((the x of parameters) - (the x of originValue)) / (the x of scaleValue)
+        set ny to ((the y of parameters) - (the y of originValue)) / (the y of scaleValue)
+        set nx to (the rounded value of (nx / step)) * step
+        set ny to (the rounded value of (ny / step)) * step
+        return a cad vector2 with x nx and y ny
+
+local function an empty owned cad constrained mesh:
+    execute:
+        set storedRings to an empty list of the type of (an empty list of a cad vector2)
+        set storedSegments to an empty list of a cad line2
+        set storedVertices to an empty list of a cad constrained vertex2
+        allocate one slot of 0 and set storageOwner to it
+        return @intrinsic("construct", a cad constrained mesh2, storedRings, storedSegments, storedVertices, the cad zero vector2, the cad zero vector2, storageOwner)
+
+local function an invalid cad constrained mesh result:
+    execute:
+        return @intrinsic("construct", a cad constrained mesh result2, false, an empty owned cad constrained mesh)
+
+function free cad constrained mesh {cad constrained mesh2:meshValue}:
+    replacement:
+        set meshValue to a new (the type of meshValue)
+
+function free cad constrained mesh result {cad constrained mesh result2:resultValue}:
+    replacement:
+        set resultValue to a new (the type of resultValue)
+
+local function cad constrained ring {a pointer to a list:ringValue} is valid from {cad vector2:originValue} at {cad vector2:scaleValue}:
+    execute:
+        if (the length of ringValue) < 3:
+            return false
+        set firstPosition to cad constrained normalized (the item at 0 in ringValue) from originValue at scaleValue
+        set previousPosition to firstPosition
+        loop pointIndex from 1 to the length of ringValue:
+            set currentPosition to cad constrained normalized (the item at pointIndex in ringValue) from originValue at scaleValue
+            if cad constrained point currentPosition equals previousPosition:
+                return false
+            set previousPosition to currentPosition
+        set effectiveCount to the length of ringValue
+        if cad constrained point previousPosition equals firstPosition:
+            set effectiveCount to effectiveCount - 1
+        if effectiveCount < 3:
+            return false
+        return true
+
+local function cad constrained remember {cad vector2:parameters} at {cad vector2:position} among {a pointer to a list:storedVertices}:
+    execute:
+        loop vertexIndex from 0 to the length of storedVertices:
+            if cad constrained point (the position of (the item at vertexIndex in storedVertices)) equals position:
+                return vertexIndex
+        append (@intrinsic("construct", a cad constrained vertex2, position, parameters)) to storedVertices
+        return (the length of storedVertices) - 1
+
+function the cad constrained mesh of rings {a pointer to a list:sourceRings}:
+    execute:
+        check cad constrained rings sourceRings
+        if (the length of sourceRings) = 0:
+            return an invalid cad constrained mesh result
+        loop ringIndex from 0 to the length of sourceRings:
+            if (the length of (the item at ringIndex in sourceRings)) < 3:
+                return an invalid cad constrained mesh result
+        set seedPoint to the item at 0 in (the item at 0 in sourceRings)
+        set lowX to the x of seedPoint
+        set highX to lowX
+        set lowY to the y of seedPoint
+        set highY to lowY
+        loop ringIndex from 0 to the length of sourceRings:
+            set sourceRing to the item at ringIndex in sourceRings
+            loop pointIndex from 0 to the length of sourceRing:
+                set sourcePoint to the item at pointIndex in sourceRing
+                if ((cad constrained scalar (the x of sourcePoint) is finite) = false) or ((cad constrained scalar (the y of sourcePoint) is finite) = false):
+                    return an invalid cad constrained mesh result
+                set lowX to the minimum of lowX and (the x of sourcePoint)
+                set highX to the maximum of highX and (the x of sourcePoint)
+                set lowY to the minimum of lowY and (the y of sourcePoint)
+                set highY to the maximum of highY and (the y of sourcePoint)
+        set originValue to a cad vector2 with x lowX and y lowY
+        set scaleValue to a cad vector2 with x (highX - lowX) and y (highY - lowY)
+        if (((the x of scaleValue) <= 0.0) or ((the y of scaleValue) <= 0.0)) or (((cad constrained scalar (the x of scaleValue) is finite) = false) or ((cad constrained scalar (the y of scaleValue) is finite) = false)):
+            return an invalid cad constrained mesh result
+        loop ringIndex from 0 to the length of sourceRings:
+            if (cad constrained ring (the item at ringIndex in sourceRings) is valid from originValue at scaleValue) = false:
+                return an invalid cad constrained mesh result
+
+        set storedRings to an empty list of the type of (an empty list of a cad vector2)
+        set storedSegments to an empty list of a cad line2
+        set storedVertices to an empty list of a cad constrained vertex2
+        loop ringIndex from 0 to the length of sourceRings:
+            set sourceRing to the item at ringIndex in sourceRings
+            set cleanedRing to an empty list of a cad vector2
+            set effectiveCount to the length of sourceRing
+            set firstPosition to cad constrained normalized (the item at 0 in sourceRing) from originValue at scaleValue
+            set lastPosition to cad constrained normalized (the item at (effectiveCount - 1) in sourceRing) from originValue at scaleValue
+            if cad constrained point firstPosition equals lastPosition:
+                set effectiveCount to effectiveCount - 1
+            loop pointIndex from 0 to effectiveCount:
+                set sourcePoint to the item at pointIndex in sourceRing
+                set positionValue to cad constrained normalized sourcePoint from originValue at scaleValue
+                ignore cad constrained remember sourcePoint at positionValue among storedVertices
+                append sourcePoint to cleanedRing
+            loop pointIndex from 0 to effectiveCount:
+                set nextIndex to pointIndex + 1
+                if nextIndex = effectiveCount:
+                    set nextIndex to 0
+                set fromPoint to cad constrained normalized (the item at pointIndex in cleanedRing) from originValue at scaleValue
+                set toPoint to cad constrained normalized (the item at nextIndex in cleanedRing) from originValue at scaleValue
+                append (a cad line2 from fromPoint to toPoint) to storedSegments
+            append cleanedRing to storedRings
+        set boundaryValid to true
+        set crossingTolerance to a cad tolerance of 2.220446049250313e-16
+        loop segmentIndex from 0 to the length of storedSegments:
+            loop otherIndex from 0 to segmentIndex:
+                set crossing to the cad crossing between (the item at segmentIndex in storedSegments) and (the item at otherIndex in storedSegments) within crossingTolerance
+                if crossing's kind = 1:
+                    set interiorA to (crossing's aStart > 2.220446049250313e-16) and (crossing's aStart < 0.9999999999999998)
+                    set interiorB to (crossing's bStart > 2.220446049250313e-16) and (crossing's bStart < 0.9999999999999998)
+                    if interiorA and interiorB:
+                        set boundaryValid to false
+        if boundaryValid = false:
+            loop ringIndex from 0 to the length of storedRings:
+                free (the item at ringIndex in storedRings)
+            free storedRings
+            free storedSegments
+            free storedVertices
+            return an invalid cad constrained mesh result
+        allocate one slot of 0 and set storageOwner to it
+        set meshValue to @intrinsic("construct", a cad constrained mesh2, storedRings, storedSegments, storedVertices, originValue, scaleValue, storageOwner)
+        return @intrinsic("construct", a cad constrained mesh result2, true, meshValue)
+
+local function cad constrained parameters {cad vector2:positionValue} in {cad constrained mesh2:meshValue}:
+    execute:
+        loop vertexIndex from 0 to the length of meshValue's vertices:
+            set candidate to the item at vertexIndex in meshValue's vertices
+            if cad constrained point candidate's position equals positionValue:
+                return candidate's parameters
+        return a cad vector2 with x ((the x of meshValue's origin) + ((the x of positionValue) * (the x of meshValue's scale))) and y ((the y of meshValue's origin) + ((the y of positionValue) * (the y of meshValue's scale)))
+
+function the cad constrained insertion of point {cad vector2:parameters} into {a pointer to a cad constrained mesh2:meshValue}:
+    execute:
+        if ((cad constrained scalar (the x of parameters) is finite) = false) or ((cad constrained scalar (the y of parameters) is finite) = false):
+            return @intrinsic("construct", a cad constrained insertion result2, false, false)
+        set positionValue to cad constrained normalized parameters from (the origin of meshValue) at (the scale of meshValue)
+        if ((cad constrained scalar (the x of positionValue) is finite) = false) or ((cad constrained scalar (the y of positionValue) is finite) = false):
+            return @intrinsic("construct", a cad constrained insertion result2, false, false)
+        set before to the length of the vertices of meshValue
+        ignore cad constrained remember parameters at positionValue among (the vertices of meshValue)
+        return @intrinsic("construct", a cad constrained insertion result2, true, (the length of the vertices of meshValue) > before)
+
+local function cad constrained remember crossing {a 64 bit floating-point number:along} on {cad line2:segmentValue} in {a pointer to a cad constrained mesh2:meshValue}:
+    execute:
+        set positionValue to the cad lerp from segmentValue's start to segmentValue's end at along
+        set parameters to cad constrained parameters positionValue in @intrinsic("dereference", meshValue)
+        ignore cad constrained remember parameters at positionValue among (the vertices of meshValue)
+
+function the cad constrained constraint from {cad vector2:fromParameters} to {cad vector2:toParameters} in {a pointer to a cad constrained mesh2:meshValue}:
+    execute:
+        set before to the length of the vertices of meshValue
+        set fromResult to the cad constrained insertion of point fromParameters into meshValue
+        if (the valid of fromResult) = false:
+            return @intrinsic("construct", a cad constrained constraint result2, false, 0)
+        set toResult to the cad constrained insertion of point toParameters into meshValue
+        if (the valid of toResult) = false:
+            return @intrinsic("construct", a cad constrained constraint result2, false, 0)
+        set fromPosition to cad constrained normalized fromParameters from (the origin of meshValue) at (the scale of meshValue)
+        set toPosition to cad constrained normalized toParameters from (the origin of meshValue) at (the scale of meshValue)
+        if (cad constrained point fromPosition equals toPosition) = false:
+            set newSegment to a cad line2 from fromPosition to toPosition
+            set tolerance to a cad tolerance of 2.220446049250313e-16
+            loop segmentIndex from 0 to the length of the segments of meshValue:
+                set crossing to the cad crossing between newSegment and (the item at segmentIndex in (the segments of meshValue)) within tolerance
+                if crossing's kind > 0:
+                    cad constrained remember crossing crossing's aStart on newSegment in meshValue
+                if crossing's kind = 2:
+                    cad constrained remember crossing crossing's aEnd on newSegment in meshValue
+            append newSegment to (the segments of meshValue)
+        return @intrinsic("construct", a cad constrained constraint result2, true, (the length of the vertices of meshValue) - before)
+
+local function cad constrained {cad vector2:pointValue} lies on {cad line2:segmentValue}:
+    execute:
+        set along to the cad difference of segmentValue's end and segmentValue's start
+        set offset to the cad difference of pointValue and segmentValue's start
+        set lengthSquared to the cad squared length of along
+        if lengthSquared = 0.0:
+            return cad constrained point pointValue equals segmentValue's start
+        set limit to 1e-12 * (the maximum of lengthSquared and 1.0)
+        if (the absolute value of (the cad cross of along and offset)) > limit:
+            return false
+        set projection to the cad dot of offset and along
+        return (projection >= (-limit)) and (projection <= (lengthSquared + limit))
+
+local function cad constrained edge from {cad vector2:fromParameters} to {cad vector2:toParameters} is constrained in {cad constrained mesh2:meshValue}:
+    execute:
+        set fromPosition to cad constrained normalized fromParameters from meshValue's origin at meshValue's scale
+        set toPosition to cad constrained normalized toParameters from meshValue's origin at meshValue's scale
+        loop segmentIndex from 0 to the length of meshValue's segments:
+            set segmentValue to the item at segmentIndex in meshValue's segments
+            if (cad constrained fromPosition lies on segmentValue) and (cad constrained toPosition lies on segmentValue):
+                return true
+        return false
+
+local function cad constrained ring {a pointer to a list:ringValue} contains {cad vector2:pointValue}:
+    execute:
+        set inside to false
+        loop pointIndex from 0 to the length of ringValue:
+            set nextIndex to pointIndex + 1
+            if nextIndex = (the length of ringValue):
+                set nextIndex to 0
+            set fromPoint to the item at pointIndex in ringValue
+            set toPoint to the item at nextIndex in ringValue
+            set crosses to ((the y of fromPoint) > (the y of pointValue)) != ((the y of toPoint) > (the y of pointValue))
+            if crosses:
+                set crossingX to (((((the x of toPoint) - (the x of fromPoint)) * ((the y of pointValue) - (the y of fromPoint))) / ((the y of toPoint) - (the y of fromPoint))) + (the x of fromPoint))
+                if (the x of pointValue) < crossingX:
+                    set inside to the inverse of inside
+        return inside
+
+local function cad constrained {cad vector2:pointValue} is inside {cad constrained mesh2:meshValue}:
+    execute:
+        set crossings to 0
+        loop ringIndex from 0 to the length of meshValue's rings:
+            if cad constrained ring (the item at ringIndex in meshValue's rings) contains pointValue:
+                set crossings to crossings + 1
+        return (the remainder of crossings divided by 2) = 1
+
+local function a cad constrained triangle from {cad vector2:firstPoint} through {cad vector2:secondPoint} to {cad vector2:thirdPoint} in {cad constrained mesh2:meshValue}:
+    execute:
+        return @intrinsic("construct", a cad constrained triangle2, firstPoint, secondPoint, thirdPoint, cad constrained edge from firstPoint to secondPoint is constrained in meshValue, cad constrained edge from secondPoint to thirdPoint is constrained in meshValue, cad constrained edge from thirdPoint to firstPoint is constrained in meshValue)
+
+local function add cad constrained cavity edge from {cad vector2:firstPoint} to {cad vector2:secondPoint} among {a pointer to a list:cavityEdges}:
+    execute:
+        loop edgeIndex from 0 to the length of cavityEdges:
+            set edgeValue to the item at edgeIndex in cavityEdges
+            set sameDirection to (cad constrained point edgeValue's first equals firstPoint) and (cad constrained point edgeValue's second equals secondPoint)
+            set reverseDirection to (cad constrained point edgeValue's first equals secondPoint) and (cad constrained point edgeValue's second equals firstPoint)
+            if sameDirection or reverseDirection:
+                set updated to @intrinsic("construct", a cad constrained cavity edge2, edgeValue's first, edgeValue's second, edgeValue's count + 1)
+                replace item at index edgeIndex in cavityEdges with updated
+                return nothing
+        append (@intrinsic("construct", a cad constrained cavity edge2, firstPoint, secondPoint, 1)) to cavityEdges
+
+local function cad constrained append unique {cad vector2:pointValue} to {a pointer to a list:points}:
+    execute:
+        loop pointIndex from 0 to the length of points:
+            if cad constrained point (the item at pointIndex in points) equals pointValue:
+                return nothing
+        append pointValue to points
+
+local function cad constrained position {cad vector2:positionValue} is stored in {cad constrained mesh2:meshValue}:
+    execute:
+        loop vertexIndex from 0 to the length of meshValue's vertices:
+            if cad constrained point (the position of (the item at vertexIndex in meshValue's vertices)) equals positionValue:
+                return true
+        return false
+
+local function the cad constrained triangles {a pointer to a list:sourceTriangles} without auxiliary {cad vector2:auxiliaryPosition} in {cad constrained mesh2:meshValue}:
+    execute:
+        set oppositeLines to an empty list of a cad line2
+        set boundaryNeighbors to an empty list of a cad vector2
+        set selected to an empty list of a boolean
+        set anySelected to false
+        loop triangleIndex from 0 to the length of sourceTriangles:
+            set triangleValue to the item at triangleIndex in sourceTriangles
+            set a to triangleValue's first
+            set b to triangleValue's second
+            set c to triangleValue's third
+            set na to cad constrained normalized a from meshValue's origin at meshValue's scale
+            set nb to cad constrained normalized b from meshValue's origin at meshValue's scale
+            set nc to cad constrained normalized c from meshValue's origin at meshValue's scale
+            set atA to cad constrained point auxiliaryPosition equals na
+            set atB to cad constrained point auxiliaryPosition equals nb
+            set atC to cad constrained point auxiliaryPosition equals nc
+            set incident to atA or (atB or atC)
+            append incident to selected
+            if incident:
+                set anySelected to true
+                if atA:
+                    append (a cad line2 from nb to nc) to oppositeLines
+                    if triangleValue's firstConstrained:
+                        cad constrained append unique nb to boundaryNeighbors
+                    if triangleValue's thirdConstrained:
+                        cad constrained append unique nc to boundaryNeighbors
+                if atB:
+                    append (a cad line2 from nc to na) to oppositeLines
+                    if triangleValue's firstConstrained:
+                        cad constrained append unique na to boundaryNeighbors
+                    if triangleValue's secondConstrained:
+                        cad constrained append unique nc to boundaryNeighbors
+                if atC:
+                    append (a cad line2 from na to nb) to oppositeLines
+                    if triangleValue's secondConstrained:
+                        cad constrained append unique nb to boundaryNeighbors
+                    if triangleValue's thirdConstrained:
+                        cad constrained append unique na to boundaryNeighbors
+        if (anySelected = false) or ((the length of boundaryNeighbors) != 2):
+            set unchanged to an empty list of a cad constrained triangle2
+            loop triangleIndex from 0 to the length of sourceTriangles:
+                append (the item at triangleIndex in sourceTriangles) to unchanged
+            free oppositeLines
+            free boundaryNeighbors
+            free selected
+            return unchanged
+        append (a cad line2 from (the item at 0 in boundaryNeighbors) to (the item at 1 in boundaryNeighbors)) to oppositeLines
+        set cavityRegions to the cad bounded faces of oppositeLines within (a cad tolerance of 2.220446049250313e-16)
+        if (the length of cavityRegions's rings) != 1:
+            set unchanged to an empty list of a cad constrained triangle2
+            loop triangleIndex from 0 to the length of sourceTriangles:
+                append (the item at triangleIndex in sourceTriangles) to unchanged
+            free oppositeLines
+            free boundaryNeighbors
+            free selected
+            return unchanged
+        set result to an empty list of a cad constrained triangle2
+        loop triangleIndex from 0 to the length of sourceTriangles:
+            if (the item at triangleIndex in selected) = false:
+                append (the item at triangleIndex in sourceTriangles) to result
+        set normalizedRing to the item at 0 in cavityRegions's rings
+        set parameterRing to an empty list of a cad vector2
+        loop pointIndex from 0 to the length of normalizedRing:
+            append (cad constrained parameters (the item at pointIndex in normalizedRing) in meshValue) to parameterRing
+        set noHoles to an empty list of the type of parameterRing
+        set localMesh to the cad triangulation of parameterRing with holes noHoles
+        loop triangleIndex from 0 to the length of localMesh's triangles:
+            set indices to the item at triangleIndex in localMesh's triangles
+            set firstPoint to the item at indices's first in localMesh's points
+            set secondPoint to the item at indices's second in localMesh's points
+            set thirdPoint to the item at indices's third in localMesh's points
+            append (a cad constrained triangle from firstPoint through secondPoint to thirdPoint in meshValue) to result
+        free cad triangulation localMesh
+        free noHoles
+        free parameterRing
+        free oppositeLines
+        free boundaryNeighbors
+        free selected
+        return result
+
+local function the cad constrained triangles {a pointer to a list:sourceTriangles} split at {cad constrained vertex2:insertedVertex} in {cad constrained mesh2:meshValue}:
+    execute:
+        set positionValue to insertedVertex's position
+        set parameters to insertedVertex's parameters
+        set selected to an empty list of a boolean
+        set anySelected to false
+        loop triangleIndex from 0 to the length of sourceTriangles:
+            set triangleValue to the item at triangleIndex in sourceTriangles
+            set a to triangleValue's first
+            set b to triangleValue's second
+            set c to triangleValue's third
+            set na to cad constrained normalized a from meshValue's origin at meshValue's scale
+            set nb to cad constrained normalized b from meshValue's origin at meshValue's scale
+            set nc to cad constrained normalized c from meshValue's origin at meshValue's scale
+            set isVertex to (cad constrained point positionValue equals na) or ((cad constrained point positionValue equals nb) or (cad constrained point positionValue equals nc))
+            set ab to the cad cross of (the cad difference of nb and na) and (the cad difference of positionValue and na)
+            set bc to the cad cross of (the cad difference of nc and nb) and (the cad difference of positionValue and nb)
+            set ca to the cad cross of (the cad difference of na and nc) and (the cad difference of positionValue and nc)
+            set edgeScale to the maximum of (the cad squared distance from na to nb) and (the maximum of (the cad squared distance from nb to nc) and (the cad squared distance from nc to na))
+            set limit to 1e-13 * (the maximum of edgeScale and 1.0)
+            set insidePositive to (ab >= (-limit)) and ((bc >= (-limit)) and (ca >= (-limit)))
+            set insideNegative to (ab <= limit) and ((bc <= limit) and (ca <= limit))
+            set choose to (isVertex = false) and (insidePositive or insideNegative)
+            append choose to selected
+            if choose:
+                set anySelected to true
+        set result to an empty list of a cad constrained triangle2
+        if anySelected = false:
+            loop triangleIndex from 0 to the length of sourceTriangles:
+                append (the item at triangleIndex in sourceTriangles) to result
+            free selected
+            return result
+        set cavityEdges to an empty list of a cad constrained cavity edge2
+        loop triangleIndex from 0 to the length of sourceTriangles:
+            set triangleValue to the item at triangleIndex in sourceTriangles
+            if the item at triangleIndex in selected:
+                add cad constrained cavity edge from triangleValue's first to triangleValue's second among cavityEdges
+                add cad constrained cavity edge from triangleValue's second to triangleValue's third among cavityEdges
+                add cad constrained cavity edge from triangleValue's third to triangleValue's first among cavityEdges
+            else:
+                append triangleValue to result
+        loop edgeIndex from 0 to the length of cavityEdges:
+            set edgeValue to the item at edgeIndex in cavityEdges
+            if edgeValue's count = 1:
+                set firstPosition to cad constrained normalized edgeValue's first from meshValue's origin at meshValue's scale
+                set secondPosition to cad constrained normalized edgeValue's second from meshValue's origin at meshValue's scale
+                set twiceArea to the cad cross of (the cad difference of secondPosition and firstPosition) and (the cad difference of positionValue and firstPosition)
+                if (the absolute value of twiceArea) > 1e-14:
+                    if twiceArea > 0.0:
+                        append (a cad constrained triangle from edgeValue's first through edgeValue's second to parameters in meshValue) to result
+                    else:
+                        append (a cad constrained triangle from edgeValue's second through edgeValue's first to parameters in meshValue) to result
+        free cavityEdges
+        free selected
+        return result
+
+local function the cad constrained arranged triangles of {cad constrained mesh2:meshValue}:
+    execute:
+        set taggedSegments to an empty list of a cad tagged line2
+        loop segmentIndex from 0 to the length of meshValue's segments:
+            append (a cad tagged line2 from (the item at segmentIndex in meshValue's segments) with tag (1 as a 64 bit unsigned integer)) to taggedSegments
+        set regions to the cad bounded face edges of taggedSegments within (a cad tolerance of 2.220446049250313e-16)
+        free taggedSegments
+        set result to an empty list of a cad constrained triangle2
+        set noHoles to an empty list of the type of (an empty list of a cad vector2)
+        loop regionIndex from 0 to the length of regions's rings:
+            set regionEdges to the item at regionIndex in regions's rings
+            set parameterRing to an empty list of a cad vector2
+            loop edgeIndex from 0 to the length of regionEdges:
+                set positionValue to the item at edgeIndex in regionEdges
+                append (cad constrained parameters positionValue's line's start in meshValue) to parameterRing
+            set localMesh to the cad triangulation of parameterRing with holes noHoles
+            loop triangleIndex from 0 to the length of localMesh's triangles:
+                set indices to the item at triangleIndex in localMesh's triangles
+                set firstPoint to the item at indices's first in localMesh's points
+                set secondPoint to the item at indices's second in localMesh's points
+                set thirdPoint to the item at indices's third in localMesh's points
+                set centre to (the cad sum of (the cad sum of firstPoint and secondPoint) and thirdPoint) cad divided by 3.0
+                if cad constrained centre is inside meshValue:
+                    append (a cad constrained triangle from firstPoint through secondPoint to thirdPoint in meshValue) to result
+            free cad triangulation localMesh
+            free parameterRing
+        free noHoles
+        return result
+
+function the cad constrained triangles of {cad constrained mesh2:meshValue}:
+    execute:
+        set boundaryCount to 0
+        loop ringIndex from 0 to the length of meshValue's rings:
+            set boundaryCount to boundaryCount + (the length of (the item at ringIndex in meshValue's rings))
+        if (the length of meshValue's segments) > boundaryCount:
+            set result to the cad constrained arranged triangles of meshValue
+        else:
+            set normalizedRings to an empty list of the type of (an empty list of a cad vector2)
+            loop ringIndex from 0 to the length of meshValue's rings:
+                set sourceRing to the item at ringIndex in meshValue's rings
+                set normalizedRing to an empty list of a cad vector2
+                loop pointIndex from 0 to the length of sourceRing:
+                    append (cad constrained normalized (the item at pointIndex in sourceRing) from meshValue's origin at meshValue's scale) to normalizedRing
+                append normalizedRing to normalizedRings
+            set triangulation to the cad triangulation of rings normalizedRings
+            set result to an empty list of a cad constrained triangle2
+            loop triangleIndex from 0 to the length of triangulation's triangles:
+                set indices to the item at triangleIndex in triangulation's triangles
+                set firstPoint to cad constrained parameters (the item at indices's first in triangulation's points) in meshValue
+                set secondPoint to cad constrained parameters (the item at indices's second in triangulation's points) in meshValue
+                set thirdPoint to cad constrained parameters (the item at indices's third in triangulation's points) in meshValue
+                append (a cad constrained triangle from firstPoint through secondPoint to thirdPoint in meshValue) to result
+            free cad triangulation triangulation
+            loop ringIndex from 0 to the length of normalizedRings:
+                free (the item at ringIndex in normalizedRings)
+            free normalizedRings
+            if (the length of result) = 0:
+                free result
+                set result to the cad constrained arranged triangles of meshValue
+        set insideTriangles to an empty list of a cad constrained triangle2
+        loop triangleIndex from 0 to the length of result:
+            set triangleValue to the item at triangleIndex in result
+            set centre to (the cad sum of (the cad sum of triangleValue's first and triangleValue's second) and triangleValue's third) cad divided by 3.0
+            if cad constrained centre is inside meshValue:
+                append triangleValue to insideTriangles
+        free result
+        set result to insideTriangles
+        set auxiliaryPositions to an empty list of a cad vector2
+        loop triangleIndex from 0 to the length of result:
+            set triangleValue to the item at triangleIndex in result
+            set firstPosition to cad constrained normalized triangleValue's first from meshValue's origin at meshValue's scale
+            set secondPosition to cad constrained normalized triangleValue's second from meshValue's origin at meshValue's scale
+            set thirdPosition to cad constrained normalized triangleValue's third from meshValue's origin at meshValue's scale
+            if (cad constrained position firstPosition is stored in meshValue) = false:
+                cad constrained append unique firstPosition to auxiliaryPositions
+            if (cad constrained position secondPosition is stored in meshValue) = false:
+                cad constrained append unique secondPosition to auxiliaryPositions
+            if (cad constrained position thirdPosition is stored in meshValue) = false:
+                cad constrained append unique thirdPosition to auxiliaryPositions
+        loop auxiliaryIndex from 0 to the length of auxiliaryPositions:
+            set cleaned to the cad constrained triangles result without auxiliary (the item at auxiliaryIndex in auxiliaryPositions) in meshValue
+            free result
+            set result to cleaned
+        free auxiliaryPositions
+        loop vertexIndex from 0 to the length of meshValue's vertices:
+            set refined to the cad constrained triangles result split at (the item at vertexIndex in meshValue's vertices) in meshValue
+            free result
+            set result to refined
+        return result

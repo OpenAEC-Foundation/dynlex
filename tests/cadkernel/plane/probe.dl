@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/plane.dl
+
+function plane argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function plane triple at {integer:index}:
+    execute:
+        return a cad vector3 with x (plane argument index), y (plane argument (index + 1)) and z (plane argument (index + 2))
+
+function emit plane {a number:value} named {string:label} at {integer:index}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%s.%d %.17g\n", the data of label, index, value as a 64 bit floating-point number)
+
+function emit plane vector {cad vector3:value} named {string:label}:
+    execute:
+        emit plane (the x of value) named label at 0
+        emit plane (the y of value) named label at 1
+        emit plane (the z of value) named label at 2
+
+function emit plane optional {cad plane coordinates result:result} named {string:label} with flag {string:flag}:
+    execute:
+        emit plane ((the valid of result) as an integer) named flag at 0
+        if the valid of result:
+            emit plane (the x of (the value of result)) named label at 0
+            emit plane (the y of (the value of result)) named label at 1
+
+function inspect plane {cad plane:frame} at {cad vector2:uv} for {cad vector3:point} xy {cad vector2:worldXY} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        emit plane vector (the origin of frame) named "origin"
+        emit plane vector (the xAxis of frame) named "x_axis"
+        emit plane vector (the yAxis of frame) named "y_axis"
+        emit plane ((cad frame is orthonormal) as an integer) named "is_orthonormal" at 0
+        emit plane ((cad frame is xy) as an integer) named "is_xy" at 0
+        emit plane ((cad frame is xy aligned) as an integer) named "is_xy_aligned" at 0
+        set normal to the cad normal of frame
+        emit plane ((the valid of normal) as an integer) named "valid_normal" at 0
+        if the valid of normal:
+            emit plane vector (the value of normal) named "normal"
+        emit plane vector (the cad point at uv on frame) named "point"
+        emit plane vector (the cad vector at uv on frame) named "vector"
+        emit plane optional (the cad projection of point onto frame) named "project" with flag "valid_project"
+        emit plane optional (the cad vector projection of point onto frame) named "project_vector" with flag "valid_project_vector"
+        emit plane optional (the cad coordinates at worldXY on frame) named "coordinates_xy" with flag "valid_coordinates_xy"
+        set distance to the cad distance from point to frame
+        emit plane ((the valid of distance) as an integer) named "valid_distance" at 0
+        if the valid of distance:
+            emit plane (the value of distance) named "distance" at 0
+        emit plane ((cad frame contains point within tolerance) as an integer) named "contains" at 0
+        emit plane optional (the cad projection of (the cad point at uv on frame) onto frame) named "point_roundtrip" with flag "valid_point_roundtrip"
+        emit plane optional (the cad vector projection of (the cad vector at uv on frame) onto frame) named "vector_roundtrip" with flag "valid_vector_roundtrip"
+
+set mode to (plane argument 0) as an integer
+if mode < 2:
+    set origin to plane triple at 1
+    set x to plane triple at 4
+    set y to plane triple at 7
+    set uv to a cad vector2 with x (plane argument 10) and y (plane argument 11)
+    set point to plane triple at 12
+    set xy to a cad vector2 with x (plane argument 15) and y (plane argument 16)
+    set tolerance to plane argument 17
+    if mode = 0:
+        emit plane 1 named "valid_frame" at 0
+        inspect plane (a cad plane with origin origin, x axis x and y axis y) at uv for point xy xy within tolerance
+    else:
+        set made to the cad orthonormal plane with origin origin, x axis x and normal y
+        emit plane ((the valid of made) as an integer) named "valid_frame" at 0
+        if the valid of made:
+            inspect plane (the value of made) at uv for point xy xy within tolerance
+else:
+    if mode = 2:
+        set np to (plane argument 1) as an integer
+        set nd to (plane argument 2) as an integer
+        set points to an empty list of a cad vector3
+        set directions to an empty list of a cad vector3
+        loop index from 0 to np:
+            append (plane triple at (3 + (index * 3))) to points
+        loop index from 0 to nd:
+            append (plane triple at (3 + ((np + index) * 3))) to directions
+        emit plane (the cad coplanarity tolerance of points) named "tolerance" at 0
+        emit plane ((cad points and directions are coplanar) as an integer) named "coplanar" at 0
+        loop index from 0 to (np + nd):
+            set value to the cad zero vector3
+            if index < np:
+                set value to the item at index in points
+            else:
+                set value to the item at (index - np) in directions
+            emit plane (the x of value) named "input" at (3 * index)
+            emit plane (the y of value) named "input" at ((3 * index) + 1)
+            emit plane (the z of value) named "input" at ((3 * index) + 2)
+        free points
+        free directions
+    else:
+        set defaultFrame to the cad xy plane
+        if mode = 4:
+            set defaultFrame to the cad default plane
+        inspect plane defaultFrame at (a cad vector2 with x (-0.0) and y 4) for (a cad vector3 with x 4, y (-7) and z 2) xy (a cad vector2 with x 3 and y 5) within (1e-9 as a 64 bit floating-point number)

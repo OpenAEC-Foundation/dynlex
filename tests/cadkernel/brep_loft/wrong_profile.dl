@@ -1,0 +1,5 @@
+import lib/cadkernel/brep_loft.dl
+set values to a list containing 1
+set section to a cad loft section on (the cad xy plane) with profile values
+print (the length of (section's profile's values)) as a line
+free values

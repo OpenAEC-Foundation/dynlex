@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs3.dl
+set result to the cad nurbs projected point [1.0, 2.0, 3.0, 1.0]
+

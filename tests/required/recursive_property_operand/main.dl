@@ -1,0 +1,41 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set target to value:
+    replacement:
+        @intrinsic("store", target, value)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+class leaf:
+    members:
+        value
+
+class holder:
+    members:
+        payload
+
+function measure {leaf:object}:
+    execute:
+        return object's value
+
+function measure {holder:object}:
+    execute:
+        return measure object's payload
+
+function inspect {leaf:object}:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "putchar", @intrinsic("type", "int"), @intrinsic("add", object's value, 48)))
+
+function inspect {holder:object}:
+    execute:
+        inspect object's payload
+
+set item to @intrinsic("construct", leaf, 9)
+set wrapper to @intrinsic("construct", holder, item)
+if @intrinsic("not equal", measure wrapper, 9):
+    @intrinsic("return", 1)
+inspect wrapper

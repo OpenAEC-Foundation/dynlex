@@ -1,0 +1,112 @@
+# B-rep construction and scalar inspection metadata for Dynedra Lab.
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_fillet_circular.dl
+import lib/cadkernel/brep_chamfer_circular.dl
+
+class:
+    patterns:
+        [a|] lab solid report
+    members:
+        built as a boolean
+        vertices as an integer
+        edges as an integer
+        coedges as an integer
+        loops as an integer
+        faces as an integer
+        shells as an integer
+        lumps as an integer
+        euler as a 64 bit integer
+        flaws as an integer
+        gap as a 64 bit floating-point number
+        bounds as a cad box3 result
+        triangles as an integer
+
+class:
+    patterns:
+        [a|] lab circular rim result
+    members:
+        valid as a boolean
+        edge as a cad edge key
+        face as a cad face key
+
+local function the first lab circular rim of {cad body:body}:
+    execute:
+        set absent to @intrinsic("construct", a lab circular rim result, false, a new cad edge key, a new cad face key)
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edgeKey to the item at index in edgeKeys
+            set edgeNode to the cad node pointer for edgeKey in body
+            if edgeNode != (0 as the type of edgeNode):
+                set curveNode to the cad node pointer for edgeNode's curve in body
+                if curveNode != (0 as the type of curveNode):
+                    if (curveNode's kind = 1) and ((the length of edgeNode's coedges's values) = 2):
+                        set firstUse to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in body
+                        set secondUse to the cad node pointer for (the item at 1 in edgeNode's coedges's values) in body
+                        if (firstUse != (0 as the type of firstUse)) and (secondUse != (0 as the type of secondUse)):
+                            set firstLoop to the cad node pointer for firstUse's owner in body
+                            set secondLoop to the cad node pointer for secondUse's owner in body
+                            if (firstLoop != (0 as the type of firstLoop)) and (secondLoop != (0 as the type of secondLoop)):
+                                if firstLoop's owner != secondLoop's owner:
+                                    set result to @intrinsic("construct", a lab circular rim result, true, edgeKey, firstLoop's owner)
+                                    free edgeKeys
+                                    return result
+        free edgeKeys
+        return absent
+
+function the lab solid name for {integer:kind}:
+    execute:
+        if kind = 0:
+            return "Cuboid"
+        if kind = 1:
+            return "Cylinder"
+        if kind = 2:
+            return "Sphere"
+        if kind = 3:
+            return "Cone"
+        if kind = 4:
+            return "Hex pyramid"
+        if kind = 5:
+            return "Hex frustum"
+        if kind = 6:
+            return "Rim fillet"
+        if kind = 7:
+            return "Rim chamfer"
+        return "Unknown solid"
+
+function the lab solid body for {integer:kind} sized {a 64 bit floating-point number:height}:
+    execute:
+        if kind = 0:
+            return the cad cuboid at (a cad vector3 with x -1.0, y -1.0 and z 0.0) with size (a cad vector3 with x 2.0, y 2.0 and z height)
+        if kind = 1:
+            return the cad cylinder body at (the cad zero vector3) with radius 1.0 and height height
+        if kind = 2:
+            return the cad sphere body at (the cad zero vector3) with radius height
+        if kind = 3:
+            return the cad cone body at (the cad zero vector3) with radius 1.0 and height height
+        if kind = 4:
+            return the cad pyramid body at (the cad zero vector3) with radius 1.0, height height and sides 6
+        if kind = 5:
+            return the cad polygonal frustum at (the cad zero vector3) with base radius 1.0, top radius 0.5, height height and sides 6
+        if (kind = 6) or (kind = 7):
+            set made to the cad cylinder body at (the cad zero vector3) with radius 1.0 and height height
+            if made's valid = false:
+                return no cad body
+            set sourceBody to made's value
+            set rimResult to the first lab circular rim of sourceBody
+            if rimResult's valid = false:
+                return no cad body
+            set selected to a list containing rimResult's edge
+            set amount to the minimum of 0.2 and (height * 0.2)
+            if kind = 6:
+                set rounded to the cad circular fillet of sourceBody along selected with radius amount
+                free selected
+                if rounded's valid:
+                    return the cad body result of rounded's value
+                return no cad body
+            set trimmed to the cad circular chamfer of sourceBody along selected with base face rimResult's face, base distance amount and other distance amount
+            free selected
+            if trimmed's valid:
+                return the cad body result of trimmed's value
+            return no cad body
+        return no cad body

@@ -1,0 +1,1423 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native foundation from src/brep/{mod,topology}.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Nominal keys preserve node kinds; adapters retain arena generation semantics.
+# Ordinary managed copies share owned lists/arenas. Explicit clone duplicates them.
+# Node pointers and list values borrow their owner; removing a node ends its borrow.
+import lib/cadkernel/arena.dl
+import lib/cadkernel/brep_geometry.dl
+import lib/cadkernel/curve2.dl
+
+class:
+    patterns:
+        [a|] cad source reference
+    members:
+        index as a 32 bit unsigned integer
+class:
+    patterns:
+        [a|] cad source result
+    members:
+        valid as a boolean
+        value as a cad source reference
+class:
+    patterns:
+        [a|] cad provenance
+    members:
+        kind as an integer
+        reference as a cad source reference
+
+function a cad source reference for {a 32 bit unsigned integer:index}:
+    execute:
+        return @intrinsic("construct", a cad source reference, index)
+function the cad index of {cad source reference:value}:
+    execute:
+        return value's index
+function {cad source reference:first} = {cad source reference:second}:
+    execute:
+        return first's index = second's index
+function hash cad source reference {cad source reference:value} into state:
+    execute:
+        hash cad unsigned integer value's index into state
+function the cad clone of {cad source reference:value}:
+    execute:
+        return value
+function the clean cad provenance of {cad source reference:reference}:
+    execute:
+        return @intrinsic("construct", a cad provenance, 1, reference)
+function the dirty cad provenance of {cad source reference:reference}:
+    execute:
+        return @intrinsic("construct", a cad provenance, 2, reference)
+function the synthesized cad provenance:
+    execute:
+        return @intrinsic("construct", a cad provenance, 0, a new cad source reference)
+function the cad source of {cad provenance:value}:
+    execute:
+        return @intrinsic("construct", a cad source result, value's kind != 0, value's reference)
+function cad {cad provenance:value} is reusable:
+    execute:
+        return value's kind = 1
+function soil cad provenance {cad provenance:value}:
+    execute:
+        if value's kind = 1:
+            set value's kind to 2
+function {cad provenance:first} = {cad provenance:second}:
+    execute:
+        if first's kind != second's kind:
+            return false
+        return (first's kind = 0) or (first's reference = second's reference)
+function the cad clone of {cad provenance:value}:
+    execute:
+        return value
+
+# A Vec-like owner. Each list is copied explicitly by node/body Clone.
+class:
+    patterns:
+        [a|] cad topology list
+    members:
+        values
+        references as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 2147483647:
+                @intrinsic("call", "libc", "abort", nothing)
+            @intrinsic("store at", owner, count + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function a cad topology reference counter:
+    execute:
+        set result to the checked allocation from (0 as a pointer) resized to 1 items of an integer
+        @intrinsic("initialize at", result, 0)
+        return result
+function a cad topology list of {type:kind}:
+    execute:
+        return @intrinsic("construct", a cad topology list, an empty list of kind, a cad topology reference counter)
+function the cad clone of {cad topology list:original}:
+    execute:
+        set result to a cad topology list of the type of (the item at 0 in original's values)
+        loop index from 0 to the length of original's values:
+            append (the item at index in original's values) to result's values
+        return result
+local function cad topology lists {cad topology list:first} and {cad topology list:second} are equal:
+    execute:
+        if (the length of first's values) != (the length of second's values):
+            return false
+        loop index from 0 to the length of first's values:
+            if ((the item at index in first's values) = (the item at index in second's values)) = false:
+                return false
+        return true
+
+class:
+    patterns:
+        [a|] cad pcurve result
+    members:
+        valid as a boolean
+        value as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+function no cad pcurve:
+    execute:
+        return @intrinsic("construct", a cad pcurve result, false, a new (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+function the cad pcurve of {cad curve2:value}:
+    execute:
+        return @intrinsic("construct", a cad pcurve result, true, value)
+function the cad clone of {cad pcurve result:original}:
+    execute:
+        if original's valid:
+            return the cad pcurve of (the cad clone of original's value)
+        return no cad pcurve
+function {cad pcurve result:first} = {cad pcurve result:second}:
+    execute:
+        if first's valid != second's valid:
+            return false
+        return (first's valid = false) or (first's value = second's value)
+
+# Nominal key records make every adjacency field statically kind-specific.
+
+class:
+    patterns:
+        [a|] cad vertex key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad vertex key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad vertex)
+local function the cad vertex key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad vertex key, key's index, key's generation)
+function the cad slot of {cad vertex key:key}:
+    execute:
+        return key's index
+function {cad vertex key:first} = {cad vertex key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad vertex key:first} != {cad vertex key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad vertex key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad vertex key:key}:
+    execute:
+        return key
+function the cad debug text of {cad vertex key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad vertex key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad edge key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad edge key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad edge)
+local function the cad edge key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad edge key, key's index, key's generation)
+function the cad slot of {cad edge key:key}:
+    execute:
+        return key's index
+function {cad edge key:first} = {cad edge key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad edge key:first} != {cad edge key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad edge key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad edge key:key}:
+    execute:
+        return key
+function the cad debug text of {cad edge key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad edge key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad coedge key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad coedge key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad coedge)
+local function the cad coedge key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad coedge key, key's index, key's generation)
+function the cad slot of {cad coedge key:key}:
+    execute:
+        return key's index
+function {cad coedge key:first} = {cad coedge key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad coedge key:first} != {cad coedge key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad coedge key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad coedge key:key}:
+    execute:
+        return key
+function the cad debug text of {cad coedge key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad coedge key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad loop key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad loop key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad loop)
+local function the cad loop key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad loop key, key's index, key's generation)
+function the cad slot of {cad loop key:key}:
+    execute:
+        return key's index
+function {cad loop key:first} = {cad loop key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad loop key:first} != {cad loop key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad loop key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad loop key:key}:
+    execute:
+        return key
+function the cad debug text of {cad loop key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad loop key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad face key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad face key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad face)
+local function the cad face key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad face key, key's index, key's generation)
+function the cad slot of {cad face key:key}:
+    execute:
+        return key's index
+function {cad face key:first} = {cad face key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad face key:first} != {cad face key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad face key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad face key:key}:
+    execute:
+        return key
+function the cad debug text of {cad face key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad face key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad shell key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad shell key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad shell)
+local function the cad shell key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad shell key, key's index, key's generation)
+function the cad slot of {cad shell key:key}:
+    execute:
+        return key's index
+function {cad shell key:first} = {cad shell key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad shell key:first} != {cad shell key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad shell key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad shell key:key}:
+    execute:
+        return key
+function the cad debug text of {cad shell key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad shell key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad lump key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad lump key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to a cad lump)
+local function the cad lump key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad lump key, key's index, key's generation)
+function the cad slot of {cad lump key:key}:
+    execute:
+        return key's index
+function {cad lump key:first} = {cad lump key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad lump key:first} != {cad lump key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad lump key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad lump key:key}:
+    execute:
+        return key
+function the cad debug text of {cad lump key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad lump key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad surface key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad surface key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to the type of (the cad surface of the cad xy plane))
+local function the cad surface key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad surface key, key's index, key's generation)
+function the cad slot of {cad surface key:key}:
+    execute:
+        return key's index
+function {cad surface key:first} = {cad surface key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad surface key:first} != {cad surface key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad surface key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad surface key:key}:
+    execute:
+        return key
+function the cad debug text of {cad surface key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad surface key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad curve key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+
+local function the cad arena key of {cad curve key:key}:
+    execute:
+        return @intrinsic("construct", a cad key, key's index, key's generation, 0 as a pointer to the type of (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis)))
+local function the cad curve key from {cad key:key}:
+    execute:
+        return @intrinsic("construct", a cad curve key, key's index, key's generation)
+function the cad slot of {cad curve key:key}:
+    execute:
+        return key's index
+function {cad curve key:first} = {cad curve key:second}:
+    execute:
+        return (first's index = second's index) and (first's generation = second's generation)
+function {cad curve key:first} != {cad curve key:second}:
+    execute:
+        return (first = second) = false
+function the cad clone of {cad curve key:key}:
+    execute:
+        return key
+function the cad payload clone of {cad curve key:key}:
+    execute:
+        return key
+function the cad debug text of {cad curve key:key}:
+    execute:
+        return the cad debug text of (the cad arena key of key)
+function hash cad key {cad curve key:key} into state:
+    execute:
+        hash cad key (the cad arena key of key) into state
+
+class:
+    patterns:
+        [a|] cad vertex
+    members:
+        point as a cad vector3
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad edge
+    members:
+        curve as a cad curve key
+        startParameter as a 64 bit floating-point number
+        endParameter as a 64 bit floating-point number
+        start as a cad vertex key
+        end as a cad vertex key
+        coedges as the type of (a cad topology list of a cad coedge key)
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad coedge
+    members:
+        edge as a cad edge key
+        forward as a boolean
+        pcurve as a cad pcurve result
+        owner as a cad loop key
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad loop
+    members:
+        coedges as the type of (a cad topology list of a cad coedge key)
+        owner as a cad face key
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad face
+    members:
+        surface as a cad surface key
+        forward as a boolean
+        loops as the type of (a cad topology list of a cad loop key)
+        owner as a cad shell key
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad shell
+    members:
+        faces as the type of (a cad topology list of a cad face key)
+        owner as a cad lump key
+        provenance as a cad provenance
+class:
+    patterns:
+        [a|] cad lump
+    members:
+        shells as the type of (a cad topology list of a cad shell key)
+        provenance as a cad provenance
+
+function a cad vertex at {cad vector3:point} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad vertex, point, provenance)
+function a cad edge on {cad curve key:curve} from {a number:first} to {a number:last} between {cad vertex key:start} and {cad vertex key:end} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad edge, curve, first as a 64 bit floating-point number, last as a 64 bit floating-point number, start, end, a cad topology list of a cad coedge key, provenance)
+function a cad coedge on {cad edge key:edge} forward {boolean:forward} with pcurve {cad pcurve result:pcurve} owned by {cad loop key:owner} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad coedge, edge, forward, pcurve, owner, provenance)
+function a cad loop owned by {cad face key:owner} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad loop, a cad topology list of a cad coedge key, owner, provenance)
+function a cad face on {cad surface key:surface} forward {boolean:forward} owned by {cad shell key:owner} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad face, surface, forward, a cad topology list of a cad loop key, owner, provenance)
+function a cad shell owned by {cad lump key:owner} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad shell, a cad topology list of a cad face key, owner, provenance)
+function a cad lump with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad lump, a cad topology list of a cad shell key, provenance)
+
+function the cad payload clone of {cad vertex:original}:
+    execute:
+        return original
+function the cad payload clone of {cad edge:original}:
+    execute:
+        set result to original
+        set result's coedges to the cad clone of original's coedges
+        return result
+function the cad payload clone of {cad coedge:original}:
+    execute:
+        set result to original
+        set result's pcurve to the cad clone of original's pcurve
+        return result
+
+function the cad payload clone of {cad loop:original}:
+    execute:
+        set result to original
+        set result's coedges to the cad clone of original's coedges
+        return result
+
+function the cad payload clone of {cad face:original}:
+    execute:
+        set result to original
+        set result's loops to the cad clone of original's loops
+        return result
+
+function the cad payload clone of {cad shell:original}:
+    execute:
+        set result to original
+        set result's faces to the cad clone of original's faces
+        return result
+
+function the cad payload clone of {cad lump:original}:
+    execute:
+        set result to original
+        set result's shells to the cad clone of original's shells
+        return result
+
+function the cad payload clone of {cad surface:original}:
+    execute:
+        return the cad clone of original
+
+function the cad payload clone of {cad edge curve3:original}:
+    execute:
+        return the cad clone of original
+
+# Source-derived node equality compares every field in declaration order.
+function {cad vertex:first} = {cad vertex:second}:
+    execute:
+        if (((first's point's x = second's point's x) and (first's point's y = second's point's y)) and (first's point's z = second's point's z)) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad vertex:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad edge:first} = {cad edge:second}:
+    execute:
+        if (first's curve = second's curve) = false:
+            return false
+        if (first's startParameter = second's startParameter) = false:
+            return false
+        if (first's endParameter = second's endParameter) = false:
+            return false
+        if (first's start = second's start) = false:
+            return false
+        if (first's end = second's end) = false:
+            return false
+        if (cad topology lists first's coedges and second's coedges are equal) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad edge:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad coedge:first} = {cad coedge:second}:
+    execute:
+        if (first's edge = second's edge) = false:
+            return false
+        if (first's forward = second's forward) = false:
+            return false
+        if (first's pcurve = second's pcurve) = false:
+            return false
+        if (first's owner = second's owner) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad coedge:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad loop:first} = {cad loop:second}:
+    execute:
+        if (cad topology lists first's coedges and second's coedges are equal) = false:
+            return false
+        if (first's owner = second's owner) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad loop:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad face:first} = {cad face:second}:
+    execute:
+        if (first's surface = second's surface) = false:
+            return false
+        if (first's forward = second's forward) = false:
+            return false
+        if (cad topology lists first's loops and second's loops are equal) = false:
+            return false
+        if (first's owner = second's owner) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad face:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad shell:first} = {cad shell:second}:
+    execute:
+        if (cad topology lists first's faces and second's faces are equal) = false:
+            return false
+        if (first's owner = second's owner) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad shell:original}:
+    execute:
+        return the cad payload clone of original
+
+function {cad lump:first} = {cad lump:second}:
+    execute:
+        if (cad topology lists first's shells and second's shells are equal) = false:
+            return false
+        if (first's provenance = second's provenance) = false:
+            return false
+        return true
+function the cad clone of {cad lump:original}:
+    execute:
+        return the cad payload clone of original
+
+# Body storage owns all nine arenas and the ordered root list.
+class:
+    patterns:
+        [a|] cad body storage
+    members:
+        vertices
+        edges
+        coedges
+        loops
+        faces
+        shells
+        lumps
+        surfaces
+        curves
+        roots
+        references as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 2147483647:
+                @intrinsic("call", "libc", "abort", nothing)
+            @intrinsic("store at", owner, count + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free cad arena (the vertices of @intrinsic("lifecycle value"))
+                free cad arena (the edges of @intrinsic("lifecycle value"))
+                free cad arena (the coedges of @intrinsic("lifecycle value"))
+                free cad arena (the loops of @intrinsic("lifecycle value"))
+                free cad arena (the faces of @intrinsic("lifecycle value"))
+                free cad arena (the shells of @intrinsic("lifecycle value"))
+                free cad arena (the lumps of @intrinsic("lifecycle value"))
+                free cad arena (the surfaces of @intrinsic("lifecycle value"))
+                free cad arena (the curves of @intrinsic("lifecycle value"))
+                free (the roots of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+class:
+    patterns:
+        [a|] cad body
+    members:
+        vertices
+        edges
+        coedges
+        loops
+        faces
+        shells
+        lumps
+        surfaces
+        curves
+        roots
+        provenance as a cad provenance
+        storage as a cad body storage
+
+local function the cad body using {cad body storage:storage} with provenance {cad provenance:provenance}:
+    execute:
+        return @intrinsic("construct", a cad body, storage's vertices, storage's edges, storage's coedges, storage's loops, storage's faces, storage's shells, storage's lumps, storage's surfaces, storage's curves, storage's roots, provenance, storage)
+function an empty cad body:
+    execute:
+        set vertices to a cad arena of a cad vertex
+        set edges to a cad arena of a cad edge
+        set coedges to a cad arena of a cad coedge
+        set loops to a cad arena of a cad loop
+        set faces to a cad arena of a cad face
+        set shells to a cad arena of a cad shell
+        set lumps to a cad arena of a cad lump
+        set surfaces to a cad arena of the type of (the cad surface of the cad xy plane)
+        set curves to a cad arena of the type of (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+        set roots to an empty list of a cad lump key
+        set storage to @intrinsic("construct", a cad body storage, vertices, edges, coedges, loops, faces, shells, lumps, surfaces, curves, roots, a cad topology reference counter)
+        return the cad body using storage with provenance the synthesized cad provenance
+function the cad default body:
+    execute:
+        return an empty cad body
+function the cad clone of {cad body:original}:
+    execute:
+        set vertices to the cad clone of original's vertices
+        set edges to the cad clone of original's edges
+        set coedges to the cad clone of original's coedges
+        set loops to the cad clone of original's loops
+        set faces to the cad clone of original's faces
+        set shells to the cad clone of original's shells
+        set lumps to the cad clone of original's lumps
+        set surfaces to the cad clone of original's surfaces
+        set curves to the cad clone of original's curves
+        set roots to an empty list of a cad lump key
+        loop index from 0 to the length of original's roots:
+            append (the item at index in original's roots) to roots
+        set storage to @intrinsic("construct", a cad body storage, vertices, edges, coedges, loops, faces, shells, lumps, surfaces, curves, roots, a cad topology reference counter)
+        return the cad body using storage with provenance original's provenance
+
+function the cad body key after inserting {cad vertex:value} into {cad body:body}:
+    execute:
+        return the cad vertex key from (the cad key after inserting value into body's vertices)
+function the cad node pointer for {cad vertex key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's vertices
+function the cad lookup of {cad vertex key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's vertices
+function the cad removal of {cad vertex key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's vertices
+function replace cad node {cad vertex key:key} in {cad body:body} with {cad vertex:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's vertices with value
+function {cad body:body} contains cad key {cad vertex key:key}:
+    execute:
+        return body's vertices contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad edge:value} into {cad body:body}:
+    execute:
+        return the cad edge key from (the cad key after inserting value into body's edges)
+function the cad node pointer for {cad edge key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's edges
+function the cad lookup of {cad edge key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's edges
+function the cad removal of {cad edge key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's edges
+function replace cad node {cad edge key:key} in {cad body:body} with {cad edge:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's edges with value
+function {cad body:body} contains cad key {cad edge key:key}:
+    execute:
+        return body's edges contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad coedge:value} into {cad body:body}:
+    execute:
+        return the cad coedge key from (the cad key after inserting value into body's coedges)
+function the cad node pointer for {cad coedge key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's coedges
+function the cad lookup of {cad coedge key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's coedges
+function the cad removal of {cad coedge key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's coedges
+function replace cad node {cad coedge key:key} in {cad body:body} with {cad coedge:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's coedges with value
+function {cad body:body} contains cad key {cad coedge key:key}:
+    execute:
+        return body's coedges contains cad key (the cad arena key of key)
+
+function the cad body [key] after inserting {cad loop:value} into {cad body:body}:
+    execute:
+        return the cad loop key from (the cad key after inserting value into body's loops)
+function the cad node pointer for {cad loop key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's loops
+function the cad lookup of {cad loop key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's loops
+function the cad removal of {cad loop key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's loops
+function replace cad node {cad loop key:key} in {cad body:body} with {cad loop:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's loops with value
+function {cad body:body} contains cad key {cad loop key:key}:
+    execute:
+        return body's loops contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad face:value} into {cad body:body}:
+    execute:
+        return the cad face key from (the cad key after inserting value into body's faces)
+function the cad node pointer for {cad face key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's faces
+function the cad lookup of {cad face key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's faces
+function the cad removal of {cad face key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's faces
+function replace cad node {cad face key:key} in {cad body:body} with {cad face:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's faces with value
+function {cad body:body} contains cad key {cad face key:key}:
+    execute:
+        return body's faces contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad shell:value} into {cad body:body}:
+    execute:
+        return the cad shell key from (the cad key after inserting value into body's shells)
+function the cad node pointer for {cad shell key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's shells
+function the cad lookup of {cad shell key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's shells
+function the cad removal of {cad shell key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's shells
+function replace cad node {cad shell key:key} in {cad body:body} with {cad shell:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's shells with value
+function {cad body:body} contains cad key {cad shell key:key}:
+    execute:
+        return body's shells contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad lump:value} into {cad body:body}:
+    execute:
+        return the cad lump key from (the cad key after inserting value into body's lumps)
+function the cad node pointer for {cad lump key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's lumps
+function the cad lookup of {cad lump key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's lumps
+function the cad removal of {cad lump key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's lumps
+function replace cad node {cad lump key:key} in {cad body:body} with {cad lump:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's lumps with value
+function {cad body:body} contains cad key {cad lump key:key}:
+    execute:
+        return body's lumps contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad surface:value} into {cad body:body}:
+    execute:
+        return the cad surface key from (the cad key after inserting value into body's surfaces)
+function the cad node pointer for {cad surface key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's surfaces
+function the cad lookup of {cad surface key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's surfaces
+function the cad removal of {cad surface key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's surfaces
+function replace cad node {cad surface key:key} in {cad body:body} with {cad surface:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's surfaces with value
+function {cad body:body} contains cad key {cad surface key:key}:
+    execute:
+        return body's surfaces contains cad key (the cad arena key of key)
+
+function the cad body key after inserting {cad edge curve3:value} into {cad body:body}:
+    execute:
+        return the cad curve key from (the cad key after inserting value into body's curves)
+function the cad node pointer for {cad curve key:key} in {cad body:body}:
+    execute:
+        return the cad node pointer for (the cad arena key of key) in body's curves
+function the cad lookup of {cad curve key:key} in {cad body:body}:
+    execute:
+        return the cad lookup of (the cad arena key of key) in body's curves
+function the cad removal of {cad curve key:key} from {cad body:body}:
+    execute:
+        return the cad removal of (the cad arena key of key) from body's curves
+function replace cad node {cad curve key:key} in {cad body:body} with {cad edge curve3:value}:
+    execute:
+        replace cad node (the cad arena key of key) in body's curves with value
+function {cad body:body} contains cad key {cad curve key:key}:
+    execute:
+        return body's curves contains cad key (the cad arena key of key)
+
+function the cad face [keys] of {cad body:body}:
+    execute:
+        set result to an empty list of a cad face key
+        set keys to the cad keys of body's faces
+        loop index from 0 to the length of keys:
+            append (the cad face key from (the item at index in keys)) to result
+        free keys
+        return result
+
+function the cad vertex [keys] of {cad body:body}:
+    execute:
+        set result to an empty list of a cad vertex key
+        set keys to the cad keys of body's vertices
+        loop index from 0 to the length of keys:
+            append (the cad vertex key from (the item at index in keys)) to result
+        free keys
+        return result
+
+function the cad edge [keys] of {cad body:body}:
+    execute:
+        set result to an empty list of a cad edge key
+        set keys to the cad keys of body's edges
+        loop index from 0 to the length of keys:
+            append (the cad edge key from (the item at index in keys)) to result
+        free keys
+        return result
+
+class:
+    patterns:
+        [a|] cad partner result
+    members:
+        valid as a boolean
+        value as a cad coedge key
+class:
+    patterns:
+        [a|] cad coedge vertices result
+    members:
+        valid as a boolean
+        start as a cad vertex key
+        end as a cad vertex key
+class:
+    patterns:
+        [a|] cad edge endpoints result
+    members:
+        valid as a boolean
+        start as a cad vector3
+        end as a cad vector3
+
+function the cad partner of {cad coedge key:key} in {cad body:body}:
+    execute:
+        set absent to @intrinsic("construct", a cad partner result, false, a new cad coedge key)
+        set use to the cad lookup of key in body
+        if use's valid = false:
+            return absent
+        set node to the cad value of use
+        set found to the cad lookup of node's edge in body
+        if found's valid = false:
+            return absent
+        set edge to the cad value of found
+        set uses to edge's coedges's values
+        if (the length of uses) = 2:
+            set first to the item at 0 in uses
+            set second to the item at 1 in uses
+            if first = key:
+                return @intrinsic("construct", a cad partner result, true, second)
+            if second = key:
+                return @intrinsic("construct", a cad partner result, true, first)
+        return absent
+
+function the cad coedge vertices of {cad coedge key:key} in {cad body:body}:
+    execute:
+        set absent to @intrinsic("construct", a cad coedge vertices result, false, a new cad vertex key, a new cad vertex key)
+        set use to the cad lookup of key in body
+        if use's valid = false:
+            return absent
+        set node to the cad value of use
+        set found to the cad lookup of node's edge in body
+        if found's valid = false:
+            return absent
+        set edge to the cad value of found
+        if node's forward:
+            return @intrinsic("construct", a cad coedge vertices result, true, edge's start, edge's end)
+        return @intrinsic("construct", a cad coedge vertices result, true, edge's end, edge's start)
+
+function the cad [face] coedges of {cad face key:key} in {cad body:body}:
+    execute:
+        set result to an empty list of a cad coedge key
+        set found to the cad lookup of key in body
+        if found's valid:
+            set face to the cad value of found
+            loop index from 0 to the length of face's loops's values:
+                set loopKey to the item at index in face's loops's values
+                set ring to the cad lookup of loopKey in body
+                if ring's valid:
+                    set uses to (the cad value of ring)'s coedges's values
+                    loop cursor from 0 to the length of uses:
+                        append (the item at cursor in uses) to result
+        return result
+
+function the cad [edge] endpoints of {cad edge key:key} in {cad body:body}:
+    execute:
+        set absent to @intrinsic("construct", a cad edge endpoints result, false, the cad zero vector3, the cad zero vector3)
+        set found to the cad lookup of key in body
+        if found's valid = false:
+            return absent
+        set edge to the cad value of found
+        set shape to the cad lookup of edge's curve in body
+        if shape's valid = false:
+            return absent
+        set curve to the cad value of shape
+        return @intrinsic("construct", a cad edge endpoints result, true, the cad point on curve at edge's startParameter, the cad point on curve at edge's endParameter)
+
+function soil cad edge {cad edge key:key} in {cad body:body}:
+    execute:
+        set found to the cad lookup of key in body
+        if found's valid:
+            set node to found's value
+            soil cad provenance node's provenance
+            set uses to the cad clone of node's coedges
+            loop index from 0 to the length of uses's values:
+                set use to the cad lookup of (the item at index in uses's values) in body
+                if use's valid:
+                    set coedge to use's value
+                    soil cad provenance coedge's provenance
+                    set owner to the cad lookup of coedge's owner in body
+                    if owner's valid:
+                        set ring to owner's value
+                        soil cad provenance ring's provenance
+                        set face to the cad lookup of ring's owner in body
+                        if face's valid:
+                            soil cad provenance face's value's provenance
+
+function soil cad vertex {cad vertex key:key} in {cad body:body}:
+    execute:
+        set found to the cad lookup of key in body
+        if found's valid:
+            soil cad provenance found's value's provenance
+        set touched to an empty list of a cad edge key
+        set keys to the cad edge keys of body
+        loop index from 0 to the length of keys:
+            set edgeKey to the item at index in keys
+            set edge to the cad value of (the cad lookup of edgeKey in body)
+            if (edge's start = key) or (edge's end = key):
+                append edgeKey to touched
+        free keys
+        loop index from 0 to the length of touched:
+            soil cad edge (the item at index in touched) in body
+        free touched
+
+function the cad [worst] vertex gap of {cad body:body}:
+    execute:
+        set worst to 0.0 as a 64 bit floating-point number
+        set keys to the cad edge keys of body
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            set endpoints to the cad edge endpoints of key in body
+            if endpoints's valid:
+                set edge to the cad value of (the cad lookup of key in body)
+                set start to the cad lookup of edge's start in body
+                if start's valid:
+                    set distance to the cad distance from endpoints's start to (the cad value of start)'s point
+                    if distance > worst:
+                        set worst to distance
+                set end to the cad lookup of edge's end in body
+                if end's valid:
+                    set distance to the cad distance from endpoints's end to (the cad value of end)'s point
+                    if distance > worst:
+                        set worst to distance
+        free keys
+        return worst
+
+function the cad euler characteristic of {cad body:body}:
+    execute:
+        return (((the cad count of body's vertices) as a 64 bit integer) - ((the cad count of body's edges) as a 64 bit integer)) + ((the cad count of body's faces) as a 64 bit integer)
+
+class:
+    patterns:
+        [a|] cad topology flaw
+    members:
+        kind as an integer
+        message as a string
+        lump as a cad lump key
+        shell as a cad shell key
+        face as a cad face key
+        ring as a cad loop key
+        edge as a cad edge key
+
+function cad dangling key flaw:
+    replacement:
+        0
+
+function cad broken ownership flaw:
+    replacement:
+        1
+
+function cad empty lump flaw:
+    replacement:
+        2
+
+function cad empty shell flaw:
+    replacement:
+        3
+
+function cad unbounded face flaw:
+    replacement:
+        4
+
+function cad degenerate loop flaw:
+    replacement:
+        5
+
+function cad open loop flaw:
+    replacement:
+        6
+
+function cad unused edge flaw:
+    replacement:
+        7
+
+function cad nonmanifold edge flaw:
+    replacement:
+        8
+
+function cad same sided edge flaw:
+    replacement:
+        9
+
+local function a cad topology flaw with kind {integer:kind} and message {string:message}:
+    execute:
+        return @intrinsic("construct", a cad topology flaw, kind, message, a new cad lump key, a new cad shell key, a new cad face key, a new cad loop key, a new cad edge key)
+local function the cad dangling flaw {string:message}:
+    execute:
+        return a cad topology flaw with kind cad dangling key flaw and message message
+local function the cad ownership flaw {string:message}:
+    execute:
+        return a cad topology flaw with kind cad broken ownership flaw and message message
+
+local function the cad flaw for {cad lump key:key} of kind {integer:kind}:
+    execute:
+        set result to a cad topology flaw with kind kind and message ""
+        set result's lump to key
+        return result
+
+local function the cad flaw for {cad shell key:key} of kind {integer:kind}:
+    execute:
+        set result to a cad topology flaw with kind kind and message ""
+        set result's shell to key
+        return result
+
+local function the cad flaw for {cad face key:key} of kind {integer:kind}:
+    execute:
+        set result to a cad topology flaw with kind kind and message ""
+        set result's face to key
+        return result
+
+local function the cad flaw for {cad loop key:key} of kind {integer:kind}:
+    execute:
+        set result to a cad topology flaw with kind kind and message ""
+        set result's ring to key
+        return result
+
+local function the cad flaw for {cad edge key:key} of kind {integer:kind}:
+    execute:
+        set result to a cad topology flaw with kind kind and message ""
+        set result's edge to key
+        return result
+
+function {cad topology flaw:first} = {cad topology flaw:second}:
+    execute:
+        if first's kind != second's kind:
+            return false
+        if first's kind < 2:
+            return first's message = second's message
+        if first's kind = 2:
+            return first's lump = second's lump
+        if first's kind = 3:
+            return first's shell = second's shell
+        if first's kind = 4:
+            return first's face = second's face
+        if first's kind < 7:
+            return first's ring = second's ring
+        return first's edge = second's edge
+
+local function cad topology surface {cad surface:surface} is closed:
+    execute:
+        if (surface's kind = 3) or (surface's kind = 4):
+            return true
+        if surface's kind = 5:
+            return surface's nurbs's uClosed and surface's nurbs's vClosed
+        return false
+
+local function cad topology surface {cad surface:surface} allows a singular ring:
+    execute:
+        if surface's kind = 3:
+            return true
+        if surface's kind = 2:
+            set slope to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, surface's cone's halfAngle)
+            return (the absolute value of slope) > 1e-15
+        if surface's kind = 4:
+            set minor to the absolute value of surface's torus's minorRadius
+            set major to the absolute value of surface's torus's majorRadius
+            return (minor > 2.220446049250313e-16) and (major <= minor)
+        return false
+
+local function collect cad [lump] flaws in {cad body:body} into {a pointer to a list:flaws}:
+    execute:
+        set keys to the cad keys of body's lumps
+        loop index from 0 to the length of keys:
+            set key to the cad lump key from (the item at index in keys)
+            set lump to the cad value of (the cad lookup of key in body)
+            set shells to lump's shells's values
+            if (the length of shells) = 0:
+                append (the cad flaw for key of kind cad empty lump flaw) to flaws
+            loop cursor from 0 to the length of shells:
+                if (body contains cad key (the item at cursor in shells)) = false:
+                    append (the cad dangling flaw "lump names a shell that is gone") to flaws
+        free keys
+
+local function collect cad [shell] flaws in {cad body:body} into {a pointer to a list:flaws}:
+    execute:
+        set keys to the cad keys of body's shells
+        loop index from 0 to the length of keys:
+            set key to the cad shell key from (the item at index in keys)
+            set shell to the cad value of (the cad lookup of key in body)
+            set faces to shell's faces's values
+            if (the length of faces) = 0:
+                append (the cad flaw for key of kind cad empty shell flaw) to flaws
+            loop cursor from 0 to the length of faces:
+                set face to the cad lookup of (the item at cursor in faces) in body
+                if face's valid:
+                    if (the cad value of face)'s owner != key:
+                        append (the cad ownership flaw "a face's shell is not the shell that lists it") to flaws
+                else:
+                    append (the cad dangling flaw "shell names a face that is gone") to flaws
+        free keys
+
+local function collect cad [face] flaws in {cad body:body} into {a pointer to a list:flaws}:
+    execute:
+        set keys to the cad face keys of body
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            set face to the cad value of (the cad lookup of key in body)
+            set surface to the cad lookup of face's surface in body
+            set closed to false
+            if surface's valid:
+                set closed to cad topology surface (the cad value of surface) is closed
+            else:
+                append (the cad dangling flaw "face names a surface that is gone") to flaws
+            set rings to face's loops's values
+            if ((the length of rings) = 0) and (closed = false):
+                append (the cad flaw for key of kind cad unbounded face flaw) to flaws
+            loop cursor from 0 to the length of rings:
+                set ring to the cad lookup of (the item at cursor in rings) in body
+                if ring's valid:
+                    if (the cad value of ring)'s owner != key:
+                        append (the cad ownership flaw "a loop's face is not the face that lists it") to flaws
+                else:
+                    append (the cad dangling flaw "face names a loop that is gone") to flaws
+        free keys
+
+local function collect cad [loop] flaws in {cad body:body} into {a pointer to a list:flaws}:
+    execute:
+        set keys to the cad keys of body's loops
+        loop index from 0 to the length of keys:
+            set key to the cad loop key from (the item at index in keys)
+            set ring to the cad value of (the cad lookup of key in body)
+            set uses to ring's coedges's values
+            set count to the length of uses
+            set closedAlone to false
+            if count = 1:
+                set use to the cad lookup of (the item at 0 in uses) in body
+                if use's valid:
+                    set edge to the cad lookup of (the cad value of use)'s edge in body
+                    if edge's valid:
+                        set node to the cad value of edge
+                        set closedAlone to node's start = node's end
+            set singular to false
+            if count = 0:
+                set face to the cad lookup of ring's owner in body
+                if face's valid:
+                    set surface to the cad lookup of (the cad value of face)'s surface in body
+                    if surface's valid:
+                        set singular to cad topology surface (the cad value of surface) allows a singular ring
+            if (singular = false) and ((count = 0) or ((count < 2) and (closedAlone = false))):
+                append (the cad flaw for key of kind cad degenerate loop flaw) to flaws
+            else:
+                loop cursor from 0 to count:
+                    set use to the cad lookup of (the item at cursor in uses) in body
+                    if use's valid:
+                        if (the cad value of use)'s owner != key:
+                            append (the cad ownership flaw "a coedge's loop is not the loop that lists it") to flaws
+                    else:
+                        append (the cad dangling flaw "loop names a coedge that is gone") to flaws
+                set open to false
+                loop cursor from 0 to count:
+                    if open = false:
+                        set here to the cad coedge vertices of (the item at cursor in uses) in body
+                        set nextIndex to the remainder of (cursor + 1) divided by count
+                        set next to the cad coedge vertices of (the item at nextIndex in uses) in body
+                        if here's valid and next's valid:
+                            if here's end != next's start:
+                                append (the cad flaw for key of kind cad open loop flaw) to flaws
+                                set open to true
+        free keys
+
+local function collect cad [edge] flaws in {cad body:body} into {a pointer to a list:flaws}:
+    execute:
+        set keys to the cad edge keys of body
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            set edge to the cad value of (the cad lookup of key in body)
+            if (body contains cad key edge's curve) = false:
+                append (the cad dangling flaw "edge names a curve that is gone") to flaws
+            if ((body contains cad key edge's start) = false) or ((body contains cad key edge's end) = false):
+                append (the cad dangling flaw "edge names a vertex that is gone") to flaws
+            set uses to edge's coedges's values
+            set count to the length of uses
+            set seam to an empty list of a boolean
+            loop cursor from 0 to count:
+                append false to seam
+            loop firstIndex from 0 to count:
+                if (the item at firstIndex in seam) = false:
+                    set first to the cad lookup of (the item at firstIndex in uses) in body
+                    if first's valid:
+                        set matched to false
+                        loop secondIndex from (firstIndex + 1) to count:
+                            if (matched = false) and ((the item at secondIndex in seam) = false):
+                                set second to the cad lookup of (the item at secondIndex in uses) in body
+                                if second's valid:
+                                    set a to the cad value of first
+                                    set b to the cad value of second
+                                    if (a's owner = b's owner) and (a's forward != b's forward):
+                                        replace item at index firstIndex in seam with true
+                                        replace item at index secondIndex in seam with true
+                                        set matched to true
+            set effective to an empty list of a cad coedge key
+            loop cursor from 0 to count:
+                if (the item at cursor in seam) = false:
+                    append (the item at cursor in uses) to effective
+            set usedCount to the length of effective
+            if (usedCount = 0) and (count = 0):
+                append (the cad flaw for key of kind cad unused edge flaw) to flaws
+            if usedCount > 2:
+                append (the cad flaw for key of kind cad nonmanifold edge flaw) to flaws
+            loop cursor from 0 to count:
+                set use to the cad lookup of (the item at cursor in uses) in body
+                if use's valid:
+                    if (the cad value of use)'s edge != key:
+                        append (the cad ownership flaw "a coedge's edge is not the edge that lists it") to flaws
+                else:
+                    append (the cad dangling flaw "edge names a coedge that is gone") to flaws
+            if usedCount = 2:
+                set first to the cad lookup of (the item at 0 in effective) in body
+                set second to the cad lookup of (the item at 1 in effective) in body
+                if first's valid and second's valid:
+                    if (the cad value of first)'s forward = (the cad value of second)'s forward:
+                        append (the cad flaw for key of kind cad same sided edge flaw) to flaws
+            free effective
+            free seam
+        free keys
+
+function the cad flaws of {cad body:body}:
+    execute:
+        set result to an empty list of a cad topology flaw
+        collect cad lump flaws in body into result
+        collect cad shell flaws in body into result
+        collect cad face flaws in body into result
+        collect cad loop flaws in body into result
+        collect cad edge flaws in body into result
+        return result

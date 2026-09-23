@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime-input differential probe; no reference computations live here.
+import lib/cadkernel/core.dl
+
+function cad probe argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function cad emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function cad emit {cad vector2:value}:
+    execute:
+        cad emit (the x of value)
+        cad emit (the y of value)
+
+function cad emit {cad vector3:value}:
+    execute:
+        cad emit (the x of value)
+        cad emit (the y of value)
+        cad emit (the z of value)
+
+set ax to cad probe argument 0
+set ay to cad probe argument 1
+set az to cad probe argument 2
+set bx to cad probe argument 3
+set by to cad probe argument 4
+set bz to cad probe argument 5
+set px to cad probe argument 6
+set py to cad probe argument 7
+set pz to cad probe argument 8
+set t to cad probe argument 9
+set a2 to a cad vector2 with x ax and y ay
+set b2 to a cad vector2 with x bx and y by
+set p2 to a cad vector2 with x px and y py
+set a3 to a cad vector3 with x ax, y ay and z az
+set b3 to a cad vector3 with x bx, y by and z bz
+set p3 to a cad vector3 with x px, y py and z pz
+cad emit (the cad sum of a2 and b2)
+cad emit (the cad difference of a2 and b2)
+cad emit (a2 scaled by t)
+cad emit (a2 cad divided by t)
+cad emit (the cad negative of a2)
+cad emit (the cad dot of a2 and b2)
+cad emit (the cad cross of a2 and b2)
+cad emit (the cad squared length of a2)
+cad emit (the cad length of a2)
+cad emit (the cad distance from a2 to b2)
+cad emit (the cad squared distance from a2 to b2)
+cad emit (the cad lerp from a2 to b2 at t)
+cad emit (the cad distance from p2 to the segment from a2 to b2)
+cad emit (the cad perpendicular of a2)
+cad emit (the cad angle of a2)
+set norm2 to the cad normalization of a2
+cad emit ((the valid of norm2) as an integer)
+cad emit (the value of norm2)
+cad emit (the cad sum of a3 and b3)
+cad emit (the cad difference of a3 and b3)
+cad emit (a3 scaled by t)
+cad emit (a3 cad divided by t)
+cad emit (the cad negative of a3)
+cad emit (the cad dot of a3 and b3)
+cad emit (the cad cross of a3 and b3)
+cad emit (the cad squared length of a3)
+cad emit (the cad length of a3)
+cad emit (the cad distance from a3 to b3)
+cad emit (the cad squared distance from a3 to b3)
+cad emit (the cad lerp from a3 to b3 at t)
+cad emit (the cad distance from p3 to the segment from a3 to b3)
+set norm3 to the cad normalization of a3
+cad emit ((the valid of norm3) as an integer)
+cad emit (the value of norm3)
+cad emit ((cad a3 is finite) as an integer)
+cad emit ((cad a3 is parallel to b3 within t) as an integer)

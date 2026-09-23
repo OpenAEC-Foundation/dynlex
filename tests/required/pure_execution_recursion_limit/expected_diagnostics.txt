@@ -1,0 +1,4 @@
+tests/required/pure_execution_recursion_limit/main.dl:22-48: Error: Compile-time evaluation exceeded the nesting limit
+  note: while inferring call ' the recursive value for 0' with arguments [a 32-bit integer] -> a 32-bit integer tests/required/pure_execution_recursion_limit/main.dl:22-48
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", the recursive value for 0)' with arguments [a 32-bit integer] -> an unresolved value tests/required/pure_execution_recursion_limit/main.dl:1-49
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", the recursive value for 0)' with arguments [an unresolved value] -> an unresolved value tests/required/pure_execution_recursion_limit/main.dl:1-49

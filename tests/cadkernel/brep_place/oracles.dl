@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MPL-2.0
+# Test-only boundary integration. This is not a replacement for brep/mesh.rs.
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/brep_bounds.dl
+function placement tetrahedron from {cad vector3:a}, {cad vector3:b} and {cad vector3:c} around {cad vector3:middle} facing {cad vector3:normal}:
+    execute:
+        set cross to the cad cross of (the cad difference of b and a) and (the cad difference of c and a)
+        set volume to (the cad dot of (the cad cross of (the cad difference of a and middle) and (the cad difference of b and middle)) and (the cad difference of c and middle)) / 6.0
+        if (the cad dot of cross and normal) < 0.0:
+            return the negative of volume
+        return volume
+function placement boundary volume of {cad body:solid}:
+    execute:
+        set bounds to the cad bounds of solid
+        set middle to the cad centre of (bounds's value)
+        set total to 0.0 as a 64 bit floating-point number
+        set faces to the cad face keys of solid
+        loop index from 0 to the length of faces:
+            set key to the item at index in faces
+            set face to the cad node pointer for key in solid
+            set surface to the cad value of (the cad lookup of (face's surface) in solid)
+            set sense to 1.0 as a 64 bit floating-point number
+            if face's forward = false:
+                set sense to -1.0
+            if surface's kind = 0:
+                set normal to (the cad normal of (surface's plane))'s value scaled by sense
+                set ring to an empty list of a cad vector3
+                set uses to the cad face coedges of key in solid
+                loop cursor from 0 to the length of uses:
+                    set coedge to the cad node pointer for (the item at cursor in uses) in solid
+                    set sampled to the cad edge points of (coedge's edge) in solid within 0.001
+                    set count to the length of (sampled's value's values)
+                    loop vertex from 0 to (count - 1):
+                        set sourceIndex to vertex
+                        if coedge's forward = false:
+                            set sourceIndex to (count - 1) - vertex
+                        append (the item at sourceIndex in (sampled's value's values)) to ring
+                free uses
+                loop cursor from 1 to ((the length of ring) - 1):
+                    set total to total + (placement tetrahedron from (the item at 0 in ring), (the item at cursor in ring) and (the item at (cursor + 1) in ring) around middle facing normal)
+                free ring
+            else:
+                set divisions to 1
+                set low to 0.0 as a 64 bit floating-point number
+                set high to 0.0 as a 64 bit floating-point number
+                if surface's kind = 1:
+                    set axis to (the cad normal of (surface's cylinder's base))'s value
+                    set vertices to the cad keys of (solid's vertices)
+                    loop cursor from 0 to the length of vertices:
+                        set vertex to the cad value of (the cad lookup of (the item at cursor in vertices) in (solid's vertices))
+                        set distance to the cad dot of (the cad difference of (vertex's point) and (surface's cylinder's base's origin)) and axis
+                        set low to the minimum of low and distance
+                        set high to the maximum of high and distance
+                    free vertices
+                if surface's kind = 3:
+                    set divisions to 32
+                    set low to -1.5707963267948966
+                    set high to 1.5707963267948966
+                loop uIndex from 0 to 64:
+                    set u0 to (6.283185307179586 * (uIndex as a 64 bit floating-point number)) / 64.0
+                    set u1 to (6.283185307179586 * ((uIndex + 1) as a 64 bit floating-point number)) / 64.0
+                    loop vIndex from 0 to divisions:
+                        set v0 to low + (((high - low) * (vIndex as a 64 bit floating-point number)) / (divisions as a 64 bit floating-point number))
+                        set v1 to low + (((high - low) * ((vIndex + 1) as a 64 bit floating-point number)) / (divisions as a 64 bit floating-point number))
+                        set normal to (the cad normal of surface at parameters ((u0 + u1) * 0.5) and ((v0 + v1) * 0.5))'s value scaled by sense
+                        set a to the cad point on surface at parameters u0 and v0
+                        set b to the cad point on surface at parameters u1 and v0
+                        set c to the cad point on surface at parameters u1 and v1
+                        set d to the cad point on surface at parameters u0 and v1
+                        set total to total + (placement tetrahedron from a, b and c around middle facing normal)
+                        set total to total + (placement tetrahedron from a, c and d around middle facing normal)
+        free faces
+        return total

@@ -1,0 +1,148 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_presspull.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function presspull probe point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x (x as a 64 bit floating-point number), y (y as a 64 bit floating-point number) and z (z as a 64 bit floating-point number)
+function presspull probe {cad vector3:firstPoint} precedes {cad vector3:secondPoint}:
+    execute:
+        if firstPoint's x != secondPoint's x:
+            return firstPoint's x < secondPoint's x
+        if firstPoint's y != secondPoint's y:
+            return firstPoint's y < secondPoint's y
+        return firstPoint's z < secondPoint's z
+function sort presspull probe points {a pointer to a list:points}:
+    execute:
+        loop index from 1 to the length of points:
+            set current to the item at index in points
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in points
+                if presspull probe current precedes previous:
+                    replace item at index position in points with previous
+                    decrement position
+                else:
+                    set searching to false
+            replace item at index position in points with current
+
+function a presspull probe rectangle from {a number:minX} {a number:minY} to {a number:maxX} {a number:maxY}:
+    execute:
+        set curves to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set firstPoint to a cad vector2 with x minX and y minY
+        set secondPoint to a cad vector2 with x maxX and y minY
+        set thirdPoint to a cad vector2 with x maxX and y maxY
+        set fourthPoint to a cad vector2 with x minX and y maxY
+        append (the cad curve2 of (a cad line2 from firstPoint to secondPoint)) to curves
+        append (the cad curve2 of (a cad line2 from secondPoint to thirdPoint)) to curves
+        append (the cad curve2 of (a cad line2 from thirdPoint to fourthPoint)) to curves
+        append (the cad curve2 of (a cad line2 from fourthPoint to firstPoint)) to curves
+        set result to a cad presspull curve loop from curves
+        free curves
+        return result
+
+function emit presspull probe body {cad body:outputBody}:
+    execute:
+        emit maker number (the cad count of outputBody's vertices)
+        emit maker number (the cad count of outputBody's edges)
+        emit maker number (the cad count of outputBody's faces)
+        emit maker number (the cad euler characteristic of outputBody)
+        set flaws to the cad flaws of outputBody
+        emit maker number (the length of flaws)
+        free flaws
+        emit maker number (the cad worst vertex gap of outputBody)
+        set edgeKeys to the cad edge keys of outputBody
+        loop curveKind from 0 to 5:
+            set curveCount to 0
+            loop edgeIndex from 0 to the length of edgeKeys:
+                set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in outputBody
+                if edgeNode != (0 as the type of edgeNode):
+                    set curveNode to the cad node pointer for edgeNode's curve in outputBody
+                    if curveNode != (0 as the type of curveNode):
+                        if curveNode's kind = curveKind:
+                            increment curveCount
+            emit maker number curveCount
+        set faceKeys to the cad face keys of outputBody
+        loop surfaceKind from 0 to 6:
+            set surfaceCount to 0
+            loop faceIndex from 0 to the length of faceKeys:
+                set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in outputBody
+                if faceNode != (0 as the type of faceNode):
+                    set surfaceNode to the cad node pointer for faceNode's surface in outputBody
+                    if surfaceNode != (0 as the type of surfaceNode):
+                        if surfaceNode's kind = surfaceKind:
+                            increment surfaceCount
+            emit maker number surfaceCount
+        set pointValues to an empty list of a cad vector3
+        set vertexKeys to the cad vertex keys of outputBody
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in outputBody
+            append vertexNode's point to pointValues
+        sort presspull probe points pointValues
+        emit maker number (the length of pointValues)
+        loop pointIndex from 0 to the length of pointValues:
+            emit maker point (the item at pointIndex in pointValues)
+        free vertexKeys
+        free pointValues
+        free faceKeys
+        free edgeKeys
+
+set kind to (maker argument 0) as an integer
+set first to maker argument 1
+set second to maker argument 2
+set third to maker argument 3
+set fourth to maker argument 4
+set origin to presspull probe point (maker argument 5) (maker argument 6) (maker argument 7)
+set sourceBody to an empty cad body
+set outcome to no cad body
+if kind >= 10:
+    set regionLoops to an empty list of a cad presspull curve loop
+    if kind = 10:
+        append (a presspull probe rectangle from 0.0 0.0 to first second) to regionLoops
+    else if kind = 11:
+        set regionCurves to a list containing (the cad curve2 of (a cad circle2 at the cad zero vector2 with radius first))
+        append (a cad presspull curve loop from regionCurves) to regionLoops
+        free regionCurves
+    else if kind = 12:
+        set ellipseValue to a cad ellipse at the cad zero vector2 with radii first and second along (a cad vector2 with x 1.0 and y 0.0)
+        set regionCurves to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipseValue))
+        append (a cad presspull curve loop from regionCurves) to regionLoops
+        free regionCurves
+    else if kind = 13:
+        append (a presspull probe rectangle from 0.0 0.0 to first second) to regionLoops
+        append (a presspull probe rectangle from third third to (first - third) (second - third)) to regionLoops
+    set regionPlane to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+    set outcome to the cad planar region on regionPlane with regionLoops
+    free regionLoops
+else if kind = 0:
+    set made to the cad cuboid at origin with size (presspull probe point first second third)
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 1:
+    set made to the cad wedge at origin with length first, width second and height third
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 2:
+    set made to the cad pyramid body at origin with radius first, height second and sides (third as an integer)
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 3:
+    set made to the cad polygonal frustum at origin with base radius first, top radius second, height third and sides (fourth as an integer)
+    if made's valid:
+        set sourceBody to made's value
+else if kind = 4:
+    set made to the cad cylinder body at origin with radius first and height second
+    if made's valid:
+        set sourceBody to made's value
+set faceKeys to an empty list of a cad face key
+if kind < 10:
+    set faceKeys to the cad face keys of sourceBody
+    if (the length of faceKeys) > 0:
+        set faceIndex to the remainder of (the absolute value of ((maker argument 8) as an integer)) divided by (the length of faceKeys)
+        set outcome to the cad presspull of sourceBody at (the item at faceIndex in faceKeys) by (maker argument 9) in mode ((maker argument 10) as an integer)
+emit maker flag outcome's valid
+if outcome's valid:
+    emit presspull probe body outcome's value
+free faceKeys

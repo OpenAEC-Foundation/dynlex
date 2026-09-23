@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft/helpers.dl
+
+function check loft pcurves {cad body:body} expecting {integer:count}:
+    execute:
+        set keys to the cad keys of (body's coedges)
+        set found to 0
+        loop index from 0 to the length of keys:
+            set usage to the cad node pointer for (the item at index in keys) in (body's coedges)
+            if usage's pcurve's valid:
+                set found to found + 1
+                set edge to the cad node pointer for (usage's edge) in body
+                set curve to the cad node pointer for (edge's curve) in body
+                set ring to the cad node pointer for (usage's owner) in body
+                set face to the cad node pointer for (ring's owner) in body
+                set surface to the cad node pointer for (face's surface) in body
+                loop step from 0 to 5:
+                    set t to (step as a 64 bit floating-point number) / 4.0
+                    set uv to the cad point on (usage's pcurve's value) at t
+                    set onSurface to the cad point on (@intrinsic("dereference", surface)) at parameters (uv's x) and (uv's y)
+                    if (usage's forward) = false:
+                        set t to 1.0 - t
+                    set onEdge to the cad point on (@intrinsic("dereference", curve)) at t
+                    check loft ((the cad distance from onSurface to onEdge) < 1e-10)
+        free keys
+        check loft (found = count)
+
+set rectangle to loft test rectangle
+set angle to 0.3
+set twisted to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 3.0), x axis (a cad vector3 with x (the cosine of angle), y (the sine of angle) and z 0.0) and y axis (a cad vector3 with x (-(the sine of angle)), y (the cosine of angle) and z 0.0)
+set made to loft test body for rectangle between (the cad xy plane) and twisted
+check loft (made's valid)
+check loft topology (made's value)
+set surfaces to the cad keys of (made's value's surfaces)
+set splineCount to 0
+loop index from 0 to the length of surfaces:
+    set surface to the cad node pointer for (the item at index in surfaces) in (made's value's surfaces)
+    if (surface's kind) = 5:
+        set splineCount to splineCount + 1
+        check loft ((surface's nurbs's uDegree) = 1)
+        check loft ((surface's nurbs's vDegree) = 1)
+free surfaces
+check loft (splineCount = 4)
+print "twisted_polygon_uses_four_bilinear_surfaces" as a line
+check loft pcurves (made's value) expecting 16
+print "twisted_side_pcurves_match_all_boundary_samples" as a line
+
+set planar to loft test body for rectangle between (the cad xy plane) and (loft test frame at 3.0)
+check loft (planar's valid)
+check loft pcurves (planar's value) expecting 0
+set surfaces to the cad keys of (planar's value's surfaces)
+loop index from 0 to the length of surfaces:
+    set surface to the cad node pointer for (the item at index in surfaces) in (planar's value's surfaces)
+    check loft ((surface's kind) = 0)
+free surfaces
+print "coplanar_sides_and_caps_remain_analytic_planes" as a line
+
+set ellipse to loft test ellipse
+set made to loft test body for ellipse between (the cad xy plane) and (loft test frame at 3.0)
+check loft (made's valid)
+check loft topology (made's value)
+check loft ((the cad count of (made's value's vertices)) = 8)
+check loft ((the cad count of (made's value's faces)) = 6)
+check loft pcurves (made's value) expecting 16
+print "elliptical_loft_has_closed_rational_sides_and_exact_pcurves" as a line
+
+set faces to the cad keys of (made's value's faces)
+set sampled to 0
+loop index from 0 to the length of faces:
+    set face to the cad node pointer for (the item at index in faces) in (made's value's faces)
+    set surface to the cad node pointer for (face's surface) in (made's value)
+    if (surface's kind) = 5:
+        set sampled to sampled + 1
+        check loft ((surface's nurbs's uDegree) = 2)
+        check loft ((surface's nurbs's vDegree) = 1)
+        loop iu from 0 to 5:
+            loop iv from 0 to 5:
+                set point to the cad point on (@intrinsic("dereference", surface)) at parameters ((iu as a 64 bit floating-point number) / 4.0) and ((iv as a 64 bit floating-point number) / 4.0)
+                check loft ((the absolute value of ((((point's x) * (point's x)) / 4.0) + ((point's y) * (point's y)) - 1.0)) < 1e-12)
+                check loft ((the absolute value of ((point's z) - ((iv as a 64 bit floating-point number) * 0.75))) < 1e-12)
+        set normal to the cad normal of (@intrinsic("dereference", surface)) at parameters 0.5 and 0.5
+        check loft (normal's valid)
+        set outward to the cad point on (@intrinsic("dereference", surface)) at parameters 0.5 and 0.5
+        set outward's z to 0.0
+        set sign to 1.0
+        if (face's forward) = false:
+            set sign to -1.0
+        check loft (((the cad dot of (normal's value) and outward) * sign) > 0.0)
+free faces
+check loft (sampled = 4)
+print "rational_surface_samples_stay_on_ellipse_with_outward_normals" as a line
+
+set sections to a list containing (a cad loft section on (the cad xy plane) with profile (ellipse's values))
+append (a cad loft section on (loft test frame at 2.0) with profile (ellipse's values)) to sections
+append (a cad loft section on (loft test frame at 1.0) with profile (ellipse's values)) to sections
+set absent to the cad loft through sections
+check loft ((absent's valid) = false)
+set absent to the ordered cad polygon loft through sections
+check loft ((absent's valid) = false)
+free sections
+print "curved_progress_must_be_monotone_and_ordered_entry_rejects_curves" as a line
+
+set mixed to a cad topology list of the type of (the item at 0 in (ellipse's values))
+append (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from 0.0 to 1.5707963267948966)) to (mixed's values)
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 2.0) to (the cad zero vector2))) to (mixed's values)
+append (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 2.0 and y 0.0))) to (mixed's values)
+set made to loft test body for mixed between (the cad xy plane) and (loft test frame at 3.0)
+check loft (made's valid)
+check loft topology (made's value)
+check loft pcurves (made's value) expecting 12
+print "mixed_line_and_arc_profiles_preserve_rational_boundaries" as a line
+
+set oneCircle to a cad topology list of the type of (the item at 0 in (ellipse's values))
+append (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 1.0)) to (oneCircle's values)
+set absent to loft test body for oneCircle between (the cad xy plane) and (loft test frame at 3.0)
+check loft ((absent's valid) = false)
+print "closed_single_conics_do_not_satisfy_the_three_piece_minimum" as a line

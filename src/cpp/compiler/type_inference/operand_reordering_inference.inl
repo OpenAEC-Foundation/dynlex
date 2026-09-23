@@ -85,7 +85,10 @@ static bool inferExpression(
 		if (!collectGroupingAmbiguity)
 			context.detectGroupingAmbiguity = false;
 		std::unordered_set<Expression *> commitResolvedGroupingRoots;
-		context.fixedGroupingRoots = selectedFixedGroupingRoots.empty() ? nullptr : &selectedFixedGroupingRoots;
+		InferenceContext::FixedGroupingScope commitFixedGroupingScope{selectedFixedGroupingRoots, savedFixedGroupingRoots};
+		// With no root filter, ordered clones preserve all child groupings.
+		// An empty scope would instead make each child eligible for regrouping.
+		context.fixedGroupingRoots = selectedFixedGroupingRoots.empty() ? savedFixedGroupingRoots : &commitFixedGroupingScope;
 		context.resolvedGroupingRoots = &commitResolvedGroupingRoots;
 		inferOrderedExpression(expr, context, flexBindingFrameStack, true);
 		context.fixedGroupingRoots = savedFixedGroupingRoots;
@@ -118,6 +121,10 @@ static bool inferExpression(
 			context.resolvedGroupingRoots->insert(selectedFixedGroupingRoots.begin(), selectedFixedGroupingRoots.end());
 	};
 	if (alreadyOrdered) {
+		// A committed line or cloned header preserves its entire snapshot,
+		// independently of the roots fixed by an enclosing caller's trial.
+		for (const auto &[expression, state] : initialGrouping.nodes)
+			selectedFixedGroupingRoots.insert(expression);
 		if (!tryInfer()) {
 			context.typesValid = false;
 			emitTypeFailureDiagnostic();
@@ -128,66 +135,8 @@ static bool inferExpression(
 	}
 
 	GroupingFailure trialFailure;
-	if (!detectAmbiguity) {
-		bool foundAcceptedGrouping = false;
-		std::unique_ptr<GroupingInferenceTransaction> acceptedTransaction;
-		enumerateExpressionGroupings(
-			expr, context, alreadyOrdered, flexBindingFrameStack,
-			[&](Expression *&candidateExpr,
-				const std::unordered_set<Expression *> &fixedGroupingRoots) -> GroupingEnumerationProgress {
-			expr = candidateExpr;
-			std::unordered_set<Expression *> resolvedGroupingRoots;
-			GroupingSnapshot candidateGrouping;
-			std::vector<InferenceContext::OperandGroupingWarning> candidateGroupingWarnings;
-			bool accepted = validateGroupingInTrial(
-				expr, context, fixedGroupingRoots, flexBindingFrameStack, originalDiagnostic, requireVoidResult, &trialFailure,
-				&resolvedGroupingRoots, &candidateGrouping, &candidateGroupingWarnings, &acceptedTransaction
-			);
-			if (!accepted)
-				return GroupingEnumerationProgress::EmittedContinue;
-			if (accepted) {
-				selectedGrouping = std::move(candidateGrouping);
-				selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
-				selectedGroupingWarnings = std::move(candidateGroupingWarnings);
-				foundAcceptedGrouping = true;
-			}
-			return GroupingEnumerationProgress::Stop;
-		}
-		);
-
-		if (foundAcceptedGrouping) {
-			if (acceptedTransaction) {
-				promoteSelectedTransaction(acceptedTransaction);
-				queueSelectedGroupingWarnings();
-				emitOwnedGroupingWarnings();
-				return true;
-			}
-			applyGroupingSnapshot(selectedGrouping);
-			expr = selectedGrouping.root;
-			recomputeRanges(expr);
-			resetExpressionTypes(expr);
-			if (!tryInfer(false)) {
-				context.typesValid = false;
-				if (!context.hasTypeFailureDiagnostic && trialFailure.hasDiagnostic)
-					context.fail(trialFailure.diagnostic, trialFailure.priority);
-				emitTypeFailureDiagnostic();
-				return false;
-			}
-			queueSelectedGroupingWarnings();
-			emitOwnedGroupingWarnings();
-			return true;
-		}
-
-		applyGroupingSnapshot(initialGrouping);
-		expr = initialGrouping.root;
-		resetExpressionTypes(expr);
-		context.typesValid = false;
-		if (trialFailure.hasDiagnostic)
-			context.fail(trialFailure.diagnostic, trialFailure.priority);
-		emitTypeFailureDiagnostic();
-		return false;
-	}
-
+	bool selectedGroupingDeferred = false;
+	bool encounteredDeferredGrouping = false;
 	std::unique_ptr<GroupingInferenceTransaction> lastAcceptedTransaction;
 	enumerateExpressionGroupings(
 		expr, context, alreadyOrdered, flexBindingFrameStack,
@@ -218,17 +167,25 @@ static bool inferExpression(
 		applyGroupingSnapshot(candidateGrouping);
 		expr = candidateGrouping.root;
 		std::string candidateRendered = renderResolvedExpression(expr);
+		bool candidateDeferred = candidateTransaction->observedRecursiveDependency();
+		encounteredDeferredGrouping |= candidateDeferred;
 
-		if (!foundValidGrouping) {
+		// An unresolved recursive candidate has not passed type checking yet.
+		// Keep searching for a resolved grouping that can establish the return
+		// type, then revisit the deferred alternatives in the next body pass.
+		if (!foundValidGrouping || (selectedGroupingDeferred && !candidateDeferred)) {
 			selectedGrouping = std::move(candidateGrouping);
 			selectedGroupingWarnings = std::move(candidateGroupingWarnings);
 			storedValidRendered = candidateRendered;
 			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
 			foundValidGrouping = true;
+			selectedGroupingDeferred = candidateDeferred;
 			lastAcceptedTransaction = std::move(candidateTransaction);
-			return GroupingEnumerationProgress::EmittedContinue;
+			return !detectAmbiguity && !candidateDeferred ? GroupingEnumerationProgress::Stop
+														  : GroupingEnumerationProgress::EmittedContinue;
 		}
-		if (snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping)) {
+		if (candidateDeferred == selectedGroupingDeferred &&
+			snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping)) {
 			selectedGrouping = std::move(candidateGrouping);
 			selectedGroupingWarnings = std::move(candidateGroupingWarnings);
 			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
@@ -237,6 +194,8 @@ static bool inferExpression(
 		}
 		candidateTransaction->rollback(expr);
 		candidateTransaction.reset();
+		if (candidateDeferred || selectedGroupingDeferred)
+			return GroupingEnumerationProgress::EmittedContinue;
 		ambiguousAlternativeRendered = candidateRendered;
 		groupingAmbiguous = true;
 		return GroupingEnumerationProgress::Stop;
@@ -246,6 +205,8 @@ static bool inferExpression(
 	if (foundValidGrouping) {
 		if (lastAcceptedTransaction) {
 			promoteSelectedTransaction(lastAcceptedTransaction);
+			if (encounteredDeferredGrouping && !selectedGroupingDeferred)
+				observeUnresolvedRecursiveDependency(context);
 			queueSelectedGroupingWarnings();
 			emitOwnedGroupingWarnings();
 			return true;
@@ -261,6 +222,8 @@ static bool inferExpression(
 			emitTypeFailureDiagnostic();
 			return false;
 		}
+		if (encounteredDeferredGrouping && !selectedGroupingDeferred)
+			observeUnresolvedRecursiveDependency(context);
 		queueSelectedGroupingWarnings();
 		if (groupingAmbiguous)
 			queueCurrentGroupingWarning(storedValidRendered, ambiguousAlternativeRendered);

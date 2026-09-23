@@ -1,0 +1,122 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_classify.dl
+import lib/cadkernel/brep_make.dl
+
+function check cad classification {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function a classification point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+function check classification of {cad vector3:point} in {cad body:body} within {a number:tolerance} is {cad containment:expected}:
+    execute:
+        check cad classification ((the cad containment of point in body within (tolerance as a 64 bit floating-point number)) = expected)
+function check cad parameter inversion on {cad surface:surface} at {a number:u} {a number:v}:
+    execute:
+        set point to the cad point on surface at parameters u and v
+        set parameters to the cad parameters on surface nearest point
+        check cad classification (parameters's valid)
+        set again to the cad point on surface at parameters (parameters's value's x) and (parameters's value's y)
+        check cad classification ((the cad distance from point to again) < 1e-9)
+
+set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+check cad classification (made's valid)
+set body to made's value
+check cad classification ((the cad containment of (a cad vector3 with x 5.0, y 5.0 and z 5.0) in body within 1e-9) = (the inside cad containment))
+print "the_middle_of_a_box_is_inside_it" as a line
+check cad classification ((the cad containment of (a cad vector3 with x 20.0, y 5.0 and z 5.0) in body within 1e-9) = (the outside cad containment))
+check classification of (a classification point -1.0 5.0 5.0) in body within 1e-9 is (the outside cad containment)
+check classification of (a classification point 5.0 5.0 40.0) in body within 1e-9 is (the outside cad containment)
+check classification of (a classification point -3.0 -3.0 -3.0) in body within 1e-9 is (the outside cad containment)
+print "a_point_beyond_a_box_is_outside_it" as a line
+set elevated to the cad cuboid at (a classification point 0.0 0.0 10.0) with size (a classification point 4.0 4.0 4.0)
+check cad classification (elevated's valid)
+check classification of (a classification point 4.0 4.0 0.0) in (elevated's value) within 1e-9 is (the outside cad containment)
+print "a_point_on_an_edge_extension_is_outside" as a line
+check cad classification ((the cad containment of (a cad vector3 with x 5.0, y 5.0 and z 0.0) in body within 1e-6) = (the boundary cad containment))
+check classification of (a classification point 0.0 5.0 5.0) in body within 1e-6 is (the boundary cad containment)
+check classification of (a classification point 10.0 5.0 5.0) in body within 1e-6 is (the boundary cad containment)
+print "a_point_on_a_face_is_on_the_boundary" as a line
+
+check classification of (a classification point 0.0 0.0 0.0) in body within 1e-6 is (the boundary cad containment)
+check classification of (a classification point 5.0 0.0 0.0) in body within 1e-6 is (the boundary cad containment)
+print "a_corner_and_an_edge_are_on_the_boundary_too" as a line
+
+check classification of (a classification point 5.0 5.0 0.001) in body within 1e-9 is (the inside cad containment)
+check classification of (a classification point 5.0 5.0 -0.001) in body within 1e-9 is (the outside cad containment)
+print "a_point_just_inside_a_face_is_inside" as a line
+
+check classification of (a classification point 5.0 5.0 5.0) in body within 1e-9 is (the inside cad containment)
+check classification of (a classification point 2.0 2.0 2.0) in body within 1e-9 is (the inside cad containment)
+print "a_point_aligned_with_every_corner_is_still_decided" as a line
+
+set cylinder to the cad cylinder body at (a classification point 10.0 5.0 -2.0) with radius 3.0 and height 14.0
+check cad classification (cylinder's valid)
+check classification of (a classification point 10.0 5.0 5.0) in (cylinder's value) within 1e-9 is (the inside cad containment)
+check classification of (a classification point 5.0 0.0 5.0) in (cylinder's value) within 1e-9 is (the outside cad containment)
+check classification of (a classification point 13.0 5.0 5.0) in (cylinder's value) within 1e-9 is (the boundary cad containment)
+print "a_cylinder_uses_its_periodic_face_boundary" as a line
+
+set moved to the cad cuboid at (a classification point 100.0 200.0 300.0) with size (a classification point 2.0 2.0 2.0)
+check cad classification (moved's valid)
+check classification of (a classification point 101.0 201.0 301.0) in (moved's value) within 1e-9 is (the inside cad containment)
+check classification of (the cad zero vector3) in (moved's value) within 1e-9 is (the outside cad containment)
+print "a_box_away_from_the_origin_answers_the_same" as a line
+
+set surveyOrigin to a classification point 512345.678 4512345.678 91.5
+set survey to the cad cuboid at surveyOrigin with size (a classification point 4.0 4.0 4.0)
+check cad classification (survey's valid)
+check classification of (a classification point 512347.678 4512347.678 93.5) in (survey's value) within 1e-6 is (the inside cad containment)
+check classification of (a classification point 512365.678 4512347.678 93.5) in (survey's value) within 1e-6 is (the outside cad containment)
+print "survey_coordinates_do_not_change_the_answer" as a line
+
+set unsupported to the cad cuboid at (the cad zero vector3) with size (a classification point 10.0 10.0 10.0)
+set unsupportedFaces to the cad face keys of (unsupported's value)
+set unsupportedFace to the cad node pointer for (the item at 0 in unsupportedFaces) in (unsupported's value)
+replace cad node (unsupportedFace's surface) in (unsupported's value) with (the cad surface of (a cad torus with frame (the cad xy plane), major radius 10.0 and minor radius 2.0))
+free unsupportedFaces
+check classification of (a classification point 5.0 5.0 5.0) in (unsupported's value) within 1e-9 is (the unknown cad containment)
+print "a_body_with_a_surface_that_cannot_be_cast_says_so" as a line
+
+set sphereSurface to the cad surface of (a cad sphere with frame (the cad xy plane) and radius 5.0)
+set through to the cad ray hits of sphereSurface from (a classification point -20.0 0.0 0.0) along (the cad x axis)
+check cad classification (through's valid)
+check cad classification ((the length of (through's values)) = 2)
+check cad classification ((the absolute value of ((the item at 0 in (through's values)) - 15.0)) < 1e-9)
+check cad classification ((the absolute value of ((the item at 1 in (through's values)) - 25.0)) < 1e-9)
+set grazing to the cad ray hits of sphereSurface from (a classification point -20.0 5.0 0.0) along (the cad x axis)
+check cad classification ((grazing's valid) and ((the length of (grazing's values)) = 1))
+set missing to the cad ray hits of sphereSurface from (a classification point -20.0 9.0 0.0) along (the cad x axis)
+check cad classification ((missing's valid) and ((the length of (missing's values)) = 0))
+print "a_ray_hits_a_sphere_twice_and_a_tangent_once" as a line
+
+set cylinderSurface to the cad surface of (a cad cylinder with base (the cad xy plane) and radius 5.0)
+set cylinderHits to the cad ray hits of cylinderSurface from (a classification point -20.0 3.0 7.0) along (the cad x axis)
+check cad classification ((cylinderHits's valid) and ((the length of (cylinderHits's values)) = 2))
+check cad classification ((the absolute value of (((the item at 1 in (cylinderHits's values)) - (the item at 0 in (cylinderHits's values))) - 8.0)) < 1e-9)
+print "a_ray_hits_a_cylinder_where_the_chord_says" as a line
+
+set coneSurface to the cad surface of (a cad cone with base (the cad xy plane), radius 10.0 and half angle 0.7853981633974483)
+set coneHits to the cad ray hits of coneSurface from (a classification point 4.0 0.0 0.0) along (the cad z axis)
+check cad classification ((coneHits's valid) and ((the length of (coneHits's values)) = 2))
+check cad classification ((the absolute value of ((the item at 0 in (coneHits's values)) - 6.0)) < 1e-9)
+check cad classification ((the absolute value of ((the item at 1 in (coneHits's values)) - 14.0)) < 1e-9)
+print "a_ray_up_a_cone_meets_it_where_the_radius_matches" as a line
+
+set planeSurface to the cad surface of (the cad xy plane)
+check cad parameter inversion on planeSurface at 0.3 1.0
+check cad parameter inversion on planeSurface at 2.0 -2.0
+check cad parameter inversion on planeSurface at -1.5 0.7
+check cad parameter inversion on cylinderSurface at 0.3 1.0
+check cad parameter inversion on cylinderSurface at 2.0 -2.0
+check cad parameter inversion on cylinderSurface at -1.5 0.7
+set inversionCone to the cad surface of (a cad cone with base (the cad xy plane), radius 8.0 and half angle 0.4)
+check cad parameter inversion on inversionCone at 0.3 1.0
+check cad parameter inversion on inversionCone at 2.0 -2.0
+check cad parameter inversion on inversionCone at -1.5 0.7
+set inversionSphere to the cad surface of (a cad sphere with frame (the cad xy plane) and radius 6.0)
+check cad parameter inversion on inversionSphere at 0.3 1.0
+check cad parameter inversion on inversionSphere at 2.0 -2.0
+check cad parameter inversion on inversionSphere at -1.5 0.7
+print "the_parameters_of_a_point_invert_its_evaluation" as a line

@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/curve3.dl
+
+function curve argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function curve point argument {integer:index}:
+    execute:
+        return a cad vector3 with x (curve argument index), y (curve argument (index + 1)) and z (curve argument (index + 2))
+
+function emit curve scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit curve vector {cad vector3:value}:
+    execute:
+        emit curve scalar (the x of value)
+        emit curve scalar (the y of value)
+        emit curve scalar (the z of value)
+
+set mode to (curve argument 0) as an integer
+if mode = 0:
+    set controls to an empty list of a cad vector3
+    set count to (curve argument 1) as an integer
+    loop index from 0 to count:
+        append (curve point argument (4 + (3 * index))) to controls
+    emit curve vector (the cad bezier point of controls at (curve argument 2))
+    set points to the cad bezier samples of controls with ((curve argument 3) as an integer) segments
+    emit curve scalar (the length of points)
+    loop index from 0 to (the length of points):
+        emit curve vector (the item at index in points)
+    free points
+    free controls
+else if mode = 1:
+    set a to curve point argument 1
+    set b to curve point argument 4
+    set c to curve point argument 7
+    emit curve vector (the cad curvature through a, b and c)
+    set bisector to the cad angle bisector of a and b with normal c
+    emit curve scalar ((the valid of bisector) as an integer)
+    if the valid of bisector:
+        emit curve vector (the value of bisector)
+else:
+    emit curve scalar ((cad segments from (curve point argument 1) to (curve point argument 4) and from (curve point argument 7) to (curve point argument 10) overlap within (curve argument 13)) as an integer)

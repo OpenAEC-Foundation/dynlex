@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft.dl
+
+function loft argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function emit loft number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit loft flag {boolean:value}:
+    execute:
+        emit loft number (value as an integer)
+function emit loft point {cad vector3:point}:
+    execute:
+        emit loft number (point's x)
+        emit loft number (point's y)
+        emit loft number (point's z)
+function emit loft plane {cad plane:plane}:
+    execute:
+        emit loft point (plane's origin)
+        emit loft point (plane's xAxis)
+        emit loft point (plane's yAxis)
+function emit loft provenance {cad provenance:value}:
+    execute:
+        emit loft number (value's kind)
+        emit loft number (value's reference's index)
+function emit loft keys {a pointer to a list:values}:
+    execute:
+        emit loft number (the length of values)
+        loop index from 0 to the length of values:
+            emit loft number (the cad slot of (the item at index in values))
+function emit loft arena {a pointer to a cad arena:nodes}:
+    execute:
+        emit loft number (the cad count of nodes)
+        set keys to the cad keys of nodes
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            emit loft number (key's index)
+            set nodeAddress to the cad node pointer for key in nodes
+            emit loft node (@intrinsic("dereference", nodeAddress))
+        free keys
+
+function emit loft node {cad vertex:value}:
+    execute:
+        emit loft point (value's point)
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad edge:value}:
+    execute:
+        emit loft number (the cad slot of (value's curve))
+        emit loft number (value's startParameter)
+        emit loft number (value's endParameter)
+        emit loft number (the cad slot of (value's start))
+        emit loft number (the cad slot of (value's end))
+        emit loft keys (value's coedges's values)
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad coedge:value}:
+    execute:
+        emit loft number (the cad slot of (value's edge))
+        emit loft flag (value's forward)
+        emit loft flag (value's pcurve's valid)
+        if value's pcurve's valid:
+            set line to value's pcurve's value's line
+            emit loft number (line's start's x)
+            emit loft number (line's start's y)
+            emit loft number (line's end's x)
+            emit loft number (line's end's y)
+        emit loft number (the cad slot of (value's owner))
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad loop:value}:
+    execute:
+        emit loft keys (value's coedges's values)
+        emit loft number (the cad slot of (value's owner))
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad face:value}:
+    execute:
+        emit loft number (the cad slot of (value's surface))
+        emit loft flag (value's forward)
+        emit loft keys (value's loops's values)
+        emit loft number (the cad slot of (value's owner))
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad shell:value}:
+    execute:
+        emit loft keys (value's faces's values)
+        emit loft number (the cad slot of (value's owner))
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad lump:value}:
+    execute:
+        emit loft keys (value's shells's values)
+        emit loft provenance (value's provenance)
+
+function emit loft node {cad edge curve3:value}:
+    execute:
+        emit loft number (value's kind)
+        if (value's kind) = 0:
+            emit loft point (value's line's origin)
+            emit loft point (value's line's direction)
+        else if (value's kind) = 1:
+            emit loft plane (value's circle's plane)
+            emit loft number (value's circle's radius)
+        else if (value's kind) = 4:
+            set curve to value's nurbs
+            emit loft number (curve's degree)
+            emit loft number (the length of (curve's controls))
+            loop i from 0 to the length of (curve's controls):
+                emit loft point (the item at i in (curve's controls))
+            emit loft scalars (curve's knots)
+            emit loft scalars (curve's weights)
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+function emit loft node {cad surface:value}:
+    execute:
+        emit loft number (value's kind)
+        if (value's kind) = 0:
+            emit loft plane (value's plane)
+        else if (value's kind) = 1:
+            emit loft plane (value's cylinder's base)
+            emit loft number (value's cylinder's radius)
+        else if (value's kind) = 2:
+            emit loft plane (value's cone's base)
+            emit loft number (value's cone's radius)
+            emit loft number (value's cone's halfAngle)
+        else if (value's kind) = 3:
+            emit loft plane (value's sphere's frame)
+            emit loft number (value's sphere's radius)
+        else if (value's kind) = 5:
+            set surface to value's nurbs
+            emit loft number (surface's uDegree)
+            emit loft number (surface's vDegree)
+            emit loft number (the length of (surface's controls))
+            loop i from 0 to the length of (surface's controls):
+                set row to the item at i in (surface's controls)
+                emit loft number (the length of row)
+                loop j from 0 to the length of row:
+                    emit loft point (the item at j in row)
+            emit loft scalars (surface's uKnots)
+            emit loft scalars (surface's vKnots)
+            emit loft number (the length of (surface's weights))
+            loop i from 0 to the length of (surface's weights):
+                emit loft scalars (the item at i in (surface's weights))
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+
+function emit loft scalars {a pointer to a list:values}:
+    execute:
+        emit loft number (the length of values)
+        loop index from 0 to the length of values:
+            emit loft number (the item at index in values)
+
+function emit loft body {cad body:body}:
+    execute:
+        emit loft provenance (body's provenance)
+        emit loft keys (body's roots)
+        emit loft arena (body's vertices)
+        emit loft arena (body's edges)
+        emit loft arena (body's coedges)
+        emit loft arena (body's loops)
+        emit loft arena (body's faces)
+        emit loft arena (body's shells)
+        emit loft arena (body's lumps)
+        emit loft arena (body's curves)
+        emit loft arena (body's surfaces)
+        emit loft number (the cad euler characteristic of body)
+        set flaws to the cad flaws of body
+        emit loft number (the length of flaws)
+        free flaws
+

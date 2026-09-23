@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: MPL-2.0
+# Seven source tests from cadkernel src/space/polygon.rs, plus empty-chain checks.
+# Source revision: 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/polygon3.dl
+
+function check polygon {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function check polygon scalar {a number:actual} against {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        check polygon ((the absolute value of (actual - expected)) <= tolerance) named label
+
+function the polygon square:
+    execute:
+        set ring to an empty list of a cad vector3
+        append (the cad zero vector3) to ring
+        append (a cad vector3 with x 10, y 0 and z 0) to ring
+        append (a cad vector3 with x 10, y 10 and z 0) to ring
+        append (a cad vector3 with x 0, y 10 and z 0) to ring
+        return ring
+
+set square to the polygon square
+check polygon scalar (the cad ring area of square) against 100.0 within 1e-9 named "flat square area"
+check polygon scalar (the cad ring perimeter of square) against 40.0 within 1e-9 named "flat square perimeter"
+set forward to the cad ring normal of square
+check polygon (the valid of forward) named "forward normal exists"
+check polygon scalar (the z of (the value of forward)) against 1.0 within 0.0 named "forward normal direction"
+print "cadkernel polygon3: flat square" as a line
+
+append (the item at 0 in square) to square
+check polygon scalar (the cad ring area of square) against 100.0 within 1e-9 named "repeated closure area"
+check polygon scalar (the cad ring perimeter of square) against 40.0 within 1e-9 named "repeated closure perimeter"
+print "cadkernel polygon3: repeated closure" as a line
+
+set tilted to an empty list of a cad vector3
+set diagonal to 0.7071067811865476
+append (the cad zero vector3) to tilted
+append (a cad vector3 with x 10, y 0 and z 0) to tilted
+append (a cad vector3 with x 10, y (10.0 * diagonal) and z (10.0 * diagonal)) to tilted
+append (a cad vector3 with x 0, y (10.0 * diagonal) and z (10.0 * diagonal)) to tilted
+check polygon scalar (the cad ring area of tilted) against 100.0 within 1e-9 named "tilted area"
+set tiltedNormal to the cad ring normal of tilted
+check polygon (the valid of tiltedNormal) named "tilted normal exists"
+check polygon scalar (the y of (the value of tiltedNormal)) against (the negative of diagonal) within 1e-9 named "tilted normal y"
+check polygon scalar (the z of (the value of tiltedNormal)) against diagonal within 1e-9 named "tilted normal z"
+print "cadkernel polygon3: tilted square" as a line
+
+set reversed to an empty list of a cad vector3
+set index to 3
+loop while index >= 0:
+    append (the item at index in square) to reversed
+    set index to (index - 1)
+set backward to the cad ring normal of reversed
+check polygon (the valid of backward) named "backward normal exists"
+check polygon scalar (the x of (the value of backward)) against 0.0 within 0.0 named "backward normal x"
+check polygon scalar (the y of (the value of backward)) against 0.0 within 0.0 named "backward normal y"
+check polygon scalar (the z of (the value of backward)) against (-1.0) within 0.0 named "backward normal z"
+print "cadkernel polygon3: winding" as a line
+
+set degenerate to an empty list of a cad vector3
+check polygon scalar (the cad ring area of degenerate) against 0.0 within 0.0 named "empty area"
+check polygon scalar (the cad ring perimeter of degenerate) against 0.0 within 0.0 named "empty perimeter"
+check polygon scalar (the cad chain length of degenerate) against 0.0 within 0.0 named "empty chain"
+append (the cad zero vector3) to degenerate
+check polygon scalar (the cad ring perimeter of degenerate) against 0.0 within 0.0 named "singleton perimeter"
+check polygon scalar (the cad chain length of degenerate) against 0.0 within 0.0 named "singleton chain"
+append (the cad x axis) to degenerate
+check polygon scalar (the cad ring area of degenerate) against 0.0 within 0.0 named "two point area"
+check polygon scalar (the cad ring perimeter of degenerate) against 2.0 within 0.0 named "two point perimeter"
+append ((the cad x axis) scaled by 2.0) to degenerate
+check polygon scalar (the cad ring area of degenerate) against 0.0 within 0.0 named "collinear area"
+set absent to the cad ring normal of degenerate
+check polygon (the inverse of (the valid of absent)) named "collinear normal absent"
+print "cadkernel polygon3: degenerate rings" as a line
+
+set chain to an empty list of a cad vector3
+append (the cad zero vector3) to chain
+append (a cad vector3 with x 3, y 0 and z 0) to chain
+append (a cad vector3 with x 3, y 4 and z 0) to chain
+check polygon scalar (the cad chain length of chain) against 7.0 within 1e-12 named "open chain"
+check polygon scalar (the cad ring perimeter of chain) against 12.0 within 1e-12 named "closing edge"
+print "cadkernel polygon3: open chain" as a line
+
+set shifted to an empty list of a cad vector3
+set origin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set index to 0
+loop while index < 4:
+    append (the cad sum of origin and (the item at index in square)) to shifted
+    set index to (index + 1)
+check polygon scalar (the cad ring area of shifted) against 100.0 within 1e-6 named "survey area"
+print "cadkernel polygon3: survey coordinates" as a line
+
+free square
+free tilted
+free reversed
+free degenerate
+free chain
+free shifted

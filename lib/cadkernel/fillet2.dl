@@ -1,0 +1,185 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/fillet.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Keep directions select the corner; the ray form expects unit directions.
+# The general form retains source offset order and first-wins deduplication.
+# Inputs are borrowed. Returned lists contain scalar records and are caller-owned.
+import lib/cadkernel/cross2.dl
+
+class:
+    patterns:
+        [a|] cad fillet2
+    members:
+        tangent1 as a cad vector2
+        tangent2 as a cad vector2
+        centre as a cad vector2
+        startAngle as a 64 bit floating-point number
+        endAngle as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad fillet2 result
+    members:
+        valid as a boolean
+        value as a cad fillet2
+
+local function cad fillet2 point {cad vector2:left} equals {cad vector2:right}:
+    execute:
+        return (left's x = right's x) and (left's y = right's y)
+function {cad fillet2:left} = {cad fillet2:right}:
+    execute:
+        return (((cad fillet2 point left's tangent1 equals right's tangent1) and (cad fillet2 point left's tangent2 equals right's tangent2)) and (cad fillet2 point left's centre equals right's centre)) and ((left's startAngle = right's startAngle) and (left's endAngle = right's endAngle))
+function the cad clone of {cad fillet2:shape}:
+    execute:
+        return shape
+
+function the cad [fillet] at {cad vector2:apex} [along] {cad vector2:direction1} and {cad vector2:direction2} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set cosine to the cad dot of direction1 and direction2
+        clamp cosine between -1.0 and 1.0
+        set corner to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, cosine)
+        if (corner < 1e-6) or ((the absolute value of (corner - 3.141592653589793)) < 1e-6):
+            return a new cad fillet2 result
+        if radius < 1e-9:
+            return a new cad fillet2 result
+        set half to corner / 2.0
+        set along to radius / (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, half))
+        set tangent1 to the cad sum of apex and (direction1 scaled by along)
+        set tangent2 to the cad sum of apex and (direction2 scaled by along)
+        set bisector to the cad normalization of (the cad sum of direction1 and direction2)
+        if bisector's valid = false:
+            return a new cad fillet2 result
+        set centre to the cad sum of apex and (bisector's value scaled by (radius / (the sine of half)))
+        set angle1 to the cad angle of (the cad difference of tangent1 and centre)
+        set angle2 to the cad angle of (the cad difference of tangent2 and centre)
+        set start to angle1
+        set end to angle2
+        if ((the cad cross of direction1 and direction2) <= 0.0) = false:
+            set start to angle2
+            set end to angle1
+        set fillet to @intrinsic("construct", a cad fillet2, tangent1, tangent2, centre, the cad normalized angle of start, the cad normalized angle of end)
+        return @intrinsic("construct", a cad fillet2 result, true, fillet)
+
+local function append cad fillet2 concentric offsets at {cad vector2:centre} with radius {a 64 bit floating-point number:own} displaced by {a 64 bit floating-point number:radius} to {a pointer to a list:curves}:
+    execute:
+        set radii to [own + radius, the absolute value of (own - radius)]
+        loop index from 0 to 2:
+            set size to the item at index in radii
+            if size > 1e-12:
+                append (the cad curve2 of (a cad circle2 at centre with radius size)) to curves
+local function append cad fillet2 offsets of {cad curve2:shape} by {a 64 bit floating-point number:radius} to {a pointer to a list:curves}:
+    execute:
+        if shape is cad straight:
+            set ray to the cad ray of shape
+            if ray's valid = false:
+                return false
+            set unit to the cad normalization of ray's value's direction
+            if unit's valid = false:
+                return false
+            set across to the cad perpendicular of unit's value
+            set sides to [1.0,-1.0]
+            loop index from 0 to 2:
+                set side to the item at index in sides
+                set origin to the cad sum of ray's value's origin and (across scaled by (radius * side))
+                append (the cad curve2 of (a cad xline2 through origin along ray's value's direction)) to curves
+            return true
+        if shape's kind = 1:
+            append cad fillet2 concentric offsets at shape's circle's centre with radius shape's circle's radius displaced by radius to curves
+            return true
+        if shape's kind = 2:
+            append cad fillet2 concentric offsets at shape's arc's centre with radius shape's arc's radius displaced by radius to curves
+            return true
+        return false
+
+local function cad fillet2 total order key of {a 64 bit floating-point number:value}:
+    execute:
+        set bits to the value at ((the address of value) as a pointer to a 64 bit integer)
+        if bits < 0:
+            return bits bitwise xor (9223372036854775807 as a 64 bit integer)
+        return bits
+local function cad fillet2 circle touch at {cad vector2:middle} with radius {a 64 bit floating-point number:own} from {cad vector2:centre} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set out to the cad normalization of (the cad difference of centre and middle)
+        if out's valid = false:
+            return a new cad normalization2
+        set delta to out's value scaled by own
+        set first to the cad sum of middle and delta
+        set second to the cad difference of middle and delta
+        set a to the absolute value of ((the cad distance from first to centre) - radius)
+        set b to the absolute value of ((the cad distance from second to centre) - radius)
+        if (cad fillet2 total order key of b) < (cad fillet2 total order key of a):
+            return @intrinsic("construct", a cad normalization2, true, second)
+        return @intrinsic("construct", a cad normalization2, true, first)
+
+local function cad fillet2 [touch] on {cad curve2:curve} from {cad vector2:centre} with radius {a 64 bit floating-point number:radius} within {cad tolerance:tolerance}:
+    execute:
+        set touch to the cad zero vector2
+        if curve is cad straight:
+            set ray to the cad ray of curve
+            if ray's valid = false:
+                return a new cad normalization2
+            set origin to ray's value's origin
+            set along to ray's value's direction
+            set squared to the cad squared length of along
+            if squared <= 0.0:
+                return a new cad normalization2
+            set parameter to (the cad dot of (the cad difference of centre and origin) and along) / squared
+            set touch to the cad sum of origin and (along scaled by parameter)
+        else if curve's kind = 1 or curve's kind = 2:
+            set middle to curve's circle's centre
+            set own to curve's circle's radius
+            if curve's kind = 2:
+                set middle to curve's arc's centre
+                set own to curve's arc's radius
+            set candidate to cad fillet2 circle touch at middle with radius own from centre with radius radius
+            if candidate's valid = false:
+                return a new cad normalization2
+            set touch to candidate's value
+        else:
+            return a new cad normalization2
+        set offBy to the absolute value of ((the cad distance from touch to centre) - radius)
+        return @intrinsic("construct", a cad normalization2, offBy <= tolerance's linear, touch)
+
+local function cad fillet2 arc at {cad vector2:centre} through {cad vector2:tangent1} and {cad vector2:tangent2}:
+    execute:
+        set angle1 to the cad angle of (the cad difference of tangent1 and centre)
+        set angle2 to the cad angle of (the cad difference of tangent2 and centre)
+        set forward to cad arc span from angle1 to angle2
+        set start to angle1
+        set end to angle2
+        if (forward <= 3.141592653589793) = false:
+            set start to angle2
+            set end to angle1
+        return @intrinsic("construct", a cad fillet2, tangent1, tangent2, centre, the cad normalized angle of start, the cad normalized angle of end)
+
+function the cad fillets between {cad curve2:a} and {cad curve2:b} with radius {a 64 bit floating-point number:radius} within {cad tolerance:tolerance}:
+    execute:
+        set output to an empty list of a cad fillet2
+        if ((radius <= 0.0) or (radius != radius)) or ((the absolute value of radius) > 1.7976931348623157e308):
+            return output
+        set firstOffsets to an empty list of a cad curve2
+        set secondOffsets to an empty list of a cad curve2
+        set firstValid to append cad fillet2 offsets of a by radius to firstOffsets
+        set secondValid to append cad fillet2 offsets of b by radius to secondOffsets
+        if firstValid and secondValid:
+            loop firstIndex from 0 to the length of firstOffsets:
+                set first to the item at firstIndex in firstOffsets
+                loop secondIndex from 0 to the length of secondOffsets:
+                    set second to the item at secondIndex in secondOffsets
+                    set crossings to the cad crossings of first and second within tolerance
+                    loop index from 0 to the length of crossings:
+                        set crossing to the item at index in crossings
+                        set centre to crossing's point
+                        set tangent1 to cad fillet2 touch on a from centre with radius radius within tolerance
+                        if tangent1's valid:
+                            set tangent2 to cad fillet2 touch on b from centre with radius radius within tolerance
+                            if tangent2's valid:
+                                set duplicate to false
+                                loop keptIndex from 0 to the length of output:
+                                    set kept to the item at keptIndex in output
+                                    if (the cad distance from kept's centre to centre) <= tolerance's linear:
+                                        set duplicate to true
+                                if duplicate = false:
+                                    append (cad fillet2 arc at centre through tangent1's value and tangent2's value) to output
+                    free crossings
+        free firstOffsets
+        free secondOffsets
+        return output

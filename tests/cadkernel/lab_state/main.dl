@@ -1,0 +1,60 @@
+import examples/dynedra/state.dl
+
+function check lab state {boolean:condition}:
+    execute:
+        if condition = false:
+            print "Dynedra state assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set state to the initial lab state
+set state to the lab state after action 0 from state
+check lab state (state's changed = false)
+set state to the lab state after action 5 from state
+check lab state state's changed
+check lab state (state's settings's weight > 0.707)
+set state to the lab state after action 13 from state
+check lab state (state's changed = false)
+check lab state (state's yaw > 0.4)
+set state to the lab state after action 3 from state
+check lab state state's changed
+set state to the lab state after action 4 from state
+check lab state (state's settings's height = 1.25)
+set state to the lab state after action 9 from state
+check lab state (state's controls = false)
+check lab state (state's changed = false)
+loop index from 0 to 12:
+    set state to the lab state after action 6 from state
+check lab state (state's settings's samples = 8)
+set state to the lab state after action 6 from state
+check lab state (state's changed = false)
+loop index from 0 to 12:
+    set state to the lab state after action 7 from state
+check lab state (state's settings's samples = 512)
+set state to the lab state after action 8 from state
+check lab state state's changed
+check lab state (state's settings's operation = 0)
+check lab state (state's settings's samples = 128)
+check lab state state's controls
+set state's yaw to 0.0
+set state's pitch to 0.0
+set point to the lab projection of (the lab point 2.0 3.0 4.0) with state
+check lab state ((point's x = 2.0) and (point's y = 4.0))
+set state to the lab state after action 16 from state
+check lab state (state's settings's operation = 4)
+set state to the lab state after action 7 from state
+check lab state (state's changed = false)
+loop index from 0 to 40:
+    set state to the lab state after action 5 from state
+check lab state (state's settings's height = 4.0)
+set state to the lab state after action 17 from state
+check lab state (state's settings's operation = 5)
+check lab state (state's settings's height = 3.0)
+loop index from 0 to 40:
+    set state to the lab state after action 4 from state
+check lab state (state's settings's height = 0.1)
+set state to the lab state after action 7 from state
+check lab state state's changed
+check lab state ((the lab scenario action for 4) = 16)
+check lab state ((the lab scenario action for 5) = 17)
+check lab state ((the lab scenario action for 2) = 2)
+print "Dynedra state checks passed" as a line

@@ -1,0 +1,2 @@
+Dynedra graphics checks passed
+Dynedra solid graphics and input checks passed: eight shaded meshes

@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft/input.dl
+import tests/cadkernel/brep_loft/emit.dl
+allocate one slot of (a new loft input reader) and set reader to it
+set mode to (loft next reader) as an integer
+set ordered to mode != 0
+set sections to loft read sections from reader
+@intrinsic("call", "libc", "free", nothing, reader)
+if mode < 2:
+    loop index from 0 to the length of (sections's values):
+        set section to the item at index in (sections's values)
+        set senses to the cad profile senses of (section's profile's values)
+        emit loft flag (senses's valid)
+        if senses's valid:
+            loop item from 0 to the length of (senses's value's values):
+                emit loft flag (the item at item in (senses's value's values))
+        set senses to the cad path senses of (section's profile's values)
+        emit loft flag (senses's valid)
+        if senses's valid:
+            loop item from 0 to the length of (senses's value's values):
+                emit loft flag (the item at item in (senses's value's values))
+set made to no cad body
+if ordered:
+    set made to the ordered cad polygon loft through (sections's values)
+else:
+    set made to the cad loft through (sections's values)
+emit loft flag (made's valid)
+if made's valid:
+    emit loft body (made's value)

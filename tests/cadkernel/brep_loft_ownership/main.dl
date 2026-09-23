@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft/helpers.dl
+
+function returned loft section:
+    execute:
+        set profile to loft test ellipse
+        return a cad loft section on (the cad xy plane) with profile (profile's values)
+function returned loft body:
+    execute:
+        set section to returned loft section
+        set last to the cad clone of section
+        set last's plane to loft test frame at 3.0
+        set sections to a list containing section
+        append last to sections
+        set made to the cad loft through sections
+        free sections
+        return made
+
+set profile to loft test rectangle
+set section to a cad loft section on (the cad xy plane) with profile (profile's values)
+check loft ((section's profile's values) != (profile's values))
+set saved to the item at 0 in (section's profile's values)
+replace item at index 0 in (profile's values) with (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 10.0))
+check loft ((the item at 0 in (section's profile's values)) = saved)
+set profile to a new (the type of profile)
+check loft ((the length of (section's profile's values)) = 4)
+print "section_copies_the_input_list_and_outlives_its_owner" as a line
+
+set copied to section
+set cloned to the cad clone of section
+check loft ((copied's profile's values) = (section's profile's values))
+check loft ((cloned's profile's values) != (section's profile's values))
+replace item at index 0 in (section's profile's values) with (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 10.0))
+check loft (((the item at 0 in (copied's profile's values))'s kind) = 1)
+check loft ((the item at 0 in (cloned's profile's values)) = saved)
+set section to a new (the type of section)
+check loft ((the length of (copied's profile's values)) = 4)
+check loft ((the length of (cloned's profile's values)) = 4)
+print "section_copies_retain_while_clones_own_independent_lists" as a line
+
+set returned to returned loft section
+set rational to the cad rational builder of (the item at 0 in (returned's profile's values))
+check loft (rational's valid)
+set curve to the cad curve of (rational's value)
+check loft (curve's valid)
+set splineProfile to a list containing (the cad curve2 of (curve's value))
+set splineSection to a cad loft section on (the cad xy plane) with profile splineProfile
+free splineProfile
+set splineClone to the cad clone of splineSection
+set firstCurve to the item at 0 in (splineSection's profile's values)
+set cloneCurve to the item at 0 in (splineClone's profile's values)
+check loft ((firstCurve's nurbs's controls) != (cloneCurve's nurbs's controls))
+check loft ((firstCurve's nurbs's knots) != (cloneCurve's nurbs's knots))
+check loft ((firstCurve's nurbs's weights) != (cloneCurve's nurbs's weights))
+check loft (firstCurve = cloneCurve)
+set splineSection to a new (the type of splineSection)
+check loft ((the length of (cloneCurve's nurbs's controls)) = 3)
+print "section_clone_deep_copies_managed_curve_storage" as a line
+
+set made to returned loft body
+check loft (made's valid)
+set body to made's value
+set independent to the cad clone of body
+set made to no cad body
+check loft topology body
+check loft topology independent
+set keys to the cad keys of (body's vertices)
+set firstKey to the item at 0 in keys
+free keys
+set original to the cad node pointer for firstKey in (body's vertices)
+set cloneNode to the cad node pointer for firstKey in (independent's vertices)
+set original's point's x to 99.0
+check loft ((cloneNode's point's x) != 99.0)
+set body to a new (the type of body)
+check loft topology independent
+print "returned_bodies_survive_sections_and_deep_clone_independently" as a line
+
+loop iteration from 0 to 20:
+    set temporary to returned loft body
+    check loft (temporary's valid)
+    set copy to temporary
+    set temporary to no cad body
+    check loft topology (copy's value)
+print "repeated_nested_construction_and_reset_preserves_ownership" as a line

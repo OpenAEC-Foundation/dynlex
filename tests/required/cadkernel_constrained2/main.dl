@@ -1,0 +1,105 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port fixture for geom2d/constrained.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/constrained2.dl
+
+function check constrained fixture {boolean:passed} named {C string:label}:
+    execute:
+        if the inverse of passed:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function the constrained fixture area of {a pointer to a list:triangles}:
+    execute:
+        set areaValue to 0.0
+        loop triangleIndex from 0 to the length of triangles:
+            set triangleValue to the item at triangleIndex in triangles
+            set ab to the cad difference of triangleValue's second and triangleValue's first
+            set ac to the cad difference of triangleValue's third and triangleValue's first
+            set areaValue to areaValue + ((the absolute value of (the cad cross of ab and ac)) * 0.5)
+        return areaValue
+
+function constrained fixture near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
+    execute:
+        check constrained fixture ((the absolute value of (actual - expected)) < 1e-9) named "area mismatch"
+
+set outer to an empty list of a cad vector2
+append (a cad vector2 with x 0.0 and y 0.0) to outer
+append (a cad vector2 with x 10.0 and y 0.0) to outer
+append (a cad vector2 with x 10.0 and y 10.0) to outer
+append (a cad vector2 with x 0.0 and y 10.0) to outer
+set rings to an empty list of the type of outer
+append outer to rings
+set built to the cad constrained mesh of rings rings
+check constrained fixture (the valid of built) named "rectangle construction"
+set meshValue to the value of built
+set triangles to the cad constrained triangles of meshValue
+check constrained fixture ((the length of triangles) = 2) named "rectangle triangle count"
+constrained fixture near (the constrained fixture area of triangles) to 100.0
+free triangles
+
+set inserted to the cad constrained insertion of point (a cad vector2 with x 5.0 and y 5.0) into (the address of meshValue)
+check constrained fixture ((the valid of inserted) and (the inserted of inserted)) named "centre insertion"
+set inserted to the cad constrained insertion of point (a cad vector2 with x 5.0 and y 5.0) into (the address of meshValue)
+check constrained fixture ((the valid of inserted) and ((the inserted of inserted) = false)) named "duplicate insertion"
+set triangles to the cad constrained triangles of meshValue
+check constrained fixture ((the length of triangles) = 4) named "inserted triangle count"
+constrained fixture near (the constrained fixture area of triangles) to 100.0
+free triangles
+free cad constrained mesh meshValue
+free cad constrained mesh result built
+
+# Crossing constraints are split at the crossing and remain marked on both sides.
+set built to the cad constrained mesh of rings rings
+set meshValue to the value of built
+set horizontal to the cad constrained constraint from (a cad vector2 with x 0.0 and y 5.0) to (a cad vector2 with x 10.0 and y 5.0) in (the address of meshValue)
+check constrained fixture ((the valid of horizontal) and ((the added of horizontal) = 2)) named "horizontal constraint"
+set vertical to the cad constrained constraint from (a cad vector2 with x 5.0 and y 0.0) to (a cad vector2 with x 5.0 and y 10.0) in (the address of meshValue)
+check constrained fixture ((the valid of vertical) and ((the added of vertical) = 3)) named "crossing constraint"
+set triangles to the cad constrained triangles of meshValue
+check constrained fixture ((the length of triangles) = 8) named "constrained cell count"
+constrained fixture near (the constrained fixture area of triangles) to 100.0
+free triangles
+free cad constrained mesh meshValue
+free cad constrained mesh result built
+
+# A hole bridge is only triangulation bookkeeping and leaves no extra vertex.
+set hole to an empty list of a cad vector2
+append (a cad vector2 with x 3.0 and y 3.0) to hole
+append (a cad vector2 with x 7.0 and y 3.0) to hole
+append (a cad vector2 with x 7.0 and y 7.0) to hole
+append (a cad vector2 with x 3.0 and y 7.0) to hole
+append hole to rings
+set built to the cad constrained mesh of rings rings
+set meshValue to the value of built
+set triangles to the cad constrained triangles of meshValue
+check constrained fixture ((the length of triangles) = 8) named "hole triangle count"
+constrained fixture near (the constrained fixture area of triangles) to 84.0
+free triangles
+set inserted to the cad constrained insertion of point (a cad vector2 with x 2.0 and y 2.0) into (the address of meshValue)
+check constrained fixture ((the valid of inserted) and (the inserted of inserted)) named "hole-domain insertion"
+set triangles to the cad constrained triangles of meshValue
+check constrained fixture ((the length of triangles) = 10) named "hole insertion count"
+constrained fixture near (the constrained fixture area of triangles) to 84.0
+free triangles
+free cad constrained mesh meshValue
+free cad constrained mesh result built
+remove item 1 from rings
+free hole
+
+# A proper boundary crossing cannot be represented by try_add_constraint.
+set bowtie to an empty list of a cad vector2
+append (a cad vector2 with x 0.0 and y 0.0) to bowtie
+append (a cad vector2 with x 10.0 and y 10.0) to bowtie
+append (a cad vector2 with x 10.0 and y 0.0) to bowtie
+append (a cad vector2 with x 0.0 and y 10.0) to bowtie
+set invalidRings to an empty list of the type of bowtie
+append bowtie to invalidRings
+set rejected to the cad constrained mesh of rings invalidRings
+check constrained fixture ((the valid of rejected) = false) named "crossing ring rejection"
+free cad constrained mesh result rejected
+free invalidRings
+free bowtie
+
+free rings
+free outer
+print "cadkernel constrained2: PASS" as a line

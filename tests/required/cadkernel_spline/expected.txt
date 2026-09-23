@@ -1,0 +1,4 @@
+cadkernel spline de Boor fixtures passed
+cadkernel spline open interpolation fixtures passed
+cadkernel spline periodic interpolation fixtures passed
+cadkernel spline degenerate fixtures passed

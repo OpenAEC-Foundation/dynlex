@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arrangement2.dl
+import tests/cadkernel/arclength2/input.dl
+
+function arrangement2 input tag {integer:index}:
+    execute:
+        set args to the command line arguments
+        set text to the argument at (index - 1) in args
+        return @intrinsic("call", "libc", "strtoull", a 64 bit unsigned integer, the data of text, 0 as a pointer, 10)
+
+set mode to (measure2 input 1) as an integer
+set tolerance to a cad tolerance of (measure2 input 2)
+set count to (measure2 input 3) as an integer
+set segments to an empty list of a cad line2
+set tagged to an empty list of a cad tagged line2
+set starts to an empty list of a cad vector2
+loop index from 0 to count:
+    set offset to 4 + (5 * index)
+    set segment to a cad line2 from (measure2 input point offset) to (measure2 input point (offset + 2))
+    append segment to segments
+    append (a cad tagged line2 from segment with tag (arrangement2 input tag (offset + 4))) to tagged
+    append segment's start to starts
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "a %.17g\n", the cad signed area of starts)
+if mode = 1:
+    set crossing to the cad crossing between (the item at 0 in segments) and (the item at 1 in segments) within tolerance
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "c %d %.17g %.17g %.17g %.17g %d\n", crossing's kind, crossing's aStart, crossing's aEnd, crossing's bStart, crossing's bEnd, ((the cad clone of crossing) = crossing) as an integer)
+if mode = 0:
+    set faces to the cad bounded faces of segments within tolerance
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "f %d\n", the length of faces's rings)
+    loop index from 0 to the length of faces's rings:
+        set ring to the item at index in faces's rings
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "r %d %.17g\n", the length of ring, the cad signed area of ring)
+        loop vertex from 0 to the length of ring:
+            set point to the item at vertex in ring
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "p %.17g %.17g\n", point's x, point's y)
+    set labelled to the cad bounded face edges of tagged within tolerance
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "t %d\n", the length of labelled's rings)
+    loop index from 0 to the length of labelled's rings:
+        set edges to the item at index in labelled's rings
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "r %d %.17g\n", the length of edges, the cad signed area of edges)
+        loop vertex from 0 to the length of edges:
+            set edge to the item at vertex in edges
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "e %.17g %.17g %.17g %.17g %llu\n", edge's line's start's x, edge's line's start's y, edge's line's end's x, edge's line's end's y, edge's tag)
+free starts
+free tagged
+free segments

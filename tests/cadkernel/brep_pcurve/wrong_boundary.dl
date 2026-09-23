@@ -1,0 +1,4 @@
+import lib/cadkernel/brep_pcurve.dl
+set boundary to an empty list of a cad vector3
+ignore the cad periodic band point on (the cad surface of (the cad xy plane)) bounded by boundary within 1e-9
+free boundary

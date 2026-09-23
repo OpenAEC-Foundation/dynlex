@@ -94,51 +94,6 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 }
 
 namespace {
-struct VariableAllocaSnapshotEntry {
-	VariableReference *reference = nullptr;
-	llvm::AllocaInst *alloca = nullptr;
-	std::optional<DataType> finalizedType;
-};
-static void collectVariableAllocaSnapshotEntries(
-	ParseContext &context, Section *section, std::unordered_set<VariableReference *> &visitedReferences,
-	std::vector<VariableAllocaSnapshotEntry> &entries
-) {
-	if (!section)
-		return;
-	for (const auto &[ignoredName, definitionReference] : section->variableDefinitions) {
-		(void)ignoredName;
-		if (!definitionReference || !visitedReferences.insert(definitionReference).second)
-			continue;
-		auto finalizedType = context.finalizedVariableTypes.find(definitionReference);
-		entries.push_back(
-			{definitionReference, definitionReference->alloca,
-			 finalizedType == context.finalizedVariableTypes.end() ? std::nullopt
-																   : std::optional<DataType>(finalizedType->second)}
-		);
-	}
-	for (Section *child : section->children)
-		collectVariableAllocaSnapshotEntries(context, child, visitedReferences, entries);
-}
-struct ScopedVariableAllocaRestore {
-	ParseContext &context;
-	std::vector<VariableAllocaSnapshotEntry> entries;
-	explicit ScopedVariableAllocaRestore(ParseContext &context, Section *section) : context(context) {
-		std::unordered_set<VariableReference *> visitedReferences;
-		collectVariableAllocaSnapshotEntries(context, section, visitedReferences, entries);
-	}
-	~ScopedVariableAllocaRestore() {
-		for (const VariableAllocaSnapshotEntry &entry : entries) {
-			requireCompilerInvariant(
-				entry.reference != nullptr, "ScopedVariableAllocaRestore contains null definition reference"
-			);
-			entry.reference->alloca = entry.alloca;
-			if (entry.finalizedType)
-				context.finalizedVariableTypes[entry.reference] = *entry.finalizedType;
-			else
-				context.finalizedVariableTypes.erase(entry.reference);
-		}
-	}
-};
 struct ScopedActiveFlexDefinition {
 	ParseContext &context;
 	ScopedActiveFlexDefinition(ParseContext &ctx, Section *section) : context(ctx) {
@@ -237,9 +192,9 @@ bool generateSpecializedFunction(
 		CodeLine *firstLine = section->codeLines[0];
 		llvm::DIFile *diFile = getOrCreateDIFile(context, firstLine->sourceFile);
 		unsigned line = firstLine->sourceFileLineIndex + 1;
-		auto *funcDIType =
-			context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(llvm::ArrayRef<llvm::Metadata *>{})
-			);
+		auto *funcDIType = context.diBuilder->createSubroutineType(
+			context.diBuilder->getOrCreateTypeArray(llvm::ArrayRef<llvm::Metadata *>{})
+		);
 		auto *sp = context.diBuilder->createFunction(
 			diFile, funcName, funcName, diFile, line, funcDIType, line, llvm::DINode::FlagPrototyped,
 			llvm::DISubprogram::SPFlagDefinition
@@ -305,7 +260,6 @@ bool generateSpecializedFunction(
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
-	ScopedVariableAllocaRestore functionVariableAllocas(context, section);
 
 	// Generate function body
 	requireCompilerInvariant(
@@ -582,9 +536,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (bindingIt != context.codegenParameterBindings.end())
 			return loadOwnedValue(bindingIt->second, varName + "_val");
 
-		// Local variable: load from alloca
-		if (definition->alloca)
-			return loadOwnedValue(definition->alloca, varName + "_val");
+		auto storage = context.variableStorage.find(variableStorageKey(expr));
+		if (storage != context.variableStorage.end())
+			return loadOwnedValue(storage->second, varName + "_val");
 
 		crashCompilerBug("Variable '" + varName + "' reached codegen without storage");
 	}
@@ -621,7 +575,6 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			// Push current bindings and set only this flex's parameters (scoped).
 			pushPatternCallBindingScope(context.flexBindingFrames, expr, matchedDef);
 			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
-			ScopedVariableAllocaRestore flexVariableAllocas(context, matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);

@@ -1,0 +1,4 @@
+tests/required/pure_execution_mutual_recursion_limit/main.dl:22-44: Error: Compile-time evaluation exceeded the nesting limit
+  note: while inferring call ' the first value for 0' with arguments [a 32-bit integer] -> a 32-bit integer tests/required/pure_execution_mutual_recursion_limit/main.dl:22-44
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", the first value for 0)' with arguments [a 32-bit integer] -> an unresolved value tests/required/pure_execution_mutual_recursion_limit/main.dl:1-45
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", the first value for 0)' with arguments [an unresolved value] -> an unresolved value tests/required/pure_execution_mutual_recursion_limit/main.dl:1-45

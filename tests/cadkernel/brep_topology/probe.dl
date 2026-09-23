@@ -1,0 +1,377 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep.dl
+
+function topology argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function emit topology [integer] {a number:value} named {string:label}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%s %lld\n", the data of label, value as a 64 bit integer)
+function emit topology number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "number %.17e\n", value as a 64 bit floating-point number)
+function emit topology point {cad vector3:point}:
+    execute:
+        emit topology number point's x
+        emit topology number point's y
+        emit topology number point's z
+function emit topology {cad provenance:value}:
+    execute:
+        set source to the cad source of value
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "provenance %d %d %u\n", value's kind, (cad value is reusable) as an integer, source's value's index)
+function emit topology optional {cad lookup result:found}:
+    execute:
+        if found's valid:
+            emit topology (the cad value of found)'s provenance
+        else:
+            print "provenance absent" as a line
+function emit topology flaw {cad topology flaw:flaw}:
+    execute:
+        set text to flaw's message
+        if flaw's kind = 2:
+            set text to the cad debug text of flaw's lump
+        if flaw's kind = 3:
+            set text to the cad debug text of flaw's shell
+        if flaw's kind = 4:
+            set text to the cad debug text of flaw's face
+        if (flaw's kind = 5) or (flaw's kind = 6):
+            set text to the cad debug text of flaw's ring
+        if flaw's kind >= 7:
+            set text to the cad debug text of flaw's edge
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %s\n", flaw's kind, the data of text)
+function emit topology use {cad coedge key:key} in {cad body:body}:
+    execute:
+        set partner to the cad partner of key in body
+        if partner's valid:
+            print ((the string form of "partner ") + (the cad debug text of partner's value)) as a line
+        else:
+            print "partner absent" as a line
+        set vertices to the cad coedge vertices of key in body
+        if vertices's valid:
+            set start to the cad debug text of vertices's start
+            set end to the cad debug text of vertices's end
+            ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "vertices %s %s\n", the data of start, the data of end)
+        else:
+            print "vertices absent" as a line
+function emit topology face {cad face key:key} in {cad body:body}:
+    execute:
+        set uses to the cad face coedges of key in body
+        emit topology integer (the length of uses) named "face uses"
+        loop index from 0 to the length of uses:
+            print the cad debug text of (the item at index in uses) as a line
+        free uses
+function emit topology edge {cad edge key:key} in {cad body:body}:
+    execute:
+        set endpoints to the cad edge endpoints of key in body
+        if endpoints's valid:
+            print "endpoints present" as a line
+            emit topology point endpoints's start
+            emit topology point endpoints's end
+        else:
+            print "endpoints absent" as a line
+function emit topology body {cad body:body} [face] {cad face key:faceKey} [edge] {cad edge key:edgeKey} uses {cad coedge key:first} and {cad coedge key:second} dead [face] {cad face key:deadFace} [edge] {cad edge key:deadEdge} use {cad coedge key:deadCoedge}:
+    execute:
+        emit topology integer (the cad euler characteristic of body) named "euler"
+        emit topology number (the cad worst vertex gap of body)
+        emit topology integer (the length of body's roots) named "roots"
+        set faces to the cad face keys of body
+        emit topology integer (the length of faces) named "faces"
+        loop index from 0 to the length of faces:
+            print the cad debug text of (the item at index in faces) as a line
+        free faces
+        set edges to the cad edge keys of body
+        emit topology integer (the length of edges) named "edges"
+        loop index from 0 to the length of edges:
+            print the cad debug text of (the item at index in edges) as a line
+        free edges
+        emit topology use first in body
+        emit topology use second in body
+        emit topology use deadCoedge in body
+        emit topology face faceKey in body
+        emit topology face deadFace in body
+        emit topology edge edgeKey in body
+        emit topology edge deadEdge in body
+        set flaws to the cad flaws of body
+        emit topology integer (the length of flaws) named "flaws"
+        loop index from 0 to the length of flaws:
+            emit topology flaw (the item at index in flaws)
+        free flaws
+
+set scenario to (topology argument 0) as an integer
+set scalar to topology argument 1
+set clean to the clean cad provenance of (a cad source reference for (7 as a 32 bit unsigned integer))
+set body to an empty cad body
+set body's provenance to clean
+set lump to the cad body key after inserting (a cad lump with provenance clean) into body
+append lump to body's roots
+set shell to the cad body key after inserting (a cad shell owned by lump with provenance clean) into body
+set nodeLump to the cad node pointer for lump in body
+append shell to nodeLump's shells's values
+set surface to the cad body key after inserting (the cad surface of the cad xy plane) into body
+set face to the cad body key after inserting (a cad face on surface forward true owned by shell with provenance clean) into body
+set nodeShell to the cad node pointer for shell in body
+append face to nodeShell's faces's values
+set ring to the cad body key after inserting (a cad loop owned by face with provenance clean) into body
+set nodeFace to the cad node pointer for face in body
+append ring to nodeFace's loops's values
+set start to the cad body key after inserting (a cad vertex at the cad zero vector3 with provenance clean) into body
+set end to the cad body key after inserting (a cad vertex at the cad x axis with provenance clean) into body
+set curve to the cad body key after inserting (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis)) into body
+set edge to the cad body key after inserting (a cad edge on curve from 0.0 to 1.0 between start and end with provenance clean) into body
+set first to the cad body key after inserting (a cad coedge on edge forward true with pcurve no cad pcurve owned by ring with provenance clean) into body
+set second to the cad body key after inserting (a cad coedge on edge forward false with pcurve no cad pcurve owned by ring with provenance clean) into body
+set nodeEdge to the cad node pointer for edge in body
+append first to nodeEdge's coedges's values
+append second to nodeEdge's coedges's values
+set nodeRing to the cad node pointer for ring in body
+append first to nodeRing's coedges's values
+append second to nodeRing's coedges's values
+set deadLump to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of lump in body))) into body
+ignore the cad removal of deadLump from body
+set deadShell to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of shell in body))) into body
+ignore the cad removal of deadShell from body
+set deadFace to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of face in body))) into body
+ignore the cad removal of deadFace from body
+set deadRing to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of ring in body))) into body
+ignore the cad removal of deadRing from body
+set deadEdge to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of edge in body))) into body
+ignore the cad removal of deadEdge from body
+set deadCoedge to the cad body key after inserting (the cad payload clone of (the cad value of (the cad lookup of first in body))) into body
+ignore the cad removal of deadCoedge from body
+
+if scenario = 1:
+    clear nodeLump's shells's values
+if scenario = 2:
+    append deadShell to nodeLump's shells's values
+if scenario = 3:
+    clear nodeShell's faces's values
+if scenario = 4:
+    append deadFace to nodeShell's faces's values
+if scenario = 5:
+    set nodeFace's owner to deadShell
+if scenario = 6:
+    ignore the cad removal of surface from body
+if scenario = 7:
+    clear nodeFace's loops's values
+if scenario = 8:
+    append deadRing to nodeFace's loops's values
+if scenario = 9:
+    set nodeRing's owner to deadFace
+if scenario = 10:
+    clear nodeRing's coedges's values
+if scenario = 11:
+    clear nodeRing's coedges's values
+    append first to nodeRing's coedges's values
+if scenario = 12:
+    set nodeEdge's end to start
+    clear nodeRing's coedges's values
+    append first to nodeRing's coedges's values
+if scenario = 13:
+    append deadCoedge to nodeRing's coedges's values
+if scenario = 14:
+    set use to the cad node pointer for first in body
+    set use's owner to deadRing
+if scenario = 15:
+    set use to the cad node pointer for second in body
+    set use's forward to true
+if scenario = 16:
+    ignore the cad removal of curve from body
+if scenario = 17:
+    ignore the cad removal of start from body
+if scenario = 18:
+    clear nodeEdge's coedges's values
+if scenario = 19:
+    clear nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+if scenario = 20:
+    append deadCoedge to nodeEdge's coedges's values
+if scenario = 21:
+    set use to the cad node pointer for first in body
+    set use's edge to deadEdge
+if scenario = 22:
+    clear nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+if scenario = 23:
+    clear nodeEdge's coedges's values
+    append second to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append second to nodeEdge's coedges's values
+if scenario = 24:
+    clear nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append second to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+if scenario = 25:
+    clear nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+if scenario = 26:
+    ignore the cad removal of second from body
+if scenario = 27:
+    ignore the cad removal of edge from body
+if scenario = 28:
+    ignore the cad removal of ring from body
+if scenario = 29:
+    ignore the cad removal of face from body
+if scenario = 30:
+    ignore the cad removal of shell from body
+if scenario = 31:
+    ignore the cad removal of lump from body
+if scenario = 32:
+    set nodeShell's owner to deadLump
+if scenario = 33:
+    append deadLump to body's roots
+if scenario = 34:
+    set nodeEdge's startParameter to 2.0
+if scenario = 35:
+    set vertex to the cad node pointer for end in body
+    set vertex's point's x to scalar
+if scenario = 36:
+    set nodeEdge's startParameter to scalar
+    set nodeEdge's endParameter to scalar
+if scenario = 37:
+    ignore the cad removal of surface from body
+    clear nodeFace's loops's values
+if scenario = 38:
+    clear nodeRing's coedges's values
+    append deadCoedge to nodeRing's coedges's values
+if scenario = 39:
+    set use to the cad node pointer for first in body
+    set use's owner to deadRing
+    set use to the cad node pointer for second in body
+    set use's owner to deadRing
+if scenario = 40:
+    clear nodeRing's coedges's values
+    append first to nodeRing's coedges's values
+    append first to nodeRing's coedges's values
+    append first to nodeRing's coedges's values
+if scenario = 41:
+    clear nodeFace's loops's values
+    append deadRing to nodeFace's loops's values
+    append ring to nodeFace's loops's values
+    append ring to nodeFace's loops's values
+if scenario = 42:
+    clear nodeEdge's coedges's values
+    append deadCoedge to nodeEdge's coedges's values
+    append first to nodeEdge's coedges's values
+    append second to nodeEdge's coedges's values
+    append deadCoedge to nodeEdge's coedges's values
+if scenario = 43:
+    ignore the cad removal of start from body
+    ignore the cad removal of end from body
+if scenario = 44:
+    clear nodeRing's coedges's values
+    set nodeRing's owner to deadFace
+if scenario = 45:
+    replace cad node surface in body with (the cad surface of (a cad sphere with frame the cad xy plane and radius scalar))
+    clear nodeRing's coedges's values
+if scenario = 46:
+    replace cad node surface in body with (the cad surface of (a cad sphere with frame the cad xy plane and radius scalar))
+    clear nodeFace's loops's values
+if scenario = 47:
+    replace cad node surface in body with (the cad surface of (a cad cone with base the cad xy plane, radius 1.0 and half angle scalar))
+    clear nodeRing's coedges's values
+if scenario = 48:
+    replace cad node surface in body with (the cad surface of (a cad cone with base the cad xy plane, radius 1.0 and half angle scalar))
+    clear nodeFace's loops's values
+if scenario = 49:
+    replace cad node surface in body with (the cad surface of (a cad torus with frame the cad xy plane, major radius scalar and minor radius 1.0))
+    clear nodeRing's coedges's values
+if scenario = 50:
+    replace cad node surface in body with (the cad surface of (a cad torus with frame the cad xy plane, major radius scalar and minor radius 1.0))
+    clear nodeFace's loops's values
+if scenario = 51:
+    replace cad node surface in body with (the cad surface of (a cad torus with frame the cad xy plane, major radius 0.0 and minor radius scalar))
+    clear nodeRing's coedges's values
+if scenario = 52:
+    replace cad node surface in body with (the cad surface of (a cad torus with frame the cad xy plane, major radius 0.0 and minor radius scalar))
+    clear nodeFace's loops's values
+if scenario = 53:
+    replace cad node surface in body with (the cad surface of (a cad cylinder with base the cad xy plane and radius scalar))
+    clear nodeRing's coedges's values
+if scenario = 54:
+    replace cad node surface in body with (the cad surface of (a cad cylinder with base the cad xy plane and radius scalar))
+    clear nodeFace's loops's values
+
+if scenario >= 55:
+    set row0 to an empty list of a cad vector3
+    append the cad zero vector3 to row0
+    append the cad y axis to row0
+    set row1 to an empty list of a cad vector3
+    append the cad x axis to row1
+    append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to row1
+    set points to an empty list of the type of row0
+    append row0 to points
+    append row1 to points
+    set knots to an empty list of a 64 bit floating-point number
+    set weights to an empty list of the type of knots
+    set built to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+    if built's valid = false:
+        @intrinsic("call", "libc", "exit", nothing, 1)
+    set shape to built's value with cad u periodicity ((scenario = 56) or (scenario >= 58)) and v periodicity (scenario >= 57)
+    replace cad node surface in body with (the cad surface of shape)
+    free row0
+    free row1
+    free points
+    free knots
+    free weights
+    if scenario = 59:
+        clear nodeRing's coedges's values
+    else:
+        clear nodeFace's loops's values
+
+emit topology integer scenario named "scenario"
+emit topology body body face face edge edge uses first and second dead face deadFace edge deadEdge use deadCoedge
+set duplicate to the cad clone of body
+set found to the cad lookup of end in duplicate
+if found's valid:
+    set vertex to found's value
+    set vertex's point's x to 3.0
+set foundLump to the cad lookup of lump in duplicate
+if foundLump's valid:
+    set clonedLump to foundLump's value
+    clear clonedLump's shells's values
+set foundShell to the cad lookup of shell in duplicate
+if foundShell's valid:
+    set clonedShell to foundShell's value
+    clear clonedShell's faces's values
+set foundFace to the cad lookup of face in duplicate
+if foundFace's valid:
+    set clonedFace to foundFace's value
+    clear clonedFace's loops's values
+set foundRing to the cad lookup of ring in duplicate
+if foundRing's valid:
+    set clonedRing to foundRing's value
+    clear clonedRing's coedges's values
+set foundEdge to the cad lookup of edge in duplicate
+if foundEdge's valid:
+    set clonedEdge to foundEdge's value
+    clear clonedEdge's coedges's values
+clear duplicate's roots
+print "clone" as a line
+emit topology body duplicate face face edge edge uses first and second dead face deadFace edge deadEdge use deadCoedge
+print "original" as a line
+emit topology body body face face edge edge uses first and second dead face deadFace edge deadEdge use deadCoedge
+soil cad vertex start in body
+emit topology optional (the cad lookup of start in body)
+emit topology optional (the cad lookup of end in body)
+emit topology optional (the cad lookup of edge in body)
+emit topology optional (the cad lookup of first in body)
+emit topology optional (the cad lookup of second in body)
+emit topology optional (the cad lookup of ring in body)
+emit topology optional (the cad lookup of face in body)
+emit topology optional (the cad lookup of shell in body)
+emit topology optional (the cad lookup of lump in body)
+emit topology body's provenance
+soil cad edge deadEdge in body
+soil cad vertex start in body
+set found to the cad lookup of start in body
+set reusable to false
+if found's valid:
+    set reusable to cad (the cad value of found)'s provenance is reusable
+emit topology integer (reusable as an integer) named "soil idempotent"

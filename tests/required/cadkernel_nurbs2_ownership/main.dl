@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+import lib/cadkernel/nurbs3.dl
+
+function ensure nurbs2 ownership {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 92)
+
+function a detached nurbs2 curve:
+    execute:
+        set points to a list containing (the cad zero vector2)
+        append (a cad vector2 with x 4.0 and y 2.0) to points
+        set empty to an empty list of a 64 bit floating-point number
+        set built to the cad nurbs curve2 of degree 1 with controls points, knots empty and weights empty
+        free points
+        free empty
+        return built's value
+
+set original to a detached nurbs2 curve
+set copy to original
+set clone to the cad clone of original
+ensure nurbs2 ownership (clone = original)
+ensure nurbs2 ownership (copy's owner = original's owner)
+ensure nurbs2 ownership (clone's owner != original's owner)
+ensure nurbs2 ownership (clone's controls != original's controls)
+ensure nurbs2 ownership (clone's knots != original's knots)
+ensure nurbs2 ownership (clone's weights != original's weights)
+ensure nurbs2 ownership ((@intrinsic("dereference", original's owner)) >= 2)
+# Exclusive deep clone storage is changed only to verify independence.
+replace item at index 1 in clone's controls with (a cad vector2 with x 40.0 and y 20.0)
+ensure nurbs2 ownership (clone != original)
+set point to the cad point on original at 1.0
+ensure nurbs2 ownership (point's x = 4.0)
+insert cad nurbs knot 0.37 into copy
+ensure nurbs2 ownership (copy's owner != original's owner)
+ensure nurbs2 ownership ((the length of copy's controls) = 3)
+ensure nurbs2 ownership ((the length of original's controls) = 2)
+free cad nurbs original
+free cad nurbs original
+set values to a list containing copy
+free cad nurbs copy
+set kept to the item at 0 in values
+clear values
+free values
+set point to the cad point on kept at 1.0
+ensure nurbs2 ownership (point's x = 4.0)
+set split to the cad split of kept at 0.5
+ensure nurbs2 ownership split's valid
+free cad nurbs kept
+set left to split's left
+set right to split's right
+free cad nurbs split's left
+free cad nurbs split's right
+set a to the cad point on left at 1.0
+set b to the cad point on right at 0.0
+ensure nurbs2 ownership (a's x = b's x)
+free cad nurbs left
+free cad nurbs right
+free cad nurbs clone
+
+set points to an empty list of a cad vector2
+set empty to an empty list of a 64 bit floating-point number
+set invalid to the strict cad nurbs curve2 of degree 0 with controls points, knots empty and weights empty
+ensure nurbs2 ownership (invalid's valid = false)
+set other to invalid
+free cad nurbs invalid's value
+ensure nurbs2 ownership ((the length of other's value's controls) = 0)
+free cad nurbs other's value
+free cad nurbs other's value
+free points
+free empty
+print "nurbs2 copied lifetime, detached insertion, nested split and invalid release" as a line

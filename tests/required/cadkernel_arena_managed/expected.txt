@@ -1,0 +1,3 @@
+empty arena accepts null-unsafe payload
+nested clone independent; detached result owns payload
+all three nested allocations released exactly once

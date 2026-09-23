@@ -1,0 +1,674 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/geom2d/curve.rs.
+# Required dependencies included below: geom2d/arclength.rs::Curve::tangent_at;
+# geom2d/deviation.rs::{Curve::tessellate_angle, polyline_angle, angular_steps,
+# angular_curve, subdivide_angle, sample_uniformly, span_boundaries, MAX_DEPTH}.
+# Other arclength/deviation operations are not implemented by this file.
+# Eight variants share one runtime type. Inspect kind before reading a payload.
+# Managed payloads retain immutable storage on copy; clone duplicates lists.
+# Constructors borrow their payload; incoming managed values are retained.
+# Inactive payloads are zero, lifecycle-safe values with no allocations.
+# Returned raw sampling/segment lists are caller-owned and must be freed once.
+import lib/cadkernel/geometry2.dl
+import lib/cadkernel/angle.dl
+import lib/cadkernel/polyline2.dl
+import lib/cadkernel/nurbs2.dl
+
+class:
+    patterns:
+        [a|] cad line2
+    members:
+        start as a cad vector2
+        end as a cad vector2
+class:
+    patterns:
+        [a|] cad circle2
+    members:
+        centre as a cad vector2
+        radius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad arc2
+    members:
+        centre as a cad vector2
+        radius as a 64 bit floating-point number
+        startAngle as a 64 bit floating-point number
+        endAngle as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad ellipse arc2
+    members:
+        ellipse as a cad ellipse
+        startParameter as a 64 bit floating-point number
+        endParameter as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad ray2
+    members:
+        origin as a cad vector2
+        direction as a cad vector2
+class:
+    patterns:
+        [a|] cad xline2
+    members:
+        base as a cad vector2
+        direction as a cad vector2
+class:
+    patterns:
+        [a|] cad curve2 extent
+    members:
+        kind as an integer
+class:
+    patterns:
+        [a|] cad curve2 ray result
+    members:
+        valid as a boolean
+        value as a cad ray2
+class:
+    patterns:
+        [a|] cad curve2 index result
+    members:
+        valid as a boolean
+        value as an integer
+class:
+    patterns:
+        [a|] cad curve2
+    members:
+        kind as an integer
+        line as a cad line2
+        circle as a cad circle2
+        arc as a cad arc2
+        ellipse as a cad ellipse arc2
+        polyline as a cad polyline2
+        nurbs as a cad nurbs curve2
+        ray as a cad ray2
+        xline as a cad xline2
+
+function cad line curve2 kind:
+    replacement:
+        0
+function cad circle curve2 kind:
+    replacement:
+        1
+function cad arc curve2 kind:
+    replacement:
+        2
+function cad ellipse curve2 kind:
+    replacement:
+        3
+function cad polyline curve2 kind:
+    replacement:
+        4
+function cad nurbs curve2 kind:
+    replacement:
+        5
+function cad ray curve2 kind:
+    replacement:
+        6
+function cad xline curve2 kind:
+    replacement:
+        7
+
+function a cad line2 from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        return @intrinsic("construct", a cad line2, start, end)
+function a cad circle2 at {cad vector2:centre} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        return @intrinsic("construct", a cad circle2, centre, radius)
+function a cad arc2 at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        return @intrinsic("construct", a cad arc2, centre, radius, first, last)
+function a cad ellipse arc2 on {cad ellipse:ellipse} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        return @intrinsic("construct", a cad ellipse arc2, ellipse, first, last)
+function the full cad ellipse arc2 on {cad ellipse:ellipse}:
+    execute:
+        return a cad ellipse arc2 on ellipse from 0.0 to 6.283185307179586
+function a cad ray2 from {cad vector2:origin} along {cad vector2:direction}:
+    execute:
+        return @intrinsic("construct", a cad ray2, origin, direction)
+function a cad xline2 through {cad vector2:base} along {cad vector2:direction}:
+    execute:
+        return @intrinsic("construct", a cad xline2, base, direction)
+function the cad direction of {cad line2:line}:
+    execute:
+        return the cad difference of line's end and line's start
+function the cad length of {cad line2:line}:
+    execute:
+        return the cad distance from line's start to line's end
+function the cad sweep of {cad arc2:arc}:
+    execute:
+        return cad arc span from arc's startAngle to arc's endAngle
+function the cad sweep of {cad ellipse arc2:arc}:
+    execute:
+        set raw to arc's endParameter - arc's startParameter
+        if raw <= 0.0:
+            return raw + 6.283185307179586
+        return raw
+
+# The result type is inferred here; type-of uses it without running allocations.
+local function the cad curve2 nurbs witness:
+    execute:
+        set controls to an empty list of a cad vector2
+        set scalars to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve2 of degree 0 with controls controls, knots scalars and weights scalars
+        free controls
+        free scalars
+        return result's value
+local function the cad curve2 empty value:
+    execute:
+        return @intrinsic("construct", a cad curve2, 0, a new cad line2, a new cad circle2, a new cad arc2, a new cad ellipse arc2, a new (the type of (an empty cad polyline2)), a new (the type of (the cad curve2 nurbs witness)), a new cad ray2, a new cad xline2)
+function the cad curve2 of {cad line2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 0
+        set result's line to shape
+        return result
+function the cad curve2 of {cad circle2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 1
+        set result's circle to shape
+        return result
+function the cad curve2 of {cad arc2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 2
+        set result's arc to shape
+        return result
+function the cad curve2 of {cad ellipse arc2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 3
+        set result's ellipse to shape
+        return result
+function the cad curve2 of {cad polyline2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 4
+        set result's polyline to shape
+        return result
+function the cad curve2 of {cad nurbs curve2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 5
+        set result's nurbs to shape
+        return result
+function the cad curve2 of {cad ray2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 6
+        set result's ray to shape
+        return result
+function the cad curve2 of {cad xline2:shape}:
+    execute:
+        set result to the cad curve2 empty value
+        set result's kind to 7
+        set result's xline to shape
+        return result
+
+function free cad curve {cad curve2:shape}:
+    replacement:
+        set shape to a new (the type of shape)
+function the cad clone of {cad curve2:shape}:
+    execute:
+        set result to shape
+        if shape's kind = 4:
+            set result's polyline to the cad clone of (shape's polyline)
+        if shape's kind = 5:
+            set result's nurbs to the cad clone of (shape's nurbs)
+        return result
+function the cad bounded extent2:
+    execute:
+        return @intrinsic("construct", a cad curve2 extent, 0)
+function the cad forward extent2:
+    execute:
+        return @intrinsic("construct", a cad curve2 extent, 1)
+function the cad infinite extent2:
+    execute:
+        return @intrinsic("construct", a cad curve2 extent, 2)
+function {cad curve2 extent:extent} holds cad parameter {a 64 bit floating-point number:parameter}:
+    execute:
+        if extent's kind = 0:
+            return (parameter >= -1e-9) and (parameter <= (1.0 + 1e-9))
+        if extent's kind = 1:
+            return parameter >= -1e-9
+        return true
+function {cad curve2 extent:left} = {cad curve2 extent:right}:
+    execute:
+        return left's kind = right's kind
+function the cad extent of {cad curve2:shape}:
+    execute:
+        if shape's kind = 6:
+            return the cad forward extent2
+        if shape's kind = 7:
+            return the cad infinite extent2
+        return the cad bounded extent2
+function {cad curve2:shape} is cad straight:
+    execute:
+        return ((shape's kind = 0) or (shape's kind = 6)) or (shape's kind = 7)
+function the cad ray of {cad curve2:shape}:
+    execute:
+        if shape's kind = 0:
+            set value to a cad ray2 from shape's line's start along (the cad direction of shape's line)
+            return @intrinsic("construct", a cad curve2 ray result, true, value)
+        if shape's kind = 6:
+            return @intrinsic("construct", a cad curve2 ray result, true, shape's ray)
+        if shape's kind = 7:
+            set value to a cad ray2 from shape's xline's base along shape's xline's direction
+            return @intrinsic("construct", a cad curve2 ray result, true, value)
+        return @intrinsic("construct", a cad curve2 ray result, false, a new cad ray2)
+function {cad curve2:shape} is cad closed:
+    execute:
+        if shape's kind = 1:
+            return true
+        if shape's kind = 2:
+            return (the absolute value of ((the cad sweep of shape's arc) - 6.283185307179586)) < 1e-9
+        if shape's kind = 3:
+            return (the absolute value of ((the cad sweep of shape's ellipse) - 6.283185307179586)) < 1e-9
+        if shape's kind = 4:
+            return shape's polyline's closed
+        if shape's kind = 5:
+            return shape's nurbs is cad closed
+        return false
+
+function the cad segment count of {cad polyline2:shape}:
+    execute:
+        set n to the length of shape's vertices
+        if n < 2:
+            return 0
+        if shape's closed:
+            return n
+        return n - 1
+function the cad segment count of {cad curve2:shape}:
+    execute:
+        if shape's kind = 4:
+            return the cad segment count of shape's polyline
+        return 1
+
+# For split_parameter the source cast maps NaN to index zero.
+local function the cad curve2 segment index of {a 64 bit floating-point number:scaled} among {integer:count}:
+    execute:
+        if scaled != scaled:
+            return 0
+        return the minimum of ((the floor of scaled) as an integer) and (count - 1)
+function the cad point on {cad polyline2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set count to the cad segment count of shape
+        if count = 0:
+            if (the length of shape's vertices) > 0:
+                return the position of (the item at 0 in shape's vertices)
+            return the cad zero vector2
+        set scaled to parameter * (count as a 64 bit floating-point number)
+        clamp scaled between 0.0 and (count as a 64 bit floating-point number)
+        set index to the cad curve2 segment index of scaled among count
+        set fraction to scaled - (index as a 64 bit floating-point number)
+        set arc to the cad segment arc of shape at index index
+        if arc's valid:
+            return the cad point on arc's value at fraction
+        set start to the position of (the item at index in shape's vertices)
+        set end to the position of (the item at (the remainder of (index + 1) divided by (the length of shape's vertices)) in shape's vertices)
+        return the cad lerp from start to end at fraction
+
+local function the cad curve2 radial point at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} and angle {a 64 bit floating-point number:angle}:
+    execute:
+        return a cad vector2 with x (centre's x + (radius * (the cosine of angle))) and y (centre's y + (radius * (the sine of angle)))
+function the cad point on {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if shape's kind = 1:
+            return the cad curve2 radial point at shape's circle's centre with radius shape's circle's radius and angle (parameter * 6.283185307179586)
+        if shape's kind = 2:
+            set arc to shape's arc
+            set angle to (the cad normalized angle of arc's startAngle) + (parameter * (the cad sweep of arc))
+            return the cad curve2 radial point at arc's centre with radius arc's radius and angle angle
+        if shape's kind = 3:
+            set arc to shape's ellipse
+            return the cad point on arc's ellipse at (arc's startParameter + (parameter * (the cad sweep of arc)))
+        if shape's kind = 4:
+            return the cad point on shape's polyline at parameter
+        if shape's kind = 5:
+            return the cad point on shape's nurbs at parameter
+        set ray to the value of (the cad ray of shape)
+        return a cad vector2 with x (ray's origin's x + (parameter * ray's direction's x)) and y (ray's origin's y + (parameter * ray's direction's y))
+
+local function the cad curve2 euclidean turn of {a 64 bit floating-point number:angle}:
+    execute:
+        set result to the remainder of angle divided by 6.283185307179586
+        if result < 0.0:
+            set result to result + 6.283185307179586
+        return result
+local function the cad curve2 projected parameter of {cad vector2:point} on {cad ray2:ray}:
+    execute:
+        set squared to the cad squared length of ray's direction
+        if squared < 1e-24:
+            return 0.0
+        return (the cad dot of (the cad difference of point and ray's origin) and ray's direction) / squared
+function the cad [parameter] on {cad polyline2:shape} nearest {cad vector2:point}:
+    execute:
+        set count to the cad segment count of shape
+        if count = 0:
+            return 0.0
+        set bestDistance to 1.0 / 0.0
+        set bestParameter to 0.0
+        loop index from 0 to count:
+            set start to the position of (the item at index in shape's vertices)
+            set end to the position of (the item at (the remainder of (index + 1) divided by (the length of shape's vertices)) in shape's vertices)
+            set arc to the cad segment arc of shape at index index
+            set fraction to 0.0
+            if arc's valid:
+                set value to arc's value
+                set angle to the cad angle of (the cad difference of point and value's centre)
+                set travelled to the cad curve2 euclidean turn of (angle - value's startAngle)
+                if value's sweep < 0.0:
+                    set travelled to -(the cad curve2 euclidean turn of (value's startAngle - angle))
+                set fraction to travelled / value's sweep
+                clamp fraction between 0.0 and 1.0
+            else:
+                set ray to a cad ray2 from start along (the cad difference of end and start)
+                set fraction to the cad curve2 projected parameter of point on ray
+                clamp fraction between 0.0 and 1.0
+            set candidate to ((index as a 64 bit floating-point number) + fraction) / (count as a 64 bit floating-point number)
+            set distance to the cad squared distance from (the cad point on shape at candidate) to point
+            if distance < bestDistance:
+                set bestDistance to distance
+                set bestParameter to candidate
+        return bestParameter
+function the cad [parameter] on {cad curve2:shape} nearest {cad vector2:point}:
+    execute:
+        if shape is cad straight:
+            return the cad curve2 projected parameter of point on (the value of (the cad ray of shape))
+        if shape's kind = 1:
+            set angle to the cad angle of (the cad difference of point and shape's circle's centre)
+            return (the cad normalized angle of angle) / 6.283185307179586
+        if shape's kind = 2:
+            set arc to shape's arc
+            set angle to the cad angle of (the cad difference of point and arc's centre)
+            return cad arc parameter of angle from arc's startAngle to arc's endAngle
+        if shape's kind = 3:
+            set arc to shape's ellipse
+            set ellipse to arc's ellipse
+            set rx to point's x - ellipse's centre's x
+            set ry to point's y - ellipse's centre's y
+            set nx to ellipse's majorAxis's x
+            set ny to ellipse's majorAxis's y
+            set along to ((rx * nx) + (ry * ny)) / ellipse's majorRadius
+            set across to (((-rx) * ny) + (ry * nx)) / ellipse's minorRadius
+            set angle to the cad angle of (a cad vector2 with x along and y across)
+            return (the cad curve2 euclidean turn of (angle - arc's startParameter)) / (the cad sweep of arc)
+        if shape's kind = 4:
+            return the cad parameter on shape's polyline nearest point
+        return the cad parameter on shape's nurbs nearest point
+
+function the cad segments of {cad curve2:shape}:
+    execute:
+        set result to an empty list of the type of shape
+        if shape's kind != 4:
+            return result
+        set polyline to shape's polyline
+        set count to the cad segment count of polyline
+        loop index from 0 to count:
+            set arc to the cad segment arc of polyline at index index
+            if arc's valid:
+                set value to arc's value
+                set first to value's startAngle
+                set last to value's startAngle + value's sweep
+                if value's sweep < 0.0:
+                    set first to value's endAngle
+                    set last to value's endAngle - value's sweep
+                append (the cad curve2 of (a cad arc2 at value's centre with radius value's radius from first to last)) to result
+            else:
+                set start to the position of (the item at index in polyline's vertices)
+                set end to the position of (the item at (the remainder of (index + 1) divided by (the length of polyline's vertices)) in polyline's vertices)
+                append (the cad curve2 of (a cad line2 from start to end)) to result
+        return result
+local function cad curve2 parameter {a 64 bit floating-point number:a} is near {a 64 bit floating-point number:b}:
+    execute:
+        set scale to the maximum of (the maximum of (the absolute value of a) and (the absolute value of b)) and 1.0
+        return (the absolute value of (a - b)) <= ((2.220446049250313e-16 * 128.0) * scale)
+local function cad curve2 parameter {a 64 bit floating-point number:value} is within {a 64 bit floating-point number array of 2 items:bounds}:
+    execute:
+        set low to the item at 0 in bounds
+        set high to the item at 1 in bounds
+        set scale to the maximum of (the maximum of (the maximum of (the absolute value of value) and (the absolute value of low)) and (the absolute value of high)) and 1.0
+        set slack to (2.220446049250313e-16 * 128.0) * scale
+        return (value >= (low - slack)) and (value <= (high + slack))
+local function the cad curve2 coordinate of {cad vector2:point} at {integer:axis}:
+    execute:
+        if axis = 0:
+            return point's x
+        return point's y
+function the cad rectangle [side] of {cad curve2:shape} with bounds {a 64 bit floating-point number array of 2 items array of 2 items:bounds}:
+    execute:
+        set start to the cad point on shape at 0.0
+        set end to the cad point on shape at 1.0
+        loop fixedAxis from 0 to 2:
+            set varying to 1 - fixedAxis
+            set varyingBounds to the item at varying in bounds
+            loop side from 0 to 2:
+                set fixedValue to the item at side in (the item at fixedAxis in bounds)
+                set onSide to false
+                if shape's kind = 0:
+                    set onSide to (cad curve2 parameter (the cad curve2 coordinate of shape's line's start at fixedAxis) is near fixedValue) and (cad curve2 parameter (the cad curve2 coordinate of shape's line's end at fixedAxis) is near fixedValue)
+                else:
+                    if shape's kind = 5:
+                        set onSide to true
+                        loop index from 0 to the length of shape's nurbs's controls:
+                            set point to the item at index in shape's nurbs's controls
+                            if ((cad curve2 parameter (the cad curve2 coordinate of point at fixedAxis) is near fixedValue) and (cad curve2 parameter (the cad curve2 coordinate of point at varying) is within varyingBounds)) = false:
+                                set onSide to false
+                    else:
+                        return @intrinsic("construct", a cad curve2 index result, false, 0)
+                set a to the cad curve2 coordinate of start at varying
+                set b to the cad curve2 coordinate of end at varying
+                set low to the item at 0 in varyingBounds
+                set high to the item at 1 in varyingBounds
+                set covers to ((cad curve2 parameter a is near low) and (cad curve2 parameter b is near high)) or ((cad curve2 parameter b is near low) and (cad curve2 parameter a is near high))
+                if onSide and covers:
+                    return @intrinsic("construct", a cad curve2 index result, true, (fixedAxis * 2) + side)
+        return @intrinsic("construct", a cad curve2 index result, false, 0)
+
+# Exact Curve::tangent_at dependency from geom2d/arclength.rs.
+local function the cad curve2 radial tangent with radius {a 64 bit floating-point number:radius}, angle {a 64 bit floating-point number:angle} and sweep {a 64 bit floating-point number:sweep}:
+    execute:
+        return a cad vector2 with x (((-radius) * (the sine of angle)) * sweep) and y ((radius * (the cosine of angle)) * sweep)
+function the cad [tangent] of {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if shape is cad straight:
+            return the direction of (the value of (the cad ray of shape))
+        if shape's kind = 1:
+            return the cad curve2 radial tangent with radius shape's circle's radius, angle (parameter * 6.283185307179586) and sweep 6.283185307179586
+        if shape's kind = 2:
+            set arc to shape's arc
+            set sweep to the cad sweep of arc
+            return the cad curve2 radial tangent with radius arc's radius, angle ((the cad normalized angle of arc's startAngle) + (parameter * sweep)) and sweep sweep
+        if shape's kind = 3:
+            set arc to shape's ellipse
+            set ellipse to arc's ellipse
+            set sweep to the cad sweep of arc
+            set angle to arc's startParameter + (parameter * sweep)
+            set along to ((-ellipse's majorRadius) * (the sine of angle)) * sweep
+            set across to (ellipse's minorRadius * (the cosine of angle)) * sweep
+            return a cad vector2 with x ((along * ellipse's majorAxis's x) - (across * ellipse's majorAxis's y)) and y ((along * ellipse's majorAxis's y) + (across * ellipse's majorAxis's x))
+        if shape's kind = 4:
+            set segments to the cad segments of shape
+            set count to the length of segments
+            if count = 0:
+                free segments
+                return the cad zero vector2
+            set bounded to parameter
+            clamp bounded between 0.0 and 1.0
+            set scaled to the minimum of (bounded * (count as a 64 bit floating-point number)) and ((count as a 64 bit floating-point number) - 1e-12)
+            set index to the cad curve2 segment index of scaled among count
+            set tangent to the cad tangent of (the item at index in segments) at (scaled - (index as a 64 bit floating-point number))
+            free segments
+            return tangent scaled by (count as a 64 bit floating-point number)
+        return the cad derivative of shape's nurbs at parameter
+function the cad curve point of {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad point on shape at parameter
+function the cad curve tangent of {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad tangent of shape at parameter
+
+# Exact angular-only dependencies from geom2d/deviation.rs.
+local function the cad curve2 angular steps for {a 64 bit floating-point number:sweep} within {a 64 bit floating-point number:limit}:
+    execute:
+        return (the maximum of (the ceiling of ((the absolute value of sweep) / limit)) and 1.0) as a 64 bit unsigned integer
+# Shared sampling helper; the returned list is owned by the caller and needs free.
+function the cad curve2 uniform samples of {cad curve2:shape} in {a 64 bit unsigned integer:steps}:
+    execute:
+        set output to an empty list of a cad vector2
+        loop index from (0 as a 64 bit unsigned integer) through steps:
+            append (the cad point on shape at ((index as a 64 bit floating-point number) / (steps as a 64 bit floating-point number))) to output
+        return output
+# Shared sampling helper; the returned list is owned by the caller and needs free.
+function the cad curve2 span boundaries of {cad nurbs curve2:shape}:
+    execute:
+        set domain to the cad domain of shape
+        set width to domain's end - domain's start
+        set values to a list containing 0.0
+        if width > 0.0:
+            loop index from 0 to the length of shape's knots:
+                set normalized to ((the item at index in shape's knots) - domain's start) / width
+                if (normalized > 1e-12) and (normalized < (1.0 - 1e-12)):
+                    if (normalized - (the last item of values)) > 1e-12:
+                        append normalized to values
+        append 1.0 to values
+        return values
+local function refine cad curve2 angular samples of {cad curve2:shape} [from] {a 64 bit floating-point number:from} [to] {a 64 bit floating-point number:to} within {a 64 bit floating-point number:limit} with minimum {integer:minimum} at depth {integer:depth} into {a pointer to a list:output}:
+    execute:
+        set directions to an empty list of a cad vector2
+        loop step from 0 through 8:
+            set unit to (step as a 64 bit floating-point number) * 0.125
+            append (the cad tangent of shape at (from + ((to - from) * unit))) to directions
+        set split to (depth < minimum) or ((the cad maximum direction angle of directions) > limit)
+        free directions
+        if split and (depth < 16):
+            set middle to 0.5 * (from + to)
+            refine cad curve2 angular samples of shape from from to middle within limit with minimum minimum at depth (depth + 1) into output
+            refine cad curve2 angular samples of shape from middle to to within limit with minimum minimum at depth (depth + 1) into output
+        else:
+            append (the cad point on shape at to) to output
+local function the cad curve2 angular samples of {cad curve2:shape} at boundaries {a pointer to a list:boundaries} within {a 64 bit floating-point number:limit} with minimum {integer:minimum}:
+    execute:
+        set output to an empty list of a cad vector2
+        if (the length of boundaries) = 0:
+            return output
+        append (the cad point on shape at (the item at 0 in boundaries)) to output
+        loop index from 0 to ((the length of boundaries) - 1):
+            refine cad curve2 angular samples of shape from (the item at index in boundaries) to (the item at (index + 1) in boundaries) within limit with minimum minimum at depth 0 into output
+        return output
+function the cad angular samples of {cad polyline2:shape} within {a 64 bit floating-point number:limit}:
+    execute:
+        set n to the length of shape's vertices
+        set count to the maximum of (n - 1) and 0
+        if shape's closed:
+            set count to n
+        set output to an empty list of a cad vector2
+        if count = 0:
+            loop index from 0 to n:
+                append (the position of (the item at index in shape's vertices)) to output
+            return output
+        loop index from 0 to count:
+            set start to the position of (the item at index in shape's vertices)
+            set end to the position of (the item at (the remainder of (index + 1) divided by n) in shape's vertices)
+            set arc to the cad segment arc of shape at index index
+            set points to an empty list of a cad vector2
+            if arc's valid:
+                free points
+                set points to the cad angular samples of arc's value within limit
+            else:
+                append start to points
+                append end to points
+            replace item at index 0 in points with start
+            replace item at index ((the length of points) - 1) in points with end
+            set skip to 0
+            if (the length of output) > 0:
+                set previous to the last item of output
+                set first to the item at 0 in points
+                if (previous's x = first's x) and (previous's y = first's y):
+                    set skip to 1
+            loop piece from skip to the length of points:
+                append (the item at piece in points) to output
+            free points
+        return output
+function the cad angular samples of {cad curve2:shape} within {a 64 bit floating-point number:requested}:
+    execute:
+        set limit to the cad sampling angle for requested
+        if shape's kind = 0:
+            set output to a list containing shape's line's start
+            append shape's line's end to output
+            return output
+        if shape is cad straight:
+            set output to a list containing (the cad point on shape at 0.0)
+            append (the cad point on shape at 1.0) to output
+            return output
+        if shape's kind = 1:
+            return the cad curve2 uniform samples of shape in (the cad curve2 angular steps for 6.283185307179586 within limit)
+        if shape's kind = 2:
+            return the cad curve2 uniform samples of shape in (the cad curve2 angular steps for (the cad sweep of shape's arc) within limit)
+        if shape's kind = 4:
+            return the cad angular samples of shape's polyline within limit
+        set boundaries to a list containing 0.0
+        append 1.0 to boundaries
+        set minimum to 0
+        if shape's kind = 5:
+            free boundaries
+            set boundaries to the cad curve2 span boundaries of shape's nurbs
+            set minimum to 2
+        set output to the cad curve2 angular samples of shape at boundaries boundaries within limit with minimum minimum
+        free boundaries
+        return output
+function the cad samples of {cad curve2:shape} with density {a 64 bit floating-point number:density}:
+    execute:
+        set angle to the cad default sampling angle
+        if ((density - density) = 0.0) and (density > 0.0):
+            set angle to 1.0 / density
+        return the cad angular samples of shape within angle
+
+function {cad line2:left} = {cad line2:right}:
+    execute:
+        return ((left's start's x = right's start's x) and (left's start's y = right's start's y)) and ((left's end's x = right's end's x) and (left's end's y = right's end's y))
+
+function {cad circle2:left} = {cad circle2:right}:
+    execute:
+        return ((left's centre's x = right's centre's x) and (left's centre's y = right's centre's y)) and (left's radius = right's radius)
+
+function {cad arc2:left} = {cad arc2:right}:
+    execute:
+        return ((((left's centre's x = right's centre's x) and (left's centre's y = right's centre's y)) and (left's radius = right's radius)) and (left's startAngle = right's startAngle)) and (left's endAngle = right's endAngle)
+
+function {cad ellipse arc2:left} = {cad ellipse arc2:right}:
+    execute:
+        return ((cad left's ellipse equals right's ellipse) and (left's startParameter = right's startParameter)) and (left's endParameter = right's endParameter)
+
+function {cad ray2:left} = {cad ray2:right}:
+    execute:
+        return ((left's origin's x = right's origin's x) and (left's origin's y = right's origin's y)) and ((left's direction's x = right's direction's x) and (left's direction's y = right's direction's y))
+
+function {cad xline2:left} = {cad xline2:right}:
+    execute:
+        return ((left's base's x = right's base's x) and (left's base's y = right's base's y)) and ((left's direction's x = right's direction's x) and (left's direction's y = right's direction's y))
+
+function {cad curve2:left} = {cad curve2:right}:
+    execute:
+        if left's kind != right's kind:
+            return false
+        if left's kind = 0:
+            return left's line = right's line
+        if left's kind = 1:
+            return left's circle = right's circle
+        if left's kind = 2:
+            return left's arc = right's arc
+        if left's kind = 3:
+            return left's ellipse = right's ellipse
+        if left's kind = 4:
+            return left's polyline = right's polyline
+        if left's kind = 5:
+            return left's nurbs = right's nurbs
+        if left's kind = 6:
+            return left's ray = right's ray
+        if left's kind = 7:
+            return left's xline = right's xline
+        return false

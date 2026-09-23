@@ -1,0 +1,32 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+class:
+    patterns:
+        box
+    members:
+        payload
+
+class:
+    patterns:
+        storage
+    members:
+        data
+
+function the [width] after refining {storage:values} with item:
+    execute:
+        set width to @intrinsic("size of", @intrinsic("type of", @intrinsic("dereference", the data of values)))
+        @intrinsic("initialize at", the data of values, item)
+        return width
+
+set data to @intrinsic("call", "libc", "calloc", @intrinsic("add pointer depth", box), 1, 8)
+set values to @intrinsic("construct", storage, data)
+set item to @intrinsic("construct", box, 7)
+@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", the width after refining values with item)
+@intrinsic("destroy at", the data of values)
+@intrinsic("call", "libc", "free", @intrinsic("type", "nothing"), the data of values)

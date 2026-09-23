@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+# Stable allocated nodes survive slot-list growth; keys must be rechecked after removal.
+import lib/cadkernel/arena.dl
+
+set nodes to a cad arena of an integer
+set key to the cad key after inserting 7 into nodes
+set borrowed to the cad node pointer for key in nodes
+set index to 0
+loop while index < 100:
+    ignore the cad key after inserting index into nodes
+    increment index
+print whether borrowed = (the cad node pointer for key in nodes) as a line
+@intrinsic("store at", borrowed, 42)
+print the cad value of (the cad lookup of key in nodes) as a line
+set entries to the cad entries of nodes
+set pointers to the cad mutable values of nodes
+print the length of entries as a line
+print the length of pointers as a line
+print the cad debug text of (the key of (the item at 0 in entries)) as a line
+@intrinsic("store at", the item at 0 in pointers, 43)
+print @intrinsic("dereference", the value of (the item at 0 in entries)) as a line
+free entries
+free pointers
+ignore the cad removal of key from nodes
+# Do not dereference the expired borrow: verify its key is refused instead.
+print whether (the cad node pointer for key in nodes) = (0 as a pointer to an integer) as a line
+set fresh to the cad key after inserting 9 into nodes
+print whether key equals cad key fresh as a line
+print the cad value of (the cad lookup of fresh in nodes) as a line
+free cad arena nodes

@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/centerline.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Picks select the angular sector and stable endpoint identity. Extensions
+# apply independently to the returned natural span. All results are values.
+import lib/cadkernel/curve2.dl
+import lib/cadkernel/intersect2.dl
+
+class:
+    patterns:
+        [a|] cad centerline2 geometry
+    members:
+        start as a cad vector2
+        end as a cad vector2
+        baseStart as a cad vector2
+        baseEnd as a cad vector2
+class:
+    patterns:
+        [a|] cad centerline2 result
+    members:
+        valid as a boolean
+        value as a cad centerline2 geometry
+
+local function cad centerline2 point {cad vector2:left} equals {cad vector2:right}:
+    execute:
+        return (left's x = right's x) and (left's y = right's y)
+function {cad centerline2 geometry:left} = {cad centerline2 geometry:right}:
+    execute:
+        return ((cad centerline2 point left's start equals right's start) and (cad centerline2 point left's end equals right's end)) and ((cad centerline2 point left's baseStart equals right's baseStart) and (cad centerline2 point left's baseEnd equals right's baseEnd))
+function the cad clone of {cad centerline2 geometry:shape}:
+    execute:
+        return shape
+
+# The source multiplies by the reciprocal, rather than dividing each coordinate.
+local function cad centerline2 unit {cad vector2:vector}:
+    execute:
+        set length to the cad length of vector
+        if length > 1e-10:
+            return @intrinsic("construct", a cad normalization2, true, vector scaled by (1.0 / length))
+        return a new cad normalization2
+local function cad centerline2 oriented {cad vector2:direction} from {cad vector2:origin} towards {cad vector2:pick}:
+    execute:
+        if (the cad dot of (the cad difference of pick and origin) and direction) < 0.0:
+            return direction scaled by -1.0
+        return direction
+
+function the cad centerline between {cad line2:first} and {cad line2:second} picked at {cad vector2:firstPick} and {cad vector2:secondPick} extended by {a 64 bit floating-point number:startExtension} and {a 64 bit floating-point number:endExtension}:
+    execute:
+        set firstUnit to cad centerline2 unit (the cad direction of first)
+        if firstUnit's valid = false:
+            return a new cad centerline2 result
+        set secondUnit to cad centerline2 unit (the cad direction of second)
+        if secondUnit's valid = false:
+            return a new cad centerline2 result
+        set firstDirection to firstUnit's value
+        set secondDirection to secondUnit's value
+        set points to [first's start, first's end, second's start, second's end]
+        set crossing to cad line intersection from first's start along firstDirection with second's start along secondDirection
+        set origin to the cad zero vector2
+        set axis to the cad zero vector2
+        if crossing's valid:
+            set origin to the cad sum of first's start and (firstDirection scaled by crossing's value's first)
+            set firstRay to cad centerline2 oriented firstDirection from origin towards firstPick
+            set secondRay to cad centerline2 oriented secondDirection from origin towards secondPick
+            set bisector to cad centerline2 unit (the cad sum of firstRay and secondRay)
+            if bisector's valid = false:
+                set bisector to cad centerline2 unit (the cad difference of firstRay and secondRay)
+            if bisector's valid = false:
+                return a new cad centerline2 result
+            set axis to bisector's value
+        else:
+            set aligned to secondDirection
+            if (the cad dot of firstDirection and secondDirection) < 0.0:
+                set aligned to secondDirection scaled by -1.0
+            set merged to cad centerline2 unit (the cad sum of firstDirection and aligned)
+            set direction to firstDirection
+            if merged's valid:
+                set direction to merged's value
+            set direction to cad centerline2 oriented direction from first's start towards firstPick
+            set normal to the cad perpendicular of direction
+            set total to (-0.0) as a 64 bit floating-point number
+            loop index from 0 to 4:
+                set total to total + (the cad dot of (the item at index in points) and normal)
+            set normalOffset to total / 4.0
+            set origin to normal scaled by normalOffset
+            set axis to direction
+        set minimum to 1.0 / 0.0
+        set maximum to -minimum
+        loop index from 0 to 4:
+            set point to the item at index in points
+            set parameter to the cad dot of (the cad difference of point and origin) and axis
+            set minimum to the minimum of minimum and parameter
+            set maximum to the maximum of maximum and parameter
+        if (maximum - minimum) <= 1e-10:
+            return a new cad centerline2 result
+        set oriented to cad centerline2 oriented firstDirection from origin towards firstPick
+        if (the cad dot of axis and oriented) < 0.0:
+            set axis to axis scaled by -1.0
+            set oldMinimum to minimum
+            set minimum to -maximum
+            set maximum to -oldMinimum
+        set baseStart to the cad sum of origin and (axis scaled by minimum)
+        set baseEnd to the cad sum of origin and (axis scaled by maximum)
+        set start to the cad sum of baseStart and (axis scaled by (-startExtension))
+        set end to the cad sum of baseEnd and (axis scaled by endExtension)
+        if (the cad dot of (the cad difference of end and start) and axis) <= 1e-10:
+            return a new cad centerline2 result
+        set geometry to @intrinsic("construct", a cad centerline2 geometry, start, end, baseStart, baseEnd)
+        return @intrinsic("construct", a cad centerline2 result, true, geometry)

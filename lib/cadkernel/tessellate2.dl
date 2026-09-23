@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/tessellate.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Binary64 world points retain elevation unchanged. Returned lists are owned
+# by the caller. Vec2::lerp is provided by the imported core module.
+import lib/cadkernel/geometry2.dl
+import lib/list.dl
+
+function the cad default segments per radian:
+    execute:
+        return 20.0
+
+local function cad planar sample count for {a 64 bit floating-point number:sweep} with density {a 64 bit floating-point number:density}:
+    execute:
+        set wanted to the ceiling of ((the absolute value of sweep) * density)
+        if ((the absolute value of wanted) <= 1.7976931348623157e308) and (wanted > 4.0):
+            # A DynLex list has a signed 32-bit element count. Reject an
+            # unrepresentable request before conversion or endpoint addition.
+            if wanted > 2147483646.0:
+                @intrinsic("call", "libc", "abort", nothing)
+            return wanted as an integer
+        return 4
+
+function the cad arc samples at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} at elevation {a 64 bit floating-point number:elevation} with density {a 64 bit floating-point number:density}:
+    execute:
+        set sweep to cad arc span from start to end
+        set count to cad planar sample count for sweep with density density
+        set base to the cad normalized angle of start
+        set points to an empty list of a cad vector3
+        loop index from 0 through count:
+            set angle to base + (sweep * ((index as a 64 bit floating-point number) / (count as a 64 bit floating-point number)))
+            set x to centre's x + (radius * (the cosine of angle))
+            set y to centre's y + (radius * (the sine of angle))
+            append (a cad vector3 with x x, y y and z elevation) to points
+        return points
+
+function the cad ellipse samples of {cad ellipse:shape} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} at elevation {a 64 bit floating-point number:elevation} with density {a 64 bit floating-point number:density}:
+    execute:
+        set sweep to end - start
+        set count to cad planar sample count for sweep with density density
+        set points to an empty list of a cad vector3
+        loop index from 0 through count:
+            set parameter to start + (sweep * ((index as a 64 bit floating-point number) / (count as a 64 bit floating-point number)))
+            set point to the cad point on shape at parameter
+            append (a cad vector3 with x point's x, y point's y and z elevation) to points
+        return points

@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_pcurve/support.dl
+import tests/cadkernel/brep_pcurve/input.dl
+import lib/cadkernel/brep_make.dl
+
+function emit pc uv {cad vector2:value}:
+    execute:
+        emit geometry scalar ((value's x))
+        emit geometry scalar ((value's y))
+function emit pc scalars {a pointer to a list:values}:
+    execute:
+        emit geometry scalar (the length of values)
+        loop i from 0 to the length of values:
+            emit geometry scalar (the item at i in values)
+function emit pc curve {cad curve2:shape}:
+    execute:
+        emit geometry scalar ((shape's kind))
+        if (shape's kind) = 0:
+            emit pc uv ((shape's line's start))
+            emit pc uv ((shape's line's end))
+        if (shape's kind) = 1:
+            emit pc uv ((shape's circle's centre))
+            emit geometry scalar ((shape's circle's radius))
+        if (shape's kind) = 2:
+            emit pc uv ((shape's arc's centre))
+            emit geometry scalar ((shape's arc's radius))
+            emit geometry scalar ((shape's arc's startAngle))
+            emit geometry scalar ((shape's arc's endAngle))
+        if (shape's kind) = 3:
+            emit pc uv ((shape's ellipse's ellipse's centre))
+            emit pc uv ((shape's ellipse's ellipse's majorAxis))
+            emit geometry scalar ((shape's ellipse's ellipse's majorRadius))
+            emit geometry scalar ((shape's ellipse's ellipse's minorRadius))
+            emit geometry scalar ((shape's ellipse's startParameter))
+            emit geometry scalar ((shape's ellipse's endParameter))
+        if (shape's kind) = 4:
+            emit geometry scalar ((shape's polyline's closed) as an integer)
+            emit geometry scalar (the length of ((shape's polyline's vertices)))
+            loop i from 0 to the length of ((shape's polyline's vertices)):
+                set vertex to the item at i in (shape's polyline's vertices)
+                emit pc uv ((vertex's position))
+                emit geometry scalar ((vertex's bulge))
+        if (shape's kind) = 5:
+            emit geometry scalar ((shape's nurbs's degree))
+            emit geometry scalar (the length of ((shape's nurbs's controls)))
+            loop i from 0 to the length of ((shape's nurbs's controls)):
+                emit pc uv (the item at i in (shape's nurbs's controls))
+            emit pc scalars ((shape's nurbs's knots))
+            emit pc scalars ((shape's nurbs's weights))
+        if (shape's kind) = 6:
+            emit pc uv ((shape's ray's origin))
+            emit pc uv ((shape's ray's direction))
+        if (shape's kind) = 7:
+            emit pc uv ((shape's xline's base))
+            emit pc uv ((shape's xline's direction))
+        loop i from 0 to 13:
+            emit pc uv (the cad point on shape at ((i as a 64 bit floating-point number) / 12.0))
+function emit pc result {cad pcurve result:flat}:
+    execute:
+        emit geometry scalar ((flat's valid) as an integer)
+        if (flat's valid):
+            emit pc curve ((flat's value))
+function emit pc boundary {cad face key:key} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set result to the cad boundary parts of key in body within tolerance
+        emit geometry scalar ((result's valid) as an integer)
+        if (result's valid):
+            emit geometry scalar (the length of ((result's parts's values)))
+            loop i from 0 to the length of ((result's parts's values)):
+                set part to the item at i in (result's parts's values)
+                emit geometry scalar ((part's coedge's index))
+                emit pc curve ((part's curve))
+        set plain to the cad boundary of key in body within tolerance
+        emit geometry scalar ((plain's valid) as an integer)
+        if (plain's valid):
+            emit geometry scalar (the length of ((plain's curves's values)))
+            loop i from 0 to the length of ((plain's curves's values)):
+                emit pc curve (the item at i in (plain's curves's values))
+
+function pc probe line {cad vector2:first} {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+set mode to (geometry argument 0) as an integer
+set sk to (geometry argument 1) as an integer
+set ck to (geometry argument 2) as an integer
+set radius to geometry argument 3
+set minor to geometry argument 4
+set angle to geometry argument 5
+set cr to geometry argument 6
+set cm to geometry argument 7
+set tolerance to geometry argument 8
+set first to geometry argument 9
+set last to geometry argument 10
+set plane to a cad plane with origin (geometry point argument 11), x axis (geometry point argument 14) and y axis (geometry point argument 17)
+set frame to a cad plane with origin (geometry point argument 20), x axis (geometry point argument 23) and y axis (geometry point argument 26)
+set point to cad pcurve probe point
+set variant to (geometry argument 31) as an integer
+
+function cad pcurve probe point:
+    execute:
+        return a cad vector2 with x (geometry argument 29) and y (geometry argument 30)
+
+set surface to the cad surface of plane
+if sk = 1:
+    set surface to the cad surface of (a cad cylinder with base plane and radius radius)
+if sk = 2:
+    set surface to the cad surface of (a cad cone with base plane, radius radius and half angle angle)
+if sk = 3:
+    set surface to the cad surface of (a cad sphere with frame plane and radius radius)
+if sk = 4:
+    set surface to the cad surface of (a cad torus with frame plane, major radius radius and minor radius minor)
+if sk = 5:
+    set nurbs to the geometry probe surface
+    set nurbs to nurbs with cad u periodicity ((ck & 1) != 0) and v periodicity ((ck & 2) != 0)
+    set surface to the cad surface of nurbs
+set periods to the cad parameter periods of surface
+emit geometry scalar ((periods's uValid) as an integer)
+if (periods's uValid):
+    emit geometry scalar ((periods's u))
+emit geometry scalar ((periods's vValid) as an integer)
+if (periods's vValid):
+    emit geometry scalar ((periods's v))
+
+if mode = 0:
+    set curve to the cad edge curve3 of (a cad line3 with origin ((frame's origin)) and direction ((frame's xAxis)))
+    if ck = 1:
+        set curve to the cad edge curve3 of (a cad circle3 with plane frame and radius cr)
+    if ck = 2:
+        set curve to the cad edge curve3 of (a cad ellipse3 with plane frame, major radius cr and minor radius cm)
+    if ck = 3:
+        set curve to the cad edge curve3 of (a cad planar spline3 with plane frame and curve (the geometry probe curve2))
+    if ck = 4:
+        set curve to the cad edge curve3 of (the geometry probe curve3)
+    emit pc result (the cad projection of curve onto surface within tolerance)
+    set body to pc one edge on surface with curve from first to last
+    set faces to the cad face keys of body
+    emit pc boundary (the item at 0 in faces) in body within tolerance
+    free faces
+else if mode = 1:
+    set made to the cad cuboid at ((plane's origin)) with size (a cad vector3 with x radius, y minor and z cr)
+    if sk = 1:
+        set made to the cad cylinder body at ((plane's origin)) with radius radius and height minor
+    if sk = 2:
+        set made to the cad cone body at ((plane's origin)) with radius radius and height minor
+    if sk = 3:
+        set made to the cad sphere body at ((plane's origin)) with radius radius
+    emit geometry scalar ((made's valid) as an integer)
+    if (made's valid):
+        set body to (made's value)
+        set faces to the cad face keys of body
+        set fk to the item at 0 in faces
+        set fn to the cad node pointer for fk in body
+        set lk to the item at 0 in (fn's loops's values)
+        set ln to the cad node pointer for lk in body
+        set uk to the item at 0 in (ln's coedges's values)
+        set un to the cad node pointer for uk in body
+        set ek to (un's edge)
+        set en to the cad node pointer for ek in body
+        if variant = 1:
+            ignore the cad removal of fk from body
+        if variant = 2:
+            ignore the cad removal of (fn's surface) from body
+        if variant = 3:
+            ignore the cad removal of lk from body
+        if variant = 4:
+            ignore the cad removal of uk from body
+        if variant = 5:
+            ignore the cad removal of ek from body
+        if variant = 6:
+            ignore the cad removal of (en's curve) from body
+        if variant = 7:
+            clear (fn's loops's values)
+        if variant = 8:
+            set (un's forward) to ((un's forward) = false)
+        if variant = 9:
+            set (en's startParameter) to first
+            set (en's endParameter) to last
+        if variant = 10:
+            set (un's pcurve) to the cad pcurve of (pc probe line (pc uv [17.0,19.0]) (pc uv [23.0,29.0]))
+            ignore the cad removal of ek from body
+        if variant = 11:
+            clear (ln's coedges's values)
+        emit geometry scalar (the length of faces)
+        loop i from 0 to the length of faces:
+            emit pc boundary (the item at i in faces) in body within tolerance
+        free faces
+else:
+    set boundary to a cad topology list of (the type of (pc probe line (the cad zero vector2) (the cad zero vector2)))
+    set period to 6.283185307179586
+    if sk = 5:
+        set period to 3.0
+    if variant = 0:
+        append (pc probe line (pc uv [0.0,1.0]) (a cad vector2 with x period and y 1.0)) to (boundary's values)
+        append (pc probe line (a cad vector2 with x period and y 4.0) (pc uv [0.0,4.0])) to (boundary's values)
+    if variant = 1:
+        append (pc probe line (pc uv [0.0,1.0]) (a cad vector2 with x (period / 2.0) and y 1.0)) to (boundary's values)
+        append (pc probe line (a cad vector2 with x (period / 2.0) and y 1.0) (a cad vector2 with x period and y 1.0)) to (boundary's values)
+        append (pc probe line (a cad vector2 with x period and y 4.0) (pc uv [0.0,4.0])) to (boundary's values)
+    if variant = 2:
+        append (pc probe line (pc uv [-0.5,-0.5]) (pc uv [0.5,-0.5])) to (boundary's values)
+        append (pc probe line (pc uv [0.5,-0.5]) (pc uv [0.5,0.5])) to (boundary's values)
+        append (pc probe line (pc uv [0.5,0.5]) (pc uv [-0.5,0.5])) to (boundary's values)
+        append (pc probe line (pc uv [-0.5,0.5]) (pc uv [-0.5,-0.5])) to (boundary's values)
+    if variant = 3:
+        append (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 0.5)) to (boundary's values)
+    if variant = 4:
+        loop i from 0 to 3:
+            append (pc probe line (a cad vector2 with x 0.0 and y i) (a cad vector2 with x period and y i)) to (boundary's values)
+    if variant = 5:
+        append (pc probe line (a cad vector2 with x 0.0 and y first) (a cad vector2 with x last and y first)) to (boundary's values)
+        append (pc probe line (a cad vector2 with x last and y (first + 1.0)) (a cad vector2 with x 0.0 and y (first + 1.0))) to (boundary's values)
+    if variant = 7:
+        append (pc probe line (pc uv [0.0,0.0]) (pc uv [0.0,1.0])) to (boundary's values)
+        append (pc probe line (pc uv [0.0,1.0]) (pc uv [0.0,0.0])) to (boundary's values)
+    if (variant = 8) or (variant = 11):
+        append (pc probe line (pc uv [11.0,12.0]) (pc uv [12.0,13.0])) to (boundary's values)
+        append (pc probe line (pc uv [0.0,0.0]) (pc uv [1.0,1.0])) to (boundary's values)
+    if variant = 9:
+        append (pc probe line (pc uv [11.0,12.0]) (pc uv [12.0,13.0])) to (boundary's values)
+        append (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 1.0)) to (boundary's values)
+    if variant = 10:
+        append (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 1.0)) to (boundary's values)
+        append (pc probe line (pc uv [11.0,12.0]) (pc uv [12.0,13.0])) to (boundary's values)
+    if mode = 3:
+        set body to pc one edge on surface with (the cad edge curve3 of (a cad line3 with origin (the cad zero vector3) and direction (the cad x axis))) from 0.0 to 1.0
+        set faces to the cad face keys of body
+        set faceKey to the item at 0 in faces
+        set faceNode to the cad node pointer for faceKey in body
+        set loopKey to the item at 0 in (faceNode's loops's values)
+        set loopNode to the cad node pointer for loopKey in body
+        set useKey to the item at 0 in (loopNode's coedges's values)
+        set useNode to the cad node pointer for useKey in body
+        set edgeKey to (useNode's edge)
+        clear (loopNode's coedges's values)
+        loop i from 0 to the length of (boundary's values):
+            if (variant = 11) and (i = 1):
+                set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+                append loopKey to (faceNode's loops's values)
+                set loopNode to the cad node pointer for loopKey in body
+            set piece to the item at i in (boundary's values)
+            set newKey to the cad body key after inserting (a cad coedge on edgeKey forward true with pcurve (the cad pcurve of piece) owned by loopKey with provenance (the synthesized cad provenance)) into body
+            append newKey to (loopNode's coedges's values)
+        emit pc boundary faceKey in body within tolerance
+        free faces
+    else:
+        emit geometry normalization (the cad periodic band point on surface bounded by ((boundary's values)) within tolerance)
+        emit geometry scalar ((cad surface bounded by ((boundary's values)) contains parameter point within (a cad tolerance of tolerance)) as an integer)

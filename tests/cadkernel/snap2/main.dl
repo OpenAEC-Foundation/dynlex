@@ -1,0 +1,197 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/snap2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check snap2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function snap2 near {cad vector2:left} to {cad vector2:right}:
+    execute:
+        return (the cad distance from left to right) < 1e-9
+function snap2 filter {a pointer to a list:points} by {cad snap kind:kind}:
+    execute:
+        set result to an empty list of a cad vector2
+        loop index from 0 to the length of points:
+            set point to the item at index in points
+            if point's kind = kind:
+                append point's point to result
+        return result
+function snap2 {a pointer to a list:points} includes {cad vector2:point}:
+    execute:
+        loop index from 0 to the length of points:
+            if snap2 near (the item at index in points) to point:
+                return true
+        return false
+function snap2 arc from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        return the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 5.0 from first to last)
+
+set points to the cad characteristic points of (cross2 segment [0.0,0.0] to [10.0,4.0])
+set ends to snap2 filter points by (the cad endpoint snap kind)
+set middles to snap2 filter points by (the cad midpoint snap kind)
+check snap2 ((the length of ends) = 2)
+check snap2 (snap2 ends includes (cross2 point [0.0,0.0]))
+check snap2 (snap2 ends includes (cross2 point [10.0,4.0]))
+check snap2 (snap2 near (the item at 0 in middles) to (cross2 point [5.0,2.0]))
+free ends
+free middles
+free points
+print "a_segment_offers_its_ends_and_middle" as a line
+
+set circle to cross2 circle [3.0,4.0] with radius 2.0
+set points to the cad characteristic points of circle
+set centres to snap2 filter points by (the cad centre snap kind)
+set quadrants to snap2 filter points by (the cad quadrant snap kind)
+set ends to snap2 filter points by (the cad endpoint snap kind)
+set middles to snap2 filter points by (the cad midpoint snap kind)
+check snap2 (snap2 near (the item at 0 in centres) to (cross2 point [3.0,4.0]))
+check snap2 ((the length of quadrants) = 4)
+check snap2 ((the length of ends) = 0)
+check snap2 ((the length of middles) = 0)
+free centres
+free ends
+free middles
+free points
+print "a_circle_offers_a_centre_and_four_quadrants_but_no_ends" as a line
+
+loop index from 0 to the length of quadrants:
+    set point to the item at index in quadrants
+    check snap2 ((the absolute value of ((the cad distance from point to (cross2 point [3.0,4.0])) - 2.0)) < 1e-9)
+    check snap2 (((the absolute value of (point's x - 3.0)) < 1e-9) or ((the absolute value of (point's y - 4.0)) < 1e-9))
+free quadrants
+print "the_quadrants_are_on_the_circle_and_on_its_axes" as a line
+
+set points to the cad characteristic points of (snap2 arc from 0.0 to 1.5707963267948966)
+set quadrants to snap2 filter points by (the cad quadrant snap kind)
+check snap2 ((the length of quadrants) = 2)
+check snap2 (snap2 quadrants includes (cross2 point [5.0,0.0]))
+check snap2 (snap2 quadrants includes (cross2 point [0.0,5.0]))
+free quadrants
+free points
+print "an_arc_offers_only_the_quadrants_it_covers" as a line
+
+set points to the cad characteristic points of (snap2 arc from 0.0 to 3.141592653589793)
+set ends to snap2 filter points by (the cad endpoint snap kind)
+set middles to snap2 filter points by (the cad midpoint snap kind)
+check snap2 ((the length of ends) = 2)
+check snap2 (snap2 near (the item at 0 in middles) to (cross2 point [0.0,5.0]))
+free ends
+free middles
+free points
+print "an_arc_still_has_ends_and_a_middle" as a line
+
+set chain to cross2 polyline [[0.0,0.0,0.0],[2.0,0.0,0.0],[2.0,2.0,0.0]] with closure false
+set points to the cad characteristic points of chain
+set ends to snap2 filter points by (the cad endpoint snap kind)
+set middles to snap2 filter points by (the cad midpoint snap kind)
+check snap2 ((the length of ends) = 3)
+check snap2 ((the length of middles) = 2)
+check snap2 (snap2 middles includes (cross2 point [1.0,0.0]))
+check snap2 (snap2 middles includes (cross2 point [2.0,1.0]))
+free ends
+free middles
+free points
+print "a_polyline_offers_every_vertex_and_every_segment_middle" as a line
+
+set chain to cross2 polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+set points to the cad characteristic points of chain
+set centres to snap2 filter points by (the cad centre snap kind)
+check snap2 ((the length of centres) = 1)
+check snap2 (snap2 near (the item at 0 in centres) to (cross2 point [1.0,0.0]))
+free centres
+free points
+print "a_polyline_arc_segment_offers_its_centre" as a line
+
+set points to the cad characteristic points of (cross2 ray [1.0,2.0] along [1.0,0.0])
+set ends to snap2 filter points by (the cad endpoint snap kind)
+check snap2 ((the length of ends) = 1)
+check snap2 (snap2 near (the item at 0 in ends) to (cross2 point [1.0,2.0]))
+free ends
+free points
+print "a_ray_offers_the_one_end_it_has" as a line
+
+set line to cross2 segment [0.0,0.0] to [10.0,0.0]
+set feet to the cad perpendicular points on line from (cross2 point [4.0,3.0])
+check snap2 ((the length of feet) = 1)
+set foot to the item at 0 in feet
+check snap2 (snap2 near foot's point to (cross2 point [4.0,0.0]))
+free feet
+print "the_perpendicular_onto_a_segment_is_the_foot" as a line
+
+set feet to the cad perpendicular points on line from (cross2 point [50.0,3.0])
+check snap2 ((the length of feet) = 0)
+free feet
+print "a_perpendicular_that_would_land_past_the_end_is_not_offered" as a line
+
+set circle to cross2 circle [0.0,0.0] with radius 5.0
+set feet to the cad perpendicular points on circle from (cross2 point [20.0,0.0])
+set positions to snap2 filter feet by (the cad perpendicular snap kind)
+check snap2 ((the length of feet) = 2)
+check snap2 (snap2 positions includes (cross2 point [5.0,0.0]))
+check snap2 (snap2 positions includes (cross2 point [-5.0,0.0]))
+free positions
+free feet
+print "a_circle_has_two_perpendicular_feet" as a line
+
+set feet to the cad perpendicular points on circle from (the cad zero vector2)
+check snap2 ((the length of feet) = 0)
+free feet
+print "the_centre_of_a_circle_has_no_perpendicular_to_offer" as a line
+
+set spline to cross2 interpolated spline
+set from to cross2 point [4.0,6.0]
+set feet to the cad perpendicular points on spline from from
+check snap2 ((the length of feet) > 0)
+loop index from 0 to the length of feet:
+    set foot to the item at index in feet
+    set before to the cad point on spline at (the maximum of (foot's t - 1e-5) and 0.0)
+    set after to the cad point on spline at (the minimum of (foot's t + 1e-5) and 1.0)
+    set along to the cad normalization of (the cad difference of after and before)
+    set back to the cad normalization of (the cad difference of from and foot's point)
+    if along's valid and back's valid:
+        check snap2 ((the absolute value of (the cad dot of along's value and back's value)) < 1e-4)
+free feet
+print "a_perpendicular_onto_a_spline_meets_it_at_a_right_angle" as a line
+
+set whole to cross2 ellipse [0.0,0.0] with radii 5.0 and 2.0
+set points to the cad characteristic points of whole
+set quadrants to snap2 filter points by (the cad quadrant snap kind)
+check snap2 ((the length of quadrants) = 4)
+check snap2 (snap2 quadrants includes (cross2 point [5.0,0.0]))
+check snap2 (snap2 quadrants includes (cross2 point [0.0,2.0]))
+free quadrants
+free points
+print "an_ellipse_offers_the_axis_ends_it_covers" as a line
+
+set circle to cross2 circle [0.0,0.0] with radius 3.0
+set touches to the cad tangent points on circle from (cross2 point [5.0,0.0])
+check snap2 ((the length of touches) = 2)
+loop index from 0 to the length of touches:
+    set touch to the item at index in touches
+    set radial to touch's point
+    check snap2 ((the absolute value of ((the cad length of radial) - 3.0)) < 1e-9)
+    set back to the cad difference of (cross2 point [5.0,0.0]) and radial
+    check snap2 ((the absolute value of (the cad dot of radial and back)) < 1e-9)
+free touches
+set touches to the cad tangent points on circle from (cross2 point [1.0,0.0])
+check snap2 ((the length of touches) = 0)
+free touches
+set touches to the cad tangent points on (cross2 segment [0.0,0.0] to [1.0,1.0]) from (cross2 point [5.0,5.0])
+check snap2 ((the length of touches) = 0)
+free touches
+print "tangents_are_offered_from_outside_a_circle_only" as a line
+
+set origin to cross2 point [512345.678,4512345.678]
+set circle to the cad curve2 of (a cad circle2 at origin with radius 2.0)
+set points to the cad characteristic points of circle
+set centres to snap2 filter points by (the cad centre snap kind)
+set quadrants to snap2 filter points by (the cad quadrant snap kind)
+check snap2 (snap2 near (the item at 0 in centres) to origin)
+loop index from 0 to the length of quadrants:
+    set quadrant to the item at index in quadrants
+    check snap2 ((the absolute value of ((the cad distance from quadrant to origin) - 2.0)) < 1e-9)
+free centres
+free quadrants
+free points
+print "survey_coordinates_snap_to_the_same_places" as a line

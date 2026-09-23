@@ -1,0 +1,6 @@
+import lib/cadkernel/curve2.dl
+set shape to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+set low to 0.0 as a 32 bit floating-point number
+set high to 1.0 as a 32 bit floating-point number
+set result to the cad rectangle side of shape with bounds [[low,high],[low,high]]
+print whether result's valid as a line

@@ -1,0 +1,5 @@
+import lib/cadkernel/curve3.dl
+set controls to an empty list of a cad vector3
+set samples to the cad bezier samples of controls with -1 segments
+free samples
+free controls

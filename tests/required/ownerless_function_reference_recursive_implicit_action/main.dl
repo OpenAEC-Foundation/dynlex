@@ -1,0 +1,13 @@
+integer means: @intrinsic("type", "int")
+
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function visit {integer:depth}:
+    execute:
+        if @intrinsic("less than", depth, 3):
+            visit @intrinsic("add", depth, 1)
+        @intrinsic("discard", depth)
+
+@intrinsic("discard", @intrinsic("function", "visit $"))

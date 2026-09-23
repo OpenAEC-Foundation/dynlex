@@ -1,0 +1,1077 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Module coverage and remaining operations are recorded in the coverage manifest.
+# Profiles are borrowed; constructed bodies own their topology and geometry.
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/brep_profile.dl
+import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/area2.dl
+import lib/cadkernel/offset2.dl
+import lib/cadkernel/brep_loft.dl
+
+class:
+    patterns:
+        [a|] cad sweep use
+    members:
+        edge as a cad edge key
+        forward as a boolean
+        pcurve as a cad pcurve result
+class:
+    patterns:
+        [a|] cad sweep lifted result
+    members:
+        valid as a boolean
+        curve as a cad edge curve3
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad sweep edge result
+    members:
+        valid as a boolean
+        value as a cad edge key
+class:
+    patterns:
+        [a|] cad sweep wall result
+    members:
+        valid as a boolean
+        surface as a cad surface key
+        spline as a boolean
+class:
+    patterns:
+        [a|] cad sweep sense result
+    members:
+        valid as a boolean
+        value as a boolean
+class:
+    patterns:
+        [a|] cad sweep revolution station
+    members:
+        radius as a 64 bit floating-point number
+        height as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad sweep projection bounds
+    members:
+        valid as a boolean
+        low as a 64 bit floating-point number
+        high as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad sweep revolution turn
+    members:
+        valid as a boolean
+        pivot as a cad vector3
+        axis as a cad vector3
+        radial as a cad vector3
+        spin as a boolean
+        tolerance as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad sweep revolution piece
+    members:
+        valid as a boolean
+        kind as an integer
+        surface as a cad surface key
+        surfaceKind as an integer
+        flat as a boolean
+class:
+    patterns:
+        [a|] cad sweep optional vertex
+    members:
+        valid as a boolean
+        value as a cad vertex key
+class:
+    patterns:
+        [a|] cad sweep revolved arc parameters
+    members:
+        valid as a boolean
+        around as a 64 bit floating-point number
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+
+local function cad sweep [use] of {cad edge key:edge} forward {boolean:forward}:
+    execute:
+        return @intrinsic("construct", a cad sweep use, edge, forward, no cad pcurve)
+local function cad sweep [vertex] at {cad vector3:point} in {cad body:body}:
+    execute:
+        return the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into body
+local function cad sweep [edge] on {cad edge curve3:curve} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} between {cad vertex key:first} and {cad vertex key:last} in {cad body:body}:
+    execute:
+        set key to the cad body key after inserting curve into body
+        return the cad body key after inserting (a cad edge on key from start to end between first and last with provenance (the synthesized cad provenance)) into body
+local function cad sweep line from {cad vertex key:first} to {cad vertex key:last} in {cad body:body}:
+    execute:
+        set start to the cad node pointer for first in body
+        set end to the cad node pointer for last in body
+        if (start = (0 as the type of start)) or (end = (0 as the type of end)):
+            return @intrinsic("construct", a cad sweep edge result, false, a new cad edge key)
+        set curve to the cad edge curve3 of (a cad line3 with origin (start's point) and direction (the cad difference of (end's point) and (start's point)))
+        set key to cad sweep edge on curve from 0.0 to 1.0 between first and last in body
+        return @intrinsic("construct", a cad sweep edge result, true, key)
+
+local function cad sweep lift of {cad curve2:piece} on {cad plane:plane}:
+    execute:
+        set absent to @intrinsic("construct", a cad sweep lifted result, false, the cad edge curve3 of (a cad line3 with origin (the cad zero vector3) and direction (the cad zero vector3)), 0.0, 0.0)
+        if (piece's kind) = 0:
+            set start to the cad point at (piece's line's start) on plane
+            set end to the cad point at (piece's line's end) on plane
+            set curve to the cad edge curve3 of (a cad line3 with origin start and direction (the cad difference of end and start))
+            return @intrinsic("construct", a cad sweep lifted result, true, curve, 0.0, 1.0)
+        if (piece's kind) = 2:
+            set centre to the cad point at (piece's arc's centre) on plane
+            set frame to a cad plane with origin centre, x axis (plane's xAxis) and y axis (plane's yAxis)
+            set start to the cad normalized angle of (piece's arc's startAngle)
+            set curve to the cad edge curve3 of (a cad circle3 with plane frame and radius (piece's arc's radius))
+            return @intrinsic("construct", a cad sweep lifted result, true, curve, start, start + (the cad sweep of (piece's arc)))
+        if (piece's kind) = 3:
+            set centre to the cad point at (piece's ellipse's ellipse's centre) on plane
+            set normal to the cad normal of plane
+            if (normal's valid) = false:
+                return absent
+            set along to the cad vector at (piece's ellipse's ellipse's majorAxis) on plane
+            set frame to the cad orthonormal plane with origin centre, x axis along and normal (normal's value)
+            if (frame's valid) = false:
+                return absent
+            set curve to the cad edge curve3 of (a cad ellipse3 with plane (frame's value), major radius (piece's ellipse's ellipse's majorRadius) and minor radius (piece's ellipse's ellipse's minorRadius))
+            set start to piece's ellipse's startParameter
+            return @intrinsic("construct", a cad sweep lifted result, true, curve, start, start + (the cad sweep of (piece's ellipse)))
+        if (piece's kind) = 5:
+            set curve to the cad edge curve3 of (a cad planar spline3 with plane plane and curve (the cad clone of (piece's nurbs)))
+            return @intrinsic("construct", a cad sweep lifted result, true, curve, 0.0, 1.0)
+        return absent
+
+local function cad sweep profile [edge] of {cad curve2:piece} on {cad plane:plane} from {cad vertex key:first} to {cad vertex key:last} in {cad body:body}:
+    execute:
+        set lifted to cad sweep lift of piece on plane
+        if (lifted's valid) = false:
+            return @intrinsic("construct", a cad sweep edge result, false, a new cad edge key)
+        set key to cad sweep edge on (lifted's curve) from (lifted's start) to (lifted's end) between first and last in body
+        return @intrinsic("construct", a cad sweep edge result, true, key)
+
+local function cad sweep wall of {cad curve2:piece} on {cad plane:plane} along {cad vector3:along} in {cad body:body}:
+    execute:
+        set absent to @intrinsic("construct", a cad sweep wall result, false, a new cad surface key, false)
+        if (piece's kind) = 0:
+            set start to the cad point at (piece's line's start) on plane
+            set end to the cad point at (piece's line's end) on plane
+            set direction to the cad difference of end and start
+            set normal to the cad normalization of (the cad cross of direction and along)
+            if (normal's valid) = false:
+                return absent
+            set frame to the cad orthonormal plane with origin start, x axis direction and normal (normal's value)
+            if (frame's valid) = false:
+                return absent
+            set key to the cad body key after inserting (the cad surface of (frame's value)) into body
+            return @intrinsic("construct", a cad sweep wall result, true, key, false)
+        if (piece's kind) = 2:
+            set centre to the cad point at (piece's arc's centre) on plane
+            set frame to the cad orthonormal plane with origin centre, x axis (plane's xAxis) and normal along
+            if (frame's valid) = false:
+                return absent
+            set key to the cad body key after inserting (the cad surface of (a cad cylinder with base (frame's value) and radius (piece's arc's radius))) into body
+            return @intrinsic("construct", a cad sweep wall result, true, key, false)
+        if ((piece's kind) = 3) or ((piece's kind) = 5):
+            set built to the cad rational builder of piece
+            if (built's valid) = false:
+                return absent
+            set base to the cad lift of (built's value) onto plane
+            set top to the cad translation of base by along
+            set surface to the cad ruled surface from base to top
+            if (surface's valid) = false:
+                return absent
+            set key to the cad body key after inserting (the cad surface of (surface's value)) into body
+            return @intrinsic("construct", a cad sweep wall result, true, key, true)
+        return absent
+
+local function cad sweep [sense] of {cad surface:surface} at {cad vector3:point} outward {cad vector3:out}:
+    execute:
+        set absent to @intrinsic("construct", a cad sweep sense result, false, false)
+        set slope to 0.0
+        if (surface's kind) = 4:
+            set parameters to the cad parameters on surface nearest point
+            if (parameters's valid) = false:
+                return absent
+            set normal to the cad normal of surface at parameters (parameters's value's x) and (parameters's value's y)
+            if (normal's valid) = false:
+                return absent
+            set slope to the cad dot of (normal's value) and out
+        else if (surface's kind) = 5:
+            set domain to the cad domain of (surface's nurbs)
+            set normal to the cad normal of surface at parameters (((domain's u's start) + (domain's u's end)) * 0.5) and (((domain's v's start) + (domain's v's end)) * 0.5)
+            if (normal's valid) = false:
+                return absent
+            set slope to the cad dot of (normal's value) and out
+        else:
+            set normalized to the cad normalization of out
+            if (normalized's valid) = false:
+                return absent
+            set step to (normalized's value) scaled by 1e-6
+            set ahead to the cad sum of point and step
+            set behind to the cad difference of point and step
+            set slope to (the cad distance from surface to ahead) - (the cad distance from surface to behind)
+        if (slope = 0.0) or (((the absolute value of slope) <= 1.7976931348623157e308) = false):
+            return absent
+        return @intrinsic("construct", a cad sweep sense result, true, slope > 0.0)
+
+local function cad sweep outward of {cad curve2:piece} on {cad plane:plane} forward {boolean:forward} counterclockwise {boolean:counterclockwise}:
+    execute:
+        set tangent to the cad tangent of piece at 0.5
+        set along to -1.0
+        if forward:
+            set along to 1.0
+        set right to the negative of along
+        if counterclockwise:
+            set right to along
+        return the cad vector at (a cad vector2 with x ((tangent's y) * right) and y ((the negative of (tangent's x)) * right)) on plane
+
+local function cad sweep reordered {cad topology list:uses} outward {boolean:outward}:
+    execute:
+        if outward:
+            return uses
+        set result to a cad topology list of a cad sweep use
+        loop index from 0 to the length of (uses's values):
+            set usage to the item at (((the length of (uses's values)) - 1) - index) in (uses's values)
+            set usage's forward to (usage's forward) = false
+            if usage's pcurve's valid:
+                set line to usage's pcurve's value's line
+                set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (line's end) to (line's start)))
+            append usage to (result's values)
+        return result
+
+# Linking preserves the creation order of faces, loops and edge uses.
+local function cad sweep [face] in {cad body:body} within {cad shell key:shellKey} on {cad surface key:surfaceKey} forward {boolean:forward} using {cad topology list:uses}:
+    execute:
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by shellKey with provenance (the synthesized cad provenance)) into body
+        set ringKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        loop index from 0 to the length of (uses's values):
+            set usage to the item at index in (uses's values)
+            set coedge to the cad body key after inserting (a cad coedge on (usage's edge) forward (usage's forward) with pcurve (usage's pcurve) owned by ringKey with provenance (the synthesized cad provenance)) into body
+            set edge to the cad node pointer for (usage's edge) in body
+            if edge = (0 as the type of edge):
+                return false
+            append coedge to (edge's coedges's values)
+            set ring to the cad node pointer for ringKey in body
+            append coedge to (ring's coedges's values)
+        set face to the cad node pointer for faceKey in body
+        append ringKey to (face's loops's values)
+        set shell to the cad node pointer for shellKey in body
+        if shell = (0 as the type of shell):
+            return false
+        append faceKey to (shell's faces's values)
+        return true
+
+local function cad sweep cap in {cad body:body} within {cad shell key:shell} on {cad plane:plane} with edges {cad topology list:edges} and senses {cad topology list:senses} forward {boolean:forward} along profile {boolean:along}:
+    execute:
+        set uses to a cad topology list of a cad sweep use
+        loop index from 0 to the length of (edges's values):
+            set position to index
+            if along = false:
+                set position to ((the length of (edges's values)) - 1) - index
+            set sense to the item at position in (senses's values)
+            append (cad sweep use of (the item at position in (edges's values)) forward (sense = along)) to (uses's values)
+        set key to the cad body key after inserting (the cad surface of plane) into body
+        return cad sweep face in body within shell on key forward forward using uses
+
+local function cad sweep profile [edges] of {a pointer to a list:profile} on {cad plane:plane} with senses {cad topology list:senses} and corners {cad topology list:corners} in {cad body:body}:
+    execute:
+        set edges to a cad topology list of a cad edge key
+        loop index from 0 to the length of profile:
+            set next to the remainder of (index + 1) divided by (the length of profile)
+            set from to the item at index in (corners's values)
+            set to to the item at next in (corners's values)
+            if (the item at index in (senses's values)) = false:
+                set from to the item at next in (corners's values)
+                set to to the item at index in (corners's values)
+            set edge to cad sweep profile edge of (the item at index in profile) on plane from from to to in body
+            if (edge's valid) = false:
+                return a cad topology list of a cad edge key
+            append (edge's value) to (edges's values)
+        return edges
+
+local function cad sweep circuit with base {cad edge key:base}, next rail {cad edge key:next}, top {cad edge key:top} and rail {cad edge key:rail} along {boolean:forward} with spline {boolean:spline}:
+    execute:
+        set result to a cad topology list of a cad sweep use
+        append (cad sweep use of base forward forward) to (result's values)
+        append (cad sweep use of next forward true) to (result's values)
+        append (cad sweep use of top forward (forward = false)) to (result's values)
+        append (cad sweep use of rail forward false) to (result's values)
+        if spline:
+            set start to 1.0
+            if forward:
+                set start to 0.0
+            set end to 1.0 - start
+            set corners to [[start,0.0],[end,0.0],[end,1.0],[start,1.0]]
+            loop index from 0 to 4:
+                set first to the item at index in corners
+                set last to the item at (the remainder of (index + 1) divided by 4) in corners
+                set p to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+                set q to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+                set usage to the item at index in (result's values)
+                set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from p to q))
+                replace item at index index in (result's values) with usage
+        return result
+
+local function cad sweep revolution scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
+
+local function no cad sweep projection bounds:
+    execute:
+        return @intrinsic("construct", a cad sweep projection bounds, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
+
+local function cad sweep projection bounds between {a 64 bit floating-point number:first} and {a 64 bit floating-point number:second}:
+    execute:
+        if ((cad sweep revolution scalar first is finite) and (cad sweep revolution scalar second is finite)) = false:
+            return no cad sweep projection bounds
+        return @intrinsic("construct", a cad sweep projection bounds, true, the minimum of first and second, the maximum of first and second)
+
+local function cad sweep revolution angle from {a 64 bit floating-point number:y} over {a 64 bit floating-point number:x}:
+    execute:
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
+
+local function cad sweep revolution positive remainder of {a 64 bit floating-point number:value}:
+    execute:
+        set result to the remainder of value divided by 6.283185307179586
+        if result < 0.0:
+            set result to result + 6.283185307179586
+        return result
+
+local function cad sweep trigonometric value with centre {a 64 bit floating-point number:centre}, cosine {a 64 bit floating-point number:cosine}, sine {a 64 bit floating-point number:sine} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return (centre + (cosine * (the cosine of parameter))) + (sine * (the sine of parameter))
+
+local function cad sweep trigonometric bounds with centre {a 64 bit floating-point number:centre}, cosine {a 64 bit floating-point number:cosine}, sine {a 64 bit floating-point number:sine}, start {a 64 bit floating-point number:start} and sweep {a 64 bit floating-point number:sweep}:
+    execute:
+        set finish to start + sweep
+        if (((((cad sweep revolution scalar centre is finite) and (cad sweep revolution scalar cosine is finite)) and (cad sweep revolution scalar sine is finite)) and (cad sweep revolution scalar start is finite)) and ((cad sweep revolution scalar sweep is finite) and (sweep > 0.0))) = false:
+            return no cad sweep projection bounds
+        if (cad sweep revolution scalar finish is finite) = false:
+            return no cad sweep projection bounds
+        set first to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at start
+        set last to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at finish
+        set interval to cad sweep projection bounds between first and last
+        if (interval's valid) = false:
+            return interval
+        set maximumParameter to cad sweep revolution angle from sine over cosine
+        loop offsetIndex from 0 to 2:
+            set extreme to maximumParameter + ((offsetIndex as a 64 bit floating-point number) * 3.141592653589793)
+            set offset to cad sweep revolution positive remainder of (extreme - start)
+            if (sweep >= (6.283185307179586 - 1e-12)) or (offset <= (sweep + 1e-12)):
+                set measured to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at extreme
+                if (cad sweep revolution scalar measured is finite) = false:
+                    return no cad sweep projection bounds
+                set interval's low to the minimum of (interval's low) and measured
+                set interval's high to the maximum of (interval's high) and measured
+        return interval
+
+local function cad sweep projection of {cad vector3:point} from {cad vector3:origin} along {cad vector3:direction}:
+    execute:
+        return the cad dot of (the cad difference of point and origin) and direction
+
+local function cad sweep projection bounds of {cad curve2:piece} on {cad plane:plane} from {cad vector3:origin} along {cad vector3:direction}:
+    execute:
+        if (piece's kind) = 0:
+            set first to cad sweep projection of (the cad point at (piece's line's start) on plane) from origin along direction
+            set second to cad sweep projection of (the cad point at (piece's line's end) on plane) from origin along direction
+            return cad sweep projection bounds between first and second
+        if (piece's kind) = 2:
+            set arc to piece's arc
+            set centre to cad sweep projection of (the cad point at (arc's centre) on plane) from origin along direction
+            set cosineVector to the cad vector at (a cad vector2 with x (arc's radius) and y 0.0) on plane
+            set sineVector to the cad vector at (a cad vector2 with x 0.0 and y (arc's radius)) on plane
+            set cosine to the cad dot of cosineVector and direction
+            set sine to the cad dot of sineVector and direction
+            return cad sweep trigonometric bounds with centre centre, cosine cosine, sine sine, start (arc's startAngle) and sweep (the cad sweep of arc)
+        return no cad sweep projection bounds
+
+local function no cad sweep revolution turn:
+    execute:
+        return @intrinsic("construct", a cad sweep revolution turn, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, false, 0.0 as a 64 bit floating-point number)
+
+local function cad sweep complete revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set normalResult to the cad normal of plane
+        set directionResult to the cad normalization of axis
+        if ((normalResult's valid) and (directionResult's valid)) = false:
+            return no cad sweep revolution turn
+        set direction to directionResult's value
+        set turnAngle to angle
+        if turnAngle < 0.0:
+            set direction to the cad negative of direction
+            set turnAngle to 0.0 - turnAngle
+        if ((cad sweep revolution scalar turnAngle is finite) = false) or ((turnAngle <= 0.0) or (turnAngle > (6.283185307179586 + 1e-12))):
+            return no cad sweep revolution turn
+        if (the absolute value of (6.283185307179586 - turnAngle)) > 1e-9:
+            return no cad sweep revolution turn
+        set planeDistance to the cad distance from pivot to plane
+        if (planeDistance's valid) = false:
+            return no cad sweep revolution turn
+        if ((the absolute value of (the cad dot of direction and (normalResult's value))) > 1e-9) or ((the absolute value of (planeDistance's value)) > 1e-9):
+            return no cad sweep revolution turn
+        set radialResult to the cad normalization of (the cad cross of (normalResult's value) and direction)
+        if (radialResult's valid) = false:
+            return no cad sweep revolution turn
+        set radial to radialResult's value
+        set spin to (the cad dot of (normalResult's value) and (the cad cross of direction and radial)) > 0.0
+        set foundFirst to false
+        set scaleOrigin to the cad zero vector3
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            if ((piece's kind) != 0) and ((piece's kind) != 2):
+                return no cad sweep revolution turn
+            if foundFirst = false:
+                set scaleOrigin to the cad point at (the cad point on piece at 0.0) on plane
+                set foundFirst to true
+        if foundFirst = false:
+            return no cad sweep revolution turn
+        set radialBounds to no cad sweep projection bounds
+        set heightBounds to no cad sweep projection bounds
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set pieceRadial to cad sweep projection bounds of piece on plane from pivot along radial
+            set pieceHeight to cad sweep projection bounds of piece on plane from scaleOrigin along direction
+            if ((pieceRadial's valid) and (pieceHeight's valid)) = false:
+                return no cad sweep revolution turn
+            if radialBounds's valid:
+                set radialBounds's low to the minimum of (radialBounds's low) and (pieceRadial's low)
+                set radialBounds's high to the maximum of (radialBounds's high) and (pieceRadial's high)
+            else:
+                set radialBounds to pieceRadial
+            if heightBounds's valid:
+                set heightBounds's low to the minimum of (heightBounds's low) and (pieceHeight's low)
+                set heightBounds's high to the maximum of (heightBounds's high) and (pieceHeight's high)
+            else:
+                set heightBounds to pieceHeight
+        set radialMagnitude to the maximum of (the absolute value of (radialBounds's low)) and (the absolute value of (radialBounds's high))
+        set profileScale to the maximum of radialMagnitude and ((heightBounds's high) - (heightBounds's low))
+        set tolerance to 1e-9 * (the maximum of profileScale and 1.0)
+        if profileScale <= tolerance:
+            return no cad sweep revolution turn
+        set reachesNegative to (radialBounds's low) < (the negative of tolerance)
+        set reachesPositive to (radialBounds's high) > tolerance
+        if reachesNegative and reachesPositive:
+            return no cad sweep revolution turn
+        if (reachesNegative or reachesPositive) = false:
+            return no cad sweep revolution turn
+        if reachesPositive = false:
+            set radial to the cad negative of radial
+            set spin to spin = false
+        return @intrinsic("construct", a cad sweep revolution turn, true, pivot, direction, radial, spin, tolerance)
+
+local function cad sweep revolution station at {cad vector2:uv} on {cad plane:plane} for {cad sweep revolution turn:turn}:
+    execute:
+        set offset to the cad difference of (the cad point at uv on plane) and (turn's pivot)
+        return @intrinsic("construct", a cad sweep revolution station, the cad dot of offset and (turn's radial), the cad dot of offset and (turn's axis))
+
+local function cad sweep revolution circle at {a 64 bit floating-point number:height} for {cad sweep revolution turn:turn}:
+    execute:
+        set centre to the cad sum of (turn's pivot) and ((turn's axis) scaled by height)
+        return the cad orthonormal plane with origin centre, x axis (turn's radial) and normal (turn's axis)
+
+local function no cad sweep revolution piece:
+    execute:
+        return @intrinsic("construct", a cad sweep revolution piece, false, 2, a new cad surface key, 0, false)
+
+local function collapsed cad sweep revolution piece:
+    execute:
+        return @intrinsic("construct", a cad sweep revolution piece, true, 0, a new cad surface key, 0, false)
+
+local function cad sweep revolution piece on {cad surface:surface} flat {boolean:flat} in {cad body:body}:
+    execute:
+        set surfaceKey to the cad body key after inserting surface into body
+        return @intrinsic("construct", a cad sweep revolution piece, true, 1, surfaceKey, surface's kind, flat)
+
+local function cad sweep revolution surface of {cad curve2:piece} on {cad plane:plane} for {cad sweep revolution turn:turn} in {cad body:body}:
+    execute:
+        set radialBounds to cad sweep projection bounds of piece on plane from (turn's pivot) along (turn's radial)
+        if radialBounds's valid = false:
+            return no cad sweep revolution piece
+        set reachesNegative to (radialBounds's low) < (the negative of (turn's tolerance))
+        set reachesPositive to (radialBounds's high) > (turn's tolerance)
+        if (reachesNegative or reachesPositive) = false:
+            return collapsed cad sweep revolution piece
+        if (piece's kind) = 0:
+            set first to cad sweep revolution station at (piece's line's start) on plane for turn
+            set second to cad sweep revolution station at (piece's line's end) on plane for turn
+            set frameResult to cad sweep revolution circle at (first's height) for turn
+            if frameResult's valid = false:
+                return no cad sweep revolution piece
+            if (the absolute value of ((second's height) - (first's height))) <= (turn's tolerance):
+                return cad sweep revolution piece on (the cad surface of (frameResult's value)) flat true in body
+            if (the absolute value of ((second's radius) - (first's radius))) <= (turn's tolerance):
+                return cad sweep revolution piece on (the cad surface of (a cad cylinder with base (frameResult's value) and radius (first's radius))) flat false in body
+            set halfAngle to @intrinsic("call", "libc", "atan", a 64 bit floating-point number, ((first's radius) - (second's radius)) / ((second's height) - (first's height)))
+            return cad sweep revolution piece on (the cad surface of (a cad cone with base (frameResult's value), radius (first's radius) and half angle halfAngle)) flat false in body
+        if (piece's kind) = 2:
+            set centreStation to cad sweep revolution station at (piece's arc's centre) on plane for turn
+            set frameResult to cad sweep revolution circle at (centreStation's height) for turn
+            if frameResult's valid = false:
+                return no cad sweep revolution piece
+            if (the absolute value of (centreStation's radius)) <= (turn's tolerance):
+                return cad sweep revolution piece on (the cad surface of (a cad sphere with frame (frameResult's value) and radius (piece's arc's radius))) flat false in body
+            return cad sweep revolution piece on (the cad surface of (a cad torus with frame (frameResult's value), major radius (the absolute value of (centreStation's radius)) and minor radius (piece's arc's radius))) flat false in body
+        return no cad sweep revolution piece
+
+local function cad sweep revolution turned {cad vector3:vector} by {a 64 bit floating-point number:angle} for {cad sweep revolution turn:turn}:
+    execute:
+        set cosine to the cosine of angle
+        set sine to the sine of angle
+        set first to vector scaled by cosine
+        set second to (the cad cross of (turn's axis) and vector) scaled by sine
+        set third to (turn's axis) scaled by ((the cad dot of (turn's axis) and vector) * (1.0 - cosine))
+        return the cad sum of (the cad sum of first and second) and third
+
+local function cad sweep revolution moved {cad vector3:point} by {a 64 bit floating-point number:angle} for {cad sweep revolution turn:turn}:
+    execute:
+        return the cad sum of (turn's pivot) and (cad sweep revolution turned (the cad difference of point and (turn's pivot)) by angle for turn)
+
+local function no cad sweep revolved arc parameters:
+    execute:
+        return @intrinsic("construct", a cad sweep revolved arc parameters, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
+
+local function cad sweep revolved parameters of {cad arc2:arc} on {cad plane:plane} for {cad sweep revolution turn:turn}:
+    execute:
+        set arcSweep to the cad sweep of arc
+        set midpoint to (arc's startAngle) + arcSweep * 0.5
+        set offset to the cad vector at (a cad vector2 with x ((arc's radius) * (the cosine of midpoint)) and y ((arc's radius) * (the sine of midpoint))) on plane
+        set tangent to the cad vector at (a cad vector2 with x ((the negative of (arc's radius)) * (the sine of midpoint)) and y ((arc's radius) * (the cosine of midpoint))) on plane
+        set radial to the cad dot of offset and (turn's radial)
+        set height to the cad dot of offset and (turn's axis)
+        set radialTangent to the cad dot of tangent and (turn's radial)
+        set heightTangent to the cad dot of tangent and (turn's axis)
+        set orientation to radial * heightTangent - height * radialTangent
+        if (((cad sweep revolution scalar arcSweep is finite) and (cad sweep revolution scalar radial is finite)) and ((cad sweep revolution scalar height is finite) and ((cad sweep revolution scalar orientation is finite) and (orientation != 0.0)))) = false:
+            return no cad sweep revolved arc parameters
+        set middleAngle to cad sweep revolution angle from height over radial
+        set direction to the negative of (1.0 as a 64 bit floating-point number)
+        if orientation > 0.0:
+            set direction to 1.0
+        set beginning to middleAngle - ((direction * arcSweep) * 0.5)
+        set ending to middleAngle + ((direction * arcSweep) * 0.5)
+        set centreStation to cad sweep revolution station at (arc's centre) on plane for turn
+        if (centreStation's radius) < (the negative of (turn's tolerance)):
+            return @intrinsic("construct", a cad sweep revolved arc parameters, true, 3.141592653589793 as a 64 bit floating-point number, 3.141592653589793 - beginning, 3.141592653589793 - ending)
+        return @intrinsic("construct", a cad sweep revolved arc parameters, true, 0.0 as a 64 bit floating-point number, beginning, ending)
+
+local function cad sweep ring on {cad face key:faceKey} in {cad body:body} using {cad topology list:uses}:
+    execute:
+        set ringKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        loop index from 0 to the length of (uses's values):
+            set usage to the item at index in (uses's values)
+            set coedgeKey to the cad body key after inserting (a cad coedge on (usage's edge) forward (usage's forward) with pcurve (usage's pcurve) owned by ringKey with provenance (the synthesized cad provenance)) into body
+            set edgeNode to the cad node pointer for (usage's edge) in body
+            set ringNode to the cad node pointer for ringKey in body
+            if (edgeNode = (0 as the type of edgeNode)) or (ringNode = (0 as the type of ringNode)):
+                return false
+            append coedgeKey to (edgeNode's coedges's values)
+            append coedgeKey to (ringNode's coedges's values)
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return false
+        append ringKey to (faceNode's loops's values)
+        return true
+
+local function cad sweep optional vertex at {cad vector3:point} in {cad body:body} present {boolean:present}:
+    execute:
+        if present:
+            return @intrinsic("construct", a cad sweep optional vertex, true, cad sweep vertex at point in body)
+        return @intrinsic("construct", a cad sweep optional vertex, false, a new cad vertex key)
+
+function the cad revolution of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a number:angle}:
+    execute:
+        set ordered to the cad profile senses of profile
+        if ordered's valid = false:
+            return no cad body
+        set senses to ordered's value
+        set handed to -0.0
+        set corners to a cad topology list of a cad vector2
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set parameter to 1.0
+            set area to the cad enclosed area of piece
+            if the item at index in (senses's values):
+                set parameter to 0.0
+            else:
+                set area to the negative of area
+            append (the cad point on piece at parameter) to (corners's values)
+            set handed to handed + area
+        if (handed = 0.0) or (handed != handed):
+            return no cad body
+        set turn to cad sweep complete revolution turn of profile on plane about pivot along axis by (angle as a 64 bit floating-point number)
+        if turn's valid = false:
+            return no cad body
+        set stations to a cad topology list of a cad sweep revolution station
+        loop index from 0 to the length of (corners's values):
+            append (cad sweep revolution station at (the item at index in (corners's values)) on plane for turn) to (stations's values)
+        set outward to (turn's spin) != (handed > 0.0)
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set pieces to a cad topology list of a cad sweep revolution piece
+        loop index from 0 to the length of profile:
+            set builtPiece to cad sweep revolution surface of (the item at index in profile) on plane for turn in body
+            if builtPiece's valid = false:
+                return no cad body
+            append builtPiece to (pieces's values)
+        set count to the length of profile
+        set hasRim to a cad topology list of a boolean
+        set hasSeam to a cad topology list of a boolean
+        loop index from 0 to count:
+            set previous to the remainder of ((index + count) - 1) divided by count
+            set herePiece to the item at index in (pieces's values)
+            set beforePiece to the item at previous in (pieces's values)
+            set rimNeeded to ((the item at index in (stations's values))'s radius) > (turn's tolerance)
+            set rimNeeded to rimNeeded and (((herePiece's kind) = 1) or ((beforePiece's kind) = 1))
+            append rimNeeded to (hasRim's values)
+            append (((herePiece's kind) = 1) and ((herePiece's flat) = false)) to (hasSeam's values)
+        set vertices to a cad topology list of a cad sweep optional vertex
+        loop index from 0 to count:
+            set previous to the remainder of ((index + count) - 1) divided by count
+            set needed to the item at index in (hasRim's values)
+            set needed to needed or (the item at index in (hasSeam's values))
+            set needed to needed or (the item at previous in (hasSeam's values))
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep optional vertex at point in body present needed) to (vertices's values)
+        set rims to a cad topology list of a cad sweep edge result
+        loop index from 0 to count:
+            if (the item at index in (hasRim's values)) = false:
+                append (@intrinsic("construct", a cad sweep edge result, false, a new cad edge key)) to (rims's values)
+            else:
+                set corner to the item at index in (vertices's values)
+                set frameResult to cad sweep revolution circle at ((the item at index in (stations's values))'s height) for turn
+                if ((corner's valid) and (frameResult's valid)) = false:
+                    return no cad body
+                set circle to the cad edge curve3 of (a cad circle3 with plane (frameResult's value) and radius ((the item at index in (stations's values))'s radius))
+                set edgeKey to cad sweep edge on circle from 0.0 to 6.283185307179586 between (corner's value) and (corner's value) in body
+                append (@intrinsic("construct", a cad sweep edge result, true, edgeKey)) to (rims's values)
+        set seams to a cad topology list of a cad sweep edge result
+        loop index from 0 to count:
+            if (the item at index in (hasSeam's values)) = false:
+                append (@intrinsic("construct", a cad sweep edge result, false, a new cad edge key)) to (seams's values)
+            else:
+                set next to the remainder of (index + 1) divided by count
+                set firstCorner to the item at index in (vertices's values)
+                set lastCorner to the item at next in (vertices's values)
+                if ((firstCorner's valid) and (lastCorner's valid)) = false:
+                    return no cad body
+                set fromKey to firstCorner's value
+                set toKey to lastCorner's value
+                if (the item at index in (senses's values)) = false:
+                    set fromKey to lastCorner's value
+                    set toKey to firstCorner's value
+                set seamResult to cad sweep profile edge of (the item at index in profile) on plane from fromKey to toKey in body
+                if seamResult's valid = false:
+                    return no cad body
+                append seamResult to (seams's values)
+        loop index from 0 to count:
+            set pieceShape to the item at index in (pieces's values)
+            if (pieceShape's kind) = 1:
+                set next to the remainder of (index + 1) divided by count
+                set sourcePiece to the item at index in profile
+                set out to cad sweep outward of sourcePiece on plane forward (the item at index in (senses's values)) counterclockwise (handed > 0.0)
+                set samplePoint to the cad point at (the cad point on sourcePiece at 0.5) on plane
+                set halfwayOut to cad sweep revolution turned out by 3.141592653589793 for turn
+                set halfwayOn to cad sweep revolution moved samplePoint by 3.141592653589793 for turn
+                set surfaceNode to the cad node pointer for (pieceShape's surface) in body
+                if surfaceNode = (0 as the type of surfaceNode):
+                    return no cad body
+                set forwardResult to cad sweep sense of (@intrinsic("dereference", surfaceNode)) at halfwayOn outward halfwayOut
+                if forwardResult's valid = false:
+                    return no cad body
+                set faceKey to the cad body key after inserting (a cad face on (pieceShape's surface) forward (forwardResult's value) owned by shellKey with provenance (the synthesized cad provenance)) into body
+                set firstRim to the item at index in (rims's values)
+                set lastRim to the item at next in (rims's values)
+                if pieceShape's flat:
+                    if (firstRim's valid) and (lastRim's valid):
+                        set firstUse to a cad topology list of a cad sweep use
+                        set lastUse to a cad topology list of a cad sweep use
+                        append (cad sweep use of (firstRim's value) forward outward) to (firstUse's values)
+                        append (cad sweep use of (lastRim's value) forward (outward = false)) to (lastUse's values)
+                        if ((the item at index in (stations's values))'s radius) >= ((the item at next in (stations's values))'s radius):
+                            if (cad sweep ring on faceKey in body using firstUse) = false:
+                                return no cad body
+                            if (cad sweep ring on faceKey in body using lastUse) = false:
+                                return no cad body
+                        else:
+                            if (cad sweep ring on faceKey in body using lastUse) = false:
+                                return no cad body
+                            if (cad sweep ring on faceKey in body using firstUse) = false:
+                                return no cad body
+                    else if firstRim's valid:
+                        set uses to a cad topology list of a cad sweep use
+                        append (cad sweep use of (firstRim's value) forward outward) to (uses's values)
+                        if (cad sweep ring on faceKey in body using uses) = false:
+                            return no cad body
+                    else if lastRim's valid:
+                        set uses to a cad topology list of a cad sweep use
+                        append (cad sweep use of (lastRim's value) forward (outward = false)) to (uses's values)
+                        if (cad sweep ring on faceKey in body using uses) = false:
+                            return no cad body
+                else:
+                    set seam to the item at index in (seams's values)
+                    if seam's valid = false:
+                        return no cad body
+                    set circuit to a cad topology list of a cad sweep use
+                    set arcParameters to no cad sweep revolved arc parameters
+                    if ((pieceShape's surfaceKind) = 4) and ((sourcePiece's kind) = 2):
+                        set arcParameters to cad sweep revolved parameters of (sourcePiece's arc) on plane for turn
+                        if arcParameters's valid = false:
+                            return no cad body
+                    set beginning to 0.0
+                    set ending to 0.0
+                    set near to 0.0
+                    set far to 0.0
+                    if arcParameters's valid:
+                        set beginning to arcParameters's start
+                        set ending to arcParameters's end
+                        if (the item at index in (senses's values)) = false:
+                            set beginning to arcParameters's end
+                            set ending to arcParameters's start
+                        set near to arcParameters's around
+                        set far to near + 6.283185307179586
+                    if firstRim's valid:
+                        set usage to cad sweep use of (firstRim's value) forward true
+                        if arcParameters's valid:
+                            set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x near and y beginning) to (a cad vector2 with x far and y beginning)))
+                        append usage to (circuit's values)
+                    set usage to cad sweep use of (seam's value) forward (the item at index in (senses's values))
+                    if arcParameters's valid:
+                        set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x far and y beginning) to (a cad vector2 with x far and y ending)))
+                    append usage to (circuit's values)
+                    if lastRim's valid:
+                        set usage to cad sweep use of (lastRim's value) forward false
+                        if arcParameters's valid:
+                            set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x far and y ending) to (a cad vector2 with x near and y ending)))
+                        append usage to (circuit's values)
+                    set usage to cad sweep use of (seam's value) forward ((the item at index in (senses's values)) = false)
+                    if arcParameters's valid:
+                        set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x near and y ending) to (a cad vector2 with x near and y beginning)))
+                    append usage to (circuit's values)
+                    set reordered to cad sweep reordered circuit outward outward
+                    if (cad sweep ring on faceKey in body using reordered) = false:
+                        return no cad body
+                set shellNode to the cad node pointer for shellKey in body
+                if shellNode = (0 as the type of shellNode):
+                    return no cad body
+                append faceKey to (shellNode's faces's values)
+        set lumpNode to the cad node pointer for lumpKey in body
+        if lumpNode = (0 as the type of lumpNode):
+            return no cad body
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body
+
+function the cad extrusion of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction}:
+    execute:
+        set normal to the cad normal of plane
+        if (normal's valid) = false:
+            return no cad body
+        set up to the cad dot of direction and (normal's value)
+        if (the absolute value of up) <= (1e-12 * (the maximum of (the cad length of direction) and 1.0)):
+            return no cad body
+        set ordered to the cad profile senses of profile
+        if (ordered's valid) = false:
+            return no cad body
+        set senses to ordered's value
+        set corners to a cad topology list of a cad vector2
+        set handed to -0.0
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set parameter to 1.0
+            set area to the cad enclosed area of piece
+            if the item at index in (senses's values):
+                set parameter to 0.0
+            else:
+                set area to the negative of area
+            append (the cad point on piece at parameter) to (corners's values)
+            set handed to handed + area
+        if (handed = 0.0) or (handed != handed):
+            return no cad body
+        set outward to (up * handed) > 0.0
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set base to a cad topology list of a cad vertex key
+        set top to a cad topology list of a cad vertex key
+        loop index from 0 to the length of (corners's values):
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep vertex at point in body) to (base's values)
+        loop index from 0 to the length of (corners's values):
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep vertex at (the cad sum of point and direction) in body) to (top's values)
+        set baseEdges to cad sweep profile edges of profile on plane with senses senses and corners base in body
+        if (the length of (baseEdges's values)) != (the length of profile):
+            return no cad body
+        set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+        set topEdges to cad sweep profile edges of profile on far with senses senses and corners top in body
+        if (the length of (topEdges's values)) != (the length of profile):
+            return no cad body
+        set rails to a cad topology list of a cad edge key
+        loop index from 0 to the length of (corners's values):
+            set rail to cad sweep line from (the item at index in (base's values)) to (the item at index in (top's values)) in body
+            if (rail's valid) = false:
+                return no cad body
+            append (rail's value) to (rails's values)
+        if (cad sweep cap in body within shellKey on plane with edges baseEdges and senses senses forward (up < 0.0) along profile (outward = false)) = false:
+            return no cad body
+        if (cad sweep cap in body within shellKey on far with edges topEdges and senses senses forward (up > 0.0) along profile outward) = false:
+            return no cad body
+        loop index from 0 to the length of profile:
+            set next to the remainder of (index + 1) divided by (the length of profile)
+            set piece to the item at index in profile
+            set wall to cad sweep wall of piece on plane along direction in body
+            if (wall's valid) = false:
+                return no cad body
+            set out to cad sweep outward of piece on plane forward (the item at index in (senses's values)) counterclockwise (handed > 0.0)
+            set point to the cad point at (the cad point on piece at 0.5) on plane
+            set surface to the cad node pointer for (wall's surface) in body
+            set forward to cad sweep sense of (@intrinsic("dereference", surface)) at point outward out
+            if (forward's valid) = false:
+                return no cad body
+            set circuit to cad sweep circuit with base (the item at index in (baseEdges's values)), next rail (the item at next in (rails's values)), top (the item at index in (topEdges's values)) and rail (the item at index in (rails's values)) along (the item at index in (senses's values)) with spline (wall's spline)
+            set uses to cad sweep reordered circuit outward outward
+            if (cad sweep face in body within shellKey on (wall's surface) forward (forward's value) using uses) = false:
+                return no cad body
+        set lump to the cad node pointer for lumpKey in body
+        append shellKey to (lump's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body
+
+local function cad sweep offset area of {cad polyline2:outline}:
+    execute:
+        set curve to the cad curve2 of outline
+        set pieces to the cad segments of curve
+        set total to 0.0
+        loop index from 0 to the length of pieces:
+            set total to total + (the cad enclosed area of (the item at index in pieces))
+        free pieces
+        return the absolute value of total
+
+# Positive angles move the far outline inward; negative angles move it outward.
+# The offset distance uses the component normal to the profile plane, matching
+# the wall angle for oblique extrusion vectors.
+function the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
+    execute:
+        set angle to givenAngle as a 64 bit floating-point number
+        if ((cad sweep revolution scalar angle is finite) = false) or ((the absolute value of angle) >= 1.5707963267948966):
+            return no cad body
+        if (the absolute value of angle) <= 1e-12:
+            return the cad extrusion of profile on plane along direction
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return no cad body
+        set height to the absolute value of (the cad dot of direction and (normal's value))
+        set tangentAngle to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
+        set offsetDistance to height * (the absolute value of tangentAngle)
+        if ((cad sweep revolution scalar offsetDistance is finite) = false) or (offsetDistance <= 1e-12):
+            return no cad body
+
+        set ordered to the cad profile senses of profile
+        if ordered's valid = false:
+            return no cad body
+        set senses to ordered's value
+        set vertices to an empty list of a cad polyline vertex2
+        set handed to -0.0
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            if ((piece's kind = 0) or (piece's kind = 2)) = false:
+                free vertices
+                return no cad body
+            set forward to the item at index in (senses's values)
+            set parameter to 1.0
+            if forward:
+                set parameter to 0.0
+            set bulge to 0.0
+            if piece's kind = 2:
+                set span to the cad sweep of (piece's arc)
+                if forward = false:
+                    set span to the negative of span
+                set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, span * 0.25)
+            append (a cad polyline vertex2 at (the cad point on piece at parameter) with bulge bulge) to vertices
+            set area to the cad enclosed area of piece
+            if forward = false:
+                set area to the negative of area
+            set handed to handed + area
+        if (handed = 0.0) or ((cad sweep revolution scalar handed is finite) = false):
+            free vertices
+            return no cad body
+        set source to the cad polyline2 with vertices vertices and closure true
+        free vertices
+
+        set firstPiece to the item at 0 in profile
+        set firstForward to the item at 0 in (senses's values)
+        set direction2 to the cad tangent of firstPiece at 0.5
+        if firstForward = false:
+            set direction2 to direction2 scaled by -1.0
+        set tangentLength to the cad length of direction2
+        if ((cad sweep revolution scalar tangentLength is finite) = false) or (tangentLength <= 1e-12):
+            free cad polyline source
+            return no cad body
+        set tangent2 to direction2 scaled by (1.0 / tangentLength)
+        set inward to a cad vector2 with x (the negative of (tangent2's y)) and y (tangent2's x)
+        if handed < 0.0:
+            set inward to a cad vector2 with x (tangent2's y) and y (the negative of (tangent2's x))
+        set sideSign to -1.0
+        if angle > 0.0:
+            set sideSign to 1.0
+        set middle to the cad point on firstPiece at 0.5
+        set side to the cad sum of middle and (inward scaled by (offsetDistance * sideSign))
+        set outlines to the cad offset polylines of source by offsetDistance toward side
+        free cad polyline source
+        if (the length of outlines) = 0:
+            free outlines
+            return no cad body
+        set selected to 0
+        set bestArea to -1.0
+        loop index from 0 to the length of outlines:
+            set candidateArea to cad sweep offset area of (the item at index in outlines)
+            if candidateArea > bestArea:
+                set selected to index
+                set bestArea to candidateArea
+        set topOutline to the cad clone of (the item at selected in outlines)
+        free outlines
+        set topCurve to the cad curve2 of topOutline
+        set topProfile to the cad segments of topCurve
+        free cad polyline topOutline
+        if (the length of topProfile) != (the length of profile):
+            free topProfile
+            return no cad body
+        if angle > 0.0:
+            set coordinateScale to the maximum of offsetDistance and 1.0
+            loop vertexIndex from 0 to the length of profile:
+                set startPoint to the cad point on (the item at vertexIndex in profile) at 0.0
+                set finishPoint to the cad point on (the item at vertexIndex in profile) at 1.0
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (startPoint's x))
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (startPoint's y))
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (finishPoint's x))
+                set coordinateScale to the maximum of coordinateScale and (the absolute value of (finishPoint's y))
+            set distanceTolerance to the maximum of (the maximum of (offsetDistance * 1e-5) and (coordinateScale * 1e-10)) and 1e-9
+            loop topIndex from 0 to the length of topProfile:
+                set topPoint to the cad point on (the item at topIndex in topProfile) at 0.5
+                set nearestDistance to 1.0 / 0.0
+                loop sourceIndex from 0 to the length of profile:
+                    set sourceDistance to the cad distance to (the item at sourceIndex in profile) from topPoint
+                    set nearestDistance to the minimum of nearestDistance and sourceDistance
+                if ((cad sweep revolution scalar nearestDistance is finite) = false) or ((the absolute value of (nearestDistance - offsetDistance)) > distanceTolerance):
+                    free topProfile
+                    return no cad body
+            set topOrdered to the cad profile senses of topProfile
+            if topOrdered's valid = false:
+                free topProfile
+                return no cad body
+            set topArea to 0.0
+            loop topIndex from 0 to the length of topProfile:
+                set pieceArea to the cad enclosed area of (the item at topIndex in topProfile)
+                if (the item at topIndex in (topOrdered's value's values)) = false:
+                    set pieceArea to the negative of pieceArea
+                set topArea to topArea + pieceArea
+            if ((cad sweep revolution scalar topArea is finite) = false) or ((the absolute value of topArea) >= (the absolute value of handed)):
+                free topProfile
+                return no cad body
+        set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+        set sections to a list containing (a cad loft section on plane with profile profile)
+        append (a cad loft section on far with profile topProfile) to sections
+        set result to the cad loft through sections
+        free sections
+        free topProfile
+        return result
+
+function the tapered cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
+    execute:
+        set angle to givenAngle as a 64 bit floating-point number
+        if ((cad sweep revolution scalar angle is finite) = false) or ((the absolute value of angle) >= 1.5707963267948966):
+            return no cad body
+        if (the absolute value of angle) <= 1e-12:
+            return the cad extrusion sheet of profile on plane along direction
+        return no cad body
+
+function the cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction}:
+    execute:
+        set length to the cad length of direction
+        if (length <= 1e-12) or ((length <= 1.7976931348623157e308) = false):
+            return no cad body
+        set ordered to the cad profile senses of profile
+        set closed to ordered's valid
+        if closed = false:
+            set ordered to the cad path senses of profile
+        if (ordered's valid) = false:
+            return no cad body
+        set senses to ordered's value
+        set corners to a cad topology list of a cad vector2
+        loop index from 0 to the length of profile:
+            set parameter to 1.0
+            if the item at index in (senses's values):
+                set parameter to 0.0
+            append (the cad point on (the item at index in profile) at parameter) to (corners's values)
+        if closed = false:
+            set parameter to 0.0
+            if the last item of (senses's values):
+                set parameter to 1.0
+            append (the cad point on (the last item of profile) at parameter) to (corners's values)
+        if ((the length of profile) = 0) or ((the length of (corners's values)) < 2):
+            return no cad body
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set base to a cad topology list of a cad vertex key
+        set top to a cad topology list of a cad vertex key
+        loop index from 0 to the length of (corners's values):
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep vertex at point in body) to (base's values)
+        loop index from 0 to the length of (corners's values):
+            set point to the cad point at (the item at index in (corners's values)) on plane
+            append (cad sweep vertex at (the cad sum of point and direction) in body) to (top's values)
+        set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+        set baseEdges to a cad topology list of a cad edge key
+        set topEdges to a cad topology list of a cad edge key
+        loop index from 0 to the length of profile:
+            set next to index + 1
+            if closed:
+                set next to the remainder of next divided by (the length of (corners's values))
+            set from to index
+            set to to next
+            if (the item at index in (senses's values)) = false:
+                set from to next
+                set to to index
+            set piece to the item at index in profile
+            set near to cad sweep profile edge of piece on plane from (the item at from in (base's values)) to (the item at to in (base's values)) in body
+            if (near's valid) = false:
+                return no cad body
+            append (near's value) to (baseEdges's values)
+            set distant to cad sweep profile edge of piece on far from (the item at from in (top's values)) to (the item at to in (top's values)) in body
+            if (distant's valid) = false:
+                return no cad body
+            append (distant's value) to (topEdges's values)
+        set rails to a cad topology list of a cad edge key
+        loop index from 0 to the length of (corners's values):
+            set rail to cad sweep line from (the item at index in (base's values)) to (the item at index in (top's values)) in body
+            if (rail's valid) = false:
+                return no cad body
+            append (rail's value) to (rails's values)
+        loop index from 0 to the length of profile:
+            set next to index + 1
+            if closed:
+                set next to the remainder of next divided by (the length of (corners's values))
+            set piece to the item at index in profile
+            set wall to cad sweep wall of piece on plane along direction in body
+            if (wall's valid) = false:
+                return no cad body
+            set tangent to the cad vector at (the cad tangent of piece at 0.5) on plane
+            set factor to -1.0
+            if the item at index in (senses's values):
+                set factor to 1.0
+            set out to the cad cross of (tangent scaled by factor) and direction
+            set point to the cad point at (the cad point on piece at 0.5) on plane
+            set surface to the cad node pointer for (wall's surface) in body
+            set forward to cad sweep sense of (@intrinsic("dereference", surface)) at point outward out
+            if (forward's valid) = false:
+                return no cad body
+            set circuit to cad sweep circuit with base (the item at index in (baseEdges's values)), next rail (the item at next in (rails's values)), top (the item at index in (topEdges's values)) and rail (the item at index in (rails's values)) along (the item at index in (senses's values)) with spline (wall's spline)
+            if (cad sweep face in body within shellKey on (wall's surface) forward (forward's value) using circuit) = false:
+                return no cad body
+        set lump to the cad node pointer for lumpKey in body
+        append shellKey to (lump's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body

@@ -1,0 +1,163 @@
+# SPDX-License-Identifier: MPL-2.0
+# Appended verbatim to the library by verify.py; private helpers remain private.
+function the triangulation helper number at {integer:index} in {argument list:arguments}:
+    execute:
+        return @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at index in the data of arguments)
+
+function print triangulation helper scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value)
+
+function print triangulation helper points {a pointer to a list:vertices}:
+    execute:
+        print (the length of vertices) as a line
+        loop index from 0 to the length of vertices:
+            set p to the item at index in vertices
+            print triangulation helper scalar (the x of p)
+            print triangulation helper scalar (the y of p)
+
+function print triangulation helper faces {a pointer to a list:triangles}:
+    execute:
+        print (the length of triangles) as a line
+        loop index from 0 to the length of triangles:
+            set face to the item at index in triangles
+            print (the first of face) as a line
+            print (the second of face) as a line
+            print (the third of face) as a line
+
+function print triangulation helper indices {a pointer to a list:indices}:
+    execute:
+        print (the length of indices) as a line
+        loop index from 0 to the length of indices:
+            print (the item at index in indices) as a line
+
+set arguments to the command line arguments
+set mode to (the triangulation helper number at 0 in arguments) as an integer
+set linear to the triangulation helper number at 1 in arguments
+set count to (the triangulation helper number at 2 in arguments) as an integer
+set boundaries to an empty list of the type of (an empty list of a cad vector2)
+set cursor to 3
+loop ringIndex from 0 to count:
+    set vertices to an empty list of a cad vector2
+    set size to (the triangulation helper number at cursor in arguments) as an integer
+    set cursor to cursor + 1
+    loop index from 0 to size:
+        set x to the triangulation helper number at cursor in arguments
+        set y to the triangulation helper number at (cursor + 1) in arguments
+        append (a cad vector2 with x x and y y) to vertices
+        set cursor to cursor + 2
+    append vertices to boundaries
+if mode = 4:
+    set vertices to the item at 0 in boundaries
+    set other to the item at 1 in boundaries
+    set p to the item at 0 in (the item at 2 in boundaries)
+    print triangulation helper scalar (the cad triangulation signed area of vertices)
+    print (cad triangulation ring vertices is simple within linear) as a line
+    set cleaned to the cad triangulation sanitized ring of vertices
+    print triangulation helper points cleaned
+    free cleaned
+    set oriented to the cad triangulation oriented ring of vertices counterclockwise true
+    print triangulation helper points oriented
+    free oriented
+    set oriented to the cad triangulation oriented ring of vertices counterclockwise false
+    print triangulation helper points oriented
+    free oriented
+    print ((the length of vertices) > 0) as a line
+    if (the length of vertices) > 0:
+        set bounds to the cad triangulation bounds of vertices
+        print triangulation helper scalar (the x of the minPoint of bounds)
+        print triangulation helper scalar (the y of the minPoint of bounds)
+        print triangulation helper scalar (the x of the maxPoint of bounds)
+        print triangulation helper scalar (the y of the maxPoint of bounds)
+        print (the cad triangulation rightmost index of vertices) as a line
+    print (cad triangulation ring vertices contains point p) as a line
+    print (cad triangulation point p lies on boundary vertices) as a line
+    print (cad triangulation ring vertices strictly contains other) as a line
+    print (cad triangulation ring other strictly contains vertices) as a line
+    print (cad triangulation boundaries vertices and other intersect) as a line
+    print (cad triangulation boundaries vertices and other properly cross) as a line
+    if ((the length of vertices) > 0) and ((the length of other) > 0):
+        set a to the cad triangulation bounds of vertices
+        set b to the cad triangulation bounds of other
+        print (cad triangulation bounds a overlap b) as a line
+        set left to @intrinsic("construct", a cad triangulation checked ring, vertices, the absolute value of (the cad triangulation signed area of vertices), a)
+        set right to @intrinsic("construct", a cad triangulation checked ring, other, the absolute value of (the cad triangulation signed area of other), b)
+        print (cad triangulation checked ring left interacts with right) as a line
+if mode = 5:
+    set vertices to the item at 0 in boundaries
+    set a to the item at 0 in vertices
+    set b to the item at 1 in vertices
+    set c to the item at 2 in vertices
+    set d to the item at 3 in vertices
+    print (cad triangulation segments from a to b and from c to d properly cross) as a line
+    print (cad triangulation segments from a to b and from c to d intersect within 0.0) as a line
+    print (cad triangulation segments from a to b and from c to d intersect within linear) as a line
+    print (cad triangulation point c lies on the segment from a to b) as a line
+    print (cad triangulation point d lies on the segment from a to b) as a line
+    print (cad triangulation triangle from a through b to c includes d) as a line
+if mode = 6:
+    set vertices to the item at 0 in boundaries
+    set faces to an empty list of a cad triangle indices
+    loop while cursor < the length of arguments:
+        set a to (the triangulation helper number at cursor in arguments) as an integer
+        set b to (the triangulation helper number at (cursor + 1) in arguments) as an integer
+        set c to (the triangulation helper number at (cursor + 2) in arguments) as an integer
+        append (@intrinsic("construct", a cad triangle indices, a, b, c)) to faces
+        set cursor to cursor + 3
+    set mesh to the cad owned triangulation with points (the cad triangulation copy of vertices) and triangles faces
+    print (cad triangulation mesh matches area linear) as a line
+    free cad triangulation mesh
+if mode = 7:
+    set vertices to the item at 0 in boundaries
+    set indexPairs to the item at 1 in boundaries
+    set parameters to the item at 2 in boundaries
+    set hole to the item at 3 in boundaries
+    set indices to an empty list of an integer
+    loop index from 0 to the length of indexPairs:
+        append ((the x of (the item at index in indexPairs)) as an integer) to indices
+    loop at from 0 to the length of indices:
+        print (cad triangulation corner at in indices of vertices is an ear) as a line
+        print triangulation helper scalar (the cad triangulation ear score at at in indices of vertices scaled by (the item at 0 in parameters))
+    set copied to the cad triangulation copy of indices
+    set faces to the cad triangulation ears of vertices around copied
+    print triangulation helper faces faces
+    free faces
+    free copied
+    set pointsCopy to the cad triangulation copy of vertices
+    set copied to the cad triangulation copy of indices
+    print (the cad triangulation bridge target in pointsCopy around copied from (the item at 1 in parameters)) as a line
+    print triangulation helper points pointsCopy
+    print triangulation helper indices copied
+    free pointsCopy
+    free copied
+    set pointsCopy to the cad triangulation copy of vertices
+    set copied to the cad triangulation copy of indices
+    bridge cad triangulation hole hole into pointsCopy around copied
+    print triangulation helper points pointsCopy
+    print triangulation helper indices copied
+    free pointsCopy
+    free copied
+    free indices
+if mode = 8:
+    set pairs to the item at 0 in boundaries
+    loop index from 0 to the length of pairs:
+        set pair to the item at index in pairs
+        set left to the cad triangulation total order key of (the x of pair)
+        set right to the cad triangulation total order key of (the y of pair)
+        set order to 0
+        if left < right:
+            set order to -1
+        if left > right:
+            set order to 1
+        print order as a line
+if mode = 9:
+    set pairs to the item at 0 in boundaries
+    set parents to an empty list of an integer
+    loop index from 0 to the length of pairs:
+        append ((the x of (the item at index in pairs)) as an integer) to parents
+    loop index from 0 to the length of parents:
+        print (the cad triangulation root of index with parents parents) as a line
+    free parents
+loop index from 0 to the length of boundaries:
+    free (the item at index in boundaries)
+free boundaries

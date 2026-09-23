@@ -1,0 +1,8 @@
+polynomial: pass
+unequal rational: pass
+thresholds: pass
+invalid tolerances: pass
+exact weight equality: pass
+periodicity and idempotence: pass
+multiple knots and nonunit domain: pass
+strict candidate validation: pass

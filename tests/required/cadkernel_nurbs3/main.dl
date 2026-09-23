@@ -1,0 +1,267 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 17 src/space/nurbs.rs tests at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Additional independent values and ownership/validation tests live alongside.
+import lib/cadkernel/nurbs3.dl
+
+function nurbs check {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function nurbs near {cad vector3:actual} to {cad vector3:expected} within {a number:tolerance}:
+    execute:
+        nurbs check ((the cad distance from actual to expected) < tolerance) named "point mismatch"
+
+function a nurbs test point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+function the nurbs test polygon:
+    execute:
+        set points to a list containing (a nurbs test point 1.0 0.0 0.0)
+        append (a nurbs test point 1.0 1.0 1.0) to points
+        append (a nurbs test point -1.0 1.0 2.0) to points
+        append (a nurbs test point -1.0 -1.0 3.0) to points
+        append (a nurbs test point 1.0 -1.0 4.0) to points
+        return points
+
+function the nurbs test length of points:
+    execute:
+        set total to 0.0 as a 64 bit floating-point number
+        loop index from 1 to the length of points:
+            set total to total + (the cad distance from (the item at (index - 1) in points) to (the item at index in points))
+        return total
+
+function the nurbs test hill raised {boolean:raised}:
+    execute:
+        set net to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 3:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 3:
+                set height to 0.0 as a 64 bit floating-point number
+                if ((raised and row = 1) and column = 1):
+                    set height to 4.0
+                append (a nurbs test point ((row as a 64 bit floating-point number) * 5.0) ((column as a 64 bit floating-point number) * 5.0) height) to across
+            append across to net
+        set empty to an empty list of a 64 bit floating-point number
+        set weights to an empty list of the type of empty
+        set result to the cad nurbs surface3 of degrees 2 and 2 with controls net, knots empty and empty and weights weights
+        loop row from 0 to the length of net:
+            free (the item at row in net)
+        free net
+        free empty
+        free weights
+        return result
+
+set empty to an empty list of a 64 bit floating-point number
+set square to a list containing (a nurbs test point 0.0 0.0 0.0)
+append (a nurbs test point 2.0 0.0 0.0) to square
+append (a nurbs test point 2.0 2.0 1.0) to square
+append (a nurbs test point 0.0 2.0 0.0) to square
+set periodic to the cad nurbs curve3 of degree 2 through control polygon square with periodicity true
+nurbs check periodic's valid named "periodic constructor"
+set curve to periodic's value
+nurbs check (the cad periodicity of curve) named "periodicity"
+nurbs near (the cad point on curve at 0.0) to (the cad point on curve at 1.0) within 1e-9
+set reversed to the cad reversal of curve
+nurbs check reversed's valid named "reverse"
+loop step from 0 to 9:
+    set t to (step as a 64 bit floating-point number) / 8.0
+    nurbs near (the cad point on curve at t) to (the cad point on reversed's value at (1.0 - t)) within 1e-9
+print "periodic_control_curves_close_and_reverse_without_moving" as a line
+
+set points to a list containing (a nurbs test point 0.0 0.0 0.0)
+append (a nurbs test point 1.0 3.0 2.0) to points
+append (a nurbs test point 2.0 -1.0 4.0) to points
+append (a nurbs test point 4.0 0.0 5.0) to points
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 0.4 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 3.0 to weights
+append 0.5 to weights
+append 2.0 to weights
+set rational to the strict cad nurbs curve3 of degree 2 with controls points, knots knots and weights weights
+set elevated to the cad elevation of rational's value by 2
+nurbs check elevated's valid named "elevation"
+nurbs check (elevated's value's degree = 4) named "raised degree"
+nurbs check (elevated's value is cad rational) named "rational elevation"
+loop step from 0 to 65:
+    set t to (step as a 64 bit floating-point number) / 64.0
+    nurbs near (the cad point on rational's value at t) to (the cad point on elevated's value at t) within 1e-9
+set absent to the cad elevation of rational's value by 0
+nurbs check (absent's valid = false) named "zero elevation"
+print "rational_degree_elevation_preserves_every_sample" as a line
+
+replace item at index 1 in square with (a nurbs test point 2.0 0.0 1.0)
+replace item at index 2 in square with (a nurbs test point 2.0 2.0 3.0)
+replace item at index 3 in square with (a nurbs test point 0.0 2.0 1.0)
+replace item at index 2 in weights with 0.75
+set weighted to the cad nurbs curve3 of degree 2 through control polygon square with weights weights and periodicity true
+nurbs check weighted's valid named "weighted periodic"
+nurbs check (weighted's value is cad rational) named "weighted rational"
+nurbs near (the cad point on weighted's value at 0.0) to (the cad point on weighted's value at 1.0) within 1e-9
+set elevated to the cad elevation of weighted's value by 1
+nurbs check (the cad periodicity of elevated's value) named "elevated periodicity"
+loop step from 0 to 65:
+    set t to (step as a 64 bit floating-point number) / 64.0
+    nurbs near (the cad point on weighted's value at t) to (the cad point on elevated's value at t) within 1e-9
+replace item at index 1 in weights with 0.0
+set bad to the cad nurbs curve3 of degree 2 through control polygon square with weights weights and periodicity true
+nurbs check (bad's valid = false) named "nonpositive weight"
+print "weighted_periodic_control_curve_closes_and_elevates_exactly" as a line
+
+clear points
+append (a nurbs test point 0.0 0.0 0.0) to points
+append (a nurbs test point 1.0 2.0 0.0) to points
+append (a nurbs test point 2.0 2.0 0.0) to points
+append (a nurbs test point 3.0 3.0 3.0) to points
+set clamped to the cad nurbs curve3 of degree 3 with controls points, knots empty and weights empty
+set reduced to the cad reduction of clamped's value without control vertex 1
+nurbs check reduced's valid named "control removal"
+nurbs check (reduced's value's degree = 2) named "reduced degree"
+nurbs check ((the length of reduced's value's controls) = 3) named "reduced count"
+loop index from 0 to 6:
+    set expected to 0.0 as a 64 bit floating-point number
+    if index >= 3:
+        set expected to 1.0
+    nurbs check ((the item at index in reduced's value's knots) = expected) named "reduced knots"
+print "deleting_a_control_vertex_keeps_a_valid_clamped_curve" as a line
+
+clear points
+append (a nurbs test point 0.0 0.0 0.0) to points
+append (a nurbs test point 1.0 2.0 1.0) to points
+append (a nurbs test point 3.0 0.0 2.0) to points
+clear weights
+append 1.0 to weights
+append 3.0 to weights
+append 2.0 to weights
+set derivativeCurve to the cad nurbs curve3 of degree 2 with controls points, knots empty and weights weights
+set before to the cad point on derivativeCurve's value at knot (0.37 - 1e-6)
+set after to the cad point on derivativeCurve's value at knot (0.37 + 1e-6)
+set numeric to (the cad difference of after and before) cad divided by 2e-6
+nurbs near (the cad derivative of derivativeCurve's value at knot 0.37) to numeric within 1e-6
+print "rational_derivative_matches_a_finite_difference" as a line
+
+set helixPoints to the nurbs test polygon
+set spatial to the cad nurbs curve3 of degree 3 with controls helixPoints, knots empty and weights empty
+nurbs near (the cad point on spatial's value at 0.0) to (a nurbs test point 1.0 0.0 0.0) within 1e-9
+nurbs near (the cad point on spatial's value at 1.0) to (a nurbs test point 1.0 -1.0 4.0) within 1e-9
+print "a_clamped_curve_ends_on_its_own_control_points" as a line
+set previous to the cad point on spatial's value at 0.0
+loop step from 1 to 9:
+    set current to the cad point on spatial's value at ((step as a 64 bit floating-point number) / 8.0)
+    nurbs check (current's z > previous's z) named "rising curve"
+    set previous to current
+print "a_curve_that_wanders_is_not_flat" as a line
+
+replace item at index 1 in points with (a nurbs test point 1.0 2.0 0.0)
+replace item at index 2 in points with (a nurbs test point 2.0 0.0 0.0)
+replace item at index 1 in weights with 8.0
+replace item at index 2 in weights with 1.0
+set plain to the cad nurbs curve3 of degree 2 with controls points, knots empty and weights empty
+set heavy to the cad nurbs curve3 of degree 2 with controls points, knots empty and weights weights
+nurbs check (heavy's value is cad rational) named "rational"
+nurbs check ((plain's value is cad rational) = false) named "polynomial"
+set plainMiddle to the cad point on plain's value at 0.5
+set heavyMiddle to the cad point on heavy's value at 0.5
+nurbs check (heavyMiddle's y > plainMiddle's y) named "heavy pull"
+nurbs near plainMiddle to (a nurbs test point 1.0 1.0 0.0) within 1e-12
+nurbs near heavyMiddle to (a nurbs test point 1.0 (16.0 / 9.0) 0.0) within 1e-12
+print "a_weighted_curve_is_pulled_towards_the_heavy_point" as a line
+
+set truthPoints to an empty list of a cad vector3
+loop step from 0 to 20001:
+    append (the cad point on spatial's value at ((step as a 64 bit floating-point number) / 20000.0)) to truthPoints
+set truth to the nurbs test length of truthPoints
+set coarse to the cad samples of spatial's value within 0.1
+set fine to the cad samples of spatial's value within 0.001
+set coarseLength to the nurbs test length of coarse
+set fineLength to the nurbs test length of fine
+nurbs check ((the length of fine) > (the length of coarse)) named "refinement count"
+nurbs check (coarseLength <= truth + 1e-9 and fineLength <= truth + 1e-9) named "chords"
+nurbs check (fineLength > coarseLength and fineLength > truth * 0.999) named "refined length"
+print "a_finer_tolerance_gets_closer_to_the_curve" as a line
+loop step from 1 to 8:
+    set t to (step as a 64 bit floating-point number) / 8.0
+    set along to the cad tangent of spatial's value at t
+    set ahead to the cad difference of (the cad point on spatial's value at (t + 0.05)) and (the cad point on spatial's value at t)
+    nurbs check ((the cad dot of along and ahead) > 0.0) named "tangent direction"
+print "a_tangent_points_the_way_the_curve_runs" as a line
+loop step from 0 to 7:
+    set bend to the cad acceleration of plain's value at knot ((step as a 64 bit floating-point number) / 6.0)
+    nurbs check (bend's y < 0.0 and (the absolute value of bend's x) < 1e-3) named "quadratic bend"
+clear points
+append (a nurbs test point 0.0 0.0 0.0) to points
+append (a nurbs test point 5.0 0.0 0.0) to points
+append (a nurbs test point 10.0 0.0 0.0) to points
+set straight to the cad nurbs curve3 of degree 1 with controls points, knots empty and weights empty
+nurbs check ((the cad length of (the cad acceleration of straight's value at knot 0.5)) < 1e-3) named "straight acceleration"
+print "a_second_derivative_reads_the_way_the_curve_bends" as a line
+clear points
+append (a nurbs test point 0.0 0.0 0.0) to points
+append (a nurbs test point 1.0 3.0 0.0) to points
+append (a nurbs test point 4.0 3.0 0.0) to points
+append (a nurbs test point 5.0 0.0 0.0) to points
+set endpointCurve to the cad nurbs curve3 of degree 3 with controls points, knots empty and weights empty
+set inside to the cad length of (the cad tangent of endpointCurve's value at knot 0.02)
+loop index from 0 to 2:
+    set atEnd to the cad length of (the cad tangent of endpointCurve's value at knot (index as a 64 bit floating-point number))
+    nurbs check ((the absolute value of (atEnd - inside)) < 0.35 * inside) named "endpoint tangent"
+print "a_tangent_at_the_very_end_is_not_halved" as a line
+clear points
+append (the cad zero vector3) to points
+append (a nurbs test point 1.0 1.0 1.0) to points
+set invalid to the cad nurbs curve3 of degree 3 with controls points, knots empty and weights empty
+nurbs check (invalid's valid = false) named "too few"
+set invalid to the cad nurbs curve3 of degree 0 with controls points, knots empty and weights empty
+nurbs check (invalid's valid = false) named "zero degree"
+print "too_few_points_for_the_degree_is_refused" as a line
+
+set hill to the nurbs test hill raised true
+nurbs check hill's valid named "hill constructor"
+loop row from 0 to 2:
+    loop column from 0 to 2:
+        set u to row as a 64 bit floating-point number
+        set v to column as a 64 bit floating-point number
+        nurbs near (the cad point on hill's value at parameters u and v) to (a nurbs test point (u * 10.0) (v * 10.0) 0.0) within 1e-9
+print "a_surface_holds_its_own_corners" as a line
+set middle to the cad point on hill's value at parameters 0.5 and 0.5
+nurbs check (middle's z > 0.5 and middle's z < 4.0) named "hill height"
+nurbs near middle to (a nurbs test point 5.0 5.0 1.0) within 1e-9
+print "a_raised_control_point_lifts_the_middle_but_not_to_its_own_height" as a line
+set flat to the nurbs test hill raised false
+set normal to the cad normal of flat's value at parameters 0.5 and 0.5
+nurbs check normal's valid named "normal valid"
+nurbs check ((the cad length of (the cad cross of normal's value and (the cad z axis))) < 1e-9) named "perpendicular"
+print "a_flat_surfaces_normal_is_perpendicular_to_it" as a line
+set ragged to an empty list of the type of points
+loop index from 0 to 3:
+    set raggedRow to a list containing (the cad zero vector3)
+    append (a nurbs test point 1.0 1.0 1.0) to raggedRow
+    if index != 1:
+        append (a nurbs test point 2.0 2.0 2.0) to raggedRow
+    append raggedRow to ragged
+set noWeights to an empty list of the type of empty
+set refused to the cad nurbs surface3 of degrees 2 and 2 with controls ragged, knots empty and empty and weights noWeights
+nurbs check (refused's valid = false) named "ragged net"
+print "a_ragged_net_is_refused_rather_than_padded" as a line
+
+loop index from 0 to the length of ragged:
+    free (the item at index in ragged)
+free ragged
+free noWeights
+free truthPoints
+free coarse
+free fine
+free empty
+free square
+free points
+free knots
+free weights
+free helixPoints

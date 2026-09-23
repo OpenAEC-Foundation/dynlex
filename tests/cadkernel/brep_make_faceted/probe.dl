@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+
+function emit faceted body {cad body:solidBody}:
+    execute:
+        emit maker provenance (solidBody's provenance)
+        emit maker keys (solidBody's roots)
+        emit maker arena (solidBody's vertices)
+        set edgeKeys to the cad edge keys of solidBody
+        loop index from 0 to the length of edgeKeys:
+            loop other from (index + 1) to the length of edgeKeys:
+                set firstKey to the item at index in edgeKeys
+                set lastKey to the item at other in edgeKeys
+                set first to the cad node pointer for firstKey in solidBody
+                set last to the cad node pointer for lastKey in solidBody
+                set a to the cad slot of (first's start)
+                set b to the cad slot of (last's start)
+                if (a > b) or ((a = b) and ((the cad slot of (first's end)) > (the cad slot of (last's end)))):
+                    replace item at index index in edgeKeys with lastKey
+                    replace item at index other in edgeKeys with firstKey
+        emit maker number (the length of edgeKeys)
+        emit maker number (the cad count of (solidBody's curves))
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in solidBody
+            emit maker number (the cad slot of (edge's start))
+            emit maker number (the cad slot of (edge's end))
+            emit maker number (edge's startParameter)
+            emit maker number (edge's endParameter)
+            emit maker keys (edge's coedges's values)
+            emit maker provenance (edge's provenance)
+            set curve to the cad node pointer for (edge's curve) in solidBody
+            emit maker node (@intrinsic("dereference", curve))
+        free edgeKeys
+        set uses to the cad keys of (solidBody's coedges)
+        emit maker number (the length of uses)
+        loop index from 0 to the length of uses:
+            set key to the item at index in uses
+            set usage to the cad node pointer for key in (solidBody's coedges)
+            set edge to the cad node pointer for (usage's edge) in solidBody
+            emit maker number (key's index)
+            emit maker number (the cad slot of (edge's start))
+            emit maker number (the cad slot of (edge's end))
+            emit maker flag (usage's forward)
+            emit maker flag (usage's pcurve's valid)
+            emit maker number (the cad slot of (usage's owner))
+            emit maker provenance (usage's provenance)
+        free uses
+        emit maker arena (solidBody's loops)
+        emit maker arena (solidBody's faces)
+        emit maker arena (solidBody's shells)
+        emit maker arena (solidBody's lumps)
+        emit maker arena (solidBody's surfaces)
+        emit maker number (the cad euler characteristic of solidBody)
+        set flaws to the cad flaws of solidBody
+        emit maker number (the length of flaws)
+        free flaws
+        emit maker number (the cad worst vertex gap of solidBody)
+
+set pointCount to (maker argument 0) as an integer
+set position to 1
+set points to an empty list of a cad vector3
+loop index from 0 to pointCount:
+    append (a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))) to points
+    set position to position + 3
+set faceCount to (maker argument position) as an integer
+set position to position + 1
+set rings to an empty list of the type of (an empty list of an integer)
+loop index from 0 to faceCount:
+    set count to (maker argument position) as an integer
+    set position to position + 1
+    set ring to an empty list of an integer
+    loop corner from 0 to count:
+        append ((maker argument position) as an integer) to ring
+        set position to position + 1
+    append ring to rings
+set result to the cad faceted solid with vertices points and faces rings
+# Construction must retain no input storage, including on failure.
+loop index from 0 to the length of rings:
+    free (the item at index in rings)
+free rings
+free points
+emit maker flag (result's valid)
+if result's valid:
+    emit faceted body (result's value)

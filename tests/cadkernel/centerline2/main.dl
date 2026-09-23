@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/centerline2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check centerline2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function centerline2 point {cad vector2:actual} near {cad vector2:expected}:
+    execute:
+        check centerline2 ((the cad distance from actual to expected) < 1e-12)
+
+set first to a cad line2 from (cross2 point [0.0,0.0]) to (cross2 point [4.0,0.0])
+set second to a cad line2 from (cross2 point [6.0,2.0]) to (cross2 point [10.0,2.0])
+set result to the cad centerline between first and second picked at (cross2 point [4.0,0.0]) and (cross2 point [10.0,2.0]) extended by 1.0 and 2.0
+check centerline2 result's valid
+set geometry to result's value
+centerline2 point geometry's start near (cross2 point [-1.0,1.0])
+centerline2 point geometry's end near (cross2 point [12.0,1.0])
+centerline2 point geometry's baseStart near (cross2 point [0.0,1.0])
+centerline2 point geometry's baseEnd near (cross2 point [10.0,1.0])
+print "parallel_midline_spans_endpoints_and_extensions" as a line
+
+set second to a cad line2 from (cross2 point [10.0,2.0]) to (cross2 point [6.0,2.0])
+set reversed to the cad centerline between first and second picked at (cross2 point [4.0,0.0]) and (cross2 point [10.0,2.0]) extended by 1.0 and 2.0
+check centerline2 reversed's valid
+check centerline2 (reversed's value = geometry)
+print "opposite_directions_use_same_support" as a line
+
+set reversed to the cad centerline between first and second picked at (cross2 point [-1.0,0.0]) and (cross2 point [10.0,2.0]) extended by 1.0 and 2.0
+check centerline2 reversed's valid
+centerline2 point reversed's value's start near (cross2 point [11.0,1.0])
+centerline2 point reversed's value's end near (cross2 point [-2.0,1.0])
+centerline2 point reversed's value's baseStart near (cross2 point [10.0,1.0])
+print "first_pick_controls_endpoint_identity" as a line
+
+set horizontal to a cad line2 from (cross2 point [-2.0,0.0]) to (cross2 point [2.0,0.0])
+set vertical to a cad line2 from (cross2 point [0.0,-2.0]) to (cross2 point [0.0,2.0])
+set corner to the cad centerline between horizontal and vertical picked at (cross2 point [2.0,0.0]) and (cross2 point [0.0,2.0]) extended by 0.0 and 0.0
+check centerline2 corner's valid
+centerline2 point corner's value's start near (cross2 point [-1.0,-1.0])
+centerline2 point corner's value's end near (cross2 point [1.0,1.0])
+set corner to the cad centerline between horizontal and vertical picked at (cross2 point [2.0,0.0]) and (cross2 point [0.0,-2.0]) extended by 0.0 and 0.0
+check centerline2 corner's valid
+centerline2 point corner's value's start near (cross2 point [-1.0,1.0])
+centerline2 point corner's value's end near (cross2 point [1.0,-1.0])
+print "picked_sector_controls_intersection_bisector" as a line
+
+set refused to the cad centerline between first and second picked at (cross2 point [4.0,0.0]) and (cross2 point [10.0,2.0]) extended by -8.0 and -8.0
+check centerline2 (refused's valid = false)
+set short to a cad line2 from (the cad zero vector2) to (cross2 point [1e-10,0.0])
+set refused to the cad centerline between short and second picked at (cross2 point [4.0,0.0]) and (cross2 point [10.0,2.0]) extended by 1.0 and 2.0
+check centerline2 (refused's valid = false)
+print "overtrim_and_degenerate_sources_are_refused" as a line
+
+set copy to the cad clone of geometry
+set result to a new (the type of result)
+check centerline2 (copy = geometry)
+centerline2 point copy's baseEnd near (cross2 point [10.0,1.0])
+print "copied_geometry_retains_base_endpoints" as a line

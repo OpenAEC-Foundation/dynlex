@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/polygon3_mesh.dl
+set points to an empty list of a 32 bit floating-point number
+ignore the cad spatial triangle soup of points within (the default cad tolerance)
+free points

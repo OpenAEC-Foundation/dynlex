@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/endpoint_join3.dl
+
+function the endpoint probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function the endpoint probe point at {integer:index}:
+    execute:
+        return a cad vector3 with x (the endpoint probe number at index), y (the endpoint probe number at (index + 1)) and z (the endpoint probe number at (index + 2))
+
+function the endpoint probe terminal at {integer:index}:
+    execute:
+        return [the endpoint probe point at index,the endpoint probe point at (index + 3)]
+
+function emit endpoint scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit endpoint flag {boolean:value}:
+    execute:
+        if value:
+            emit endpoint scalar 1
+        else:
+            emit endpoint scalar 0
+
+function emit endpoint joint {cad endpoint joint:joint}:
+    execute:
+        emit endpoint flag (the valid of joint)
+        if the valid of joint:
+            emit endpoint scalar (the x of the value of joint)
+            emit endpoint scalar (the y of the value of joint)
+            emit endpoint scalar (the z of the value of joint)
+
+set mode to (the endpoint probe number at 0) as an integer
+set fuzz to the endpoint probe number at 1
+set connector to the endpoint probe number at 2
+set kind to @intrinsic("construct", a cad endpoint join kind, (the endpoint probe number at 3) as an integer)
+set firstCount to (the endpoint probe number at 4) as an integer
+set secondCount to (the endpoint probe number at 5) as an integer
+set cursor to 6
+if mode = 1:
+    set points to an empty list of a cad vector2
+    loop index from 0 to firstCount:
+        append (a cad vector2 with x (the endpoint probe number at cursor) and y (the endpoint probe number at (cursor + 1))) to points
+        set cursor to cursor + 2
+    set distance to the cad planar connector distance of points with fuzz fuzz
+    emit endpoint flag (the valid of distance)
+    if the valid of distance:
+        emit endpoint scalar (the value of distance)
+    free points
+else:
+    set first to an empty list of a cad vector3 array of 2 items
+    set second to an empty list of a cad vector3 array of 2 items
+    loop index from 0 to firstCount:
+        append (the endpoint probe terminal at cursor) to first
+        set cursor to cursor + 6
+    loop index from 0 to secondCount:
+        append (the endpoint probe terminal at cursor) to second
+        set cursor to cursor + 6
+    if mode = 0:
+        emit endpoint joint (the cad extension joint of (the item at 0 in first) and (the item at 0 in second) within fuzz)
+    else if mode = 2:
+        set joined to the cad endpoint join of (the item at 0 in first) and (the item at 0 in second) with fuzz fuzz, connector distance connector and kind kind
+        emit endpoint flag (the valid of joined)
+        if the valid of joined:
+            emit endpoint joint (the value of joined)
+    else:
+        set found to the cad closest endpoint join of first and second with fuzz fuzz, connector distance connector and kind kind
+        emit endpoint flag (the valid of found)
+        if the valid of found:
+            emit endpoint scalar (the first of the value of found)
+            emit endpoint scalar (the second of the value of found)
+            emit endpoint joint (the joint of the value of found)
+    free first
+    free second

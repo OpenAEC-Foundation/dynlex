@@ -43,6 +43,8 @@ struct Expression {
 		int selectedBranchIndex = -1;
 	};
 
+	enum class SectionBodyExecution { None, Explicit, Implicit };
+
 	enum class Kind {
 		Literal,
 		ArrayLiteral,
@@ -63,6 +65,8 @@ struct Expression {
 
 	// For Variable: reference to the variable
 	VariableReference *variable{};
+	// Lexical instance containing this expression; source templates have none.
+	InstantiatedSectionBody *owningSectionBody{};
 
 	// For PatternCall: the matched pattern (filled after resolution)
 	PatternMatch *patternMatch{};
@@ -105,10 +109,10 @@ struct Expression {
 	// Branch headers are inferred even when compile-time control flow proves
 	// their bodies unreachable. Later stages skip those uninferred bodies.
 	bool sectionBodyReachable = true;
-	// Set when a section flex executes or otherwise consumes its caller body
-	// while its replacement is inferred. The enclosing source walk must not
-	// infer that body a second time.
-	bool sectionBodyInferred = false;
+	// Inference assigns a consumed caller body either to an explicit transfer
+	// or to the continuation after the replacement. This is static ownership:
+	// an explicit transfer may execute zero or many times inside a runtime loop.
+	SectionBodyExecution sectionBodyExecution = SectionBodyExecution::None;
 	// The control-flow result produced while consuming that body. This remains
 	// separate from sectionOutcome because the flex still forwards the header
 	// outcome (for example, Conditional) to the enclosing section walk.

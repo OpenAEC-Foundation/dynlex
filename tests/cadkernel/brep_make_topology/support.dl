@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_make.dl
+
+function the maker [vertex] [keys] of {cad body:solid}:
+    execute:
+        set result to an empty list of a cad vertex key
+        set keys to the cad keys of (solid's vertices)
+        loop cursor from 0 to the length of keys:
+            set arenaKey to the item at cursor in keys
+            append (@intrinsic("construct", a cad vertex key, arenaKey's index, arenaKey's generation)) to result
+        free keys
+        return result
+
+function the maker [loop] [keys] of {cad body:solid}:
+    execute:
+        set result to an empty list of a cad loop key
+        set keys to the cad keys of (solid's loops)
+        loop cursor from 0 to the length of keys:
+            set arenaKey to the item at cursor in keys
+            append (@intrinsic("construct", a cad loop key, arenaKey's index, arenaKey's generation)) to result
+        free keys
+        return result
+
+function the maker [coedge] [keys] of {cad body:solid}:
+    execute:
+        set result to an empty list of a cad coedge key
+        set keys to the cad keys of (solid's coedges)
+        loop cursor from 0 to the length of keys:
+            set arenaKey to the item at cursor in keys
+            append (@intrinsic("construct", a cad coedge key, arenaKey's index, arenaKey's generation)) to result
+        free keys
+        return result

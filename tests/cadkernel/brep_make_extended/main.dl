@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_make.dl
+
+function check extended maker {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function check extended body {cad body:body} with euler {integer:euler}:
+    execute:
+        set flaws to the cad flaws of body
+        check extended maker ((the length of flaws) = 0)
+        free flaws
+        check extended maker ((the cad euler characteristic of body) = euler)
+
+print "extended_make_fixture_started" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set ellipticalCylinder to the cad elliptical cylinder at (the cad zero vector3) with x radius 4.0, y radius 2.0 and height 7.0
+check extended maker (ellipticalCylinder's valid)
+check extended maker ((the cad count of (ellipticalCylinder's value's vertices)) = 8)
+check extended maker ((the cad count of (ellipticalCylinder's value's edges)) = 12)
+check extended maker ((the cad count of (ellipticalCylinder's value's faces)) = 6)
+check extended body (ellipticalCylinder's value) with euler 2
+print "elliptical_cylinder_builds_exact_loft" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set ellipticalFrustum to the cad frustum at (the cad zero vector3) with base x radius 4.0, base y radius 2.0, top radius 1.5 and height 7.0
+check extended maker (ellipticalFrustum's valid)
+check extended maker ((the cad count of (ellipticalFrustum's value's vertices)) = 8)
+check extended maker ((the cad count of (ellipticalFrustum's value's edges)) = 12)
+check extended maker ((the cad count of (ellipticalFrustum's value's faces)) = 6)
+check extended body (ellipticalFrustum's value) with euler 2
+set ellipticalCone to the cad frustum at (the cad zero vector3) with base x radius 4.0, base y radius 2.0, top radius 0.0 and height 7.0
+check extended maker (ellipticalCone's valid)
+check extended maker ((the cad count of (ellipticalCone's value's vertices)) = 2)
+check extended maker ((the cad count of (ellipticalCone's value's edges)) = 2)
+check extended maker ((the cad count of (ellipticalCone's value's faces)) = 2)
+check extended body (ellipticalCone's value) with euler 2
+print "elliptical_frustum_and_cone_are_valid" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set ringTorus to the cad torus at (the cad zero vector3) with major radius 10.0 and minor radius 2.0
+check extended maker (ringTorus's valid)
+check extended maker ((the cad count of (ringTorus's value's vertices)) = 1)
+check extended maker ((the cad count of (ringTorus's value's edges)) = 2)
+check extended maker ((the cad count of (ringTorus's value's faces)) = 1)
+check extended body (ringTorus's value) with euler 0
+print "a_torus_has_a_hole_through_it" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set hornTorus to the cad torus at (the cad zero vector3) with major radius 2.0 and minor radius 2.0
+set spindleTorus to the cad torus at (the cad zero vector3) with major radius 1.0 and minor radius 2.0
+check extended maker (hornTorus's valid)
+check extended maker (spindleTorus's valid)
+check extended body (hornTorus's value) with euler 1
+check extended body (spindleTorus's value) with euler 2
+print "horn_and_spindle_tori_are_trimmed_at_the_axis" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set torusFaces to the cad face keys of (ringTorus's value)
+set torusFace to the cad node pointer for (the item at 0 in torusFaces) in (ringTorus's value)
+set torusSurface to the cad node pointer for (torusFace's surface) in (ringTorus's value)
+set torusEdges to the cad edge keys of (ringTorus's value)
+loop edgeIndex from 0 to the length of torusEdges:
+    set torusEdge to the cad node pointer for (the item at edgeIndex in torusEdges) in (ringTorus's value)
+    set torusCurve to the cad node pointer for (torusEdge's curve) in (ringTorus's value)
+    loop step from 0 to 8:
+        set point to the cad point on (@intrinsic("dereference", torusCurve)) at ((6.283185307179586 * (step as a 64 bit floating-point number)) / 8.0)
+        check extended maker ((@intrinsic("dereference", torusSurface)) contains cad point point within 1e-9)
+free torusEdges
+free torusFaces
+print "both_of_a_toruss_seams_lie_on_it" as a line
+ignore @intrinsic("call", "libc", "fflush", integer, 0 as a pointer)
+
+set refusedCylinder to the cad elliptical cylinder at (the cad zero vector3) with x radius 4.0, y radius 0.0 and height 7.0
+set refusedFrustum to the cad frustum at (the cad zero vector3) with base x radius 4.0, base y radius 2.0, top radius -1.0 and height 7.0
+set refusedTorus to the cad torus at (the cad zero vector3) with major radius 10.0 and minor radius 0.0
+check extended maker ((refusedCylinder's valid) = false)
+check extended maker ((refusedFrustum's valid) = false)
+check extended maker ((refusedTorus's valid) = false)
+print "invalid_extended_primitives_are_refused" as a line

@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: MPL-2.0
+# Twelve source test groups from cadkernel src/brep/geometry.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_geometry.dl
+
+function geometry check {boolean:condition}:
+    execute:
+        if condition = false:
+            print "B-rep geometry assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function geometry near {a number:actual} to {a number:expected} within {a number:tolerance}:
+    execute:
+        geometry check ((the absolute value of (actual - expected)) < tolerance)
+
+function the geometry [point] {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+function {cad vector3:first} = {cad vector3:second}:
+    execute:
+        return ((first's x = second's x) and (first's y = second's y)) and (first's z = second's z)
+
+set surface to the cad surface of the cad xy plane
+geometry check ((the cad point on surface at parameters 3.0 and -4.0) = (the geometry point 3.0 -4.0 0.0))
+geometry check (surface contains cad point (the geometry point 3.0 -4.0 0.0) within 1e-9)
+geometry check ((surface contains cad point (the geometry point 3.0 -4.0 1.0) within 1e-9) = false)
+geometry near (the cad distance from surface to (the geometry point 0.0 0.0 2.5)) to 2.5 within 1e-12
+print "a_plane_surface_is_its_own_coordinates" as a line
+
+set surface to the cad surface of (a cad cylinder with base the cad xy plane and radius 5.0)
+set point to the cad point on surface at parameters 0.0 and 3.0
+geometry near point's x to 5.0 within 1e-12
+geometry near point's y to 0.0 within 1e-12
+geometry near point's z to 3.0 within 1e-12
+set geometryValues1 to [0.0, 1.0, 3.141592653589793, 5.0]
+loop geometryIndex1 from 0 to the length of geometryValues1:
+    set u to the item at geometryIndex1 in geometryValues1
+    set geometryValues2 to [-10.0, 0.0, 7.0]
+    loop geometryIndex2 from 0 to the length of geometryValues2:
+        set v to the item at geometryIndex2 in geometryValues2
+        geometry check (surface contains cad point (the cad point on surface at parameters u and v) within 1e-9)
+geometry near (the cad distance from surface to (the geometry point 8.0 0.0 100.0)) to 3.0 within 1e-12
+print "a_cylinder_wraps_round_its_axis_and_runs_along_it" as a line
+
+set surface to the cad surface of (a cad cone with base the cad xy plane, radius 10.0 and half angle 0.7853981633974483)
+geometry near ((the cad point on surface at parameters 0.0 and 0.0)'s x) to 10.0 within 1e-12
+geometry near ((the cad point on surface at parameters 0.0 and 4.0)'s x) to 6.0 within 1e-12
+set geometryValues3 to [0.0, 3.0, 9.0]
+loop geometryIndex3 from 0 to the length of geometryValues3:
+    set v to the item at geometryIndex3 in geometryValues3
+    geometry check (surface contains cad point (the cad point on surface at parameters 1.2 and v) within 1e-9)
+print "a_cone_narrows_from_its_base_radius" as a line
+
+set heights to [0.0, 6.0, 10.0, 16.0, 20.0]
+set radii to [10.0, 4.0, 0.0, 6.0, 10.0]
+loop index from 0 to 5:
+    geometry near (the cad distance from surface to (the geometry point (the item at index in radii) 0.0 (the item at index in heights))) to 0.0 within 1e-12
+geometry check ((the cad distance from surface to (the geometry point 14.0 0.0 20.0)) > 0.0)
+geometry check ((the cad distance from surface to (the geometry point 6.0 0.0 20.0)) < 0.0)
+geometry check ((the cad distance from surface to (the geometry point 14.0 0.0 0.0)) > 0.0)
+geometry check ((the cad distance from surface to (the geometry point 6.0 0.0 0.0)) < 0.0)
+print "a_cone_holds_the_nappe_past_its_own_apex" as a line
+
+set plane to a cad plane with origin (the geometry point 1.0 2.0 3.0), x axis the cad x axis and y axis the cad y axis
+set surface to the cad surface of (a cad sphere with frame plane and radius 4.0)
+set geometryValues4 to [0.0, 1.0, 3.141592653589793]
+loop geometryIndex4 from 0 to the length of geometryValues4:
+    set u to the item at geometryIndex4 in geometryValues4
+    set geometryValues5 to [-1.4707963267948965, 0.0, 1.4707963267948965]
+    loop geometryIndex5 from 0 to the length of geometryValues5:
+        set v to the item at geometryIndex5 in geometryValues5
+        set point to the cad point on surface at parameters u and v
+        geometry check (surface contains cad point point within 1e-9)
+        geometry near (the cad distance from point to (the geometry point 1.0 2.0 3.0)) to 4.0 within 1e-9
+geometry near ((the cad point on surface at parameters 0.0 and 1.5707963267948966)'s z) to 7.0 within 1e-9
+print "a_sphere_holds_every_point_at_its_radius" as a line
+
+set surface to the cad surface of (a cad torus with frame the cad xy plane, major radius 10.0 and minor radius 2.0)
+set geometryValues6 to [0.0, 1.0, 3.141592653589793, 5.0]
+loop geometryIndex6 from 0 to the length of geometryValues6:
+    set u to the item at geometryIndex6 in geometryValues6
+    set geometryValues7 to [0.0, 1.0, 3.141592653589793, 5.0]
+    loop geometryIndex7 from 0 to the length of geometryValues7:
+        set v to the item at geometryIndex7 in geometryValues7
+        geometry check (surface contains cad point (the cad point on surface at parameters u and v) within 1e-9)
+geometry near ((the cad point on surface at parameters 0.0 and 0.0)'s x) to 12.0 within 1e-12
+geometry near ((the cad point on surface at parameters 0.0 and 3.141592653589793)'s x) to 8.0 within 1e-12
+geometry near (the cad distance from surface to the cad zero vector3) to 8.0 within 1e-12
+print "a_torus_holds_every_point_at_its_tube_radius" as a line
+
+set upright to the cad orthonormal plane with origin the cad zero vector3, x axis the cad x axis and normal the cad y axis
+geometry check upright's valid
+set surface to the cad surface of (a cad cylinder with base upright's value and radius 3.0)
+set point to the cad point on surface at parameters 0.0 and 5.0
+geometry near point's y to 5.0 within 1e-9
+geometry check (surface contains cad point point within 1e-9)
+print "a_tilted_frame_carries_the_whole_surface_with_it" as a line
+
+set curve to the cad edge curve3 of (a cad line3 with origin (the geometry point 1.0 2.0 3.0) and direction (the geometry point 0.0 0.0 4.0))
+geometry check ((the cad point on curve at 0.0) = (the geometry point 1.0 2.0 3.0))
+geometry check ((the cad point on curve at 2.0) = (the geometry point 1.0 2.0 11.0))
+geometry near (the cad parameter on curve nearest (the geometry point 1.0 2.0 11.0)) to 2.0 within 1e-12
+geometry near (the cad parameter on curve nearest (the geometry point 9.0 9.0 7.0)) to 1.0 within 1e-12
+print "a_straight_edge_runs_between_its_parameters" as a line
+
+set curve to the cad edge curve3 of (a cad circle3 with plane the cad xy plane and radius 6.0)
+geometry check ((the cad point on curve at 0.0) = (the geometry point 6.0 0.0 0.0))
+set quarter to the cad point on curve at 1.5707963267948966
+geometry near quarter's x to 0.0 within 1e-12
+geometry near quarter's y to 6.0 within 1e-12
+geometry near (the cad parameter on curve nearest (the geometry point 0.0 6.0 0.0)) to 1.5707963267948966 within 1e-12
+print "a_circular_edge_reads_its_parameter_as_an_angle" as a line
+
+set tilted to the cad orthonormal plane with origin (the geometry point 3.0 4.0 5.0), x axis (the geometry point 1.0 1.0 0.0) and normal (the geometry point 0.0 1.0 1.0)
+geometry check tilted's valid
+set curve to the cad edge curve3 of (a cad circle3 with plane tilted's value and radius 2.0)
+loop index from 0 to 8:
+    set point to the cad point on curve at ((6.283185307179586 * (index as a 64 bit floating-point number)) / 8.0)
+    geometry check (cad tilted's value contains point within 1e-9)
+    geometry near (the cad distance from point to tilted's value's origin) to 2.0 within 1e-9
+print "a_circular_edge_on_a_tilted_plane_stays_on_it" as a line
+
+set controls to a list containing (a cad vector2 with x 0.0 and y 0.0)
+append (a cad vector2 with x 5.0 and y 5.0) to controls
+append (a cad vector2 with x 10.0 and y 0.0) to controls
+set empty to an empty list of a 64 bit floating-point number
+set fitted to the cad nurbs curve2 of degree 2 with controls controls, knots empty and weights empty
+geometry check fitted's valid
+set curve to the cad edge curve3 of (a cad planar spline3 with plane upright's value and curve fitted's value)
+geometry check ((the cad point on curve at 0.0) = the cad zero vector3)
+geometry near ((the cad point on curve at 1.0)'s x) to 10.0 within 1e-9
+loop index from 0 to 9:
+    geometry check (cad upright's value contains (the cad point on curve at ((index as a 64 bit floating-point number) / 8.0)) within 1e-9)
+free controls
+free empty
+print "a_planar_spline_edge_evaluates_through_its_plane" as a line
+
+set far to a cad plane with origin (the geometry point 512345.678 4512345.678 91.5), x axis the cad x axis and y axis the cad y axis
+set surface to the cad surface of (a cad cylinder with base far and radius 0.5)
+set geometryValues8 to [0.0, 1.0, 3.0]
+loop geometryIndex8 from 0 to the length of geometryValues8:
+    set u to the item at geometryIndex8 in geometryValues8
+    geometry check (surface contains cad point (the cad point on surface at parameters u and 2.0) within 1e-9)
+print "survey_coordinates_keep_a_surface_where_it_is" as a line

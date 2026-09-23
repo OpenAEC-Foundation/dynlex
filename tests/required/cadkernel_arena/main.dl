@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: MPL-2.0
+# Behavioral fixtures derived from cadkernel src/brep/arena.rs at 953d546b.
+import lib/cadkernel/arena.dl
+
+set nodes to a cad arena of an integer
+set first to the cad key after inserting 10 into nodes
+set second to the cad key after inserting 20 into nodes
+set found to the cad lookup of first in nodes
+print the cad value of found as a line
+print the cad count of nodes as a line
+set removed to the cad removal of first from nodes
+print whether the valid of removed as a line
+print the cad value of removed as a line
+print whether nodes contains cad key first as a line
+set repeated to the cad removal of first from nodes
+print whether the valid of repeated as a line
+set replacement to the cad key after inserting 30 into nodes
+print whether (the index of first) = (the index of replacement) as a line
+print whether (the generation of first) != (the generation of replacement) as a line
+print whether nodes contains cad key first as a line
+set found to the cad lookup of replacement in nodes
+print the cad value of found as a line
+set found to the cad lookup of second in nodes
+print the cad value of found as a line
+print the cad count of nodes as a line
+set storedNode to the cad node pointer for second in nodes
+store 42 into storedNode at 0
+set found to the cad lookup of second in nodes
+print the cad value of found as a line
+set keys to the cad keys of nodes
+print the length of keys as a line
+free keys
+set duplicate to the cad clone of nodes
+set discarded to the cad removal of replacement from nodes
+print whether duplicate contains cad key replacement as a line
+print whether nodes contains cad key replacement as a line
+free cad arena duplicate
+free cad arena nodes
+
+# Same-typed arenas do not carry global identities in the source API.
+class:
+    patterns:
+        [an|] arena test node
+    members:
+        number as an integer
+
+function an arena test node numbered number:
+    execute:
+        return @intrinsic("construct", an arena test node, number)
+
+set one to a cad arena of an arena test node
+set other to a cad arena of an arena test node
+set recordKey to the cad key after inserting (an arena test node numbered 1) into one
+ignore the cad key after inserting (an arena test node numbered 2) into one
+set foreign to the cad key after inserting (an arena test node numbered 9) into other
+print the number of the cad value of (the cad lookup of foreign in one) as a line
+print the number of the cad value of (the cad lookup of foreign in other) as a line
+set index to 1
+loop while index < 5:
+    ignore the cad key after inserting (an arena test node numbered index) into other
+    increment index
+set recordKeys to the cad keys of other
+set far to the last item of recordKeys
+print whether the valid of (the cad lookup of far in one) as a line
+print whether (the cad node pointer for far in one) = (0 as a pointer to an arena test node) as a line
+print whether the valid of (the cad removal of far from one) as a line
+free recordKeys
+set recordKeys to the cad keys of one
+set index to 0
+loop while index < the length of recordKeys:
+    set storedRecord to the cad node pointer for (the item at index in recordKeys) in one
+    set the number of storedRecord to ((the number of storedRecord) + 1)
+    increment index
+print the number of the cad value of (the cad lookup of recordKey in one) as a line
+free recordKeys
+free cad arena one
+free cad arena other
+
+set nodes to a cad arena of an integer
+set index to 0
+loop while index < 5:
+    ignore the cad key after inserting index into nodes
+    increment index
+set keys to the cad keys of nodes
+ignore the cad removal of (the item at 1 in keys) from nodes
+ignore the cad removal of (the item at 3 in keys) from nodes
+set live to the cad keys of nodes
+print the length of live as a line
+set index to 0
+loop while index < the length of live:
+    print the cad value of (the cad lookup of (the item at index in live) in nodes) as a line
+    increment index
+set clone to the cad clone of nodes
+set fresh to the cad key after inserting 7 into clone
+print the index of fresh as a line
+print whether clone contains cad key (the item at 3 in keys) as a line
+print the cad count of nodes as a line
+free keys
+free live
+free cad arena clone
+free cad arena nodes
+
+# Source regression injects the maximum generation into a vacant slot.
+set nodes to a cad arena of an integer
+set stale to the cad key after inserting 1 into nodes
+ignore the cad removal of stale from nodes
+set vacantSlot to the data of the slots of nodes
+set the generation of vacantSlot to 4294967295 as a 32 bit unsigned integer
+set wrapped to the cad key after inserting 2 into nodes
+print the generation of wrapped as a line
+ignore the cad removal of wrapped from nodes
+print whether nodes contains cad key wrapped as a line
+set fresh to the cad key after inserting 3 into nodes
+print the generation of fresh as a line
+ignore the cad removal of fresh from nodes
+print the cad count of nodes as a line
+free cad arena nodes

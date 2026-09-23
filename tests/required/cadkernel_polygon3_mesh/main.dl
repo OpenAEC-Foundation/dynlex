@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+# Shared adapter fixture; expected output is fixed before required registration.
+import tests/cadkernel/polygon3_mesh/main.dl

@@ -1,0 +1,4 @@
+arc_fit2: circle geometry, G1 tangents, reversal, closure and length fractions
+arc_fit2: explicit normalized directions preserve inflection and G1 knee
+arc_fit2: source collinear fallback remains straight with opposing directions
+

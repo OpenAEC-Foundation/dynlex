@@ -1,0 +1,21 @@
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function finish with value:
+    replacement:
+        @intrinsic("return", value)
+
+function visit depth:
+    execute:
+        if @intrinsic("less than", depth, 3):
+            visit @intrinsic("add", depth, 1)
+
+function the result at depth:
+    execute:
+        visit depth
+        if @intrinsic("less than", depth, 3):
+            finish with the result at @intrinsic("add", depth, 1)
+        finish with depth
+
+@intrinsic("return", @intrinsic("subtract", the result at 0, 3))

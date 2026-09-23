@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_bounds/main.dl
+
+function bounds3 example surface {integer:kind}:
+    execute:
+        set frame to the cad orthonormal plane with origin (bounds3 point [7.0,-9.0,12.0]), x axis (bounds3 point [1.0,1.0,0.0]) and normal (bounds3 point [1.0,-1.0,2.0])
+        check bounds3 (frame's valid)
+        if kind = 0:
+            return the cad surface of (a cad sphere with frame (frame's value) and radius 3.0)
+        if kind = 1:
+            return the cad surface of (a cad torus with frame (frame's value), major radius 5.0 and minor radius 2.0)
+        set first to a list containing (the cad zero vector3)
+        append (bounds3 point [1.0,2.0,3.0]) to first
+        set last to a list containing (bounds3 point [4.0,5.0,1.0])
+        append (bounds3 point [6.0,7.0,2.0]) to last
+        set points to a list containing first
+        append last to points
+        set firstWeights to a list containing 1.0
+        append 2.0 to firstWeights
+        set lastWeights to a list containing 3.0
+        append 1.0 to lastWeights
+        set weights to a list containing firstWeights
+        append lastWeights to weights
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set nurbs to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+        free first
+        free last
+        free points
+        free firstWeights
+        free lastWeights
+        free weights
+        free knots
+        check bounds3 (nurbs's valid)
+        return the cad surface of (nurbs's value)
+
+loop kind from 0 to 3:
+    set madeSurface to bounds3 example surface kind
+    set cube to the cad cuboid at (the cad zero vector3) with size (bounds3 point [1.0,1.0,1.0])
+    set surfaceFaces to the cad face keys of (cube's value)
+    set key to the item at 0 in surfaceFaces
+    set face to the cad node pointer for key in (cube's value)
+    replace cad node (face's surface) in (cube's value) with madeSurface
+    set bounds to the cad bounds of key in (cube's value)
+    check bounds3 (bounds's valid)
+    set padded to the cad box (bounds's value) grown by 1e-12
+    loop i from 0 to 33:
+        loop j from 0 to 33:
+            set u to ((i as a 64 bit floating-point number) * 6.283185307179586) / 32.0
+            set v to ((j as a 64 bit floating-point number) * 6.283185307179586) / 32.0
+            if kind = 2:
+                set u to (i as a 64 bit floating-point number) / 32.0
+                set v to (j as a 64 bit floating-point number) / 32.0
+            check bounds3 (padded holds cad point (the cad point on madeSurface at parameters u and v))
+    set whole to the cad bounds of (cube's value)
+    check bounds3 (whole's valid)
+    free surfaceFaces
+set sphere to the cad sphere body at (bounds3 point [2.0,2.0,2.0]) with radius 3.0
+set bounds to the cad bounds of (sphere's value)
+check bounds3 (bounds's valid)
+check bounds3 point (bounds's value's low) near (bounds3 point [-1.0,-1.0,-1.0])
+check bounds3 point (bounds's value's high) near (bounds3 point [5.0,5.0,5.0])
+print "closed_surfaces_and_nurbs_are_bounded_by_their_full_extent" as a line
+
+set cube to the cad cuboid at (the cad zero vector3) with size (bounds3 point [2.0,2.0,2.0])
+set arcEdges to the cad edge keys of (cube's value)
+set arcKey to the item at 0 in arcEdges
+set arcEdge to the cad node pointer for arcKey in (cube's value)
+set ends to the cad edge endpoints of arcKey in (cube's value)
+check bounds3 (ends's valid)
+set middle to the cad lerp from (ends's start) to (ends's end) at 0.5
+set arcFrame to the cad orthonormal plane with origin (the cad difference of middle and (bounds3 point [0.0,0.0,1.0])), x axis (the cad x axis) and normal (the cad y axis)
+check bounds3 (arcFrame's valid)
+replace cad node (arcEdge's curve) in (cube's value) with (the cad edge curve3 of (a cad circle3 with plane (arcFrame's value) and radius 1.5))
+set arcEdge's startParameter to 0.0
+set arcEdge's endParameter to 3.141592653589793
+set arcFaces to the cad face keys of (cube's value)
+set detected to false
+loop index from 0 to the length of arcFaces:
+    set faceKey to the item at index in arcFaces
+    set uses to the cad face coedges of faceKey in (cube's value)
+    set usesArc to false
+    set corners to an empty list of a cad vector3
+    loop j from 0 to the length of uses:
+        set useKey to the item at j in uses
+        set coedge to the cad node pointer for useKey in (cube's value)
+        if (coedge's edge) = arcKey:
+            set usesArc to true
+        set vertices to the cad coedge vertices of useKey in (cube's value)
+        check bounds3 (vertices's valid)
+        set vertex to the cad node pointer for (vertices's start) in (cube's value)
+        append (vertex's point) to corners
+    if usesArc:
+        set bounds to the cad bounds of faceKey in (cube's value)
+        set byCorners to the cad box around corners
+        check bounds3 (bounds's valid)
+        check bounds3 (byCorners's valid)
+        if ((bounds's value's low's x) < ((byCorners's value's low's x) - 1e-9)) or ((bounds's value's high's x) > ((byCorners's value's high's x) + 1e-9)):
+            set detected to true
+    free corners
+    free uses
+free arcEdges
+free arcFaces
+check bounds3 detected
+print "a_curved_edge_is_sampled_rather_than_cornered" as a line

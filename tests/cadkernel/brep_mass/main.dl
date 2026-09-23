@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mass.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_mass/support.dl
+
+function check cad mass {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function check cad mass {a 64 bit floating-point number:value} near {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        check cad mass ((the absolute value of (value - expected)) <= tolerance)
+function check cad mass point {cad vector3:value} near {cad vector3:expected} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        check cad mass (value's x) near (expected's x) within tolerance
+        check cad mass (value's y) near (expected's y) within tolerance
+        check cad mass (value's z) near (expected's z) within tolerance
+function a cad mass point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+set sphere to the cad sphere body at (a cad mass point 2.0 -3.0 5.0) with radius 2.0
+check cad mass (sphere's valid)
+set sphereMass to the cad analytic mass properties of (sphere's value)
+check cad mass (sphereMass's valid)
+set sphereVolume to (32.0 * 3.141592653589793) / 3.0
+check cad mass (sphereMass's value's volume) near sphereVolume within 1e-10
+check cad mass point (sphereMass's value's centroid) near (a cad mass point 2.0 -3.0 5.0) within 0.0
+set sphereCentral to ((2.0 * sphereVolume) * 4.0) / 5.0
+check cad mass (sphereMass's value's principalMoments's x) near sphereCentral within 1e-10
+check cad mass (sphereMass's value's principalMoments's y) near sphereCentral within 1e-10
+check cad mass (sphereMass's value's principalMoments's z) near sphereCentral within 1e-10
+print "a_translated_sphere_has_exact_mass_properties" as a line
+
+set cylinder to the cad cylinder body at (a cad mass point 1.0 2.0 3.0) with radius 2.0 and height 6.0
+check cad mass (cylinder's valid)
+set cylinderMass to the cad analytic mass properties of (cylinder's value)
+check cad mass (cylinderMass's valid)
+set cylinderVolume to 24.0 * 3.141592653589793
+check cad mass (cylinderMass's value's volume) near cylinderVolume within 1e-10
+check cad mass point (cylinderMass's value's centroid) near (a cad mass point 1.0 2.0 6.0) within 0.0
+check cad mass (cylinderMass's value's principalMoments's x) near (4.0 * cylinderVolume) within 1e-10
+check cad mass (cylinderMass's value's principalMoments's y) near (4.0 * cylinderVolume) within 1e-10
+check cad mass (cylinderMass's value's principalMoments's z) near (2.0 * cylinderVolume) within 1e-10
+print "a_cylinder_has_exact_volume_centroid_and_principal_moments" as a line
+
+set original to the cad sphere body at (a cad mass point 2.0 -3.0 5.0) with radius 2.0
+set shifted to the cad sphere body at (a cad mass point 9.0 8.0 -8.0) with radius 2.0
+check cad mass ((original's valid) and (shifted's valid))
+set first to the cad analytic mass properties of (original's value)
+set expected to the cad analytic mass properties of (shifted's value)
+check cad mass ((first's valid) and (expected's valid))
+set translated to (first's value) translated by (a cad mass point 7.0 11.0 -13.0)
+check cad mass point (translated's centroid) near (expected's value's centroid) within 0.0
+check cad mass point (translated's momentOfInertia) near (expected's value's momentOfInertia) within 1e-9
+check cad mass point (translated's productOfInertia) near (expected's value's productOfInertia) within 1e-9
+print "translating_properties_matches_translating_the_body" as a line
+
+set sectorAngle to 1.5707963267948966
+set sector to a cad mass cylindrical sector at (the cad zero vector3) with outer radius 3.0, inner radius 1.0, height 4.0 and angle sectorAngle
+set sectorMass to the cad analytic mass properties of sector
+check cad mass (sectorMass's valid)
+set sectorArea to ((0.5 * (9.0 - 1.0)) * sectorAngle)
+set sectorVolume to sectorArea * 4.0
+set sectorRadius to (((4.0 * (the sine of (sectorAngle * 0.5))) * (27.0 - 1.0)) / ((3.0 * sectorAngle) * (9.0 - 1.0)))
+set radial to 0.7071067811865476 * sectorRadius
+check cad mass (sectorMass's value's volume) near sectorVolume within 1e-10
+check cad mass point (sectorMass's value's centroid) near (a cad mass point radial radial 2.0) within 1e-10
+print "a_cylindrical_sector_shell_has_exact_mass_properties" as a line
+
+set hollowSphere to a cad mass spherical shell at (a cad mass point 4.0 -2.0 9.0) with outer radius 3.0 and inner radius 1.0
+set hollowMass to the cad analytic mass properties of hollowSphere
+check cad mass (hollowMass's valid)
+set hollowVolume to ((4.0 * 3.141592653589793) * (27.0 - 1.0)) / 3.0
+check cad mass (hollowMass's value's volume) near hollowVolume within 1e-10
+check cad mass point (hollowMass's value's centroid) near (a cad mass point 4.0 -2.0 9.0) within 0.0
+print "concentric_spherical_shells_subtract_the_cavity" as a line
+
+set unsupportedBox to the cad cuboid at (the cad zero vector3) with size (a cad mass point 2.0 3.0 4.0)
+set unsupportedCone to the cad cone body at (the cad zero vector3) with radius 2.0 and height 5.0
+check cad mass ((unsupportedBox's valid) and (unsupportedCone's valid))
+check cad mass ((the cad analytic mass properties of (unsupportedBox's value))'s valid = false)
+check cad mass ((the cad analytic mass properties of (unsupportedCone's value))'s valid = false)
+print "unsupported_analytic_surface_sets_are_refused" as a line

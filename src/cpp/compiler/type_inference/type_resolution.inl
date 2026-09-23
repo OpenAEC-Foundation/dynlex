@@ -413,7 +413,7 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		} else if (kind == IntrinsicKind::SizeOf) {
 			DataType typeArgType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (typeArgType.kind == DataType::Kind::Type && typeArgType.referencedKind != DataType::Kind::Type &&
-				typeArgType.referencedKind != DataType::Kind::Unresolved)
+				typeArgType.referencedKind != DataType::Kind::Unresolved && typeArgType.toReferencedType().isConcrete())
 				return {DataType::Kind::Int, 8};
 		} else if (kind == IntrinsicKind::BuildInfo) {
 			Expression *keyExpr =

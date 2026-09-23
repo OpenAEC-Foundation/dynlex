@@ -75,7 +75,8 @@ static bool inferSectionLineRange(
 		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
 		Expression *activeOpeningExpression =
 			body && line->sectionOpening ? body->findCloneOf(line->expression) : line->expression;
-		if (activeOpeningExpression && activeOpeningExpression->sectionBodyInferred) {
+		if (activeOpeningExpression &&
+			activeOpeningExpression->sectionBodyExecution != Expression::SectionBodyExecution::None) {
 			if (openedSectionFallsThrough)
 				*openedSectionFallsThrough = activeOpeningExpression->sectionBodyFallsThrough;
 			return true;
@@ -155,7 +156,8 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
@@ -475,8 +477,14 @@ static bool inferSection(
 
 #include "declared_type_constraint_work_item.inl"
 
-static PatternTypeConstraintProbe
-probeDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
+static bool typeContainsSymbolicClassInstantiation(const DataType &type) {
+	return (type.classDefinition && type.classInstIndex < -1) ||
+		   (type.arrayElementType && typeContainsSymbolicClassInstantiation(*type.arrayElementType));
+}
+
+static PatternTypeConstraintProbe probeDeclaredTypeConstraint(
+	DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, ResolvedPatternConstraint *resolvedResult = nullptr
+) {
 	item.failureDiagnostic.reset();
 	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
 	resetExpressionTypes(item.expression);
@@ -494,6 +502,12 @@ probeDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &
 	DataType parameterType;
 	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
 	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
+	if (resolvedResult && inferred && producedType && pure && !deferred) {
+		*resolvedResult = {
+			constraint, constraint.requiresCompileTimeValue, false, constraint.explicitlyAcceptsNothing(),
+			!typeContainsSymbolicClassInstantiation(parameterType)
+		};
+	}
 	if (!deferred && (!inferred || !producedType) && trialContext.hasTypeFailureDiagnostic)
 		item.failureDiagnostic = trialContext.typeFailureDiagnostic;
 	rollbackTrialJournal(journal);
@@ -633,6 +647,13 @@ static bool collectDeclaredTypeConstraintWorkItems(
 #include "variable_type_constraint_materialization.inl"
 
 static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
+	struct ProvisionalDomainScope {
+		ParseContext &context;
+		~ProvisionalDomainScope() {
+			requireCompilerInvariant(context.activePatternConstraintProbes.empty(), "signature probe scope did not unwind");
+			context.provisionalConstraintDomains.clear();
+		}
+	} provisionalDomainScope{parseContext};
 	materializeExplicitPatternParameterDefinitions(parseContext);
 	std::vector<DeclaredTypeConstraintWorkItem> items;
 	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
@@ -829,8 +850,8 @@ bool inferTypes(ParseContext &parseContext) {
 			if (!line || !line->expression)
 				continue;
 			parseContext.diagnostics.push_back(Diagnostic(
-				parseContext, Diagnostic::Level::Error,
-				"definition-only output cannot contain executable top-level statements", Range(line, line->patternText)
+				parseContext, Diagnostic::Level::Error, "definition-only output cannot contain executable top-level statements",
+				Range(line, line->patternText)
 			));
 			return false;
 		}

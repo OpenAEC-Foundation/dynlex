@@ -1,0 +1,30 @@
+import tests/cadkernel/lab_graphics/main.dl
+
+check lab input ((the lab click action at 30 288) = 18)
+check lab input ((the lab click action at 100 272) = -1)
+set solidState to the lab state after action 18 from (the initial lab state)
+check lab input ((the lab click action at 354 100 for solidState) = 20)
+check lab input ((the lab click action at 469 133 for solidState) = 20)
+check lab input ((the lab click action at 470 120 for solidState) = -1)
+check lab input ((the lab click action at 484 120 for solidState) = 21)
+check lab input ((the lab click action at 354 142 for solidState) = 24)
+check lab input ((the lab click action at 744 142 for solidState) = 27)
+check lab input ((the lab click action at 859 175 for solidState) = 27)
+check lab input ((the lab click action at 860 175 for solidState) = -1)
+check lab input ((the lab click action at 360 120 for (the initial lab state)) = -1)
+set solidWindow to a new hidden window with width 900 and height 750
+set solidLoading to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 18 for solidWindow
+set solidTypeface to solidLoading's typeface
+require lab font (solidLoading's status)
+loop shapeIndex from 0 to 8:
+    set solidState to the lab state after action (20 + shapeIndex) from solidState
+    set solidScene to the lab scene for (solidState's settings)
+    check lab input (solidScene's valid)
+    set solidFrame to a new graphics frame in solidWindow with background red 0.9686, green 0.9765, blue 0.9882 and alpha 1.0
+    check lab input (solidFrame's drawable)
+    draw lab solidScene with solidState using solidTypeface in solidFrame
+    display solidFrame
+set solidReleasing to the result of releasing (the address of solidTypeface)
+require lab font solidReleasing
+close solidWindow
+print "Dynedra solid graphics and input checks passed: eight shaded meshes" as a line

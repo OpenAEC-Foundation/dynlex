@@ -1,0 +1,279 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f:
+# src/geom2d/vec.rs (Vec2) and src/space/vec.rs (Vec3).
+# Mathematical operations retain the upstream evaluation order and thresholds.
+# Coordinates and scalar computations are explicitly IEEE binary64.
+# A normalization result represents Option<VecN>: inspect valid before value.
+# Invalid results carry a deterministic zero payload, not a usable direction.
+# As upstream, squared-length underflow can invalidate tiny nonzero vectors,
+# while length overflow is valid and may produce zero or NaN components.
+
+import lib/std.dl
+
+# Numeric type spelling used by the CAD patterns.
+local function number:
+    replacement:
+        a number
+
+class:
+    patterns:
+        [a|] cad vector2
+    members:
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad normalization2
+    members:
+        valid as a boolean
+        value as a cad vector2
+
+function a cad vector2 with x {number:x} and y {number:y}:
+    execute:
+        return @intrinsic("construct", a cad vector2, x as a 64 bit floating-point number, y as a 64 bit floating-point number)
+
+function the cad zero vector2:
+    execute:
+        return a cad vector2 with x 0.0 and y 0.0
+
+function the cad sum of {cad vector2:left} and {cad vector2:right}:
+    execute:
+        set x to ((the x of left) + (the x of right))
+        set y to ((the y of left) + (the y of right))
+        return a cad vector2 with x x and y y
+
+function the cad difference of {cad vector2:left} and {cad vector2:right}:
+    execute:
+        set x to ((the x of left) - (the x of right))
+        set y to ((the y of left) - (the y of right))
+        return a cad vector2 with x x and y y
+
+function {cad vector2:value} scaled by {number:factor}:
+    execute:
+        set scalar to factor as a 64 bit floating-point number
+        set x to ((the x of value) * scalar)
+        set y to ((the y of value) * scalar)
+        return a cad vector2 with x x and y y
+
+function {cad vector2:value} cad divided by {number:divisor}:
+    execute:
+        set scalar to divisor as a 64 bit floating-point number
+        set x to ((the x of value) / scalar)
+        set y to ((the y of value) / scalar)
+        return a cad vector2 with x x and y y
+
+function the cad negative of {cad vector2:value}:
+    execute:
+        set x to the negative of (the x of value)
+        set y to the negative of (the y of value)
+        return a cad vector2 with x x and y y
+
+function the cad dot of {cad vector2:left} and {cad vector2:right}:
+    execute:
+        set x to ((the x of left) * (the x of right))
+        set y to ((the y of left) * (the y of right))
+        return x + y
+
+function the cad cross of {cad vector2:left} and {cad vector2:right}:
+    execute:
+        return ((the x of left) * (the y of right)) - ((the y of left) * (the x of right))
+
+function the cad squared length of {cad vector2:value}:
+    execute:
+        return the cad dot of value and value
+
+function the cad length of {cad vector2:value}:
+    execute:
+        return the square root of (the cad squared length of value)
+
+function the cad distance from {cad vector2:left} to {cad vector2:right}:
+    execute:
+        return the cad length of (the cad difference of right and left)
+
+function the cad squared distance from {cad vector2:left} to {cad vector2:right}:
+    execute:
+        return the cad squared length of (the cad difference of right and left)
+
+function the cad normalization of {cad vector2:value}:
+    execute:
+        set magnitude to the cad length of value
+        if magnitude > (1e-300 as a 64 bit floating-point number):
+            return @intrinsic("construct", a cad normalization2, true, value cad divided by magnitude)
+        return @intrinsic("construct", a cad normalization2, false, the cad zero vector2)
+
+function the cad lerp from {cad vector2:left} to {cad vector2:right} at {number:parameter}:
+    execute:
+        set step to (the cad difference of right and left) scaled by parameter
+        return the cad sum of left and step
+
+function the cad distance from {cad vector2:point} to the segment from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        set along to the cad difference of end and start
+        set squared to the cad squared length of along
+        if squared < (1e-24 as a 64 bit floating-point number):
+            return the cad distance from point to start
+        set parameter to (the cad dot of (the cad difference of point and start) and along) / squared
+        # Ordered comparisons implement Rust f64::clamp, preserving NaN.
+        if parameter < 0.0:
+            set parameter to 0.0
+        if parameter > 1.0:
+            set parameter to 1.0
+        set closest to the cad sum of start and (along scaled by parameter)
+        return the cad distance from point to closest
+
+class:
+    patterns:
+        [a|] cad vector3
+    members:
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+        z as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad normalization3
+    members:
+        valid as a boolean
+        value as a cad vector3
+
+function a cad vector3 with x {number:x}, y {number:y} and z {number:z}:
+    execute:
+        return @intrinsic("construct", a cad vector3, x as a 64 bit floating-point number, y as a 64 bit floating-point number, z as a 64 bit floating-point number)
+
+function the cad zero vector3:
+    execute:
+        return a cad vector3 with x 0.0, y 0.0 and z 0.0
+
+function the cad sum of {cad vector3:left} and {cad vector3:right}:
+    execute:
+        set x to ((the x of left) + (the x of right))
+        set y to ((the y of left) + (the y of right))
+        set z to ((the z of left) + (the z of right))
+        return a cad vector3 with x x, y y and z z
+
+function the cad difference of {cad vector3:left} and {cad vector3:right}:
+    execute:
+        set x to ((the x of left) - (the x of right))
+        set y to ((the y of left) - (the y of right))
+        set z to ((the z of left) - (the z of right))
+        return a cad vector3 with x x, y y and z z
+
+function {cad vector3:value} scaled by {number:factor}:
+    execute:
+        set scalar to factor as a 64 bit floating-point number
+        set x to ((the x of value) * scalar)
+        set y to ((the y of value) * scalar)
+        set z to ((the z of value) * scalar)
+        return a cad vector3 with x x, y y and z z
+
+function {cad vector3:value} cad divided by {number:divisor}:
+    execute:
+        set scalar to divisor as a 64 bit floating-point number
+        set x to ((the x of value) / scalar)
+        set y to ((the y of value) / scalar)
+        set z to ((the z of value) / scalar)
+        return a cad vector3 with x x, y y and z z
+
+function the cad negative of {cad vector3:value}:
+    execute:
+        set x to the negative of (the x of value)
+        set y to the negative of (the y of value)
+        set z to the negative of (the z of value)
+        return a cad vector3 with x x, y y and z z
+
+function the cad dot of {cad vector3:left} and {cad vector3:right}:
+    execute:
+        set x to ((the x of left) * (the x of right))
+        set y to ((the y of left) * (the y of right))
+        set z to ((the z of left) * (the z of right))
+        return (x + y) + z
+
+function the cad cross of {cad vector3:left} and {cad vector3:right}:
+    execute:
+        set x to (((the y of left) * (the z of right)) - ((the z of left) * (the y of right)))
+        set y to (((the z of left) * (the x of right)) - ((the x of left) * (the z of right)))
+        set z to (((the x of left) * (the y of right)) - ((the y of left) * (the x of right)))
+        return a cad vector3 with x x, y y and z z
+
+function the cad squared length of {cad vector3:value}:
+    execute:
+        return the cad dot of value and value
+
+function the cad length of {cad vector3:value}:
+    execute:
+        return the square root of (the cad squared length of value)
+
+function the cad distance from {cad vector3:left} to {cad vector3:right}:
+    execute:
+        return the cad length of (the cad difference of right and left)
+
+function the cad squared distance from {cad vector3:left} to {cad vector3:right}:
+    execute:
+        return the cad squared length of (the cad difference of right and left)
+
+function the cad normalization of {cad vector3:value}:
+    execute:
+        set magnitude to the cad length of value
+        if magnitude > (1e-300 as a 64 bit floating-point number):
+            return @intrinsic("construct", a cad normalization3, true, value cad divided by magnitude)
+        return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+
+function the cad lerp from {cad vector3:left} to {cad vector3:right} at {number:parameter}:
+    execute:
+        set step to (the cad difference of right and left) scaled by parameter
+        return the cad sum of left and step
+
+function the cad distance from {cad vector3:point} to the segment from {cad vector3:start} to {cad vector3:end}:
+    execute:
+        set along to the cad difference of end and start
+        set squared to the cad squared length of along
+        if squared < (1e-24 as a 64 bit floating-point number):
+            return the cad distance from point to start
+        set parameter to (the cad dot of (the cad difference of point and start) and along) / squared
+        # Ordered comparisons implement Rust f64::clamp, preserving NaN.
+        if parameter < 0.0:
+            set parameter to 0.0
+        if parameter > 1.0:
+            set parameter to 1.0
+        set closest to the cad sum of start and (along scaled by parameter)
+        return the cad distance from point to closest
+
+function the cad perpendicular of {cad vector2:value}:
+    execute:
+        return a cad vector2 with x (the negative of (the y of value)) and y (the x of value)
+
+function the cad angle of {cad vector2:value}:
+    execute:
+        return @intrinsic("atan2", the y of value, the x of value)
+
+function the cad x axis:
+    execute:
+        return a cad vector3 with x 1.0, y 0.0 and z 0.0
+
+function the cad y axis:
+    execute:
+        return a cad vector3 with x 0.0, y 1.0 and z 0.0
+
+function the cad z axis:
+    execute:
+        return a cad vector3 with x 0.0, y 0.0 and z 1.0
+
+function cad {cad vector3:value} is finite:
+    execute:
+        # Ordered bounds reject both infinities and NaN in each component.
+        set maximum to 1.7976931348623157e308 as a 64 bit floating-point number
+        set x to the absolute value of (the x of value)
+        set y to the absolute value of (the y of value)
+        set z to the absolute value of (the z of value)
+        return (x <= maximum) and ((y <= maximum) and (z <= maximum))
+
+function cad {cad vector3:left} is parallel to {cad vector3:right} within {number:tolerance}:
+    execute:
+        set first to the cad normalization of left
+        set second to the cad normalization of right
+        if (the valid of first) and (the valid of second):
+            set normal to the cad cross of (the value of first) and (the value of second)
+            return (the cad length of normal) <= (tolerance as a 64 bit floating-point number)
+        return false

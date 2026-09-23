@@ -1,0 +1,2 @@
+a_line_join_keeps_the_source_direction
+spline_join_elevates_the_lower_degree_without_moving_either_half

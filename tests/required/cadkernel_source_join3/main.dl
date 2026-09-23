@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/source_join3/main.dl
+

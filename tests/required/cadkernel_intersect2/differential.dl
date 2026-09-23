@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime-input differential fixture for the pinned cadkernel numerical port.
+# Source: https://github.com/HakanSeven12/cadkernel/tree/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d
+
+import lib/cadkernel/intersect2.dl
+
+function cad fixture number at {integer:index} in {argument list:arguments}:
+    execute:
+        return @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at index in arguments' data)
+
+function cad fixture vector at {integer:index} in {argument list:arguments}:
+    execute:
+        return a cad vector2 with x (cad fixture number at index in arguments) and y (cad fixture number at (index + 1) in arguments)
+
+function cad fixture ellipse at {integer:index} in {argument list:arguments}:
+    execute:
+        return a cad ellipse at (cad fixture vector at index in arguments) with radii (cad fixture number at (index + 2) in arguments) and (cad fixture number at (index + 3) in arguments) along (cad fixture vector at (index + 4) in arguments)
+
+function cad fixture print {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value)
+
+function cad fixture dump scalars {a pointer to a list:values}:
+    execute:
+        print the length of values as a line
+        loop index from 0 to the length of values:
+            cad fixture print (the item at index in values)
+        free values
+
+set arguments to the command line arguments
+set operation to the argument at 0 in arguments
+if operation = "line-line":
+    set result to cad line intersection from (cad fixture vector at 1 in arguments) along (cad fixture vector at 3 in arguments) with (cad fixture vector at 5 in arguments) along (cad fixture vector at 7 in arguments)
+    if result's valid:
+        print 1 as a line
+        cad fixture print result's value's first
+        cad fixture print result's value's second
+    else:
+        print 0 as a line
+if operation = "line-circle":
+    cad fixture dump scalars (cad line circle intersections from (cad fixture vector at 1 in arguments) along (cad fixture vector at 3 in arguments) around (cad fixture vector at 5 in arguments) with radius (cad fixture number at 7 in arguments))
+if operation = "circle-angles":
+    cad fixture dump scalars (cad circle intersection angles at (cad fixture vector at 1 in arguments) with radius (cad fixture number at 3 in arguments) and at (cad fixture vector at 4 in arguments) with radius (cad fixture number at 6 in arguments))
+if operation = "circle-points":
+    set values to cad circle intersection points at (cad fixture vector at 1 in arguments) with radius (cad fixture number at 3 in arguments) and at (cad fixture vector at 4 in arguments) with radius (cad fixture number at 6 in arguments)
+    print the length of values as a line
+    loop index from 0 to the length of values:
+        set point to the item at index in values
+        cad fixture print point's x
+        cad fixture print point's y
+    free values
+if operation = "line-ellipse":
+    set values to cad line ellipse intersections from (cad fixture vector at 1 in arguments) along (cad fixture vector at 3 in arguments) with (cad fixture ellipse at 5 in arguments)
+    print the length of values as a line
+    loop index from 0 to the length of values:
+        set pair to the item at index in values
+        cad fixture print pair's first
+        cad fixture print pair's second
+    free values
+if operation = "ellipse-point":
+    set point to the cad point on (cad fixture ellipse at 1 in arguments) at (cad fixture number at 7 in arguments)
+    print 1 as a line
+    cad fixture print point's x
+    cad fixture print point's y
+if operation = "ellipse-minor":
+    set point to the cad minor axis of (cad fixture ellipse at 1 in arguments)
+    print 1 as a line
+    cad fixture print point's x
+    cad fixture print point's y
+if operation = "ellipse-degenerate":
+    print (cad (cad fixture ellipse at 1 in arguments) is degenerate) as a line
+if operation = "tolerance-equal":
+    set tolerance to a cad tolerance of (cad fixture number at 1 in arguments)
+    print (cad (cad fixture number at 2 in arguments) and (cad fixture number at 3 in arguments) are equal within tolerance) as a line

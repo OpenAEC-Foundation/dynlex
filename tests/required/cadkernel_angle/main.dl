@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: MPL-2.0
+# Tests translated from cadkernel src/geom2d/angle.rs, with boundary fixtures.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/angle.rs
+
+import lib/cadkernel/angle.dl
+
+function cad angle check {a boolean:passed} named {C string:label}:
+    execute:
+        print label
+        print ": "
+        print passed as a line
+        if the inverse of passed:
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function cad angle near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
+    execute:
+        return (the absolute value of (actual - expected)) < 1e-12
+
+# Exposed entry points exercise binary64 arguments at runtime as well as literals.
+exposed function cad angle check normalization of {a 64 bit floating-point number:angle} against {a 64 bit floating-point number:expected} named {C string:label}:
+    execute:
+        cad angle check (cad angle near (the cad normalized angle of angle) to expected) named label
+
+exposed function cad angle check span from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} against {a 64 bit floating-point number:expected} named {C string:label}:
+    execute:
+        cad angle check (cad angle near (cad arc span from start to end) to expected) named label
+
+exposed function cad angle check inclusion of {a 64 bit floating-point number:angle} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} against {a boolean:expected} named {C string:label}:
+    execute:
+        cad angle check ((cad angle angle within arc from start to end) = expected) named label
+
+exposed function cad angle check parameter of {a 64 bit floating-point number:angle} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} against {a 64 bit floating-point number:expected} named {C string:label}:
+    execute:
+        cad angle check (cad angle near (cad arc parameter of angle from start to end) to expected) named label
+
+set pi to 3.141592653589793 as a 64 bit floating-point number
+set tau to 6.283185307179586 as a 64 bit floating-point number
+set halfPi to 1.5707963267948966 as a 64 bit floating-point number
+set start to (7.0 * pi) / 4.0
+set end to pi / 4.0
+
+# All nine upstream test groups.
+cad angle check normalization of 0.0 against 0.0 named "normalize zero"
+cad angle check normalization of tau against 0.0 named "normalize full turn"
+cad angle check normalization of (-halfPi) against (tau - halfPi) named "normalize negative quarter turn"
+cad angle check normalization of (3.0 * tau + pi) against pi named "normalize multiple positive turns"
+cad angle check span from 0.0 to 0.0 against tau named "closed arc at zero"
+cad angle check span from pi to pi against tau named "closed arc at pi"
+cad angle check span from 0.0 to halfPi against halfPi named "counterclockwise quarter span"
+cad angle check span from halfPi to 0.0 against (tau - halfPi) named "reversed span takes long way"
+cad angle check inclusion of 0.0 from start to end against true named "crossing arc contains zero"
+cad angle check inclusion of 0.1 from start to end against true named "crossing arc contains after zero"
+cad angle check inclusion of (tau - 0.1) from start to end against true named "crossing arc contains before zero"
+cad angle check inclusion of pi from start to end against false named "crossing arc excludes opposite"
+cad angle check inclusion of halfPi from 0.0 to pi against true named "ordinary arc contains midpoint"
+cad angle check inclusion of ((3.0 * pi) / 2.0) from 0.0 to pi against false named "ordinary arc excludes opposite"
+cad angle check inclusion of pi from 0.0 to 0.0 against true named "closed zero arc contains pi"
+cad angle check inclusion of 0.3 from 1.0 to 1.0 against true named "closed offset arc contains angle"
+cad angle check parameter of 0.0 from 0.0 to pi against 0.0 named "parameter starts at zero"
+cad angle check parameter of halfPi from 0.0 to pi against 0.5 named "parameter midpoint"
+cad angle check parameter of pi from 0.0 to pi against 1.0 named "parameter ends at one"
+cad angle check parameter of ((3.0 * pi) / 2.0) from 0.0 to pi against 1.0 named "parameter clamps past end"
+set before to cad arc parameter of ((7.1 * pi) / 4.0) from start to end
+set atZero to cad arc parameter of 0.0 from start to end
+set after to cad arc parameter of 0.1 from start to end
+cad angle check (before < atZero) named "parameter increases toward zero"
+cad angle check (atZero < after) named "parameter increases beyond zero"
+
+# Exact turns, negative inputs and values immediately around zero.
+cad angle check normalization of (-tau) against 0.0 named "normalize negative full turn"
+cad angle check normalization of (-5.0 * tau - halfPi) against (tau - halfPi) named "normalize multiple negative turns"
+cad angle check normalization of (1000.0 * tau + halfPi) against halfPi named "normalize thousand turns"
+cad angle check normalization of (-1000.0 * tau - halfPi) against (tau - halfPi) named "normalize negative thousand turns"
+cad angle check normalization of 1e-8 against 1e-8 named "normalize just above zero"
+cad angle check normalization of (-1e-8) against (tau - 1e-8) named "normalize just below zero"
+cad angle check normalization of (tau + 1e-8) against 1e-8 named "normalize just past full turn"
+cad angle check normalization of (-1e-20) against 0.0 named "normalize rounded tiny negative"
+cad angle check ((1.0 / (the cad normalized angle of (-0.0))) > 0.0) named "normalize negative zero becomes positive"
+cad angle check span from (-halfPi) to halfPi against pi named "span accepts negative start"
+cad angle check span from 0.0 to (4.0 * tau) against tau named "multiple turns still form circle"
+cad angle check span from (-2.0 * tau) to (2.0 * tau) against tau named "opposite turns form circle"
+cad angle check span from 1.0 to (1.0 + 5e-10) against 5e-10 named "span retains sub tolerance sweep"
+cad angle check span from (1.0 + 5e-10) to 1.0 against (tau - 5e-10) named "tiny reversed sweep spans almost circle"
+
+# Inclusion uses an angular epsilon of 1e-9, including endpoints.
+cad angle check inclusion of 1.0 from 1.0 to 2.0 against true named "ordinary arc includes start"
+cad angle check inclusion of 2.0 from 1.0 to 2.0 against true named "ordinary arc includes end"
+cad angle check inclusion of (1.0 - 5e-10) from 1.0 to 2.0 against true named "ordinary start within tolerance"
+cad angle check inclusion of (1.0 - 2e-9) from 1.0 to 2.0 against false named "ordinary start outside tolerance"
+cad angle check inclusion of (2.0 + 5e-10) from 1.0 to 2.0 against true named "ordinary end within tolerance"
+cad angle check inclusion of (2.0 + 2e-9) from 1.0 to 2.0 against false named "ordinary end outside tolerance"
+cad angle check inclusion of start from start to end against true named "crossing arc includes start"
+cad angle check inclusion of end from start to end against true named "crossing arc includes end"
+cad angle check inclusion of (start - 5e-10) from start to end against true named "crossing start within tolerance"
+cad angle check inclusion of (start - 2e-9) from start to end against false named "crossing start outside tolerance"
+cad angle check inclusion of (end + 5e-10) from start to end against true named "crossing end within tolerance"
+cad angle check inclusion of (end + 2e-9) from start to end against false named "crossing end outside tolerance"
+cad angle check inclusion of 4.0 from 1.0 to (1.0 + 5e-10) against true named "near zero sweep covers circle"
+cad angle check inclusion of 4.0 from (1.0 + 5e-10) to 1.0 against true named "near zero reverse sweep covers circle"
+cad angle check inclusion of 4.0 from 1.0 to (1.0 + 2e-9) against false named "larger tiny sweep stays bounded"
+cad angle check inclusion of 0.0 from 5e-10 to (tau - 5e-10) against true named "near full sweep covers circle"
+cad angle check inclusion of 0.0 from 2e-9 to (tau - 2e-9) against false named "near full sweep outside epsilon"
+# A tiny wrapped sweep has a negative sweep near -TAU: upstream does not treat it as full.
+cad angle check inclusion of pi from (tau - 2e-10) to 2e-10 against false named "tiny wrapped arc stays bounded"
+cad angle check inclusion of (-halfPi) from pi to tau against true named "inclusion normalizes negative angle"
+cad angle check inclusion of (4.0 * tau + halfPi) from (-2.0 * tau) to (3.0 * tau + pi) against true named "inclusion normalizes all three angles"
+cad angle check inclusion of 4.0 from 0.0 to (3.0 * tau) against true named "multiple turn closed arc contains all"
+cad angle check inclusion of (-5e-10) from 0.0 to pi against false named "ordinary start tolerance does not wrap"
+
+# Parameters use exact span, independently of the inclusion tolerance.
+cad angle check parameter of start from start to end against 0.0 named "crossing parameter start"
+cad angle check parameter of 0.0 from start to end against 0.5 named "crossing parameter midpoint"
+cad angle check parameter of end from start to end against 1.0 named "crossing parameter end"
+cad angle check parameter of pi from start to end against 1.0 named "crossing parameter outside"
+cad angle check parameter of (-halfPi) from pi to 0.0 against 0.5 named "parameter normalizes negative angle"
+cad angle check parameter of (4.0 * tau + halfPi) from (-2.0 * tau) to (3.0 * tau + pi) against 0.5 named "parameter normalizes all three angles"
+cad angle check parameter of 1.0 from 1.0 to 1.0 against 0.0 named "closed arc seam parameter is zero"
+cad angle check parameter of pi from 0.0 to 0.0 against 0.5 named "closed arc half turn parameter"
+cad angle check parameter of (-halfPi) from 0.0 to 0.0 against 0.75 named "closed arc negative angle parameter"
+cad angle check parameter of (2.0 * tau) from 0.0 to tau against 0.0 named "full turn endpoint normalizes to zero"
+cad angle check parameter of (1.0 - 5e-10) from 1.0 to 2.0 against 1.0 named "before start tolerance still clamps to one"
+cad angle check parameter of 1.0001 from 1.0 to 2.0 against 0.0001 named "parameter does not snap near start"
+cad angle check parameter of 1.9999 from 1.0 to 2.0 against 0.9999 named "parameter does not snap near end"
+cad angle check parameter of (1.0 + 5e-10) from 1.0 to (1.0 + 5e-10) against 1.0 named "tiny arc parameter still reaches end"
+cad angle check parameter of 4.0 from 1.0 to (1.0 + 5e-10) against 1.0 named "tiny arc parameter still clamps"
+
+# IEEE nonfinite inputs retain upstream NaN propagation and inclusion behavior.
+set notANumber to the square root of (-1.0)
+set infinity to 1e308 * 1e308
+set normalizedNaN to the cad normalized angle of notANumber
+set normalizedInfinity to the cad normalized angle of infinity
+set invalidSpan to cad arc span from notANumber to 1.0
+set invalidParameter to cad arc parameter of notANumber from 0.0 to pi
+set invalidStartParameter to cad arc parameter of 1.0 from notANumber to pi
+set invalidEndParameter to cad arc parameter of 1.0 from 0.0 to notANumber
+cad angle check (normalizedNaN != normalizedNaN) named "normalization propagates NaN"
+cad angle check (normalizedInfinity != normalizedInfinity) named "normalization of infinity is NaN"
+cad angle check (invalidSpan != invalidSpan) named "span propagates NaN"
+cad angle check inclusion of notANumber from 0.0 to pi against false named "ordinary arc excludes NaN"
+cad angle check inclusion of notANumber from 1.0 to 1.0 against true named "closed arc includes NaN by sweep"
+cad angle check inclusion of 0.5 from notANumber to 1.0 against true named "NaN start follows wrapped end comparison"
+cad angle check inclusion of 2.0 from 1.0 to notANumber against true named "NaN end follows wrapped start comparison"
+cad angle check (invalidParameter != invalidParameter) named "parameter propagates NaN angle"
+cad angle check (invalidStartParameter != invalidStartParameter) named "parameter propagates NaN start"
+cad angle check (invalidEndParameter != invalidEndParameter) named "parameter propagates NaN end"

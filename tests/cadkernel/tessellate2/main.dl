@@ -1,0 +1,116 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/tessellate2.dl
+
+function check tessellate2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 95)
+function tessellate2 near {a 64 bit floating-point number:value} to {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:limit}:
+    execute:
+        check tessellate2 ((the absolute value of (value - expected)) < limit)
+
+set density to the cad default segments per radian
+set points to the cad arc samples at the cad zero vector2 with radius 1.0 from 0.0 to 1.5707963267948966 at elevation 0.0 with density density
+set first to the item at 0 in points
+set last to the last item of points
+tessellate2 near first's x to 1.0 within 1e-12
+tessellate2 near first's y to 0.0 within 1e-12
+tessellate2 near last's x to 0.0 within 1e-12
+tessellate2 near last's y to 1.0 within 1e-12
+free points
+print "an_arc_includes_both_endpoints" as a line
+
+set centre to a cad vector2 with x 3.0 and y -4.0
+set points to the cad arc samples at centre with radius 7.5 from 0.3 to 4.0 at elevation 2.0 with density density
+loop index from 0 to the length of points:
+    set point to the item at index in points
+    set dx to point's x - centre's x
+    set dy to point's y - centre's y
+    tessellate2 near (the square root of ((dx * dx) + (dy * dy))) to 7.5 within 1e-9
+    check tessellate2 (point's z = 2.0)
+free points
+print "every_sampled_point_sits_on_the_circle" as a line
+
+set points to the cad arc samples at the cad zero vector2 with radius 1.0 from 0.0 to 0.0 at elevation 0.0 with density density
+check tessellate2 ((the length of points) > 100)
+set first to the item at 0 in points
+set last to the last item of points
+tessellate2 near first's x to last's x within 1e-9
+tessellate2 near first's y to last's y within 1e-9
+free points
+print "a_closed_arc_sweeps_a_full_turn" as a line
+
+set points to the cad arc samples at the cad zero vector2 with radius 1.0 from 1.0 to 1.000001 at elevation 0.0 with density density
+check tessellate2 ((the length of points) = 5)
+free points
+print "a_vanishingly_short_arc_still_gets_a_few_segments" as a line
+
+set sparse to the cad arc samples at the cad zero vector2 with radius 1.0 from 0.0 to 6.283185307179586 at elevation 0.0 with density 1.0
+set dense to the cad arc samples at the cad zero vector2 with radius 1.0 from 0.0 to 6.283185307179586 at elevation 0.0 with density 50.0
+check tessellate2 ((the length of dense) > ((the length of sparse) * 10))
+free sparse
+free dense
+print "density_scales_with_the_requested_rate" as a line
+
+set circle to a cad ellipse at the cad zero vector2 with radii 1.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+set points to the cad ellipse samples of circle from 0.0 to 1.5707963267948966 at elevation 9.0 with density density
+set last to the last item of points
+tessellate2 near last's x to 0.0 within 1e-12
+tessellate2 near last's y to 1.0 within 1e-12
+check tessellate2 (last's z = 9.0)
+free points
+print "components_land_in_x_y_z_order" as a line
+
+set circle to a cad ellipse at (a cad vector2 with x 1.0 and y 2.0) with radii 3.0 and 3.0 along (a cad vector2 with x 1.0 and y 0.0)
+set points to the cad ellipse samples of circle from 0.0 to 3.141592653589793 at elevation 0.0 with density density
+set arc to the cad arc samples at circle's centre with radius 3.0 from 0.0 to 3.141592653589793 at elevation 0.0 with density density
+check tessellate2 ((the length of points) = (the length of arc))
+loop index from 0 to the length of points:
+    set a to the item at index in points
+    set b to the item at index in arc
+    tessellate2 near a's x to b's x within 1e-9
+    tessellate2 near a's y to b's y within 1e-9
+free points
+free arc
+print "a_unit_ratio_ellipse_matches_the_circle_of_the_same_radius" as a line
+
+set ellipse to a cad ellipse at (a cad vector2 with x -6.0 and y 11.0) with radii 8.0 and 3.0 along (a cad vector2 with x 0.6 and y 0.8)
+set points to the cad ellipse samples of ellipse from 0.2 to 5.0 at elevation 0.0 with density density
+loop index from 0 to the length of points:
+    set point to the item at index in points
+    set rx to point's x - ellipse's centre's x
+    set ry to point's y - ellipse's centre's y
+    set along to (rx * 0.6) + (ry * 0.8)
+    set across to ((the negative of rx) * 0.8) + (ry * 0.6)
+    set a to along / 8.0
+    set b to across / 3.0
+    tessellate2 near ((a * a) + (b * b)) to 1.0 within 1e-9
+free points
+print "every_sampled_point_satisfies_the_ellipse_equation" as a line
+
+set ellipse to a cad ellipse at the cad zero vector2 with radii 2.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+set forward to the cad ellipse samples of ellipse from 0.0 to 1.5707963267948966 at elevation 0.0 with density density
+set backward to the cad ellipse samples of ellipse from 1.5707963267948966 to 0.0 at elevation 0.0 with density density
+check tessellate2 ((the length of forward) = (the length of backward))
+tessellate2 near (the last item of forward)'s y to (the item at 0 in backward)'s y within 1e-12
+free forward
+free backward
+print "a_backwards_parameter_range_sweeps_the_other_way" as a line
+
+set centre to a cad vector2 with x 512345.678 and y 4512345.678
+set points to the cad arc samples at centre with radius 0.5 from 0.0 to 6.283185307179586 at elevation 0.0 with density density
+loop index from 0 to the length of points:
+    set point to the item at index in points
+    set dx to point's x - centre's x
+    set dy to point's y - centre's y
+    tessellate2 near (the square root of ((dx * dx) + (dy * dy))) to 0.5 within 1e-9
+free points
+print "survey_coordinates_keep_their_precision" as a line
+
+set end to a cad vector2 with x 10.0 and y 20.0
+set parameters to [0.0,1.0,0.5]
+loop index from 0 to 3:
+    set t to the item at index in parameters
+    set point to the cad lerp from the cad zero vector2 to end at t
+    check tessellate2 ((point's x = (10.0 * t)) and (point's y = (20.0 * t)))
+print "lerp_hits_both_ends_and_the_middle" as a line

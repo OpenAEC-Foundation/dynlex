@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/lengthen3/main.dl
+
+set retained to shortened
+set shortened to a new (the type of shortened)
+set open to a new (the type of open)
+require lengthening retained's valid
+set endpoint to the last item of retained's vertices
+lengthening close (the x of endpoint's position) to 1.0
+lengthening close (the y of endpoint's position) to -1.0
+set invalidCopy to refused
+set refused to a new (the type of refused)
+require lengthening (invalidCopy's valid = false)
+require lengthening ((the length of invalidCopy's vertices) = 0)
+
+function lengthening local chain:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        append (a straight cad polyline vertex2 at (the cad zero vector2)) to vertices
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+        append (a cad polyline vertex2 at (a cad vector2 with x 5.0 and y 0.0) with bulge 0.75) to vertices
+        set source to a flat cad planar curve3 of (the cad curve2 of (the cad polyline2 with vertices vertices and closure false))
+        free vertices
+        set pick to the cad zero vector3
+        set first to the cad lengthened polyline of source picked at pick with (a total cad length change of 1.0)
+        set second to the cad lengthened polyline of source picked at pick with (a total cad length change of 7.0)
+        require lengthening (first's vertices != second's vertices)
+        require lengthening ((first's vertices as a pointer) != (source's curve's polyline's vertices as a pointer))
+        set start to the item at 0 in first's vertices
+        set end to the last item of first's vertices
+        require lengthening ((the x of start's position) = 4.0 and (the y of start's position) = 0.0)
+        require lengthening (start's source = 1)
+        require lengthening (start's startFraction = (1.0 - (1.0 / 3.0)))
+        require lengthening (end's bulge = 0.75)
+        return second
+
+set localResult to lengthening local chain
+require lengthening localResult's valid
+set endpoint to the item at 0 in localResult's vertices
+require lengthening ((the x of endpoint's position) = -2.0)
+require lengthening (endpoint's source = 0)
+require lengthening (endpoint's startFraction = -1.0)
+print "retained endpoint metadata and independent owned results" as a line

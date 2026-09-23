@@ -32,6 +32,7 @@ struct PatternDefinition;
 
 struct InstantiatedSectionBody {
 	Section *sourceSection{};
+	InstantiatedSectionBody *parentBody{};
 	std::vector<Expression *> lineExpressions;
 	std::vector<std::shared_ptr<InstantiatedSectionBody>> childBodies;
 
@@ -63,10 +64,20 @@ struct InstantiationKey {
 struct FlexExpansionKey {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
+	Range callSite;
 	std::vector<DataType> argumentTypes;
 	std::vector<CompileTimeValue> compileTimeArguments;
 
-	bool operator==(const FlexExpansionKey &) const = default;
+	bool sameDefinitionAndArguments(const FlexExpansionKey &other) const {
+		return definition == other.definition && pathIndex == other.pathIndex && argumentTypes == other.argumentTypes &&
+			   compileTimeArguments == other.compileTimeArguments;
+	}
+
+	bool operator==(const FlexExpansionKey &other) const {
+		return sameDefinitionAndArguments(other) && callSite.line == other.callSite.line &&
+			   callSite.subString.data() == other.callSite.subString.data() &&
+			   callSite.subString.size() == other.callSite.subString.size();
+	}
 };
 
 inline bool parameterRequiresCompileTimeInstantiationValue(
@@ -99,15 +110,9 @@ inline InstantiationKey buildInstantiationKey(
 	return key;
 }
 
-// Per-instantiation state for monomorphized functions.
-// Each unique combination of argument types produces a separate instantiation.
-struct Instantiation {
-	DataType returnType{DataType::Kind::Any};
-	Range returnTypeOriginRange;
-	std::vector<DataType> argumentTypes;
-	std::unordered_map<std::string, DataType> parameterTypesByName;
+// Effects of executing a function, separate from its inferred representation.
+struct InstantiationExecutionEffects {
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
-	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	VariableAddressProvenance finalGlobalAddressProvenance;
@@ -119,8 +124,21 @@ struct Instantiation {
 	bool returnPointerStorageAmbiguous = false;
 	bool writesThroughUnknownAddress = false;
 	bool externallyEscapesUnknownAddress = false;
-	std::unordered_set<std::string> requiredCompileTimeParameters;
 	InstantiationPurity purity = InstantiationPurity::Pure;
+	bool operator==(const InstantiationExecutionEffects &) const = default;
+};
+
+// Per-instantiation state for monomorphized functions.
+// Each unique combination of argument types produces a separate instantiation.
+struct Instantiation : InstantiationExecutionEffects {
+	DataType returnType{DataType::Kind::Any};
+	Range returnTypeOriginRange;
+	bool hasReturnIntrinsic = false;
+	std::vector<DataType> argumentTypes;
+	std::unordered_map<std::string, DataType> parameterTypesByName;
+	std::unordered_map<std::string, DataType> parameterSeedTypesByName;
+	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_set<std::string> requiredCompileTimeParameters;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	llvm::Function *llvmFunction = nullptr;

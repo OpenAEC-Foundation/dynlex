@@ -74,6 +74,12 @@ We use this logic to determine what is a variable and what is not, all the way f
 
 The consequence: an unused argument is not an argument.
 
+Retain and release bodies are independent function scopes for local variables.
+Implicit declaration grouping and explicit lookup include the lifecycle body
+itself, then stop there instead of binding a same-named top-level declaration.
+Nested sections and flex replacements still share variables within that body.
+Ordinary functions retain their explicit `globals` declaration behavior.
+
 Pattern matching is type-agnostic. This is because we cannot easily match based on types if we do not even know whether a variable exists yet. Also, variables come from the callee to the caller (the function signature defines what is a variable), while types come from the caller to the callee (the arguments define the type).
 
 The consequence: we cannot know what order nested expressions should have.
@@ -115,8 +121,11 @@ We loop over the code like it would get executed.
 Before inferring executable code, we infer every pattern argument type constraint with the same expression inference engine.
 Pattern matching has already recorded all candidates, but it has not selected an overload. Signature inference resolves
 constraint dependencies first, selects overloads from inferred argument types, and requires every constraint expression to
-produce a pure compile-time type or constraint value. A constraint is deferred while one of its candidate signatures is unresolved. If a full
-pass makes no progress, the remaining signature dependency is cyclic and compilation fails.
+produce a pure compile-time type or constraint value. An unresolved candidate defers a call only while that candidate can still
+match its arguments. A known argument mismatch excludes it, including when another parameter is unresolved. On-demand signature
+probes can establish necessary structural domains for exclusion, but cannot select a callee. Their cached domains omit speculative
+class-layout indices, and nested class probes restore the enclosing layout transaction. If a full pass makes no progress, the
+remaining signature dependency is cyclic and compilation fails.
 
 Exact expression types and parameter requirements use separate models. `DataType` describes one exact expression type.
 `TypeConstraint` describes the structural domain accepted by a pattern parameter and may additionally require a compile-time-known
@@ -154,6 +163,20 @@ this implies:
  - functions and classes are instantiated on USAGE. for functions when they're called, for classes with the construct intrinsic. so if a class or function is never used, NO instantiation is created.
 
 The compiler NEVER expands flexes to look for something like an intrinsic. instead, the compiler walks the code normally and once intrinsics are encountered, it does something with them.
+
+Recursive function inference runs complete body passes until the instantiation stabilizes.
+A successful, type-valid body pass that encountered no return intrinsic establishes a
+`nothing` result before the convergence decision, even if recursive calls need another
+pass. Encountering a return whose operand is still unresolved is distinct from encountering
+no return. Return observations belong to the active instantiation, reset for each body
+pass, and participate in inference-trial rollback. Returns inferred inside a nested
+function do not determine the caller's result.
+
+An ordinary overload lookup with unresolved recursive operands is deferred until
+the existing body reinference pass deduces those operands. Dependency observation
+belongs to each argument, so an unrelated unresolved argument remains a failure.
+Flex overloads explicitly accepting unresolved arguments still participate in
+selection, including return wrappers that must record the return observation.
 
 Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. When replacement inference transfers caller-body control, the outcome is recorded on the exact replacement expression that performed the transfer and enclosing flex calls forward it normally. A direct outcome already recorded on an active flex call takes precedence over the replacement expression's forwarded outcome. Transfer identity is the complete active flex-invocation path plus the transfer expression, with reusable clones normalized to their template nodes. This lets retries of one logical invocation share the inferred caller body while distinct direct, helper, and nested-helper call sites produce the required duplicate-transfer diagnostic. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Flex sections cannot be overloaded, so selecting an overload cannot create a control-flow classification dependency.
 
@@ -206,7 +229,49 @@ When we encounter a value that cannot be known at compile time, values that buil
 
 When processing a function call, we infer that function right away so we can know return types. We do the same with flexes. When a (flex) function fails on typing, we just reorder the expression that is calling it, since we are still inferring that one.
 
+Argument type inference and argument execution have separate effects. After selecting a replacement, inference restores the
+caller's execution state from before the preliminary argument walk. The replacement then applies argument effects where its
+bindings are used. An already inferred binding is reusable only when its inference did not change execution state and that same
+state still holds. This state includes constants, address provenance, the subject and the owning instantiation's effect summary;
+restoration retains inferred types, grouping selections and recursive inference dependencies.
+
+`type of` and `type extent` inspect an operand's inferred type without executing that operand. Their argument inference must
+therefore leave the caller's execution state unchanged, and pure evaluation returns their stored result without walking the
+operand. This also applies through ordinary replacement patterns. A type-producing function that actually performs I/O remains
+impure and cannot be a type constraint.
+
 after we have successfully inferred a function, if it is a pure function and all arguments are compile time known. we execute the function in compile time and retrieve the result from it. evaluating a pure function shouldn't modify anything, only give a compile time value as result.
+
+Each root pure evaluation shares one execution budget across nested calls, expressions,
+sections and loop iterations: at most 1,000,000 expression/section entries and 256
+simultaneously active entries. Exhausting either resource unwinds the entire evaluation
+and reports a compile-time evaluation limit at its root call. It must never resume an
+enclosing caller with an unknown value or cache a partial result as a completed value.
+Unwinding restores active body and flex scopes; an inference trial still owns its usual
+diagnostics and cache journal. Compiler invariant failures remain compiler failures.
+
+Pure Store execution resolves the destination through all caller binding layers
+and already selected flex expansions, using the same shared traversal as purity
+classification and code generation. The right-hand side still evaluates in its
+original binding stack. An intermediate replacement parameter is not a new local
+destination when it forwards a caller variable.
+
+Section-flex inference assigns caller-body execution to one explicit transfer
+site or to the implicit continuation after its replacement. Pure evaluation
+consumes this static classification: an explicit transfer can execute zero or
+many times in a loop, and does not become an implicit continuation when its
+loop has no iterations. A function return from a caller body propagates before
+checking the enclosing loop or conditional's normal header outcome. Distinct
+duplicate transfer sites remain inference errors; runtime iteration does not
+create another static transfer site.
+
+Local storage is identified by its source declaration and the instantiated body
+that declares it. Expression clones retain their owning body; nested bodies link
+to their parent, and flex roots link to the call-site body. Resolving a caller
+binding preserves the referenced expression's storage identity. Pure execution,
+native allocations and finalized local types use this same identity, so nested
+uses of one definition cannot overwrite each other's local storage. Each pure
+flex invocation resets and restores only its own local keys.
 
 Type phrases describe types. Direct value construction is explicit: `a new {type}` value-initializes a concrete runtime type, while `a new {type} from ...` supplies constructor values. `nothing` is not constructible. `return nothing` is the sole natural-language exception: it is a valueless return, whereas `return the type nothing` returns the compile-time type value.
 
@@ -302,6 +367,12 @@ layout to the same expression nodes.
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
 A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate with the same local ordering replaces the retained transaction, so the final accepted subgroupings are promoted together.
+
+A candidate whose validity depends on an unresolved recursive call is deferred, rather than counted as a second passing tree. A resolved alternative can establish the return type needed for the normal body reinference pass to check those deferred alternatives. Dependency observations belong to the individual candidate.
+
+Nested trials and cached-grouping inference borrow the caller's fixed roots through parent-linked scopes. They collect only their own resolved roots. Type requests through flex bindings honor all active scopes, so the caller's selected expression tree cannot be regrouped behind its reference. Each scope is restored before its owning transaction or inference call ends.
+
+Replaying a selected snapshot fixes only nodes actually present in that snapshot. Callee body groupings are journaled separately and must not be frozen after their transaction has been rolled back. A committed code line or an already-ordered cloned header fixes every node of its own snapshot, even when an enclosing caller supplies a different fixed-root scope. This keeps independently valid subexpressions from being regrouped into an invalid parent condition during reuse.
 
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
 

@@ -1,0 +1,132 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime inputs: dimension, operation, degree, count, knot count, spacing,
+# start-valid, end-valid, parameter, then knots, flat points, and two tangents.
+import lib/cadkernel/spline.dl
+
+function cad spline probe number {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function cad spline emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function cad spline emit {an array of numbers:value}:
+    execute:
+        loop axis from 0 to the length of value:
+            cad spline emit (the item at axis in value)
+
+class:
+    patterns:
+        [a|] cad spline probe source
+    members:
+        data
+        prototype
+        indices
+
+function the cad spline [point] at {integer:index} from {a pointer to a cad spline probe source:source}:
+    execute:
+        append index to the indices of source
+        set point to a new (the type of the prototype of source)
+        loop axis from 0 to the length of point:
+            store (the item at ((index * (the length of point)) + axis) in the data of source) at point + axis
+        return point
+
+function cad run spline probe in {fixed integer:dimension} dimensions:
+    execute:
+        set operation to (cad spline probe number 1) as an integer
+        set degree to (cad spline probe number 2) as an integer
+        set count to (cad spline probe number 3) as an integer
+        set knotCount to (cad spline probe number 4) as an integer
+        set spacing to (cad spline probe number 5) as an integer
+        set startValid to ((cad spline probe number 6) != 0.0)
+        set endValid to ((cad spline probe number 7) != 0.0)
+        set parameter to cad spline probe number 8
+        set parameterization to @intrinsic("construct", a cad spline parameterization, spacing)
+        set knots to an empty list of a 64 bit floating-point number
+        set cursor to 9
+        loop index from 0 to knotCount:
+            append (cad spline probe number cursor) to knots
+            increment cursor
+        set data to an empty list of a 64 bit floating-point number
+        loop index from 0 to count * dimension:
+            append (cad spline probe number cursor) to data
+            increment cursor
+        set prototype to a new (a 64 bit floating-point number array of dimension items)
+        set first to prototype
+        set last to prototype
+        loop axis from 0 to dimension:
+            store (cad spline probe number cursor) at first + axis
+            increment cursor
+        loop axis from 0 to dimension:
+            store (cad spline probe number cursor) at last + axis
+            increment cursor
+        set indices to an empty list of integer
+        set initial to @intrinsic("construct", a cad spline probe source, data, prototype, indices)
+        allocate one slot of initial and set source to it
+        if operation = 0:
+            set value to the cad de Boor value of degree degree with knots knots and count points from source at parameter
+            cad spline emit value
+            cad spline emit (the length of indices)
+            loop index from 0 to the length of indices:
+                cad spline emit (the item at index in indices)
+            if count > 0 and degree > 0:
+                cad spline emit (the cad span of degree degree with knots knots and last (count - 1) at parameter)
+            else:
+                cad spline emit (-1)
+        else:
+            if operation = 3:
+                set generated to the cad clamped uniform knots of degree degree for count points
+                cad spline emit (the length of generated)
+                loop index from 0 to the length of generated:
+                    cad spline emit (the item at index in generated)
+                free generated
+            else:
+                set points to an empty list of (the type of prototype)
+                loop index from 0 to count:
+                    append (the cad spline point at index from source) to points
+                set start to @intrinsic("construct", a cad spline tangent, startValid, first)
+                set end to @intrinsic("construct", a cad spline tangent, endValid, last)
+                if operation = 1:
+                    set result to the cad open spline through points with start tangent start and end tangent end using parameterization
+                else:
+                    set result to the cad periodic spline through points using parameterization
+                cad spline emit ((the valid of result) as an integer)
+                cad spline emit (the length of the controls of result)
+                cad spline emit (the length of the knots of result)
+                loop index from 0 to the length of the controls of result:
+                    cad spline emit (the item at index in the controls of result)
+                loop index from 0 to the length of the knots of result:
+                    cad spline emit (the item at index in the knots of result)
+                free cad spline interpolation result
+                free points
+        free indices
+        free knots
+        free data
+        @intrinsic("call", "libc", "free", nothing, source)
+
+set dimension to (cad spline probe number 0) as an integer
+if dimension = 0:
+    cad run spline probe in 0 dimensions
+else:
+    if dimension = 1:
+        cad run spline probe in 1 dimensions
+    else:
+        if dimension = 2:
+            cad run spline probe in 2 dimensions
+        else:
+            if dimension = 3:
+                cad run spline probe in 3 dimensions
+            else:
+                if dimension = 4:
+                    cad run spline probe in 4 dimensions
+                else:
+                    if dimension = 5:
+                        cad run spline probe in 5 dimensions
+                    else:
+                        if dimension = 8:
+                            cad run spline probe in 8 dimensions
+                        else:
+                            cad run spline probe in 17 dimensions

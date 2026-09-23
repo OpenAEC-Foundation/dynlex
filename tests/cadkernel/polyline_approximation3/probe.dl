@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/polyline_approximation3.dl
+import tests/cadkernel/nurbs3/support.dl
+
+set precision to (the nurbs probe number at 0) as an integer
+set degree to (the nurbs probe number at 1) as an integer
+set count to (the nurbs probe number at 2) as an integer
+set knotCount to (the nurbs probe number at 3) as an integer
+set weightCount to (the nurbs probe number at 4) as an integer
+set closed to (the nurbs probe number at 5) != 0.0
+set cursor to 6
+set controls to an empty list of a cad vector3
+set knots to an empty list of a 64 bit floating-point number
+set weights to an empty list of a 64 bit floating-point number
+loop index from 0 to count:
+    append (the nurbs probe point at cursor) to controls
+    set cursor to cursor + 3
+loop index from 0 to knotCount:
+    append (the nurbs probe number at cursor) to knots
+    increment cursor
+loop index from 0 to weightCount:
+    append (the nurbs probe number at cursor) to weights
+    increment cursor
+set built to the cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+free controls
+free knots
+free weights
+emit nurbs flag built's valid
+if built's valid:
+    set built's value to built's value with cad periodicity closed
+    set original to the cad clone of built's value
+    set result to the cad spline polyline of built's value at precision precision
+    emit nurbs flag result's valid
+    if result's valid:
+        emit nurbs scalar result's tolerance
+        emit nurbs scalar (the length of result's points)
+        loop index from 0 to the length of result's points:
+            emit nurbs point (the item at index in result's points)
+    emit nurbs flag (built's value = original)

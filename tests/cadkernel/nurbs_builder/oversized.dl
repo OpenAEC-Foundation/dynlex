@@ -1,0 +1,6 @@
+import lib/cadkernel/nurbs_builder.dl
+set arguments to the command line arguments
+set text to the argument at 0 in arguments
+set sweep to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+set result to the cad rational unit arc with sweep sweep
+print result's valid as a line

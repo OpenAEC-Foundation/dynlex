@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_intersect.dl
+function intersection argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function intersection vector at {integer:index}:
+    execute:
+        return a cad vector3 with x (intersection argument index), y (intersection argument (index + 1)) and z (intersection argument (index + 2))
+function intersection surface at {integer:index}:
+    execute:
+        set kind to (intersection argument index) as an integer
+        set frame to a cad plane with origin (intersection vector at (index + 1)), x axis (intersection vector at (index + 4)) and y axis (intersection vector at (index + 7))
+        set radius to intersection argument (index + 10)
+        set extra to intersection argument (index + 11)
+        if kind = 0:
+            return the cad surface of frame
+        if kind = 1:
+            return the cad surface of (a cad cylinder with base frame and radius radius)
+        if kind = 2:
+            return the cad surface of (a cad cone with base frame, radius radius and half angle extra)
+        if kind = 3:
+            return the cad surface of (a cad sphere with frame frame and radius radius)
+        if kind = 4:
+            return the cad surface of (a cad torus with frame frame, major radius radius and minor radius extra)
+        set row to a list containing (the cad zero vector3)
+        append (the cad x axis) to row
+        set points to a list containing row
+        append row to points
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weightRow to a list containing 1.0
+        append 1.0 to weightRow
+        set weights to a list containing weightRow
+        append weightRow to weights
+        set made to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+        free points
+        free row
+        free weights
+        free weightRow
+        free knots
+        return the cad surface of (made's value)
+function emit intersection number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit intersection vector {cad vector3:value}:
+    execute:
+        emit intersection number value's x
+        emit intersection number value's y
+        emit intersection number value's z
+function emit intersection frame {cad plane:value}:
+    execute:
+        emit intersection vector value's origin
+        emit intersection vector value's xAxis
+        emit intersection vector value's yAxis
+function emit intersection {cad surface meeting:value}:
+    execute:
+        emit intersection number value's kind
+        if value's kind = 1:
+            emit intersection number (the length of value's curves)
+            loop index from 0 to the length of value's curves:
+                set curve to the item at index in value's curves
+                emit intersection number curve's kind
+                if curve's kind = 0:
+                    emit intersection vector curve's line's origin
+                    emit intersection vector curve's line's direction
+                else if curve's kind = 1:
+                    emit intersection frame curve's circle's plane
+                    emit intersection number curve's circle's radius
+                else:
+                    emit intersection frame curve's ellipse's plane
+                    emit intersection number curve's ellipse's majorRadius
+                    emit intersection number curve's ellipse's minorRadius
+                loop sample from 0 to 3:
+                    emit intersection vector (the cad point on curve at ((sample as a 64 bit floating-point number) - 0.25))
+        else if value's kind = 2:
+            emit intersection number (the length of value's points)
+            loop index from 0 to the length of value's points:
+                emit intersection vector (the item at index in value's points)
+        set cloned to the cad clone of value
+        emit intersection number ((value = cloned) as an integer)
+set firstSurface to intersection surface at 1
+set secondSurface to intersection surface at 13
+set tol to intersection argument 0
+set result to the cad meeting of firstSurface and secondSurface within tol
+emit intersection result
+set result to the cad meeting of secondSurface and firstSurface within tol
+emit intersection result

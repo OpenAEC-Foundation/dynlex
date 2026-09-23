@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft.dl
+function check loft {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function loft test rectangle:
+    execute:
+        set points to a list containing (a cad vector2 with x -2.0 and y -1.0)
+        append (a cad vector2 with x 2.0 and y -1.0) to points
+        append (a cad vector2 with x 2.0 and y 1.0) to points
+        append (a cad vector2 with x -2.0 and y 1.0) to points
+        set result to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop i from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at i in points) to (the item at (the remainder of (i + 1) divided by 4) in points))) to (result's values)
+        free points
+        return result
+function loft test [ellipse]:
+    execute:
+        set ellipse to a cad ellipse at (the cad zero vector2) with radii 2.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+        set result to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad ellipse arc2 on ellipse from ((index as a 64 bit floating-point number) * 1.5707963267948966) to (((index + 1) as a 64 bit floating-point number) * 1.5707963267948966))) to (result's values)
+        return result
+function loft test frame at {a 64 bit floating-point number:z}:
+    execute:
+        return a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z z), x axis (the cad x axis) and y axis (the cad y axis)
+function check loft topology {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check loft ((the length of flaws) = 0)
+        free flaws
+        check loft ((the cad euler characteristic of body) = 2)
+        check loft ((the cad worst vertex gap of body) < 1e-9)
+function loft test body for {cad topology list:profile} between {cad plane:first} and {cad plane:last}:
+    execute:
+        set sections to a list containing (a cad loft section on first with profile (profile's values))
+        append (a cad loft section on last with profile (profile's values)) to sections
+        set made to the cad loft through sections
+        free sections
+        return made
+function loft vertices of {cad body:first} match {cad body:last}:
+    execute:
+        set keys to the cad keys of (first's vertices)
+        set matched to (the length of keys) = (the cad count of (last's vertices))
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            set a to the cad node pointer for key in (first's vertices)
+            set b to the cad node pointer for key in (last's vertices)
+            if b = (0 as the type of b):
+                set matched to false
+            else if ((the cad distance from (a's point) to (b's point)) = 0.0) = false:
+                set matched to false
+        free keys
+        return matched

@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/band2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check band2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function band2 near {a 64 bit floating-point number:value} to {a 64 bit floating-point number:expected}:
+    execute:
+        check band2 ((the absolute value of (value - expected)) < 1e-9)
+function band2 open line:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        append (a straight cad polyline vertex2 at (cross2 point [0.0,0.0])) to vertices
+        append (a straight cad polyline vertex2 at (cross2 point [10.0,0.0])) to vertices
+        set source to the cad polyline2 with vertices vertices and closure false
+        free vertices
+        return source
+
+set source to band2 open line
+set widths to a list containing [2.0,2.0]
+set band to the cad band boundary of source with widths widths within angle 0.1
+check band2 ((the length of band's edges) = 4)
+check band2 ((the length of band's stationPieces) = 1)
+band2 near band's sourceLength to 10.0
+set stations to the item at 0 in band's stationPieces
+band2 near stations's sourceStart to 0.0
+band2 near stations's sourceEnd to 10.0
+loop index from 0 to the length of band's edges:
+    set edge to the item at index in band's edges
+    check band2 (edge's sourceSegment = 0)
+    band2 near (the absolute value of edge's start's y) to 1.0
+    band2 near edge's sourceStart to edge's start's x
+    band2 near edge's sourceEnd to edge's end's x
+print "straight band boundary and source stations" as a line
+
+replace item at index 0 in widths with [2.0,4.0]
+set band to the cad band boundary of source with widths widths within angle 0.1
+check band2 ((the length of band's edges) = 4)
+loop index from 0 to the length of band's edges:
+    set edge to the item at index in band's edges
+    band2 near (the absolute value of edge's start's y) to (1.0 + (edge's start's x * 0.1))
+print "linear width variation follows the original segment" as a line
+
+set invalidWidths to [[-1.0,2.0],[0.0,0.0],[1e-12,1e-12],[1.0,(1.0 / 0.0)],[1.0,(0.0 / 0.0)]]
+loop index from 0 to the length of invalidWidths:
+    replace item at index 0 in widths with (the item at index in invalidWidths)
+    set band to the cad band boundary of source with widths widths within angle 0.1
+    check band2 ((the length of band's edges) = 0)
+    check band2 ((the length of band's stationPieces) = 0)
+    band2 near band's sourceLength to 0.0
+clear widths
+set band to the cad band boundary of source with widths widths within angle 0.1
+check band2 ((the length of band's edges) = 0)
+free widths
+free cad polyline source
+print "invalid widths and width counts return the empty default" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a straight cad polyline vertex2 at (cross2 point [0.0,0.0])) to vertices
+append (a straight cad polyline vertex2 at (cross2 point [10.0,0.0])) to vertices
+append (a straight cad polyline vertex2 at (cross2 point [10.0,10.0])) to vertices
+set source to the cad polyline2 with vertices vertices and closure false
+set widths to a list containing [2.0,2.0]
+append [2.0,2.0] to widths
+set band to the cad band boundary of source with widths widths within angle 0.1
+check band2 ((the length of band's edges) = 6)
+check band2 ((the length of band's stationPieces) = 2)
+band2 near band's sourceLength to 20.0
+set foundInner to false
+set foundOuter to false
+loop index from 0 to the length of band's edges:
+    set edge to the item at index in band's edges
+    if (edge's start's x = 9.0) and (edge's start's y = 1.0):
+        set foundInner to true
+    if (edge's start's x = 11.0) and (edge's start's y = -1.0):
+        set foundOuter to true
+check band2 (foundInner and foundOuter)
+free widths
+free cad polyline source
+free vertices
+print "equal-width corner joins use the rail intersection" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a cad polyline vertex2 at (cross2 point [0.0,0.0]) with bulge 1.0) to vertices
+append (a straight cad polyline vertex2 at (cross2 point [2.0,0.0])) to vertices
+set source to the cad polyline2 with vertices vertices and closure false
+set widths to a list containing [0.2,0.2]
+set band to the cad band boundary of source with widths widths within angle 0.2
+band2 near band's sourceLength to 3.141592653589793
+check band2 ((the length of band's stationPieces) = 16)
+set lastStation to the last item of band's stationPieces
+band2 near lastStation's sourceEnd to band's sourceLength
+check band2 ((the length of band's edges) > 16)
+free widths
+free cad polyline source
+free vertices
+print "curved bands retain analytic source distances between chord stations" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a straight cad polyline vertex2 at (cross2 point [3.0,4.0])) to vertices
+append (a straight cad polyline vertex2 at (cross2 point [3.0,4.0])) to vertices
+set source to the cad polyline2 with vertices vertices and closure false
+set widths to a list containing [2.0,2.0]
+set band to the cad band boundary of source with widths widths within angle 0.1
+check band2 ((the length of band's edges) = 0)
+check band2 ((the length of band's stationPieces) = 0)
+band2 near band's sourceLength to 0.0
+free widths
+free cad polyline source
+free vertices
+print "collapsed source geometry has no usable rails" as a line

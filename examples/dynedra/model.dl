@@ -1,0 +1,351 @@
+# Dynedra Lab scenarios. Geometry comes from the native kernel.
+# Scene copies retain their shared segment/control storage. Views are read-only.
+import lib/cadkernel/curve3.dl
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/helix.dl
+import lib/cadkernel/band2.dl
+import lib/cadkernel/brep_mesh.dl
+import examples/dynedra/settings.dl
+import examples/dynedra/solids.dl
+
+class:
+    patterns:
+        [a|] lab segment
+    members:
+        start as a cad vector3
+        end as a cad vector3
+
+class:
+    patterns:
+        [a|] lab surface vertex
+    members:
+        position as a cad vector3
+        normal as a cad vector3
+
+class:
+    patterns:
+        [a|] lab scene
+    members:
+        valid as a boolean
+        message as a C string
+        segments
+        controls
+        guides
+        surface
+        length as a 64 bit floating-point number
+        exactLength as a 64 bit floating-point number
+        area as a 64 bit floating-point number
+        regions as an integer
+        solid as a lab solid report
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set references to @intrinsic("dereference", owner)
+            if references = 1:
+                free (the segments of @intrinsic("lifecycle value"))
+                free (the controls of @intrinsic("lifecycle value"))
+                free (the guides of @intrinsic("lifecycle value"))
+                free (the surface of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, references - 1)
+
+local function a new lab scene:
+    execute:
+        set segments to an empty list of a lab segment
+        set controls to an empty list of a cad vector3
+        set guides to an empty list of a lab segment
+        set surface to an empty list of a lab surface vertex
+        allocate one slot of 0 and set owner to it
+        if owner = (0 as a pointer to an integer):
+            @intrinsic("call", "libc", "abort", nothing)
+        return @intrinsic("construct", a lab scene, true, "Geometry evaluated", segments, controls, guides, surface, 0.0, -1.0, 0.0, 0, a new lab solid report, owner)
+
+local function add lab segment from {cad vector3:start} to {cad vector3:end} into {lab scene:scene}:
+    execute:
+        append (@intrinsic("construct", a lab segment, start, end)) to scene's segments
+
+local function add lab chain points into {lab scene:scene}:
+    execute:
+        loop index from 1 to the length of points:
+            add lab segment from (the item at (index - 1) in points) to (the item at index in points) into scene
+
+local function add lab surface vertex {integer:index} from {cad mesh:meshValue} into {lab scene:scene}:
+    execute:
+        append (@intrinsic("construct", a lab surface vertex, the item at index in meshValue's positions, the item at index in meshValue's normals)) to scene's surface
+
+local function fill lab arc for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        append (the lab point 1.0 0.0 0.0) to scene's controls
+        append (the lab point 1.0 1.0 0.0) to scene's controls
+        append (the lab point 0.0 1.0 0.0) to scene's controls
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to a list containing 1.0
+        append settings's weight to weights
+        append 1.0 to weights
+        set constructed to the cad nurbs curve3 of degree 2 with controls scene's controls, knots knots and weights weights
+        free knots
+        free weights
+        set samples to an empty list of a cad vector3
+        if constructed's valid:
+            loop index from 0 to (settings's samples + 1):
+                set parameter to (index as a 64 bit floating-point number) / (settings's samples as a 64 bit floating-point number)
+                append (the cad point on constructed's value at parameter) to samples
+            add lab chain samples into scene
+        free samples
+        return constructed's valid
+
+local function fill lab bezier for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        append (the lab point -2.0 0.0 0.0) to scene's controls
+        append (the lab point -1.0 0.0 settings's height) to scene's controls
+        append (the lab point 1.0 0.0 (the negative of settings's height)) to scene's controls
+        append (the lab point 2.0 0.0 0.0) to scene's controls
+        set samples to the cad bezier samples of scene's controls with settings's samples segments
+        add lab chain samples into scene
+        free samples
+        return true
+
+local function fill lab helix for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        set shape to a cad helix with center (the lab point 0.0 0.0 0.0), axis (the lab point 0.0 0.0 1.0), start (the lab point 1.0 0.0 0.0), base radius 1.0, top radius 1.0, height settings's height, turns settings's turns and direction the cad counterclockwise helix direction
+        set constructed to the cad helix nurbs of shape
+        set samples to an empty list of a cad vector3
+        if constructed's valid:
+            loop index from 0 to the length of constructed's value's controls:
+                append (the item at index in constructed's value's controls) to scene's controls
+            loop index from 0 to (settings's samples + 1):
+                set parameter to (index as a 64 bit floating-point number) / (settings's samples as a 64 bit floating-point number)
+                append (the cad curve point of constructed's value at parameter) to samples
+            add lab chain samples into scene
+        set valid to constructed's valid
+        free samples
+        return valid
+
+local function fill lab surface for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        set net to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 3:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 3:
+                set height to 0.0
+                if (row = 1) and (column = 1):
+                    set height to settings's height * 4.0
+                set point to the lab point ((row as a 64 bit floating-point number) - 1.0) ((column as a 64 bit floating-point number) - 1.0) height
+                append point to across
+                append point to scene's controls
+            append across to net
+        set empty to an empty list of a 64 bit floating-point number
+        set weights to an empty list of the type of empty
+        set constructed to the cad nurbs surface3 of degrees 2 and 2 with controls net, knots empty and empty and weights weights
+        loop row from 0 to the length of net:
+            free (the item at row in net)
+        free net
+        free empty
+        free weights
+        if constructed's valid:
+            loop line from 0 to 12:
+                set across to (line as a 64 bit floating-point number) / 11.0
+                set first to the cad point on constructed's value at parameters 0.0 and across
+                set second to the cad point on constructed's value at parameters across and 0.0
+                loop index from 1 to (settings's samples + 1):
+                    set parameter to (index as a 64 bit floating-point number) / (settings's samples as a 64 bit floating-point number)
+                    set nextFirst to the cad point on constructed's value at parameters parameter and across
+                    set nextSecond to the cad point on constructed's value at parameters across and parameter
+                    add lab segment from first to nextFirst into scene
+                    add lab segment from second to nextSecond into scene
+                    set first to nextFirst
+                    set second to nextSecond
+        return constructed's valid
+
+local function the lab lifted {cad vector2:point}:
+    execute:
+        return the lab point point's x point's y 0.0
+
+local function the lab planar point {a 64 bit floating-point number array of 2 items:coordinates}:
+    execute:
+        return a cad vector2 with x (the item at 0 in coordinates) and y (the item at 1 in coordinates)
+
+local function fill lab arrangement for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        set corners to [[0.0,0.0],[4.0,0.0],[4.0,3.0],[0.0,3.0]]
+        set source to an empty list of a cad line2
+        loop index from 0 to 4:
+            set start to the lab planar point (the item at index in corners)
+            set end to the lab planar point (the item at (the remainder of (index + 1) divided by 4) in corners)
+            append (a cad line2 from start to end) to source
+        append (a cad line2 from (the lab planar point [settings's height,-0.5]) to (the lab planar point [settings's height,3.5])) to source
+        append (a cad line2 from (the lab planar point [-0.5,1.5]) to (the lab planar point [4.5,1.5])) to source
+        loop index from 0 to the length of source:
+            set edge to the item at index in source
+            set first to the lab lifted edge's start
+            set second to the lab lifted edge's end
+            append (@intrinsic("construct", a lab segment, first, second)) to scene's guides
+            append first to scene's controls
+            append second to scene's controls
+        set faces to the cad bounded faces of source within (a cad tolerance of 1e-6)
+        free source
+        set scene's regions to the length of faces's rings
+        set scene's area to 0.0
+        loop index from 0 to the length of faces's rings:
+            set ring to the item at index in faces's rings
+            set count to the length of ring
+            set scene's area to scene's area + (the cad signed area of ring)
+            loop vertex from 0 to count:
+                set next to the remainder of (vertex + 1) divided by count
+                add lab segment from (the lab lifted (the item at vertex in ring)) to (the lab lifted (the item at next in ring)) into scene
+        set scene's valid to scene's regions > 0
+        set scene's message to "Bounded regions reconstructed from intersecting lines"
+        return scene
+
+local function fill lab band for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        append (a straight cad polyline vertex2 at (the lab planar point [-2.0,-1.0])) to vertices
+        append (a cad polyline vertex2 at (the lab planar point [0.0,-1.0]) with bulge 0.4) to vertices
+        append (a straight cad polyline vertex2 at (the lab planar point [2.0,1.0])) to vertices
+        loop index from 0 to the length of vertices:
+            append (the lab lifted ((the item at index in vertices)'s position)) to scene's controls
+        set source to the cad polyline2 with vertices vertices and closure false
+        free vertices
+        set widths to a list containing [settings's height,(settings's height * 1.25)]
+        append [(settings's height * 1.25),(settings's height * 1.5)] to widths
+        set angle to 3.141592653589793 / (settings's samples as a 64 bit floating-point number)
+        set result to the cad band boundary of source with widths widths within angle angle
+        free widths
+        free cad polyline source
+        loop index from 0 to the length of result's edges:
+            set edge to the item at index in result's edges
+            add lab segment from (the lab lifted edge's start) to (the lab lifted edge's end) into scene
+        loop index from 0 to the length of result's stationPieces:
+            set station to the item at index in result's stationPieces
+            append (@intrinsic("construct", a lab segment, the lab lifted station's start, the lab lifted station's end)) to scene's guides
+        set scene's exactLength to result's sourceLength
+        set scene's valid to (the length of result's edges) > 0
+        set scene's message to "Variable-width boundary with distances along the source curve"
+        return scene
+
+local function fill lab solid for {lab settings:settings} into {lab scene:scene}:
+    execute:
+        set constructed to the lab solid body for (settings's solidKind) sized (settings's height)
+        set scene's valid to constructed's valid
+        set scene's solid's built to constructed's valid
+        if (constructed's valid) = false:
+            set scene's message to "Kernel rejected this solid"
+            return scene
+        set body to constructed's value
+        set scene's solid's vertices to the cad count of (body's vertices)
+        set scene's solid's edges to the cad count of (body's edges)
+        set scene's solid's coedges to the cad count of (body's coedges)
+        set scene's solid's loops to the cad count of (body's loops)
+        set scene's solid's faces to the cad count of (body's faces)
+        set scene's solid's shells to the cad count of (body's shells)
+        set scene's solid's lumps to the cad count of (body's lumps)
+        set scene's solid's euler to the cad euler characteristic of body
+        set flaws to the cad flaws of body
+        set scene's solid's flaws to the length of flaws
+        free flaws
+        set scene's solid's gap to the cad worst vertex gap of body
+        set scene's solid's bounds to the cad bounds of body
+        set scene's valid to ((scene's solid's flaws) = 0) and (scene's solid's bounds's valid)
+        if (scene's valid) = false:
+            set scene's message to "Solid validation failed or bounds unavailable"
+            return scene
+        set meshTolerance to a cad tessellation tolerance with maximum angle 0.1308996938995747 within 1e-9
+        set bodyMesh to the cad tessellation of body with tolerance meshTolerance
+        if (cad body mesh bodyMesh is complete) = false:
+            set scene's valid to false
+            set scene's message to "Solid tessellation is incomplete"
+            free cad body mesh bodyMesh
+            return scene
+        set scene's solid's triangles to the cad triangle count of bodyMesh's mesh
+        loop triangleIndex from 0 to the length of bodyMesh's mesh's triangles:
+            set triangle to the item at triangleIndex in bodyMesh's mesh's triangles
+            add lab surface vertex triangle's first from bodyMesh's mesh into scene
+            add lab surface vertex triangle's second from bodyMesh's mesh into scene
+            add lab surface vertex triangle's third from bodyMesh's mesh into scene
+        free cad body mesh bodyMesh
+        set scene's message to "GPU surface mesh with kernel edge overlay"
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            append (vertexNode's point) to (scene's controls)
+        free vertexKeys
+        # Sample each topological edge once, using its own curve and parameter interval.
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in body
+            set curveNode to the cad node pointer for (edgeNode's curve) in body
+            set samples to settings's samples
+            if (curveNode's kind) = 0:
+                set samples to 1
+            set first to the cad point on (@intrinsic("dereference", curveNode)) at (edgeNode's startParameter)
+            loop step from 1 to (samples + 1):
+                set fraction to (step as a 64 bit floating-point number) / (samples as a 64 bit floating-point number)
+                set parameter to (edgeNode's startParameter) + (((edgeNode's endParameter) - (edgeNode's startParameter)) * fraction)
+                set next to the cad point on (@intrinsic("dereference", curveNode)) at parameter
+                add lab segment from first to next into scene
+                set first to next
+        free edgeKeys
+        if scene's solid's bounds's valid:
+            set low to scene's solid's bounds's value's low
+            set high to scene's solid's bounds's value's high
+            set corners to [(the lab point low's x low's y low's z),(the lab point high's x low's y low's z),(the lab point low's x high's y low's z),(the lab point high's x high's y low's z),(the lab point low's x low's y high's z),(the lab point high's x low's y high's z),(the lab point low's x high's y high's z),(the lab point high's x high's y high's z)]
+            set pairs to [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
+            loop index from 0 to 12:
+                set pair to the item at index in pairs
+                set first to the item at (the item at 0 in pair) in corners
+                set last to the item at (the item at 1 in pair) in corners
+                append (@intrinsic("construct", a lab segment, first, last)) to (scene's guides)
+        return scene
+
+function the lab [scene] for {lab settings:settings}:
+    execute:
+        set scene to a new lab scene
+        if (settings's samples < 2) or (settings's samples > 512):
+            set scene's valid to false
+            set scene's message to "Sample count must be between 2 and 512"
+            return scene
+        if ((settings's weight > 0.0) and (settings's weight <= 10.0)) = false:
+            set scene's valid to false
+            set scene's message to "Weight must be greater than zero and at most 10"
+            return scene
+        if ((settings's height >= 0.0) and (settings's height <= 10.0)) = false:
+            set scene's valid to false
+            set scene's message to "Height must be between 0 and 10"
+            return scene
+        if ((settings's turns > 0.0) and (settings's turns <= 8.0)) = false:
+            set scene's valid to false
+            set scene's message to "Turns must be greater than zero and at most 8"
+            return scene
+        if settings's operation = 0:
+            set scene's valid to fill lab arc for settings into scene
+        else if settings's operation = 1:
+            set scene's valid to fill lab bezier for settings into scene
+        else if settings's operation = 2:
+            set scene's valid to fill lab helix for settings into scene
+            set shape to a cad helix with center (the lab point 0.0 0.0 0.0), axis (the lab point 0.0 0.0 1.0), start (the lab point 1.0 0.0 0.0), base radius 1.0, top radius 1.0, height settings's height, turns settings's turns and direction the cad counterclockwise helix direction
+            set measured to the cad length of shape
+            if measured's valid:
+                set scene's exactLength to measured's value
+        else if settings's operation = 3:
+            set scene's valid to fill lab surface for settings into scene
+        else if settings's operation = 4:
+            set scene to fill lab arrangement for settings into scene
+        else if settings's operation = 5:
+            set scene to fill lab band for settings into scene
+        else if settings's operation = 6:
+            set scene to fill lab solid for settings into scene
+        else:
+            set scene's valid to false
+        if (scene's valid = false) and (settings's operation != 6):
+            set scene's message to "Kernel rejected this geometry"
+        loop index from 0 to the length of scene's segments:
+            set segment to the item at index in scene's segments
+            set scene's length to scene's length + (the cad distance from segment's start to segment's end)
+        return scene

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/tessellate2.dl
+set ellipse to a cad ellipse at the cad zero vector2 with radii 1.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+set points to the cad ellipse samples of ellipse from 0.0 to 1.0 at elevation 0.0 with density 1e12
+free points

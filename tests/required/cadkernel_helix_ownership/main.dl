@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/helix.dl
+import lib/cadkernel/nurbs3.dl
+
+function helix ownership check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 91)
+
+function a returned helix result with turns {a number:turns}:
+    execute:
+        set curve to a cad helix with center (a cad vector3 with x 1, y 2 and z 3), axis (the cad z axis), start (the cad x axis), base radius 2, top radius 4, height 0, turns turns and direction (the cad counterclockwise helix direction)
+        return the cad helix nurbs of curve
+
+function the helix consumer point of {cad nurbs curve result:result}:
+    execute:
+        return the cad point on (the value of result) at 0.0
+
+function a returned helix refusal from {integer:scenario}:
+    execute:
+        set curve to a cad helix with center (the cad zero vector3), axis (the cad z axis), start (the cad x axis), base radius 1, top radius 2, height 5, turns (-1) and direction (the cad clockwise helix direction)
+        if scenario = 1:
+            set the turns of curve to 0.0
+        else if scenario = 2:
+            set the turns of curve to 1.0
+            set the baseCenter of curve to a cad vector3 with x 1e308, y 0 and z 0
+            set the baseRadius of curve to 1e308
+        else if scenario = 3:
+            set the turns of curve to 0.0
+            set the height of curve to 0.0
+            set the baseCenter of curve to a cad vector3 with x 1e308, y 0 and z 0
+            set the baseRadius of curve to 1e308
+        else if scenario = 4:
+            set the turns of curve to 16667.0
+        else if scenario = 5:
+            set the turns of curve to 1.0
+            set the axisDirection of curve to the cad zero vector3
+        return the cad helix nurbs of curve
+
+set original to a returned helix result with turns 0
+helix ownership check (the valid of original)
+set first to the helix consumer point of original
+helix ownership check ((((the x of first) = 3.0) and ((the y of first) = 2.0)) and ((the z of first) = 3.0))
+set copied to original
+set held to the value of original
+set clone to the cad clone of held
+helix ownership check (clone = held)
+helix ownership check ((the owner of clone) != (the owner of held))
+helix ownership check ((the controls of clone) != (the controls of held))
+helix ownership check ((the knots of clone) != (the knots of held))
+helix ownership check ((the weights of clone) != (the weights of held))
+# Mutating exclusive cloned storage proves the clone is independent.
+replace item at index 0 in (the controls of clone) with (the cad zero vector3)
+helix ownership check (clone != held)
+free cad nurbs (the value of original)
+free cad nurbs (the value of original)
+free cad nurbs held
+set retained to a list containing copied
+free cad nurbs (the value of copied)
+set detached to the item at 0 in retained
+clear retained
+free retained
+helix ownership check ((@intrinsic("dereference", the owner of (the value of detached))) = 1)
+set last to the helix consumer point of detached
+helix ownership check ((((the x of last) = 3.0) and ((the y of last) = 2.0)) and ((the z of last) = 3.0))
+free cad nurbs (the value of detached)
+free cad nurbs clone
+print "helix: native NURBS consumer, shared copies, deep clone and list lifetime" as a line
+
+loop iteration from 0 to 120:
+    set invalid to a returned helix refusal from (the remainder of iteration divided by 6)
+    helix ownership check ((the valid of invalid) = false)
+    set alias to invalid
+    free cad nurbs (the value of invalid)
+    set entries to a list containing alias
+    free cad nurbs (the value of alias)
+    set escaped to the item at 0 in entries
+    free entries
+    helix ownership check ((@intrinsic("dereference", the owner of (the value of escaped))) = 1)
+    helix ownership check ((the valid of escaped) = false)
+    helix ownership check ((the length of the controls of (the value of escaped)) = 0)
+    set refusalClone to the cad clone of (the value of escaped)
+    free cad nurbs (the value of escaped)
+    helix ownership check ((the length of the controls of refusalClone) = 0)
+    free cad nurbs refusalClone
+    free cad nurbs refusalClone
+print "helix: returned refusals survive copies, lists, reset and cloning" as a line
+
+set rebuilt to a returned helix result with turns 0.25
+set previous to rebuilt
+set sample to the cad curve point of (the value of previous) at 0.37
+loop iteration from 0 to 32:
+    set rebuilt to a returned helix result with turns ((iteration + 1) / 8.0)
+free cad nurbs (the value of rebuilt)
+set retainedSample to the cad curve point of (the value of previous) at 0.37
+helix ownership check ((the cad length of (the cad difference of sample and retainedSample)) = 0.0)
+set tangent to the cad curve tangent of (the value of previous) at 0.37
+helix ownership check (cad tangent is finite)
+free cad nurbs (the value of previous)
+print "helix: retained geometry survives repeated regeneration" as a line

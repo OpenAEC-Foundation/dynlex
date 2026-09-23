@@ -9,6 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from native_test_support import resolve_c_compiler
+
 
 LIBRARY_SOURCE = """\
 import lib/std.dl
@@ -126,16 +128,6 @@ def require_failure(result: subprocess.CompletedProcess[str], message: str) -> N
     output = result.stdout + result.stderr
     if message not in output:
         raise RuntimeError(f"expected {message!r} in compiler output:\n{output}")
-
-
-def resolve_c_compiler(compiler: Path) -> str:
-    cache_path = compiler.parent / "CMakeCache.txt"
-    if cache_path.is_file():
-        for line in cache_path.read_text(encoding="utf-8").splitlines():
-            match = re.fullmatch(r"CMAKE_C_COMPILER:[^=]+=(.+)", line)
-            if match and Path(match.group(1)).is_file():
-                return match.group(1)
-    return os.environ.get("CC", "cc")
 
 
 def main() -> int:

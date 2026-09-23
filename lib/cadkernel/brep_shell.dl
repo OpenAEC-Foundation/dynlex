@@ -1,0 +1,613 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/shell.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Shell operations borrow their source and return an independently owned body.
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_place.dl
+
+function cad shell invalid distance error:
+    replacement:
+        1
+function cad shell unsupported solid error:
+    replacement:
+        2
+function cad shell unknown face error:
+    replacement:
+        3
+function cad shell no material error:
+    replacement:
+        4
+function cad shell kernel error:
+    replacement:
+        5
+
+class:
+    patterns:
+        [a|] cad shell result
+    members:
+        valid as a boolean
+        error as an integer
+        snag as an integer
+        value as a cad body
+class:
+    patterns:
+        [a|] cad shell face result
+    members:
+        valid as a boolean
+        value as a cad face key
+class:
+    patterns:
+        [a|] cad shell span
+    members:
+        direction as a cad vector3
+        length as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad shell box face
+    members:
+        face as a cad face key
+        axis as an integer
+        upper as a boolean
+class:
+    patterns:
+        [a|] cad shell box shape
+    members:
+        valid as a boolean
+        origin as a cad vector3
+        xAxis as a cad vector3
+        yAxis as a cad vector3
+        zAxis as a cad vector3
+        size as a cad vector3
+        faces as the type of (a cad topology list of a cad shell box face)
+class:
+    patterns:
+        [a|] cad shell cylinder face
+    members:
+        face as a cad face key
+        role as an integer
+class:
+    patterns:
+        [a|] cad shell cylinder shape
+    members:
+        valid as a boolean
+        origin as a cad vector3
+        xAxis as a cad vector3
+        yAxis as a cad vector3
+        zAxis as a cad vector3
+        radius as a 64 bit floating-point number
+        height as a 64 bit floating-point number
+        faces as the type of (a cad topology list of a cad shell cylinder face)
+class:
+    patterns:
+        [a|] cad shell sphere shape
+    members:
+        valid as a boolean
+        centre as a cad vector3
+        radius as a 64 bit floating-point number
+        face as a cad face key
+
+local function cad shell failure {integer:errorCode}:
+    execute:
+        return @intrinsic("construct", a cad shell result, false, errorCode, 0, an empty cad body)
+local function cad shell kernel failure {integer:snagCode}:
+    execute:
+        return @intrinsic("construct", a cad shell result, false, cad shell kernel error, snagCode, an empty cad body)
+local function cad shell success {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad shell result, true, 0, 0, value)
+local function no cad shell face:
+    execute:
+        return @intrinsic("construct", a cad shell face result, false, a new cad face key)
+local function the cad shell face {cad face key:value}:
+    execute:
+        return @intrinsic("construct", a cad shell face result, true, value)
+local function no cad shell box shape:
+    execute:
+        return @intrinsic("construct", a cad shell box shape, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, the cad zero vector3, the cad zero vector3, a cad topology list of a cad shell box face)
+local function no cad shell cylinder shape:
+    execute:
+        return @intrinsic("construct", a cad shell cylinder shape, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, the cad zero vector3, 0.0, 0.0, a cad topology list of a cad shell cylinder face)
+local function no cad shell sphere shape:
+    execute:
+        return @intrinsic("construct", a cad shell sphere shape, false, the cad zero vector3, 0.0, a new cad face key)
+local function cad shell scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad shell point {cad vector3:value} is finite:
+    execute:
+        return ((cad shell scalar value's x is finite) and (cad shell scalar value's y is finite)) and (cad shell scalar value's z is finite)
+local function cad shell face list {a pointer to a list:values} contains {cad face key:faceKey}:
+    execute:
+        loop faceCursor from 0 to the length of values:
+            if (the item at faceCursor in values) = faceKey:
+                return true
+        return false
+local function cad shell component {cad vector3:value} at {integer:axis}:
+    execute:
+        if axis = 0:
+            return value's x
+        if axis = 1:
+            return value's y
+        return value's z
+local function cad shell vector from {a pointer to a list:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+
+local function the cad shell box recognition of {cad body:sourceBody}:
+    execute:
+        if (((the cad count of sourceBody's faces) != 6) or ((the cad count of sourceBody's edges) != 12)) or ((the cad count of sourceBody's vertices) != 8):
+            return no cad shell box shape
+        set faceKeys to the cad face keys of sourceBody
+        loop faceCursor from 0 to the length of faceKeys:
+            set faceNode to the cad node pointer for (the item at faceCursor in faceKeys) in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad shell box shape
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if (surfaceNode = (0 as the type of surfaceNode)) or (surfaceNode's kind != 0):
+                free faceKeys
+                return no cad shell box shape
+
+        set vertexKeys to the cad vertex keys of sourceBody
+        if (the length of vertexKeys) = 0:
+            free vertexKeys
+            free faceKeys
+            return no cad shell box shape
+        set cornerKey to the item at 0 in vertexKeys
+        set cornerNode to the cad node pointer for cornerKey in sourceBody
+        if cornerNode = (0 as the type of cornerNode):
+            free vertexKeys
+            free faceKeys
+            return no cad shell box shape
+        set originPoint to cornerNode's point
+        set spans to a cad topology list of a cad shell span
+        set edgeKeys to the cad edge keys of sourceBody
+        loop edgeCursor from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at edgeCursor in edgeKeys) in sourceBody
+            if edgeNode != (0 as the type of edgeNode):
+                set otherKey to a new cad vertex key
+                set connected to false
+                if edgeNode's start = cornerKey:
+                    set otherKey to edgeNode's end
+                    set connected to true
+                else if edgeNode's end = cornerKey:
+                    set otherKey to edgeNode's start
+                    set connected to true
+                if connected:
+                    set otherNode to the cad node pointer for otherKey in sourceBody
+                    if otherNode = (0 as the type of otherNode):
+                        free edgeKeys
+                        free vertexKeys
+                        free faceKeys
+                        return no cad shell box shape
+                    set delta to the cad difference of otherNode's point and originPoint
+                    set directionResult to the cad normalization of delta
+                    if directionResult's valid = false:
+                        free edgeKeys
+                        free vertexKeys
+                        free faceKeys
+                        return no cad shell box shape
+                    append (@intrinsic("construct", a cad shell span, directionResult's value, the cad length of delta)) to (spans's values)
+        free edgeKeys
+        if (the length of (spans's values)) != 3:
+            free vertexKeys
+            free faceKeys
+            return no cad shell box shape
+        set firstSpan to the item at 0 in (spans's values)
+        set secondSpan to the item at 1 in (spans's values)
+        set thirdSpan to the item at 2 in (spans's values)
+        set axisX to firstSpan's direction
+        set axisY to secondSpan's direction
+        set axisZ to thirdSpan's direction
+        set sizeValue to a cad vector3 with x firstSpan's length, y secondSpan's length and z thirdSpan's length
+        if (((the absolute value of (the cad dot of axisX and axisY)) > 1e-8) or ((the absolute value of (the cad dot of axisX and axisZ)) > 1e-8)) or ((the absolute value of (the cad dot of axisY and axisZ)) > 1e-8):
+            free vertexKeys
+            free faceKeys
+            return no cad shell box shape
+        set scaleValue to the maximum of 1.0 and (the maximum of sizeValue's x and (the maximum of sizeValue's y and sizeValue's z))
+        set tolerance to scaleValue * 1e-8
+        loop vertexCursor from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at vertexCursor in vertexKeys) in sourceBody
+            if vertexNode = (0 as the type of vertexNode):
+                free vertexKeys
+                free faceKeys
+                return no cad shell box shape
+            set offset to the cad difference of vertexNode's point and originPoint
+            set coordinates to [(the cad dot of offset and axisX),(the cad dot of offset and axisY),(the cad dot of offset and axisZ)]
+            loop axisCursor from 0 to 3:
+                set coordinate to the item at axisCursor in coordinates
+                set extent to cad shell component sizeValue at axisCursor
+                if ((the absolute value of coordinate) > tolerance) and ((the absolute value of (coordinate - extent)) > tolerance):
+                    free vertexKeys
+                    free faceKeys
+                    return no cad shell box shape
+        free vertexKeys
+
+        set tags to a cad topology list of a cad shell box face
+        loop faceCursor from 0 to the length of faceKeys:
+            set faceKey to the item at faceCursor in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            set normalResult to the cad normal of surfaceNode's plane
+            if normalResult's valid = false:
+                free faceKeys
+                return no cad shell box shape
+            set outward to normalResult's value
+            if faceNode's forward = false:
+                set outward to the cad negative of outward
+            set projections to [(the cad dot of outward and axisX),(the cad dot of outward and axisY),(the cad dot of outward and axisZ)]
+            set bestAxis to 0
+            set bestProjection to the item at 0 in projections
+            loop axisCursor from 1 to 3:
+                set candidateProjection to the item at axisCursor in projections
+                if (the absolute value of candidateProjection) > (the absolute value of bestProjection):
+                    set bestAxis to axisCursor
+                    set bestProjection to candidateProjection
+            if (the absolute value of bestProjection) < (1.0 - 1e-8):
+                free faceKeys
+                return no cad shell box shape
+            append (@intrinsic("construct", a cad shell box face, faceKey, bestAxis, bestProjection > 0.0)) to (tags's values)
+        free faceKeys
+        if (the length of (tags's values)) != 6:
+            return no cad shell box shape
+        return @intrinsic("construct", a cad shell box shape, true, originPoint, axisX, axisY, axisZ, sizeValue, tags)
+
+local function the cad shell cylinder recognition of {cad body:sourceBody}:
+    execute:
+        if (the cad count of sourceBody's faces) != 3:
+            return no cad shell cylinder shape
+        set cylinderFound to false
+        set sideFace to a new cad face key
+        set cylinderValue to a cad cylinder with base (the cad xy plane) and radius 0.0
+        set capFaces to a cad topology list of a cad face key
+        set capPlanes to a cad topology list of a cad plane
+        set faceKeys to the cad face keys of sourceBody
+        loop faceCursor from 0 to the length of faceKeys:
+            set faceKey to the item at faceCursor in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return no cad shell cylinder shape
+            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return no cad shell cylinder shape
+            if surfaceNode's kind = 1:
+                if cylinderFound:
+                    free faceKeys
+                    return no cad shell cylinder shape
+                set cylinderFound to true
+                set sideFace to faceKey
+                set cylinderValue to surfaceNode's cylinder
+            else if surfaceNode's kind = 0:
+                append faceKey to (capFaces's values)
+                append surfaceNode's plane to (capPlanes's values)
+            else:
+                free faceKeys
+                return no cad shell cylinder shape
+        free faceKeys
+        if (cylinderFound = false) or ((the length of (capFaces's values)) != 2):
+            return no cad shell cylinder shape
+        set radiusValue to cylinderValue's radius
+        if ((cad shell scalar radiusValue is finite) and (radiusValue > 0.0)) = false:
+            return no cad shell cylinder shape
+        set axisResult to the cad normal of cylinderValue's base
+        if axisResult's valid = false:
+            return no cad shell cylinder shape
+        set axisResult to the cad normalization of (axisResult's value)
+        set xResult to the cad normalization of cylinderValue's base's xAxis
+        if (axisResult's valid and xResult's valid) = false:
+            return no cad shell cylinder shape
+        set axisValue to axisResult's value
+        set xResult to the cad normalization of (the cad difference of (xResult's value) and (axisValue scaled by (the cad dot of (xResult's value) and axisValue)))
+        if xResult's valid = false:
+            return no cad shell cylinder shape
+        set xValue to xResult's value
+        set yResult to the cad normalization of (the cad cross of axisValue and xValue)
+        if yResult's valid = false:
+            return no cad shell cylinder shape
+        set firstPlane to the item at 0 in (capPlanes's values)
+        set secondPlane to the item at 1 in (capPlanes's values)
+        set firstNormal to the cad normal of firstPlane
+        set secondNormal to the cad normal of secondPlane
+        if (firstNormal's valid and secondNormal's valid) = false:
+            return no cad shell cylinder shape
+        if ((the absolute value of (the cad dot of (firstNormal's value) and axisValue)) < (1.0 - 1e-8)) or ((the absolute value of (the cad dot of (secondNormal's value) and axisValue)) < (1.0 - 1e-8)):
+            return no cad shell cylinder shape
+        set firstPosition to the cad dot of (the cad difference of firstPlane's origin and cylinderValue's base's origin) and axisValue
+        set secondPosition to the cad dot of (the cad difference of secondPlane's origin and cylinderValue's base's origin) and axisValue
+        set firstFace to the item at 0 in (capFaces's values)
+        set secondFace to the item at 1 in (capFaces's values)
+        if firstPosition > secondPosition:
+            set savedPosition to firstPosition
+            set firstPosition to secondPosition
+            set secondPosition to savedPosition
+            set savedFace to firstFace
+            set firstFace to secondFace
+            set secondFace to savedFace
+        set heightValue to secondPosition - firstPosition
+        if ((cad shell scalar heightValue is finite) and (heightValue > 0.0)) = false:
+            return no cad shell cylinder shape
+        set originPoint to the cad sum of cylinderValue's base's origin and (axisValue scaled by firstPosition)
+        set tags to a cad topology list of a cad shell cylinder face
+        append (@intrinsic("construct", a cad shell cylinder face, sideFace, 0)) to (tags's values)
+        append (@intrinsic("construct", a cad shell cylinder face, firstFace, 1)) to (tags's values)
+        append (@intrinsic("construct", a cad shell cylinder face, secondFace, 2)) to (tags's values)
+        return @intrinsic("construct", a cad shell cylinder shape, true, originPoint, xValue, yResult's value, axisValue, radiusValue, heightValue, tags)
+
+local function the cad shell sphere recognition of {cad body:sourceBody}:
+    execute:
+        if (the cad count of sourceBody's faces) != 1:
+            return no cad shell sphere shape
+        set faceKeys to the cad face keys of sourceBody
+        set faceKey to the item at 0 in faceKeys
+        free faceKeys
+        set faceNode to the cad node pointer for faceKey in sourceBody
+        if faceNode = (0 as the type of faceNode):
+            return no cad shell sphere shape
+        set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+        if (surfaceNode = (0 as the type of surfaceNode)) or (surfaceNode's kind != 3):
+            return no cad shell sphere shape
+        set radiusValue to surfaceNode's sphere's radius
+        if ((cad shell scalar radiusValue is finite) and (radiusValue > 0.0)) = false:
+            return no cad shell sphere shape
+        return @intrinsic("construct", a cad shell sphere shape, true, surfaceNode's sphere's frame's origin, radiusValue, faceKey)
+
+local function the cad shell placed box for {cad shell box shape:shape} at {cad vector3:localOrigin} with size {cad vector3:sizeValue}:
+    execute:
+        set made to the cad cuboid at localOrigin with size sizeValue
+        if made's valid = false:
+            return no cad body
+        set placement to a cad placement with axes shape's xAxis, shape's yAxis and shape's zAxis at shape's origin
+        return the cad transformed (made's value) by placement
+
+local function the cad shell placed cylinder for {cad shell cylinder shape:shape} with radius {a 64 bit floating-point number:radiusValue} at {a 64 bit floating-point number:localZ} with height {a 64 bit floating-point number:heightValue}:
+    execute:
+        set localOrigin to a cad vector3 with x 0.0, y 0.0 and z localZ
+        set made to the cad cylinder body at localOrigin with radius radiusValue and height heightValue
+        if made's valid = false:
+            return no cad body
+        set placement to a cad placement with axes shape's xAxis, shape's yAxis and shape's zAxis at shape's origin
+        return the cad transformed (made's value) by placement
+
+local function the cad shell subtraction of {cad body:outerBody} minus {cad body:cavityBody} referenced by {cad body:referenceBody}:
+    execute:
+        set toleranceBodies to a list containing referenceBody
+        append outerBody to toleranceBodies
+        append cavityBody to toleranceBodies
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set combined to the cad combination of outerBody and cavityBody using cad difference operation within tolerance
+        if combined's valid:
+            return cad shell success combined's value
+        return cad shell kernel failure combined's snag
+
+local function the cad shell box {cad body:sourceBody} as {cad shell box shape:shape} removing {a pointer to a list:removedFaces} by {a 64 bit floating-point number:distance}:
+    execute:
+        set openSides to a list containing false
+        loop sideCursor from 1 to 6:
+            append false to openSides
+        loop removedCursor from 0 to the length of removedFaces:
+            set removedFace to the item at removedCursor in removedFaces
+            set foundTag to false
+            loop tagCursor from 0 to the length of (shape's faces's values):
+                set tag to the item at tagCursor in (shape's faces's values)
+                if tag's face = removedFace:
+                    set sideSlot to tag's axis * 2
+                    if tag's upper:
+                        set sideSlot to sideSlot + 1
+                    replace item at index sideSlot in openSides with true
+                    set foundTag to true
+            if foundTag = false:
+                free openSides
+                return cad shell failure cad shell unknown face error
+        if (the length of removedFaces) = (the length of (shape's faces's values)):
+            free openSides
+            return cad shell failure cad shell no material error
+        set thickness to the absolute value of distance
+        set spanValue to the maximum of shape's size's x and (the maximum of shape's size's y and shape's size's z)
+        set extension to spanValue + (thickness * 2.0)
+        set outerMinimum to a list containing 0.0
+        append 0.0 to outerMinimum
+        append 0.0 to outerMinimum
+        set outerSizes to a list containing shape's size's x
+        append shape's size's y to outerSizes
+        append shape's size's z to outerSizes
+        set cavityMinimum to a list containing 0.0
+        append 0.0 to cavityMinimum
+        append 0.0 to cavityMinimum
+        set cavityMaximum to a list containing 0.0
+        append 0.0 to cavityMaximum
+        append 0.0 to cavityMaximum
+        if distance > 0.0:
+            loop axisCursor from 0 to 3:
+                set extent to cad shell component shape's size at axisCursor
+                set minimumValue to thickness
+                set maximumValue to extent - thickness
+                if the item at (axisCursor * 2) in openSides:
+                    set minimumValue to -extension
+                if the item at ((axisCursor * 2) + 1) in openSides:
+                    set maximumValue to extent + extension
+                if maximumValue <= minimumValue:
+                    free cavityMaximum
+                    free cavityMinimum
+                    free outerSizes
+                    free outerMinimum
+                    free openSides
+                    return cad shell failure cad shell no material error
+                replace item at index axisCursor in cavityMinimum with minimumValue
+                replace item at index axisCursor in cavityMaximum with maximumValue
+        else:
+            loop axisCursor from 0 to 3:
+                set extent to cad shell component shape's size at axisCursor
+                replace item at index axisCursor in outerMinimum with (-thickness)
+                replace item at index axisCursor in outerSizes with (extent + (2.0 * thickness))
+                set minimumValue to 0.0
+                set maximumValue to extent
+                if the item at (axisCursor * 2) in openSides:
+                    set minimumValue to -extension
+                if the item at ((axisCursor * 2) + 1) in openSides:
+                    set maximumValue to extent + extension
+                replace item at index axisCursor in cavityMinimum with minimumValue
+                replace item at index axisCursor in cavityMaximum with maximumValue
+        set cavitySizes to a list containing 0.0
+        append 0.0 to cavitySizes
+        append 0.0 to cavitySizes
+        loop axisCursor from 0 to 3:
+            replace item at index axisCursor in cavitySizes with ((the item at axisCursor in cavityMaximum) - (the item at axisCursor in cavityMinimum))
+        set outerMade to the cad shell placed box for shape at (cad shell vector from outerMinimum) with size (cad shell vector from outerSizes)
+        set cavityMade to the cad shell placed box for shape at (cad shell vector from cavityMinimum) with size (cad shell vector from cavitySizes)
+        free cavitySizes
+        free cavityMaximum
+        free cavityMinimum
+        free outerSizes
+        free outerMinimum
+        free openSides
+        if (outerMade's valid and cavityMade's valid) = false:
+            return cad shell failure cad shell no material error
+        return the cad shell subtraction of (outerMade's value) minus (cavityMade's value) referenced by sourceBody
+
+local function the cad shell cylinder {cad body:sourceBody} as {cad shell cylinder shape:shape} removing {a pointer to a list:removedFaces} by {a 64 bit floating-point number:distance}:
+    execute:
+        set sideOpen to false
+        set bottomOpen to false
+        set topOpen to false
+        loop removedCursor from 0 to the length of removedFaces:
+            set removedFace to the item at removedCursor in removedFaces
+            set foundTag to false
+            loop tagCursor from 0 to the length of (shape's faces's values):
+                set tag to the item at tagCursor in (shape's faces's values)
+                if tag's face = removedFace:
+                    set foundTag to true
+                    if tag's role = 0:
+                        set sideOpen to true
+                    else if tag's role = 1:
+                        set bottomOpen to true
+                    else:
+                        set topOpen to true
+            if foundTag = false:
+                return cad shell failure cad shell unknown face error
+        if sideOpen and (bottomOpen and topOpen):
+            return cad shell failure cad shell no material error
+        set thickness to the absolute value of distance
+        set extension to (the maximum of shape's radius and shape's height) + (thickness * 2.0)
+        set outerRadius to shape's radius
+        set outerZ to 0.0
+        set outerHeight to shape's height
+        set cavityRadius to shape's radius - thickness
+        set cavityZ to thickness
+        set cavityTop to shape's height - thickness
+        if distance > 0.0:
+            if sideOpen:
+                set cavityRadius to shape's radius + extension
+            if bottomOpen:
+                set cavityZ to -extension
+            if topOpen:
+                set cavityTop to shape's height + extension
+        else:
+            set outerRadius to shape's radius + thickness
+            set outerZ to -thickness
+            set outerHeight to shape's height + (2.0 * thickness)
+            set cavityRadius to shape's radius
+            set cavityZ to 0.0
+            set cavityTop to shape's height
+            if sideOpen:
+                set cavityRadius to (shape's radius + thickness) + extension
+            if bottomOpen:
+                set cavityZ to -extension
+            if topOpen:
+                set cavityTop to shape's height + extension
+        set cavityHeight to cavityTop - cavityZ
+        if (((outerRadius > 0.0) and (outerHeight > 0.0)) and (cavityRadius > 0.0)) = false:
+            return cad shell failure cad shell no material error
+        if cavityHeight <= 0.0:
+            return cad shell failure cad shell no material error
+        set outerMade to the cad shell placed cylinder for shape with radius outerRadius at outerZ with height outerHeight
+        set cavityMade to the cad shell placed cylinder for shape with radius cavityRadius at cavityZ with height cavityHeight
+        if (outerMade's valid and cavityMade's valid) = false:
+            return cad shell failure cad shell no material error
+        return the cad shell subtraction of (outerMade's value) minus (cavityMade's value) referenced by sourceBody
+
+local function the cad shell sphere {cad body:sourceBody} as {cad shell sphere shape:shape} removing {a pointer to a list:removedFaces} by {a 64 bit floating-point number:distance}:
+    execute:
+        if (the length of removedFaces) > 0:
+            if cad shell face list removedFaces contains shape's face:
+                return cad shell failure cad shell no material error
+            return cad shell failure cad shell unknown face error
+        set thickness to the absolute value of distance
+        set outerRadius to shape's radius
+        set cavityRadius to shape's radius - thickness
+        if distance < 0.0:
+            set outerRadius to shape's radius + thickness
+            set cavityRadius to shape's radius
+        if (outerRadius <= 0.0) or (cavityRadius <= 0.0):
+            return cad shell failure cad shell no material error
+        set outerMade to the cad sphere body at shape's centre with radius outerRadius
+        set cavityMade to the cad sphere body at shape's centre with radius cavityRadius
+        if (outerMade's valid and cavityMade's valid) = false:
+            return cad shell failure cad shell no material error
+        return the cad shell subtraction of (outerMade's value) minus (cavityMade's value) referenced by sourceBody
+
+function the cad shell face at {cad vector3:worldPoint} in {cad body:sourceBody}:
+    execute:
+        if cad shell point worldPoint is finite = false:
+            return no cad shell face
+        set boxShape to the cad shell box recognition of sourceBody
+        set cylinderShape to the cad shell cylinder recognition of sourceBody
+        set sphereShape to the cad shell sphere recognition of sourceBody
+        if ((boxShape's valid or cylinderShape's valid) or sphereShape's valid) = false:
+            return no cad shell face
+        set found to false
+        set bestDistance to 1.0 / 0.0
+        set bestFace to a new cad face key
+        set faceKeys to the cad face keys of sourceBody
+        loop faceCursor from 0 to the length of faceKeys:
+            set faceKey to the item at faceCursor in faceKeys
+            set faceNode to the cad node pointer for faceKey in sourceBody
+            if faceNode != (0 as the type of faceNode):
+                set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+                if surfaceNode != (0 as the type of surfaceNode):
+                    set measured to the absolute value of (the cad distance from (@intrinsic("dereference", surfaceNode)) to worldPoint)
+                    if (found = false) or (measured < bestDistance):
+                        set found to true
+                        set bestDistance to measured
+                        set bestFace to faceKey
+        free faceKeys
+        if found:
+            return the cad shell face bestFace
+        return no cad shell face
+
+function the cad shell of {cad body:sourceBody} removing {a pointer to a list:removedFaces} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if (((cad shell scalar distance is finite) and (distance != 0.0))) = false:
+            return cad shell failure cad shell invalid distance error
+        loop firstCursor from 0 to the length of removedFaces:
+            set faceKey to the item at firstCursor in removedFaces
+            if (sourceBody contains cad key faceKey) = false:
+                return cad shell failure cad shell unknown face error
+            loop secondCursor from (firstCursor + 1) to the length of removedFaces:
+                if (the item at secondCursor in removedFaces) = faceKey:
+                    return cad shell failure cad shell unknown face error
+        if (((the length of sourceBody's roots) != 1) or ((the cad count of sourceBody's lumps) != 1)) or ((the cad count of sourceBody's shells) != 1):
+            return cad shell failure cad shell unsupported solid error
+        set boxShape to the cad shell box recognition of sourceBody
+        if boxShape's valid:
+            set result to the cad shell box sourceBody as boxShape removing removedFaces by distance
+            if result's valid and (((the cad count of result's value's faces) = 0) or ((the length of result's value's roots) = 0)):
+                return cad shell failure cad shell no material error
+            return result
+        set cylinderShape to the cad shell cylinder recognition of sourceBody
+        if cylinderShape's valid:
+            set result to the cad shell cylinder sourceBody as cylinderShape removing removedFaces by distance
+            if result's valid and (((the cad count of result's value's faces) = 0) or ((the length of result's value's roots) = 0)):
+                return cad shell failure cad shell no material error
+            return result
+        set sphereShape to the cad shell sphere recognition of sourceBody
+        if sphereShape's valid:
+            set result to the cad shell sphere sourceBody as sphereShape removing removedFaces by distance
+            if result's valid and (((the cad count of result's value's faces) = 0) or ((the length of result's value's roots) = 0)):
+                return cad shell failure cad shell no material error
+            return result
+        return cad shell failure cad shell unsupported solid error

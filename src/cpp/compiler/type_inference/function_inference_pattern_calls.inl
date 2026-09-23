@@ -7,7 +7,8 @@ struct PatternCallResolution {
 };
 
 static bool inferPatternCall(
-	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
+	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping,
+	const InferenceExecutionSnapshot *argumentEffects = nullptr
 );
 
 static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstraint(
@@ -22,9 +23,7 @@ static std::optional<ResolvedPatternConstraint> resolvePatternConstraintForInfer
 	if (context.unresolvedPatternConstraintSignal) {
 		std::optional<ResolvedPatternConstraint> constraint =
 			resolveProvisionalPatternConstraint(context, definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
-		if (!constraint)
-			*context.unresolvedPatternConstraintSignal = true;
-		return constraint;
+		return constraint.value_or(ResolvedPatternConstraint{TypeConstraint::any(), false, true, true, false});
 	}
 	return resolveCompiledPatternConstraint(definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
 }
@@ -39,6 +38,7 @@ struct ConversionCandidate {
 struct ConversionLookup {
 	std::optional<ConversionCandidate> selected;
 	std::vector<ConversionCandidate> ambiguous;
+	bool deferred = false;
 };
 
 struct ConversionOutcome {
@@ -71,6 +71,7 @@ createConversionCall(InferenceContext &context, Expression *source, PatternDefin
 	context.parseContext.ownedClonedExpressions.push_back(call);
 	call->kind = Expression::Kind::PatternCall;
 	call->range = source->range;
+	call->owningSectionBody = source->owningSectionBody;
 	call->patternMatch = matchPointer;
 	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, true);
 	if (!source->reusableTemplateExpression)
@@ -82,7 +83,7 @@ createConversionCall(InferenceContext &context, Expression *source, PatternDefin
 
 static std::optional<ConversionOutcome> probeConversionOutcome(
 	Expression *source, const BindingFrameStack &bindingFrameStack, InferenceContext &context,
-	const ConversionCandidate &candidate
+	const ConversionCandidate &candidate, bool &deferred
 ) {
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(context.parseContext, true);
@@ -94,11 +95,13 @@ static std::optional<ConversionOutcome> probeConversionOutcome(
 	trialContext.inheritedTrialExpressionValues =
 		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
 	trialContext.trialJournal = &journal;
-	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
+	if (context.unresolvedPatternConstraintSignal)
+		trialContext.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
 	trialContext.detectGroupingAmbiguity = false;
 
 	Expression *call = createConversionCall(trialContext, source, candidate.definition, candidate.pathIndex);
 	bool inferred = inferPatternCall(call, trialContext, bindingFrameStack, true) && trialContext.typesValid;
+	deferred = trialContext.unresolvedPatternConstraintSignal && *trialContext.unresolvedPatternConstraintSignal;
 	std::optional<ConversionOutcome> result;
 	if (inferred && call->type.isDeduced() && call->type.kind != DataType::Kind::Void)
 		result = ConversionOutcome{call->type, isCompileTimeKnown(trialContext.lookupExpressionValue(call))};
@@ -127,6 +130,7 @@ static ConversionLookup findUserConversion(
 		return resolvePatternConstraintForInference(context, definition, pathIndex, argumentIndex, sourceTypes, sourceValues);
 	};
 	std::vector<ConversionCandidate> matches;
+	bool hasDeferredCandidate = false;
 	for (PatternDefinition *definition : root->argumentChild->matchingDefinitions) {
 		if (!definition || !definition->section || !definition->section->isConversion)
 			continue;
@@ -139,18 +143,27 @@ static ConversionLookup findUserConversion(
 			{definition}, {source}, definition->indexedNodePaths.front(), {sourceType}, {compileTimeKnown},
 			resolveSourceConstraint
 		);
+		if (sourceSelection.deferred) {
+			hasDeferredCandidate = true;
+			continue;
+		}
 		if (!sourceSelection)
 			continue;
 		std::optional<ResolvedPatternConstraint> sourceConstraint =
 			resolveSourceConstraint(definition, sourceSelection.pathIndex, 0);
 		requireCompilerInvariant(sourceConstraint.has_value(), "selected conversion constraint could not be materialized");
 		ConversionCandidate candidate{definition, sourceSelection.pathIndex, std::move(sourceConstraint->constraint), {}};
-		std::optional<ConversionOutcome> outcome = probeConversionOutcome(source, bindingFrameStack, context, candidate);
+		bool deferred = false;
+		std::optional<ConversionOutcome> outcome =
+			probeConversionOutcome(source, bindingFrameStack, context, candidate, deferred);
+		hasDeferredCandidate = hasDeferredCandidate || deferred;
 		if (outcome && targetConstraint.accepts(outcome->type, outcome->compileTimeKnown)) {
 			candidate.outcomeType = outcome->type;
 			matches.push_back(candidate);
 		}
 	}
+	if (hasDeferredCandidate)
+		return {std::nullopt, {}, true};
 	if (matches.empty())
 		return {};
 
@@ -209,6 +222,14 @@ static bool tryApplyUserConversion(
 	TypeConstraint targetConstraint = TypeConstraint::fromValueType(targetType);
 	targetConstraint.requiresCompileTimeValue = requireCompileTimeResult;
 	ConversionLookup lookup = findUserConversion(source, targetConstraint, implicitOnly, context, bindingFrameStack);
+	if (lookup.deferred) {
+		requireCompilerInvariant(
+			context.unresolvedPatternConstraintSignal != nullptr, "deferred conversion outside signature inference"
+		);
+		*context.unresolvedPatternConstraintSignal = true;
+		context.typesValid = false;
+		return false;
+	}
 	if (!lookup.ambiguous.empty()) {
 		reportAmbiguousUserConversion(source, typeToUserName(targetType), lookup.ambiguous, context);
 		return false;
@@ -251,6 +272,7 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 ) {
 	std::vector<ImplicitPatternOverload> candidates;
 	std::optional<DeferredConversionAmbiguity> deferredAmbiguity;
+	bool hasDeferredCandidate = false;
 	for (PatternDefinition *definition : definitions) {
 		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, definition)) {
 			ImplicitPatternOverload candidate;
@@ -259,6 +281,7 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 			candidate.conversionTargets.resize(arguments.size());
 			candidate.conversionRequiresCompileTime.resize(arguments.size());
 			bool possible = true;
+			bool constraintDeferred = false;
 			std::optional<DeferredConversionAmbiguity> candidateAmbiguity;
 			size_t argumentIndex = 0;
 			forEachPatternParameterName(definition, pathIndex, [&](const std::string &, PatternTreeNode *, size_t) {
@@ -280,6 +303,7 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 					return;
 				}
 				TypeConstraint parameterConstraint = resolvedConstraint->effectiveConstraint();
+				constraintDeferred = constraintDeferred || !resolvedConstraint->complete;
 				candidate.constraints.push_back(parameterConstraint);
 				const DataType &argumentType = argumentTypes[argumentIndex];
 				bool compileTimeKnown =
@@ -290,6 +314,11 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 				}
 				ConversionLookup lookup =
 					findUserConversion(arguments[argumentIndex], parameterConstraint, true, context, bindingFrameStack);
+				if (lookup.deferred) {
+					constraintDeferred = true;
+					argumentIndex++;
+					return;
+				}
 				if (!lookup.selected) {
 					if (!lookup.ambiguous.empty() && !candidateAmbiguity) {
 						candidateAmbiguity = DeferredConversionAmbiguity{
@@ -308,13 +337,23 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 			});
 			if (argumentIndex != argumentTypes.size())
 				possible = false;
-			if (possible && candidateAmbiguity) {
+			if (possible && constraintDeferred) {
+				hasDeferredCandidate = true;
+			} else if (possible && candidateAmbiguity) {
 				if (!deferredAmbiguity)
 					deferredAmbiguity = std::move(candidateAmbiguity);
 			} else if (possible && candidate.conversionCount > 0) {
 				candidates.push_back(std::move(candidate));
 			}
 		}
+	}
+	if (hasDeferredCandidate) {
+		requireCompilerInvariant(
+			context.unresolvedPatternConstraintSignal != nullptr, "deferred implicit overload outside signature inference"
+		);
+		*context.unresolvedPatternConstraintSignal = true;
+		context.typesValid = false;
+		return std::nullopt;
 	}
 	if (candidates.empty()) {
 		if (deferredAmbiguity) {
@@ -373,27 +412,31 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	auto &defs = expr->patternMatch->matchingDefinitions;
-	if (definitionsHaveUnresolvedTypeConstraints(defs)) {
-		if (!context.unresolvedPatternConstraintSignal)
-			crashCompilerBug("normal type inference encountered an unresolved pattern type constraint");
-		*context.unresolvedPatternConstraintSignal = true;
-		context.typesValid = false;
-		return std::nullopt;
-	}
+	if (!context.unresolvedPatternConstraintSignal && definitionsHaveUnresolvedTypeConstraints(defs))
+		crashCompilerBug("normal type inference encountered an unresolved pattern type constraint");
 
 	// Build argument types for overload selection.
 	// Arguments are sorted by source position and include captured variables.
 	std::vector<DataType> argTypesForOverload;
 	std::vector<bool> argCompileTimeKnown;
 	std::vector<CompileTimeValue> argCompileTimeValues;
+	bool hasUnresolvedArgument = false;
+	bool unresolvedArgumentsAreRecursive = true;
 	argCompileTimeKnown.reserve(expr->arguments.size());
 	argCompileTimeValues.reserve(expr->arguments.size());
 	for (size_t ai = 0; ai < expr->arguments.size(); ai++) {
 		Expression *inferArg = expr->arguments[ai];
+		ScopedRecursiveInferenceObservation argumentObservation(context, context.currentInstantiation);
 		DataType argumentType =
 			requestKnownOrInferExpressionType(inferArg, context, flexBindingFrameStack, preserveCurrentGrouping);
-		argTypesForOverload.push_back(argumentType);
 		expr->arguments[ai] = inferArg;
+		if (!context.typesValid)
+			return std::nullopt;
+		if (!argumentType.isDeduced()) {
+			hasUnresolvedArgument = true;
+			unresolvedArgumentsAreRecursive = unresolvedArgumentsAreRecursive && argumentObservation.observed();
+		}
+		argTypesForOverload.push_back(argumentType);
 		CompileTimeValue argumentValue = resolveStoredCompileTimeValue(inferArg, flexBindingFrameStack, &context);
 		argCompileTimeKnown.push_back(argumentType.isMetaType() || isCompileTimeKnown(argumentValue));
 		argCompileTimeValues.push_back(std::move(argumentValue));
@@ -427,6 +470,14 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	PatternOverloadSelection overload = selectOverload(
 		defs, expr->arguments, expr->patternMatch->nodesPassed, argTypesForOverload, argCompileTimeKnown, resolveConstraint
 	);
+	if (overload.deferred) {
+		requireCompilerInvariant(
+			context.unresolvedPatternConstraintSignal != nullptr, "deferred overload outside signature inference"
+		);
+		*context.unresolvedPatternConstraintSignal = true;
+		context.typesValid = false;
+		return std::nullopt;
+	}
 	if (overload.ambiguous) {
 		std::string detail = renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, expr->range), "ambiguous overload for call", "message",
@@ -437,6 +488,10 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 		return std::nullopt;
 	}
 	if (!overload) {
+		// Flex overloads may intentionally accept unresolved operands. Otherwise,
+		// retry after the owning recursive body pass supplies the argument types.
+		if (hasUnresolvedArgument && unresolvedArgumentsAreRecursive)
+			return std::nullopt;
 		std::optional<ImplicitPatternOverload> convertedOverload = selectOverloadUsingImplicitConversions(
 			defs, expr->patternMatch->nodesPassed, expr->arguments, argTypesForOverload, argCompileTimeKnown,
 			argCompileTimeValues, context, flexBindingFrameStack
@@ -514,8 +569,7 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex,
-		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -560,8 +614,7 @@ static void pushResolvedFlexBindingScope(
 	BindingFrame frame;
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex,
-		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;
@@ -635,6 +688,7 @@ static void inferFlexPatternCall(
 	FlexExpansionKey expansionKey;
 	expansionKey.definition = def;
 	expansionKey.pathIndex = resolution.pathIndex;
+	expansionKey.callSite = expr->range;
 	expansionKey.argumentTypes = argumentTypes;
 	expansionKey.compileTimeArguments.reserve(expr->arguments.size());
 	for (size_t argumentIndex = 0; argumentIndex < expr->arguments.size(); argumentIndex++) {
@@ -643,8 +697,10 @@ static void inferFlexPatternCall(
 			value = TypeReferenceValue::exact(argumentTypes[argumentIndex]);
 		expansionKey.compileTimeArguments.push_back(std::move(value));
 	}
+	Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 	if (std::ranges::any_of(context.activeFlexExpansionKeys, [&](const std::optional<FlexExpansionKey> &activeKey) {
-		return activeKey && *activeKey == expansionKey;
+		return activeKey && (*activeKey == expansionKey || (activeKey->sameDefinitionAndArguments(expansionKey) &&
+															sectionIsDescendantOrSame(callSiteSection, matchedSection)));
 	})) {
 		context.setTypeFailure("recursive flex expansion");
 		return;
@@ -652,7 +708,6 @@ static void inferFlexPatternCall(
 	context.activeFlexDefinitionStack.push_back(matchedSection);
 	context.activeFlexExpansionKeys.push_back(std::move(expansionKey));
 	context.activeFlexCallStack.push_back(expr);
-	Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 	if (callSiteSection)
 		context.flexCallSiteSectionStack.push_back(callSiteSection);
 	std::optional<size_t> sectionBodyFrameIndex;
@@ -672,7 +727,8 @@ static void inferFlexPatternCall(
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
-	std::shared_ptr<InstantiatedSectionBody> flexBody = context.parseContext.cloneSectionBody(matchedSection);
+	std::shared_ptr<InstantiatedSectionBody> flexBody =
+		context.parseContext.cloneSectionBody(matchedSection, false, expr->owningSectionBody);
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();
 	bool flexFallsThrough = true;
@@ -720,7 +776,15 @@ static void inferFlexPatternCall(
 				return;
 			}
 		}
-		expr->sectionBodyInferred = context.sectionFlexBodyFrames[frameIndex].bodyInferred;
+		const auto &bodyFrame = context.sectionFlexBodyFrames[frameIndex];
+		expr->sectionBodyExecution = Expression::SectionBodyExecution::None;
+		if (bodyFrame.bodyInferred) {
+			requireCompilerInvariant(
+				bodyFrame.executeBodyCallSite != nullptr, "inferred section flex body has no execution site"
+			);
+			expr->sectionBodyExecution = bodyFrame.executeBodyCallSite == expr ? Expression::SectionBodyExecution::Implicit
+																			   : Expression::SectionBodyExecution::Explicit;
+		}
 		expr->sectionBodyFallsThrough = context.sectionFlexBodyFrames[frameIndex].bodyFallsThrough;
 	}
 	DataType resolvedType = matchedSection->type == SectionType::Section ? DataType{DataType::Kind::Void} : bodyExpr->type;
@@ -801,10 +865,9 @@ static bool inferNonFlexPatternCall(
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
 		bool instantiationFallsThrough = true;
 		bool inferenceSucceeded = runInstantiationReinferenceLoop(
-			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
-			[&]() -> bool {
+			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
-			inst.parameterOutputTypesByName.clear();
+			beginParameterOutputReinference(inst);
 			inst.writtenGlobalReferences.clear();
 			inst.finalGlobalConstantValues.clear();
 			inst.finalGlobalAddressProvenance.clear();
@@ -820,8 +883,7 @@ static bool inferNonFlexPatternCall(
 			inst.purity = InstantiationPurity::Pure;
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
-				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
-				[&](Expression *argumentExpression) {
+				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
@@ -852,6 +914,7 @@ static bool inferNonFlexPatternCall(
 				inst.body = context.parseContext.cloneSectionBody(matchedSection);
 			bool passSucceeded =
 				inferSection(matchedSection, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
+			finishParameterOutputReinference(context, inst, passSucceeded);
 			inst.fallsThrough = instantiationFallsThrough;
 			inst.finalGlobalConstantValues.clear();
 			for (VariableReference *reference : inst.writtenGlobalReferences) {
@@ -933,10 +996,6 @@ static bool inferNonFlexPatternCall(
 		retainExternalAddress(context, callArgumentProvenance);
 	}
 
-	// If no return intrinsic was found, default to Void
-	if (!inst.inferring && !inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any) {
-		inst.returnType = {DataType::Kind::Void};
-	}
 	if (!validateDefinitionReturnContract(matchedSection, def, inst.returnType, context))
 		return true;
 	CompileTimeValue inferredReturnValue;
@@ -944,6 +1003,8 @@ static bool inferNonFlexPatternCall(
 		expr->type = inst.returnType;
 		inferredReturnValue =
 			evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context, flexBindingFrameStack);
+		if (!context.typesValid)
+			return true;
 		refineDirectMinimumSignedLiteralType(expr, inferredReturnValue);
 		context.setExpressionValue(expr, inferredReturnValue);
 	}
@@ -963,7 +1024,8 @@ static bool inferNonFlexPatternCall(
 }
 
 static bool inferPatternCall(
-	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
+	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping,
+	const InferenceExecutionSnapshot *argumentEffects
 ) {
 	std::optional<PatternCallResolution> resolution =
 		resolvePatternCall(expr, context, flexBindingFrameStack, preserveCurrentGrouping);
@@ -973,6 +1035,8 @@ static bool inferPatternCall(
 	if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
 		inferClassPatternCall(expr, context, flexBindingFrameStack, *resolution);
 	} else if (matchedSection->isFlex) {
+		if (argumentEffects)
+			argumentEffects->restore(context);
 		inferFlexPatternCall(expr, context, flexBindingFrameStack, *resolution);
 	} else {
 		return inferNonFlexPatternCall(expr, context, flexBindingFrameStack, *resolution);

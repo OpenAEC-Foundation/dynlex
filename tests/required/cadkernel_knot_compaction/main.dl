@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: MPL-2.0
+# Required fixture: both src/space/knot_compaction.rs tests at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, plus independent contract checks.
+import lib/cadkernel/knot_compaction.dl
+
+function compaction check {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function the compaction test list from values:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return result
+
+function the compaction test hill with weight {64 bit floating-point number:weight}, offset {64 bit floating-point number:offset} and unequal {boolean:unequal}:
+    execute:
+        set points to a list containing (a cad vector3 with x 0.0, y 0.0 and z 0.0)
+        append (a cad vector3 with x 0.5, y 0.5 and z 0.0) to points
+        append (a cad vector3 with x 1.0, y 0.5 and z 0.0) to points
+        append (a cad vector3 with x (1.5 + offset), y 0.5 and z 0.0) to points
+        append (a cad vector3 with x 2.0, y 0.0 and z 0.0) to points
+        set knots to the compaction test list from [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0]
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to 5:
+            set value to weight
+            if unequal and ((index = 1) or (index = 3)):
+                set value to weight * 2.0
+            append value to weights
+        set result to the strict cad nurbs curve3 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        compaction check (the valid of result) named "test hill constructor"
+        return the value of result
+
+function compaction check independent {cad nurbs curve3:result} from {cad nurbs curve3:source}:
+    execute:
+        compaction check ((the controls of result) != (the controls of source)) named "independent control storage"
+        compaction check ((the knots of result) != (the knots of source)) named "independent knot storage"
+        compaction check ((the weights of result) != (the weights of source)) named "independent weight storage"
+        compaction check ((the owner of result) != (the owner of source)) named "independent managed owner"
+
+# Original: redundant_inserted_knot_is_removed_without_changing_shape.
+set hill to the compaction test hill with weight 0.1, offset 0.0 and unequal false
+set original to the cad clone of hill
+set compacted to the cad knot compaction of hill within 1e-12
+compaction check (the valid of compacted) named "upstream polynomial valid"
+set compact to the value of compacted
+compaction check ((the length of the controls of compact) = 4) named "upstream four controls"
+set occurrences to 0
+loop index from 0 to the length of the knots of compact:
+    if (the item at index in the knots of compact) = 0.5:
+        increment occurrences
+compaction check (occurrences = 1) named "retain final interior occurrence"
+loop index from 0 to the length of the weights of compact:
+    compaction check ((the item at index in the weights of compact) = 0.1) named "exact original polynomial weight"
+loop step from 0 to 21:
+    set t to (step as a 64 bit floating-point number) / 20.0
+    compaction check ((the cad distance from (the cad point on hill at t) to (the cad point on compact at t)) < 1e-12) named "upstream sampled shape"
+compaction check (hill = original) named "input unchanged"
+compaction check independent compact from hill
+print "polynomial: pass" as a line
+
+# Original: unequal_rational_weights_are_left_untouched.
+set rational to the compaction test hill with weight 1.0, offset 0.0 and unequal true
+set rationalResult to the cad knot compaction of rational within 1e-12
+compaction check (the valid of rationalResult) named "upstream rational valid"
+compaction check ((the value of rationalResult) = rational) named "upstream rational unchanged"
+compaction check independent (the value of rationalResult) from rational
+free cad nurbs rational
+compaction check ((the length of the controls of the value of rationalResult) = 5) named "clone survives input release"
+print "unequal rational: pass" as a line
+
+# Strict distance comparison: the exact tolerance is accepted.
+set thresholdHill to the compaction test hill with weight 1.0, offset 0.125 and unequal false
+set below to the cad knot compaction of thresholdHill within 0.12499999999999999
+set boundary to the cad knot compaction of thresholdHill within 0.125
+compaction check ((the valid of below) and (the valid of boundary)) named "candidate failure is successful unchanged curve"
+compaction check ((the value of below) = thresholdHill) named "below threshold skipped"
+compaction check ((the length of the controls of the value of boundary) = 4) named "exact threshold accepted"
+set exactHill to the compaction test hill with weight 1.0, offset 0.0 and unequal false
+set zeroTolerance to the cad knot compaction of exactHill within -0.0
+compaction check ((the valid of zeroTolerance) and ((the length of the controls of the value of zeroTolerance) = 4)) named "negative zero accepted"
+print "thresholds: pass" as a line
+
+set invalidTolerances to the compaction test list from [-1.0, -1e-300, (1.0 / 0.0), (-1.0 / 0.0), (0.0 / 0.0)]
+loop index from 0 to the length of invalidTolerances:
+    set invalid to the cad knot compaction of exactHill within (the item at index in invalidTolerances)
+    compaction check ((the valid of invalid) = false) named "invalid tolerance refused"
+    compaction check ((the owner of the value of invalid) = (0 as a pointer to an integer)) named "invalid tolerance no allocation"
+    set invalidCopy to invalid
+    compaction check ((the valid of invalidCopy) = false) named "invalid result safe copy"
+free invalidTolerances
+print "invalid tolerances: pass" as a line
+
+# Exact weight comparison differs from the rationality predicate's epsilon.
+set almostWeights to the compaction test list from [1.0, 1.0000000000000002, 1.0, 1.0, 1.0]
+set almostResult to the strict cad nurbs curve3 of degree 2 with controls (the controls of exactHill), knots (the knots of exactHill) and weights almostWeights
+free almostWeights
+set almost to the value of almostResult
+compaction check ((almost is cad rational) = false) named "epsilon rationality distinction"
+set almostCompact to the cad knot compaction of almost within 1e-12
+compaction check ((the value of almostCompact) = almost) named "unequal by one ulp unchanged"
+compaction check independent (the value of almostCompact) from almost
+print "exact weight equality: pass" as a line
+
+set periodic to exactHill with cad periodicity true
+set periodicResult to the cad knot compaction of periodic within 0.0
+compaction check (the cad periodicity of the value of periodicResult) named "periodicity preserved"
+set beforeDomain to the cad domain of periodic
+set afterDomain to the cad domain of the value of periodicResult
+compaction check (((the start of beforeDomain) = (the start of afterDomain)) and ((the end of beforeDomain) = (the end of afterDomain))) named "domain preserved"
+set again to the cad knot compaction of (the value of periodicResult) within 0.0
+compaction check ((the value of again) = (the value of periodicResult)) named "idempotent"
+compaction check independent (the value of again) from (the value of periodicResult)
+set periodicResult to a new (the type of periodicResult)
+compaction check (the cad periodicity of the value of again) named "independent idempotent clone lifetime"
+print "periodicity and idempotence: pass" as a line
+
+# Cubic line: Greville control coordinates independently reproduce x = u.
+set lineKnots to the compaction test list from [2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 5.0, 5.0, 5.0, 6.0, 6.0, 6.0, 6.0]
+set linePoints to an empty list of a cad vector3
+set lineWeights to an empty list of a 64 bit floating-point number
+loop index from 0 to 10:
+    set coordinate to (((the item at (index + 1) in lineKnots) + (the item at (index + 2) in lineKnots)) + (the item at (index + 3) in lineKnots)) / 3.0
+    append (a cad vector3 with x coordinate, y 0.0 and z 0.0) to linePoints
+    append 0.1 to lineWeights
+set lineSource to the strict cad nurbs curve3 of degree 3 with controls linePoints, knots lineKnots and weights lineWeights
+free linePoints
+free lineKnots
+free lineWeights
+set lineResult to the cad knot compaction of (the value of lineSource) within 1e-12
+compaction check ((the length of the controls of the value of lineResult) = 6) named "multiple repeated removals"
+loop step from 0 to 41:
+    set t to (step as a 64 bit floating-point number) / 40.0
+    set point to the cad point on (the value of lineResult) at t
+    compaction check ((the absolute value of ((the x of point) - (2.0 + 4.0 * t))) < 1e-12) named "independent line oracle"
+print "multiple knots and nonunit domain: pass" as a line
+
+# Overflow in the solve is rejected by the strict candidate constructor.
+set overflowPoints to an empty list of a cad vector3
+set overflowWeights to an empty list of a 64 bit floating-point number
+loop index from 0 to 5:
+    append (a cad vector3 with x 1e308, y 1e308 and z 1e308) to overflowPoints
+    append 1e308 to overflowWeights
+set overflowSource to the strict cad nurbs curve3 of degree 2 with controls overflowPoints, knots (the knots of exactHill) and weights overflowWeights
+free overflowPoints
+free overflowWeights
+compaction check (the valid of overflowSource) named "finite overflow source"
+set overflowResult to the cad knot compaction of (the value of overflowSource) within 1e-12
+compaction check ((the valid of overflowResult) and ((the value of overflowResult) = (the value of overflowSource))) named "strict candidate failure preserves input"
+compaction check independent (the value of overflowResult) from (the value of overflowSource)
+print "strict candidate validation: pass" as a line

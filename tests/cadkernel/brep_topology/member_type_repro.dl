@@ -1,0 +1,30 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+# Two generated accessors must retain their distinct receiver constraints.
+class:
+    patterns:
+        holder
+    members:
+        length as integer
+class:
+    patterns:
+        other
+    members:
+        length as integer
+function sample:
+    execute:
+        @intrinsic("store", value, @intrinsic("cast", 0, @intrinsic("add pointer depth", holder)))
+        @intrinsic("return", the length of value)
+class:
+    patterns:
+        container
+    members:
+        value as the type of sample
+function consume {container:item}:
+    execute:
+        @intrinsic("return", item's value)
+@intrinsic("store", item, @intrinsic("construct", container))

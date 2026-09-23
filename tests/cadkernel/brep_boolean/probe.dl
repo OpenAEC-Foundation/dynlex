@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_sweep.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function boolean probe point at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+function boolean probe point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+
+function boolean probe prism through {a pointer to a list:points}:
+    execute:
+        set profile to an empty list of a cad curve2
+        loop cursor from 0 to the length of points:
+            set next to the remainder of (cursor + 1) divided by (the length of points)
+            append (the cad curve2 of (a cad line2 from (the item at cursor in points) to (the item at next in points))) to profile
+        set made to the cad extrusion of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3000.0)
+        free profile
+        return made
+
+set firstMade to the cad cuboid at (boolean probe point at 0) with size (boolean probe point at 3)
+set secondMade to the cad cuboid at (boolean probe point at 6) with size (boolean probe point at 9)
+if ((maker argument 14) as an integer) = 1:
+    set firstMade to the cad sphere body at (boolean probe point at 0) with radius (maker argument 3)
+    set secondMade to the cad sphere body at (boolean probe point at 6) with radius (maker argument 9)
+else if ((maker argument 14) as an integer) = 2:
+    set secondMade to the cad cylinder body at (boolean probe point at 6) with radius (maker argument 9) and height (maker argument 10)
+set result to the cad combination of firstMade's value and secondMade's value using ((maker argument 12) as an integer) within (maker argument 13)
+if ((maker argument 14) as an integer) = 3:
+    set outerPoints to a list containing (boolean probe point 0.0 2350.608306267448)
+    append (boolean probe point 0.0 6299.998941667038) to outerPoints
+    append (boolean probe point 18119.99661333453 6299.998941667038) to outerPoints
+    append (boolean probe point 18119.99661333453 -299.99964722234654) to outerPoints
+    append (boolean probe point 2650.609364600408 -299.99964722234654) to outerPoints
+    set outerMade to boolean probe prism through outerPoints
+    free outerPoints
+    set innerPoints to a list containing (boolean probe point 299.99964722234614 2474.872823655858)
+    append (boolean probe point 299.99964722234614 5999.998941667038) to innerPoints
+    append (boolean probe point 17819.995555001562 5999.998941667038) to innerPoints
+    append (boolean probe point 17819.995555001562 0.0) to innerPoints
+    append (boolean probe point 2774.8735292111646 0.0) to innerPoints
+    set innerMade to boolean probe prism through innerPoints
+    free innerPoints
+    set toleranceBodies to a list containing outerMade's value
+    append innerMade's value to toleranceBodies
+    set doorTolerance to the cad operation tolerance of toleranceBodies
+    free toleranceBodies
+    set wall to the cad combination of outerMade's value and innerMade's value using cad difference operation within doorTolerance
+    set cutterMade to the cad cuboid at (a cad vector3 with x 6159.999129815122, y -400.0 and z -100.0) with size (a cad vector3 with x 1200.0, y 500.0 and z 2200.0)
+    set result to the cad combination of wall's value and cutterMade's value using cad difference operation within doorTolerance
+emit maker flag result's valid
+emit maker number result's snag
+emit maker body result's value

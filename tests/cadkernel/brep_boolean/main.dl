@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_make.dl
+
+function check cad boolean {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function check cad boolean {boolean:condition} code {integer:code}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, code)
+
+function check cad boolean body {cad body:body} from {cad vector3:low} to {cad vector3:high}:
+    execute:
+        set bounds to the cad bounds of body
+        check cad boolean bounds's valid
+        check cad boolean ((the cad distance from bounds's value's low to low) < 1e-9)
+        check cad boolean ((the cad distance from bounds's value's high to high) < 1e-9)
+        set flaws to the cad flaws of body
+        check cad boolean ((the length of flaws) = 0)
+        free flaws
+        set edges to the cad edge keys of body
+        loop cursor from 0 to the length of edges:
+            set edgeNode to the cad node pointer for (the item at cursor in edges) in body
+            check cad boolean ((the length of (edgeNode's coedges's values)) = 2)
+        free edges
+
+set firstMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+set secondMade to the cad cuboid at (a cad vector3 with x 5.0, y 5.0 and z 5.0) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+set firstBody to firstMade's value
+set secondBody to secondMade's value
+
+set united to the cad combination of firstBody and secondBody using cad union operation within 1e-9
+check cad boolean united's valid
+check cad boolean body united's value from (the cad zero vector3) to (a cad vector3 with x 15.0, y 15.0 and z 15.0)
+check cad boolean ((the cad count of firstBody's faces) = 6)
+check cad boolean ((the cad count of secondBody's faces) = 6)
+print "a_union_reaches_across_both_solids" as a line
+
+set intersected to the cad combination of firstBody and secondBody using cad intersection operation within 1e-9
+check cad boolean intersected's valid
+check cad boolean body intersected's value from (a cad vector3 with x 5.0, y 5.0 and z 5.0) to (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+print "an_intersection_keeps_only_the_overlap" as a line
+
+set subtracted to the cad combination of firstBody and secondBody using cad difference operation within 1e-9
+check cad boolean subtracted's valid
+check cad boolean body subtracted's value from (the cad zero vector3) to (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+check cad boolean ((the cad count of subtracted's value's faces) > 6)
+print "a_difference_removes_the_second_solid_from_the_first" as a line
+
+set apartMadeA to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 2.0 and z 2.0)
+set apartMadeB to the cad cuboid at (a cad vector3 with x 5.0, y 5.0 and z 5.0) with size (a cad vector3 with x 2.0, y 2.0 and z 2.0)
+set apartUnion to the cad combination of apartMadeA's value and apartMadeB's value using cad union operation within 1e-9
+check cad boolean apartUnion's valid code 41
+check cad boolean ((the length of apartUnion's value's roots) = 2) code 42
+check cad boolean ((the cad count of apartUnion's value's shells) = 2) code 43
+set apartFlaws to the cad flaws of apartUnion's value
+check cad boolean ((the length of apartFlaws) = 0) code 44
+free apartFlaws
+set apartIntersection to the cad combination of apartMadeA's value and apartMadeB's value using cad intersection operation within 1e-9
+check cad boolean apartIntersection's valid code 45
+check cad boolean ((the cad count of apartIntersection's value's faces) = 0) code 46
+check cad boolean ((the length of apartIntersection's value's roots) = 0) code 47
+print "disjoint_union_components_become_separate_lumps" as a line
+
+set outerMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+set innerMade to the cad cuboid at (a cad vector3 with x 2.0, y 2.0 and z 2.0) with size (a cad vector3 with x 6.0, y 6.0 and z 6.0)
+set hollowed to the cad combination of outerMade's value and innerMade's value using cad difference operation within 1e-9
+check cad boolean hollowed's valid code 51
+check cad boolean ((the length of hollowed's value's roots) = 1) code 52
+check cad boolean ((the cad count of hollowed's value's shells) = 2) code 53
+set hollowFlaws to the cad flaws of hollowed's value
+check cad boolean ((the length of hollowFlaws) = 0) code 54
+free hollowFlaws
+check cad boolean ((the cad containment of (a cad vector3 with x 1.0, y 1.0 and z 1.0) in hollowed's value within 1e-9) = the inside cad containment) code 55
+check cad boolean ((the cad containment of (a cad vector3 with x 5.0, y 5.0 and z 5.0) in hollowed's value within 1e-9) = the outside cad containment) code 56
+print "a_contained_difference_attaches_an_inward_cavity_shell" as a line
+
+set outerSphereMade to the cad sphere body at (a cad vector3 with x 3.0, y -2.0 and z 5.0) with radius 4.0
+set innerSphereMade to the cad sphere body at (a cad vector3 with x 3.0, y -2.0 and z 5.0) with radius 3.0
+set sphereCavity to the cad combination of outerSphereMade's value and innerSphereMade's value using cad difference operation within 1e-9
+check cad boolean sphereCavity's valid code 61
+check cad boolean ((the length of sphereCavity's value's roots) = 1) code 62
+check cad boolean ((the cad count of sphereCavity's value's shells) = 2) code 63
+set sphereFlaws to the cad flaws of sphereCavity's value
+check cad boolean ((the length of sphereFlaws) = 0) code 64
+free sphereFlaws
+check cad boolean ((the cad containment of (a cad vector3 with x 3.0, y -2.0 and z 5.0) in sphereCavity's value within 1e-9) = the outside cad containment) code 65
+check cad boolean ((the cad containment of (a cad vector3 with x 6.5, y -2.0 and z 5.0) in sphereCavity's value within 1e-9) = the inside cad containment) code 66
+print "a_nested_sphere_difference_keeps_an_analytic_cavity_shell" as a line

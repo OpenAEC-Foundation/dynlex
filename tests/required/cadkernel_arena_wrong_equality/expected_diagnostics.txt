@@ -1,0 +1,6 @@
+lib/cadkernel/arena.dl:9-78: Error: No overload matches call 'check cad witness (the witness of left) against (the witness of right' for argument types [a pointer to a 32-bit integer, a pointer to a 64-bit floating-point number]. Available overloads: 'check cad witness expected against {the type of expected:actual}'
+  note: while inferring call 'check cad witness (the witness of left) against (the witness of right' with arguments [a pointer to a 32-bit integer, a pointer to a 64-bit floating-point number] -> an unresolved value lib/cadkernel/arena.dl:9-78
+  note: while inferring call 'return left equals cad key right' with arguments [a cad key, a cad key] -> an unresolved value lib/cadkernel/arena.dl:16-41
+  note: while inferring call 'return left equals cad key right' with arguments [an unresolved value] -> an unresolved value lib/cadkernel/arena.dl:9-41
+  note: while inferring call 'left = right' with arguments [a cad key, a cad key] -> an unresolved value tests/required/cadkernel_arena_wrong_equality/main.dl:18-30
+  note: while inferring call 'set accepted to (left = right' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/cadkernel_arena_wrong_equality/main.dl:1-30

@@ -1,0 +1,189 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime inputs exercise every Curve/Polyline variant and source operation.
+import lib/cadkernel/curve2.dl
+function curve2 input {integer:index}:
+    execute:
+        set args to the command line arguments
+        set text to the argument at (index - 1) in args
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function curve2 input point {integer:index}:
+    execute:
+        return a cad vector2 with x (curve2 input index) and y (curve2 input (index + 1))
+function emit curve2 scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit curve2 flag {boolean:value}:
+    execute:
+        if value:
+            emit curve2 scalar 1
+        else:
+            emit curve2 scalar 0
+function emit curve2 point {cad vector2:value}:
+    execute:
+        emit curve2 scalar value's x
+        emit curve2 scalar value's y
+function emit curve2 points {a pointer to a list:points}:
+    execute:
+        emit curve2 scalar (the length of points)
+        loop index from 0 to the length of points:
+            emit curve2 point (the item at index in points)
+function emit curve2 arc {cad bulge arc2 result:arc} at {a 64 bit floating-point number:parameter} within {a 64 bit floating-point number:angle} with sampling {boolean:sampling}:
+    execute:
+        emit curve2 flag arc's valid
+        if arc's valid:
+            set value to arc's value
+            emit curve2 point value's centre
+            emit curve2 scalar value's radius
+            emit curve2 scalar value's startAngle
+            emit curve2 scalar value's endAngle
+            emit curve2 scalar value's sweep
+            emit curve2 point (the cad point on value at parameter)
+            emit curve2 flag (value = value)
+            if sampling:
+                set samples to the cad angular samples of value within angle
+                emit curve2 points samples
+                free samples
+function emit curve2 polyline {cad polyline2:shape}:
+    execute:
+        emit curve2 flag shape's closed
+        emit curve2 scalar (the length of shape's vertices)
+        loop index from 0 to the length of shape's vertices:
+            set vertex to the item at index in shape's vertices
+            emit curve2 point vertex's position
+            emit curve2 scalar vertex's bulge
+function probe curve2:
+    execute:
+        set kind to (curve2 input 1) as an integer
+        set parameter to curve2 input 2
+        set target to curve2 input point 3
+        set density to curve2 input 5
+        set angle to curve2 input 6
+        set flags to (curve2 input 7) as an integer
+        set count to (curve2 input 8) as an integer
+        set closed to (curve2 input 9) != 0.0
+        set degree to (curve2 input 10) as an integer
+        set knotCount to (curve2 input 11) as an integer
+        set weightCount to (curve2 input 12) as an integer
+        set start to curve2 input point 13
+        set end to curve2 input point 15
+        set radius to curve2 input 17
+        set first to curve2 input 18
+        set last to curve2 input 19
+        set minor to curve2 input 20
+        set axis to curve2 input point 21
+        set sampling to (flags & 1) != 0
+        if kind = 8:
+            emit curve2 arc (the cad bulge arc2 from start to end with bulge radius) at parameter within angle with sampling sampling
+            return nothing
+        set vertices to an empty list of a cad polyline vertex2
+        set controls to an empty list of a cad vector2
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            set point to curve2 input point (23 + (3 * index))
+            append (a cad polyline vertex2 at point with bulge (curve2 input (25 + (3 * index)))) to vertices
+            append point to controls
+        set offset to 23 + (3 * count)
+        loop index from 0 to knotCount:
+            append (curve2 input (offset + index)) to knots
+        set offset to offset + knotCount
+        loop index from 0 to weightCount:
+            append (curve2 input (offset + index)) to weights
+        set polyline to the cad polyline2 with vertices vertices and closure closed
+        set shape to the cad curve2 of (a cad line2 from start to end)
+        if kind = 1:
+            set shape to the cad curve2 of (a cad circle2 at start with radius radius)
+        if kind = 2:
+            set shape to the cad curve2 of (a cad arc2 at start with radius radius from first to last)
+        if kind = 3:
+            set ellipse to a cad ellipse at start with radii radius and minor along axis
+            set shape to the cad curve2 of (a cad ellipse arc2 on ellipse from first to last)
+        if kind = 4:
+            set shape to the cad curve2 of polyline
+        if kind = 5:
+            set result to the cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+            emit curve2 flag result's valid
+            if result's valid = false:
+                free vertices
+                free controls
+                free knots
+                free weights
+                return nothing
+            set shape to the cad curve2 of result's value
+        if kind = 6:
+            set shape to the cad curve2 of (a cad ray2 from start along end)
+        if kind = 7:
+            set shape to the cad curve2 of (a cad xline2 through start along end)
+        free vertices
+        free controls
+        free knots
+        free weights
+        emit curve2 scalar shape's kind
+        set extent to the cad extent of shape
+        emit curve2 scalar extent's kind
+        emit curve2 flag (extent holds cad parameter parameter)
+        emit curve2 flag (shape is cad straight)
+        emit curve2 flag (shape is cad closed)
+        emit curve2 scalar (the cad segment count of shape)
+        emit curve2 point (the cad point on shape at parameter)
+        emit curve2 point (the cad tangent of shape at parameter)
+        if (flags & 2) != 0:
+            emit curve2 scalar (the cad parameter on shape nearest target)
+        set ray to the cad ray of shape
+        emit curve2 flag ray's valid
+        if ray's valid:
+            emit curve2 point ray's value's origin
+            emit curve2 point ray's value's direction
+        set side to the cad rectangle side of shape with bounds [[0.0,1.0],[0.0,1.0]]
+        emit curve2 flag side's valid
+        if side's valid:
+            emit curve2 scalar side's value
+        set copy to shape
+        set clone to the cad clone of shape
+        emit curve2 flag (shape = copy)
+        emit curve2 flag (shape = clone)
+        if kind = 0:
+            emit curve2 point (the cad direction of shape's line)
+            emit curve2 scalar (the cad length of shape's line)
+        if kind = 2:
+            emit curve2 scalar (the cad sweep of shape's arc)
+        if kind = 3:
+            emit curve2 scalar (the cad sweep of shape's ellipse)
+            set full to the full cad ellipse arc2 on shape's ellipse's ellipse
+            emit curve2 scalar (the cad sweep of full)
+        set segments to the cad segments of shape
+        emit curve2 scalar (the length of segments)
+        loop index from 0 to the length of segments:
+            set segment to the item at index in segments
+            emit curve2 scalar segment's kind
+            emit curve2 point (the cad point on segment at 0.0)
+            emit curve2 point (the cad point on segment at 1.0)
+            emit curve2 point (the cad tangent of segment at parameter)
+        free segments
+        if kind = 4:
+            emit curve2 polyline polyline
+            loop index from 0 through (count + 1):
+                emit curve2 arc (the cad segment arc of polyline at index index) at parameter within angle with sampling false
+            set ranged to the cad range of polyline from first to last
+            emit curve2 flag ranged's valid
+            if ranged's valid:
+                set range to ranged's value
+                emit curve2 polyline range's polyline
+                emit curve2 scalar (the length of range's segments)
+                loop index from 0 to the length of range's segments:
+                    set segment to the item at index in range's segments
+                    emit curve2 scalar segment's sourceIndex
+                    emit curve2 scalar segment's from
+                    emit curve2 scalar segment's to
+                    set values to the cad interpolation of segment from radius to minor
+                    emit curve2 scalar (the item at 0 in values)
+                    emit curve2 scalar (the item at 1 in values)
+                emit curve2 flag (range = (the cad clone of range))
+        if sampling:
+            set samples to the cad samples of shape with density density
+            emit curve2 points samples
+            free samples
+            set samples to the cad angular samples of shape within angle
+            emit curve2 points samples
+            free samples
+probe curve2

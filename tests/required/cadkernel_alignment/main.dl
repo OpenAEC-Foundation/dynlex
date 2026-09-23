@@ -1,0 +1,154 @@
+# SPDX-License-Identifier: MPL-2.0
+# Upstream test and independent fixtures for cadkernel src/space/alignment.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/alignment.rs
+import lib/cadkernel/alignment.dl
+
+function cad alignment check {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function cad alignment point {cad vector3:actual} near {cad vector3:expected} named {string:label}:
+    execute:
+        cad alignment check ((the cad distance from actual to expected) < 1e-12) named label
+
+set source to an empty list of a cad vector3
+set target to an empty list of a cad vector3
+set zero to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set z to the cad z axis
+
+# three_pairs_map_a_spatial_frame
+append (a cad vector3 with x 1, y 2 and z 3) to source
+append (a cad vector3 with x 3, y 2 and z 3) to source
+append (a cad vector3 with x 1, y 5 and z 3) to source
+append (a cad vector3 with x 7, y 8 and z 9) to target
+append (a cad vector3 with x 7, y 10 and z 9) to target
+append (a cad vector3 with x 4, y 8 and z 9) to target
+set aligned to the cad alignment from source to target scaling two pairs true
+cad alignment check (the valid of aligned) named "three pairs valid"
+set matrix to the value of aligned
+loop index from 0 to 3:
+    cad alignment point (the cad alignment of (the item at index in source) through matrix) near (the item at index in target) named "three pairs spatial frame"
+cad alignment check ((the m01 of matrix) = (-1.0)) named "row major rotation 01"
+cad alignment check ((the m10 of matrix) = 1.0) named "row major rotation 10"
+cad alignment check ((the m03 of matrix) = 9.0) named "row major translation X"
+cad alignment check ((the m13 of matrix) = 7.0) named "row major translation Y"
+cad alignment check ((the m23 of matrix) = 6.0) named "row major translation Z"
+cad alignment check (((the m30 of matrix) = 0) and (((the m31 of matrix) = 0) and (((the m32 of matrix) = 0) and ((the m33 of matrix) = 1)))) named "affine bottom row"
+print "cadkernel alignment: upstream spatial frame" as a line
+
+clear source
+clear target
+append (a cad vector3 with x 1, y 2 and z 3) to source
+append (a cad vector3 with x 7, y 8 and z 9) to target
+set translated to the cad alignment from source to target scaling two pairs true
+cad alignment check (the valid of translated) named "one pair valid"
+cad alignment point (the cad alignment of zero through (the value of translated)) near (a cad vector3 with x 6, y 6 and z 6) named "one pair translates only"
+append (a cad vector3 with x 3, y 2 and z 3) to source
+append (a cad vector3 with x 7, y 12 and z 9) to target
+set rigid to the cad alignment from source to target scaling two pairs false
+set scaled to the cad alignment from source to target scaling two pairs true
+cad alignment check ((the valid of rigid) and (the valid of scaled)) named "two pairs valid"
+cad alignment point (the cad alignment of (the item at 0 in source) through (the value of rigid)) near (the item at 0 in target) named "rigid first pair exact"
+cad alignment point (the cad alignment of (the item at 1 in source) through (the value of rigid)) near (a cad vector3 with x 7, y 10 and z 9) named "rigid keeps source length"
+cad alignment point (the cad alignment of (the item at 1 in source) through (the value of scaled)) near (the item at 1 in target) named "scaled maps second pair"
+cad alignment point (the cad alignment of (a cad vector3 with x 1, y 2 and z 4) through (the value of scaled)) near (a cad vector3 with x 7, y 8 and z 11) named "scale is uniform"
+append (a cad vector3 with x 1, y 5 and z 3) to source
+append (a cad vector3 with x (-5), y 8 and z 9) to target
+set threeScaled to the cad alignment from source to target scaling two pairs true
+cad alignment check (the valid of threeScaled) named "unequal spacing three pairs valid"
+cad alignment point (the cad alignment of (the item at 1 in source) through (the value of threeScaled)) near (a cad vector3 with x 7, y 10 and z 9) named "three pairs ignore scale flag"
+cad alignment point (the cad alignment of (the item at 2 in source) through (the value of threeScaled)) near (a cad vector3 with x 4, y 8 and z 9) named "three pairs preserve lengths"
+print "cadkernel alignment: translation rotation and scale" as a line
+
+clear source
+clear target
+append zero to source
+append x to source
+append zero to target
+append (x scaled by (-1)) to target
+set halfTurn to the cad alignment from source to target scaling two pairs false
+cad alignment check (the valid of halfTurn) named "horizontal half turn valid"
+cad alignment point (the cad alignment of x through (the value of halfTurn)) near (x scaled by (-1)) named "horizontal half turn X"
+cad alignment point (the cad alignment of z through (the value of halfTurn)) near z named "half turn preserves world vertical"
+replace item at index 1 in source with z
+replace item at index 1 in target with (z scaled by (-1))
+set verticalTurn to the cad alignment from source to target scaling two pairs false
+cad alignment check (the valid of verticalTurn) named "vertical half turn valid"
+cad alignment point (the cad alignment of z through (the value of verticalTurn)) near (z scaled by (-1)) named "vertical half turn Z"
+cad alignment point (the cad alignment of y through (the value of verticalTurn)) near y named "vertical half turn preserves Y"
+replace item at index 1 in target with z
+set identity to the cad alignment from source to target scaling two pairs false
+cad alignment check (the valid of identity) named "parallel valid"
+cad alignment point (the cad alignment of x through (the value of identity)) near x named "parallel identity"
+print "cadkernel alignment: parallel and antiparallel baselines" as a line
+
+clear source
+clear target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "empty refused"
+append zero to source
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "mismatched counts refused"
+append zero to target
+append zero to source
+append x to target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "coincident source refused"
+replace item at index 1 in source with x
+replace item at index 1 in target with zero
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "coincident target refused"
+replace item at index 1 in target with x
+replace item at index 1 in source with (x scaled by 1e-12)
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "baseline threshold inclusive"
+replace item at index 1 in source with (x scaled by 1.001e-12)
+set validSmall to the cad alignment from source to target scaling two pairs false
+cad alignment check (the valid of validSmall) named "baseline above threshold valid"
+replace item at index 1 in source with x
+append (x scaled by 2) to source
+append y to target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "collinear source refused"
+replace item at index 2 in source with y
+replace item at index 2 in target with (x scaled by 2)
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "collinear target refused"
+replace item at index 2 in target with y
+append z to source
+append z to target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "four pairs refused"
+print "cadkernel alignment: input and degeneracy validation" as a line
+
+clear source
+clear target
+set infinity to (1e308 as a 64 bit floating-point number) * (1e308 as a 64 bit floating-point number)
+set nan to infinity - infinity
+append (a cad vector3 with x nan, y 0 and z 0) to source
+append zero to target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "nonfinite source refused"
+replace item at index 0 in source with zero
+replace item at index 0 in target with (a cad vector3 with x 0, y infinity and z 0)
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "nonfinite target refused"
+replace item at index 0 in source with (a cad vector3 with x (-1e308), y 0 and z 0)
+replace item at index 0 in target with (a cad vector3 with x 1e308, y 0 and z 0)
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "nonfinite translation refused"
+replace item at index 0 in source with zero
+replace item at index 0 in target with zero
+append (a cad vector3 with x 1e308, y 0 and z 0) to source
+append x to target
+set invalid to the cad alignment from source to target scaling two pairs false
+cad alignment check ((the valid of invalid) = false) named "overflow baseline length refused"
+cad alignment check ((the length of source) = 2) named "caller source preserved"
+cad alignment check ((the length of target) = 2) named "caller target preserved"
+free source
+free target
+print "cadkernel alignment: IEEE rejection and ownership" as a line

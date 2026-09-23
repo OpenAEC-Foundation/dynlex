@@ -1,0 +1,409 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/fillet_circular.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The source body and selection are borrowed. A recognized success owns the
+# reconstructed body; failures own an empty body.
+import lib/cadkernel/brep_fillet_profile.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_sweep.dl
+
+class:
+    patterns:
+        [a|] cad circular fillet result
+    members:
+        recognized as a boolean
+        valid as a boolean
+        error as a cad fillet error
+        value as the type of (an empty cad body)
+class:
+    patterns:
+        [a|] cad circular fillet edge node
+    members:
+        edge as a cad edge key
+        node as an integer
+class:
+    patterns:
+        [a|] cad circular fillet node result
+    members:
+        valid as a boolean
+        value as an integer
+class:
+    patterns:
+        [a|] cad circular fillet connection
+    members:
+        first as an integer
+        second as an integer
+        curve as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+        original as a cad fillet original arc
+
+local function cad circular fillet result recognized {boolean:recognized} valid {boolean:valid} with error {cad fillet error:error} and body {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad circular fillet result, recognized, valid, error, value)
+local function cad circular fillet not recognized:
+    execute:
+        return cad circular fillet result recognized false valid false with error (a cad fillet error of kind (cad fillet no error)) and body (an empty cad body)
+local function cad circular fillet failure {cad fillet error:error}:
+    execute:
+        return cad circular fillet result recognized true valid false with error error and body (an empty cad body)
+local function cad circular fillet invalid result:
+    execute:
+        return cad circular fillet failure (a cad fillet error of kind (cad fillet invalid result error))
+local function cad circular fillet success {cad body:value}:
+    execute:
+        return cad circular fillet result recognized true valid true with error (a cad fillet error of kind (cad fillet no error)) and body value
+
+local function a cad circular fillet edge {cad edge key:edge} at node {integer:node}:
+    execute:
+        return @intrinsic("construct", a cad circular fillet edge node, edge, node)
+local function the cad circular fillet node for {cad edge key:edge} in {cad topology list:circles}:
+    execute:
+        loop index from 0 to the length of circles's values:
+            set entry to the item at index in circles's values
+            if entry's edge = edge:
+                return @intrinsic("construct", a cad circular fillet node result, true, entry's node)
+        return @intrinsic("construct", a cad circular fillet node result, false, 0 - 1)
+local function cad circular fillet {a pointer to a list:values} contains node {integer:node}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = node:
+                return true
+        return false
+local function append cad circular fillet unique node {integer:node} to {a pointer to a list:values}:
+    execute:
+        if (cad circular fillet values contains node node) = false:
+            append node to values
+local function cad circular fillet connection between {integer:first} and {integer:second} along {cad curve2:curve} preserving {cad fillet original arc:original}:
+    execute:
+        return @intrinsic("construct", a cad circular fillet connection, first, second, curve, original)
+local function cad circular fillet connection {cad circular fillet connection:value} touches {integer:node}:
+    execute:
+        return (value's first = node) or (value's second = node)
+local function cad circular fillet connection {cad circular fillet connection:value} joins {integer:first} and {integer:second}:
+    execute:
+        set direct to (value's first = first) and (value's second = second)
+        set reverse to (value's first = second) and (value's second = first)
+        return direct or reverse
+local function cad circular fillet angle from {a 64 bit floating-point number:y} over {a 64 bit floating-point number:x}:
+    execute:
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
+
+function the cad circular [fillet] of {cad body:body} along {a pointer to a list:selected} with [radius] {a number:radius}:
+    execute:
+        if (the length of selected) = 0:
+            return cad circular fillet not recognized
+        set firstEdge to the cad node pointer for (the item at 0 in selected) in body
+        if firstEdge = (0 as the type of firstEdge):
+            return cad circular fillet not recognized
+        set firstCurve to the cad node pointer for firstEdge's curve in body
+        if (firstCurve = (0 as the type of firstCurve)) or (firstCurve's kind != 1):
+            return cad circular fillet not recognized
+        set firstNormal to the cad normal of firstCurve's circle's plane
+        set radialResult to the cad normalization of firstCurve's circle's plane's xAxis
+        if (firstNormal's valid = false) or (radialResult's valid = false):
+            return cad circular fillet not recognized
+        set origin to firstCurve's circle's plane's origin
+        set axis to firstNormal's value
+        set radial to radialResult's value
+        set meridianPlaneResult to the cad orthonormal plane with origin origin, x axis radial and normal (the cad cross of radial and axis)
+        if meridianPlaneResult's valid = false:
+            return cad circular fillet not recognized
+        set meridianPlane to meridianPlaneResult's value
+        set toleranceBodies to a list containing body
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        if (((the length of body's roots) != 1) or ((the cad count of body's shells) != 1)) or ((the cad count of body's lumps) != 1):
+            return cad circular fillet not recognized
+
+        set points to a cad topology list of a cad vector2
+        set circles to a cad topology list of a cad circular fillet edge node
+        set edgeKeys to the cad edge keys of body
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeKey to the item at edgeIndex in edgeKeys
+            set edgeNode to the cad node pointer for edgeKey in body
+            if (edgeNode = (0 as the type of edgeNode)) or ((the length of edgeNode's coedges's values) != 2):
+                free edgeKeys
+                return cad circular fillet not recognized
+            set firstUse to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in body
+            set secondUse to the cad node pointer for (the item at 1 in edgeNode's coedges's values) in body
+            if (firstUse = (0 as the type of firstUse)) or (secondUse = (0 as the type of secondUse)):
+                free edgeKeys
+                return cad circular fillet not recognized
+            set firstLoop to the cad node pointer for firstUse's owner in body
+            set secondLoop to the cad node pointer for secondUse's owner in body
+            if (firstLoop = (0 as the type of firstLoop)) or (secondLoop = (0 as the type of secondLoop)):
+                free edgeKeys
+                return cad circular fillet not recognized
+            set edgeCurve to the cad node pointer for edgeNode's curve in body
+            if edgeCurve = (0 as the type of edgeCurve):
+                free edgeKeys
+                return cad circular fillet not recognized
+            if firstLoop's owner = secondLoop's owner:
+                if (edgeCurve's kind != 0) and (edgeCurve's kind != 1):
+                    free edgeKeys
+                    return cad circular fillet not recognized
+            else:
+                if edgeCurve's kind != 1:
+                    free edgeKeys
+                    return cad circular fillet not recognized
+                set span to the absolute value of (edgeNode's endParameter - edgeNode's startParameter)
+                set circleNormal to the cad normal of edgeCurve's circle's plane
+                if circleNormal's valid = false:
+                    free edgeKeys
+                    return cad circular fillet not recognized
+                if ((span < (6.283185307179586 - 1e-8)) or (span > (6.283185307179586 + 1e-8))) or ((the absolute value of (the cad dot of circleNormal's value and axis)) < (1.0 - 1e-9)):
+                    free edgeKeys
+                    return cad circular fillet not recognized
+                set delta to the cad difference of edgeCurve's circle's plane's origin and origin
+                set height to the cad dot of delta and axis
+                set offset to the cad difference of delta and (axis scaled by height)
+                if (the cad length of offset) > tolerance:
+                    free edgeKeys
+                    return cad circular fillet not recognized
+                append (a cad circular fillet edge edgeKey at node (the length of points's values)) to circles's values
+                append (a cad vector2 with x edgeCurve's circle's radius and y height) to points's values
+        free edgeKeys
+        loop selectedIndex from 0 to the length of selected:
+            if (the cad circular fillet node for (the item at selectedIndex in selected) in circles)'s valid = false:
+                return cad circular fillet not recognized
+
+        set connections to a cad topology list of a cad circular fillet connection
+        set axisNodes to a cad topology list of an integer
+        set faceKeys to the cad face keys of body
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in body
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return cad circular fillet not recognized
+            set surfaceNode to the cad node pointer for faceNode's surface in body
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return cad circular fillet not recognized
+            set surfaceKind to surfaceNode's kind
+            if (((surfaceKind != 0) and (surfaceKind != 1)) and (surfaceKind != 2)) and (surfaceKind != 4):
+                free faceKeys
+                return cad circular fillet not recognized
+            set surfaceFrame to surfaceNode's plane
+            if surfaceKind = 1:
+                set surfaceFrame to surfaceNode's cylinder's base
+            else if surfaceKind = 2:
+                set surfaceFrame to surfaceNode's cone's base
+            else if surfaceKind = 4:
+                set surfaceFrame to surfaceNode's torus's frame
+            set surfaceNormal to the cad normal of surfaceFrame
+            if surfaceNormal's valid = false:
+                free faceKeys
+                return cad circular fillet not recognized
+            if (the absolute value of (the cad dot of surfaceNormal's value and axis)) < (1.0 - 1e-9):
+                free faceKeys
+                return cad circular fillet not recognized
+            if surfaceKind != 0:
+                set frameDelta to the cad difference of surfaceFrame's origin and origin
+                set frameHeight to the cad dot of frameDelta and axis
+                if (the cad length of (the cad difference of frameDelta and (axis scaled by frameHeight))) > tolerance:
+                    free faceKeys
+                    return cad circular fillet not recognized
+
+            set nodes to a cad topology list of an integer
+            set faceUses to the cad face coedges of faceKey in body
+            loop useIndex from 0 to the length of faceUses:
+                set useNode to the cad node pointer for (the item at useIndex in faceUses) in body
+                if useNode != (0 as the type of useNode):
+                    set mappedNode to the cad circular fillet node for useNode's edge in circles
+                    if mappedNode's valid:
+                        append cad circular fillet unique node mappedNode's value to nodes's values
+            if (the length of nodes's values) = 2:
+                if (the item at 0 in nodes's values) > (the item at 1 in nodes's values):
+                    set temporaryNode to the item at 0 in nodes's values
+                    replace item at index 0 in nodes's values with (the item at 1 in nodes's values)
+                    replace item at index 1 in nodes's values with temporaryNode
+            if (the length of nodes's values) = 1:
+                set rimNode to the item at 0 in nodes's values
+                set capHeight to 0.0 as a 64 bit floating-point number
+                set capValid to false
+                if surfaceKind = 0:
+                    set capHeight to (the item at rimNode in points's values)'s y
+                    set capValid to true
+                else if surfaceKind = 2:
+                    set tangent to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, surfaceNode's cone's halfAngle)
+                    if (the absolute value of tangent) > 1e-12:
+                        set localAxisResult to the cad normal of surfaceNode's cone's base
+                        if localAxisResult's valid:
+                            set apex to the cad sum of surfaceNode's cone's base's origin and (localAxisResult's value scaled by (surfaceNode's cone's radius / tangent))
+                            set apexHeight to the cad dot of (the cad difference of apex and origin) and axis
+                            set apexFound to false
+                            loop apexUseIndex from 0 to the length of faceUses:
+                                set apexUse to the cad node pointer for (the item at apexUseIndex in faceUses) in body
+                                if apexUse != (0 as the type of apexUse):
+                                    set apexEdge to the cad node pointer for apexUse's edge in body
+                                    if apexEdge != (0 as the type of apexEdge):
+                                        set apexStart to the cad node pointer for apexEdge's start in body
+                                        set apexEnd to the cad node pointer for apexEdge's end in body
+                                        if apexStart != (0 as the type of apexStart):
+                                            if (the cad distance from apexStart's point to apex) <= tolerance:
+                                                set apexFound to true
+                                        if apexEnd != (0 as the type of apexEnd):
+                                            if (the cad distance from apexEnd's point to apex) <= tolerance:
+                                                set apexFound to true
+                            if apexFound:
+                                set capHeight to apexHeight
+                                set capValid to true
+                if capValid = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                append (the length of points's values) to axisNodes's values
+                append (the length of points's values) to nodes's values
+                append (a cad vector2 with x 0.0 and y capHeight) to points's values
+            if (the length of nodes's values) != 2:
+                free faceUses
+                free faceKeys
+                return cad circular fillet not recognized
+            set firstNode to the item at 0 in nodes's values
+            set secondNode to the item at 1 in nodes's values
+            set meridian to the cad curve2 of (a cad line2 from (the item at firstNode in points's values) to (the item at secondNode in points's values))
+            set originalArc to no cad fillet original arc
+            if surfaceKind = 4:
+                if surfaceNode's torus's majorRadius <= tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                set centreDelta to the cad difference of surfaceNode's torus's frame's origin and origin
+                set centre to a cad vector2 with x surfaceNode's torus's majorRadius and y (the cad dot of centreDelta and axis)
+                set firstPoint to the item at firstNode in points's values
+                set secondPoint to the item at secondNode in points's values
+                set startAngle to cad circular fillet angle from (firstPoint's y - centre's y) over (firstPoint's x - centre's x)
+                set endAngle to cad circular fillet angle from (secondPoint's y - centre's y) over (secondPoint's x - centre's x)
+                set seamFound to false
+                set seamPoint to the cad zero vector3
+                loop seamIndex from 0 to the length of faceUses:
+                    if seamFound = false:
+                        set seamUse to the cad node pointer for (the item at seamIndex in faceUses) in body
+                        if seamUse != (0 as the type of seamUse):
+                            set seamMapped to the cad circular fillet node for seamUse's edge in circles
+                            set seamEdge to the cad node pointer for seamUse's edge in body
+                            if (seamMapped's valid = false) and (seamEdge != (0 as the type of seamEdge)):
+                                set seamCurve to the cad node pointer for seamEdge's curve in body
+                                if seamCurve != (0 as the type of seamCurve):
+                                    if seamCurve's kind = 1:
+                                        set seamParameter to (seamEdge's startParameter + seamEdge's endParameter) * 0.5
+                                        set seamPoint to the cad point on (@intrinsic("dereference", seamCurve)) at seamParameter
+                                        set seamFound to true
+                if seamFound = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                set seamDelta to the cad difference of seamPoint and origin
+                set seamHeight to the cad dot of seamDelta and axis
+                set middle to a cad vector2 with x (the cad length of (the cad difference of seamDelta and (axis scaled by seamHeight))) and y seamHeight
+                set middleAngle to cad circular fillet angle from (middle's y - centre's y) over (middle's x - centre's x)
+                set arc to a cad arc2 at centre with radius surfaceNode's torus's minorRadius from startAngle to endAngle
+                if (cad arc span from startAngle to middleAngle) > ((the cad sweep of arc) + 1e-9):
+                    set temporaryAngle to startAngle
+                    set startAngle to endAngle
+                    set endAngle to temporaryAngle
+                    set arc to a cad arc2 at centre with radius surfaceNode's torus's minorRadius from startAngle to endAngle
+                if ((cad arc span from startAngle to 3.141592653589793) <= (the cad sweep of arc)) and ((centre's x - arc's radius) <= tolerance):
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                set meridian to the cad curve2 of arc
+                set nearestParameter to the cad parameter on meridian nearest middle
+                if (the cad distance from (the cad point on meridian at nearestParameter) to middle) > tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                set originalArc to the cad fillet original arc arc
+
+            loop sampleIndex from 0 to 3:
+                set sampleParameter to (sampleIndex as a 64 bit floating-point number) * 0.5
+                set worldPoint to the cad point at (the cad point on meridian at sampleParameter) on meridianPlane
+                set surfaceParameters to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest worldPoint
+                if surfaceParameters's valid = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+                set rebuiltPoint to the cad point on (@intrinsic("dereference", surfaceNode)) at parameters surfaceParameters's value's x and surfaceParameters's value's y
+                if (the cad distance from rebuiltPoint to worldPoint) > tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular fillet not recognized
+            append (cad circular fillet connection between firstNode and secondNode along meridian preserving originalArc) to connections's values
+            free faceUses
+        free faceKeys
+
+        if (the length of axisNodes's values) = 2:
+            set firstAxisNode to the item at 0 in axisNodes's values
+            set secondAxisNode to the item at 1 in axisNodes's values
+            set axisCurve to the cad curve2 of (a cad line2 from (the item at firstAxisNode in points's values) to (the item at secondAxisNode in points's values))
+            append (cad circular fillet connection between firstAxisNode and secondAxisNode along axisCurve preserving (no cad fillet original arc)) to connections's values
+        else if (the length of axisNodes's values) != 0:
+            return cad circular fillet not recognized
+
+        loop pointIndex from 0 to the length of points's values:
+            set degree to 0
+            loop connectionIndex from 0 to the length of connections's values:
+                if cad circular fillet connection (the item at connectionIndex in connections's values) touches pointIndex:
+                    increment degree
+            if degree != 2:
+                return cad circular fillet not recognized
+        if (the length of points's values) = 0:
+            return cad circular fillet not recognized
+        set order to a cad topology list of an integer
+        append 0 to order's values
+        set previousNode to 0 - 1
+        set currentNode to 0
+        set traversalDone to false
+        loop traversalIndex from 0 to the length of points's values:
+            if traversalDone = false:
+                set nextNode to 0 - 1
+                loop connectionIndex from 0 to the length of connections's values:
+                    set connectionNode to the item at connectionIndex in connections's values
+                    if cad circular fillet connection connectionNode touches currentNode:
+                        set candidateNode to connectionNode's first
+                        if candidateNode = currentNode:
+                            set candidateNode to connectionNode's second
+                        if (candidateNode != previousNode) and (nextNode < 0):
+                            set nextNode to candidateNode
+                if nextNode < 0:
+                    return cad circular fillet not recognized
+                if nextNode = 0:
+                    set traversalDone to true
+                else:
+                    if cad circular fillet order's values contains node nextNode:
+                        return cad circular fillet not recognized
+                    append nextNode to order's values
+                    set previousNode to currentNode
+                    set currentNode to nextNode
+        if (traversalDone = false) or ((the length of order's values) != (the length of points's values)):
+            return cad circular fillet not recognized
+
+        set selectedNodes to a cad topology list of an integer
+        loop selectedIndex from 0 to the length of selected:
+            set mappedSelection to the cad circular fillet node for (the item at selectedIndex in selected) in circles
+            if mappedSelection's valid = false:
+                return cad circular fillet not recognized
+            append cad circular fillet unique node mappedSelection's value to selectedNodes's values
+        set originals to a cad topology list of a cad fillet original arc
+        loop orderIndex from 0 to the length of order's values:
+            set orderedFirst to the item at orderIndex in order's values
+            set orderedSecond to the item at (the remainder of (orderIndex + 1) divided by (the length of order's values)) in order's values
+            set preservedArc to no cad fillet original arc
+            loop connectionIndex from 0 to the length of connections's values:
+                set connectionNode to the item at connectionIndex in connections's values
+                if cad circular fillet connection connectionNode joins orderedFirst and orderedSecond:
+                    set preservedArc to connectionNode's original
+            append preservedArc to originals's values
+
+        set roundedProfile to the cad rounded profile through points's values in order order's values at selected selectedNodes's values with radius radius, tolerance tolerance, avoiding axis true and preserving originals's values
+        if roundedProfile's valid = false:
+            return cad circular fillet failure roundedProfile's error
+        set revolved to the cad revolution of roundedProfile's value's values on meridianPlane about origin along axis by 6.283185307179586
+        if revolved's valid = false:
+            return cad circular fillet invalid result
+        set flaws to the cad flaws of revolved's value
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if (validBody = false) or ((the cad worst vertex gap of revolved's value) > tolerance):
+            return cad circular fillet invalid result
+        return cad circular fillet success revolved's value

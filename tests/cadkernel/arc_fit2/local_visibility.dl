@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+set normalized to the cad arc fit2 unit (the cad zero vector2)
+print normalized's valid
+

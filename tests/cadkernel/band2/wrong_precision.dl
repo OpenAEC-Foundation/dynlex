@@ -1,0 +1,5 @@
+import lib/cadkernel/band2.dl
+set width to 1.0 as a 32 bit floating-point number
+set widths to a list containing [width,width]
+set result to the cad band boundary of (an empty cad polyline2) with widths widths within angle 0.2
+print result's sourceLength as a line

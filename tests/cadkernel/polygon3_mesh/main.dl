@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MPL-2.0
+# Spatial triangulation adapters from space/polygon.rs, cadkernel
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f. Runtime reference tests supplement
+# the upstream module's seven measurement tests; adapters have no source tests.
+import lib/cadkernel/polygon3_mesh.dl
+
+function check polygon mesh {boolean:condition} named {C string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function a polygon mesh fixture ring from {an array:coordinates}:
+    execute:
+        set vertices to an empty list of a cad vector3
+        loop index from 0 to the length of coordinates:
+            set p to the item at index in coordinates
+            append (a cad vector3 with x (the item at 0 in p), y (the item at 1 in p) and z (the item at 2 in p)) to vertices
+        return vertices
+
+function the polygon mesh fixture area of {a pointer to a list:soup}:
+    execute:
+        set total to 0.0
+        set index to 0
+        loop while index < the length of soup:
+            set a to the item at index in soup
+            set b to the item at (index + 1) in soup
+            set c to the item at (index + 2) in soup
+            set twice to the cad length of (the cad cross of (the cad difference of b and a) and (the cad difference of c and a))
+            set total to total + (twice * 0.5)
+            set index to index + 3
+        return total
+
+set tolerance to the default cad tolerance
+set square to a polygon mesh fixture ring from [[0.0,0.0,5.0],[10.0,0.0,5.0],[10.0,10.0,5.0],[0.0,10.0,5.0]]
+set soup to the cad spatial triangle soup of square within tolerance
+check polygon mesh ((the length of soup) = 6) named "square six soup vertices"
+check polygon mesh ((the polygon mesh fixture area of soup) = 100.0) named "square area"
+check polygon mesh ((the y of (the item at 0 in soup)) = 10.0) named "first ear order"
+check polygon mesh ((the x of (the item at 1 in soup)) = 0.0) named "first ear second vertex"
+check polygon mesh ((the x of (the item at 2 in soup)) = 10.0) named "first ear third vertex"
+free soup
+check polygon mesh ((the length of square) = 4) named "borrowed input unchanged"
+
+set hole to a polygon mesh fixture ring from [[3.0,3.0,5.0],[7.0,3.0,5.0],[7.0,7.0,5.0],[3.0,7.0,5.0]]
+set rings to a list containing square
+append hole to rings
+set soup to the cad spatial triangle soup of rings rings within tolerance
+check polygon mesh ((the polygon mesh fixture area of soup) = 84.0) named "hole area"
+set crossingFound to false
+loop index from 0 to the length of soup:
+    set p to the item at index in soup
+    check polygon mesh ((the z of p) = 5.0) named "lift onto original plane"
+    if ((the x of p) = 10.0) and ((the y of p) = 7.0):
+        set crossingFound to true
+check polygon mesh crossingFound named "inserted bridge point lifted"
+free soup
+
+set tilted to a polygon mesh fixture ring from [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,10.0,10.0],[0.0,10.0,10.0]]
+set soup to the cad spatial triangle soup of tilted within tolerance
+check polygon mesh ((the length of soup) = 6) named "tilted square triangulated"
+check polygon mesh ((the absolute value of ((the polygon mesh fixture area of soup) - (100.0 * (the square root of 2.0)))) < 1e-10) named "tilted area"
+loop index from 0 to the length of soup:
+    set p to the item at index in soup
+    check polygon mesh ((the y of p) = (the z of p)) named "tilted plane preserved"
+free soup
+free tilted
+
+set warped to a polygon mesh fixture ring from [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,10.0,1.0],[0.0,10.0,0.0]]
+set soup to the cad spatial triangle soup of warped within tolerance
+check polygon mesh ((the length of soup) = 0) named "noncoplanar ring refused"
+free soup
+append warped to rings
+set soup to the cad spatial triangle soup of rings rings within tolerance
+check polygon mesh ((the length of soup) = 0) named "one noncoplanar ring refuses all"
+free soup
+remove item 2 from rings
+free warped
+
+set invalid to an empty list of a cad vector3
+append (a cad vector3 with x (0.0 / 0.0), y 0.0 and z 0.0) to invalid
+append invalid to rings
+set soup to the cad spatial triangle soup of rings rings within tolerance
+check polygon mesh ((the length of soup) = 0) named "nonfinite short ring refuses all"
+free soup
+remove item 2 from rings
+free invalid
+
+set short to an empty list of a cad vector3
+insert short into rings at index 0
+set soup to the cad spatial triangle soup of rings rings within tolerance
+check polygon mesh ((the polygon mesh fixture area of soup) = 84.0) named "empty ring skipped"
+free soup
+append (the cad zero vector3) to short
+append (the cad x axis) to short
+append ((the cad x axis) scaled by 2.0) to short
+set soup to the cad spatial triangle soup of rings rings within tolerance
+check polygon mesh ((the length of soup) = 0) named "first collinear ring is not skipped"
+free soup
+free short
+free rings
+free hole
+free square
+print "cadkernel polygon3 mesh: PASS" as a line

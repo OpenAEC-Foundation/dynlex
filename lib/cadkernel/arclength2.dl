@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/geom2d/arclength.rs.
+# Curve::tangent_at is shared through curve2.dl. Inputs are borrowed; all public
+# results are scalar or vector values. Internal cumulative lists have one
+# explicit owner in the calling operation and are freed before it returns.
+import lib/cadkernel/curve2.dl
+
+function the cad length of {cad circle2:shape}:
+    execute:
+        return (the absolute value of shape's radius) * 6.283185307179586
+function the cad length of {cad arc2:shape}:
+    execute:
+        return (the absolute value of shape's radius) * (the absolute value of (the cad sweep of shape))
+function the cad length of {cad ellipse arc2:shape}:
+    execute:
+        return the cad length of (the cad curve2 of shape)
+
+# The returned list is owned by its caller. Every entry is a segment boundary;
+# the last entry is the source SegmentLengths.total, including the empty case.
+local function the cad cumulative lengths of {cad curve2:shape}:
+    execute:
+        set values to a list containing 0.0
+        set total to 0.0
+        set segments to the cad segments of shape
+        loop index from 0 to the length of segments:
+            set total to total + (the cad length of (the item at index in segments))
+            append total to values
+        free segments
+        return values
+
+# Borrows the cumulative list.
+local function the cad cumulative length in {a pointer to a list:values} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set count to the maximum of ((the length of values) - 1) and 0
+        if count = 0:
+            return 0.0
+        set bounded to parameter
+        clamp bounded between 0.0 and 1.0
+        set scaled to bounded * (count as a 64 bit floating-point number)
+        set index to 0
+        if scaled = scaled:
+            set index to the minimum of ((the floor of scaled) as an integer) and (count - 1)
+        set within to scaled - (index as a 64 bit floating-point number)
+        set span to (the item at (index + 1) in values) - (the item at index in values)
+        return (the item at index in values) + (span * within)
+
+# Rust slice binary_search_by selects the rightmost equal boundary. Its
+# unordered comparison and terminal out-of-bounds cases fail explicitly.
+local function the cad cumulative [parameter] in {a pointer to a list:values} at distance {a 64 bit floating-point number:distance}:
+    execute:
+        set count to the maximum of ((the length of values) - 1) and 0
+        set total to the last item of values
+        if (count = 0) or ((total != total) or (total <= 0.0)):
+            return 0.0
+        set size to the length of values
+        set base to 0
+        while size > 1:
+            set half to size / 2
+            set middle to base + half
+            set value to the item at middle in values
+            if (value != value) or (distance != distance):
+                @intrinsic("call", "libc", "abort", nothing)
+            if (value > distance) = false:
+                set base to middle
+            set size to size - half
+        set value to the item at base in values
+        if (value != value) or (distance != distance):
+            @intrinsic("call", "libc", "abort", nothing)
+        set index to the minimum of base and count
+        if value != distance:
+            set after to base
+            if value < distance:
+                set after to after + 1
+            set index to the minimum of (the maximum of (after - 1) and 0) and (count - 1)
+        if (index + 1) >= (the length of values):
+            @intrinsic("call", "libc", "abort", nothing)
+        set span to (the item at (index + 1) in values) - (the item at index in values)
+        set within to 0.0
+        if span > 0.0:
+            set within to (distance - (the item at index in values)) / span
+        set parameter to ((index as a 64 bit floating-point number) + within) / (count as a 64 bit floating-point number)
+        clamp parameter between 0.0 and 1.0
+        return parameter
+
+local function the cad integrated speed of {cad curve2:shape} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        set nodes to [[-0.906179845938664,0.236926885056189],[-0.538469310105683,0.478628670499366],[0.0,0.568888888888889],[0.538469310105683,0.478628670499366],[0.906179845938664,0.236926885056189]]
+        set half to 0.5 * (last - first)
+        set middle to 0.5 * (last + first)
+        set total to -0.0
+        loop index from 0 to 5:
+            set pair to the item at index in nodes
+            set parameter to middle + (half * (the item at 0 in pair))
+            set total to total + ((the item at 1 in pair) * (the cad length of (the cad tangent of shape at parameter)))
+        return half * total
+
+function the cad length of {cad curve2:shape}:
+    execute:
+        if shape's kind = 0:
+            return the cad length of (shape's line)
+        if (shape's kind = 6) or (shape's kind = 7):
+            return 1.0 / 0.0
+        if shape's kind = 1:
+            return the cad length of (shape's circle)
+        if shape's kind = 2:
+            return the cad length of (shape's arc)
+        if shape's kind = 4:
+            set values to the cad cumulative lengths of shape
+            set total to the last item of values
+            free values
+            return total
+        return the cad length of shape from parameter 0.0 to parameter 1.0
+
+function the cad length of {cad curve2:shape} from parameter {a 64 bit floating-point number:first} to parameter {a 64 bit floating-point number:last}:
+    execute:
+        if last < first:
+            return the negative of (the cad length of shape from parameter last to parameter first)
+        if (shape is cad straight) or ((shape's kind = 1) or (shape's kind = 2)):
+            return (the cad length of shape) * (last - first)
+        if shape's kind = 4:
+            set values to the cad cumulative lengths of shape
+            set result to (the cad cumulative length in values at last) - (the cad cumulative length in values at first)
+            free values
+            return result
+        set span to last - first
+        if span <= 0.0:
+            return 0.0
+        set width to span / 32.0
+        set total to -0.0
+        loop panel from 0 to 32:
+            set lower to first + (width * (panel as a 64 bit floating-point number))
+            set total to total + (the cad integrated speed of shape from lower to (lower + width))
+        return total
+
+function the cad length of {cad curve2:shape} to parameter {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad length of shape from parameter 0.0 to parameter parameter
+
+function the cad [parameter] on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
+    execute:
+        set total to the cad length of shape
+        if (total != total) or (total <= 0.0):
+            return 0.0
+        if distance <= 0.0:
+            return 0.0
+        if ((total - total) = 0.0) and (distance >= total):
+            return 1.0
+        if (shape's kind = 0) or ((shape's kind = 1) or (shape's kind = 2)):
+            return distance / total
+        if (shape's kind = 6) or (shape's kind = 7):
+            set step to the cad length of (the cad tangent of shape at 0.0)
+            if step > 0.0:
+                return distance / step
+            return 0.0
+        if shape's kind = 4:
+            set values to the cad cumulative lengths of shape
+            set parameter to the cad cumulative parameter in values at distance distance
+            free values
+            return parameter
+        set low to 0.0
+        set high to 1.0
+        loop iteration from 0 to 60:
+            set middle to 0.5 * (low + high)
+            if (the cad length of shape from parameter 0.0 to parameter middle) < distance:
+                set low to middle
+            else:
+                set high to middle
+        return 0.5 * (low + high)
+
+function the cad point on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
+    execute:
+        return the cad point on shape at (the cad parameter on shape at distance distance)

@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime-input checks of cadkernel src/geom2d/angle.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/angle.rs
+
+import lib/cadkernel/angle.dl
+import lib/cadkernel/intersect2.dl
+
+function the cad angle fixture number at {integer:index} in {argument list:arguments}:
+    execute:
+        return @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at index in arguments' data)
+
+function print cad angle fixture scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value)
+
+set arguments to the command line arguments
+set angle to the cad angle fixture number at 0 in arguments
+set start to the cad angle fixture number at 1 in arguments
+set end to the cad angle fixture number at 2 in arguments
+print cad angle fixture scalar (the cad normalized angle of angle)
+print cad angle fixture scalar (cad arc span from start to end)
+print (cad angle angle within arc from start to end) as a line
+print cad angle fixture scalar (cad arc parameter of angle from start to end)
+# Exercise the renamed value phrase inside another public value pattern.
+print cad angle fixture scalar (cad arc span from (the cad normalized angle of start) to (the cad normalized angle of end))

@@ -1,0 +1,35 @@
+import tests/cadkernel/lab_state/main.dl
+
+set solidState to the initial lab state
+check lab state ((the lab scenario action for 6) = 18)
+set solidState to the lab state after action 19 from solidState
+check lab state ((solidState's changed) = false)
+set solidState to the lab state after action 18 from solidState
+check lab state ((solidState's settings's operation) = 6)
+check lab state ((solidState's pitch) = 0.7)
+check lab state ((solidState's yaw) = 0.4)
+loop shapeIndex from 0 to 8:
+    set solidState to the lab state after action (20 + shapeIndex) from solidState
+    check lab state ((solidState's settings's solidKind) = shapeIndex)
+    set solidState to the lab state after action (20 + shapeIndex) from solidState
+    check lab state ((solidState's changed) = false)
+set solidState to the lab state after action 19 from solidState
+check lab state ((solidState's settings's solidKind) = 0)
+check lab state (solidState's changed)
+loop changeIndex from 0 to 60:
+    set solidState to the lab state after action 4 from solidState
+check lab state ((solidState's settings's height) = 0.1)
+set solidState to the lab state after action 4 from solidState
+check lab state ((solidState's changed) = false)
+set solidState to the lab state after action 5 from solidState
+check lab state (solidState's changed)
+set solidState to the lab state after action 7 from solidState
+check lab state (solidState's changed)
+set solidState to the lab state after action 22 from solidState
+set equalSettings to solidState's settings
+set equalSettings's solidKind to 3
+check lab state ((lab settings equalSettings equal (solidState's settings)) = false)
+set solidState to the lab state after action 8 from solidState
+check lab state ((solidState's settings's operation) = 0)
+check lab state ((solidState's settings's solidKind) = 0)
+print "Dynedra solid selection and parameter state checks passed" as a line

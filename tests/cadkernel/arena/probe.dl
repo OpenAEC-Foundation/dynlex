@@ -1,0 +1,71 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime operation trace compared with the unmodified Rust arena.
+import lib/cadkernel/arena.dl
+
+function emit arena optional {cad lookup result:found}:
+    execute:
+        if the valid of found:
+            set text to ((the string form of "Some(") + (the string form of the cad value of found)) + (the string form of ")")
+            print text as a line
+        else:
+            print "None" as a line
+
+set nodes to a cad arena of an integer
+set keys to the cad keys of nodes
+set step to 0
+loop while step < 400:
+    set operation to the remainder of ((step * 17) + 5) divided by 7
+    print operation as a line
+    if ((the length of keys) = 0) or operation <= 1:
+        set key to the cad key after inserting ((step * 3) - 50) into nodes
+        append key to keys
+        print the cad debug text of key as a line
+    else:
+        set key to the item at (the remainder of step divided by the length of keys) in keys
+        if operation = 2:
+            set removed to the cad removal of key from nodes
+            print whether the valid of removed as a line
+            if the valid of removed:
+                print the cad value of removed as a line
+        if operation = 3:
+            set found to the cad lookup of key in nodes
+            print whether the valid of found as a line
+            if the valid of found:
+                print the cad value of found as a line
+        if operation = 4:
+            set duplicate to the cad clone of nodes
+            set found to the cad lookup of key in duplicate
+            if the valid of found:
+                @intrinsic("store at", the value of found, (the cad value of found) + 1000)
+            emit arena optional found
+            emit arena optional (the cad lookup of key in nodes)
+            free cad arena duplicate
+        if operation = 5:
+            set entries to the cad entries of nodes
+            set total to 0
+            set cursor to 0
+            loop while cursor < (the length of entries):
+                set total to total + (@intrinsic("dereference", the value of the item at cursor in entries))
+                increment cursor
+            print total as a line
+            print the cad debug text of nodes as a line
+            free entries
+        if operation = 6:
+            set words to an empty list of a 32 bit unsigned integer
+            hash cad key key into words
+            print the item at 0 in words as a line
+            print the item at 1 in words as a line
+            print whether key = (the cad clone of key) as a line
+            free words
+    print the cad count of nodes as a line
+    print whether nodes is cad empty as a line
+    increment step
+set firstKey to the item at 0 in keys
+set container to a cad arena of the type of firstKey
+set keyKey to the cad key after inserting firstKey into container
+set clonedKeys to the cad clone of container
+print the cad debug text of (the cad value of (the cad lookup of keyKey in clonedKeys)) as a line
+free cad arena clonedKeys
+free cad arena container
+free keys
+free cad arena nodes

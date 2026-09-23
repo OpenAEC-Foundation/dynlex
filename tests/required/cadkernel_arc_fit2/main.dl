@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+function fit2 check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 81)
+
+set points to a list containing (the cad zero vector2)
+append (a cad vector2 with x 3 and y 4) to points
+set directions to a list containing (an automatic cad arc fit direction2)
+append (an automatic cad arc fit direction2) to directions
+set fitted to the cad arc chain2 through points with closure false and directions directions
+fit2 check fitted's valid
+fit2 check ((the length of fitted's vertices) = 2)
+set first to the item at 0 in fitted's vertices
+set last to the item at 1 in fitted's vertices
+fit2 check (((first's point's x = 0.0) and (first's point's y = 0.0)) and (first's bulge = 0.0))
+fit2 check ((last's point's x = 3.0) and (last's point's y = 4.0))
+print "two_points_remain_one_straight_span" as a line
+
+clear points
+append (the cad zero vector2) to points
+append (a cad vector2 with x 1 and y 1) to points
+append (a cad vector2 with x 2 and y 0) to points
+append (an automatic cad arc fit direction2) to directions
+set fitted to the cad arc chain2 through points with closure false and directions directions
+fit2 check fitted's valid
+set first to the item at 0 in fitted's vertices
+set last to the item at ((the length of fitted's vertices) - 1) in fitted's vertices
+fit2 check ((first's point's x = 0.0) and (first's point's y = 0.0))
+fit2 check ((last's point's x = 2.0) and (last's point's y = 0.0))
+loop index from 0 to the length of fitted's vertices:
+    set vertex to the item at index in fitted's vertices
+    fit2 check (((the absolute value of vertex's point's x) <= 1.7976931348623157e308) and ((the absolute value of vertex's point's y) <= 1.7976931348623157e308))
+    fit2 check (((the absolute value of vertex's bulge) <= 1.7976931348623157e308) and ((the absolute value of vertex's fraction) <= 1.7976931348623157e308))
+print "curved_chain_keeps_endpoints_and_returns_finite_arcs" as a line
+
+replace item at index 0 in directions with (a cad arc fit direction2 along (a cad vector2 with x 1.7976931348623157e308 and y 1.7976931348623157e308))
+set fitted to the cad arc chain2 through points with closure false and directions directions
+fit2 check (fitted's valid = false)
+fit2 check ((the length of fitted's vertices) = 0)
+free points
+free directions
+print "invalid_direction_rejects_the_entire_fit" as a line
+

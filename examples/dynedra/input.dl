@@ -1,0 +1,89 @@
+import examples/dynedra/state.dl
+import lib/graphics.dl
+
+function the lab keyboard action in {pointer:window}:
+    execute:
+        if key the 1 key is down in window:
+            return 0
+        if key the 2 key is down in window:
+            return 1
+        if key the 3 key is down in window:
+            return 2
+        if key the 4 key is down in window:
+            return 3
+        if key the 5 key is down in window:
+            return the lab scenario action for 4
+        if key the 6 key is down in window:
+            return the lab scenario action for 5
+        if key the 7 key is down in window:
+            return 18
+        if key 78 is down in window:
+            return 19
+        if key 45 is down in window:
+            return 4
+        if key 61 is down in window:
+            return 5
+        if key 91 is down in window:
+            return 6
+        if key 93 is down in window:
+            return 7
+        if key the 0 key is down in window:
+            return 8
+        if key 67 is down in window:
+            return 9
+        if key the Q key is down in window:
+            return 10
+        if key the E key is down in window:
+            return 11
+        if key the left arrow key is down in window:
+            return 12
+        if key the right arrow key is down in window:
+            return 13
+        if key the up arrow key is down in window:
+            return 14
+        if key the down arrow key is down in window:
+            return 15
+        return -1
+
+function the lab click action at {a number:x} {a number:y}:
+    execute:
+        if (x < 24) or (x >= 296):
+            return -1
+        loop index from 0 to 6:
+            set column to the remainder of index divided by 2
+            set left to 24 + (column * 144)
+            set top to 134 + ((index / 2) * 42)
+            if ((x >= left) and (x < (left + 128))) and ((y >= top) and (y < (top + 34))):
+                return the lab scenario action for index
+        if (y >= 276) and (y < 310):
+            return 18
+        if (y >= 352) and (y < 386):
+            if x < 66:
+                return 4
+            if x >= 254:
+                return 5
+        if (y >= 436) and (y < 470):
+            if x < 66:
+                return 6
+            if x >= 254:
+                return 7
+        if (y >= 500) and (y < 534):
+            return 9
+        if (y >= 548) and (y < 582):
+            return 8
+        if (y >= 596) and (y < 630):
+            if x < 152:
+                return 10
+            if x >= 168:
+                return 11
+        return -1
+
+function the lab click action at {a number:x} {a number:y} for {lab state:state}:
+    execute:
+        if state's settings's operation = 6:
+            loop index from 0 to 8:
+                set left to the lab solid choice x for index
+                set top to the lab solid choice y for index
+                if ((x >= left) and (x < (left + (the lab solid choice width)))) and ((y >= top) and (y < (top + 34))):
+                    return 20 + index
+        return the lab click action at x y

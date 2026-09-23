@@ -1,0 +1,142 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make_cuboid/main.dl
+import tests/cadkernel/brep_make_topology/support.dl
+
+# Each branch returns a local result so its body must outlive the constructor scope.
+function a retained maker [result] for {integer:kind}:
+    execute:
+        set origin to a maker point [1.0,2.0,3.0]
+        set result to no cad body
+        if kind = 0:
+            set result to the cad cuboid at origin with size (a maker point [2.0,3.0,4.0])
+        else if kind = 1:
+            set result to the cad cylinder body at origin with radius 2.0 and height 4.0
+        else if kind = 2:
+            set result to the cad sphere body at origin with radius 2.0
+        else if kind = 3:
+            set result to the cad cone body at origin with radius 2.0 and height 4.0
+        else if kind = 4:
+            set result to the cad pyramid body at origin with radius 2.0, height 4.0 and sides 5
+        else if kind = 5:
+            set result to the cad polygonal frustum at origin with base radius 2.0, top radius 1.0, height 4.0 and sides 5
+        return result
+function a retained maker value for {integer:kind}:
+    execute:
+        set localResult to a retained maker result for kind
+        check solid maker (localResult's valid)
+        set retainedValue to localResult's value
+        set localResult to no cad body
+        return retainedValue
+function check maker survivor {cad body:solid} with vertices {integer:vertices}, edges {integer:edges} and faces {integer:faces}:
+    execute:
+        check solid maker ((the cad count of (solid's vertices)) = vertices)
+        check solid maker ((the cad count of (solid's edges)) = edges)
+        check solid maker ((the cad count of (solid's faces)) = faces)
+        check solid maker ((the length of (solid's roots)) = 1)
+        check solid maker ((the cad euler characteristic of solid) = 2)
+        check solid maker ((the cad worst vertex gap of solid) < 1e-9)
+        check consistent solid solid
+
+set vertexCounts to [8,2,2,2,6,10]
+set edgeCounts to [12,3,1,2,10,15]
+set faceCounts to [6,3,1,2,6,7]
+loop repetition from 0 to 12:
+    loop kind from 0 to 6:
+        set created to a retained maker result for kind
+        check solid maker (created's valid)
+        set retained to created
+        set shared to created's value
+        set cloned to the cad clone of shared
+        set created to no cad body
+        check solid maker ((created's valid) = false)
+        check maker survivor (retained's value) with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+        check maker survivor cloned with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+
+        # Copies share arena edits; a clone keeps its original vertex coordinates.
+        set vertexKeys to the maker vertex keys of shared
+        set vertexKey to the item at 0 in vertexKeys
+        set sharedNode to the cad node pointer for vertexKey in shared
+        set retainedNode to the cad node pointer for vertexKey in (retained's value)
+        set clonedNode to the cad node pointer for vertexKey in cloned
+        set originalX to sharedNode's point's x
+        set sharedNode's point's x to originalX + 11.0
+        check solid maker ((retainedNode's point's x) = (originalX + 11.0))
+        check solid maker ((clonedNode's point's x) = originalX)
+        set sharedNode's point's x to originalX
+        free vertexKeys
+
+        # Nested loop lists and the root list must also be independent in a clone.
+        set loopKeys to the maker loop keys of shared
+        set loopKey to the item at 0 in loopKeys
+        set sharedRing to the cad node pointer for loopKey in shared
+        set clonedRing to the cad node pointer for loopKey in cloned
+        set savedCount to the length of (sharedRing's coedges's values)
+        check solid maker (savedCount > 0)
+        clear clonedRing's coedges's values
+        check solid maker ((the length of (sharedRing's coedges's values)) = savedCount)
+        clear cloned's roots
+        check solid maker ((the length of (retained's value's roots)) = 1)
+        set cloned to an empty cad body
+        free loopKeys
+
+        # Reset each owner in turn and keep validating the remaining owner.
+        set shared to an empty cad body
+        check solid maker ((the cad count of (shared's vertices)) = 0)
+        check maker survivor (retained's value) with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+        set finalOwner to retained's value
+        set retained to no cad body
+        check maker survivor finalOwner with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+        set finalOwner to an empty cad body
+
+        set returnedValue to a retained maker value for kind
+        check maker survivor returnedValue with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+        set returnedCopy to returnedValue
+        set returnedValue to an empty cad body
+        check maker survivor returnedCopy with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+print "all_six_builders_survive_result_returns_copies_clones_and_resets" as a line
+
+# Removing a face through one copy is visible through another, never in the clone.
+loop kind from 0 to 6:
+    set created to a retained maker result for kind
+    set retained to created
+    set cloned to the cad clone of (created's value)
+    set keys to the cad face keys of (created's value)
+    set key to the item at 0 in keys
+    set removed to the cad removal of key from (created's value)
+    check solid maker (removed's valid)
+    check solid maker (((retained's value) contains cad key key) = false)
+    check solid maker (cloned contains cad key key)
+    set created to no cad body
+    set retained to no cad body
+    check maker survivor cloned with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+    free keys
+print "shared_arena_removals_leave_clones_independent" as a line
+
+# Invalid results can replace live results and be copied repeatedly without double release.
+loop kind from 0 to 6:
+    set live to a retained maker result for kind
+    set survivor to live
+    set refused to no cad body
+    if kind = 0:
+        set refused to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,0.0,1.0])
+    else if kind = 1:
+        set refused to the cad cylinder body at (the cad zero vector3) with radius 0.0 and height 1.0
+    else if kind = 2:
+        set refused to the cad sphere body at (the cad zero vector3) with radius 0.0
+    else if kind = 3:
+        set refused to the cad cone body at (the cad zero vector3) with radius 1.0 and height 0.0
+    else if kind = 4:
+        set refused to the cad pyramid body at (the cad zero vector3) with radius 1.0, height 1.0 and sides 2
+    else if kind = 5:
+        set refused to the cad polygonal frustum at (the cad zero vector3) with base radius 1.0, top radius -1.0, height 1.0 and sides 5
+    check solid maker ((refused's valid) = false)
+    set live to refused
+    set absentCopy to live
+    set refused to no cad body
+    set live to no cad body
+    check solid maker ((absentCopy's valid) = false)
+    check maker survivor (survivor's value) with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+    set absentCopy to a retained maker result for kind
+    set survivor to no cad body
+    check maker survivor (absentCopy's value) with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
+print "invalid_results_copy_reset_and_replace_live_results_safely" as a line

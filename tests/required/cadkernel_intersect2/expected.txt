@@ -1,0 +1,5 @@
+cadkernel intersect2 upstream fixtures passed
+cadkernel intersect2 boundary fixtures passed
+cadkernel ellipse fixtures passed
+cadkernel tolerance fixtures passed
+cadkernel intersect2 IEEE fixtures passed

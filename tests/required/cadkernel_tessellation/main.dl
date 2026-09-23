@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: MPL-2.0
+# Shared angular sampling policy: analytic invariants and recursion limits.
+import lib/cadkernel/tessellation.dl
+
+class:
+    patterns:
+        [a|] sampling test curve
+    members:
+        kind as an integer
+        turns as a 64 bit floating-point number
+
+function the cad curve point of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if the kind of curve = 0:
+            return a cad vector3 with x parameter, y 0.0 and z 0.0
+        set angle to (parameter * (the turns of curve)) * 6.283185307179586
+        return a cad vector3 with x (@intrinsic("cos", angle)), y (@intrinsic("sin", angle)) and z parameter
+
+function the cad curve tangent of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if the kind of curve = 0:
+            return the cad x axis
+        if the kind of curve = 2:
+            return the cad zero vector3
+        set rate to (the turns of curve) * 6.283185307179586
+        set angle to parameter * rate
+        return a cad vector3 with x ((the negative of @intrinsic("sin", angle)) * rate), y (@intrinsic("cos", angle) * rate) and z 1.0
+
+function sampling check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+sampling check ((the cad sampling angle for 0.0) = (the cad default sampling angle))
+sampling check ((the cad sampling angle for -1.0) = (the cad default sampling angle))
+sampling check ((the cad sampling angle for (@intrinsic("sqrt", -1.0))) = (the cad default sampling angle))
+sampling check ((the cad sampling angle for (1.0 / 0.0)) = (the cad default sampling angle))
+sampling check ((the cad sampling angle for 100.0) = 1.5707963267948966)
+sampling check ((the cad sampling angle for 0.01) = 0.01)
+sampling check ((the cad sampling angle at resolution 1.0) = (the cad default sampling angle))
+sampling check ((the cad sampling angle at resolution 10.0) = (the cad fine sampling angle))
+sampling check ((the cad sampling angle at resolution 100.0) = (the cad sampling angle at resolution 10.0))
+sampling check ((the cad display angle at resolution 0.01) = (the cad display sampling angle))
+sampling check ((the cad display angle at resolution 0.0) = (the cad display sampling angle))
+sampling check ((the cad display angle at resolution -1.0) = (the cad display sampling angle))
+sampling check ((the cad direction angle between (the cad x axis) and (the cad y axis)) = 1.5707963267948966)
+sampling check ((the cad direction angle between (the cad zero vector3) and (the cad y axis)) = 3.141592653589793)
+sampling check ((the cad direction angle between (the cad x axis) and (the cad x axis)) = 0.0)
+sampling check ((the cad direction angle between (the cad x axis) and (the cad negative of the cad x axis)) = 3.141592653589793)
+sampling check ((the cad direction angle between [3.0, 4.0] and [3.0, 4.0]) = 0.0)
+sampling check ((the cad direction angle between [1e20] and [1e20]) = 0.0)
+sampling check ((the cad direction angle between [1.0] and [-1.0]) = 3.141592653589793)
+set emptyCoordinates to a new (a 64 bit floating-point number array of 0 items)
+sampling check ((the cad direction angle between emptyCoordinates and emptyCoordinates) = 3.141592653589793)
+set emptyDirections to a list containing emptyCoordinates
+sampling check ((the cad maximum direction angle of emptyDirections) = 0.0)
+append emptyCoordinates to emptyDirections
+sampling check ((the cad maximum direction angle of emptyDirections) = 3.141592653589793)
+free emptyDirections
+set largeDirection to a new (a 64 bit floating-point number array of 17 items)
+store 1.0 at largeDirection + 16
+sampling check ((the cad direction angle between largeDirection and largeDirection) = 0.0)
+set directions to an empty list of a cad vector3
+sampling check ((the cad maximum direction angle of directions) = 0.0)
+append (the cad x axis) to directions
+append (the cad y axis) to directions
+append (the cad negative of the cad x axis) to directions
+sampling check ((the cad maximum direction angle of directions) = 3.141592653589793)
+free directions
+
+set curve to @intrinsic("construct", a sampling test curve, 0, 1.0)
+set sampled to the cad angular samples of curve with maximum angle 0.1
+sampling check ((the length of sampled) = 5)
+set index to 0
+loop while index < the length of sampled:
+    sampling check ((the x of (the item at index in sampled)) = ((index as a 64 bit floating-point number) / 4.0))
+    increment index
+free sampled
+set the kind of curve to 1
+set sampled to the cad angular samples of curve with maximum angle 0.1
+sampling check ((the length of sampled) = 65)
+sampling check ((the z of (the item at 0 in sampled)) = 0.0)
+sampling check ((the z of (the last item of sampled)) = 1.0)
+free sampled
+# All zero tangents force recursion to the depth limit, without looping forever.
+set the kind of curve to 2
+set sampled to the cad angular samples of curve with maximum angle 0.1
+sampling check ((the length of sampled) = 65537)
+sampling check ((the z of (the last item of sampled)) = 1.0)
+free sampled
+print "cadkernel tessellation: PASS" as a line

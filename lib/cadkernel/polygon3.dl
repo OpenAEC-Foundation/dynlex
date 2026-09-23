@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/polygon.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Ring measurements borrow lists of cad vector3; no storage is transferred.
+# The first point is the summation origin to retain precision at survey coordinates.
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+function the cad ring area vector of {a pointer to a list:ring}:
+    execute:
+        set total to the cad zero vector3
+        set count to the length of ring
+        if count < 3:
+            return total
+        set {cad vector3:origin} to the item at 0 in ring
+        set index to 0
+        loop while index < count:
+            set {cad vector3:first} to the item at index in ring
+            set {cad vector3:second} to the item at (the remainder of (index + 1) divided by count) in ring
+            set a to the cad difference of first and origin
+            set b to the cad difference of second and origin
+            set total to the cad sum of total and (the cad cross of a and b)
+            set index to (index + 1)
+        return total scaled by 0.5
+
+function the cad ring area of {a pointer to a list:ring}:
+    execute:
+        return the cad length of (the cad ring area vector of ring)
+
+function the cad ring normal of {a pointer to a list:ring}:
+    execute:
+        return the cad normalization of (the cad ring area vector of ring)
+
+function the cad ring perimeter of {a pointer to a list:ring}:
+    execute:
+        set total to 0.0
+        set count to the length of ring
+        if count < 2:
+            return total
+        set index to 0
+        loop while index < count:
+            set {cad vector3:first} to the item at index in ring
+            set {cad vector3:second} to the item at (the remainder of (index + 1) divided by count) in ring
+            set total to (total + (the cad distance from first to second))
+            set index to (index + 1)
+        return total
+
+function the cad chain length of {a pointer to a list:points}:
+    execute:
+        # The source floating-point sum returns negative zero for an empty chain.
+        set total to -0.0
+        set index to 1
+        loop while index < (the length of points):
+            set {cad vector3:first} to the item at (index - 1) in points
+            set {cad vector3:second} to the item at index in points
+            set total to (total + (the cad distance from first to second))
+            set index to (index + 1)
+        return total

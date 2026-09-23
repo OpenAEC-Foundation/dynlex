@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_make.dl
+
+function check boolean mesh {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set firstMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+set secondMade to the cad cuboid at (a cad vector3 with x 5.0, y 5.0 and z 5.0) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
+check boolean mesh (firstMade's valid and secondMade's valid) named "boxes"
+set joined to the cad combination of firstMade's value and secondMade's value using 0 within 1e-9
+check boolean mesh joined's valid named "union"
+set meshValue to the cad mesh of joined's value with maximum angle (the cad default sampling angle) within 1e-9
+set faceKeys to the cad face keys of joined's value
+check boolean mesh ((the cad triangle count of meshValue) >= ((the length of faceKeys) * 2)) named "triangles"
+loop triangleIndex from 0 to the length of meshValue's triangles:
+    set triangleValue to the item at triangleIndex in meshValue's triangles
+    check boolean mesh (((triangleValue's first < (the length of meshValue's positions)) and (triangleValue's second < (the length of meshValue's positions))) and (triangleValue's third < (the length of meshValue's positions))) named "indices"
+free faceKeys
+free cad mesh meshValue
+print "cadkernel brep mesh boolean: PASS" as a line

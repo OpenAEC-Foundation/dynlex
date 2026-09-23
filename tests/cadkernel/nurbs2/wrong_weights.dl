@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+set points to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1.0 and y 2.0) to points
+set empty to an empty list of a 64 bit floating-point number
+set weights to a list containing (1.0 as a 32 bit floating-point number)
+append (1.0 as a 32 bit floating-point number) to weights
+set result to the cad nurbs curve2 of degree 1 with controls points, knots empty and weights weights

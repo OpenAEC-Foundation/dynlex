@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/tessellation.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Upstream: https://github.com/HakanSeven12/cadkernel
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+function the cad default sampling angle:
+    execute:
+        return 3.141592653589793 / 24.0
+
+function the cad display sampling angle:
+    execute:
+        return 3.141592653589793 / 9.0
+
+function the cad fine sampling angle:
+    execute:
+        return 3.141592653589793 / 36.0
+
+local function cad sampling value {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value - value) = 0.0
+
+function the cad sampling angle for {a 64 bit floating-point number:value}:
+    execute:
+        if (cad sampling value value is finite) and value > 0.0:
+            return the minimum of value and 1.5707963267948966
+        return the cad default sampling angle
+
+local function the cad bounded resolution of {a 64 bit floating-point number:value}:
+    execute:
+        if (cad sampling value value is finite) and value > 0.0:
+            return value clamped between 0.01 and 10.0
+        return 1.0
+
+function the cad sampling angle at resolution {a 64 bit floating-point number:resolution}:
+    execute:
+        set bounded to the cad bounded resolution of resolution
+        set capValue to the cad sampling angle for ((the cad default sampling angle) / (the square root of bounded))
+        return the maximum of capValue and (the cad fine sampling angle)
+
+function the cad display angle at resolution {a 64 bit floating-point number:resolution}:
+    execute:
+        set bounded to the maximum of (the cad bounded resolution of resolution) and 1.0
+        set capValue to the cad sampling angle for ((the cad display sampling angle) / (the square root of bounded))
+        return the maximum of capValue and (the cad fine sampling angle)
+
+local function the cad direction dot of {cad vector2:left} with {cad vector2:right}:
+    execute:
+        return (0.0 + ((the x of left) * (the x of right))) + ((the y of left) * (the y of right))
+
+local function the cad direction dot of {cad vector3:left} with {cad vector3:right}:
+    execute:
+        return ((0.0 + ((the x of left) * (the x of right))) + ((the y of left) * (the y of right))) + ((the z of left) * (the z of right))
+
+local function cad sampling coordinates:
+    replacement:
+        @intrinsic("array", a 64 bit floating-point number)
+
+# The source takes two fixed binary64 arrays of the same dimension.
+local function the cad direction dot of {cad sampling coordinates:left} with {the type of left:right}:
+    execute:
+        set total to 0.0 as a 64 bit floating-point number
+        set axis to 0
+        loop while axis < the length of left:
+            set total to total + ((the item at axis in left) * (the item at axis in right))
+            increment axis
+        return total
+
+function the cad direction angle between left and right:
+    execute:
+        set dot to the cad direction dot of left with right
+        set aa to the cad direction dot of left with left
+        set bb to the cad direction dot of right with right
+        set length to the square root of (aa * bb)
+        if ((cad sampling value length is finite) = false) or length <= 2.2250738585072014e-308:
+            return 3.141592653589793
+        set cosine to dot / length
+        # The mutating standard clamp retains NaN through ordered comparisons.
+        clamp cosine between -1.0 and 1.0
+        return @intrinsic("call", "libc", "acos", a 64 bit floating-point number, cosine)
+
+function the cad maximum direction angle of {a pointer to a list:directions}:
+    execute:
+        set largest to 0.0 as a 64 bit floating-point number
+        set from to 0
+        loop while from < the length of directions:
+            set to to from + 1
+            loop while to < the length of directions:
+                set separation to the cad direction angle between (the item at from in directions) and (the item at to in directions)
+                if separation > largest:
+                    set largest to separation
+                increment to
+            increment from
+        return largest
+
+# An evaluator is a caller-defined record implementing the two patterns
+# "the cad curve point of evaluator at parameter" and
+# "the cad curve tangent of evaluator at parameter", both returning cad vector3.
+# Its data members provide the captured context of the source callbacks.
+local function refine cad angular samples of evaluator from {a 64 bit floating-point number:from} to {a 64 bit floating-point number:to} with {a 64 bit floating-point number:limit} at depth {integer:depth} into {a pointer to a list:output}:
+    execute:
+        set directions to an empty list of a cad vector3
+        set step to 0
+        loop while step <= 8:
+            set unit to (step as a 64 bit floating-point number) * 0.125
+            set {cad vector3:tangent} to the cad curve tangent of evaluator at (from + ((to - from) * unit))
+            append tangent to directions
+            increment step
+        set split to depth < 2 or (the cad maximum direction angle of directions) > limit
+        free directions
+        if split and depth < 16:
+            set middle to 0.5 * (from + to)
+            refine cad angular samples of evaluator from from to middle with limit at depth (depth + 1) into output
+            refine cad angular samples of evaluator from middle to to with limit at depth (depth + 1) into output
+        else:
+            set {cad vector3:point} to the cad curve point of evaluator at to
+            append point to output
+
+# The returned list belongs to the caller and must be freed.
+function the cad angular samples of evaluator with maximum angle {a 64 bit floating-point number:requestedLimit}:
+    execute:
+        set limit to the cad sampling angle for requestedLimit
+        set {cad vector3:first} to the cad curve point of evaluator at 0.0
+        set output to a list containing first
+        refine cad angular samples of evaluator from 0.0 to 1.0 with limit at depth 0 into output
+        return output

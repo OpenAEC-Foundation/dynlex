@@ -1,0 +1,11 @@
+function the first value for depth:
+    execute:
+        @intrinsic("discard", the second value for @intrinsic("add", depth, 1))
+        @intrinsic("return", 7)
+
+function the second value for depth:
+    execute:
+        @intrinsic("discard", the first value for @intrinsic("add", depth, 1))
+        @intrinsic("return", 7)
+
+@intrinsic("discard", the first value for 0)

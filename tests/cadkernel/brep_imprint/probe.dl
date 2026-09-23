@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_imprint.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function imprint probe point at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+set firstMade to the cad cuboid at (imprint probe point at 0) with size (imprint probe point at 3)
+set secondMade to the cad cuboid at (imprint probe point at 6) with size (imprint probe point at 9)
+set firstBody to firstMade's value
+set secondBody to secondMade's value
+if (maker argument 13) = 1.0:
+    set faces to the cad face keys of secondBody
+    set faceNode to the cad node pointer for (the item at 0 in faces) in secondBody
+    replace cad node faceNode's surface in secondBody with (the cad surface of (a cad torus with frame (the cad xy plane), major radius 4.0 and minor radius 1.0))
+    free faces
+set result to the cad imprint of firstBody and secondBody within (maker argument 12)
+emit maker flag result's valid
+emit maker number result's snag
+emit maker number result's cuts
+emit maker number result's meetings
+emit maker body firstBody
+emit maker body secondBody

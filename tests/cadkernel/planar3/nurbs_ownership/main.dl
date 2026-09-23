@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/planar3/support.dl
+
+function the planar test nurbs:
+    execute:
+        set controls to a list containing (planar v2 0.0 0.0)
+        append (planar v2 2.0 0.0) to controls
+        append (planar v2 0.0 2.0) to controls
+        set knots to a list containing (0.0 as a 64 bit floating-point number)
+        append 0.0 to knots
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing (1.0 as a 64 bit floating-point number)
+        append 1.0 to weights
+        append 1.0 to weights
+        set result to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+        planar check (the valid of result) named "ownership nurbs constructed"
+        free controls
+        free knots
+        free weights
+        return a cad planar curve3 of (the cad curve2 of (the value of result)) on (the planar upright frame)
+
+function exercise planar list lifetime {cad planar curve3:shape}:
+    execute:
+        set curves to a list containing shape
+        loop index from 0 to 70:
+            append shape to curves
+        set common to the cad common plane of curves within 1e-9
+        planar check (the valid of common) named "full nurbs control support"
+        free curves
+
+function verify planar nurbs ownership assertions:
+    execute:
+        set shape to the planar test nurbs
+        set retained to shape
+        set cloned to the cad clone of shape
+        planar check (cloned = shape) named "nurbs clone equals shape"
+        planar check ((the owner of the nurbs of the curve of cloned) != (the owner of the nurbs of the curve of shape)) named "independent nurbs owner"
+        planar check ((the controls of the nurbs of the curve of cloned) != (the controls of the nurbs of the curve of shape)) named "independent controls"
+        planar check ((the knots of the nurbs of the curve of cloned) != (the knots of the nurbs of the curve of shape)) named "independent knots"
+        planar check ((the weights of the nurbs of the curve of cloned) != (the weights of the nurbs of the curve of shape)) named "independent weights"
+        set owner to the owner of the nurbs of the curve of shape
+        set references to the value at owner
+        exercise planar list lifetime shape
+        planar check ((the value at owner) = references) named "list growth and free balance nested references"
+        insert cad nurbs knot 0.5 into (the nurbs of the curve of cloned)
+        planar check ((the length of the controls of the nurbs of the curve of cloned) = 4) named "clone knot insertion"
+        planar check ((the length of the controls of the nurbs of the curve of shape) = 3) named "original controls unchanged"
+        planar point (the cad point on cloned at 0.5) equals (planar v3 1.0 0.0 0.5)
+        free cad planar curve shape
+        planar point (the cad point on retained at 0.5) equals (planar v3 1.0 0.0 0.5)
+        free cad planar curve retained
+        planar point (the cad point on cloned at 0.5) equals (planar v3 1.0 0.0 0.5)
+        free cad planar curve cloned
+        print "nurbs nested lists, independent clone, insertion and release" as a line
+
+verify planar nurbs ownership assertions

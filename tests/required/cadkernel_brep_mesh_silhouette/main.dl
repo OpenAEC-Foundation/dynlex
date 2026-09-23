@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check mesh silhouette {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set sphereResult to the cad sphere body at the cad zero vector3 with radius 2.0
+check mesh silhouette (sphereResult's valid) named "sphere"
+set toleranceValue to a cad tessellation tolerance with maximum angle 0.3 within 1e-9
+set bodyMesh to the cad tessellation of sphereResult's value with tolerance toleranceValue
+set sourceValue to the cad silhouette source of bodyMesh
+set contourPoints to the cad silhouette of sourceValue viewed along the cad z axis
+check mesh silhouette ((the length of contourPoints) > 16) named "sphere contour"
+check mesh silhouette (((the remainder of (the length of contourPoints) divided by 2)) = 0) named "paired segments"
+loop pointIndex from 0 to the length of contourPoints:
+    set pointValue to the item at pointIndex in contourPoints
+    set radialValue to the square root of ((pointValue's x * pointValue's x) + (pointValue's y * pointValue's y))
+    check mesh silhouette ((the absolute value of pointValue's z) < 1e-5) named "view plane"
+    check mesh silhouette ((the absolute value of (radialValue - 2.0)) < 0.08) named "sphere radius"
+
+set movedResult to the cad affine transformation of sourceValue with x vector (a cad vector3 with x 2.0, y 0.0 and z 0.0), y vector (a cad vector3 with x 0.0, y 2.0 and z 0.0), z vector (a cad vector3 with x 0.0, y 0.0 and z 2.0) and origin (a cad vector3 with x 10.0, y 20.0 and z 30.0)
+check mesh silhouette (movedResult's valid) named "affine transform"
+set movedPoints to the cad silhouette of movedResult's value viewed along the cad z axis
+check mesh silhouette ((the length of movedPoints) = (the length of contourPoints)) named "transformed topology"
+loop pointIndex from 0 to the length of movedPoints:
+    set pointValue to the item at pointIndex in movedPoints
+    set dx to pointValue's x - 10.0
+    set dy to pointValue's y - 20.0
+    set radialValue to the square root of ((dx * dx) + (dy * dy))
+    check mesh silhouette ((the absolute value of (pointValue's z - 30.0)) < 2e-5) named "moved view plane"
+    check mesh silhouette ((the absolute value of (radialValue - 4.0)) < 0.16) named "scaled radius"
+
+set invalidView to the cad silhouette of sourceValue viewed along the cad zero vector3
+check mesh silhouette ((the length of invalidView) = 0) named "zero view"
+set singularResult to the cad affine transformation of sourceValue with x vector the cad x axis, y vector the cad x axis, z vector the cad z axis and origin the cad zero vector3
+check mesh silhouette ((singularResult's valid) = false) named "singular transform"
+
+free contourPoints
+free movedPoints
+free invalidView
+free cad silhouette source result singularResult
+free cad silhouette source result movedResult
+free cad silhouette source sourceValue
+free cad body mesh bodyMesh
+print "cadkernel brep mesh silhouette: PASS" as a line

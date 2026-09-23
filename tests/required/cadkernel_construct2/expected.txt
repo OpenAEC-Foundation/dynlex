@@ -1,0 +1,3 @@
+construct2: seven constructors, endpoints, minor/major and tangent flip
+construct2: full-turn, coincidence, collinearity and impossible chord refusals
+

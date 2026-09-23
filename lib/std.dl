@@ -305,9 +305,14 @@ function the checked allocation from {pointer:allocation} resized to {integer:co
             stop because a collection allocation failed
         set quantity to count as a word sized integer
         set width to (the size of kind) as a word sized integer
-        if quantity > (the maximum allocation byte count / width):
-            stop because a collection allocation failed
-        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+        # Zero-sized elements still need a valid owned allocation, independent
+        # of logical capacity. Avoid both division by zero and realloc(p, 0).
+        set byteCount to 1 as a word sized integer
+        if width != 0:
+            if quantity > (the maximum allocation byte count / width):
+                stop because a collection allocation failed
+            set byteCount to quantity * width
+        set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, byteCount)
         if replacement = 0 as a pointer to kind:
             stop because a collection allocation failed
         return replacement

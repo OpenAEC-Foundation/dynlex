@@ -1,0 +1,354 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 13 tests from cadkernel src/space/plane.rs, with additional helper cases.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/plane.rs
+import lib/cadkernel/plane.dl
+
+function cad plane check {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function cad plane check scalar {a number:actual} against {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        if tolerance = 0:
+            cad plane check (actual = expected) named label
+        else:
+            cad plane check ((the absolute value of (actual - expected)) < tolerance) named label
+
+function cad plane check vector {cad vector2:actual} against {cad vector2:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad plane check scalar (the x of actual) against (the x of expected) within tolerance named label
+        cad plane check scalar (the y of actual) against (the y of expected) within tolerance named label
+
+function cad plane check vector {cad vector3:actual} against {cad vector3:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad plane check scalar (the x of actual) against (the x of expected) within tolerance named label
+        cad plane check scalar (the y of actual) against (the y of expected) within tolerance named label
+        cad plane check scalar (the z of actual) against (the z of expected) within tolerance named label
+
+function cad plane check coordinates {cad plane coordinates result:actual} against {cad vector2:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad plane check (the valid of actual) named label
+        cad plane check vector (the value of actual) against expected within tolerance named label
+
+function cad plane check normal {cad normalization3:actual} against {cad vector3:expected} named {string:label}:
+    execute:
+        cad plane check (the valid of actual) named label
+        cad plane check vector (the value of actual) against expected within 0 named label
+
+function cad plane check distance {cad plane distance result:actual} against {a number:expected} named {string:label}:
+    execute:
+        cad plane check (the valid of actual) named label
+        cad plane check scalar (the value of actual) against expected within 0 named label
+
+function cad plane check round trip through {cad plane:plane} at {cad vector2:uv} within {a number:tolerance}:
+    execute:
+        set point to the cad point at uv on plane
+        cad plane check coordinates (the cad projection of point onto plane) against uv within tolerance named "point round trip"
+
+set zero to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set z to the cad z axis
+set xy to the cad xy plane
+set skew to a cad plane with origin (a cad vector3 with x 1, y 2 and z 3), x axis (x scaled by 2) and y axis (a cad vector3 with x 1, y 3 and z 0)
+
+# the_xy_plane_carries_coordinates_through_unchanged
+set uv to a cad vector2 with x 4 and y (-7)
+set point to a cad vector3 with x 4, y (-7) and z 0
+cad plane check vector (the cad point at uv on xy) against point within 0 named "XY point"
+cad plane check coordinates (the cad projection of point onto xy) against uv within 0 named "XY project"
+cad plane check normal (the cad normal of xy) against z named "XY normal"
+cad plane check (cad xy is xy) named "XY identity"
+cad plane check (cad (the cad default plane) is xy) named "default XY"
+print "cadkernel plane: XY coordinates" as a line
+
+# projecting_inverts_point_at_on_an_orthonormal_frame
+set made to the cad orthonormal plane with origin (a cad vector3 with x 10, y 20 and z 30), x axis (a cad vector3 with x 1, y 1 and z 0) and normal z
+cad plane check (the valid of made) named "orthonormal construction"
+set orthonormal to the value of made
+cad plane check round trip through orthonormal at (a cad vector2 with x 0 and y 0) within 1e-12
+cad plane check round trip through orthonormal at (a cad vector2 with x 3 and y (-5)) within 1e-12
+cad plane check round trip through orthonormal at (a cad vector2 with x (-1.25) and y 8.5) within 1e-12
+print "cadkernel plane: orthonormal round trips" as a line
+
+# projecting_inverts_point_at_on_a_skewed_frame_too
+cad plane check round trip through skew at (a cad vector2 with x 1 and y 0) within 1e-12
+cad plane check round trip through skew at (a cad vector2 with x 0 and y 1) within 1e-12
+cad plane check round trip through skew at (a cad vector2 with x 3 and y (-5)) within 1e-12
+cad plane check round trip through skew at (a cad vector2 with x (-1.25) and y 8.5) within 1e-12
+print "cadkernel plane: skew round trips" as a line
+
+# dot_products_would_have_disagreed_on_the_skewed_frame
+set point to the cad point at (a cad vector2 with x 3 and y (-5)) on skew
+set offset to the cad difference of point and (the origin of skew)
+set naive to the cad dot of offset and (the xAxis of skew)
+cad plane check scalar naive against 2 within 1e-12 named "skew naive dot"
+set projected to the cad projection of point onto skew
+cad plane check (the valid of projected) named "skew projection valid"
+set coordinates to the value of projected
+cad plane check scalar (the rounded value of (the x of coordinates)) against 3 within 0 named "skew correct coordinate"
+print "cadkernel plane: skew least squares" as a line
+
+# a_direction_projects_without_the_origin
+set made to the cad orthonormal plane with origin (a cad vector3 with x 100, y 200 and z 300), x axis x and normal y
+cad plane check (the valid of made) named "XZ construction"
+set xz to the value of made
+cad plane check vector (the yAxis of xz) against (a cad vector3 with x 0, y 0 and z (-1)) within 0 named "XZ y axis"
+cad plane check vector (the cad vector at (a cad vector2 with x 3 and y (-4)) on xz) against (a cad vector3 with x 3, y 0 and z 4) within 0 named "direction without origin"
+cad plane check coordinates (the cad vector projection of (a cad vector3 with x 3, y 0 and z 4) onto xz) against (a cad vector2 with x 3 and y (-4)) within 0 named "project direction"
+set direction to the cad vector at (a cad vector2 with x 2 and y 5) on skew
+cad plane check coordinates (the cad vector projection of direction onto skew) against (a cad vector2 with x 2 and y 5) within 0 named "project skew direction"
+print "cadkernel plane: direction projection" as a line
+
+# a_point_off_the_plane_projects_along_the_normal
+set made to the cad orthonormal plane with origin (a cad vector3 with x 0, y 0 and z 5), x axis x and normal z
+cad plane check (the valid of made) named "elevated construction"
+set elevated to the value of made
+set above to a cad vector3 with x 2, y 3 and z 99
+cad plane check coordinates (the cad projection of above onto elevated) against (a cad vector2 with x 2 and y 3) within 0 named "off plane projection"
+cad plane check distance (the cad distance from above to elevated) against 94 named "positive distance"
+cad plane check distance (the cad distance from (a cad vector3 with x 2, y 3 and z 1) to elevated) against (-4) named "negative distance"
+cad plane check (cad elevated contains (a cad vector3 with x 2, y 3 and z 5) within 1e-9) named "point contained"
+cad plane check ((cad elevated contains (a cad vector3 with x 2, y 3 and z 6) within 1e-9) = false) named "point excluded"
+print "cadkernel plane: signed distance and containment" as a line
+
+# orthonormal_squares_up_an_axis_that_leans_off_the_plane
+set made to the cad orthonormal plane with origin zero, x axis (a cad vector3 with x 1, y 0 and z 1) and normal z
+cad plane check (the valid of made) named "leaning axis construction"
+set squared to the value of made
+set squaredX to the xAxis of squared
+cad plane check (cad squared is orthonormal) named "lean removed"
+cad plane check scalar (the x of squaredX) against 1 within 1e-12 named "lean X"
+cad plane check scalar (the z of squaredX) against 0 within 1e-12 named "lean Z"
+cad plane check normal (the cad normal of squared) against z named "lean normal"
+print "cadkernel plane: leaning axis correction" as a line
+
+# orthonormal_is_right_handed
+set made to the cad orthonormal plane with origin zero, x axis x and normal z
+cad plane check (the valid of made) named "right handed construction"
+set rightHanded to the value of made
+cad plane check vector (the yAxis of rightHanded) against y within 0 named "right handed Y"
+print "cadkernel plane: right handed frame" as a line
+
+# orthonormal_refuses_an_axis_along_the_normal
+set parallel to the cad orthonormal plane with origin zero, x axis (z scaled by 2) and normal z
+set zeroNormal to the cad orthonormal plane with origin zero, x axis x and normal zero
+set zeroAxis to the cad orthonormal plane with origin zero, x axis zero and normal z
+cad plane check ((the valid of parallel) = false) named "parallel rejected"
+cad plane check ((the valid of zeroNormal) = false) named "zero normal rejected"
+cad plane check ((the valid of zeroAxis) = false) named "zero axis rejected"
+print "cadkernel plane: degenerate construction" as a line
+
+# a_collapsed_frame_reports_itself_rather_than_answering
+set collapsed to a cad plane with origin zero, x axis x and y axis (x scaled by 2)
+set collapsedNormal to the cad normal of collapsed
+set collapsedProjection to the cad projection of (a cad vector3 with x 1, y 1 and z 1) onto collapsed
+set collapsedDistance to the cad distance from (a cad vector3 with x 1, y 1 and z 1) to collapsed
+cad plane check ((the valid of collapsedNormal) = false) named "collapsed normal"
+cad plane check ((the valid of collapsedProjection) = false) named "collapsed projection"
+cad plane check ((the valid of collapsedDistance) = false) named "collapsed distance"
+cad plane check ((cad collapsed contains zero within 1e9) = false) named "collapsed containment"
+print "cadkernel plane: collapsed frame" as a line
+
+# is_orthonormal_tells_the_two_kinds_of_frame_apart
+cad plane check (cad xy is orthonormal) named "XY orthonormal"
+cad plane check ((cad skew is orthonormal) = false) named "skew not orthonormal"
+set scaled to a cad plane with origin zero, x axis (x scaled by 2) and y axis (y scaled by 2)
+cad plane check ((cad scaled is orthonormal) = false) named "scaled not orthonormal"
+cad plane check normal (the cad normal of scaled) against z named "scaled unit normal"
+print "cadkernel plane: orthonormal classification" as a line
+
+# a_tilted_plane_places_its_own_axes_at_unit_distance
+set made to the cad orthonormal plane with origin zero, x axis x and normal (a cad vector3 with x 0, y 1 and z 1)
+cad plane check (the valid of made) named "tilted construction"
+set tilted to the value of made
+cad plane check vector (the cad point at (a cad vector2 with x 1 and y 0) on tilted) against x within 0 named "tilted unit X"
+set up to the cad point at (a cad vector2 with x 0 and y 1) on tilted
+cad plane check scalar (the y of up) against 0.7071067811865476 within 1e-12 named "tilted unit Y"
+cad plane check scalar (the z of up) against (-0.7071067811865476) within 1e-12 named "tilted unit Z"
+cad plane check (cad tilted contains up within 1e-12) named "tilted point contained"
+print "cadkernel plane: tilted unit axes" as a line
+
+# survey_coordinates_survive_the_round_trip
+set survey to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set made to the cad orthonormal plane with origin survey, x axis x and normal z
+cad plane check (the valid of made) named "survey construction"
+cad plane check round trip through (the value of made) at (a cad vector2 with x 0.001 and y (-0.002)) within 1e-9
+print "cadkernel plane: survey precision" as a line
+
+# World XY intersection differs from orthogonal projection on tilted frames.
+set oblique to a cad plane with origin (a cad vector3 with x 10, y 20 and z 30), x axis (a cad vector3 with x 2, y 1 and z 5) and y axis (a cad vector3 with x 1, y 3 and z (-2))
+set worldXY to a cad vector2 with x 13 and y 9
+cad plane check coordinates (the cad coordinates at worldXY on oblique) against (a cad vector2 with x 4 and y (-5)) within 0 named "world XY skew intersection"
+cad plane check vector (the cad point at (a cad vector2 with x 4 and y (-5)) on oblique) against (a cad vector3 with x 13, y 9 and z 60) within 0 named "world XY resulting point"
+set edgeOn to the cad coordinates at worldXY on xz
+cad plane check ((the valid of edgeOn) = false) named "edge on XY intersection"
+set small to a cad plane with origin zero, x axis (x scaled by 1e-8) and y axis (y scaled by 1e-8)
+cad plane check coordinates (the cad vector projection of (a cad vector3 with x 2e-8, y (-3e-8) and z 5) onto small) against (a cad vector2 with x 2 and y (-3)) within 1e-12 named "small frame projection"
+cad plane check coordinates (the cad coordinates at (a cad vector2 with x 2e-8 and y (-3e-8)) on small) against (a cad vector2 with x 2 and y (-3)) within 1e-12 named "small XY frame"
+set underflow to a cad plane with origin zero, x axis (x scaled by 1e-200) and y axis (y scaled by 1e-200)
+set tinyProjection to the cad vector projection of x onto underflow
+set tinyXY to the cad coordinates at worldXY on underflow
+cad plane check ((the valid of tinyProjection) = false) named "underflow projection rejected"
+cad plane check ((the valid of tinyXY) = false) named "underflow XY rejected"
+set edgeThreshold to a cad plane with origin zero, x axis x and y axis (a cad vector3 with x 1, y 1e-24 and z 0)
+set atThreshold to the cad coordinates at worldXY on edgeThreshold
+cad plane check ((the valid of atThreshold) = false) named "XY determinant threshold inclusive"
+set overThreshold to a cad plane with origin zero, x axis x and y axis (a cad vector3 with x 1, y 2e-24 and z 0)
+set overXY to the cad coordinates at (a cad vector2 with x 1 and y 2e-24) on overThreshold
+cad plane check coordinates overXY against (a cad vector2 with x 0 and y 1) within 0 named "XY above determinant threshold"
+print "cadkernel plane: XY intersection and scale thresholds" as a line
+
+# Exact basis checks, signed orientation and inclusive containment.
+cad plane check (cad elevated is xy aligned) named "elevated XY alignment"
+cad plane check ((cad elevated is xy) = false) named "elevated is not XY identity"
+cad plane check ((cad scaled is xy aligned) = false) named "scaled not XY aligned"
+set nearXY to a cad plane with origin zero, x axis (a cad vector3 with x 1, y 1e-15 and z 0) and y axis y
+cad plane check ((cad nearXY is xy aligned) = false) named "XY alignment is exact"
+cad plane check (cad nearXY is orthonormal) named "orthonormal uses tolerance"
+set atAngle to a cad plane with origin zero, x axis x and y axis (a cad vector3 with x 1e-9, y 1 and z 0)
+cad plane check ((cad atAngle is orthonormal) = false) named "orthonormal dot threshold is strict"
+set reversed to a cad plane with origin zero, x axis y and y axis x
+cad plane check normal (the cad normal of reversed) against (z scaled by (-1)) named "reversed normal"
+cad plane check distance (the cad distance from z to reversed) against (-1) named "reversed signed distance"
+cad plane check (cad xy contains z within 1) named "inclusive containment boundary"
+cad plane check ((cad xy contains zero within (-1)) = false) named "negative tolerance excludes origin"
+cad plane check ((the size of the type of the value of collapsedDistance) = 8) named "distance binary64"
+print "cadkernel plane: exact basis and boundary semantics" as a line
+
+# Scale-aware tolerance includes extent and world-coordinate roundoff.
+set points to an empty list of a cad vector3
+set directions to an empty list of a cad vector3
+cad plane check scalar (the cad coplanarity tolerance of points) against 1e-9 within 0 named "empty tolerance"
+cad plane check (cad points and directions are coplanar) named "empty coplanarity"
+append zero to points
+cad plane check scalar (the cad coplanarity tolerance of points) against 1.0000142108547153e-9 within 0 named "unit tolerance floor"
+append (a cad vector3 with x 3, y 4 and z 0) to points
+cad plane check scalar (the cad coplanarity tolerance of points) against 5.000056843418861e-9 within 0 named "extent tolerance"
+clear points
+append survey to points
+append (the cad sum of survey and x) to points
+cad plane check scalar (the cad coplanarity tolerance of points) against 6.512428885482768e-8 within 1e-22 named "survey tolerance"
+print "cadkernel plane: coplanarity tolerance" as a line
+
+# Coplanarity considers all points and directions, including empty inputs.
+clear points
+append x to directions
+append y to directions
+append z to directions
+cad plane check (cad points and directions are coplanar) named "empty points ignore finite directions"
+append zero to points
+cad plane check ((cad points and directions are coplanar) = false) named "singleton with three directions"
+clear directions
+append zero to directions
+cad plane check (cad points and directions are coplanar) named "zero direction ignored"
+append x to points
+append (x scaled by 2) to points
+cad plane check (cad points and directions are coplanar) named "collinear points"
+append y to points
+cad plane check (cad points and directions are coplanar) named "planar points"
+append z to points
+cad plane check ((cad points and directions are coplanar) = false) named "tetrahedron not coplanar"
+clear points
+append zero to points
+append x to points
+append y to points
+append (z scaled by 5e-10) to points
+cad plane check (cad points and directions are coplanar) named "within distance tolerance"
+replace item at index 3 in points with (z scaled by 2e-9)
+cad plane check ((cad points and directions are coplanar) = false) named "outside distance tolerance"
+clear points
+append zero to points
+clear directions
+append x to directions
+append (a cad vector3 with x 1, y 1e-9 and z 0) to directions
+append z to directions
+cad plane check (cad points and directions are coplanar) named "inclusive direction threshold"
+replace item at index 1 in directions with (a cad vector3 with x 1, y 2e-9 and z 0)
+cad plane check ((cad points and directions are coplanar) = false) named "above direction threshold"
+clear directions
+append (x scaled by 1e8) to directions
+append (y scaled by 1e-8) to directions
+append (z scaled by 1e-30) to directions
+cad plane check ((cad points and directions are coplanar) = false) named "direction tolerance scales with length"
+replace item at index 2 in directions with (z scaled by 1e-200)
+cad plane check (cad points and directions are coplanar) named "underflow direction treated as zero"
+clear points
+append survey to points
+append (the cad sum of survey and x) to points
+append (the cad sum of survey and y) to points
+append (the cad sum of survey and (z scaled by 5e-8)) to points
+clear directions
+cad plane check (cad points and directions are coplanar) named "survey coplanarity within roundoff tolerance"
+replace item at index 3 in points with (the cad sum of survey and (z scaled by 1e-7))
+cad plane check ((cad points and directions are coplanar) = false) named "survey noncoplanarity above roundoff tolerance"
+cad plane check ((the length of points) = 4) named "points remain caller owned"
+cad plane check ((the length of directions) = 0) named "directions remain caller owned"
+print "cadkernel plane: coplanar points and directions" as a line
+
+# IEEE behavior follows each upstream operation, without extra validation.
+set infinity to (1e308 as a 64 bit floating-point number) * (1e308 as a 64 bit floating-point number)
+set nan to infinity - infinity
+set badPoint to a cad vector3 with x nan, y 0 and z 0
+set nanFrame to a cad plane with origin zero, x axis badPoint and y axis y
+set nanProjection to the cad vector projection of x onto nanFrame
+cad plane check (the valid of nanProjection) named "NaN vector projection remains Some"
+set nanUV to the value of nanProjection
+cad plane check ((the x of nanUV) != (the x of nanUV)) named "NaN projection value preserved"
+set nanNormal to the cad normal of nanFrame
+cad plane check ((the valid of nanNormal) = false) named "NaN normal invalid"
+cad plane check ((cad nanFrame is orthonormal) = false) named "NaN frame not orthonormal"
+set nanXY to the cad coordinates at (a cad vector2 with x nan and y 0) on xy
+set infiniteXY to the cad coordinates at (a cad vector2 with x 0 and y infinity) on xy
+set badAxesXY to the cad coordinates at worldXY on nanFrame
+cad plane check ((the valid of nanXY) = false) named "NaN world XY rejected"
+cad plane check ((the valid of infiniteXY) = false) named "infinite world XY rejected"
+cad plane check ((the valid of badAxesXY) = false) named "nonfinite XY determinant rejected"
+set infiniteFrame to a cad plane with origin zero, x axis (x scaled by 1e308) and y axis (y scaled by 1e308)
+set infiniteProjection to the cad vector projection of x onto infiniteFrame
+set overflowXY to the cad coordinates at worldXY on infiniteFrame
+cad plane check ((the valid of infiniteProjection) = false) named "infinite vector determinant meets infinite threshold"
+cad plane check ((the valid of overflowXY) = false) named "overflow XY determinant rejected"
+set overflowGram to a cad plane with origin zero, x axis (a cad vector3 with x 1e308, y 0 and z 0) and y axis (a cad vector3 with x 1e308, y 1e308 and z 0)
+set nanDeterminant to the cad vector projection of x onto overflowGram
+cad plane check (the valid of nanDeterminant) named "NaN vector determinant remains Some"
+set nanDeterminantUV to the value of nanDeterminant
+cad plane check ((the x of nanDeterminantUV) != (the x of nanDeterminantUV)) named "NaN determinant U preserved"
+cad plane check ((the y of nanDeterminantUV) != (the y of nanDeterminantUV)) named "NaN determinant V preserved"
+set badOrigin to a cad plane with origin badPoint, x axis x and y axis y
+set badOriginProjection to the cad projection of x onto badOrigin
+set badOriginXY to the cad coordinates at worldXY on badOrigin
+set badOriginDistance to the cad distance from zero to badOrigin
+cad plane check (the valid of badOriginProjection) named "nonfinite origin projection remains Some"
+cad plane check (the valid of badOriginXY) named "nonfinite origin XY remains Some"
+cad plane check (the valid of badOriginDistance) named "nonfinite distance remains Some"
+cad plane check (cad badOrigin is xy aligned) named "alignment ignores origin"
+cad plane check ((cad badOrigin is xy) = false) named "identity rejects nonfinite origin"
+set made to the cad orthonormal plane with origin badPoint, x axis x and normal z
+cad plane check (the valid of made) named "orthonormal constructor preserves origin"
+set badMade to the cad orthonormal plane with origin zero, x axis badPoint and normal z
+cad plane check ((the valid of badMade) = false) named "NaN orthonormal axis rejected"
+cad plane check ((cad xy contains zero within nan) = false) named "NaN containment tolerance"
+cad plane check (cad xy contains z within infinity) named "infinite containment tolerance"
+clear points
+append badPoint to points
+set invalidTolerance to the cad coplanarity tolerance of points
+cad plane check (invalidTolerance != invalidTolerance) named "NaN points give NaN tolerance"
+cad plane check ((cad points and directions are coplanar) = false) named "NaN point rejected"
+replace item at index 0 in points with (a cad vector3 with x 0, y infinity and z 0)
+set infiniteTolerance to the cad coplanarity tolerance of points
+cad plane check (infiniteTolerance != infiniteTolerance) named "infinite point gives NaN tolerance"
+clear points
+append badPoint to directions
+cad plane check ((cad points and directions are coplanar) = false) named "invalid direction rejected even without points"
+clear directions
+append (a cad vector3 with x 1e308, y 0 and z 0) to points
+append (a cad vector3 with x (-1e308), y 0 and z 0) to points
+set overflowTolerance to the cad coplanarity tolerance of points
+cad plane check (overflowTolerance = infinity) named "finite extent overflow retained"
+cad plane check (cad points and directions are coplanar) named "overflow tolerance leaves no axes"
+free points
+free directions
+print "cadkernel plane: IEEE optional results" as a line

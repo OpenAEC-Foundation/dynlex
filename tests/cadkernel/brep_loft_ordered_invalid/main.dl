@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft/helpers.dl
+# The polygon-only entry rejects non-lines before evaluating their domain.
+# This curve can be constructed, but evaluating it aborts on its inverted domain.
+set points to a list containing (a cad vector2 with x 0.0 and y 0.0)
+append (a cad vector2 with x 1.0 and y 1.0) to points
+set knots to a list containing 0.0
+append 2.0 to knots
+append 1.0 to knots
+append 3.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+set nurbs to the cad nurbs curve2 of degree 1 with controls points, knots knots and weights weights
+check loft (nurbs's valid)
+free points
+free knots
+free weights
+set profile to a list containing (the cad curve2 of (nurbs's value))
+set sections to a list containing (a cad loft section on (the cad xy plane) with profile profile)
+append (a cad loft section on (loft test frame at 3.0) with profile profile) to sections
+set result to the ordered cad polygon loft through sections
+check loft ((result's valid) = false)
+free sections
+free profile
+print "ordered_polygon_rejects_non_lines_before_evaluation" as a line

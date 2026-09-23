@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_place/checks.dl
+import tests/cadkernel/brep_place/support.dl
+
+function placement locally returned samples:
+    execute:
+        set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
+        set edges to the cad edge keys of localBody
+        set sampled to the cad edge samples of (the item at 3 in edges) in localBody within 0.01
+        free edges
+        return sampled
+function placement locally returned polylines:
+    execute:
+        set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
+        return the cad edge polylines of localBody within 0.01
+
+loop repetition from 0 to 12:
+    set source to place test body 4 with pcurves 5 from 0.0 to 1.0
+    set originalCurves to the cad keys of (source's curves)
+    set changed to the cad transformed source by (a cad placement at (place test point [7.0,8.0,9.0]))
+    check placement (changed's valid)
+    check placement ((changed's value's vertices) != (source's vertices))
+    check placement ((changed's value's edges) != (source's edges))
+    check placement ((changed's value's coedges) != (source's coedges))
+    check placement ((changed's value's loops) != (source's loops))
+    check placement ((changed's value's faces) != (source's faces))
+    check placement ((changed's value's shells) != (source's shells))
+    check placement ((changed's value's lumps) != (source's lumps))
+    check placement ((changed's value's curves) != (source's curves))
+    check placement ((changed's value's surfaces) != (source's surfaces))
+    check placement ((changed's value's roots) != (source's roots))
+    set key to the item at 4 in originalCurves
+    set originalCurve to the cad node pointer for key in (source's curves)
+    set movedCurve to the cad node pointer for key in (changed's value's curves)
+    check placement ((originalCurve's nurbs's controls) != (movedCurve's nurbs's controls))
+    check placement ((originalCurve's nurbs's knots) != (movedCurve's nurbs's knots))
+    check placement ((originalCurve's nurbs's weights) != (movedCurve's nurbs's weights))
+    check placement (movedCurve's nurbs's closed)
+    set surfaces to the cad keys of (source's surfaces)
+    set sourceSurface to the cad node pointer for (the item at 5 in surfaces) in (source's surfaces)
+    set movedSurface to the cad node pointer for (the item at 5 in surfaces) in (changed's value's surfaces)
+    check placement ((sourceSurface's nurbs's controls) != (movedSurface's nurbs's controls))
+    check placement ((the item at 0 in (sourceSurface's nurbs's controls)) != (the item at 0 in (movedSurface's nurbs's controls)))
+    check placement ((sourceSurface's nurbs's weights) != (movedSurface's nurbs's weights))
+    check placement ((sourceSurface's nurbs's uKnots) != (movedSurface's nurbs's uKnots))
+    check placement ((sourceSurface's nurbs's vKnots) != (movedSurface's nurbs's vKnots))
+    check placement (((movedSurface's nurbs's uClosed) and (movedSurface's nurbs's vClosed)) and (movedSurface's nurbs's vReversed))
+    free surfaces
+    set coedges to the cad keys of (source's coedges)
+    set originalUse to the cad node pointer for (the item at 0 in coedges) in (source's coedges)
+    set movedUse to the cad node pointer for (the item at 0 in coedges) in (changed's value's coedges)
+    check placement ((originalUse's pcurve's value's nurbs's controls) != (movedUse's pcurve's value's nurbs's controls))
+    free coedges
+    free originalCurves
+    set retainedBody to changed's value
+    set changed to no cad body
+    set source to an empty cad body
+    check placement ((the cad count of (retainedBody's curves)) = 6)
+    check placement scalar ((the item at 0 in (movedCurve's nurbs's controls))'s x) near 7.0
+    set retainedBody to an empty cad body
+
+    set samples to placement locally returned samples
+    check placement (samples's valid)
+    set count to the length of (samples's value's values)
+    check placement (count > 2)
+    set before to @intrinsic("dereference", samples's value's references)
+    set retainedSamples to samples
+    check placement ((@intrinsic("dereference", samples's value's references)) = (before + 1))
+    set sampleList to a list containing samples
+    set samples to a new (the type of samples)
+    check placement ((the length of (retainedSamples's value's values)) = count)
+    clear sampleList
+    free sampleList
+    check placement ((@intrinsic("dereference", retainedSamples's value's references)) = before)
+    set retainedSamples to a new (the type of retainedSamples)
+
+    set polylines to placement locally returned polylines
+    set retainedLines to polylines
+    set firstLine to the item at 0 in (polylines's values)
+    set polylines to a new (the type of polylines)
+    set retainedLines to a new (the type of retainedLines)
+    check placement ((the length of (firstLine's values)) = 2)
+    check placement scalar ((the item at 0 in (firstLine's values))'s x) near 1.0
+print "transformed_bodies_and_nested_samples_have_independent_managed_lifetimes" as a line
+
+set rejectedSource to place test body 4 with pcurves 5 from 0.0 to 1.0
+damage place test rejectedSource with 12 and 0.0
+set before to @intrinsic("dereference", rejectedSource's storage's references)
+loop repetition from 0 to 24:
+    set rejected to the cad transformed rejectedSource by (the cad identity placement)
+    check placement (rejected's valid = false)
+    check placement ((@intrinsic("dereference", rejectedSource's storage's references)) = before)
+    set retainedRejection to rejected
+    set rejected to no cad body
+    check placement (retainedRejection's valid = false)
+print "rejected_transforms_release_partial_clones_without_consuming_inputs" as a line
+
+set emptyBody to an empty cad body
+set emptyPolylines to the cad edge polylines of emptyBody within 0.1
+check placement ((the length of (emptyPolylines's values)) = 0)
+set absentKey to @intrinsic("construct", a cad edge key, 999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+set absentSamples to the cad edge samples of absentKey in emptyBody within 0.1
+set absentPoints to the cad edge points of absentKey in emptyBody within 0.1
+check placement ((absentSamples's valid = false) and (absentPoints's valid = false))
+check placement ((the length of (absentSamples's value's values)) = 0)
+check placement ((the length of (absentPoints's value's values)) = 0)
+print "empty_and_missing_edge_results_have_safe_owned_storage" as a line

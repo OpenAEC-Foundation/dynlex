@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/source_join3.dl
+
+function check source join3 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 97)
+function source join3 point {a 64 bit floating-point number array of 3 items:coordinates}:
+    execute:
+        return a cad vector3 with x (the item at 0 in coordinates), y (the item at 1 in coordinates) and z (the item at 2 in coordinates)
+
+set line to the cad joined line from (source join3 point [2.0,0.0,0.0]) to the cad zero vector3 with (source join3 point [5.0,0.0,0.0]) to (source join3 point [4.0,0.0,0.0]) within 1e-9
+check source join3 line's valid
+check source join3 ((the cad distance from line's start to (source join3 point [5.0,0.0,0.0])) = 0.0)
+check source join3 ((the cad distance from line's end to the cad zero vector3) = 0.0)
+print "a_line_join_keeps_the_source_direction" as a line
+
+set source to the cad line nurbs from the cad zero vector3 to the cad x axis of degree 1
+set other to the cad line nurbs from the cad x axis to (source join3 point [2.0,1.0,0.0]) of degree 3
+check source join3 (source's valid and other's valid)
+set joined to the cad joined nurbs of source's value and other's value within 1e-9
+check source join3 joined's valid
+check source join3 (joined's value's degree = 3)
+set parameters to [0.0,0.25,0.5,0.75,1.0]
+set expected to [[0.0,0.0,0.0],[0.5,0.0,0.0],[1.0,0.0,0.0],[1.5,0.5,0.0],[2.0,1.0,0.0]]
+loop index from 0 to 5:
+    set actual to the cad point on joined's value at (the item at index in parameters)
+    check source join3 ((the cad distance from actual to (source join3 point (the item at index in expected))) < 1e-12)
+print "spline_join_elevates_the_lower_degree_without_moving_either_half" as a line
+

@@ -1,0 +1,898 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/geom2d/nurbs.rs.
+# Binary64 planar coordinates. Constructors borrow and copy their input lists.
+# Ordinary copies retain shared read-only storage; clone duplicates every list.
+# Raw list fields are borrowed views, valid while their owning curve is alive.
+# Never free or mutate these views. Knot insertion detaches the caller's curve.
+# Invalid results and reset values have safe automatic lifecycle. Explicit free
+# resets the caller's value; it does not invalidate retained copies.
+# Tessellation lists have manual ownership and must be freed once.
+# 2D validation, unscaled homogeneous derivatives, tiny-span thresholds,
+# normalized inverse parameters, and interpolation follow this module's source.
+import lib/cadkernel/core.dl
+import lib/cadkernel/spline.dl
+
+class:
+    patterns:
+        [a|] cad nurbs curve2
+    members:
+        degree as an integer
+        controls
+        knots
+        weights
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the controls of @intrinsic("lifecycle value"))
+                free (the knots of @intrinsic("lifecycle value"))
+                free (the weights of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+class:
+    patterns:
+        [a|] cad nurbs2 result
+    members:
+        valid as a boolean
+        value as a cad nurbs curve2
+
+class:
+    patterns:
+        [a|] cad nurbs2 split
+    members:
+        valid as a boolean
+        left as a cad nurbs curve2
+        right as a cad nurbs curve2
+
+class:
+    patterns:
+        [a|] cad nurbs2 interval
+    members:
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+
+function free cad nurbs {cad nurbs curve2:shape}:
+    replacement:
+        set shape to a new (the type of shape)
+
+local function the cad nurbs2 copied list of {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return result
+
+local function the cad nurbs2 owned curve of degree {integer:degree} with controls {a pointer to a list:controls}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad nurbs curve2, degree, controls, knots, weights, owner)
+
+local function the cad nurbs2 absent curve:
+    execute:
+        return the cad nurbs2 owned curve of degree 0 with controls (an empty list of a cad vector2), knots (an empty list of a 64 bit floating-point number) and weights (an empty list of a 64 bit floating-point number)
+
+local function the cad nurbs2 failure:
+    execute:
+        return @intrinsic("construct", a cad nurbs2 result, false, the cad nurbs2 absent curve)
+
+local function the cad nurbs2 unsplit:
+    execute:
+        return @intrinsic("construct", a cad nurbs2 split, false, the cad nurbs2 absent curve, the cad nurbs2 absent curve)
+
+function the cad clone of {cad nurbs curve2:shape}:
+    execute:
+        return the cad nurbs2 owned curve of degree (the degree of shape) with controls (the cad nurbs2 copied list of (the controls of shape)), knots (the cad nurbs2 copied list of (the knots of shape)) and weights (the cad nurbs2 copied list of (the weights of shape))
+
+local function cad nurbs2 scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad nurbs2 point {cad vector2:point} is finite:
+    execute:
+        return (cad nurbs2 scalar (the x of point) is finite) and (cad nurbs2 scalar (the y of point) is finite)
+
+local function the cad nurbs2 unit weights for {integer:count}:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append 1.0 to result
+        return result
+
+function the cad nurbs curve2 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        set count to the length of points
+        if degree <= 0 or count <= degree:
+            return the cad nurbs2 failure
+        set ownedKnots to the cad nurbs2 copied list of knots
+        if (the length of knots) != ((count + degree) + 1):
+            free ownedKnots
+            set ownedKnots to the cad clamped uniform knots of degree degree for count points
+        set usable to (the length of weights) = count
+        loop index from 0 to the length of weights:
+            if ((the item at index in weights) > 0.0) = false:
+                set usable to false
+        set ownedWeights to the cad nurbs2 unit weights for count
+        if usable:
+            free ownedWeights
+            set ownedWeights to the cad nurbs2 copied list of weights
+        set value to the cad nurbs2 owned curve of degree degree with controls (the cad nurbs2 copied list of points), knots ownedKnots and weights ownedWeights
+        return @intrinsic("construct", a cad nurbs2 result, true, value)
+
+function the strict cad nurbs curve2 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        set count to the length of points
+        if (((degree <= 0 or count <= degree) or ((the length of knots) != ((count + degree) + 1))) or ((the length of weights) != count)):
+            return the cad nurbs2 failure
+        loop index from 0 to the length of knots:
+            set knot to the item at index in knots
+            if (cad nurbs2 scalar knot is finite) = false:
+                return the cad nurbs2 failure
+            if index > 0:
+                if ((the item at (index - 1) in knots) <= knot) = false:
+                    return the cad nurbs2 failure
+        if ((the item at 0 in knots) < (the last item of knots)) = false:
+            return the cad nurbs2 failure
+        loop index from 0 to count:
+            if (cad nurbs2 point (the item at index in points) is finite) = false:
+                return the cad nurbs2 failure
+            set weight to the item at index in weights
+            if ((cad nurbs2 scalar weight is finite) = false) or ((weight > 0.0) = false):
+                return the cad nurbs2 failure
+        set value to the cad nurbs2 owned curve of degree degree with controls (the cad nurbs2 copied list of points), knots (the cad nurbs2 copied list of knots) and weights (the cad nurbs2 copied list of weights)
+        return @intrinsic("construct", a cad nurbs2 result, true, value)
+
+function the cad degree of {cad nurbs curve2:shape}:
+    execute:
+        return the degree of shape
+function the cad control points of {cad nurbs curve2:shape}:
+    execute:
+        return the controls of shape
+function the cad knots of {cad nurbs curve2:shape}:
+    execute:
+        return the knots of shape
+function the cad weights of {cad nurbs curve2:shape}:
+    execute:
+        return the weights of shape
+function the cad domain of {cad nurbs curve2:shape}:
+    execute:
+        return @intrinsic("construct", a cad nurbs2 interval, the item at (the degree of shape) in (the knots of shape), the item at (the length of the controls of shape) in (the knots of shape))
+function {cad nurbs curve2:shape} is cad rational:
+    execute:
+        set first to the item at 0 in (the weights of shape)
+        loop index from 0 to the length of the weights of shape:
+            if (the absolute value of ((the item at index in (the weights of shape)) - first)) > 1e-12:
+                return true
+        return false
+function {cad nurbs curve2:shape} is cad closed:
+    execute:
+        return (the cad distance from (the cad point on shape at 0.0) to (the cad point on shape at 1.0)) < 1e-9
+
+local function cad nurbs2 lists left and right are equal:
+    execute:
+        if (the length of left) != (the length of right):
+            return false
+        loop index from 0 to the length of left:
+            if ((the item at index in left) = (the item at index in right)) = false:
+                return false
+        return true
+
+function {cad nurbs curve2:left} = {cad nurbs curve2:right}:
+    execute:
+        if (the degree of left) != (the degree of right):
+            return false
+        if ((the owner of left) = (0 as a pointer to an integer)) or ((the owner of right) = (0 as a pointer to an integer)):
+            return (the owner of left) = (the owner of right)
+        if (the length of the controls of left) != (the length of the controls of right):
+            return false
+        loop index from 0 to the length of the controls of left:
+            set a to the item at index in (the controls of left)
+            set b to the item at index in (the controls of right)
+            if ((the x of a) != (the x of b)) or ((the y of a) != (the y of b)):
+                return false
+        return (cad nurbs2 lists (the knots of left) and (the knots of right) are equal) and (cad nurbs2 lists (the weights of left) and (the weights of right) are equal)
+function {cad nurbs curve2:left} != {cad nurbs curve2:right}:
+    execute:
+        return (left = right) = false
+
+function the cad nurbs2 coordinates of {cad vector2:point}:
+    execute:
+        return [the x of point, the y of point]
+function the cad nurbs2 vector of {a 64 bit floating-point number array of 2 items:point}:
+    execute:
+        return a cad vector2 with x (the item at 0 in point) and y (the item at 1 in point)
+
+local function the cad nurbs2 bounded {a number:parameter} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    execute:
+        if (start <= end) = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        set value to parameter as a 64 bit floating-point number
+        clamp value between start and end
+        return value
+
+local function the cad nurbs2 homogeneous point {cad vector2:point} with weight {a 64 bit floating-point number:weight}:
+    execute:
+        return [(the x of point) * weight, (the y of point) * weight, weight]
+local function the cad nurbs2 projected point raw:
+    execute:
+        if (the absolute value of (the item at 2 in raw)) < 1e-15:
+            return a cad vector2 with x (the item at 0 in raw) and y (the item at 1 in raw)
+        return a cad vector2 with x ((the item at 0 in raw) / (the item at 2 in raw)) and y ((the item at 1 in raw) / (the item at 2 in raw))
+
+class:
+    patterns:
+        [a|] cad nurbs2 source
+    members:
+        curve as a cad nurbs curve2
+        derivative as a boolean
+
+function the cad spline point at {integer:index} from {cad nurbs2 source:source}:
+    execute:
+        set shape to the curve of source
+        set current to the cad nurbs2 homogeneous point (the item at index in (the controls of shape)) with weight (the item at index in (the weights of shape))
+        if (the derivative of source) = false:
+            return current
+        set width to (the item at ((index + (the degree of shape)) + 1) in (the knots of shape)) - (the item at (index + 1) in (the knots of shape))
+        set scale to 0.0 as a 64 bit floating-point number
+        if ((the absolute value of width) < 1e-15) = false:
+            set scale to (the degree of shape) / width
+        set next to the cad nurbs2 homogeneous point (the item at (index + 1) in (the controls of shape)) with weight (the item at (index + 1) in (the weights of shape))
+        set result to a new (the type of current)
+        loop axis from 0 to 3:
+            store (((the item at axis in next) - (the item at axis in current)) * scale) at result + axis
+        return result
+
+function the cad point on {cad nurbs curve2:shape} at knot {a number:parameter}:
+    execute:
+        set domain to the cad domain of shape
+        set u to the cad nurbs2 bounded parameter from (the start of domain) to (the end of domain)
+        set source to @intrinsic("construct", a cad nurbs2 source, shape, false)
+        return the cad nurbs2 projected point (the cad de Boor value of degree (the degree of shape) with knots (the knots of shape) and (the length of the controls of shape) points from source at u)
+function the cad point on {cad nurbs curve2:shape} at {a number:parameter}:
+    execute:
+        set domain to the cad domain of shape
+        set t to the cad nurbs2 bounded parameter from 0.0 to 1.0
+        return the cad point on shape at knot ((the start of domain) + t * ((the end of domain) - (the start of domain)))
+
+function the cad derivative of {cad nurbs curve2:shape} at knot {a number:parameter}:
+    execute:
+        if (the degree of shape) = 0:
+            return the cad zero vector2
+        set domain to the cad domain of shape
+        set u to the cad nurbs2 bounded parameter from (the start of domain) to (the end of domain)
+        set source to @intrinsic("construct", a cad nurbs2 source, shape, false)
+        set raw to the cad de Boor value of degree (the degree of shape) with knots (the knots of shape) and (the length of the controls of shape) points from source at u
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 1 to (the length of the knots of shape) - 1:
+            append (the item at index in (the knots of shape)) to knots
+        set source to @intrinsic("construct", a cad nurbs2 source, shape, true)
+        set slope to the cad de Boor value of degree ((the degree of shape) - 1) with knots knots and ((the length of the controls of shape) - 1) points from source at u
+        free knots
+        set weight to the item at 2 in raw
+        if (the absolute value of weight) < 1e-15:
+            return a cad vector2 with x (the item at 0 in slope) and y (the item at 1 in slope)
+        set point to the cad nurbs2 projected point raw
+        return a cad vector2 with x (((the item at 0 in slope) - (the x of point) * (the item at 2 in slope)) / weight) and y (((the item at 1 in slope) - (the y of point) * (the item at 2 in slope)) / weight)
+function the cad derivative of {cad nurbs curve2:shape} at {a number:parameter}:
+    execute:
+        set domain to the cad domain of shape
+        set width to (the end of domain) - (the start of domain)
+        set t to the cad nurbs2 bounded parameter from 0.0 to 1.0
+        return (the cad derivative of shape at knot ((the start of domain) + t * width)) scaled by width
+
+local function the cad nurbs2 squared distance on {cad nurbs curve2:shape} at {a number:parameter} to {cad vector2:point}:
+    execute:
+        return the cad squared distance from (the cad point on shape at parameter) to point
+function the cad [parameter] on {cad nurbs curve2:shape} nearest {cad vector2:point}:
+    execute:
+        set coarse to the maximum of ((the length of the controls of shape) * 8) and 64
+        set best to 0.0 as a 64 bit floating-point number
+        set distance to (1.0 as a 64 bit floating-point number) / 0.0
+        loop index from 0 to coarse + 1:
+            set t to (index as a 64 bit floating-point number) / (coarse as a 64 bit floating-point number)
+            set here to the cad nurbs2 squared distance on shape at t to point
+            if here < distance:
+                set distance to here
+                set best to t
+        set step to 1.0 / (coarse as a 64 bit floating-point number)
+        set low to the maximum of (best - step) and 0.0
+        set high to the minimum of (best + step) and 1.0
+        set round to 0
+        loop while (round < 60) and ((high - low) >= 1e-15):
+            set third to (high - low) / 3.0
+            set left to low + third
+            set right to high - third
+            if (the cad nurbs2 squared distance on shape at left to point) < (the cad nurbs2 squared distance on shape at right to point):
+                set high to right
+            else:
+                set low to left
+            set best to (low + high) * 0.5
+            increment round
+        return the cad nurbs2 bounded best from 0.0 to 1.0
+
+function the cad samples of {cad nurbs curve2:shape} with {integer:pieces} pieces per span:
+    execute:
+        set count to the maximum of pieces and 1
+        set domain to the cad domain of shape
+        set values to an empty list of a 64 bit floating-point number
+        loop index from (the degree of shape) to (the length of the controls of shape) + 1:
+            set u to the item at index in (the knots of shape)
+            if (u >= (the start of domain)) and (u <= (the end of domain)):
+                set distinct to true
+                if (the length of values) > 0:
+                    set distinct to ((the absolute value of (u - (the last item of values))) < 1e-12) = false
+                if distinct:
+                    append u to values
+        if (the length of values) < 2:
+            clear values
+            append (the start of domain) to values
+            append (the end of domain) to values
+        set result to an empty list of a cad vector2
+        loop index from 0 to (the length of values) - 1:
+            set first to the item at index in values
+            set next to the item at (index + 1) in values
+            loop step from 0 to count:
+                set f to (step as a 64 bit floating-point number) / (count as a 64 bit floating-point number)
+                append (the cad point on shape at knot (first + f * (next - first))) to result
+        append (the cad point on shape at knot (the end of domain)) to result
+        free values
+        return result
+
+local function the cad nurbs2 slice of values from {integer:start} to {integer:end}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from start to end:
+            append (the item at index in values) to result
+        return result
+
+local function insert cad nurbs2 owned knot {a number:parameter} into {cad nurbs curve2:shape}:
+    execute:
+        set u to parameter as a 64 bit floating-point number
+        set domain to the cad domain of shape
+        if (u <= (the start of domain)) or (u >= (the end of domain)):
+            return nothing
+        set degree to the degree of shape
+        set knots to the knots of shape
+        set span to the cad span of degree degree with knots knots and last ((the length of the controls of shape) - 1) at u
+        set homogeneous to an empty list of a 64 bit floating-point number array of 3 items
+        loop index from 0 to the length of the controls of shape:
+            append (the cad nurbs2 homogeneous point (the item at index in (the controls of shape)) with weight (the item at index in (the weights of shape))) to homogeneous
+        set updated to the cad nurbs2 slice of homogeneous from 0 to ((span - degree) + 1)
+        loop index from ((span - degree) + 1) to span + 1:
+            set lower to the item at index in knots
+            set upper to the item at (index + degree) in knots
+            set alpha to 0.0 as a 64 bit floating-point number
+            if ((the absolute value of (upper - lower)) < 1e-15) = false:
+                set alpha to (u - lower) / (upper - lower)
+            set before to the item at (index - 1) in homogeneous
+            set after to the item at index in homogeneous
+            set blended to a new (the type of before)
+            loop axis from 0 to 3:
+                store ((1.0 - alpha) * (the item at axis in before) + alpha * (the item at axis in after)) at blended + axis
+            append blended to updated
+        loop index from span to the length of homogeneous:
+            append (the item at index in homogeneous) to updated
+        insert u into knots at index (span + 1)
+        clear (the controls of shape)
+        clear (the weights of shape)
+        loop index from 0 to the length of updated:
+            set raw to the item at index in updated
+            append (the cad nurbs2 projected point raw) to (the controls of shape)
+            append (the item at 2 in raw) to (the weights of shape)
+        free updated
+        free homogeneous
+
+function the cad knot insertion of {a number:parameter} into {cad nurbs curve2:shape}:
+    execute:
+        set result to the cad clone of shape
+        insert cad nurbs2 owned knot parameter into result
+        return result
+
+function insert cad nurbs knot {a number:parameter} into {cad nurbs curve2:shape}:
+    replacement:
+        set shape to the cad knot insertion of parameter into shape
+
+function the cad reversal of {cad nurbs curve2:shape}:
+    execute:
+        set points to an empty list of a cad vector2
+        set weights to an empty list of a 64 bit floating-point number
+        set knots to an empty list of a 64 bit floating-point number
+        set total to (the item at 0 in (the knots of shape)) + (the last item of (the knots of shape))
+        loop index from ((the length of the controls of shape) - 1) down through 0:
+            append (the item at index in (the controls of shape)) to points
+            append (the item at index in (the weights of shape)) to weights
+        loop index from ((the length of the knots of shape) - 1) down through 0:
+            append (total - (the item at index in (the knots of shape))) to knots
+        return the cad nurbs2 owned curve of degree (the degree of shape) with controls points, knots knots and weights weights
+
+class:
+    patterns:
+        [a|] cad nurbs2 bezier parts
+    members:
+        segments
+        breaks
+
+local function the cad nurbs2 bezier parts of {cad nurbs curve2:shape}:
+    execute:
+        set work to the cad clone of shape
+        set domain to the cad domain of work
+        set start to the start of domain
+        set end to the end of domain
+        set missing to an empty list of a 64 bit floating-point number
+        set atValues to an empty list of a 64 bit floating-point number
+        set multiplicities to an empty list of an integer
+        set finished to false
+        loop while finished = false:
+            clear missing
+            clear atValues
+            clear multiplicities
+            loop index from 0 to the length of the knots of work:
+                set knot to the item at index in (the knots of work)
+                if (knot <= start + 1e-12 or knot >= end - 1e-12) = false:
+                    set found to -1
+                    loop group from 0 to the length of atValues:
+                        if (found < 0) and ((the absolute value of ((the item at group in atValues) - knot)) < 1e-12):
+                            set found to group
+                    if found >= 0:
+                        replace item at index found in multiplicities with ((the item at found in multiplicities) + 1)
+                    else:
+                        append knot to atValues
+                        append 1 to multiplicities
+            loop group from 0 to the length of atValues:
+                if (the item at group in multiplicities) < (the degree of work):
+                    append (the item at group in atValues) to missing
+            if (the length of missing) = 0:
+                set finished to true
+            else:
+                loop index from 0 to the length of missing:
+                    insert cad nurbs2 owned knot (the item at index in missing) into work
+        free missing
+        free atValues
+        free multiplicities
+        set breaks to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of the knots of work:
+            set knot to the item at index in (the knots of work)
+            if (knot <= start + 1e-12 or knot >= end - 1e-12) = false:
+                set distinct to true
+                if (the length of breaks) > 0:
+                    set distinct to (the absolute value of ((the last item of breaks) - knot)) > 1e-12
+                if distinct:
+                    append knot to breaks
+        set homogeneous to an empty list of a 64 bit floating-point number array of 3 items
+        loop index from 0 to the length of the controls of work:
+            append (the cad nurbs2 homogeneous point (the item at index in (the controls of work)) with weight (the item at index in (the weights of work))) to homogeneous
+        set segments to an empty list of the type of homogeneous
+        loop index from 0 to ((the length of homogeneous) - 1) / (the degree of work):
+            append (the cad nurbs2 slice of homogeneous from (index * (the degree of work)) to (((index + 1) * (the degree of work)) + 1)) to segments
+        free homogeneous
+        return @intrinsic("construct", a cad nurbs2 bezier parts, segments, breaks)
+
+local function the cad nurbs2 single elevation of {cad nurbs curve2:shape}:
+    execute:
+        set degree to the degree of shape
+        set raised to degree + 1
+        set parts to the cad nurbs2 bezier parts of shape
+        set segments to the segments of parts
+        set breaks to the breaks of parts
+        if (the length of segments) = 0:
+            free segments
+            free breaks
+            return the cad nurbs2 failure
+        set points to an empty list of a cad vector2
+        set weights to an empty list of a 64 bit floating-point number
+        loop segment from 0 to the length of segments:
+            set controls to the item at segment in segments
+            loop index from 0 to raised + 1:
+                set alpha to (index as a 64 bit floating-point number) / (raised as a 64 bit floating-point number)
+                set before to a new (a 64 bit floating-point number array of 3 items)
+                set after to a new (a 64 bit floating-point number array of 3 items)
+                if index > 0:
+                    set before to the item at (index - 1) in controls
+                if index <= degree:
+                    set after to the item at index in controls
+                set raw to a new (the type of before)
+                loop axis from 0 to 3:
+                    store ((the item at axis in before) * alpha + (the item at axis in after) * (1.0 - alpha)) at raw + axis
+                if segment = 0 or index > 0:
+                    set weight to the item at 2 in raw
+                    if (the absolute value of weight) < 1e-15:
+                        set weight to 1.0
+                    append (a cad vector2 with x ((the item at 0 in raw) / weight) and y ((the item at 1 in raw) / weight)) to points
+                    append weight to weights
+            free controls
+        free segments
+        set domain to the cad domain of shape
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to raised + 1:
+            append (the start of domain) to knots
+        loop index from 0 to the length of breaks:
+            loop repetition from 0 to raised:
+                append (the item at index in breaks) to knots
+        loop index from 0 to raised + 1:
+            append (the end of domain) to knots
+        free breaks
+        set result to the cad nurbs2 owned curve of degree raised with controls points, knots knots and weights weights
+        return @intrinsic("construct", a cad nurbs2 result, true, result)
+
+function the cad elevation of {cad nurbs curve2:shape} by {integer:amount}:
+    execute:
+        if amount <= 0:
+            return the cad nurbs2 failure
+        set result to the cad nurbs2 single elevation of shape
+        loop step from 1 to amount:
+            if (the valid of result) = false:
+                return result
+            set result to the cad nurbs2 single elevation of (the value of result)
+        return result
+
+function the cad split of {cad nurbs curve2:shape} at {a number:parameter}:
+    execute:
+        set domain to the cad domain of shape
+        set t to the cad nurbs2 bounded parameter from 0.0 to 1.0
+        set u to (the start of domain) + t * ((the end of domain) - (the start of domain))
+        if (u <= (the start of domain) + 1e-12) or (u >= (the end of domain) - 1e-12):
+            return the cad nurbs2 unsplit
+        set work to the cad clone of shape
+        set degree to the degree of shape
+        set existing to 0
+        loop index from 0 to the length of the knots of work:
+            if (the absolute value of ((the item at index in (the knots of work)) - u)) < 1e-12:
+                increment existing
+        loop step from existing to degree:
+            insert cad nurbs2 owned knot u into work
+        set cut to -1
+        loop index from 0 to the length of the knots of work:
+            if (the absolute value of ((the item at index in (the knots of work)) - u)) < 1e-12:
+                set cut to index
+        if cut < 0:
+            return the cad nurbs2 unsplit
+        set leftCount to (cut - degree) + 1
+        set leftKnots to the cad nurbs2 slice of (the knots of work) from 0 to (cut + 1)
+        append u to leftKnots
+        set left to the cad nurbs2 owned curve of degree degree with controls (the cad nurbs2 slice of (the controls of work) from 0 to leftCount), knots leftKnots and weights (the cad nurbs2 slice of (the weights of work) from 0 to leftCount)
+        set rightKnots to a list containing u
+        loop index from leftCount to the length of the knots of work:
+            append (the item at index in (the knots of work)) to rightKnots
+        set right to the cad nurbs2 owned curve of degree degree with controls (the cad nurbs2 slice of (the controls of work) from (leftCount - 1) to (the length of the controls of work)), knots rightKnots and weights (the cad nurbs2 slice of (the weights of work) from (leftCount - 1) to (the length of the weights of work))
+        if ((the length of the controls of left) <= degree) or ((the length of the controls of right) <= degree):
+            return the cad nurbs2 unsplit
+        return @intrinsic("construct", a cad nurbs2 split, true, left, right)
+
+function the cad trim of {cad nurbs curve2:shape} [from] {a number:first} [to] {a number:last}:
+    execute:
+        set from to first as a 64 bit floating-point number
+        set to to last as a 64 bit floating-point number
+        if ((cad nurbs2 scalar from is finite) = false) or ((cad nurbs2 scalar to is finite) = false):
+            return the cad nurbs2 failure
+        clamp from between 0.0 and 1.0
+        clamp to between 0.0 and 1.0
+        if (the absolute value of (from - to)) <= 1e-12:
+            return the cad nurbs2 failure
+        if from > to:
+            set result to the cad trim of shape from to to from
+            if the valid of result:
+                set the value of result to the cad reversal of (the value of result)
+            return result
+        if (from <= 1e-12) and (to >= 1.0 - 1e-12):
+            return @intrinsic("construct", a cad nurbs2 result, true, the cad clone of shape)
+        set left to the cad clone of shape
+        if to < 1.0 - 1e-12:
+            set divided to the cad split of shape at to
+            if (the valid of divided) = false:
+                return the cad nurbs2 failure
+            set left to the left of divided
+        if from <= 1e-12:
+            return @intrinsic("construct", a cad nurbs2 result, true, left)
+        if (to > 1e-12) = false:
+            return the cad nurbs2 failure
+        set divided to the cad split of left at (from / to)
+        if (the valid of divided) = false:
+            return the cad nurbs2 failure
+        return @intrinsic("construct", a cad nurbs2 result, true, the right of divided)
+
+local function the cad nurbs2 list of {integer:count} copies of value:
+    execute:
+        set result to an empty list of the type of value
+        loop index from 0 to count:
+            append value to result
+        return result
+
+# The planar source deliberately has an unguarded Thomas solve. Its behavior
+# for nonfinite inputs and tiny pivots differs from the generic spline solver.
+local function solve cad nurbs2 tridiagonal with lower, diagonal and upper into right:
+    execute:
+        set count to the length of right
+        set scratch to the cad nurbs2 list of count copies of 0.0
+        replace item at index 0 in scratch with ((the item at 0 in upper) / (the item at 0 in diagonal))
+        replace item at index 0 in right with ((the item at 0 in right) / (the item at 0 in diagonal))
+        loop index from 1 to count:
+            set m to (the item at index in diagonal) - (the item at index in lower) * (the item at (index - 1) in scratch)
+            replace item at index index in scratch with ((the item at index in upper) / m)
+            replace item at index index in right with (((the item at index in right) - (the item at index in lower) * (the item at (index - 1) in right)) / m)
+        loop index from (count - 2) down through 0:
+            replace item at index index in right with ((the item at index in right) - (the item at index in scratch) * (the item at (index + 1) in right))
+        free scratch
+
+local function the cad nurbs2 coordinate of {cad vector2:point} on {integer:axis}:
+    execute:
+        if axis = 0:
+            return the x of point
+        return the y of point
+
+local function the cad nurbs2 segment slope at {integer:index} in points over spans on {integer:axis}:
+    execute:
+        return ((the cad nurbs2 coordinate of (the item at (index + 1) in points) on axis) - (the cad nurbs2 coordinate of (the item at index in points) on axis)) / (the item at index in spans)
+
+local function check cad nurbs2 tangent {a 64 bit floating-point number array of 2 items:value}:
+    execute:
+        ignore value
+
+function the cad nurbs2 fit through {a pointer to a list:points} with start tangent {cad spline tangent:start} and end tangent {cad spline tangent:end} using {cad spline parameterization:spacing}:
+    execute:
+        check cad nurbs2 tangent (the value of start)
+        check cad nurbs2 tangent (the value of end)
+        set count to the length of points
+        if count < 2:
+            return the cad nurbs2 failure
+        set knotsAt to a list containing 0.0
+        loop index from 1 to count:
+            set chord to the cad distance from (the item at (index - 1) in points) to (the item at index in points)
+            if (chord >= 1e-9) = false:
+                set chord to 1e-9
+            set step to chord
+            if (the code of spacing) = 0:
+                set step to 1.0
+            else if (the code of spacing) = 1:
+                set step to the square root of chord
+            else if (the code of spacing) != 2:
+                @intrinsic("call", "libc", "abort", nothing)
+            append ((the last item of knotsAt) + step) to knotsAt
+        set spans to an empty list of a 64 bit floating-point number
+        loop index from 0 to count - 1:
+            set width to (the item at (index + 1) in knotsAt) - (the item at index in knotsAt)
+            if (width >= 1e-9) = false:
+                set width to 1e-9
+            append width to spans
+        set firstTangent to the value of start
+        set lastTangent to the value of end
+        set startUsable to (the valid of start) and (((the item at 0 in firstTangent) * (the item at 0 in firstTangent) + (the item at 1 in firstTangent) * (the item at 1 in firstTangent)) > 1e-18)
+        set endUsable to (the valid of end) and (((the item at 0 in lastTangent) * (the item at 0 in lastTangent) + (the item at 1 in lastTangent) * (the item at 1 in lastTangent)) > 1e-18)
+        set slopes to an empty list of the type of spans
+        loop axis from 0 to 2:
+            set sub to the cad nurbs2 list of count copies of 0.0
+            set diagonal to the cad nurbs2 list of count copies of 0.0
+            set sup to the cad nurbs2 list of count copies of 0.0
+            set rhs to the cad nurbs2 list of count copies of 0.0
+            if startUsable:
+                replace item at index 0 in diagonal with 1.0
+                replace item at index 0 in rhs with (the item at axis in firstTangent)
+            else:
+                replace item at index 0 in diagonal with 2.0
+                replace item at index 0 in sup with 1.0
+                replace item at index 0 in rhs with (3.0 * (the cad nurbs2 segment slope at 0 in points over spans on axis))
+            loop index from 1 to count - 1:
+                set before to the item at (index - 1) in spans
+                set after to the item at index in spans
+                replace item at index index in sub with after
+                replace item at index index in diagonal with (2.0 * (before + after))
+                replace item at index index in sup with before
+                replace item at index index in rhs with (3.0 * (after * (the cad nurbs2 segment slope at (index - 1) in points over spans on axis) + before * (the cad nurbs2 segment slope at index in points over spans on axis)))
+            if endUsable:
+                replace item at index (count - 1) in diagonal with 1.0
+                replace item at index (count - 1) in rhs with (the item at axis in lastTangent)
+            else:
+                replace item at index (count - 1) in sub with 1.0
+                replace item at index (count - 1) in diagonal with 2.0
+                replace item at index (count - 1) in rhs with (3.0 * (the cad nurbs2 segment slope at (count - 2) in points over spans on axis))
+            solve cad nurbs2 tridiagonal with sub, diagonal and sup into rhs
+            free sub
+            free diagonal
+            free sup
+            append rhs to slopes
+        set controls to a list containing (the item at 0 in points)
+        loop index from 0 to count - 1:
+            set h to the item at index in spans
+            set from to the item at index in points
+            set to to the item at (index + 1) in points
+            set sx to the item at 0 in slopes
+            set sy to the item at 1 in slopes
+            set mx to (the item at index in sx) * h
+            set my to (the item at index in sy) * h
+            append (a cad vector2 with x ((the x of from) + mx / 3.0) and y ((the y of from) + my / 3.0)) to controls
+            set mx to (the item at (index + 1) in sx) * h
+            set my to (the item at (index + 1) in sy) * h
+            append (a cad vector2 with x ((the x of to) - mx / 3.0) and y ((the y of to) - my / 3.0)) to controls
+            append to to controls
+        loop axis from 0 to 2:
+            free (the item at axis in slopes)
+        free slopes
+        free spans
+        set knots to the cad nurbs2 list of 4 copies of (the item at 0 in knotsAt)
+        loop index from 1 to count - 1:
+            loop copy from 0 to 3:
+                append (the item at index in knotsAt) to knots
+        loop copy from 0 to 4:
+            append (the last item of knotsAt) to knots
+        free knotsAt
+        set value to the cad nurbs2 owned curve of degree 3 with controls controls, knots knots and weights (the cad nurbs2 unit weights for (the length of controls))
+        return @intrinsic("construct", a cad nurbs2 result, true, value)
+
+function the cad nurbs2 fit through {a pointer to a list:points} using {cad spline parameterization:spacing}:
+    execute:
+        set absent to no cad spline tangent matching [0.0,0.0]
+        return the cad nurbs2 fit through points with start tangent absent and end tangent absent using spacing
+
+function the cad periodic nurbs2 fit through {a pointer to a list:points} using {cad spline parameterization:spacing}:
+    execute:
+        set coordinates to an empty list of a 64 bit floating-point number array of 2 items
+        loop index from 0 to the length of points:
+            append (the cad nurbs2 coordinates of (the item at index in points)) to coordinates
+        set fitted to the cad periodic spline through coordinates using spacing
+        free coordinates
+        if (the valid of fitted) = false:
+            free cad spline interpolation fitted
+            return the cad nurbs2 failure
+        set controls to an empty list of a cad vector2
+        loop index from 0 to the length of the controls of fitted:
+            append (the cad nurbs2 vector of (the item at index in (the controls of fitted))) to controls
+        set knots to the cad nurbs2 copied list of (the knots of fitted)
+        free cad spline interpolation fitted
+        set value to the cad nurbs2 owned curve of degree 3 with controls controls, knots knots and weights (the cad nurbs2 unit weights for (the length of controls))
+        return @intrinsic("construct", a cad nurbs2 result, true, value)
+
+local function the cad nurbs2 simplified polyline points within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set count to the length of points
+        if (count <= 2) or (tolerance = 0.0):
+            return the cad nurbs2 copied list of points
+        set keep to the cad nurbs2 list of count copies of false
+        replace item at index 0 in keep with true
+        replace item at index (count - 1) in keep with true
+        set ranges to a list containing [0,count - 1]
+        loop while (the length of ranges) > 0:
+            set range to the last item of ranges
+            remove item ((the length of ranges) - 1) from ranges
+            set start to the item at 0 in range
+            set end to the item at 1 in range
+            set farthest to -1
+            set distance to tolerance
+            set from to the item at start in points
+            set last to the item at end in points
+            set along to the cad difference of last and from
+            set squared to the cad squared length of along
+            set previous to 0.0 as a 64 bit floating-point number
+            set reversal to -1
+            set index to start + 1
+            loop while (index < end) and (reversal < 0):
+                set point to the item at index in points
+                set parameter to 0.0 as a 64 bit floating-point number
+                if squared > 0.0:
+                    set parameter to (the cad dot of (the cad difference of point and from) and along) / squared
+                if parameter + 1e-12 < previous:
+                    set reversal to index
+                else:
+                    set previous to parameter
+                    set here to the cad distance from point to the segment from from to last
+                    if here > distance:
+                        set distance to here
+                        set farthest to index
+                increment index
+            if (reversal < 0) and (previous > 1.0 + 1e-12):
+                set reversal to end - 1
+            set split to farthest
+            if reversal >= 0:
+                set split to reversal
+            if split >= 0:
+                replace item at index split in keep with true
+                append [start,split] to ranges
+                append [split,end] to ranges
+        free ranges
+        set result to an empty list of a cad vector2
+        loop index from 0 to count:
+            if the item at index in keep:
+                append (the item at index in points) to result
+        free keep
+        return result
+
+class:
+    patterns:
+        [a|] cad nurbs2 cubic segment
+    members:
+        points as a cad vector2 array of 4 items
+        length as a 64 bit floating-point number
+
+local function append cad nurbs2 line from {cad vector2:start} to {cad vector2:end} into segments:
+    execute:
+        set length to the cad distance from start to end
+        if length = 0.0:
+            return nothing
+        set points to [start,the cad lerp from start to end at (1.0 / 3.0),the cad lerp from start to end at (2.0 / 3.0),end]
+        append (@intrinsic("construct", a cad nurbs2 cubic segment, points, length)) to segments
+
+local function the cad nurbs2 rounded polyline points within {a 64 bit floating-point number:allowance}:
+    execute:
+        set segments to an empty list of a cad nurbs2 cubic segment
+        set current to the item at 0 in points
+        loop index from 0 to (the length of points) - 2:
+            set previous to the item at index in points
+            set corner to the item at (index + 1) in points
+            set next to the item at (index + 2) in points
+            set incoming to the cad normalization of (the cad difference of corner and previous)
+            set outgoing to the cad normalization of (the cad difference of next and corner)
+            if ((the valid of incoming) = false) or ((the valid of outgoing) = false):
+                free segments
+                return the cad nurbs2 failure
+            set trim to the minimum of (the minimum of allowance and ((the cad distance from previous to corner) * 0.5)) and ((the cad distance from corner to next) * 0.5)
+            set entry to the cad difference of corner and ((the value of incoming) scaled by trim)
+            set exit to the cad sum of corner and ((the value of outgoing) scaled by trim)
+            append cad nurbs2 line from current to entry into segments
+            if (the cad distance from entry to exit) > 0.0:
+                set length to (the cad distance from entry to corner) + (the cad distance from corner to exit)
+                append (@intrinsic("construct", a cad nurbs2 cubic segment, [entry,corner,corner,exit], length)) to segments
+            set current to exit
+        append cad nurbs2 line from current to (the last item of points) into segments
+        if (the length of segments) = 0:
+            free segments
+            return the cad nurbs2 failure
+        set first to the item at 0 in segments
+        set controls to an empty list of a cad vector2
+        loop index from 0 to 4:
+            append (the item at index in (the points of first)) to controls
+        set knots to the cad nurbs2 list of 4 copies of 0.0
+        set parameter to the length of first
+        loop segment from 1 to the length of segments:
+            set next to the item at segment in segments
+            loop copy from 0 to 3:
+                append parameter to knots
+            loop index from 1 to 4:
+                append (the item at index in (the points of next)) to controls
+            set parameter to parameter + (the length of next)
+        loop copy from 0 to 4:
+            append parameter to knots
+        free segments
+        set weights to the cad nurbs2 unit weights for (the length of controls)
+        set result to the strict cad nurbs curve2 of degree 3 with controls controls, knots knots and weights weights
+        free controls
+        free knots
+        free weights
+        return result
+
+function the cad nurbs2 fit to polyline {a pointer to a list:points} within {a number:precision}:
+    execute:
+        set tolerance to precision as a 64 bit floating-point number
+        if ((cad nurbs2 scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return the cad nurbs2 failure
+        loop index from 0 to the length of points:
+            if (cad nurbs2 point (the item at index in points) is finite) = false:
+                return the cad nurbs2 failure
+        set distinct to an empty list of a cad vector2
+        loop index from 0 to the length of points:
+            set point to the item at index in points
+            set appendPoint to true
+            if (the length of distinct) > 0:
+                set previous to the last item of distinct
+                set appendPoint to ((the x of point) != (the x of previous)) or ((the y of point) != (the y of previous))
+            if appendPoint:
+                append point to distinct
+        if (the length of distinct) < 2:
+            free distinct
+            return the cad nurbs2 failure
+        set simplified to the cad nurbs2 simplified polyline distinct within (tolerance * 0.5)
+        free distinct
+        set result to the cad nurbs2 failure
+        if (tolerance = 0.0) or ((the length of simplified) = 2):
+            set empty to an empty list of a 64 bit floating-point number
+            set result to the cad nurbs curve2 of degree 1 with controls simplified, knots empty and weights empty
+            free empty
+        else:
+            set result to the cad nurbs2 rounded polyline simplified within (tolerance * 0.5)
+        free simplified
+        return result

@@ -1,0 +1,515 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/mass.rs.
+# Mass queries borrow the body and return allocation-free value records.
+import lib/cadkernel/brep_pcurve.dl
+
+class:
+    patterns:
+        [a|] cad mass properties
+    members:
+        volume as a 64 bit floating-point number
+        centroid as a cad vector3
+        momentOfInertia as a cad vector3
+        principalDirectionX as a cad vector3
+        principalDirectionY as a cad vector3
+        principalDirectionZ as a cad vector3
+        principalMoments as a cad vector3
+        productOfInertia as a cad vector3
+        radiiOfGyration as a cad vector3
+class:
+    patterns:
+        [a|] cad mass properties result
+    members:
+        valid as a boolean
+        value as a cad mass properties
+class:
+    patterns:
+        [a|] cad mass patch
+    members:
+        uStart as a 64 bit floating-point number
+        uSweep as a 64 bit floating-point number
+        vStart as a 64 bit floating-point number
+        vSweep as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad mass patch result
+    members:
+        valid as a boolean
+        value as a cad mass patch
+class:
+    patterns:
+        [a|] cad mass cylinder face
+    members:
+        face as a cad face key
+        cylinder as a cad cylinder
+
+local function no cad mass properties:
+    execute:
+        return @intrinsic("construct", a cad mass properties result, false, a new cad mass properties)
+local function the cad mass result of {cad mass properties:value}:
+    execute:
+        return @intrinsic("construct", a cad mass properties result, true, value)
+local function cad mass scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad mass vector {cad vector3:value} is finite:
+    execute:
+        return ((cad mass scalar (value's x) is finite) and (cad mass scalar (value's y) is finite)) and (cad mass scalar (value's z) is finite)
+local function the cad mass radii for {cad vector3:moments} with volume {a 64 bit floating-point number:volume}:
+    execute:
+        set x to the square root of ((the maximum of (moments's x) and 0.0) / volume)
+        set y to the square root of ((the maximum of (moments's y) and 0.0) / volume)
+        set z to the square root of ((the maximum of (moments's z) and 0.0) / volume)
+        return a cad vector3 with x x, y y and z z
+local function no cad mass patch:
+    execute:
+        return @intrinsic("construct", a cad mass patch result, false, a new cad mass patch)
+local function the cad mass patch from {a 64 bit floating-point number:uStart} across {a 64 bit floating-point number:uSweep} and from {a 64 bit floating-point number:vStart} across {a 64 bit floating-point number:vSweep}:
+    execute:
+        set value to @intrinsic("construct", a cad mass patch, uStart, uSweep, vStart, vSweep)
+        return @intrinsic("construct", a cad mass patch result, true, value)
+
+local function cad mass assembled with volume {a 64 bit floating-point number:volume}, centroid {cad vector3:centroid}, principal moments {cad vector3:principal} and axes {cad vector3:xAxis} {cad vector3:yAxis} {cad vector3:zAxis}:
+    execute:
+        if (((cad mass scalar volume is finite) and (volume > 0.0)) and (cad mass vector centroid is finite)) = false:
+            return no cad mass properties
+        if cad mass vector principal is finite = false:
+            return no cad mass properties
+
+        set centralXX to (((principal's x) * (xAxis's x)) * (xAxis's x)) + ((((principal's y) * (yAxis's x)) * (yAxis's x)) + (((principal's z) * (zAxis's x)) * (zAxis's x)))
+        set centralYY to (((principal's x) * (xAxis's y)) * (xAxis's y)) + ((((principal's y) * (yAxis's y)) * (yAxis's y)) + (((principal's z) * (zAxis's y)) * (zAxis's y)))
+        set centralZZ to (((principal's x) * (xAxis's z)) * (xAxis's z)) + ((((principal's y) * (yAxis's z)) * (yAxis's z)) + (((principal's z) * (zAxis's z)) * (zAxis's z)))
+        set centralXY to (((principal's x) * (xAxis's x)) * (xAxis's y)) + ((((principal's y) * (yAxis's x)) * (yAxis's y)) + (((principal's z) * (zAxis's x)) * (zAxis's y)))
+        set centralYZ to (((principal's x) * (xAxis's y)) * (xAxis's z)) + ((((principal's y) * (yAxis's y)) * (yAxis's z)) + (((principal's z) * (zAxis's y)) * (zAxis's z)))
+        set centralZX to (((principal's x) * (xAxis's z)) * (xAxis's x)) + ((((principal's y) * (yAxis's z)) * (yAxis's x)) + (((principal's z) * (zAxis's z)) * (zAxis's x)))
+        set squaredCentre to the cad dot of centroid and centroid
+        set moment to a cad vector3 with x (centralXX + (volume * (squaredCentre - ((centroid's x) * (centroid's x))))), y (centralYY + (volume * (squaredCentre - ((centroid's y) * (centroid's y))))) and z (centralZZ + (volume * (squaredCentre - ((centroid's z) * (centroid's z)))))
+        set product to a cad vector3 with x (centralXY - ((volume * (centroid's x)) * (centroid's y))), y (centralYZ - ((volume * (centroid's y)) * (centroid's z))) and z (centralZX - ((volume * (centroid's z)) * (centroid's x)))
+        set radii to the cad mass radii for moment with volume volume
+        set value to @intrinsic("construct", a cad mass properties, volume, centroid, moment, xAxis, yAxis, zAxis, principal, product, radii)
+        return the cad mass result of value
+
+function {cad mass properties:value} translated by {cad vector3:delta}:
+    execute:
+        set old to value's centroid
+        set centroid to the cad sum of old and delta
+        set xChange to (delta's x) * ((2.0 * (old's x)) + (delta's x))
+        set yChange to (delta's y) * ((2.0 * (old's y)) + (delta's y))
+        set zChange to (delta's z) * ((2.0 * (old's z)) + (delta's z))
+        set moment to a cad vector3 with x ((value's momentOfInertia's x) + ((value's volume) * (yChange + zChange))), y ((value's momentOfInertia's y) + ((value's volume) * (xChange + zChange))) and z ((value's momentOfInertia's z) + ((value's volume) * (xChange + yChange)))
+        set xyChange to (((old's x) * (delta's y)) + ((old's y) * (delta's x))) + ((delta's x) * (delta's y))
+        set yzChange to (((old's y) * (delta's z)) + ((old's z) * (delta's y))) + ((delta's y) * (delta's z))
+        set zxChange to (((old's z) * (delta's x)) + ((old's x) * (delta's z))) + ((delta's z) * (delta's x))
+        set product to a cad vector3 with x ((value's productOfInertia's x) - ((value's volume) * xyChange)), y ((value's productOfInertia's y) - ((value's volume) * yzChange)) and z ((value's productOfInertia's z) - ((value's volume) * zxChange))
+        set radii to the cad mass radii for moment with volume (value's volume)
+        return @intrinsic("construct", a cad mass properties, value's volume, centroid, moment, value's principalDirectionX, value's principalDirectionY, value's principalDirectionZ, value's principalMoments, product, radii)
+
+local function sort cad mass cylinders by descending radius {cad topology list:values}:
+    execute:
+        loop index from 1 to the length of (values's values):
+            set current to the item at index in (values's values)
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in (values's values)
+                if (previous's radius) >= (current's radius):
+                    set searching to false
+                else:
+                    replace item at index position in (values's values) with previous
+                    decrement position
+            replace item at index position in (values's values) with current
+local function sort cad mass scalars ascending {cad topology list:values}:
+    execute:
+        loop index from 1 to the length of (values's values):
+            set current to the item at index in (values's values)
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in (values's values)
+                if previous <= current:
+                    set searching to false
+                else:
+                    replace item at index position in (values's values) with previous
+                    decrement position
+            replace item at index position in (values's values) with current
+
+local function the cad mass rectangular patch of {cad face key:faceKey} in {cad body:body} on {cad surface:surface}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return no cad mass patch
+        if (the length of (face's loops's values)) != 1:
+            return no cad mass patch
+        set boundary to the cad boundary of faceKey in body within 1e-8
+        if (boundary's valid) = false:
+            return no cad mass patch
+        if (the length of (boundary's curves's values)) != 4:
+            return no cad mass patch
+        set lowU to (1.0 as a 64 bit floating-point number) / 0.0
+        set lowV to (1.0 as a 64 bit floating-point number) / 0.0
+        set highU to the negative of lowU
+        set highV to the negative of lowV
+        loop index from 0 to 4:
+            set curve to the item at index in (boundary's curves's values)
+            set next to the item at (the remainder of (index + 1) divided by 4) in (boundary's curves's values)
+            if ((curve's kind) != 0) or ((next's kind) != 0):
+                return no cad mass patch
+            set line to curve's line
+            set nextLine to next's line
+            if (the cad distance from (line's end) to (nextLine's start)) > 1e-8:
+                return no cad mass patch
+            set delta to the cad difference of (line's end) and (line's start)
+            if ((the absolute value of (delta's x)) <= 1e-8) = ((the absolute value of (delta's y)) <= 1e-8):
+                return no cad mass patch
+            if ((cad mass scalar (line's start's x) is finite) and (cad mass scalar (line's start's y) is finite)) = false:
+                return no cad mass patch
+            set lowU to the minimum of lowU and (line's start's x)
+            set lowV to the minimum of lowV and (line's start's y)
+            set highU to the maximum of highU and (line's start's x)
+            set highV to the maximum of highV and (line's start's y)
+        loop first from 0 to 4:
+            set firstPoint to (the item at first in (boundary's curves's values))'s line's start
+            loop second from (first + 1) to 4:
+                set secondPoint to (the item at second in (boundary's curves's values))'s line's start
+                if (the cad distance from firstPoint to secondPoint) <= 1e-8:
+                    return no cad mass patch
+        set uSweep to highU - lowU
+        set vSweep to highV - lowV
+        if uSweep > (6.283185307179586 + 1e-8):
+            return no cad mass patch
+        if (surface's kind) = 4:
+            if vSweep > (6.283185307179586 + 1e-8):
+                return no cad mass patch
+        return the cad mass patch from lowU across uSweep and from lowV across vSweep
+
+local function cad mass body edges are paired {cad body:body}:
+    execute:
+        set keys to the cad edge keys of body
+        loop index from 0 to the length of keys:
+            set edge to the cad node pointer for (the item at index in keys) in body
+            if edge = (0 as the type of edge):
+                free keys
+                return false
+            if (the length of (edge's coedges's values)) != 2:
+                free keys
+                return false
+        free keys
+        return true
+
+local function the cad cylindrical sector mass properties of {cad body:body}:
+    execute:
+        set cylinders to a cad topology list of a cad mass cylinder face
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set faceKey to the item at index in faces
+            set face to the cad node pointer for faceKey in body
+            if face = (0 as the type of face):
+                free faces
+                return no cad mass properties
+            set surface to the cad node pointer for (face's surface) in body
+            if surface = (0 as the type of surface):
+                free faces
+                return no cad mass properties
+            if (surface's kind) = 1:
+                append (@intrinsic("construct", a cad mass cylinder face, faceKey, surface's cylinder)) to (cylinders's values)
+            else if (surface's kind) != 0:
+                free faces
+                return no cad mass properties
+        free faces
+        if (the length of (cylinders's values)) != 2:
+            return no cad mass properties
+        if ((the item at 1 in (cylinders's values))'s cylinder's radius) > ((the item at 0 in (cylinders's values))'s cylinder's radius):
+            set saved to the item at 0 in (cylinders's values)
+            replace item at index 0 in (cylinders's values) with (the item at 1 in (cylinders's values))
+            replace item at index 1 in (cylinders's values) with saved
+        set outerEntry to the item at 0 in (cylinders's values)
+        set innerEntry to the item at 1 in (cylinders's values)
+        set outer to outerEntry's cylinder
+        set inner to innerEntry's cylinder
+        set outerNormal to the cad normal of (outer's base)
+        set innerNormal to the cad normal of (inner's base)
+        if ((outerNormal's valid) and (innerNormal's valid)) = false:
+            return no cad mass properties
+        set axisResult to the cad normalization of (outerNormal's value)
+        set innerAxisResult to the cad normalization of (innerNormal's value)
+        if ((axisResult's valid) and (innerAxisResult's valid)) = false:
+            return no cad mass properties
+        set axis to axisResult's value
+        set innerAxis to innerAxisResult's value
+        set scale to the maximum of (the absolute value of (outer's radius)) and 1.0
+        set outerOrigin to outer's base's origin
+        set innerOrigin to inner's base's origin
+        set innerOffset to the cad difference of innerOrigin and outerOrigin
+        set innerLateral to the cad difference of innerOrigin and (axis scaled by (the cad dot of innerOffset and axis))
+        if ((cad mass scalar (outer's radius) is finite) and (cad mass scalar (inner's radius) is finite)) = false:
+            return no cad mass properties
+        if ((inner's radius) <= 0.0) or ((inner's radius) >= (outer's radius)):
+            return no cad mass properties
+        if (the absolute value of (the cad dot of innerAxis and axis)) < (1.0 - 1e-8):
+            return no cad mass properties
+        if (the cad distance from innerLateral to outerOrigin) > (scale * 1e-8):
+            return no cad mass properties
+        set outerSurface to the cad surface of outer
+        set innerSurface to the cad surface of inner
+        set patch to the cad mass rectangular patch of (outerEntry's face) in body on outerSurface
+        set innerPatch to the cad mass rectangular patch of (innerEntry's face) in body on innerSurface
+        if ((patch's valid) and (innerPatch's valid)) = false:
+            return no cad mass properties
+        set innerBottom to the cad sum of innerOrigin and (innerAxis scaled by (innerPatch's value's vStart))
+        set innerTop to the cad sum of innerBottom and (innerAxis scaled by (innerPatch's value's vSweep))
+        set outerBottom to patch's value's vStart
+        set outerTop to (patch's value's vStart) + (patch's value's vSweep)
+        set z0 to the cad dot of (the cad difference of innerBottom and outerOrigin) and axis
+        set z1 to the cad dot of (the cad difference of innerTop and outerOrigin) and axis
+        if (the absolute value of ((the minimum of z0 and z1) - outerBottom)) > (scale * 1e-8):
+            return no cad mass properties
+        if (the absolute value of ((the maximum of z0 and z1) - outerTop)) > (scale * 1e-8):
+            return no cad mass properties
+        if (the absolute value of ((innerPatch's value's uSweep) - (patch's value's uSweep))) > 1e-8:
+            return no cad mass properties
+        if cad mass body edges are paired body = false:
+            return no cad mass properties
+        set middle to (patch's value's uStart) + ((patch's value's uSweep) * 0.5)
+        set innerMiddle to (innerPatch's value's uStart) + ((innerPatch's value's uSweep) * 0.5)
+        set outerMid to the cad normalization of (the cad vector at (a cad vector2 with x (the cosine of middle) and y (the sine of middle)) on (outer's base))
+        set innerMid to the cad normalization of (the cad vector at (a cad vector2 with x (the cosine of innerMiddle) and y (the sine of innerMiddle)) on (inner's base))
+        if ((outerMid's valid) and (innerMid's valid)) = false:
+            return no cad mass properties
+        if (patch's value's uSweep) < (6.283185307179586 - 1e-8):
+            if (the cad distance from (outerMid's value) to (innerMid's value)) > 1e-8:
+                return no cad mass properties
+        set angle to patch's value's uSweep
+        set height to patch's value's vSweep
+        if ((cad mass scalar angle is finite) and (cad mass scalar height is finite)) = false:
+            return no cad mass properties
+        if ((angle <= 0.0) or (angle > (6.283185307179586 + 1e-8))) or (height <= 0.0):
+            return no cad mass properties
+
+        set outerSquared to (outer's radius) * (outer's radius)
+        set innerSquared to (inner's radius) * (inner's radius)
+        set radialSquared to outerSquared - innerSquared
+        set radialCubed to (((outerSquared * (outer's radius)) - (innerSquared * (inner's radius))))
+        set radialFourth to ((outerSquared * outerSquared) - (innerSquared * innerSquared))
+        set area to (0.5 * radialSquared) * angle
+        set half to angle * 0.5
+        set centroidRadius to 0.0
+        if (the absolute value of (angle - 6.283185307179586)) > 1e-8:
+            set centroidRadius to (((4.0 * (the sine of half)) * radialCubed) / ((3.0 * angle) * radialSquared))
+        set volume to area * height
+        set radialResult to the cad normalization of (the cad vector at (a cad vector2 with x (the cosine of middle) and y (the sine of middle)) on (outer's base))
+        if (radialResult's valid) = false:
+            return no cad mass properties
+        set radial to radialResult's value
+        set tangentResult to the cad normalization of (the cad cross of axis and radial)
+        if (tangentResult's valid) = false:
+            return no cad mass properties
+        set tangent to tangentResult's value
+        set centreOnAxis to the cad sum of outerOrigin and (axis scaled by ((patch's value's vStart) + (height * 0.5)))
+        set centroid to the cad sum of centreOnAxis and (radial scaled by centroidRadius)
+        set factor to radialFourth * 0.25
+        set radialSecond to factor * ((angle * 0.5) + ((the sine of angle) * 0.5))
+        set tangentSecond to factor * ((angle * 0.5) - ((the sine of angle) * 0.5))
+        set heightSecond to (area * ((height * height) * height)) / 12.0
+        set centroidSquared to centroidRadius * centroidRadius
+        set radialMoment to (height * tangentSecond) + heightSecond
+        set tangentMoment to (height * (radialSecond - (area * centroidSquared))) + heightSecond
+        set axialMoment to height * ((radialSecond + tangentSecond) - (area * centroidSquared))
+        set principal to a cad vector3 with x radialMoment, y tangentMoment and z axialMoment
+        return cad mass assembled with volume volume, centroid centroid, principal moments principal and axes radial tangent axis
+
+local function the cad spherical mass properties of {cad body:body}:
+    execute:
+        set spheres to a cad topology list of a cad sphere
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set face to the cad node pointer for (the item at index in faces) in body
+            if face = (0 as the type of face):
+                free faces
+                return no cad mass properties
+            set surface to the cad node pointer for (face's surface) in body
+            if surface = (0 as the type of surface):
+                free faces
+                return no cad mass properties
+            if (surface's kind) != 3:
+                free faces
+                return no cad mass properties
+            append (surface's sphere) to (spheres's values)
+        free faces
+        if ((the length of (spheres's values)) < 1) or ((the length of (spheres's values)) > 2):
+            return no cad mass properties
+        if (the length of (spheres's values)) = 2:
+            if ((the item at 1 in (spheres's values))'s radius) > ((the item at 0 in (spheres's values))'s radius):
+                set saved to the item at 0 in (spheres's values)
+                replace item at index 0 in (spheres's values) with (the item at 1 in (spheres's values))
+                replace item at index 1 in (spheres's values) with saved
+        set outerSphere to the item at 0 in (spheres's values)
+        set centre to outerSphere's frame's origin
+        set scale to the maximum of (the absolute value of (outerSphere's radius)) and 1.0
+        loop index from 0 to the length of (spheres's values):
+            set sphere to the item at index in (spheres's values)
+            if ((cad mass scalar (sphere's radius) is finite) and ((sphere's radius) > 0.0)) = false:
+                return no cad mass properties
+            if (the cad distance from centre to (sphere's frame's origin)) > (scale * 1e-8):
+                return no cad mass properties
+        set outer to outerSphere's radius
+        set inner to 0.0
+        if (the length of (spheres's values)) = 2:
+            set inner to (the item at 1 in (spheres's values))'s radius
+        if inner >= outer:
+            return no cad mass properties
+        set outerCubed to (outer * outer) * outer
+        set innerCubed to (inner * inner) * inner
+        set outerFifth to ((outerCubed * outer) * outer)
+        set innerFifth to ((innerCubed * inner) * inner)
+        set volume to ((4.0 * 3.141592653589793) * (outerCubed - innerCubed)) / 3.0
+        set principalValue to ((8.0 * 3.141592653589793) * (outerFifth - innerFifth)) / 15.0
+        set principal to a cad vector3 with x principalValue, y principalValue and z principalValue
+        return cad mass assembled with volume volume, centroid centre, principal moments principal and axes (the cad x axis) (the cad y axis) (the cad z axis)
+
+local function the cad cylindrical mass properties of {cad body:body}:
+    execute:
+        set cylinders to a cad topology list of a cad cylinder
+        set planes to a cad topology list of a cad plane
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set face to the cad node pointer for (the item at index in faces) in body
+            if face = (0 as the type of face):
+                free faces
+                return no cad mass properties
+            set surface to the cad node pointer for (face's surface) in body
+            if surface = (0 as the type of surface):
+                free faces
+                return no cad mass properties
+            if (surface's kind) = 1:
+                append (surface's cylinder) to (cylinders's values)
+            else if (surface's kind) = 0:
+                append (surface's plane) to (planes's values)
+            else:
+                free faces
+                return no cad mass properties
+        free faces
+        if ((the length of (cylinders's values)) = 0) or ((the length of (planes's values)) = 0):
+            return no cad mass properties
+        loop index from 0 to the length of (cylinders's values):
+            set cylinder to the item at index in (cylinders's values)
+            if ((cad mass scalar (cylinder's radius) is finite) and ((cylinder's radius) > 0.0)) = false:
+                return no cad mass properties
+        sort cad mass cylinders by descending radius cylinders
+        set outer to the item at 0 in (cylinders's values)
+        set axisResult to the cad normal of (outer's base)
+        if (axisResult's valid) = false:
+            return no cad mass properties
+        set axisResult to the cad normalization of (axisResult's value)
+        set xResult to the cad normalization of (outer's base's xAxis)
+        if ((axisResult's valid) and (xResult's valid)) = false:
+            return no cad mass properties
+        set axis to axisResult's value
+        set xResult to the cad normalization of (the cad difference of (xResult's value) and (axis scaled by (the cad dot of (xResult's value) and axis)))
+        if (xResult's valid) = false:
+            return no cad mass properties
+        set xAxis to xResult's value
+        set yResult to the cad normalization of (the cad cross of axis and xAxis)
+        if (yResult's valid) = false:
+            return no cad mass properties
+        set yAxis to yResult's value
+        set reference to outer's base's origin
+        set referenceLateral to the cad difference of reference and (axis scaled by (the cad dot of reference and axis))
+        set scale to the maximum of (the absolute value of (outer's radius)) and 1.0
+        loop index from 0 to the length of (cylinders's values):
+            set cylinder to the item at index in (cylinders's values)
+            set candidateNormal to the cad normal of (cylinder's base)
+            if (candidateNormal's valid) = false:
+                return no cad mass properties
+            set candidateAxis to the cad normalization of (candidateNormal's value)
+            if (candidateAxis's valid) = false:
+                return no cad mass properties
+            set origin to cylinder's base's origin
+            set lateral to the cad difference of origin and (axis scaled by (the cad dot of origin and axis))
+            if (the absolute value of (the cad dot of (candidateAxis's value) and axis)) < (1.0 - 1e-8):
+                return no cad mass properties
+            if (the cad distance from lateral to referenceLateral) > (scale * 1e-8):
+                return no cad mass properties
+
+        set uniqueCylinders to a cad topology list of a cad cylinder
+        loop index from 0 to the length of (cylinders's values):
+            set cylinder to the item at index in (cylinders's values)
+            if (the length of (uniqueCylinders's values)) = 0:
+                append cylinder to (uniqueCylinders's values)
+            else:
+                set previous to the last item of (uniqueCylinders's values)
+                if (the absolute value of ((previous's radius) - (cylinder's radius))) > (scale * 1e-8):
+                    append cylinder to (uniqueCylinders's values)
+        if ((the length of (uniqueCylinders's values)) < 1) or ((the length of (uniqueCylinders's values)) > 2):
+            return no cad mass properties
+
+        set positions to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of (planes's values):
+            set plane to the item at index in (planes's values)
+            set normal to the cad normal of plane
+            if (normal's valid) = false:
+                return no cad mass properties
+            if (the absolute value of (the cad dot of (normal's value) and axis)) < (1.0 - 1e-8):
+                return no cad mass properties
+            append (the cad dot of (the cad difference of (plane's origin) and reference) and axis) to (positions's values)
+        sort cad mass scalars ascending positions
+        set positionTolerance to scale
+        loop index from 0 to the length of (positions's values):
+            set positionTolerance to the maximum of positionTolerance and (the absolute value of (the item at index in (positions's values)))
+        set positionTolerance to positionTolerance * 1e-8
+        set uniquePositions to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of (positions's values):
+            set position to the item at index in (positions's values)
+            if (the length of (uniquePositions's values)) = 0:
+                append position to (uniquePositions's values)
+            else if (the absolute value of ((the last item of (uniquePositions's values)) - position)) > positionTolerance:
+                append position to (uniquePositions's values)
+        if (the length of (uniquePositions's values)) != ((the length of (uniqueCylinders's values)) * 2):
+            return no cad mass properties
+
+        set outerCylinder to the item at 0 in (uniqueCylinders's values)
+        set outerMinimum to the item at 0 in (uniquePositions's values)
+        set outerMaximum to the last item of (uniquePositions's values)
+        set outerHeight to outerMaximum - outerMinimum
+        if outerHeight <= 0.0:
+            return no cad mass properties
+        set outerRadiusSquared to (outerCylinder's radius) * (outerCylinder's radius)
+        set outerVolume to (3.141592653589793 * outerRadiusSquared) * outerHeight
+        set outerCentre to (outerMinimum + outerMaximum) * 0.5
+        set innerRadius to 0.0
+        set innerHeight to 0.0
+        set innerVolume to 0.0
+        set innerCentre to outerCentre
+        if (the length of (uniqueCylinders's values)) = 2:
+            set innerCylinder to the item at 1 in (uniqueCylinders's values)
+            if (innerCylinder's radius) >= (outerCylinder's radius):
+                return no cad mass properties
+            set innerMinimum to the item at 1 in (uniquePositions's values)
+            set innerMaximum to the item at 2 in (uniquePositions's values)
+            set innerHeight to innerMaximum - innerMinimum
+            if innerHeight <= 0.0:
+                return no cad mass properties
+            set innerRadius to innerCylinder's radius
+            set innerVolume to (3.141592653589793 * (innerRadius * innerRadius)) * innerHeight
+            set innerCentre to (innerMinimum + innerMaximum) * 0.5
+        set volume to outerVolume - innerVolume
+        if ((cad mass scalar volume is finite) and (volume > 0.0)) = false:
+            return no cad mass properties
+        set centreAt to ((outerVolume * outerCentre) - (innerVolume * innerCentre)) / volume
+        set centroid to the cad sum of reference and (axis scaled by centreAt)
+        set axial to 0.5 * ((outerVolume * outerRadiusSquared) - (innerVolume * (innerRadius * innerRadius)))
+        set outerTransverse to (outerVolume * ((3.0 * outerRadiusSquared) + (outerHeight * outerHeight))) / 12.0
+        set innerTransverse to (innerVolume * ((3.0 * (innerRadius * innerRadius)) + (innerHeight * innerHeight))) / 12.0
+        set transverse to ((outerTransverse + (outerVolume * ((outerCentre - centreAt) * (outerCentre - centreAt)))) - innerTransverse) - (innerVolume * ((innerCentre - centreAt) * (innerCentre - centreAt)))
+        set principal to a cad vector3 with x transverse, y transverse and z axial
+        return cad mass assembled with volume volume, centroid centroid, principal moments principal and axes xAxis yAxis axis
+
+function the cad analytic mass properties of {cad body:body}:
+    execute:
+        set sphere to the cad spherical mass properties of body
+        if sphere's valid:
+            return sphere
+        set sector to the cad cylindrical sector mass properties of body
+        if sector's valid:
+            return sector
+        return the cad cylindrical mass properties of body

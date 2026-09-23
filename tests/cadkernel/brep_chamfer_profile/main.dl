@@ -1,0 +1,247 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_chamfer_profile.dl
+
+function check chamfer [profile] {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function chamfer [profile] near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
+    execute:
+        check chamfer profile ((the absolute value of (actual - expected)) < 1e-9)
+function chamfer [profile] point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+function chamfer [profile] line from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        return the cad curve2 of (a cad line2 from start to end)
+function chamfer [profile] [face] [key] {integer:index}:
+    execute:
+        set key to a new cad face key
+        set key's index to index as a 32 bit unsigned integer
+        set key's generation to 0 as a 32 bit unsigned integer
+        return key
+function chamfer [profile] [edge] [key] {integer:index}:
+    execute:
+        set key to a new cad edge key
+        set key's index to index as a 32 bit unsigned integer
+        set key's generation to 0 as a 32 bit unsigned integer
+        return key
+function chamfer [profile] rectangle segments:
+    execute:
+        set p0 to chamfer profile point 0 0
+        set p1 to chamfer profile point 10 0
+        set p2 to chamfer profile point 10 10
+        set p3 to chamfer profile point 0 10
+        set result to a list containing (chamfer profile line from p0 to p1)
+        append (chamfer profile line from p1 to p2) to result
+        append (chamfer profile line from p2 to p3) to result
+        append (chamfer profile line from p3 to p0) to result
+        return result
+function chamfer [profile] rectangle points:
+    execute:
+        set result to a list containing (chamfer profile point 0 0)
+        append (chamfer profile point 10 0) to result
+        append (chamfer profile point 10 10) to result
+        append (chamfer profile point 0 10) to result
+        return result
+function chamfer [profile] faces with [base] {cad face key:base} and [other] {cad face key:other}:
+    execute:
+        set result to a list containing (the cad chamfer face other)
+        append (the cad chamfer face other) to result
+        append (the cad chamfer face other) to result
+        append (the cad chamfer face base) to result
+        return result
+function chamfer [profile] one selection:
+    execute:
+        return a list containing (a cad chamfer profile selection at node 0 for edge (chamfer profile edge key 41))
+function chamfer [profile] rectangle with [base] distance {a number:baseDistance}, [other] distance {a number:otherDistance}, avoiding axis {boolean:avoidAxis}:
+    execute:
+        set segments to chamfer profile rectangle segments
+        set points to chamfer profile rectangle points
+        set base to chamfer profile face key 7
+        set other to chamfer profile face key 9
+        set faces to chamfer profile faces with base base and other other
+        set selected to chamfer profile one selection
+        set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance baseDistance, other distance otherDistance, tolerance 1e-9, avoiding axis avoidAxis
+        free selected
+        free faces
+        free points
+        free segments
+        return result
+
+set result to chamfer profile rectangle with base distance 2.0, other distance 1.0, avoiding axis false
+check chamfer profile result's valid
+check chamfer profile ((the length of result's value's values) = 5)
+set bevel to the item at 0 in result's value's values
+check chamfer profile (bevel's kind = cad line curve2 kind)
+chamfer profile near bevel's line's start's x to 0.0
+chamfer profile near bevel's line's start's y to 2.0
+chamfer profile near bevel's line's end's x to 1.0
+chamfer profile near bevel's line's end's y to 0.0
+print "single_corner_uses_face_specific_distances" as a line
+
+set segments to chamfer profile rectangle segments
+set points to chamfer profile rectangle points
+set base to chamfer profile face key 7
+set other to chamfer profile face key 9
+set faces to a list containing (the cad chamfer face other)
+append (the cad chamfer face base) to faces
+append (the cad chamfer face other) to faces
+append (the cad chamfer face base) to faces
+set selected to a list containing (a cad chamfer profile selection at node 0 for edge (chamfer profile edge key 41))
+append (a cad chamfer profile selection at node 2 for edge (chamfer profile edge key 43)) to selected
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.5, other distance 0.5, tolerance 1e-9, avoiding axis false
+check chamfer profile result's valid
+check chamfer profile ((the length of result's value's values) = 6)
+free selected
+free faces
+free points
+free segments
+print "nonadjacent_corners_trim_independently" as a line
+
+set segments to chamfer profile rectangle segments
+set points to a list containing (chamfer profile point 0 0)
+append (chamfer profile point 10 0) to points
+set faces to an empty list of a cad chamfer face
+set selected to an empty list of a cad chamfer profile selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face (chamfer profile face key 7), base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer invalid result error))
+free selected
+free faces
+free points
+free segments
+print "inconsistent_profile_counts_are_refused" as a line
+
+set segments to chamfer profile rectangle segments
+set points to chamfer profile rectangle points
+set base to chamfer profile face key 7
+set faces to a list containing (the cad chamfer face base)
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+set selected to chamfer profile one selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer edge outside base face error))
+check chamfer profile (result's error's edge = chamfer profile edge key 41)
+free selected
+free faces
+free points
+free segments
+print "a_selected_edge_must_straddle_the_base_face" as a line
+
+set segments to chamfer profile rectangle segments
+set points to chamfer profile rectangle points
+set base to chamfer profile face key 7
+set other to chamfer profile face key 9
+set faces to chamfer profile faces with base base and other other
+replace item at index 3 in faces with no cad chamfer face
+set selected to chamfer profile one selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer edge outside base face error))
+free selected
+free faces
+free points
+free segments
+print "a_missing_adjacent_face_is_refused" as a line
+
+set result to chamfer profile rectangle with base distance 10.0, other distance 1.0, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer distance interaction error))
+print "a_distance_cannot_remove_a_segment" as a line
+
+set result to chamfer profile rectangle with base distance 2.0, other distance 1.0, avoiding axis true
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer distance interaction error))
+print "axis_contact_is_refused_when_requested" as a line
+
+set p0 to chamfer profile point 0 0
+set p1 to chamfer profile point 4 0
+set p2 to chamfer profile point 0 4
+set segments to a list containing (chamfer profile line from p0 to p1)
+append (the cad curve2 of (a cad arc2 at (chamfer profile point 0 0) with radius 4.0 from 0.0 to 1.5707963267948966)) to segments
+append (chamfer profile line from p2 to p0) to segments
+set points to a list containing p0
+append p1 to points
+append p2 to points
+set base to chamfer profile face key 7
+set faces to a list containing (the cad chamfer face base)
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+set selected to an empty list of a cad chamfer profile selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile result's valid
+check chamfer profile (((the item at 1 in result's value's values)'s kind) = cad arc curve2 kind)
+free selected
+free faces
+free points
+free segments
+print "line_and_arc_profiles_are_preserved" as a line
+
+set segments to chamfer profile rectangle segments
+replace item at index 0 in segments with (the cad curve2 of (a cad circle2 at (chamfer profile point 5 0) with radius 5.0))
+set points to chamfer profile rectangle points
+set base to chamfer profile face key 7
+set faces to a list containing (the cad chamfer face base)
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+set selected to an empty list of a cad chamfer profile selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer unsupported surface error))
+free selected
+free faces
+free points
+free segments
+print "unsupported_profile_curves_are_refused" as a line
+
+set p0 to chamfer profile point 0 0
+set p1 to chamfer profile point 4 4
+set p2 to chamfer profile point 0 4
+set p3 to chamfer profile point 4 0
+set segments to a list containing (chamfer profile line from p0 to p1)
+append (chamfer profile line from p1 to p2) to segments
+append (chamfer profile line from p2 to p3) to segments
+append (chamfer profile line from p3 to p0) to segments
+set points to a list containing p0
+append p1 to points
+append p2 to points
+append p3 to points
+set base to chamfer profile face key 7
+set faces to a list containing (the cad chamfer face base)
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+append (the cad chamfer face base) to faces
+set selected to an empty list of a cad chamfer profile selection
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 1.0, other distance 1.0, tolerance 1e-9, avoiding axis false
+check chamfer profile ((result's valid = false) and (result's error's kind = cad chamfer distance interaction error))
+free selected
+free faces
+free points
+free segments
+print "self_intersecting_profiles_are_refused" as a line
+
+set arcStart to chamfer profile point 0 4
+set arcEnd to chamfer profile point 4 0
+set middle to chamfer profile point 2 2
+set segments to a list containing (the cad curve2 of (a cad arc2 at (chamfer profile point 0 0) with radius 4.0 from 1.5707963267948966 to 0.0))
+append (chamfer profile line from arcEnd to middle) to segments
+append (chamfer profile line from middle to arcStart) to segments
+set points to a list containing arcStart
+append arcEnd to points
+append middle to points
+set base to chamfer profile face key 7
+set other to chamfer profile face key 9
+set faces to a list containing (the cad chamfer face base)
+append (the cad chamfer face other) to faces
+append (the cad chamfer face other) to faces
+set selected to a list containing (a cad chamfer profile selection at node 1 for edge (chamfer profile edge key 45))
+set result to the cad chamfer profile of segments through points with selections selected and faces faces, base face base, base distance 0.4, other distance 0.3, tolerance 1e-9, avoiding axis false
+check chamfer profile result's valid
+check chamfer profile ((the length of result's value's values) = 4)
+set trimmedArc to the item at 0 in result's value's values
+check chamfer profile (trimmedArc's kind = cad arc curve2 kind)
+chamfer profile near trimmedArc's arc's startAngle to 1.5707963267948966
+chamfer profile near trimmedArc's arc's endAngle to 6.183185307179587
+free selected
+free faces
+free points
+free segments
+print "wrapped_arcs_keep_their_forward_sweep" as a line

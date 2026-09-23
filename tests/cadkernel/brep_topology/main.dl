@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_topology/ownership.dl
+import tests/cadkernel/brep_topology/graph.dl

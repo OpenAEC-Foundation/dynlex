@@ -1,0 +1,150 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/geom2d/intersect.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/intersect.rs
+# Returned lists are owned by the caller and must be released with free.
+# Parameters are unbounded; circle and ellipse angles retain atan2's signed range.
+
+import lib/cadkernel/geometry2.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad parameter pair
+    members:
+        first as a 64 bit floating-point number
+        second as a 64 bit floating-point number
+
+function a cad parameter pair of {a 64 bit floating-point number:first} and {a 64 bit floating-point number:second}:
+    execute:
+        return @intrinsic("construct", a cad parameter pair, first, second)
+
+# Option<(f64, f64)>: inspect valid before reading value.
+class:
+    patterns:
+        [a|] cad optional parameter pair
+    members:
+        valid as a boolean
+        value as a cad parameter pair
+
+local function cad intersection determinant epsilon:
+    replacement:
+        1e-10 as a 64 bit floating-point number
+
+local function cad intersection discriminant epsilon:
+    replacement:
+        1e-14 as a 64 bit floating-point number
+
+local function cad intersection degenerate direction:
+    replacement:
+        1e-20 as a 64 bit floating-point number
+
+local function cad intersection proximity epsilon:
+    replacement:
+        1e-9 as a 64 bit floating-point number
+
+# Shared quadratic solve after each caller has checked its squared direction.
+# Negative discriminants are rejected before testing the double-root threshold.
+local function cad intersection quadratic roots for {a 64 bit floating-point number:a}, {a 64 bit floating-point number:b} and {a 64 bit floating-point number:c}:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        set discriminant to (b * b) - ((4.0 * a) * c)
+        if discriminant < 0.0:
+            return result
+        if discriminant < (cad intersection discriminant epsilon):
+            append ((-b) / (2.0 * a)) to result
+            return result
+        set root to the square root of discriminant
+        append (((-b) - root) / (2.0 * a)) to result
+        append (((-b) + root) / (2.0 * a)) to result
+        return result
+
+function cad line intersection from {cad vector2:origin} along {cad vector2:direction} with {cad vector2:otherOrigin} along {cad vector2:otherDirection}:
+    execute:
+        set determinant to the cad cross of direction and otherDirection
+        if (the absolute value of determinant) < (cad intersection determinant epsilon):
+            return @intrinsic("construct", a cad optional parameter pair, false, a cad parameter pair of 0.0 and 0.0)
+        set dx to otherOrigin's x - origin's x
+        set dy to otherOrigin's y - origin's y
+        set first to ((dx * otherDirection's y) - (dy * otherDirection's x)) / determinant
+        set second to ((dx * direction's y) - (dy * direction's x)) / determinant
+        return @intrinsic("construct", a cad optional parameter pair, true, a cad parameter pair of first and second)
+
+function cad line circle intersections from {cad vector2:origin} along {cad vector2:direction} around {cad vector2:centre} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set fx to origin's x - centre's x
+        set fy to origin's y - centre's y
+        set a to (direction's x * direction's x) + (direction's y * direction's y)
+        if a < (cad intersection degenerate direction):
+            return an empty list of a 64 bit floating-point number
+        set b to 2.0 * ((fx * direction's x) + (fy * direction's y))
+        set c to ((fx * fx) + (fy * fy)) - (radius * radius)
+        return cad intersection quadratic roots for a, b and c
+
+function cad circle intersection angles at {cad vector2:centre1} with radius {a 64 bit floating-point number:radius1} and at {cad vector2:centre2} with radius {a 64 bit floating-point number:radius2}:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        set spanX to centre2's x - centre1's x
+        set spanY to centre2's y - centre1's y
+        set distance to the square root of ((spanX * spanX) + (spanY * spanY))
+        if (distance < (cad intersection proximity epsilon)) or ((distance > ((radius1 + radius2) + (cad intersection proximity epsilon))) or (distance < ((the absolute value of (radius1 - radius2)) - (cad intersection proximity epsilon)))):
+            return result
+        set along to (((radius1 * radius1) - (radius2 * radius2)) + (distance * distance)) / (2.0 * distance)
+        set halfChordSquared to (radius1 * radius1) - (along * along)
+        if halfChordSquared < 0.0:
+            return result
+        set halfChord to the square root of halfChordSquared
+        set midX to centre1's x + ((along * spanX) / distance)
+        set midY to centre1's y + ((along * spanY) / distance)
+        set offsetX to (halfChord * spanY) / distance
+        set offsetY to ((-halfChord) * spanX) / distance
+        set first to @intrinsic("atan2", (midY + offsetY) - centre1's y, (midX + offsetX) - centre1's x)
+        append first to result
+        if halfChord < (cad intersection proximity epsilon):
+            return result
+        set second to @intrinsic("atan2", (midY - offsetY) - centre1's y, (midX - offsetX) - centre1's x)
+        append second to result
+        return result
+
+function cad line ellipse intersections from {cad vector2:origin} along {cad vector2:direction} with {cad ellipse:shape}:
+    execute:
+        set result to an empty list of a cad parameter pair
+        if cad shape is degenerate:
+            return result
+        set nx to shape's majorAxis's x
+        set ny to shape's majorAxis's y
+        set rx to origin's x - shape's centre's x
+        set ry to origin's y - shape's centre's y
+        set localX to (rx * nx) + (ry * ny)
+        set localY to ((-rx) * ny) + (ry * nx)
+        set dirX to (direction's x * nx) + (direction's y * ny)
+        set dirY to ((-direction's x) * ny) + (direction's y * nx)
+        set unitX to localX / shape's majorRadius
+        set unitDx to dirX / shape's majorRadius
+        set unitY to localY / shape's minorRadius
+        set unitDy to dirY / shape's minorRadius
+        set a to (unitDx * unitDx) + (unitDy * unitDy)
+        if a < (cad intersection degenerate direction):
+            return result
+        set b to 2.0 * ((unitX * unitDx) + (unitY * unitDy))
+        set c to ((unitX * unitX) + (unitY * unitY)) - 1.0
+        set lineParameters to cad intersection quadratic roots for a, b and c
+        loop index from 0 to the length of lineParameters:
+            set s to the item at index in lineParameters
+            set cosT to unitX + (s * unitDx)
+            set sinT to unitY + (s * unitDy)
+            set t to @intrinsic("atan2", sinT, cosT)
+            append (a cad parameter pair of s and t) to result
+        free lineParameters
+        return result
+
+function cad circle intersection points at {cad vector2:centre1} with radius {a 64 bit floating-point number:radius1} and at {cad vector2:centre2} with radius {a 64 bit floating-point number:radius2}:
+    execute:
+        set result to an empty list of a cad vector2
+        set angles to cad circle intersection angles at centre1 with radius radius1 and at centre2 with radius radius2
+        loop index from 0 to the length of angles:
+            set angle to the item at index in angles
+            set horizontal to centre1's x + (radius1 * (the cosine of angle))
+            set vertical to centre1's y + (radius1 * (the sine of angle))
+            append (a cad vector2 with x horizontal and y vertical) to result
+        free angles
+        return result

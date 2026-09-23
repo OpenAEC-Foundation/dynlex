@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/fillet2/main.dl
+
+function fillet2 local results:
+    execute:
+        set first to cross2 segment [-10.0,0.0] to [10.0,0.0]
+        set second to cross2 segment [0.0,-10.0] to [0.0,10.0]
+        return the cad fillets between first and second with radius 2.0 within (a cad tolerance of 1e-9)
+
+set results to fillet2 local results
+set independent to fillet2 local results
+check fillet2 (results != independent)
+check fillet2 ((the length of results) = 4)
+set value to the item at 0 in results
+set copy to value
+set the startAngle of value to 0.0
+replace item at index 0 in results with value
+check fillet2 ((the item at 0 in independent) = copy)
+free results
+check fillet2 (copy = (the item at 0 in independent))
+free independent
+
+set unsupported to cross2 interpolated spline
+set before to the cad clone of unsupported
+set refused to the cad fillets between unsupported and a with radius 2.0 within (a cad tolerance of 1e-9)
+check fillet2 ((the length of refused) = 0)
+check fillet2 (unsupported = before)
+free refused
+print "owned fillet lists and scalar copies outlive their inputs" as a line

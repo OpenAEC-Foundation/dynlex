@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep.dl
+import lib/cadkernel/brep_debug.dl
+
+function check brep debug {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 96)
+
+function check brep text {string:actual} against {C string:expected}:
+    execute:
+        if (actual = expected) = false:
+            print actual as a line
+            print expected as a line
+            @intrinsic("call", "libc", "exit", nothing, 96)
+

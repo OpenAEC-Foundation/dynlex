@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: MPL-2.0
+# Tests from space/arc_union.rs and space/line_union.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, with independent boundaries.
+import lib/cadkernel/arc_union3.dl
+import lib/cadkernel/line_union3.dl
+
+function check spatial union {boolean:condition} named {C string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set centre to the cad zero vector3
+set normal to the cad z axis
+set first to a cad circular arc at centre with normal normal and radius 2.0 from 0.0 to 3.141592653589793
+set second to a cad circular arc at centre with normal normal and radius 2.0 from 3.141592653589793 to 6.283185307179586
+set joined to the cad circular arc union of first and second within 1e-9
+check spatial union (the valid of joined) named "touching half arcs valid"
+check spatial union (cad (the kind of the value of joined) equals (the cad end to end arc union kind)) named "half arcs end to end"
+check spatial union (the fullCircle of the value of joined) named "half arcs cover circle"
+
+set centre to a cad vector3 with x 1.0, y 2.0 and z 3.0
+set first to a cad circular arc at centre with normal normal and radius 2.0 from 0.0 to 3.141592653589793
+check spatial union (cad circle at centre with normal normal and radius 2.0 contains first) named "exact support contains"
+check spatial union ((cad circle at (a cad vector3 with x 1.0, y 2.0 and z 3.1) with normal normal and radius 2.0 contains first) = false) named "different support rejected"
+set collapsed to a cad circular arc at centre with normal normal and radius 2.0 from 0.0 to 0.0
+check spatial union ((cad circle at centre with normal normal and radius 2.0 contains collapsed) = false) named "zero span rejected"
+set joined to the cad circular arc union of first and first within 0.0
+check spatial union (the valid of joined) named "duplicate valid at zero tolerance"
+check spatial union (cad (the kind of the value of joined) equals (the cad duplicate arc union kind)) named "duplicate kind"
+set separated to a cad circular arc at centre with normal normal and radius 2.0 from 4.0 to 5.0
+set joined to the cad circular arc union of first and separated within 0.0
+check spatial union ((the valid of joined) = false) named "real arc gap rejected"
+set infinity to 1.0 / 0.0
+set joined to the cad circular arc union of first and first within infinity
+check spatial union ((the valid of joined) = false) named "infinite tolerance rejected"
+
+set a to a cad vector3 with x 4.0, y 0.0 and z 0.0
+set b to a cad vector3 with x 2.0, y 0.0 and z 0.0
+set c to a cad vector3 with x 3.0, y 0.0 and z 0.0
+set d to a cad vector3 with x 1.0, y 0.0 and z 0.0
+set merged to the cad line union from a to b and from c to d within 1e-9
+check spatial union (the valid of merged) named "reversed line union valid"
+check spatial union (cad (the kind of the value of merged) equals (the cad overlapping line union kind)) named "line overlap kind"
+check spatial union ((the x of the start of the value of merged) = 4.0) named "first direction start"
+check spatial union ((the x of the end of the value of merged) = 1.0) named "first direction end"
+set points to an empty list of a cad vector3
+append (the cad zero vector3) to points
+append (the cad x axis) to points
+append ((the cad x axis) scaled by 2.0) to points
+append (the cad x axis) to points
+set kept to the cad retained indices of linear chain points within 1e-9
+check spatial union ((the length of kept) = 3) named "direction change kept"
+check spatial union (((the item at 0 in kept) = 0) and (((the item at 1 in kept) = 2) and ((the item at 2 in kept) = 3))) named "retained source indices"
+free kept
+set kept to the cad retained indices of linear chain points within -1.0
+check spatial union ((the length of kept) = 4) named "invalid simplification tolerance preserves all"
+free kept
+set merged to the cad line union from a to a and from c to d within 0.0
+check spatial union ((the valid of merged) = false) named "zero line rejected"
+set merged to the cad line union from a to b and from b to d within 0.0
+check spatial union (the valid of merged) named "line touching accepted"
+check spatial union (cad (the kind of the value of merged) equals (the cad end to end line union kind)) named "line end to end kind"
+free points
+print "cadkernel union3: PASS" as a line

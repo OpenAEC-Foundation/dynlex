@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/offset2.dl
+
+function check cad offset2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function cad offset2 point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+
+function cad offset2 rectangle at {cad vector2:origin} with width {a number:width} and height {a number:height}:
+    execute:
+        set vertices to a list containing (a straight cad polyline vertex2 at origin)
+        append (a straight cad polyline vertex2 at (cad offset2 point (origin's x + width) origin's y)) to vertices
+        append (a straight cad polyline vertex2 at (cad offset2 point (origin's x + width) (origin's y + height))) to vertices
+        append (a straight cad polyline vertex2 at (cad offset2 point origin's x (origin's y + height))) to vertices
+        set result to the cad polyline2 with vertices vertices and closure true
+        free vertices
+        return result
+
+function cad offset2 low horizontal of {cad polyline2:shape}:
+    execute:
+        set result to (1.0 as a 64 bit floating-point number) / 0.0
+        loop index from 0 to the length of shape's vertices:
+            set candidate to (the item at index in shape's vertices)'s position's x
+            if candidate < result:
+                set result to candidate
+        return result
+
+set rectangle to cad offset2 rectangle at (cad offset2 point 0 0) with width 10 and height 6
+set result to the cad offset polylines of rectangle by 1.0 toward (cad offset2 point (the negative of 5.0) 3.0)
+check cad offset2 ((the length of result) = 1)
+check cad offset2 ((cad offset2 low horizontal of (the item at 0 in result)) < (the negative of 0.5))
+free result
+print "offsetting_outward_grows_the_loop" as a line
+
+set result to the cad offset polylines of rectangle by 1.0 toward (cad offset2 point 5 3)
+check cad offset2 ((the length of result) = 1)
+check cad offset2 ((cad offset2 low horizontal of (the item at 0 in result)) > 0.5)
+free result
+print "offsetting_inward_shrinks_the_loop" as a line
+
+set result to the cad offset polylines of rectangle by 1.0 toward (cad offset2 point 5 3)
+check cad offset2 ((the item at 0 in result)'s closed)
+free result
+print "a_closed_source_offsets_to_a_closed_result" as a line
+
+set result to the cad offset polylines of rectangle by 1.0 toward (cad offset2 point (the negative of 5.0) 3.0)
+loop index from 0 to the length of (the item at 0 in result)'s vertices:
+    check cad offset2 ((the absolute value of ((the item at index in (the item at 0 in result)'s vertices)'s bulge)) < 1e-6)
+free result
+print "corners_stay_sharp_rather_than_rounding" as a line
+
+set result to the cad offset polylines of rectangle by 5.0 toward (cad offset2 point 5 3)
+check cad offset2 ((the length of result) = 0)
+free result
+print "an_inward_offset_wider_than_the_shape_collapses" as a line
+
+set openVertices to a list containing (a straight cad polyline vertex2 at (cad offset2 point 0 0))
+append (a straight cad polyline vertex2 at (cad offset2 point 10 0)) to openVertices
+append (a straight cad polyline vertex2 at (cad offset2 point 10 6)) to openVertices
+set openShape to the cad polyline2 with vertices openVertices and closure false
+free openVertices
+set result to the cad offset polylines of openShape by 1.0 toward (cad offset2 point 5 1)
+check cad offset2 ((the length of result) = 1)
+check cad offset2 (((the item at 0 in result)'s closed) = false)
+free result
+print "an_open_polyline_offsets_without_closing" as a line
+
+set result to the cad offset polylines of rectangle by 0.0 toward (cad offset2 point 5 3)
+check cad offset2 ((the length of result) = 0)
+free result
+print "a_zero_distance_offset_does_nothing" as a line
+
+set loneVertices to a list containing (a straight cad polyline vertex2 at (cad offset2 point 0 0))
+set lone to the cad polyline2 with vertices loneVertices and closure false
+free loneVertices
+set result to the cad offset polylines of lone by 1.0 toward (cad offset2 point 1 1)
+check cad offset2 ((the length of result) = 0)
+free result
+print "too_few_vertices_offset_to_nothing" as a line
+
+set surveyOrigin to cad offset2 point 512345.678 4512345.678
+set survey to cad offset2 rectangle at surveyOrigin with width 10 and height 6
+set result to the cad offset polylines of survey by 1.0 toward (cad offset2 point 512350.678 4512348.678)
+check cad offset2 ((the length of result) = 1)
+check cad offset2 ((the absolute value of ((cad offset2 low horizontal of (the item at 0 in result)) - 512346.678)) < 1e-6)
+free result
+print "survey_coordinates_offset_by_the_distance_asked_for" as a line
+
+set arcVertices to a list containing (a cad polyline vertex2 at (cad offset2 point 0 0) with bulge 1.0)
+append (a straight cad polyline vertex2 at (cad offset2 point 4 0)) to arcVertices
+set arcShape to the cad polyline2 with vertices arcVertices and closure true
+free arcVertices
+set result to the cad offset polylines of arcShape by 0.5 toward (cad offset2 point 2 0.1)
+check cad offset2 ((the length of result) > 0)
+set foundArc to false
+loop resultIndex from 0 to the length of result:
+    set offsetShape to the item at resultIndex in result
+    loop vertexIndex from 0 to the length of offsetShape's vertices:
+        if (the absolute value of ((the item at vertexIndex in offsetShape's vertices)'s bulge)) > 1e-6:
+            set foundArc to true
+check cad offset2 foundArc
+free result
+print "an_arc_segment_survives_the_round_trip" as a line

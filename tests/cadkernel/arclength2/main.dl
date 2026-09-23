@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: MPL-2.0
+# Complete fixtures from pinned geom2d/arclength.rs, in source order.
+import lib/cadkernel/arclength2.dl
+import tests/cadkernel/arclength2/support.dl
+
+function measure2 walked length of {cad curve2:shape} with {integer:steps}:
+    execute:
+        set total to 0.0
+        loop index from 0 to steps:
+            set a to the cad point on shape at ((index as a 64 bit floating-point number) / (steps as a 64 bit floating-point number))
+            set b to the cad point on shape at (((index + 1) as a 64 bit floating-point number) / (steps as a 64 bit floating-point number))
+            set total to total + (the cad distance from a to b)
+        return total
+
+set zero to the cad zero vector2
+set line to the cad curve2 of (a cad line2 from zero to (measure2 point 3.0 and 4.0))
+check measure2 ((the absolute value of ((the cad length of line) - 5.0)) < 1e-12)
+check measure2 (measure2 (the cad point on line at distance 2.5) exactly equals (measure2 point 1.5 and 2.0))
+check measure2 ((the absolute value of ((the cad parameter on line at distance 1.25) - 0.25)) < 1e-12)
+print "a_line_measures_its_own_span" as a line
+set circle to the cad curve2 of (a cad circle2 at zero with radius 10.0)
+check measure2 ((the absolute value of ((the cad length of circle) - (6.283185307179586 * 10.0))) < 1e-12)
+set arc to the cad curve2 of (a cad arc2 at (measure2 point 1.0 and 2.0) with radius 4.0 from 0.0 to 1.5707963267948966)
+check measure2 ((the absolute value of ((the cad length of arc) - (4.0 * 1.5707963267948966))) < 1e-12)
+set quarter to the cad point on arc at distance ((the cad length of arc) * 0.25)
+set expected to the cad point on arc at 0.25
+check measure2 ((the absolute value of (quarter's x - expected's x)) < 1e-12)
+print "a_circle_and_an_arc_use_their_closed_forms" as a line
+set ellipse to measure2 ellipse at zero with radii 100.0 and 40.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+set integrated to the cad length of ellipse
+set walked to measure2 walked length of ellipse with 200000
+check measure2 ((the absolute value of (integrated - walked)) < (1e-4 * walked))
+print "an_ellipse_is_integrated_and_agrees_with_walking_it" as a line
+set ellipse to measure2 ellipse at zero with radii 100.0 and 10.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+set total to the cad length of ellipse
+set quarter to the cad point on ellipse at distance (total * 0.25)
+check measure2 ((the cad distance from quarter to (the cad point on ellipse at 0.25)) < 1e-4)
+set byDistance to the cad point on ellipse at distance (total * 0.125)
+set byParameter to the cad point on ellipse at 0.125
+check measure2 ((the cad distance from byDistance to byParameter) > 10.0)
+print "an_ellipse_spaced_by_distance_is_not_spaced_by_parameter" as a line
+set ellipse to measure2 ellipse at (measure2 point 5.0 and -3.0) with radii 60.0 and 15.0 along (measure2 point 0.6 and 0.8) from 0.0 to 6.283185307179586
+set total to the cad length of ellipse
+set step to total / 12.0
+set points to an empty list of a cad vector2
+loop index from 0 through 12:
+    append (the cad point on ellipse at distance (step * (index as a 64 bit floating-point number))) to points
+loop index from 0 to 12:
+    set chord to the cad distance from (the item at index in points) to (the item at (index + 1) in points)
+    check measure2 ((the absolute value of (chord - step)) < (0.05 * step))
+free points
+print "even_spacing_really_is_even" as a line
+set polyline to measure2 polyline [[0.0,0.0,0.0],[100.0,0.0,1.0],[200.0,0.0,0.0]] with closure false
+set expectedLength to 100.0 + (3.141592653589793 * 50.0)
+check measure2 ((the absolute value of ((the cad length of polyline) - expectedLength)) < 1e-9)
+check measure2 ((the cad length of polyline) > 250.0)
+set middle to the cad point on polyline at distance (expectedLength * 0.5)
+check measure2 (middle's x > 100.0)
+print "a_polyline_counts_its_bulges_rather_than_its_chords" as a line
+set polyline to measure2 polyline [[0.0,0.0,0.0],[30.0,0.0,0.0],[30.0,40.0,0.0]] with closure false
+check measure2 ((the absolute value of ((the cad length of polyline) - 70.0)) < 1e-12)
+set corner to the cad point on polyline at distance 30.0
+check measure2 (measure2 corner is near (measure2 point 30.0 and 0.0) within 1e-9)
+set end to the cad point on polyline at distance 70.0
+check measure2 ((the absolute value of (end's y - 40.0)) < 1e-9)
+print "a_polyline_walks_to_its_own_vertices" as a line
+set spline to measure2 quarter spline
+set expectedLength to 100.0 * 1.5707963267948966
+check measure2 ((the absolute value of ((the cad length of spline) - expectedLength)) < (1e-6 * expectedLength))
+check measure2 ((the cad length of spline) < 190.0)
+print "a_spline_measures_the_curve_and_not_its_control_polygon" as a line
+set total to the cad length of spline
+loop index from 0 through 8:
+    set point to the cad point on spline at distance ((total * (index as a 64 bit floating-point number)) / 8.0)
+    check measure2 ((the absolute value of ((the cad length of point) - 100.0)) < 1e-6)
+    set angle to the cad angle of point
+    set expectedAngle to (1.5707963267948966 * (index as a 64 bit floating-point number)) / 8.0
+    check measure2 ((the absolute value of (angle - expectedAngle)) < 1e-6)
+print "a_spline_walked_by_distance_stays_on_the_circle_it_traces" as a line
+set ray to the cad curve2 of (a cad ray2 from zero along (measure2 point 3.0 and 4.0))
+check measure2 ((the cad length of ray) = (1.0 / 0.0))
+check measure2 (measure2 (the cad point on ray at distance 5.0) is near (measure2 point 3.0 and 4.0) within 1e-12)
+print "an_unbounded_curve_reports_an_infinite_length" as a line
+set line to the cad curve2 of (a cad line2 from zero to (measure2 point 10.0 and 0.0))
+check measure2 (measure2 (the cad point on line at distance -5.0) exactly equals zero)
+check measure2 (measure2 (the cad point on line at distance 1000.0) exactly equals (measure2 point 10.0 and 0.0))
+print "distances_outside_the_curve_clamp_to_its_ends" as a line
+set collapsed to the cad curve2 of (a cad line2 from (measure2 point 7.0 and 7.0) to (measure2 point 7.0 and 7.0))
+check measure2 ((the cad length of collapsed) = 0.0)
+check measure2 ((the cad parameter on collapsed at distance 1.0) = 0.0)
+print "a_collapsed_curve_has_nothing_to_measure" as a line
+set circle to the cad curve2 of (a cad circle2 at (measure2 point 1.0 and 2.0) with radius 7.0)
+set arc to the cad curve2 of (a cad arc2 at zero with radius 3.0 from 0.5 to 2.0)
+set ellipse to measure2 ellipse at zero with radii 9.0 and 4.0 along (measure2 point 0.6 and 0.8) from 0.3 to 2.9
+set shapes to [circle,arc,ellipse]
+loop shapeIndex from 0 to 3:
+    set shape to the item at shapeIndex in shapes
+    loop index from 1 to 10:
+        set parameter to (index as a 64 bit floating-point number) / 10.0
+        set before to the cad point on shape at (parameter - 1e-7)
+        set after to the cad point on shape at (parameter + 1e-7)
+        set numeric to (the cad difference of after and before) cad divided by (2.0 * 1e-7)
+        set analytic to the cad tangent of shape at parameter
+        set scale to the maximum of (the cad length of numeric) and 1.0
+        check measure2 ((the cad length of (the cad difference of analytic and numeric)) < (1e-4 * scale))
+print "the_tangent_agrees_with_how_the_point_moves" as a line
+set local to measure2 ellipse at zero with radii 30.0 and 12.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+set remote to measure2 ellipse at (measure2 point 512345.678 and 4512345.678) with radii 30.0 and 12.0 along (measure2 point 1.0 and 0.0) from 0.0 to 6.283185307179586
+check measure2 ((the absolute value of ((the cad length of local) - (the cad length of remote))) < 1e-9)
+print "survey_coordinates_measure_the_same_length" as a line

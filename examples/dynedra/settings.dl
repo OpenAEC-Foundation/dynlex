@@ -1,0 +1,39 @@
+# Shared Dynedra Lab settings without model or tessellation dependencies.
+import lib/cadkernel/core.dl
+
+class:
+    patterns:
+        [a|] lab settings
+    members:
+        operation as an integer
+        samples as an integer
+        weight as a 64 bit floating-point number
+        height as a 64 bit floating-point number
+        turns as a 64 bit floating-point number
+        solidKind as an integer
+
+function the initial lab settings:
+    execute:
+        return @intrinsic("construct", a lab settings, 0, 128, the square root of 0.5, 1.5, 2.0, 0)
+
+function the lab operation name for {integer:operation}:
+    execute:
+        if operation = 0:
+            return "Rational arc"
+        if operation = 1:
+            return "Bezier curve"
+        if operation = 2:
+            return "Helix"
+        if operation = 3:
+            return "NURBS surface"
+        if operation = 4:
+            return "Planar faces"
+        if operation = 5:
+            return "Width band"
+        if operation = 6:
+            return "B-rep solids"
+        return "Unknown operation"
+
+function the lab [point] {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z

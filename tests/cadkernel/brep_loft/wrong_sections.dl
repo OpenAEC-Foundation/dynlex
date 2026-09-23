@@ -1,0 +1,5 @@
+import lib/cadkernel/brep_loft.dl
+set values to a list containing 1
+set result to the cad loft through values
+print (result's valid) as a line
+free values

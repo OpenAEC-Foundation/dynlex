@@ -1,0 +1,13 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function emit value:
+    replacement:
+        @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, value))
+function bad type:
+    replacement:
+        emit 88
+        integer
+function accept {bad type:value}:
+    execute:
+        @intrinsic("discard", value)

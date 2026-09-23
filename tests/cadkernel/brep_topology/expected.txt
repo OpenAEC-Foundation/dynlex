@@ -1,0 +1,6 @@
+a_clean_node_lowers_from_its_source
+soiling_blocks_reuse_but_keeps_the_reference
+soiling_is_idempotent
+synthesized_nodes_have_nothing_to_fall_back_on
+node equality and nested payload ownership
+body graph queries clone and stale keys

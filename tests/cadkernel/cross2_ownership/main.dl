@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/containment2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check crossing storage {boolean:condition} labelled {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function verify crossing storage of {cad curve2:source}:
+    execute:
+        set shape to source
+        set owner to shape's polyline's storage's owner
+        if shape's kind = 5:
+            set owner to shape's nurbs's owner
+        set baseline to @intrinsic("dereference", owner)
+        set target to cross2 point [1.0,1.0]
+        set line to cross2 xline [0.0,1.0] along [1.0,0.0]
+        set tolerance to a cad tolerance of 1e-6
+        set start to the cad point on shape at 0.0
+        loop iteration from 0 to 20:
+            set hits to the cad crossings of shape and line within tolerance
+            check crossing storage ((the length of hits) > 0) labelled "crossing exists"
+            free hits
+            set boundary to a list containing shape
+            set nearest to the cad nearest of boundary to target
+            check crossing storage nearest's valid labelled "nearest exists"
+            check crossing storage (nearest's index = 0) labelled "nearest index"
+            check crossing storage (cad boundary boundary contains nearest's value's point within tolerance) labelled "nearest point lies on boundary"
+            free boundary
+        check crossing storage ((@intrinsic("dereference", owner)) = baseline) labelled "balanced ownership"
+        set startAfter to the cad point on shape at 0.0
+        check crossing storage ((start's x = startAfter's x) and (start's y = startAfter's y)) labelled "source unchanged"
+        set first to the cad crossings of shape and line within tolerance
+        set second to the cad crossings of shape and line within tolerance
+        check crossing storage (first != second) labelled "independent crossing lists"
+        set saved to the item at 0 in second
+        replace item at index 0 in first with (a new cad crossing2)
+        check crossing storage ((the item at 0 in second) = saved) labelled "independent crossing values"
+        free first
+        free cad curve shape
+        check crossing storage ((the item at 0 in second) = saved) labelled "crossings survive local release"
+        free second
+
+function detached crossing values:
+    execute:
+        set curve to cross2 interpolated spline
+        set line to cross2 xline [0.0,1.0] along [1.0,0.0]
+        set hits to the cad crossings of curve and line within (a cad tolerance of 1e-6)
+        free cad curve curve
+        return hits
+
+set polyline to cross2 polyline [[0.0,0.0,0.0],[3.0,3.0,0.0],[6.0,0.0,0.0]] with closure false
+verify crossing storage of polyline
+free cad curve polyline
+set spline to cross2 interpolated spline
+verify crossing storage of spline
+free cad curve spline
+set detached to detached crossing values
+check crossing storage ((the length of detached) > 0) labelled "detached crossing count"
+loop index from 0 to the length of detached:
+    set hit to the item at index in detached
+    check crossing storage ((the absolute value of (hit's point's y - 1.0)) < 1e-6) labelled "detached crossing position"
+free detached
+print "crossing and containment ownership passed" as a line

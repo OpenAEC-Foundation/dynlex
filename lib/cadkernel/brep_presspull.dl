@@ -1,0 +1,1344 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/presspull.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Face offsets edit cloned topology in place so concavity, holes and unrelated
+# lumps are retained. Region booleans are added with the boolean dependency.
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/brep_pcurve.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/brep_intersect.dl
+import lib/cadkernel/area2.dl
+import lib/cadkernel/brep_profile.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/transform2.dl
+import lib/cadkernel/cross2.dl
+import lib/cadkernel/containment2.dl
+
+class:
+    patterns:
+        [a|] cad presspull curve loop
+    members:
+        values as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+class:
+    patterns:
+        [a|] cad planar face profile
+    members:
+        plane as a cad plane
+        loops as the type of (a cad topology list of a cad presspull curve loop)
+        outward as a cad vector3
+class:
+    patterns:
+        [a|] cad planar face profile result
+    members:
+        valid as a boolean
+        value as a cad planar face profile
+class:
+    patterns:
+        [a|] cad presspull moved vertex
+    members:
+        key as a cad vertex key
+        point as a cad vector3
+class:
+    patterns:
+        [a|] cad presspull curve result
+    members:
+        valid as a boolean
+        value as the type of (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+class:
+    patterns:
+        [a|] cad presspull surface result
+    members:
+        valid as a boolean
+        value as the type of (the cad surface of the cad xy plane)
+class:
+    patterns:
+        [a|] cad presspull parameter result
+    members:
+        valid as a boolean
+        values as the type of (a cad topology list of a 64 bit floating-point number)
+class:
+    patterns:
+        [a|] cad presspull span result
+    members:
+        valid as a boolean
+        first as a 64 bit floating-point number
+        second as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad presspull area result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad presspull face result
+    members:
+        valid as a boolean
+        value as a cad face key
+class:
+    patterns:
+        [a|] cad presspull lifted curve
+    members:
+        valid as a boolean
+        curve as the type of (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+        first as a 64 bit floating-point number
+        second as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad planar intersection result
+    members:
+        valid as a boolean
+        snag as an integer
+        kind as an integer
+        value as a cad body
+class:
+    patterns:
+        [a|] cad presspull profiles result
+    members:
+        valid as a boolean
+        snag as an integer
+        values as the type of (a cad topology list of a cad planar face profile)
+class:
+    patterns:
+        [a|] cad presspull profile group
+    members:
+        profiles as the type of (a cad topology list of a cad planar face profile)
+class:
+    patterns:
+        [a|] cad presspull loops result
+    members:
+        valid as a boolean
+        values as the type of (a cad topology list of a cad presspull curve loop)
+
+function cad presspull extrude mode:
+    replacement:
+        0
+function cad presspull offset mode:
+    replacement:
+        1
+function cad planar intersection area kind:
+    replacement:
+        0
+function cad planar intersection touching kind:
+    replacement:
+        1
+function cad planar intersection disjoint kind:
+    replacement:
+        2
+local function cad presspull tau:
+    replacement:
+        6.283185307179586
+local function cad presspull finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad presspull boolean success {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad boolean result, true, 0, value)
+local function cad presspull boolean failure {integer:snag}:
+    execute:
+        return @intrinsic("construct", a cad boolean result, false, snag, an empty cad body)
+local function cad presspull intersection success {integer:kind} body {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad planar intersection result, true, 0, kind, value)
+local function cad presspull intersection failure {integer:snag}:
+    execute:
+        return @intrinsic("construct", a cad planar intersection result, false, snag, cad planar intersection disjoint kind, an empty cad body)
+local function no cad presspull profiles {integer:snag}:
+    execute:
+        return @intrinsic("construct", a cad presspull profiles result, false, snag, a cad topology list of a cad planar face profile)
+local function the cad presspull profiles {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad presspull profiles result, true, 0, values)
+local function no cad presspull loops:
+    execute:
+        return @intrinsic("construct", a cad presspull loops result, false, a cad topology list of a cad presspull curve loop)
+local function the cad presspull loops {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad presspull loops result, true, values)
+local function cad presspull {a pointer to a list:values} contains edge {cad edge key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function cad presspull {a pointer to a list:values} contains vertex {cad vertex key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function cad presspull {a pointer to a list:values} contains face {cad face key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function append cad presspull unique vertex {cad vertex key:key} to {a pointer to a list:values}:
+    execute:
+        if (cad presspull values contains vertex key) = false:
+            append key to values
+local function append cad presspull unique face {cad face key:key} to {a pointer to a list:values}:
+    execute:
+        if (cad presspull values contains face key) = false:
+            append key to values
+
+function a cad presspull curve loop from {a pointer to a list:source}:
+    execute:
+        set ownedValues to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop curveIndex from 0 to the length of source:
+            append (the cad clone of (the item at curveIndex in source)) to ownedValues's values
+        return @intrinsic("construct", a cad presspull curve loop, ownedValues)
+
+local function no cad planar face profile:
+    execute:
+        set emptyLoops to a cad topology list of a cad presspull curve loop
+        set emptyValue to @intrinsic("construct", a cad planar face profile, the cad xy plane, emptyLoops, the cad zero vector3)
+        return @intrinsic("construct", a cad planar face profile result, false, emptyValue)
+function the cad planar face profile of {cad body:sourceBody} at {cad face key:faceKey}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in sourceBody
+        if faceNode = (0 as the type of faceNode):
+            return no cad planar face profile
+        set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+        if surfaceNode = (0 as the type of surfaceNode):
+            return no cad planar face profile
+        if surfaceNode's kind != 0:
+            return no cad planar face profile
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set partsResult to the cad boundary parts of faceKey in sourceBody within tolerance
+        if partsResult's valid = false:
+            return no cad planar face profile
+        set loopValues to a cad topology list of a cad presspull curve loop
+        loop loopIndex from 0 to the length of (faceNode's loops's values):
+            set loopNode to the cad node pointer for (the item at loopIndex in (faceNode's loops's values)) in sourceBody
+            if loopNode = (0 as the type of loopNode):
+                return no cad planar face profile
+            set curveValues to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+            loop useIndex from 0 to the length of (loopNode's coedges's values):
+                set useKey to the item at useIndex in (loopNode's coedges's values)
+                set foundPart to false
+                loop partIndex from 0 to the length of (partsResult's parts's values):
+                    set partValue to the item at partIndex in (partsResult's parts's values)
+                    if (partValue's coedge = useKey) and (foundPart = false):
+                        append (the cad clone of partValue's curve) to curveValues's values
+                        set foundPart to true
+                if foundPart = false:
+                    return no cad planar face profile
+            if (the length of (curveValues's values)) = 0:
+                return no cad planar face profile
+            append (@intrinsic("construct", a cad presspull curve loop, curveValues)) to loopValues's values
+        set normalResult to the cad normal of surfaceNode's plane
+        if normalResult's valid = false:
+            return no cad planar face profile
+        set outwardValue to normalResult's value
+        if faceNode's forward = false:
+            set outwardValue to the cad negative of outwardValue
+        set extracted to @intrinsic("construct", a cad planar face profile, surfaceNode's plane, loopValues, outwardValue)
+        return @intrinsic("construct", a cad planar face profile result, true, extracted)
+
+function the cad planar face at {cad vector3:worldPoint} in {cad body:sourceBody} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        set absent to @intrinsic("construct", a cad presspull face result, false, a new cad face key)
+        set finitePoint to (cad presspull finite worldPoint's x) and ((cad presspull finite worldPoint's y) and (cad presspull finite worldPoint's z))
+        if ((cad presspull finite tolerance) = false) or ((tolerance < 0.0) or (finitePoint = false)):
+            return absent
+        set faceKeys to the cad face keys of sourceBody
+        set foundFace to false
+        set bestFace to a new cad face key
+        set bestDistance to 1e300 as a 64 bit floating-point number
+        loop faceIndex from 0 to the length of faceKeys:
+            set candidateFace to the item at faceIndex in faceKeys
+            set extractedResult to the cad planar face profile of sourceBody at candidateFace
+            if extractedResult's valid:
+                set distanceResult to the cad distance from worldPoint to extractedResult's value's plane
+                if distanceResult's valid:
+                    set distanceValue to the absolute value of distanceResult's value
+                    if distanceValue <= tolerance:
+                        set projectedResult to the cad projection of worldPoint onto extractedResult's value's plane
+                        if projectedResult's valid:
+                            set boundaryValues to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+                            loop loopIndex from 0 to the length of (extractedResult's value's loops's values):
+                                set loopValue to the item at loopIndex in (extractedResult's value's loops's values)
+                                loop curveIndex from 0 to the length of (loopValue's values's values):
+                                    append (the item at curveIndex in (loopValue's values's values)) to boundaryValues
+                            set containsPoint to cad boundary boundaryValues contains projectedResult's value within (a cad tolerance of (the maximum of tolerance and 1e-12))
+                            free boundaryValues
+                            if containsPoint and ((foundFace = false) or (distanceValue < bestDistance)):
+                                set foundFace to true
+                                set bestFace to candidateFace
+                                set bestDistance to distanceValue
+        free faceKeys
+        if foundFace:
+            return @intrinsic("construct", a cad presspull face result, true, bestFace)
+        return absent
+
+function the cad extrusion profile pieces of {a pointer to a list:ring}:
+    execute:
+        set result to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop curveIndex from 0 to the length of ring:
+            set curveValue to the item at curveIndex in ring
+            if curveValue's kind = cad circle curve2 kind:
+                loop quarter from 0 to 4:
+                    set firstParameter to (quarter as a 64 bit floating-point number) * 1.5707963267948966
+                    set secondParameter to ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
+                    append (the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from firstParameter to secondParameter)) to result
+            else if (curveValue's kind = cad arc curve2 kind) and ((the cad sweep of curveValue's arc) >= ((cad presspull tau) - 1e-12)):
+                loop quarter from 0 to 4:
+                    set firstParameter to curveValue's arc's startAngle + (quarter as a 64 bit floating-point number) * 1.5707963267948966
+                    set secondParameter to curveValue's arc's startAngle + ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
+                    append (the cad curve2 of (a cad arc2 at curveValue's arc's centre with radius curveValue's arc's radius from firstParameter to secondParameter)) to result
+            else if (curveValue's kind = cad ellipse curve2 kind) and ((the cad sweep of curveValue's ellipse) >= ((cad presspull tau) - 1e-12)):
+                loop quarter from 0 to 4:
+                    set firstParameter to curveValue's ellipse's startParameter + (quarter as a 64 bit floating-point number) * 1.5707963267948966
+                    set secondParameter to curveValue's ellipse's startParameter + ((quarter + 1) as a 64 bit floating-point number) * 1.5707963267948966
+                    append (the cad curve2 of (a cad ellipse arc2 on curveValue's ellipse's ellipse from firstParameter to secondParameter)) to result
+            else if curveValue's kind = cad polyline curve2 kind:
+                set segmentValues to the cad segments of curveValue
+                loop segmentIndex from 0 to the length of segmentValues:
+                    append (the cad clone of (the item at segmentIndex in segmentValues)) to result
+                free segmentValues
+            else:
+                append (the cad clone of curveValue) to result
+        return result
+
+local function the cad presspull lift of {cad curve2:piece} on {cad plane:basePlane}:
+    execute:
+        set absent to @intrinsic("construct", a cad presspull lifted curve, false, the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad zero vector3), 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
+        if piece's kind = cad line curve2 kind:
+            set startPoint to the cad point at piece's line's start on basePlane
+            set endPoint to the cad point at piece's line's end on basePlane
+            set curveValue to the cad edge curve3 of (a cad line3 with origin startPoint and direction (the cad difference of endPoint and startPoint))
+            return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
+        if piece's kind = cad arc curve2 kind:
+            set centrePoint to the cad point at piece's arc's centre on basePlane
+            set circlePlane to a cad plane with origin centrePoint, x axis basePlane's xAxis and y axis basePlane's yAxis
+            set firstParameter to the cad normalized angle of piece's arc's startAngle
+            set curveValue to the cad edge curve3 of (a cad circle3 with plane circlePlane and radius piece's arc's radius)
+            return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, firstParameter, firstParameter + (the cad sweep of piece's arc))
+        if piece's kind = cad ellipse curve2 kind:
+            set centrePoint to the cad point at piece's ellipse's ellipse's centre on basePlane
+            set normalResult to the cad normal of basePlane
+            if normalResult's valid = false:
+                return absent
+            set majorDirection to the cad vector at piece's ellipse's ellipse's majorAxis on basePlane
+            set frameResult to the cad orthonormal plane with origin centrePoint, x axis majorDirection and normal normalResult's value
+            if frameResult's valid = false:
+                return absent
+            set curveValue to the cad edge curve3 of (a cad ellipse3 with plane frameResult's value, major radius piece's ellipse's ellipse's majorRadius and minor radius piece's ellipse's ellipse's minorRadius)
+            set firstParameter to piece's ellipse's startParameter
+            return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, firstParameter, firstParameter + (the cad sweep of piece's ellipse))
+        if piece's kind = cad nurbs curve2 kind:
+            set curveValue to the cad edge curve3 of (a cad planar spline3 with plane basePlane and curve (the cad clone of piece's nurbs))
+            return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
+        return absent
+
+function the cad planar region on {cad plane:basePlane} with {a pointer to a list:sourceLoops}:
+    execute:
+        if (the length of sourceLoops) = 0:
+            return no cad body
+        set normalResult to the cad normal of basePlane
+        if normalResult's valid = false:
+            return no cad body
+        set outputBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into outputBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into outputBody
+        set surfaceKey to the cad body key after inserting (the cad surface of basePlane) into outputBody
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward true owned by shellKey with provenance (the synthesized cad provenance)) into outputBody
+        loop loopIndex from 0 to the length of sourceLoops:
+            set sourceLoop to the item at loopIndex in sourceLoops
+            set pieces to the cad extrusion profile pieces of sourceLoop's values's values
+            if (the length of pieces) = 0:
+                return no cad body
+            set senseResult to the cad profile senses of pieces
+            if senseResult's valid = false:
+                return no cad body
+            set vertices to a cad topology list of a cad vertex key
+            loop pieceIndex from 0 to the length of pieces:
+                set pieceValue to the item at pieceIndex in pieces
+                set parameter to 1.0 as a 64 bit floating-point number
+                if the item at pieceIndex in (senseResult's value's values):
+                    set parameter to 0.0
+                set pointValue to the cad point at (the cad point on pieceValue at parameter) on basePlane
+                append (the cad body key after inserting (a cad vertex at pointValue with provenance (the synthesized cad provenance)) into outputBody) to vertices's values
+            set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into outputBody
+            loop pieceIndex from 0 to the length of pieces:
+                set nextIndex to the remainder of (pieceIndex + 1) divided by (the length of pieces)
+                set forwardValue to the item at pieceIndex in (senseResult's value's values)
+                set startKey to the item at pieceIndex in (vertices's values)
+                set endKey to the item at nextIndex in (vertices's values)
+                if forwardValue = false:
+                    set savedKey to startKey
+                    set startKey to endKey
+                    set endKey to savedKey
+                set liftedResult to the cad presspull lift of (the item at pieceIndex in pieces) on basePlane
+                if liftedResult's valid = false:
+                    return no cad body
+                set curveKey to the cad body key after inserting liftedResult's curve into outputBody
+                set edgeKey to the cad body key after inserting (a cad edge on curveKey from liftedResult's first to liftedResult's second between startKey and endKey with provenance (the synthesized cad provenance)) into outputBody
+                set useKey to the cad body key after inserting (a cad coedge on edgeKey forward forwardValue with pcurve (no cad pcurve) owned by loopKey with provenance (the synthesized cad provenance)) into outputBody
+                set edgeNode to the cad node pointer for edgeKey in outputBody
+                set loopNode to the cad node pointer for loopKey in outputBody
+                if (edgeNode = (0 as the type of edgeNode)) or (loopNode = (0 as the type of loopNode)):
+                    return no cad body
+                append useKey to edgeNode's coedges's values
+                append useKey to loopNode's coedges's values
+            set faceNode to the cad node pointer for faceKey in outputBody
+            if faceNode = (0 as the type of faceNode):
+                return no cad body
+            append loopKey to faceNode's loops's values
+            free pieces
+        set shellNode to the cad node pointer for shellKey in outputBody
+        set lumpNode to the cad node pointer for lumpKey in outputBody
+        if (shellNode = (0 as the type of shellNode)) or (lumpNode = (0 as the type of lumpNode)):
+            return no cad body
+        append faceKey to shellNode's faces's values
+        append shellKey to lumpNode's shells's values
+        append lumpKey to outputBody's roots
+        return the validated cad body result of outputBody
+
+local function the cad presspull transformed profile {cad planar face profile:sourceProfile} on {cad plane:basePlane} with normal {cad vector3:baseNormal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set sourceNormal to the cad normal of sourceProfile's plane
+        if sourceNormal's valid = false:
+            return no cad planar face profile
+        if (the absolute value of (the cad dot of baseNormal and sourceNormal's value)) < (1.0 - 1e-9):
+            return no cad planar face profile
+        set planeGap to the cad distance from sourceProfile's plane's origin to basePlane
+        if (planeGap's valid = false) or ((the absolute value of planeGap's value) > tolerance):
+            return no cad planar face profile
+        set mappedOrigin to the cad projection of sourceProfile's plane's origin onto basePlane
+        set mappedX to the cad vector projection of sourceProfile's plane's xAxis onto basePlane
+        set mappedY to the cad vector projection of sourceProfile's plane's yAxis onto basePlane
+        if (mappedOrigin's valid and (mappedX's valid and mappedY's valid)) = false:
+            return no cad planar face profile
+        set map to a cad transform2 with axes mappedX's value and mappedY's value at mappedOrigin's value
+        set transformedLoops to a cad topology list of a cad presspull curve loop
+        loop loopIndex from 0 to the length of (sourceProfile's loops's values):
+            set sourceLoop to the item at loopIndex in (sourceProfile's loops's values)
+            set transformedCurves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+            loop curveIndex from 0 to the length of (sourceLoop's values's values):
+                set transformedCurve to the cad transformed (the item at curveIndex in (sourceLoop's values's values)) by map
+                if transformedCurve's valid = false:
+                    return no cad planar face profile
+                append transformedCurve's value to (transformedCurves's values)
+            append (@intrinsic("construct", a cad presspull curve loop, transformedCurves)) to (transformedLoops's values)
+        set transformedProfile to @intrinsic("construct", a cad planar face profile, basePlane, transformedLoops, baseNormal)
+        return @intrinsic("construct", a cad planar face profile result, true, transformedProfile)
+
+local function the cad presspull profiles from {a pointer to a list:bodies} on {cad plane:basePlane} with normal {cad vector3:baseNormal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set collectedProfiles to a cad topology list of a cad planar face profile
+        loop bodyIndex from 0 to the length of bodies:
+            set sourceBody to the item at bodyIndex in bodies
+            set faceKeys to the cad face keys of sourceBody
+            loop faceIndex from 0 to the length of faceKeys:
+                set sourceProfile to the cad planar face profile of sourceBody at (the item at faceIndex in faceKeys)
+                if sourceProfile's valid = false:
+                    free faceKeys
+                    return no cad presspull profiles cad imprint no closed form snag
+                set transformedProfile to the cad presspull transformed profile sourceProfile's value on basePlane with normal baseNormal within tolerance
+                if transformedProfile's valid = false:
+                    free faceKeys
+                    return no cad presspull profiles cad imprint no closed form snag
+                append transformedProfile's value to (collectedProfiles's values)
+            free faceKeys
+        return the cad presspull profiles collectedProfiles
+
+local function the cad presspull cap in {cad body:sourceBody} on {cad plane:targetPlane} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set absent to @intrinsic("construct", a cad presspull face result, false, a new cad face key)
+        set targetNormal to the cad normal of targetPlane
+        if targetNormal's valid = false:
+            return absent
+        set faceKeys to the cad face keys of sourceBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set profileResult to the cad planar face profile of sourceBody at faceKey
+            if profileResult's valid:
+                set candidateNormal to the cad normal of profileResult's value's plane
+                set gap to the cad distance from profileResult's value's plane's origin to targetPlane
+                if candidateNormal's valid and gap's valid:
+                    if ((the absolute value of (the cad dot of candidateNormal's value and targetNormal's value)) > (1.0 - 1e-9)) and ((the absolute value of gap's value) <= tolerance):
+                        free faceKeys
+                        return @intrinsic("construct", a cad presspull face result, true, faceKey)
+        free faceKeys
+        return absent
+
+local function the cad presspull solid from {cad planar face profile:region} along {cad vector3:direction} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the length of (region's loops's values)) = 0:
+            return no cad body
+        set outerLoop to the item at 0 in (region's loops's values)
+        set outerPieces to the cad extrusion profile pieces of outerLoop's values's values
+        set outerMade to the cad extrusion of outerPieces on region's plane along direction
+        free outerPieces
+        if outerMade's valid = false:
+            return no cad body
+        set toolBody to outerMade's value
+        if (the length of (region's loops's values)) = 1:
+            return the cad body result of toolBody
+        set farPlane to a cad plane with origin (the cad sum of region's plane's origin and direction), x axis region's plane's xAxis and y axis region's plane's yAxis
+        set baseCap to the cad presspull cap in toolBody on region's plane within tolerance
+        set farCap to the cad presspull cap in toolBody on farPlane within tolerance
+        if (baseCap's valid and farCap's valid) = false:
+            return no cad body
+        set baseCapNode to the cad node pointer for baseCap's value in toolBody
+        if baseCapNode = (0 as the type of baseCapNode):
+            return no cad body
+        set destinationShell to baseCapNode's owner
+        loop holeIndex from 1 to the length of (region's loops's values):
+            set holeLoop to the item at holeIndex in (region's loops's values)
+            set holePieces to the cad extrusion profile pieces of holeLoop's values's values
+            set holeMade to the cad extrusion of holePieces on region's plane along direction
+            free holePieces
+            if holeMade's valid = false:
+                return no cad body
+            set holeBaseCap to the cad presspull cap in holeMade's value on region's plane within tolerance
+            set holeFarCap to the cad presspull cap in holeMade's value on farPlane within tolerance
+            if (holeBaseCap's valid and holeFarCap's valid) = false:
+                return no cad body
+            set holeFaces to the cad face keys of holeMade's value
+            loop faceIndex from 0 to the length of holeFaces:
+                set holeFace to the item at faceIndex in holeFaces
+                if (copy cad boolean face holeFace from holeMade's value into toolBody owned by destinationShell flipped true within tolerance) = false:
+                    free holeFaces
+                    return no cad body
+                set destinationCap to a new cad face key
+                set isCap to false
+                if holeFace = holeBaseCap's value:
+                    set destinationCap to baseCap's value
+                    set isCap to true
+                else if holeFace = holeFarCap's value:
+                    set destinationCap to farCap's value
+                    set isCap to true
+                if isCap:
+                    set destinationShellNode to the cad node pointer for destinationShell in toolBody
+                    set copiedFace to the last item of (destinationShellNode's faces's values)
+                    set copiedFaceNode to the cad node pointer for copiedFace in toolBody
+                    set destinationCapNode to the cad node pointer for destinationCap in toolBody
+                    if (copiedFaceNode = (0 as the type of copiedFaceNode)) or (destinationCapNode = (0 as the type of destinationCapNode)):
+                        free holeFaces
+                        return no cad body
+                    loop ringIndex from 0 to the length of (copiedFaceNode's loops's values):
+                        set ringKey to the item at ringIndex in (copiedFaceNode's loops's values)
+                        set ringNode to the cad node pointer for ringKey in toolBody
+                        if ringNode = (0 as the type of ringNode):
+                            free holeFaces
+                            return no cad body
+                        set ringNode's owner to destinationCap
+                        loop useIndex from 0 to the length of (ringNode's coedges's values):
+                            set useNode to the cad node pointer for (the item at useIndex in (ringNode's coedges's values)) in toolBody
+                            if useNode = (0 as the type of useNode):
+                                free holeFaces
+                                return no cad body
+                            set useNode's pcurve to no cad pcurve
+                        append ringKey to (destinationCapNode's loops's values)
+                    remove the last item from (destinationShellNode's faces's values)
+                    ignore the cad removal of copiedFace from toolBody
+            free holeFaces
+        set edges to the cad edge keys of toolBody
+        loop edgeIndex from 0 to the length of edges:
+            set edgeNode to the cad node pointer for (the item at edgeIndex in edges) in toolBody
+            if (edgeNode = (0 as the type of edgeNode)) or ((the length of (edgeNode's coedges's values)) != 2):
+                free edges
+                return no cad body
+        free edges
+        return the validated cad body result of toolBody
+
+local function unite cad presspull profiles {a pointer to a list:profileValues} along {cad vector3:sweepNormal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the length of profileValues) = 0:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set {cad planar face profile:firstProfile} to the item at 0 in profileValues
+        set firstSolid to the cad presspull solid from firstProfile along sweepNormal within tolerance
+        if firstSolid's valid = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set unitedBody to firstSolid's value
+        loop profileIndex from 1 to the length of profileValues:
+            set {cad planar face profile:nextProfile} to the item at profileIndex in profileValues
+            set nextSolid to the cad presspull solid from nextProfile along sweepNormal within tolerance
+            if nextSolid's valid = false:
+                return cad presspull boolean failure cad imprint cut refused snag
+            set combined to the cad combination of unitedBody and nextSolid's value using cad union operation within tolerance
+            if combined's valid = false:
+                return combined
+            set unitedBody to combined's value
+        return cad presspull boolean success unitedBody
+
+local function cad presspull face list {cad topology list:faces} contains {cad face key:faceKey}:
+    execute:
+        loop faceIndex from 0 to the length of (faces's values):
+            if (the item at faceIndex in (faces's values)) = faceKey:
+                return true
+        return false
+
+local function cad presspull shell list {a pointer to a list:shells} contains {cad shell key:shellKey}:
+    execute:
+        loop shellIndex from 0 to the length of shells:
+            if (the item at shellIndex in shells) = shellKey:
+                return true
+        return false
+
+local function the cad presspull reversed curve {cad curve2:sourceCurve}:
+    execute:
+        if sourceCurve's kind = cad line curve2 kind:
+            set reversedLine to a cad line2 from sourceCurve's line's end to sourceCurve's line's start
+            return @intrinsic("construct", a cad curve2 transform result, true, the cad curve2 of reversedLine)
+        return @intrinsic("construct", a cad curve2 transform result, false, a new (the type of sourceCurve))
+
+local function cad presspull points {cad vector2:firstPoint} and {cad vector2:secondPoint} meet within {a 64 bit floating-point number:tolerance}:
+    execute:
+        return (the cad distance from firstPoint to secondPoint) <= (tolerance * 4.0)
+
+local function cad presspull loop area {cad presspull curve loop:ring}:
+    execute:
+        set signedArea to 0.0 as a 64 bit floating-point number
+        loop curveIndex from 0 to the length of (ring's values's values):
+            set signedArea to signedArea + (the cad enclosed area of (the item at curveIndex in (ring's values's values)))
+        return signedArea
+
+local function the cad presspull ordered loops from {a pointer to a list:sourceCurves} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set pending to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop sourceIndex from 0 to the length of sourceCurves:
+            append (the cad clone of (the item at sourceIndex in sourceCurves)) to pending
+        set outputLoops to a cad topology list of a cad presspull curve loop
+        loop while (the length of pending) > 0:
+            set firstCurve to the item at 0 in pending
+            set ringCurves to an empty list of (the type of firstCurve)
+            append (the cad clone of firstCurve) to ringCurves
+            remove item 0 from pending
+            set startPoint to the cad point on firstCurve at 0.0
+            set headPoint to the cad point on firstCurve at 1.0
+            set closed to cad presspull points headPoint and startPoint meet within tolerance
+            loop while closed = false:
+                set found to false
+                set candidateIndex to 0
+                loop while (found = false) and (candidateIndex < (the length of pending)):
+                    set candidate to the item at candidateIndex in pending
+                    set candidateStart to the cad point on candidate at 0.0
+                    set candidateEnd to the cad point on candidate at 1.0
+                    if cad presspull points headPoint and candidateStart meet within tolerance:
+                        append (the cad clone of candidate) to ringCurves
+                        set headPoint to candidateEnd
+                        set found to true
+                    else if cad presspull points headPoint and candidateEnd meet within tolerance:
+                        set reversedCurve to the cad presspull reversed curve candidate
+                        if reversedCurve's valid = false:
+                            return no cad presspull loops
+                        append reversedCurve's value to ringCurves
+                        set headPoint to candidateStart
+                        set found to true
+                    if found:
+                        remove item candidateIndex from pending
+                    else:
+                        increment candidateIndex
+                if found = false:
+                    return no cad presspull loops
+                set closed to cad presspull points headPoint and startPoint meet within tolerance
+            append (a cad presspull curve loop from ringCurves) to (outputLoops's values)
+            free ringCurves
+        loop loopIndex from 1 to the length of (outputLoops's values):
+            set currentLoop to the item at loopIndex in (outputLoops's values)
+            set currentArea to the absolute value of (cad presspull loop area currentLoop)
+            set position to loopIndex
+            set searching to true
+            loop while searching and (position > 0):
+                set previousLoop to the item at (position - 1) in (outputLoops's values)
+                set previousArea to the absolute value of (cad presspull loop area previousLoop)
+                if currentArea > previousArea:
+                    replace item at index position in (outputLoops's values) with previousLoop
+                    decrement position
+                else:
+                    set searching to false
+            replace item at index position in (outputLoops's values) with currentLoop
+        free pending
+        return the cad presspull loops outputLoops
+
+local function the cad presspull boundary loops of {cad topology list:faceKeys} in {cad body:sourceBody} on {cad plane:basePlane} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set boundaryCurves to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop faceIndex from 0 to the length of (faceKeys's values):
+            set faceKey to the item at faceIndex in (faceKeys's values)
+            set profileResult to the cad planar face profile of sourceBody at faceKey
+            if profileResult's valid = false:
+                return no cad presspull loops
+            set sourcePlane to profileResult's value's plane
+            set mappedOrigin to the cad projection of sourcePlane's origin onto basePlane
+            set mappedX to the cad vector projection of sourcePlane's xAxis onto basePlane
+            set mappedY to the cad vector projection of sourcePlane's yAxis onto basePlane
+            if (mappedOrigin's valid and (mappedX's valid and mappedY's valid)) = false:
+                return no cad presspull loops
+            set map to a cad transform2 with axes mappedX's value and mappedY's value at mappedOrigin's value
+            set partsResult to the cad boundary parts of faceKey in sourceBody within tolerance
+            if partsResult's valid = false:
+                return no cad presspull loops
+            loop partIndex from 0 to the length of (partsResult's parts's values):
+                set partValue to the item at partIndex in (partsResult's parts's values)
+                set useNode to the cad node pointer for partValue's coedge in sourceBody
+                if useNode = (0 as the type of useNode):
+                    return no cad presspull loops
+                set edgeNode to the cad node pointer for useNode's edge in sourceBody
+                if edgeNode = (0 as the type of edgeNode):
+                    return no cad presspull loops
+                set internal to false
+                loop candidateIndex from 0 to the length of (edgeNode's coedges's values):
+                    set candidateKey to the item at candidateIndex in (edgeNode's coedges's values)
+                    if candidateKey != partValue's coedge:
+                        set candidateUse to the cad node pointer for candidateKey in sourceBody
+                        if candidateUse != (0 as the type of candidateUse):
+                            set candidateLoop to the cad node pointer for candidateUse's owner in sourceBody
+                            if candidateLoop != (0 as the type of candidateLoop):
+                                if cad presspull face list faceKeys contains candidateLoop's owner:
+                                    set internal to true
+                if internal = false:
+                    set transformedCurve to the cad transformed partValue's curve by map
+                    if transformedCurve's valid = false:
+                        return no cad presspull loops
+                    append transformedCurve's value to boundaryCurves
+        set loopsResult to the cad presspull ordered loops from boundaryCurves within tolerance
+        free boundaryCurves
+        return loopsResult
+
+local function the cad presspull bottom sheets of {cad body:solidBody} on {cad plane:basePlane} with normal {cad vector3:normal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set bottomFaces to a cad topology list of a cad face key
+        set ownerShells to an empty list of a cad shell key
+        set faceKeys to the cad face keys of solidBody
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set profileResult to the cad planar face profile of solidBody at faceKey
+            if profileResult's valid:
+                set gap to the cad distance from profileResult's value's plane's origin to basePlane
+                if gap's valid:
+                    if ((the absolute value of gap's value) <= (tolerance * 4.0)) and ((the cad dot of profileResult's value's outward and normal) < (-1.0 + 1e-9)):
+                        append faceKey to (bottomFaces's values)
+                        set faceNode to the cad node pointer for faceKey in solidBody
+                        if (faceNode != (0 as the type of faceNode)) and ((cad presspull shell list ownerShells contains faceNode's owner) = false):
+                            append faceNode's owner to ownerShells
+        free faceKeys
+        if (the length of (bottomFaces's values)) = 0:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set outputBody to an empty cad body
+        loop ownerIndex from 0 to the length of ownerShells:
+            set ownerKey to the item at ownerIndex in ownerShells
+            set componentFaces to a cad topology list of a cad face key
+            loop bottomIndex from 0 to the length of (bottomFaces's values):
+                set bottomKey to the item at bottomIndex in (bottomFaces's values)
+                set bottomNode to the cad node pointer for bottomKey in solidBody
+                if bottomNode's owner = ownerKey:
+                    append bottomKey to (componentFaces's values)
+            set loopsResult to the cad presspull boundary loops of componentFaces in solidBody on basePlane within tolerance
+            if loopsResult's valid = false:
+                return cad presspull boolean failure cad imprint cut refused snag
+            set sheetResult to the cad planar region on basePlane with loopsResult's values's values
+            if sheetResult's valid = false:
+                return cad presspull boolean failure cad imprint cut refused snag
+            set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into outputBody
+            set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into outputBody
+            set lumpNode to the cad node pointer for lumpKey in outputBody
+            append shellKey to (lumpNode's shells's values)
+            append lumpKey to outputBody's roots
+            set sheetFaces to the cad face keys of sheetResult's value
+            loop sheetIndex from 0 to the length of sheetFaces:
+                if (copy cad boolean face (the item at sheetIndex in sheetFaces) from sheetResult's value into outputBody owned by shellKey flipped false within tolerance) = false:
+                    return cad presspull boolean failure cad imprint cut refused snag
+            free sheetFaces
+        set flaws to the cad flaws of outputBody
+        set accepted to (the length of flaws) = 0
+        free flaws
+        if accepted = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        return cad presspull boolean success outputBody
+
+local function the cad presspull first profile in {a pointer to a list:bodies}:
+    execute:
+        if (the length of bodies) = 0:
+            return no cad planar face profile
+        set firstBody to the item at 0 in bodies
+        set faceKeys to the cad face keys of firstBody
+        if (the length of faceKeys) = 0:
+            free faceKeys
+            return no cad planar face profile
+        set profileResult to the cad planar face profile of firstBody at (the item at 0 in faceKeys)
+        free faceKeys
+        return profileResult
+
+local function cad presspull bodies {a pointer to a list:sourceBodies} share planar point on {cad plane:basePlane} with normal {cad vector3:baseNormal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set boundaryGroups to a cad topology list of a cad presspull curve loop
+        loop bodyIndex from 0 to the length of sourceBodies:
+            set oneBody to a list containing (the item at bodyIndex in sourceBodies)
+            set profilesResult to the cad presspull profiles from oneBody on basePlane with normal baseNormal within tolerance
+            free oneBody
+            if profilesResult's valid = false:
+                return false
+            set groupCurves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+            loop profileIndex from 0 to the length of (profilesResult's values's values):
+                set profileValue to the item at profileIndex in (profilesResult's values's values)
+                loop loopIndex from 0 to the length of (profileValue's loops's values):
+                    set loopValue to the item at loopIndex in (profileValue's loops's values)
+                    loop curveIndex from 0 to the length of (loopValue's values's values):
+                        append (the cad clone of (the item at curveIndex in (loopValue's values's values))) to (groupCurves's values)
+            if (the length of (groupCurves's values)) = 0:
+                return false
+            append (@intrinsic("construct", a cad presspull curve loop, groupCurves)) to (boundaryGroups's values)
+        if (the length of (boundaryGroups's values)) < 2:
+            return false
+        set candidatePoints to an empty list of a cad vector2
+        set firstGroup to the item at 0 in (boundaryGroups's values)
+        loop firstIndex from 0 to the length of (firstGroup's values's values):
+            set firstCurve to the item at firstIndex in (firstGroup's values's values)
+            append (the cad point on firstCurve at 0.0) to candidatePoints
+            append (the cad point on firstCurve at 1.0) to candidatePoints
+        loop groupIndex from 1 to the length of (boundaryGroups's values):
+            set otherGroup to the item at groupIndex in (boundaryGroups's values)
+            loop firstIndex from 0 to the length of (firstGroup's values's values):
+                set firstCurve to the item at firstIndex in (firstGroup's values's values)
+                loop otherIndex from 0 to the length of (otherGroup's values's values):
+                    set otherCurve to the item at otherIndex in (otherGroup's values's values)
+                    set crossings to the cad crossings of firstCurve and otherCurve within (a cad tolerance of tolerance)
+                    loop crossingIndex from 0 to the length of crossings:
+                        append (the item at crossingIndex in crossings)'s point to candidatePoints
+                    free crossings
+                    set firstStart to the cad point on firstCurve at 0.0
+                    set firstEnd to the cad point on firstCurve at 1.0
+                    set otherStart to the cad point on otherCurve at 0.0
+                    set otherEnd to the cad point on otherCurve at 1.0
+                    if (the cad distance to otherCurve from firstStart) <= tolerance:
+                        append firstStart to candidatePoints
+                    if (the cad distance to otherCurve from firstEnd) <= tolerance:
+                        append firstEnd to candidatePoints
+                    if (the cad distance to firstCurve from otherStart) <= tolerance:
+                        append otherStart to candidatePoints
+                    if (the cad distance to firstCurve from otherEnd) <= tolerance:
+                        append otherEnd to candidatePoints
+        set foundShared to false
+        set candidateIndex to 0
+        loop while (foundShared = false) and (candidateIndex < (the length of candidatePoints)):
+            set candidatePoint to the item at candidateIndex in candidatePoints
+            set containedByAll to true
+            set groupIndex to 0
+            loop while containedByAll and (groupIndex < (the length of (boundaryGroups's values))):
+                set groupValue to the item at groupIndex in (boundaryGroups's values)
+                if (cad boundary (groupValue's values's values) contains candidatePoint within (a cad tolerance of tolerance)) = false:
+                    set containedByAll to false
+                increment groupIndex
+            if containedByAll:
+                set foundShared to true
+            increment candidateIndex
+        free candidatePoints
+        return foundShared
+
+function the cad union of planar regions {a pointer to a list:bodies} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        if ((the length of bodies) < 2) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0)):
+            return cad presspull boolean failure cad imprint cut refused snag
+        set baseProfile to the cad presspull first profile in bodies
+        if baseProfile's valid = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set normalResult to the cad normal of baseProfile's value's plane
+        if normalResult's valid = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set profilesResult to the cad presspull profiles from bodies on baseProfile's value's plane with normal normalResult's value within tolerance
+        if profilesResult's valid = false:
+            return cad presspull boolean failure profilesResult's snag
+        set solidResult to unite cad presspull profiles profilesResult's values's values along normalResult's value within tolerance
+        if solidResult's valid = false:
+            return solidResult
+        return the cad presspull bottom sheets of solidResult's value on baseProfile's value's plane with normal normalResult's value within tolerance
+
+function the cad intersection of planar regions {a pointer to a list:bodies} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        if ((the length of bodies) < 2) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0)):
+            return cad presspull intersection failure cad imprint cut refused snag
+        set baseProfile to the cad presspull first profile in bodies
+        if baseProfile's valid = false:
+            return cad presspull intersection failure cad imprint cut refused snag
+        set normalResult to the cad normal of baseProfile's value's plane
+        if normalResult's valid = false:
+            return cad presspull intersection failure cad imprint cut refused snag
+        set hasSolid to false
+        set intersectionBody to an empty cad body
+        loop bodyIndex from 0 to the length of bodies:
+            set oneBody to a list containing (the item at bodyIndex in bodies)
+            set profilesResult to the cad presspull profiles from oneBody on baseProfile's value's plane with normal normalResult's value within tolerance
+            free oneBody
+            if profilesResult's valid = false:
+                return cad presspull intersection failure profilesResult's snag
+            set solidResult to unite cad presspull profiles profilesResult's values's values along normalResult's value within tolerance
+            if solidResult's valid = false:
+                return cad presspull intersection failure solidResult's snag
+            if hasSolid = false:
+                set intersectionBody to solidResult's value
+                set hasSolid to true
+            else:
+                set combined to the cad combination of intersectionBody and solidResult's value using cad intersection operation within tolerance
+                if combined's valid = false:
+                    return cad presspull intersection failure combined's snag
+                set intersectionBody to combined's value
+                if (the cad count of intersectionBody's faces) = 0:
+                    if cad presspull bodies bodies share planar point on baseProfile's value's plane with normal normalResult's value within tolerance:
+                        return cad presspull intersection success cad planar intersection touching kind body (an empty cad body)
+                    return cad presspull intersection success cad planar intersection disjoint kind body (an empty cad body)
+        if hasSolid = false:
+            return cad presspull intersection failure cad imprint cut refused snag
+        set sheetsResult to the cad presspull bottom sheets of intersectionBody on baseProfile's value's plane with normal normalResult's value within tolerance
+        if sheetsResult's valid = false:
+            return cad presspull intersection failure sheetsResult's snag
+        return cad presspull intersection success cad planar intersection area kind body sheetsResult's value
+
+function the cad subtraction of planar regions {a pointer to a list:bases} by {a pointer to a list:cutters} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        if ((the length of bases) = 0) or (((the length of cutters) = 0) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0))):
+            return cad presspull boolean failure cad imprint cut refused snag
+        set baseProfile to the cad presspull first profile in bases
+        if baseProfile's valid = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set normalResult to the cad normal of baseProfile's value's plane
+        if normalResult's valid = false:
+            return cad presspull boolean failure cad imprint cut refused snag
+        set baseProfiles to the cad presspull profiles from bases on baseProfile's value's plane with normal normalResult's value within tolerance
+        if baseProfiles's valid = false:
+            return cad presspull boolean failure baseProfiles's snag
+        set cutterProfiles to the cad presspull profiles from cutters on baseProfile's value's plane with normal normalResult's value within tolerance
+        if cutterProfiles's valid = false:
+            return cad presspull boolean failure cutterProfiles's snag
+        set baseSolid to unite cad presspull profiles baseProfiles's values's values along normalResult's value within tolerance
+        if baseSolid's valid = false:
+            return baseSolid
+        set cutterSolid to unite cad presspull profiles cutterProfiles's values's values along normalResult's value within tolerance
+        if cutterSolid's valid = false:
+            return cutterSolid
+        set differenceResult to the cad combination of baseSolid's value and cutterSolid's value using cad difference operation within tolerance
+        if differenceResult's valid = false:
+            return differenceResult
+        if (the cad count of differenceResult's value's faces) = 0:
+            return cad presspull boolean success (an empty cad body)
+        return the cad presspull bottom sheets of differenceResult's value on baseProfile's value's plane with normal normalResult's value within tolerance
+
+function the cad presspull of {cad body:sourceBody} with {cad planar face profile:region} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if ((cad presspull finite distance) = false) or (((the absolute value of distance) <= 2.220446049250313e-16) or ((the length of (region's loops's values)) = 0)):
+            return no cad body
+        set normalResult to the cad normalization of region's outward
+        if normalResult's valid = false:
+            return no cad body
+        set planeNormal to the cad normal of region's plane
+        if planeNormal's valid = false:
+            return no cad body
+        if (the absolute value of (the cad dot of normalResult's value and planeNormal's value)) < (1.0 - 1e-9):
+            return no cad body
+        set worldOrigin to region's plane's origin
+        set localBody to the cad transformed sourceBody by (a cad placement at (the cad negative of worldOrigin))
+        if localBody's valid = false:
+            return no cad body
+        set localPlane to region's plane
+        set localPlane's origin to the cad zero vector3
+        set localRegion to region
+        set localRegion's plane to localPlane
+        set preliminaryToleranceBodies to a list containing localBody's value
+        set preliminaryTolerance to the cad operation tolerance of preliminaryToleranceBodies
+        free preliminaryToleranceBodies
+        set toolResult to the cad presspull solid from localRegion along (normalResult's value scaled by distance) within preliminaryTolerance
+        if toolResult's valid = false:
+            return no cad body
+        set toleranceBodies to a list containing localBody's value
+        append toolResult's value to toleranceBodies
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set coordinateTolerance to (2.220446049250313e-16 * (the maximum of (the cad length of worldOrigin) and 1.0)) * 64.0
+        set tolerance to the maximum of tolerance and coordinateTolerance
+        set operation to cad difference operation
+        if distance > 0.0:
+            set operation to cad union operation
+        set edited to the cad combination of localBody's value and toolResult's value using operation within tolerance
+        if edited's valid = false:
+            return no cad body
+        if (the length of edited's value's roots) = 0:
+            return no cad body
+        set flaws to the cad flaws of edited's value
+        set accepted to (the length of flaws) = 0
+        free flaws
+        if accepted = false:
+            return no cad body
+        return the cad transformed edited's value by (a cad placement at worldOrigin)
+
+local function no cad presspull curve:
+    execute:
+        return @intrinsic("construct", a cad presspull curve result, false, the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+local function the cad presspull curve {cad edge curve3:value}:
+    execute:
+        return @intrinsic("construct", a cad presspull curve result, true, value)
+local function no cad presspull surface:
+    execute:
+        return @intrinsic("construct", a cad presspull surface result, false, the cad surface of the cad xy plane)
+local function the cad presspull surface {cad surface:value}:
+    execute:
+        return @intrinsic("construct", a cad presspull surface result, true, value)
+local function no cad presspull parameters:
+    execute:
+        return @intrinsic("construct", a cad presspull parameter result, false, a cad topology list of a 64 bit floating-point number)
+local function the cad presspull parameters {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad presspull parameter result, true, values)
+local function no cad presspull span:
+    execute:
+        return @intrinsic("construct", a cad presspull span result, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
+
+local function the cad presspull adjacent surface to {cad edge:edgeValue} away from {cad face key:selectedFace} in {cad body:sourceBody}:
+    execute:
+        loop useIndex from 0 to the length of (edgeValue's coedges's values):
+            set useNode to the cad node pointer for (the item at useIndex in (edgeValue's coedges's values)) in sourceBody
+            if useNode != (0 as the type of useNode):
+                set loopNode to the cad node pointer for useNode's owner in sourceBody
+                if loopNode != (0 as the type of loopNode):
+                    if loopNode's owner != selectedFace:
+                        set faceNode to the cad node pointer for loopNode's owner in sourceBody
+                        if faceNode != (0 as the type of faceNode):
+                            set surfaceNode to the cad node pointer for faceNode's surface in sourceBody
+                            if surfaceNode != (0 as the type of surfaceNode):
+                                return the cad presspull surface (the cad clone of (@intrinsic("dereference", surfaceNode)))
+        return no cad presspull surface
+
+local function the cad presspull intersection curve of {cad plane:movedPlane} and {cad surface:otherSurface} matching {cad edge curve3:oldCurve} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set meetingValue to the cad meeting of (the cad surface of movedPlane) and otherSurface within tolerance
+        if (meetingValue's kind != 1) or ((the length of (meetingValue's curves)) != 1):
+            free cad meeting meetingValue
+            return no cad presspull curve
+        set curveValue to the cad clone of (the item at 0 in (meetingValue's curves))
+        free cad meeting meetingValue
+        if curveValue's kind != oldCurve's kind:
+            return no cad presspull curve
+        if curveValue's kind = 0:
+            if (the cad dot of curveValue's line's direction and oldCurve's line's direction) < 0.0:
+                set curveValue's line's direction to the cad negative of curveValue's line's direction
+        else if curveValue's kind = 1:
+            set newNormal to the cad normal of curveValue's circle's plane
+            set oldNormal to the cad normal of oldCurve's circle's plane
+            if (newNormal's valid = false) or (oldNormal's valid = false):
+                return no cad presspull curve
+            if (the cad dot of newNormal's value and oldNormal's value) < 0.0:
+                set curveValue's circle's plane's yAxis to the cad negative of curveValue's circle's plane's yAxis
+        else if curveValue's kind = 2:
+            set newNormal to the cad normal of curveValue's ellipse's plane
+            set oldNormal to the cad normal of oldCurve's ellipse's plane
+            if (newNormal's valid = false) or (oldNormal's valid = false):
+                return no cad presspull curve
+            if (the cad dot of newNormal's value and oldNormal's value) < 0.0:
+                set curveValue's ellipse's plane's yAxis to the cad negative of curveValue's ellipse's plane's yAxis
+        else:
+            return no cad presspull curve
+        return the cad presspull curve curveValue
+
+local function the cad presspull trigonometric parameters where {cad plane:movedPlane} meets {cad plane:curvePlane} with x radius {a 64 bit floating-point number:xRadius} and y radius {a 64 bit floating-point number:yRadius}:
+    execute:
+        set normalResult to the cad normal of movedPlane
+        if normalResult's valid = false:
+            return no cad presspull parameters
+        set normalValue to normalResult's value
+        set cosineCoefficient to (the cad dot of normalValue and curvePlane's xAxis) * xRadius
+        set sineCoefficient to (the cad dot of normalValue and curvePlane's yAxis) * yRadius
+        set planeOffset to the cad dot of normalValue and (the cad difference of movedPlane's origin and curvePlane's origin)
+        set amplitude to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, cosineCoefficient, sineCoefficient)
+        if (amplitude <= 1e-12) or ((the absolute value of planeOffset) > amplitude):
+            return no cad presspull parameters
+        set phase to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, sineCoefficient, cosineCoefficient)
+        set ratio to planeOffset / amplitude
+        clamp ratio between -1.0 and 1.0
+        set angle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, ratio)
+        set roots to a cad topology list of a 64 bit floating-point number
+        loop turn from -2 to 3:
+            set fullTurn to (turn as a 64 bit floating-point number) * (cad presspull tau)
+            append (phase - angle + fullTurn) to roots's values
+            append (phase + angle + fullTurn) to roots's values
+        return the cad presspull parameters roots
+
+function the cad presspull parameters where {cad plane:movedPlane} meets {cad edge curve3:curveValue}:
+    execute:
+        set normalResult to the cad normal of movedPlane
+        if normalResult's valid = false:
+            return no cad presspull parameters
+        set normalValue to normalResult's value
+        if curveValue's kind = 0:
+            set along to the cad dot of normalValue and curveValue's line's direction
+            if (the absolute value of along) <= (1e-12 * (the cad length of curveValue's line's direction)):
+                return no cad presspull parameters
+            set values to a cad topology list of a 64 bit floating-point number
+            append ((the cad dot of normalValue and (the cad difference of movedPlane's origin and curveValue's line's origin)) / along) to values's values
+            return the cad presspull parameters values
+        if curveValue's kind = 1:
+            return the cad presspull trigonometric parameters where movedPlane meets curveValue's circle's plane with x radius curveValue's circle's radius and y radius curveValue's circle's radius
+        if curveValue's kind = 2:
+            return the cad presspull trigonometric parameters where movedPlane meets curveValue's ellipse's plane with x radius curveValue's ellipse's majorRadius and y radius curveValue's ellipse's minorRadius
+        return no cad presspull parameters
+
+local function cad presspull euclidean remainder of {a 64 bit floating-point number:value}:
+    execute:
+        set reduced to the remainder of value divided by (cad presspull tau)
+        if reduced < 0.0:
+            return reduced + (cad presspull tau)
+        return reduced
+local function the cad presspull span of {cad edge curve3:curveValue} from {cad vector3:startPoint} to {cad vector3:endPoint} like {cad edge:oldEdge} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set firstParameter to the cad parameter on curveValue nearest startPoint
+        set secondParameter to the cad parameter on curveValue nearest endPoint
+        if (curveValue's kind = 1) or (curveValue's kind = 2):
+            set secondParameter to firstParameter + (cad presspull euclidean remainder of (secondParameter - firstParameter))
+            if oldEdge's start = oldEdge's end:
+                set secondParameter to firstParameter + (cad presspull tau)
+        if ((cad presspull finite firstParameter) and (cad presspull finite secondParameter)) = false:
+            return no cad presspull span
+        if secondParameter <= firstParameter:
+            return no cad presspull span
+        if (the cad distance from (the cad point on curveValue at firstParameter) to startPoint) > (tolerance * 4.0):
+            return no cad presspull span
+        if (the cad distance from (the cad point on curveValue at secondParameter) to endPoint) > (tolerance * 4.0):
+            return no cad presspull span
+        return @intrinsic("construct", a cad presspull span result, true, firstParameter, secondParameter)
+
+local function the cad presspull boundary area of {cad face key:faceKey} in {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set boundaryResult to the cad boundary of faceKey in sourceBody within tolerance
+        if boundaryResult's valid = false:
+            return @intrinsic("construct", a cad presspull area result, false, 0.0 as a 64 bit floating-point number)
+        set areaValue to 0.0 as a 64 bit floating-point number
+        loop curveIndex from 0 to the length of (boundaryResult's curves's values):
+            set areaValue to areaValue + (the cad enclosed area of (the item at curveIndex in (boundaryResult's curves's values)))
+        return @intrinsic("construct", a cad presspull area result, true, areaValue)
+
+local function the cad presspull local offset of {cad body:sourceBody} at {cad face key:faceKey} by {a 64 bit floating-point number:distance}:
+    execute:
+        set extractedResult to the cad planar face profile of sourceBody at faceKey
+        if extractedResult's valid = false:
+            return no cad body
+        set outwardValue to extractedResult's value's outward
+        set movedPlane to extractedResult's value's plane
+        set movedPlane's origin to the cad sum of movedPlane's origin and (outwardValue scaled by distance)
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        if (the absolute value of distance) <= tolerance:
+            return no cad body
+
+        set boundaryKeys to an empty list of a cad edge key
+        set faceUses to the cad face coedges of faceKey in sourceBody
+        loop useIndex from 0 to the length of faceUses:
+            set useNode to the cad node pointer for (the item at useIndex in faceUses) in sourceBody
+            if useNode = (0 as the type of useNode):
+                free faceUses
+                free boundaryKeys
+                return no cad body
+            if (cad presspull boundaryKeys contains edge useNode's edge) = false:
+                append useNode's edge to boundaryKeys
+        free faceUses
+
+        set vertexKeys to an empty list of a cad vertex key
+        loop boundaryIndex from 0 to the length of boundaryKeys:
+            set edgeNode to the cad node pointer for (the item at boundaryIndex in boundaryKeys) in sourceBody
+            if edgeNode = (0 as the type of edgeNode):
+                free vertexKeys
+                free boundaryKeys
+                return no cad body
+            append cad presspull unique vertex edgeNode's start to vertexKeys
+            append cad presspull unique vertex edgeNode's end to vertexKeys
+
+        set movedValues to a cad topology list of a cad presspull moved vertex
+        set allEdges to the cad edge keys of sourceBody
+        loop vertexIndex from 0 to the length of vertexKeys:
+            set vertexKey to the item at vertexIndex in vertexKeys
+            set vertexNode to the cad node pointer for vertexKey in sourceBody
+            if vertexNode = (0 as the type of vertexNode):
+                return no cad body
+            set candidatePoints to a cad topology list of a cad vector3
+            loop edgeIndex from 0 to the length of allEdges:
+                set railKey to the item at edgeIndex in allEdges
+                set railNode to the cad node pointer for railKey in sourceBody
+                if railNode = (0 as the type of railNode):
+                    return no cad body
+                set incident to (railNode's start = vertexKey) or (railNode's end = vertexKey)
+                if incident and ((cad presspull boundaryKeys contains edge railKey) = false):
+                    set curveNode to the cad node pointer for railNode's curve in sourceBody
+                    if curveNode = (0 as the type of curveNode):
+                        return no cad body
+                    set parameterResult to the cad presspull parameters where movedPlane meets (@intrinsic("dereference", curveNode))
+                    if parameterResult's valid = false:
+                        return no cad body
+                    set startsHere to railNode's start = vertexKey
+                    set oldParameter to railNode's endParameter
+                    set otherParameter to railNode's startParameter
+                    if startsHere:
+                        set oldParameter to railNode's startParameter
+                        set otherParameter to railNode's endParameter
+                    set foundParameter to false
+                    set bestDistance to 1e300 as a 64 bit floating-point number
+                    set bestParameter to 0.0 as a 64 bit floating-point number
+                    loop parameterIndex from 0 to the length of (parameterResult's values's values):
+                        set candidateParameter to the item at parameterIndex in (parameterResult's values's values)
+                        set allowed to cad presspull finite candidateParameter
+                        if startsHere:
+                            set allowed to allowed and (candidateParameter < (otherParameter - tolerance))
+                        else:
+                            set allowed to allowed and (candidateParameter > (otherParameter + tolerance))
+                        if allowed:
+                            set parameterDistance to the absolute value of (candidateParameter - oldParameter)
+                            if parameterDistance < bestDistance:
+                                set bestDistance to parameterDistance
+                                set bestParameter to candidateParameter
+                                set foundParameter to true
+                    if foundParameter = false:
+                        return no cad body
+                    append (the cad point on (@intrinsic("dereference", curveNode)) at bestParameter) to candidatePoints's values
+            if (the length of (candidatePoints's values)) = 0:
+                return no cad body
+            set movedPoint to the item at 0 in (candidatePoints's values)
+            loop candidateIndex from 1 to the length of (candidatePoints's values):
+                if (the cad distance from movedPoint to (the item at candidateIndex in (candidatePoints's values))) > (tolerance * 4.0):
+                    return no cad body
+            set planeDistance to the cad distance from movedPoint to movedPlane
+            if (planeDistance's valid = false) or ((the absolute value of planeDistance's value) > (tolerance * 4.0)):
+                return no cad body
+            append (@intrinsic("construct", a cad presspull moved vertex, vertexKey, movedPoint)) to movedValues's values
+
+        set outputBody to the cad clone of sourceBody
+        loop movedIndex from 0 to the length of (movedValues's values):
+            set movedValue to the item at movedIndex in (movedValues's values)
+            set outputVertex to the cad node pointer for movedValue's key in outputBody
+            if outputVertex = (0 as the type of outputVertex):
+                return no cad body
+            set outputVertex's point to movedValue's point
+            soil cad vertex movedValue's key in outputBody
+        set surfaceKey to the cad body key after inserting (the cad surface of movedPlane) into outputBody
+        set selectedNode to the cad node pointer for faceKey in outputBody
+        if selectedNode = (0 as the type of selectedNode):
+            return no cad body
+        set selectedNode's surface to surfaceKey
+        soil cad provenance selectedNode's provenance
+
+        set affectedFaces to an empty list of a cad face key
+        append faceKey to affectedFaces
+        loop edgeIndex from 0 to the length of allEdges:
+            set edgeKey to the item at edgeIndex in allEdges
+            set oldEdgeNode to the cad node pointer for edgeKey in sourceBody
+            if oldEdgeNode = (0 as the type of oldEdgeNode):
+                return no cad body
+            set touchesMoved to (cad presspull vertexKeys contains vertex oldEdgeNode's start) or (cad presspull vertexKeys contains vertex oldEdgeNode's end)
+            if touchesMoved:
+                set oldCurveNode to the cad node pointer for oldEdgeNode's curve in sourceBody
+                if oldCurveNode = (0 as the type of oldCurveNode):
+                    return no cad body
+                set nextCurveResult to the cad presspull curve (the cad clone of (@intrinsic("dereference", oldCurveNode)))
+                if cad presspull boundaryKeys contains edge edgeKey:
+                    set otherResult to the cad presspull adjacent surface to (@intrinsic("dereference", oldEdgeNode)) away from faceKey in sourceBody
+                    if otherResult's valid = false:
+                        return no cad body
+                    set nextCurveResult to the cad presspull intersection curve of movedPlane and otherResult's value matching (@intrinsic("dereference", oldCurveNode)) within tolerance
+                if nextCurveResult's valid = false:
+                    return no cad body
+                set outputStart to the cad node pointer for oldEdgeNode's start in outputBody
+                set outputEnd to the cad node pointer for oldEdgeNode's end in outputBody
+                if (outputStart = (0 as the type of outputStart)) or (outputEnd = (0 as the type of outputEnd)):
+                    return no cad body
+                set spanResult to the cad presspull span of nextCurveResult's value from outputStart's point to outputEnd's point like (@intrinsic("dereference", oldEdgeNode)) within tolerance
+                if spanResult's valid = false:
+                    return no cad body
+                set curveKey to the cad body key after inserting nextCurveResult's value into outputBody
+                set outputEdge to the cad node pointer for edgeKey in outputBody
+                if outputEdge = (0 as the type of outputEdge):
+                    return no cad body
+                set outputEdge's curve to curveKey
+                set outputEdge's startParameter to spanResult's first
+                set outputEdge's endParameter to spanResult's second
+                soil cad provenance outputEdge's provenance
+                loop edgeUseIndex from 0 to the length of (oldEdgeNode's coedges's values):
+                    set outputUse to the cad node pointer for (the item at edgeUseIndex in (oldEdgeNode's coedges's values)) in outputBody
+                    if outputUse = (0 as the type of outputUse):
+                        return no cad body
+                    set outputUse's pcurve to no cad pcurve
+                    soil cad provenance outputUse's provenance
+                    set outputLoop to the cad node pointer for outputUse's owner in outputBody
+                    if outputLoop = (0 as the type of outputLoop):
+                        return no cad body
+                    append cad presspull unique face outputLoop's owner to affectedFaces
+
+        loop affectedIndex from 0 to the length of affectedFaces:
+            set affectedKey to the item at affectedIndex in affectedFaces
+            set affectedNode to the cad node pointer for affectedKey in outputBody
+            if affectedNode = (0 as the type of affectedNode):
+                return no cad body
+            set affectedSurface to the cad node pointer for affectedNode's surface in outputBody
+            if affectedSurface = (0 as the type of affectedSurface):
+                return no cad body
+            if affectedSurface's kind = 0:
+                set oldAreaResult to the cad presspull boundary area of affectedKey in sourceBody within tolerance
+                set newAreaResult to the cad presspull boundary area of affectedKey in outputBody within tolerance
+                if (oldAreaResult's valid = false) or (newAreaResult's valid = false):
+                    return no cad body
+                if ((oldAreaResult's value * newAreaResult's value) <= 0.0) or ((the absolute value of newAreaResult's value) <= (tolerance * tolerance)):
+                    return no cad body
+            set affectedUses to the cad face coedges of affectedKey in outputBody
+            loop affectedUseIndex from 0 to the length of affectedUses:
+                set affectedUse to the cad node pointer for (the item at affectedUseIndex in affectedUses) in outputBody
+                if affectedUse = (0 as the type of affectedUse):
+                    return no cad body
+                set affectedEdge to the cad node pointer for affectedUse's edge in outputBody
+                if affectedEdge = (0 as the type of affectedEdge):
+                    return no cad body
+                set affectedCurve to the cad node pointer for affectedEdge's curve in outputBody
+                if affectedCurve = (0 as the type of affectedCurve):
+                    return no cad body
+                loop sampleIndex from 0 to 5:
+                    set fraction to (sampleIndex as a 64 bit floating-point number) / 4.0
+                    set sampleParameter to affectedEdge's startParameter + fraction * (affectedEdge's endParameter - affectedEdge's startParameter)
+                    set samplePoint to the cad point on (@intrinsic("dereference", affectedCurve)) at sampleParameter
+                    set sampleDistance to the cad distance from (@intrinsic("dereference", affectedSurface)) to samplePoint
+                    if (cad presspull finite sampleDistance) = false:
+                        return no cad body
+                    if (the absolute value of sampleDistance) > (tolerance * 8.0):
+                        return no cad body
+            free affectedUses
+        soil cad provenance outputBody's provenance
+        set flaws to the cad flaws of outputBody
+        set accepted to ((the length of flaws) = 0) and ((the cad worst vertex gap of outputBody) <= (tolerance * 4.0))
+        free flaws
+        free affectedFaces
+        free allEdges
+        free vertexKeys
+        free boundaryKeys
+        if accepted = false:
+            return no cad body
+        return the cad body result of outputBody
+
+function the cad presspull of {cad body:sourceBody} at {cad face key:faceKey} by {a number:givenDistance} in mode {integer:mode}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if ((cad presspull finite distance) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+            return no cad body
+        set worldProfile to the cad planar face profile of sourceBody at faceKey
+        if worldProfile's valid = false:
+            return no cad body
+        if mode = cad presspull extrude mode:
+            return the cad presspull of sourceBody with worldProfile's value by distance
+        if mode != cad presspull offset mode:
+            return no cad body
+        set worldOrigin to worldProfile's value's plane's origin
+        set localResult to the cad transformed sourceBody by (a cad placement at (the cad negative of worldOrigin))
+        if localResult's valid = false:
+            return no cad body
+        set editedResult to the cad presspull local offset of localResult's value at faceKey by distance
+        if editedResult's valid = false:
+            return no cad body
+        return the cad transformed editedResult's value by (a cad placement at worldOrigin)
+function the cad presspull of {cad body:sourceBody} at {cad face key:faceKey} by {a number:distance}:
+    execute:
+        return the cad presspull of sourceBody at faceKey by distance in mode (cad presspull offset mode)

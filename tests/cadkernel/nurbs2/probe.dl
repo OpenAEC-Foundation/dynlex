@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+
+function nurbs2 input {integer:index}:
+    execute:
+        set args to the command line arguments
+        set text to the argument at index in args
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function nurbs2 input point {integer:index}:
+    execute:
+        return a cad vector2 with x (nurbs2 input index) and y (nurbs2 input (index + 1))
+function emit nurbs2 scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit nurbs2 flag {boolean:value}:
+    execute:
+        if value:
+            emit nurbs2 scalar 1
+        else:
+            emit nurbs2 scalar 0
+function emit nurbs2 point {cad vector2:value}:
+    execute:
+        emit nurbs2 scalar (the x of value)
+        emit nurbs2 scalar (the y of value)
+function emit nurbs2 curve {cad nurbs curve2:shape} at {a number:u} and {a number:t} nearest {cad vector2:target} with {integer:pieces} and evaluation {integer:flags}:
+    execute:
+        emit nurbs2 scalar (the cad degree of shape)
+        emit nurbs2 scalar (the length of the cad control points of shape)
+        emit nurbs2 scalar (the length of the cad knots of shape)
+        emit nurbs2 scalar (the length of the cad weights of shape)
+        emit nurbs2 flag (shape is cad rational)
+        loop index from 0 to the length of the controls of shape:
+            emit nurbs2 point (the item at index in (the controls of shape))
+        loop index from 0 to the length of the knots of shape:
+            emit nurbs2 scalar (the item at index in (the knots of shape))
+        loop index from 0 to the length of the weights of shape:
+            emit nurbs2 scalar (the item at index in (the weights of shape))
+        set domain to the cad domain of shape
+        emit nurbs2 scalar (the start of domain)
+        emit nurbs2 scalar (the end of domain)
+        if flags >= 1:
+            emit nurbs2 point (the cad point on shape at knot u)
+            emit nurbs2 point (the cad point on shape at t)
+            emit nurbs2 point (the cad derivative of shape at knot u)
+            emit nurbs2 point (the cad derivative of shape at t)
+            emit nurbs2 flag (shape is cad closed)
+        if flags >= 2:
+            emit nurbs2 scalar (the cad parameter on shape nearest target)
+        if flags >= 3:
+            set samples to the cad samples of shape with pieces pieces per span
+            emit nurbs2 scalar (the length of samples)
+            loop index from 0 to the length of samples:
+                emit nurbs2 point (the item at index in samples)
+            free samples
+
+set constructor to (nurbs2 input 0) as an integer
+set degree to (nurbs2 input 1) as an integer
+set count to (nurbs2 input 2) as an integer
+set knotCount to (nurbs2 input 3) as an integer
+set weightCount to (nurbs2 input 4) as an integer
+set transform to (nurbs2 input 5) as an integer
+set amount to nurbs2 input 6
+set last to nurbs2 input 7
+set u to nurbs2 input 8
+set t to nurbs2 input 9
+set pieces to (nurbs2 input 10) as an integer
+set spacingCode to (nurbs2 input 11) as an integer
+set firstGiven to (nurbs2 input 12) != 0.0
+set lastGiven to (nurbs2 input 13) != 0.0
+set flags to (nurbs2 input 14) as an integer
+set cursor to 15
+set controls to an empty list of a cad vector2
+loop index from 0 to count:
+    append (nurbs2 input point cursor) to controls
+    set cursor to cursor + 2
+set knots to an empty list of a 64 bit floating-point number
+loop index from 0 to knotCount:
+    append (nurbs2 input cursor) to knots
+    increment cursor
+set weights to an empty list of a 64 bit floating-point number
+loop index from 0 to weightCount:
+    append (nurbs2 input cursor) to weights
+    increment cursor
+set first to no cad spline tangent matching [0.0,0.0]
+if firstGiven:
+    set first to a cad spline tangent with value [nurbs2 input cursor,nurbs2 input (cursor + 1)]
+set end to no cad spline tangent matching [0.0,0.0]
+if lastGiven:
+    set end to a cad spline tangent with value [nurbs2 input (cursor + 2),nurbs2 input (cursor + 3)]
+set target to nurbs2 input point (cursor + 4)
+set spacing to the cad uniform parameterization
+if spacingCode = 1:
+    set spacing to the cad centripetal parameterization
+else if spacingCode = 2:
+    set spacing to the cad chord parameterization
+set result to the cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+if constructor = 1:
+    set result to the strict cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+else if constructor = 2:
+    set result to the cad nurbs2 fit through controls with start tangent first and end tangent end using spacing
+else if constructor = 3:
+    set result to the cad periodic nurbs2 fit through controls using spacing
+else if constructor = 4:
+    set result to the cad nurbs2 fit to polyline controls within amount
+if (the valid of result) and (constructor != 4):
+    if transform = 1:
+        set the value of result to the cad reversal of (the value of result)
+    else if transform = 2:
+        set result to the cad elevation of (the value of result) by (amount as an integer)
+    else if transform = 3:
+        insert cad nurbs knot amount into (the value of result)
+    else if transform = 5:
+        set result to the cad trim of (the value of result) from amount to last
+emit nurbs2 flag (the valid of result)
+if the valid of result:
+    if transform = 4:
+        set divided to the cad split of (the value of result) at amount
+        emit nurbs2 flag (the valid of divided)
+        if the valid of divided:
+            emit nurbs2 curve (the left of divided) at u and t nearest target with pieces and evaluation flags
+            emit nurbs2 curve (the right of divided) at u and t nearest target with pieces and evaluation flags
+    else:
+        emit nurbs2 curve (the value of result) at u and t nearest target with pieces and evaluation flags
+free controls
+free knots
+free weights

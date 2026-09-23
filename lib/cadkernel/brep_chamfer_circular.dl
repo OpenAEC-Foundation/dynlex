@@ -1,0 +1,480 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/chamfer_circular.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The source body and selection are borrowed. A recognized success owns the
+# reconstructed body; failures own an empty body.
+import lib/cadkernel/brep_chamfer_profile.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_sweep.dl
+
+class:
+    patterns:
+        [a|] cad circular chamfer result
+    members:
+        recognized as a boolean
+        valid as a boolean
+        error as a cad chamfer error
+        value as the type of (an empty cad body)
+class:
+    patterns:
+        [a|] cad circular chamfer edge node
+    members:
+        edge as a cad edge key
+        node as an integer
+class:
+    patterns:
+        [a|] cad circular chamfer node result
+    members:
+        valid as a boolean
+        value as an integer
+class:
+    patterns:
+        [a|] cad circular chamfer connection
+    members:
+        first as an integer
+        second as an integer
+        face as a cad chamfer face
+        curve as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+class:
+    patterns:
+        [a|] cad circular chamfer ordered result
+    members:
+        valid as a boolean
+        order as the type of (a cad topology list of an integer)
+        points as the type of (a cad topology list of a cad vector2)
+        segments as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+        faces as the type of (a cad topology list of a cad chamfer face)
+
+local function cad circular chamfer result recognized {boolean:recognized} valid {boolean:valid} with error {cad chamfer error:error} and body {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad circular chamfer result, recognized, valid, error, value)
+local function cad circular chamfer error of kind {integer:kind}:
+    execute:
+        return @intrinsic("construct", a cad chamfer error, kind, a new cad edge key)
+local function cad circular chamfer not recognized:
+    execute:
+        return cad circular chamfer result recognized false valid false with error (cad circular chamfer error of kind (cad chamfer no error)) and body (an empty cad body)
+local function cad circular chamfer failure {cad chamfer error:error}:
+    execute:
+        return cad circular chamfer result recognized true valid false with error error and body (an empty cad body)
+local function cad circular chamfer invalid result:
+    execute:
+        return cad circular chamfer failure (cad circular chamfer error of kind (cad chamfer invalid result error))
+local function cad circular chamfer success {cad body:value}:
+    execute:
+        return cad circular chamfer result recognized true valid true with error (cad circular chamfer error of kind (cad chamfer no error)) and body value
+
+local function a cad circular chamfer edge {cad edge key:edge} at node {integer:node}:
+    execute:
+        return @intrinsic("construct", a cad circular chamfer edge node, edge, node)
+local function the cad circular chamfer node for {cad edge key:edge} in {cad topology list:circles}:
+    execute:
+        loop index from 0 to the length of circles's values:
+            set entry to the item at index in circles's values
+            if entry's edge = edge:
+                return @intrinsic("construct", a cad circular chamfer node result, true, entry's node)
+        return @intrinsic("construct", a cad circular chamfer node result, false, 0 - 1)
+local function cad circular chamfer {a pointer to a list:values} contains node {integer:node}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = node:
+                return true
+        return false
+local function append cad circular chamfer unique node {integer:node} to {a pointer to a list:values}:
+    execute:
+        if (cad circular chamfer values contains node node) = false:
+            append node to values
+local function cad circular chamfer connection between {integer:first} and {integer:second} on {cad chamfer face:face} along {cad curve2:curve}:
+    execute:
+        return @intrinsic("construct", a cad circular chamfer connection, first, second, face, curve)
+local function cad circular chamfer connection {cad circular chamfer connection:value} touches {integer:node}:
+    execute:
+        return (value's first = node) or (value's second = node)
+local function cad circular chamfer connection {cad circular chamfer connection:value} joins {integer:first} and {integer:second}:
+    execute:
+        set direct to (value's first = first) and (value's second = second)
+        set reverse to (value's first = second) and (value's second = first)
+        return direct or reverse
+local function cad circular chamfer angle from {a 64 bit floating-point number:y} over {a 64 bit floating-point number:x}:
+    execute:
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
+local function no cad circular chamfer ordered result:
+    execute:
+        set order to a cad topology list of an integer
+        set points to a cad topology list of a cad vector2
+        set segments to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set faces to a cad topology list of a cad chamfer face
+        return @intrinsic("construct", a cad circular chamfer ordered result, false, order, points, segments, faces)
+local function the cad circular chamfer ordered profile in {a pointer to a list:order} through {a pointer to a list:sourcePoints} with {cad topology list:connections} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set orderedOrder to a cad topology list of an integer
+        set orderedPoints to a cad topology list of a cad vector2
+        set segments to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set faces to a cad topology list of a cad chamfer face
+        set total to the length of order
+        loop index from 0 to total:
+            set node to the item at index in order
+            set nextNode to the item at (the remainder of (index + 1) divided by total) in order
+            set found to false
+            set sourceCurve to the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)
+            set sourceFace to no cad chamfer face
+            loop connectionIndex from 0 to the length of connections's values:
+                set connectionNode to the item at connectionIndex in connections's values
+                if cad circular chamfer connection connectionNode joins node and nextNode:
+                    if found:
+                        return no cad circular chamfer ordered result
+                    set found to true
+                    set sourceCurve to connectionNode's curve
+                    set sourceFace to connectionNode's face
+            if found = false:
+                return no cad circular chamfer ordered result
+            set orderedCurve to the cad curve2 of (a cad line2 from (the item at node in sourcePoints) to (the item at nextNode in sourcePoints))
+            if sourceCurve's kind = 0:
+                set orderedCurve to the cad curve2 of (a cad line2 from (the item at node in sourcePoints) to (the item at nextNode in sourcePoints))
+            else if sourceCurve's kind = 2:
+                set firstGap to the cad distance from (the cad point on sourceCurve at 0.0) to (the item at node in sourcePoints)
+                set lastGap to the cad distance from (the cad point on sourceCurve at 1.0) to (the item at nextNode in sourcePoints)
+                if (firstGap > tolerance) or (lastGap > tolerance):
+                    return no cad circular chamfer ordered result
+                set orderedCurve to sourceCurve
+            else:
+                return no cad circular chamfer ordered result
+            append node to orderedOrder's values
+            append (the item at node in sourcePoints) to orderedPoints's values
+            append orderedCurve to segments's values
+            append sourceFace to faces's values
+        return @intrinsic("construct", a cad circular chamfer ordered result, true, orderedOrder, orderedPoints, segments, faces)
+
+function the cad circular [chamfer] of {cad body:body} along {a pointer to a list:selected} with [base] [face] {cad face key:baseFace}, [base] [distance] {a number:baseDistance} and [other] [distance] {a number:otherDistance}:
+    execute:
+        if (the length of selected) = 0:
+            return cad circular chamfer not recognized
+        set firstEdge to the cad node pointer for (the item at 0 in selected) in body
+        if firstEdge = (0 as the type of firstEdge):
+            return cad circular chamfer not recognized
+        set firstCurve to the cad node pointer for firstEdge's curve in body
+        if (firstCurve = (0 as the type of firstCurve)) or (firstCurve's kind != 1):
+            return cad circular chamfer not recognized
+        set firstNormal to the cad normal of firstCurve's circle's plane
+        set radialResult to the cad normalization of firstCurve's circle's plane's xAxis
+        if (firstNormal's valid = false) or (radialResult's valid = false):
+            return cad circular chamfer not recognized
+        set origin to firstCurve's circle's plane's origin
+        set axis to firstNormal's value
+        set radial to radialResult's value
+        set meridianPlaneResult to the cad orthonormal plane with origin origin, x axis radial and normal (the cad cross of radial and axis)
+        if meridianPlaneResult's valid = false:
+            return cad circular chamfer not recognized
+        set meridianPlane to meridianPlaneResult's value
+        set toleranceBodies to a list containing body
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        if (((the length of body's roots) != 1) or ((the cad count of body's shells) != 1)) or ((the cad count of body's lumps) != 1):
+            return cad circular chamfer not recognized
+
+        set points to a cad topology list of a cad vector2
+        set circles to a cad topology list of a cad circular chamfer edge node
+        set edgeKeys to the cad edge keys of body
+        loop edgeIndex from 0 to the length of edgeKeys:
+            set edgeKey to the item at edgeIndex in edgeKeys
+            set edgeNode to the cad node pointer for edgeKey in body
+            if (edgeNode = (0 as the type of edgeNode)) or ((the length of edgeNode's coedges's values) != 2):
+                free edgeKeys
+                return cad circular chamfer not recognized
+            set firstUse to the cad node pointer for (the item at 0 in edgeNode's coedges's values) in body
+            set secondUse to the cad node pointer for (the item at 1 in edgeNode's coedges's values) in body
+            if (firstUse = (0 as the type of firstUse)) or (secondUse = (0 as the type of secondUse)):
+                free edgeKeys
+                return cad circular chamfer not recognized
+            set firstLoop to the cad node pointer for firstUse's owner in body
+            set secondLoop to the cad node pointer for secondUse's owner in body
+            if (firstLoop = (0 as the type of firstLoop)) or (secondLoop = (0 as the type of secondLoop)):
+                free edgeKeys
+                return cad circular chamfer not recognized
+            set edgeCurve to the cad node pointer for edgeNode's curve in body
+            if edgeCurve = (0 as the type of edgeCurve):
+                free edgeKeys
+                return cad circular chamfer not recognized
+            if firstLoop's owner = secondLoop's owner:
+                if (edgeCurve's kind != 0) and (edgeCurve's kind != 1):
+                    free edgeKeys
+                    return cad circular chamfer not recognized
+            else:
+                if edgeCurve's kind != 1:
+                    free edgeKeys
+                    return cad circular chamfer not recognized
+                set span to the absolute value of (edgeNode's endParameter - edgeNode's startParameter)
+                set circleNormal to the cad normal of edgeCurve's circle's plane
+                if circleNormal's valid = false:
+                    free edgeKeys
+                    return cad circular chamfer not recognized
+                if ((the absolute value of (span - 6.283185307179586)) > 1e-8) or ((the absolute value of (the cad dot of circleNormal's value and axis)) < (1.0 - 1e-9)):
+                    free edgeKeys
+                    return cad circular chamfer not recognized
+                set delta to the cad difference of edgeCurve's circle's plane's origin and origin
+                set height to the cad dot of delta and axis
+                set offset to the cad difference of delta and (axis scaled by height)
+                if (the cad length of offset) > tolerance:
+                    free edgeKeys
+                    return cad circular chamfer not recognized
+                append (a cad circular chamfer edge edgeKey at node (the length of points's values)) to circles's values
+                append (a cad vector2 with x edgeCurve's circle's radius and y height) to points's values
+        free edgeKeys
+        loop selectedIndex from 0 to the length of selected:
+            if (the cad circular chamfer node for (the item at selectedIndex in selected) in circles)'s valid = false:
+                return cad circular chamfer not recognized
+
+        set connections to a cad topology list of a cad circular chamfer connection
+        set axisNodes to a cad topology list of an integer
+        set faceKeys to the cad face keys of body
+        loop faceIndex from 0 to the length of faceKeys:
+            set faceKey to the item at faceIndex in faceKeys
+            set faceNode to the cad node pointer for faceKey in body
+            if faceNode = (0 as the type of faceNode):
+                free faceKeys
+                return cad circular chamfer not recognized
+            set surfaceNode to the cad node pointer for faceNode's surface in body
+            if surfaceNode = (0 as the type of surfaceNode):
+                free faceKeys
+                return cad circular chamfer not recognized
+            set surfaceKind to surfaceNode's kind
+            if (((surfaceKind != 0) and (surfaceKind != 1)) and (surfaceKind != 2)) and (surfaceKind != 4):
+                free faceKeys
+                return cad circular chamfer not recognized
+            set surfaceFrame to surfaceNode's plane
+            if surfaceKind = 1:
+                set surfaceFrame to surfaceNode's cylinder's base
+            else if surfaceKind = 2:
+                set surfaceFrame to surfaceNode's cone's base
+            else if surfaceKind = 4:
+                set surfaceFrame to surfaceNode's torus's frame
+            set surfaceNormal to the cad normal of surfaceFrame
+            if surfaceNormal's valid = false:
+                free faceKeys
+                return cad circular chamfer not recognized
+            if (the absolute value of (the cad dot of surfaceNormal's value and axis)) < (1.0 - 1e-9):
+                free faceKeys
+                return cad circular chamfer not recognized
+            if surfaceKind != 0:
+                set frameDelta to the cad difference of surfaceFrame's origin and origin
+                set frameHeight to the cad dot of frameDelta and axis
+                if (the cad length of (the cad difference of frameDelta and (axis scaled by frameHeight))) > tolerance:
+                    free faceKeys
+                    return cad circular chamfer not recognized
+
+            set nodes to a cad topology list of an integer
+            set faceUses to the cad face coedges of faceKey in body
+            loop useIndex from 0 to the length of faceUses:
+                set useNode to the cad node pointer for (the item at useIndex in faceUses) in body
+                if useNode != (0 as the type of useNode):
+                    set mappedNode to the cad circular chamfer node for useNode's edge in circles
+                    if mappedNode's valid:
+                        append cad circular chamfer unique node mappedNode's value to nodes's values
+            if (the length of nodes's values) = 1:
+                set rimNode to the item at 0 in nodes's values
+                set capHeight to 0.0 as a 64 bit floating-point number
+                set capValid to false
+                if surfaceKind = 0:
+                    set capHeight to (the item at rimNode in points's values)'s y
+                    set capValid to true
+                else if surfaceKind = 2:
+                    set tangent to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, surfaceNode's cone's halfAngle)
+                    if (the absolute value of tangent) > 1e-12:
+                        set localAxisResult to the cad normal of surfaceNode's cone's base
+                        if localAxisResult's valid:
+                            set apex to the cad sum of surfaceNode's cone's base's origin and (localAxisResult's value scaled by (surfaceNode's cone's radius / tangent))
+                            set apexHeight to the cad dot of (the cad difference of apex and origin) and axis
+                            set apexFound to false
+                            loop apexUseIndex from 0 to the length of faceUses:
+                                set apexUse to the cad node pointer for (the item at apexUseIndex in faceUses) in body
+                                if apexUse != (0 as the type of apexUse):
+                                    set apexEdge to the cad node pointer for apexUse's edge in body
+                                    if apexEdge != (0 as the type of apexEdge):
+                                        set apexStart to the cad node pointer for apexEdge's start in body
+                                        set apexEnd to the cad node pointer for apexEdge's end in body
+                                        if apexStart != (0 as the type of apexStart):
+                                            if (the cad distance from apexStart's point to apex) <= tolerance:
+                                                set apexFound to true
+                                        if apexEnd != (0 as the type of apexEnd):
+                                            if (the cad distance from apexEnd's point to apex) <= tolerance:
+                                                set apexFound to true
+                            if apexFound:
+                                set capHeight to apexHeight
+                                set capValid to true
+                if capValid = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+                append (the length of points's values) to axisNodes's values
+                append (the length of points's values) to nodes's values
+                append (a cad vector2 with x 0.0 and y capHeight) to points's values
+            if (the length of nodes's values) != 2:
+                free faceUses
+                free faceKeys
+                return cad circular chamfer not recognized
+            if (the item at 0 in nodes's values) > (the item at 1 in nodes's values):
+                set temporaryNode to the item at 0 in nodes's values
+                replace item at index 0 in nodes's values with (the item at 1 in nodes's values)
+                replace item at index 1 in nodes's values with temporaryNode
+            set firstNode to the item at 0 in nodes's values
+            set secondNode to the item at 1 in nodes's values
+            set meridian to the cad curve2 of (a cad line2 from (the item at firstNode in points's values) to (the item at secondNode in points's values))
+            if surfaceKind = 4:
+                if surfaceNode's torus's majorRadius <= tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+                set centreDelta to the cad difference of surfaceNode's torus's frame's origin and origin
+                set centre to a cad vector2 with x surfaceNode's torus's majorRadius and y (the cad dot of centreDelta and axis)
+                set firstPoint to the item at firstNode in points's values
+                set secondPoint to the item at secondNode in points's values
+                set startAngle to cad circular chamfer angle from (firstPoint's y - centre's y) over (firstPoint's x - centre's x)
+                set endAngle to cad circular chamfer angle from (secondPoint's y - centre's y) over (secondPoint's x - centre's x)
+                set seamFound to false
+                set seamPoint to the cad zero vector3
+                loop seamIndex from 0 to the length of faceUses:
+                    if seamFound = false:
+                        set seamUse to the cad node pointer for (the item at seamIndex in faceUses) in body
+                        if seamUse != (0 as the type of seamUse):
+                            set seamMapped to the cad circular chamfer node for seamUse's edge in circles
+                            set seamEdge to the cad node pointer for seamUse's edge in body
+                            if (seamMapped's valid = false) and (seamEdge != (0 as the type of seamEdge)):
+                                set seamCurve to the cad node pointer for seamEdge's curve in body
+                                if seamCurve != (0 as the type of seamCurve):
+                                    if seamCurve's kind = 1:
+                                        set seamParameter to (seamEdge's startParameter + seamEdge's endParameter) * 0.5
+                                        set seamPoint to the cad point on (@intrinsic("dereference", seamCurve)) at seamParameter
+                                        set seamFound to true
+                if seamFound = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+                set seamDelta to the cad difference of seamPoint and origin
+                set seamHeight to the cad dot of seamDelta and axis
+                set middle to a cad vector2 with x (the cad length of (the cad difference of seamDelta and (axis scaled by seamHeight))) and y seamHeight
+                set middleAngle to cad circular chamfer angle from (middle's y - centre's y) over (middle's x - centre's x)
+                set arc to a cad arc2 at centre with radius surfaceNode's torus's minorRadius from startAngle to endAngle
+                if (cad arc span from startAngle to middleAngle) > ((the cad sweep of arc) + 1e-9):
+                    set temporaryAngle to startAngle
+                    set startAngle to endAngle
+                    set endAngle to temporaryAngle
+                    set arc to a cad arc2 at centre with radius surfaceNode's torus's minorRadius from startAngle to endAngle
+                if ((cad arc span from startAngle to 3.141592653589793) <= (the cad sweep of arc)) and ((centre's x - arc's radius) <= tolerance):
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+                set meridian to the cad curve2 of arc
+                set nearestParameter to the cad parameter on meridian nearest middle
+                if (the cad distance from (the cad point on meridian at nearestParameter) to middle) > tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+
+            loop sampleIndex from 0 to 3:
+                set sampleParameter to (sampleIndex as a 64 bit floating-point number) * 0.5
+                set worldPoint to the cad point at (the cad point on meridian at sampleParameter) on meridianPlane
+                set surfaceParameters to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest worldPoint
+                if surfaceParameters's valid = false:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+                set rebuiltPoint to the cad point on (@intrinsic("dereference", surfaceNode)) at parameters surfaceParameters's value's x and surfaceParameters's value's y
+                if (the cad distance from rebuiltPoint to worldPoint) > tolerance:
+                    free faceUses
+                    free faceKeys
+                    return cad circular chamfer not recognized
+            append (cad circular chamfer connection between firstNode and secondNode on (the cad chamfer face faceKey) along meridian) to connections's values
+            free faceUses
+        free faceKeys
+
+        if (the length of axisNodes's values) = 2:
+            set firstAxisNode to the item at 0 in axisNodes's values
+            set secondAxisNode to the item at 1 in axisNodes's values
+            set axisCurve to the cad curve2 of (a cad line2 from (the item at firstAxisNode in points's values) to (the item at secondAxisNode in points's values))
+            append (cad circular chamfer connection between firstAxisNode and secondAxisNode on (no cad chamfer face) along axisCurve) to connections's values
+        else if (the length of axisNodes's values) != 0:
+            return cad circular chamfer not recognized
+
+        loop pointIndex from 0 to the length of points's values:
+            set degree to 0
+            loop connectionIndex from 0 to the length of connections's values:
+                if cad circular chamfer connection (the item at connectionIndex in connections's values) touches pointIndex:
+                    increment degree
+            if degree != 2:
+                return cad circular chamfer not recognized
+        if (the length of points's values) = 0:
+            return cad circular chamfer not recognized
+        set order to a cad topology list of an integer
+        append 0 to order's values
+        set previousNode to 0 - 1
+        set currentNode to 0
+        set traversalDone to false
+        loop traversalIndex from 0 to the length of points's values:
+            if traversalDone = false:
+                set nextNode to 0 - 1
+                loop connectionIndex from 0 to the length of connections's values:
+                    set connectionNode to the item at connectionIndex in connections's values
+                    if cad circular chamfer connection connectionNode touches currentNode:
+                        set candidateNode to connectionNode's first
+                        if candidateNode = currentNode:
+                            set candidateNode to connectionNode's second
+                        if (candidateNode != previousNode) and (nextNode < 0):
+                            set nextNode to candidateNode
+                if nextNode < 0:
+                    return cad circular chamfer not recognized
+                if nextNode = 0:
+                    set traversalDone to true
+                else:
+                    if cad circular chamfer order's values contains node nextNode:
+                        return cad circular chamfer not recognized
+                    append nextNode to order's values
+                    set previousNode to currentNode
+                    set currentNode to nextNode
+        if (traversalDone = false) or ((the length of order's values) != (the length of points's values)):
+            return cad circular chamfer not recognized
+
+        set orderedProfile to the cad circular chamfer ordered profile in order's values through points's values with connections within tolerance
+        if orderedProfile's valid = false:
+            set reversedOrder to a cad topology list of an integer
+            append (the item at 0 in order's values) to reversedOrder's values
+            loop reverseOffset from 1 to the length of order's values:
+                append (the item at ((the length of order's values) - reverseOffset) in order's values) to reversedOrder's values
+            set orderedProfile to the cad circular chamfer ordered profile in reversedOrder's values through points's values with connections within tolerance
+            if orderedProfile's valid = false:
+                return cad circular chamfer not recognized
+
+        set selections to a cad topology list of a cad chamfer profile selection
+        loop selectedIndex from 0 to the length of selected:
+            set selectedEdge to the item at selectedIndex in selected
+            set mappedSelection to the cad circular chamfer node for selectedEdge in circles
+            if mappedSelection's valid = false:
+                return cad circular chamfer not recognized
+            set position to 0 - 1
+            loop orderIndex from 0 to the length of orderedProfile's order's values:
+                if (the item at orderIndex in orderedProfile's order's values) = mappedSelection's value:
+                    set position to orderIndex
+            if position < 0:
+                return cad circular chamfer not recognized
+            set replaced to false
+            loop choiceIndex from 0 to the length of selections's values:
+                if (the item at choiceIndex in selections's values)'s node = position:
+                    replace item at index choiceIndex in selections's values with (a cad chamfer profile selection at node position for edge selectedEdge)
+                    set replaced to true
+            if replaced = false:
+                append (a cad chamfer profile selection at node position for edge selectedEdge) to selections's values
+
+        set orderedSegments to orderedProfile's segments
+        set orderedPoints to orderedProfile's points
+        set orderedFaces to orderedProfile's faces
+        set trimmedProfile to the cad chamfer profile of orderedSegments's values through orderedPoints's values with selections selections's values and faces orderedFaces's values, base face baseFace, base distance baseDistance, other distance otherDistance, tolerance tolerance, avoiding axis true
+        if trimmedProfile's valid = false:
+            return cad circular chamfer failure trimmedProfile's error
+        set revolved to the cad revolution of trimmedProfile's value's values on meridianPlane about origin along axis by 6.283185307179586
+        if revolved's valid = false:
+            return cad circular chamfer invalid result
+        set flaws to the cad flaws of revolved's value
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if (validBody = false) or ((the cad worst vertex gap of revolved's value) > tolerance):
+            return cad circular chamfer invalid result
+        return cad circular chamfer success revolved's value

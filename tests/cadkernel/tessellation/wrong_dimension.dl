@@ -1,0 +1,3 @@
+import tests/cadkernel/tessellation/support.dl
+
+ignore the cad direction angle between [1.0] and [1.0, 0.0]

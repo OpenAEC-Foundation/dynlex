@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check cone silhouette {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set coneResult to the cad cone body at the cad zero vector3 with radius 3.0 and height 5.0
+check cone silhouette (coneResult's valid) named "cone"
+set toleranceValue to a cad tessellation tolerance with maximum angle 0.3 within 1e-9
+set bodyMesh to the cad tessellation of coneResult's value with tolerance toleranceValue
+loop triangleIndex from 0 to the length of bodyMesh's mesh's triangles:
+    set triangleValue to the item at triangleIndex in bodyMesh's mesh's triangles
+    set firstPoint to the item at triangleValue's first in bodyMesh's mesh's positions
+    set secondPoint to the item at triangleValue's second in bodyMesh's mesh's positions
+    set thirdPoint to the item at triangleValue's third in bodyMesh's mesh's positions
+    set geometricNormal to the cad normalization of (the cad cross of (the cad difference of secondPoint and firstPoint) and (the cad difference of thirdPoint and firstPoint))
+    check cone silhouette (geometricNormal's valid) named "nondegenerate triangle"
+    set storedNormal to the item at triangleValue's first in bodyMesh's mesh's normals
+    check cone silhouette ((the cad dot of geometricNormal's value and storedNormal) > 0.9) named "outward winding"
+set sourceValue to the cad silhouette source of bodyMesh
+set contourValues to the cad silhouette of sourceValue viewed along the cad y axis
+check cone silhouette ((the length of contourValues) = 4) named "two analytic generators"
+set baseCount to 0
+set apexCount to 0
+loop pointIndex from 0 to the length of contourValues:
+    set pointValue to the item at pointIndex in contourValues
+    if (the absolute value of pointValue's z) < 1e-8:
+        increment baseCount
+        check cone silhouette ((the absolute value of ((the absolute value of pointValue's x) - 3.0)) < 1e-6) named "base radius"
+    if (the absolute value of (pointValue's z - 5.0)) < 1e-8:
+        increment apexCount
+        check cone silhouette ((the square root of ((pointValue's x * pointValue's x) + (pointValue's y * pointValue's y))) < 1e-6) named "apex"
+check cone silhouette (baseCount = 2) named "two base endpoints"
+check cone silhouette (apexCount = 2) named "two apex endpoints"
+
+free contourValues
+free cad silhouette source sourceValue
+free cad body mesh bodyMesh
+print "cadkernel brep mesh cone silhouette: PASS" as a line

@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: MPL-2.0
+# Ported fixtures from cadkernel src/geom2d/frame.rs at 953d546b.
+import lib/cadkernel/frame.dl
+
+set points to an empty list of a cad vector3
+append (a cad vector3 with x 500000.0, y 4500000.0 and z 0.0) to points
+append (a cad vector3 with x 500100.0, y 4500200.0 and z 10.0) to points
+set frame to the cad frame around points
+print the x of the origin of frame as a line
+print the y of the origin of frame as a line
+print the z of the origin of frame as a line
+set original to the item at 0 in points
+set localPoint to the cad lift of original through frame
+print the x of localPoint as a line
+print the y of localPoint as a line
+print the z of localPoint as a line
+set restored to the cad lower of localPoint through frame
+print whether (the x of restored) = (the x of original) as a line
+print whether (the y of restored) = (the y of original) as a line
+print whether (the z of restored) = (the z of original) as a line
+set local2 to the cad lift of (a cad vector2 with x 500050.25 and y 4500100.5) through frame
+print the x of local2 as a line
+print the y of local2 as a line
+set restored2 to the cad lower of local2 through frame
+print whether (the x of restored2) = 500050.25 as a line
+print whether (the y of restored2) = 4500100.5 as a line
+clear points
+set frame to the cad frame around points
+print the x of the origin of frame as a line
+print the y of the origin of frame as a line
+print the z of the origin of frame as a line
+free points
+
+# All five upstream invariants, including binary64 resolution after lifting.
+set frame to a cad frame at (a cad vector3 with x 512345.678, y 4512345.678 and z 91.5)
+set original to a cad vector3 with x 512400.5, y 4512300.25 and z 100.0
+set restored to the cad lower of (the cad lift of original through frame) through frame
+print whether (the x of restored) = (the x of original) as a line
+print whether (the y of restored) = (the y of original) as a line
+print whether (the z of restored) = (the z of original) as a line
+set world to @intrinsic("call", "libc", "nextafter", a 64 bit floating-point number, 4500000.0, 4500001.0) - 4500000.0
+set localSpacing to @intrinsic("call", "libc", "nextafter", a 64 bit floating-point number, 100.0, 101.0) - 100.0
+print whether world > 1e-10 as a line
+print whether localSpacing < 1e-13 as a line
+print whether world / localSpacing > 1e3 as a line
+set points to an empty list of a cad vector3
+append (a cad vector3 with x 500000.0, y 4500000.0 and z 0.0) to points
+append (a cad vector3 with x 500100.0, y 4500200.0 and z 10.0) to points
+set frame to the cad frame around points
+set cursor to 0
+loop while cursor < the length of points:
+    set localPoint to the cad lift of (the item at cursor in points) through frame
+    print whether (the absolute value of the x of localPoint) <= 50.0 as a line
+    print whether (the absolute value of the y of localPoint) <= 100.0 as a line
+    print whether (the absolute value of the z of localPoint) <= 5.0 as a line
+    increment cursor
+clear points
+# Ordered bounds comparisons preserve a NaN in the first point.
+set nanValue to @intrinsic("sqrt", -1.0)
+append (a cad vector3 with x nanValue, y 2.0 and z 3.0) to points
+append (a cad vector3 with x 4.0, y 4.0 and z 5.0) to points
+set frame to the cad frame around points
+print whether (the x of the origin of frame) != (the x of the origin of frame) as a line
+print whether (the y of the origin of frame) = 3.0 as a line
+free points

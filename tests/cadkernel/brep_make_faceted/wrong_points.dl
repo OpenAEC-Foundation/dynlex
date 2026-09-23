@@ -1,0 +1,4 @@
+import lib/cadkernel/brep_make.dl
+set points to an empty list of a cad vector2
+set rings to an empty list of the type of (an empty list of an integer)
+ignore (the cad faceted solid with vertices points and faces rings)

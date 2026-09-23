@@ -1,0 +1,18 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+function the negative of value:
+    execute:
+        return @intrinsic("negate", value)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function the span from first to last:
+    execute:
+        if @intrinsic("greater than or equal", last, first):
+            return @intrinsic("subtract", last, first)
+        return the negative of (the span from last to first)
+ignore the span from 1.0 to 0.0

@@ -1,0 +1,6 @@
+function the recursive value for depth:
+    execute:
+        @intrinsic("discard", the recursive value for @intrinsic("add", depth, 1))
+        @intrinsic("return", 7)
+
+@intrinsic("discard", the recursive value for 0)

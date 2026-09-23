@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/construct2.dl
+set result to the cad arc2 through (the cad zero vector3) then (the cad zero vector2) to (the cad zero vector2)
+print result's valid
+

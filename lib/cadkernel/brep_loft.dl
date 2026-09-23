@@ -1,0 +1,461 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/loft.rs.
+# Sections borrow and copy profile inputs. Managed section copies retain their
+# profile; cloning a section copies its list and each curve payload. Loft inputs
+# are borrowed, and all topology and geometry in a returned body is independent.
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/brep_profile.dl
+import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/area2.dl
+
+class:
+    patterns:
+        [a|] cad loft section
+    members:
+        plane as a cad plane
+        profile as the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+function a cad loft section on {cad plane:plane} with profile {a pointer to a list:profile}:
+    execute:
+        check cad loft (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in profile))
+        set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to the length of profile:
+            append (the item at index in profile) to (copied's values)
+        return @intrinsic("construct", a cad loft section, plane, copied)
+function the cad clone of {cad loft section:section}:
+    execute:
+        set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to the length of (section's profile's values):
+            append (the cad clone of (the item at index in (section's profile's values))) to (copied's values)
+        return @intrinsic("construct", a cad loft section, section's plane, copied)
+local function check cad loft expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+
+class:
+    patterns:
+        [a|] cad loft ring
+    members:
+        points as the type of (a cad topology list of a cad vector3)
+        curves as the type of (a cad topology list of the type of (an empty cad rational curve3))
+        vertices as the type of (a cad topology list of a cad vertex key)
+        rims as the type of (a cad topology list of a cad edge key)
+        rails as the type of (a cad topology list of a cad edge key)
+local function an empty cad loft ring:
+    execute:
+        return @intrinsic("construct", a cad loft ring, a cad topology list of a cad vector3, a cad topology list of the type of (an empty cad rational curve3), a cad topology list of a cad vertex key, a cad topology list of a cad edge key, a cad topology list of a cad edge key)
+class:
+    patterns:
+        [a|] cad loft edge result
+    members:
+        valid as a boolean
+        value as a cad edge key
+class:
+    patterns:
+        [a|] cad loft use
+    members:
+        edge as a cad edge key
+        forward as a boolean
+local function cad loft use of {cad edge key:edge} forward {boolean:forward}:
+    execute:
+        return @intrinsic("construct", a cad loft use, edge, forward)
+
+local function cad loft centre of {cad topology list:points}:
+    execute:
+        set sum to the cad zero vector3
+        loop index from 0 to the length of (points's values):
+            set sum to the cad sum of sum and (the item at index in (points's values))
+        return sum cad divided by ((the length of (points's values)) as a 64 bit floating-point number)
+local function cad loft tolerance of {cad topology list:rings}:
+    execute:
+        set scale to 1.0
+        loop row from 0 to the length of (rings's values):
+            set ring to the item at row in (rings's values)
+            loop col from 0 to the length of (ring's points's values):
+                set point to the item at col in (ring's points's values)
+                set scale to the maximum of scale and (the absolute value of (point's x))
+                set scale to the maximum of scale and (the absolute value of (point's y))
+                set scale to the maximum of scale and (the absolute value of (point's z))
+        return scale * 1e-9
+local function cad loft polygon [normal] of {cad topology list:points}:
+    execute:
+        set absent to the cad normalization of (the cad zero vector3)
+        if (the length of (points's values)) = 0:
+            return absent
+        set origin to the item at 0 in (points's values)
+        loop index from 1 to ((the length of (points's values)) - 1):
+            set normal to the cad normalization of (the cad cross of (the cad difference of (the item at index in (points's values)) and origin) and (the cad difference of (the item at (index + 1) in (points's values)) and origin))
+            if normal's valid:
+                return normal
+        return absent
+local function cad loft aligned points {cad topology list:ring} after {cad topology list:previous}:
+    execute:
+        set best to the cad clone of ring
+        set bestCost to 1.0 / 0.0
+        set count to the length of (ring's values)
+        loop reverse from 0 to 2:
+            loop shift from 0 to count:
+                set candidate to a cad topology list of a cad vector3
+                set cost to 0.0
+                loop index from 0 to count:
+                    set at to shift + index
+                    if reverse = 1:
+                        set at to (shift + count) - index
+                    set point to the item at (the remainder of at divided by count) in (ring's values)
+                    append point to (candidate's values)
+                    set delta to the cad difference of (the item at index in (previous's values)) and point
+                    set cost to cost + (the cad dot of delta and delta)
+                if cost < bestCost:
+                    set best to candidate
+                    set bestCost to cost
+        return best
+local function cad loft aligned curves {cad topology list:ring} after {cad topology list:previous}:
+    execute:
+        set best to the cad clone of ring
+        set bestCost to 1.0 / 0.0
+        set count to the length of (ring's values)
+        loop reverse from 0 to 2:
+            loop shift from 0 to count:
+                set candidate to a cad topology list of the type of (an empty cad rational curve3)
+                set cost to 0.0
+                loop index from 0 to count:
+                    set at to shift + index
+                    if reverse = 1:
+                        set at to ((shift + count) - 1) - index
+                    set curve to the item at (the remainder of at divided by count) in (ring's values)
+                    if reverse = 1:
+                        set curve to the cad reverse of curve
+                    append curve to (candidate's values)
+                    set before to the item at index in (previous's values)
+                    set delta to the cad difference of (the item at 0 in (before's controls)) and (the item at 0 in (curve's controls))
+                    set cost to cost + (the cad dot of delta and delta)
+                if cost < bestCost:
+                    set best to candidate
+                    set bestCost to cost
+        return best
+
+local function cad loft line from {cad vertex key:start} to {cad vertex key:end} in {cad body:body}:
+    execute:
+        set a to the cad node pointer for start in body
+        set b to the cad node pointer for end in body
+        if (a = (0 as the type of a)) or (b = (0 as the type of b)):
+            return @intrinsic("construct", a cad loft edge result, false, a new cad edge key)
+        set direction to the cad difference of (b's point) and (a's point)
+        if (the cad length of direction) <= 1e-12:
+            return @intrinsic("construct", a cad loft edge result, false, a new cad edge key)
+        set curve to the cad edge curve3 of (a cad line3 with origin (a's point) and direction direction)
+        set key to the cad body key after inserting curve into body
+        set edge to the cad body key after inserting (a cad edge on key from 0.0 to 1.0 between start and end with provenance (the synthesized cad provenance)) into body
+        return @intrinsic("construct", a cad loft edge result, true, edge)
+local function cad loft nurbs [edge] on {cad rational curve3:source} from {cad vertex key:start} to {cad vertex key:end} in {cad body:body}:
+    execute:
+        set curve to the cad curve of source
+        if (curve's valid) = false:
+            return @intrinsic("construct", a cad loft edge result, false, a new cad edge key)
+        set key to the cad body key after inserting (the cad edge curve3 of (curve's value)) into body
+        set edge to the cad body key after inserting (a cad edge on key from 0.0 to 1.0 between start and end with provenance (the synthesized cad provenance)) into body
+        return @intrinsic("construct", a cad loft edge result, true, edge)
+
+local function cad loft [face] in {cad body:body} within {cad shell key:shellKey} on {cad surface key:surfaceKey} forward {boolean:forward} using {cad topology list:circuit} with pcurves {cad topology list:pcurves}:
+    execute:
+        set hasPcurves to (the length of (pcurves's values)) != 0
+        if hasPcurves and ((the length of (pcurves's values)) != (the length of (circuit's values))):
+            return false
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by shellKey with provenance (the synthesized cad provenance)) into body
+        set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        loop index from 0 to the length of (circuit's values):
+            set usage to the item at index in (circuit's values)
+            set pcurve to no cad pcurve
+            if hasPcurves:
+                set pcurve to the cad pcurve of (the item at index in (pcurves's values))
+            set key to the cad body key after inserting (a cad coedge on (usage's edge) forward (usage's forward) with pcurve pcurve owned by loopKey with provenance (the synthesized cad provenance)) into body
+            set edge to the cad node pointer for (usage's edge) in body
+            if edge = (0 as the type of edge):
+                return false
+            append key to (edge's coedges's values)
+            set ring to the cad node pointer for loopKey in body
+            append key to (ring's coedges's values)
+        set face to the cad node pointer for faceKey in body
+        append loopKey to (face's loops's values)
+        set shell to the cad node pointer for shellKey in body
+        if shell = (0 as the type of shell):
+            return false
+        append faceKey to (shell's faces's values)
+        return true
+local function cad loft cap in {cad body:body} within {cad shell key:shell} on {cad loft ring:ring} normal {cad vector3:normal} along edges {boolean:alongEdges}:
+    execute:
+        set origin to the item at 0 in (ring's points's values)
+        set x to the cad difference of (the item at 1 in (ring's points's values)) and origin
+        set plane to the cad orthonormal plane with origin origin, x axis x and normal normal
+        if (plane's valid) = false:
+            return false
+        set surfaceKey to the cad body key after inserting (the cad surface of (plane's value)) into body
+        set circuit to a cad topology list of a cad loft use
+        set count to the length of (ring's rims's values)
+        loop index from 0 to count:
+            set at to index
+            if alongEdges = false:
+                set at to (count - 1) - index
+            append (cad loft use of (the item at at in (ring's rims's values)) forward alongEdges) to (circuit's values)
+        return cad loft face in body within shell on surfaceKey forward true using circuit with pcurves (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+local function cad loft unit pcurves:
+    execute:
+        set corners to a list containing (a cad vector2 with x 0.0 and y 0.0)
+        append (a cad vector2 with x 1.0 and y 0.0) to corners
+        append (a cad vector2 with x 1.0 and y 1.0) to corners
+        append (a cad vector2 with x 0.0 and y 1.0) to corners
+        set result to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at (the remainder of (index + 1) divided by 4) in corners))) to (result's values)
+        free corners
+        return result
+local function cad loft bilinear from {cad vector3:a} through {cad vector3:b} and {cad vector3:c} to {cad vector3:d}:
+    execute:
+        set first to a list containing a
+        append d to first
+        set last to a list containing b
+        append c to last
+        set points to a list containing first
+        append last to points
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weightRow to a list containing 1.0
+        append 1.0 to weightRow
+        set weights to a list containing weightRow
+        append weightRow to weights
+        set result to the strict cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+        free weights
+        free weightRow
+        free knots
+        free points
+        free first
+        free last
+        return result
+
+local function cad loft build {a pointer to a list:sections} curved {boolean:curved} aligning {boolean:align}:
+    execute:
+        check cad loft (0 as a pointer to a cad loft section) against (0 as a pointer to the type of (the item at 0 in sections))
+        if (the length of sections) < 2:
+            return no cad body
+        set firstSection to the item at 0 in sections
+        set firstArea to 0.0
+        if curved:
+            set senses to the cad profile senses of (firstSection's profile's values)
+            if (senses's valid) = false:
+                return no cad body
+            loop index from 0 to the length of (firstSection's profile's values):
+                set area to the cad enclosed area of (the item at index in (firstSection's profile's values))
+                if (the item at index in (senses's value's values)) = false:
+                    set area to area * -1.0
+                set firstArea to firstArea + area
+            if (((the absolute value of firstArea) <= 1.7976931348623157e308) = false) or ((the absolute value of firstArea) <= 1e-12):
+                return no cad body
+        set rings to a cad topology list of a cad loft ring
+        loop row from 0 to the length of sections:
+            set section to the item at row in sections
+            # The polygon entry refuses non-lines before evaluating any domain.
+            if curved = false:
+                loop index from 0 to the length of (section's profile's values):
+                    if ((the item at index in (section's profile's values))'s kind) != 0:
+                        return no cad body
+            set senses to the cad profile senses of (section's profile's values)
+            if (senses's valid) = false:
+                return no cad body
+            set ring to an empty cad loft ring
+            loop index from 0 to the length of (section's profile's values):
+                set piece to the item at index in (section's profile's values)
+                set forward to the item at index in (senses's value's values)
+                if curved:
+                    set built to the cad rational builder of piece
+                    if (built's valid) = false:
+                        return no cad body
+                    set curve to built's value
+                    if forward = false:
+                        set curve to the cad reverse of curve
+                    append (the cad lift of curve onto (section's plane)) to (ring's curves's values)
+                else:
+                    set parameter to 0.0
+                    if forward = false:
+                        set parameter to 1.0
+                    append (the cad point at (the cad point on piece at parameter) on (section's plane)) to (ring's points's values)
+            set count to the length of (section's profile's values)
+            if count < 3:
+                return no cad body
+            if row > 0:
+                set previous to the item at (row - 1) in (rings's values)
+                if count != (the length of (previous's points's values)):
+                    return no cad body
+                if curved:
+                    set ring's curves to cad loft aligned curves (ring's curves) after (previous's curves)
+                    loop index from 0 to count:
+                        if ((the item at index in (previous's curves's values)) is cad compatible with (the item at index in (ring's curves's values))) = false:
+                            return no cad body
+                else if align:
+                    set ring's points to cad loft aligned points (ring's points) after (previous's points)
+            if curved:
+                loop index from 0 to count:
+                    set curve to the item at index in (ring's curves's values)
+                    append (the item at 0 in (curve's controls)) to (ring's points's values)
+            append ring to (rings's values)
+        set centres to a cad topology list of a cad vector3
+        loop row from 0 to the length of sections:
+            set ring to the item at row in (rings's values)
+            append (cad loft centre of (ring's points)) to (centres's values)
+        set lastIndex to (the length of sections) - 1
+        set direction to the cad normalization of (the cad difference of (the item at lastIndex in (centres's values)) and (the item at 0 in (centres's values)))
+        if curved and ((direction's valid) = false):
+            return no cad body
+        set tolerance to cad loft tolerance of rings
+        loop row from 0 to lastIndex:
+            set delta to the cad difference of (the item at (row + 1) in (centres's values)) and (the item at row in (centres's values))
+            set advance to the cad length of delta
+            if curved:
+                set advance to the cad dot of delta and (direction's value)
+            if advance <= tolerance:
+                return no cad body
+
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set firstRing to the item at 0 in (rings's values)
+        set count to the length of (firstRing's points's values)
+        loop row from 0 to the length of sections:
+            set ring to the item at row in (rings's values)
+            loop index from 0 to count:
+                append (the cad body key after inserting (a cad vertex at (the item at index in (ring's points's values)) with provenance (the synthesized cad provenance)) into body) to (ring's vertices's values)
+        loop row from 0 to the length of sections:
+            set ring to the item at row in (rings's values)
+            loop index from 0 to count:
+                set start to the item at index in (ring's vertices's values)
+                set end to the item at (the remainder of (index + 1) divided by count) in (ring's vertices's values)
+                set edge to a new cad loft edge result
+                if curved:
+                    set edge to cad loft nurbs edge on (the item at index in (ring's curves's values)) from start to end in body
+                else:
+                    set edge to cad loft line from start to end in body
+                if (edge's valid) = false:
+                    return no cad body
+                append (edge's value) to (ring's rims's values)
+        loop row from 0 to lastIndex:
+            set ring to the item at row in (rings's values)
+            set nextRing to the item at (row + 1) in (rings's values)
+            loop index from 0 to count:
+                set edge to cad loft line from (the item at index in (ring's vertices's values)) to (the item at index in (nextRing's vertices's values)) in body
+                if (edge's valid) = false:
+                    return no cad body
+                append (edge's value) to (ring's rails's values)
+
+        set lastRing to the item at lastIndex in (rings's values)
+        set firstNormal to the cad zero vector3
+        set lastNormal to the cad zero vector3
+        set firstAlong to false
+        set lastAlong to false
+        if curved:
+            set firstFrameNormal to the cad normal of (firstSection's plane)
+            set lastSection to the item at lastIndex in sections
+            set lastFrameNormal to the cad normal of (lastSection's plane)
+            if ((firstFrameNormal's valid) = false) or ((lastFrameNormal's valid) = false):
+                return no cad body
+            set sign to 1.0
+            if firstArea < 0.0:
+                set sign to -1.0
+            set winding to (firstFrameNormal's value) scaled by sign
+            set lastAlong to (the cad dot of winding and (direction's value)) > 0.0
+            set firstAlong to lastAlong = false
+            set firstNormal to firstFrameNormal's value
+            if (the cad dot of firstNormal and (direction's value)) > 0.0:
+                set firstNormal to the cad negative of firstNormal
+            set lastNormal to lastFrameNormal's value
+            if ((the cad dot of lastNormal and (direction's value)) > 0.0) = false:
+                set lastNormal to the cad negative of lastNormal
+        else:
+            set firstWinding to cad loft polygon normal of (firstRing's points)
+            set lastWinding to cad loft polygon normal of (lastRing's points)
+            set firstOutward to the cad normalization of (the cad difference of (the item at 0 in (centres's values)) and (the item at 1 in (centres's values)))
+            set lastOutward to the cad normalization of (the cad difference of (the item at lastIndex in (centres's values)) and (the item at (lastIndex - 1) in (centres's values)))
+            if (((firstWinding's valid) = false) or ((lastWinding's valid) = false)) or (((firstOutward's valid) = false) or ((lastOutward's valid) = false)):
+                return no cad body
+            set firstNormal to firstWinding's value
+            if ((the cad dot of firstNormal and (firstOutward's value)) >= 0.0) = false:
+                set firstNormal to the cad negative of firstNormal
+            set lastNormal to lastWinding's value
+            if ((the cad dot of lastNormal and (lastOutward's value)) >= 0.0) = false:
+                set lastNormal to the cad negative of lastNormal
+            set firstAlong to (the cad dot of (firstWinding's value) and firstNormal) > 0.0
+            set lastAlong to (the cad dot of (lastWinding's value) and lastNormal) > 0.0
+        if (cad loft cap in body within shellKey on firstRing normal firstNormal along edges firstAlong) = false:
+            return no cad body
+        if (cad loft cap in body within shellKey on lastRing normal lastNormal along edges lastAlong) = false:
+            return no cad body
+
+        loop band from 0 to lastIndex:
+            set lower to the item at band in (rings's values)
+            set upper to the item at (band + 1) in (rings's values)
+            loop index from 0 to count:
+                set next to the remainder of (index + 1) divided by count
+                set circuit to a cad topology list of a cad loft use
+                append (cad loft use of (the item at index in (lower's rims's values)) forward true) to (circuit's values)
+                append (cad loft use of (the item at next in (lower's rails's values)) forward true) to (circuit's values)
+                append (cad loft use of (the item at index in (upper's rims's values)) forward false) to (circuit's values)
+                append (cad loft use of (the item at index in (lower's rails's values)) forward false) to (circuit's values)
+                set surface to the cad surface of (the cad xy plane)
+                set pcurves to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+                set forward to true
+                if curved:
+                    set spline to the cad ruled surface from (the item at index in (lower's curves's values)) to (the item at index in (upper's curves's values))
+                    if (spline's valid) = false:
+                        return no cad body
+                    set surface to the cad surface of (spline's value)
+                    set on to the cad point on surface at parameters 0.5 and 0.5
+                    set middle to (the cad sum of (the item at band in (centres's values)) and (the item at (band + 1) in (centres's values))) scaled by 0.5
+                    set normal to the cad normal of surface at parameters 0.5 and 0.5
+                    if (normal's valid) = false:
+                        return no cad body
+                    set sense to the cad dot of (normal's value) and (the cad difference of on and middle)
+                    if (((the absolute value of sense) <= 1.7976931348623157e308) = false) or (sense = 0.0):
+                        return no cad body
+                    set forward to sense > 0.0
+                    set pcurves to cad loft unit pcurves
+                else:
+                    set a to the item at index in (lower's points's values)
+                    set b to the item at next in (lower's points's values)
+                    set c to the item at next in (upper's points's values)
+                    set d to the item at index in (upper's points's values)
+                    set normal to the cad normalization of (the cad cross of (the cad difference of b and a) and (the cad difference of d and a))
+                    if (normal's valid) = false:
+                        return no cad body
+                    if (the absolute value of (the cad dot of (the cad difference of c and a) and (normal's value))) <= tolerance:
+                        set plane to the cad orthonormal plane with origin a, x axis (the cad difference of b and a) and normal (normal's value)
+                        if (plane's valid) = false:
+                            return no cad body
+                        set surface to the cad surface of (plane's value)
+                    else:
+                        set spline to cad loft bilinear from a through b and c to d
+                        if (spline's valid) = false:
+                            return no cad body
+                        set surface to the cad surface of (spline's value)
+                        set pcurves to cad loft unit pcurves
+                set surfaceKey to the cad body key after inserting surface into body
+                if (cad loft face in body within shellKey on surfaceKey forward forward using circuit with pcurves pcurves) = false:
+                    return no cad body
+        set lump to the cad node pointer for lumpKey in body
+        append shellKey to (lump's shells's values)
+        append lumpKey to (body's roots)
+        return the validated cad body result of body
+
+function the cad loft through {a pointer to a list:sections}:
+    execute:
+        check cad loft (0 as a pointer to a cad loft section) against (0 as a pointer to the type of (the item at 0 in sections))
+        set curved to false
+        loop row from 0 to the length of sections:
+            set section to the item at row in sections
+            loop index from 0 to the length of (section's profile's values):
+                if ((the item at index in (section's profile's values))'s kind) != 0:
+                    set curved to true
+        return cad loft build sections curved curved aligning true
+function the ordered cad polygon loft through {a pointer to a list:sections}:
+    execute:
+        return cad loft build sections curved false aligning false

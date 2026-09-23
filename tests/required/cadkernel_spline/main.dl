@@ -1,0 +1,232 @@
+# SPDX-License-Identifier: MPL-2.0
+# Upstream: cadkernel 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/space/spline.rs.
+# All five upstream tests, plus independently calculated interpolation fixtures.
+import lib/cadkernel/spline.dl
+
+function spline check {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function spline near {a number:actual} to {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        spline check ((the absolute value of (actual - expected)) <= tolerance) named label
+
+function spline point {an array of numbers:actual} near {an array of numbers:expected} named {string:label}:
+    execute:
+        spline check ((the length of actual) = (the length of expected)) named label
+        loop axis from 0 to the length of actual:
+            spline near (the item at axis in actual) to (the item at axis in expected) within 1e-12 named label
+
+class:
+    patterns:
+        [a|] spline fixture source
+    members:
+        points
+        reads as an integer
+        indices
+
+function the cad spline point at {integer:index} from {a pointer to a spline fixture source:source}:
+    execute:
+        increment the reads of source
+        append index to the indices of source
+        return the item at index in the points of source
+
+set cubic to a list containing [0.0, 0.0, 1.0]
+append [1.0, 4.0, 1.0] to cubic
+append [5.0, 4.0, 1.0] to cubic
+append [6.0, 0.0, 1.0] to cubic
+set knots to the cad clamped uniform knots of degree 3 for 4 points
+spline point (the cad de Boor value of degree 3 with knots knots and points cubic at 0.0) near [0.0, 0.0, 1.0] named "clamped start"
+spline point (the cad de Boor value of degree 3 with knots knots and points cubic at 1.0) near [6.0, 0.0, 1.0] named "clamped end"
+spline point (the cad de Boor value of degree 3 with knots knots and points cubic at 0.5) near [3.0, 3.0, 1.0] named "Bernstein midpoint"
+
+set flat to a list containing [0.0, 0.0, 1.0]
+append [2.0, 6.0, 1.0] to flat
+append [8.0, 6.0, 1.0] to flat
+append [10.0, 0.0, 1.0] to flat
+set spatial to a list containing [0.0, 0.0, 0.0, 1.0]
+append [2.0, 6.0, 0.0, 1.0] to spatial
+append [8.0, 6.0, 0.0, 1.0] to spatial
+append [10.0, 0.0, 0.0, 1.0] to spatial
+loop step from 0 to 11:
+    set t to (step as a 64 bit floating-point number) / 10.0
+    set x to ((6.0 * t) + ((12.0 * t) * t)) - (((8.0 * t) * t) * t)
+    set y to (18.0 * t) * (1.0 - t)
+    spline point (the cad de Boor value of degree 3 with knots knots and points flat at t) near [x, y, 1.0] named "3D analytic cubic"
+    spline point (the cad de Boor value of degree 3 with knots knots and points spatial at t) near [x, y, 0.0, 1.0] named "4D same analytic cubic"
+
+set plain to a list containing [0.0, 0.0, 1.0]
+append [1.0, 1.0, 1.0] to plain
+append [2.0, 0.0, 1.0] to plain
+set heavy to a list containing [0.0, 0.0, 1.0]
+append [5.0, 5.0, 5.0] to heavy
+append [2.0, 0.0, 1.0] to heavy
+set quadratic to the cad clamped uniform knots of degree 2 for 3 points
+set unweighted to the cad de Boor value of degree 2 with knots quadratic and points plain at 0.5
+set weighted to the cad de Boor value of degree 2 with knots quadratic and points heavy at 0.5
+spline point unweighted near [1.0, 0.5, 1.0] named "unweighted quadratic"
+spline point weighted near [3.0, 2.5, 3.0] named "homogeneous weighted quadratic"
+spline near ((the item at 1 in weighted) / (the item at 2 in weighted)) to (5.0 / 6.0) within 1e-12 named "rational division stays outside recursion"
+set polyline to a list containing [0.0, 0.0, 1.0]
+append [10.0, 0.0, 1.0] to polyline
+append [10.0, 10.0, 1.0] to polyline
+set linear to the cad clamped uniform knots of degree 1 for 3 points
+spline point (the cad de Boor value of degree 1 with knots linear and points polyline at 0.25) near [5.0, 0.0, 1.0] named "degree one polyline"
+set spanKnots to the cad clamped uniform knots of degree 3 for 6 points
+spline check ((the cad span of degree 3 with knots spanKnots and last 5 at 1.0) = 5) named "span at end"
+spline check ((the cad span of degree 3 with knots spanKnots and last 5 at 2.0) = 5) named "span past end"
+spline check ((the cad span of degree 3 with knots spanKnots and last 5 at 0.0) = 3) named "span at start"
+
+set indices to an empty list of integer
+set initial to @intrinsic("construct", a spline fixture source, cubic, 0, indices)
+allocate one slot of initial and set source to it
+spline point (the cad de Boor value of degree 3 with knots knots and 4 points from source at 0.5) near [3.0, 3.0, 1.0] named "generic mutable getter"
+spline check ((the reads of source) = 4) named "getter exactly degree plus one calls"
+loop index from 0 to 4:
+    spline check ((the item at index in indices) = index) named "getter call order"
+set empty to an empty list of a 64 bit floating-point number array of 5 items
+spline point (the cad de Boor value of degree 3 with knots knots and points empty at 0.5) near [0.0, 0.0, 0.0, 0.0, 0.0] named "empty generic five dimensional source"
+loop degree from 15 to 17:
+    set high to an empty list of a 64 bit floating-point number array of 2 items
+    loop index from 0 to degree + 1:
+        set x to index as a 64 bit floating-point number
+        append [x, 2.0 * x] to high
+    set highKnots to the cad clamped uniform knots of degree degree for degree + 1 points
+    set x to (degree as a 64 bit floating-point number) / 2.0
+    spline point (the cad de Boor value of degree degree with knots highKnots and points high at 0.5) near [x, 2.0 * x] named "stack and heap degree boundary"
+    free high
+    free highKnots
+print "cadkernel spline de Boor fixtures passed" as a line
+
+set uniform to the cad uniform parameterization
+set chord to the cad chord parameterization
+set centripetal to the cad centripetal parameterization
+set line to a list containing [0.0, 0.0]
+append [3.0, 6.0] to line
+set fit2 to the cad open spline through line using uniform
+spline check (the valid of fit2) named "natural two point interpolation valid"
+spline check ((the length of the controls of fit2) = 4) named "natural controls count"
+spline check ((the length of the knots of fit2) = 8) named "natural knots count"
+spline point (the item at 1 in the controls of fit2) near [1.0, 2.0] named "natural first handle"
+spline point (the item at 2 in the controls of fit2) near [2.0, 4.0] named "natural second handle"
+free cad spline interpolation fit2
+set arch to a list containing [0.0]
+append [1.0] to arch
+append [0.0] to arch
+set fit1 to the cad open spline through arch using uniform
+spline check (the valid of fit1) named "one dimensional natural valid"
+spline point (the item at 1 in the controls of fit1) near [0.5] named "natural slope at start"
+spline point (the item at 5 in the controls of fit1) near [0.5] named "natural slope at end"
+spline point (the cad de Boor value of degree 3 with knots (the knots of fit1) and points (the controls of fit1) at 1.0) near [1.0] named "interpolates internal fit point"
+free cad spline interpolation fit1
+set start to a cad spline tangent with value [3.0]
+set end to a cad spline tangent with value [-3.0]
+set clamped to the cad open spline through arch with start tangent start and end tangent end using uniform
+spline check (the valid of clamped) named "clamped tangents valid"
+spline point (the item at 1 in the controls of clamped) near [1.0] named "clamped start handle"
+spline point (the item at 5 in the controls of clamped) near [1.0] named "clamped end handle"
+free cad spline interpolation clamped
+set space to a list containing [0.0, 0.0, 0.0, 0.0, 0.0]
+append [0.0, 0.0, 0.0, 3.0, 4.0] to space
+append [0.0, 0.0, 0.0, 9.0, 12.0] to space
+set fit5 to the cad open spline through space using chord
+spline check (the valid of fit5) named "five dimensional chord valid"
+spline near (the item at 4 in the knots of fit5) to 5.0 within 1e-12 named "full source dimension chord"
+spline near (the last item of the knots of fit5) to 15.0 within 1e-12 named "full source dimension domain"
+spline point (the cad de Boor value of degree 3 with knots (the knots of fit5) and points (the controls of fit5) at 5.0) near [0.0, 0.0, 0.0, 3.0, 4.0] named "chord interpolation fit point"
+free cad spline interpolation fit5
+set fit5 to the cad open spline through space using centripetal
+spline near (the item at 4 in the knots of fit5) to 2.23606797749979 within 1e-12 named "centripetal square root chord"
+spline near (the last item of the knots of fit5) to 5.39834563766817 within 1e-12 named "centripetal domain"
+free cad spline interpolation fit5
+print "cadkernel spline open interpolation fixtures passed" as a line
+
+set square to a list containing [0.0, 0.0]
+append [1.0, 0.0] to square
+append [1.0, 1.0] to square
+append [0.0, 1.0] to square
+set loopFit to the cad periodic spline through square using uniform
+spline check (the valid of loopFit) named "periodic square valid"
+spline check ((the length of the controls of loopFit) = 13) named "periodic controls count"
+spline check ((the length of the knots of loopFit) = 17) named "periodic knots count"
+spline point (the item at 1 in the controls of loopFit) near [0.25, -0.25] named "cyclic first handle"
+spline point (the item at 2 in the controls of loopFit) near [0.75, -0.25] named "cyclic second handle"
+spline point (the cad de Boor value of degree 3 with knots (the knots of loopFit) and points (the controls of loopFit) at 0.5) near [0.5, -0.1875] named "cyclic midpoint"
+spline point (the cad de Boor value of degree 3 with knots (the knots of loopFit) and points (the controls of loopFit) at 4.0) near [0.0, 0.0] named "periodic closing endpoint"
+free cad spline interpolation loopFit
+append [5e-10, 0.0] to square
+set loopFit to the cad periodic spline through square using uniform
+spline check ((the length of the controls of loopFit) = 13) named "near duplicate closing fit point removed"
+free cad spline interpolation loopFit
+replace item at index 4 in square with [2e-9, 0.0]
+set loopFit to the cad periodic spline through square using uniform
+spline check ((the length of the controls of loopFit) = 16) named "distinct closing fit point retained"
+free cad spline interpolation loopFit
+print "cadkernel spline periodic interpolation fixtures passed" as a line
+
+set singleton to a list containing [1.0]
+set failed1 to the cad open spline through singleton using uniform
+spline check ((the valid of failed1) = false) named "open insufficient points"
+spline check ((the length of the controls of failed1) = 0) named "invalid owns empty controls"
+free cad spline interpolation failed1
+set failed2 to the cad periodic spline through line using uniform
+spline check ((the valid of failed2) = false) named "periodic insufficient points"
+free cad spline interpolation failed2
+set infinity to 1e308 * 1e308
+set nan to infinity - infinity
+set nonfinite to a list containing [nan]
+append [1.0] to nonfinite
+set failed1 to the cad open spline through nonfinite using uniform
+spline check ((the valid of failed1) = false) named "open rejects NaN points"
+free cad spline interpolation failed1
+set badTangent to a cad spline tangent with value [infinity]
+set absent to no cad spline tangent matching [0.0]
+set failed1 to the cad open spline through arch with start tangent badTangent and end tangent absent using uniform
+spline check ((the valid of failed1) = false) named "open rejects infinite tangent"
+free cad spline interpolation failed1
+set tinyTangent to a cad spline tangent with value [1e-10]
+set fit1 to the cad open spline through arch with start tangent tinyTangent and end tangent absent using uniform
+spline point (the item at 1 in the controls of fit1) near [0.5] named "tiny tangent uses natural boundary"
+free cad spline interpolation fit1
+set constant to a list containing [2.0]
+append [9.0] to constant
+set constantKnots to a list containing 0.0
+append 0.5 to constantKnots
+append 1.0 to constantKnots
+spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at (-1.0)) near [2.0] named "degree zero before domain"
+spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at 0.5) near [9.0] named "degree zero inclusive knot"
+spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at nan) near [2.0] named "degree zero NaN selects first"
+set narrow to a list containing 0.0
+append 0.0 to narrow
+append 1e-16 to narrow
+append 1e-16 to narrow
+spline point (the cad de Boor value of degree 1 with knots narrow and points constant at 1e-16) near [2.0] named "nearly repeated knots use alpha zero"
+replace item at index 2 in narrow with 1e-15
+replace item at index 3 in narrow with 1e-15
+spline point (the cad de Boor value of degree 1 with knots narrow and points constant at 1e-15) near [9.0] named "exact knot denominator threshold"
+print "cadkernel spline degenerate fixtures passed" as a line
+
+free cubic
+free knots
+free flat
+free spatial
+free plain
+free heavy
+free quadratic
+free polyline
+free linear
+free spanKnots
+free indices
+@intrinsic("call", "libc", "free", nothing, source)
+free empty
+free line
+free arch
+free space
+free square
+free singleton
+free nonfinite
+free constant
+free constantKnots
+free narrow

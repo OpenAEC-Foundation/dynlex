@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_bounds.dl
+
+function check placement {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function placement point {a 64 bit floating-point number array of 3 items:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+function check placement scalar {a number:actual} near {a number:expected}:
+    execute:
+        check placement ((the absolute value of (actual - expected)) < 1e-9)
+function check placement solid {cad body:solid}:
+    execute:
+        set flaws to the cad flaws of solid
+        check placement ((the length of flaws) = 0)
+        free flaws
+function placement maximum samples of {cad body:solid} with sag {a 64 bit floating-point number:sag}:
+    execute:
+        set edges to the cad edge keys of solid
+        set longest to 0
+        loop index from 0 to the length of edges:
+            set points to the cad edge points of (the item at index in edges) in solid within sag
+            if points's valid:
+                set longest to the maximum of longest and (the length of points's value's values)
+        free edges
+        return longest
+

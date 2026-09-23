@@ -95,7 +95,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->sectionOutcome = {};
 	expr->executionFallsThrough.reset();
 	expr->sectionBodyReachable = true;
-	expr->sectionBodyInferred = false;
+	expr->sectionBodyExecution = Expression::SectionBodyExecution::None;
 	expr->sectionBodyFallsThrough = true;
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
@@ -656,13 +656,14 @@ class GroupingInferenceTransaction {
 		  savedPendingOperandGroupingWarnings(context.pendingOperandGroupingWarnings),
 		  savedExpressionStack(context.expressionStack),
 		  savedInheritedTrialExpressionValues(context.inheritedTrialExpressionValues),
-		  trialFixedGroupingRoots(fixedGroupingRoots) {
+		  trialFixedGroupingRoots(fixedGroupingRoots),
+		  trialFixedGroupingScope{trialFixedGroupingRoots, savedFixedGroupingRoots} {
 		context.trial = true;
 		context.trialJournal = &journal;
 		context.groupingTrialJournal = &groupingJournal;
 		context.detectGroupingAmbiguity = true;
 		context.pendingOperandGroupingWarnings = &groupingWarnings;
-		context.fixedGroupingRoots = &trialFixedGroupingRoots;
+		context.fixedGroupingRoots = &trialFixedGroupingScope;
 		context.resolvedGroupingRoots = &trialFixedGroupingRoots;
 		context.typesValid = true;
 		context.clearTypeFailure();
@@ -680,6 +681,7 @@ class GroupingInferenceTransaction {
 
 	std::vector<InferenceContext::OperandGroupingWarning> takeGroupingWarnings() { return std::move(groupingWarnings); }
 	bool dependsOnRecursiveDependency() const { return recursiveInferenceObservation.ownerObserved(); }
+	bool observedRecursiveDependency() const { return recursiveInferenceObservation.observed(); }
 
 	void rollback() {
 		requireCompilerInvariant(active, "grouping inference transaction was resolved twice");
@@ -758,13 +760,14 @@ class GroupingInferenceTransaction {
 	bool savedHasTypeFailureDiagnostic;
 	InferenceContext::TrialJournal *savedTrialJournal;
 	InferenceContext::GroupingTrialJournal *savedGroupingTrialJournal;
-	const std::unordered_set<Expression *> *savedFixedGroupingRoots;
+	const InferenceContext::FixedGroupingScope *savedFixedGroupingRoots;
 	std::unordered_set<Expression *> *savedResolvedGroupingRoots;
 	bool savedDetectGroupingAmbiguity;
 	std::vector<InferenceContext::OperandGroupingWarning> *savedPendingOperandGroupingWarnings;
 	std::vector<Expression *> savedExpressionStack;
 	const std::unordered_map<Expression *, CompileTimeValue> *savedInheritedTrialExpressionValues;
 	std::unordered_set<Expression *> trialFixedGroupingRoots;
+	InferenceContext::FixedGroupingScope trialFixedGroupingScope;
 	std::vector<InferenceContext::OperandGroupingWarning> groupingWarnings;
 	bool active = true;
 
@@ -868,8 +871,15 @@ static bool validateGroupingInTrial(
 			);
 		}
 	}
-	if (trialSucceeded && resolvedGroupingRoots)
-		*resolvedGroupingRoots = transaction->resolvedGroupingRoots();
+	if (trialSucceeded && resolvedGroupingRoots) {
+		// Replay restores only this expression's snapshot. Callee body orderings
+		// are rolled back separately and must be inferred again, not frozen.
+		resolvedGroupingRoots->clear();
+		for (Expression *root : transaction->resolvedGroupingRoots()) {
+			if (originalExpressionNodes.contains(root))
+				resolvedGroupingRoots->insert(root);
+		}
+	}
 	if (trialSucceeded && retainedTransaction)
 		*retainedTransaction = std::move(transaction);
 	else

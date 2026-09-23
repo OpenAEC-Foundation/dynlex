@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/geom2d/bounds.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Analytic extents only: unbounded curves, NURBS and invalid input return no bounds.
+# Input curves and their payload storage are borrowed; the result owns no lists.
+import lib/cadkernel/curve2.dl
+
+class:
+    patterns:
+        [a|] cad bounds2
+    members:
+        valid as a boolean
+        low as a cad vector2
+        high as a cad vector2
+
+local function the absent cad analytic bounds:
+    execute:
+        return @intrinsic("construct", a cad bounds2, false, the cad zero vector2, the cad zero vector2)
+
+local function cad bounds scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad bounds after absorbing {cad vector2:point} into {cad bounds2:prior}:
+    execute:
+        if (cad bounds scalar point's x is finite) = false:
+            return the absent cad analytic bounds
+        if (cad bounds scalar point's y is finite) = false:
+            return the absent cad analytic bounds
+        if prior's valid = false:
+            return @intrinsic("construct", a cad bounds2, true, point, point)
+        set minimum to a cad vector2 with x (the minimum of (prior's low's x) and (point's x)) and y (the minimum of (prior's low's y) and (point's y))
+        set maximum to a cad vector2 with x (the maximum of (prior's high's x) and (point's x)) and y (the maximum of (prior's high's y) and (point's y))
+        return @intrinsic("construct", a cad bounds2, true, minimum, maximum)
+
+local function the cad bounds after conic {cad ellipse:ellipse} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} into {cad bounds2:prior}:
+    execute:
+        if ((cad bounds scalar start is finite) and (cad bounds scalar end is finite)) = false:
+            return the absent cad analytic bounds
+        if ((cad bounds scalar ellipse's majorRadius is finite) and (cad bounds scalar ellipse's minorRadius is finite)) = false:
+            return the absent cad analytic bounds
+        if (ellipse's majorRadius <= 0.0) or (ellipse's minorRadius <= 0.0):
+            return the absent cad analytic bounds
+        if ((cad bounds scalar ellipse's majorAxis's x is finite) and (cad bounds scalar ellipse's majorAxis's y is finite)) = false:
+            return the absent cad analytic bounds
+        set result to the cad bounds after absorbing (the cad point on ellipse at start) into prior
+        if result's valid = false:
+            return result
+        set result to the cad bounds after absorbing (the cad point on ellipse at end) into result
+        if result's valid = false:
+            return result
+        set minor to the cad minor axis of ellipse
+        loop axis from 0 to 2:
+            set along to ellipse's majorAxis's x
+            set across to minor's x
+            if axis = 1:
+                set along to ellipse's majorAxis's y
+                set across to minor's y
+            set maximum to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, ellipse's minorRadius * across, ellipse's majorRadius * along)
+            loop extreme from 0 to 2:
+                set parameter to maximum
+                if extreme = 1:
+                    set parameter to maximum + 3.141592653589793
+                if ((the absolute value of (end - start)) >= 6.283185307179586) or (cad angle parameter within arc from start to end):
+                    set result to the cad bounds after absorbing (the cad point on ellipse at parameter) into result
+                    if result's valid = false:
+                        return result
+        return result
+
+local function the cad bounds after circle at {cad vector2:centre} with radius {a 64 bit floating-point number:radiusValue} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} into {cad bounds2:prior}:
+    execute:
+        set ellipse to a cad ellipse at centre with radii radiusValue and radiusValue along (a cad vector2 with x 1 and y 0)
+        return the cad bounds after conic ellipse from start to end into prior
+
+local function the cad bounds input {cad curve2:shape}:
+    execute:
+        return shape
+
+function the cad analytic bounds of {a pointer to a list:curves}:
+    execute:
+        set result to the absent cad analytic bounds
+        loop index from 0 to the length of curves:
+            set curve to the cad bounds input (the item at index in curves)
+            if curve's kind = cad line curve2 kind:
+                set result to the cad bounds after absorbing curve's line's start into result
+                if result's valid = false:
+                    return result
+                set result to the cad bounds after absorbing curve's line's end into result
+            else if curve's kind = cad circle curve2 kind:
+                set result to the cad bounds after circle at curve's circle's centre with radius curve's circle's radius from 0.0 to 6.283185307179586 into result
+            else if curve's kind = cad arc curve2 kind:
+                set result to the cad bounds after circle at curve's arc's centre with radius curve's arc's radius from curve's arc's startAngle to curve's arc's endAngle into result
+            else if curve's kind = cad ellipse curve2 kind:
+                set result to the cad bounds after conic (curve's ellipse's ellipse) from (curve's ellipse's startParameter) to (curve's ellipse's endParameter) into result
+            else if curve's kind = cad polyline curve2 kind:
+                set polyline to curve's polyline
+                loop vertexIndex from 0 to the length of polyline's vertices:
+                    set vertex to the item at vertexIndex in polyline's vertices
+                    set result to the cad bounds after absorbing vertex's position into result
+                    if (result's valid = false) or ((cad bounds scalar vertex's bulge is finite) = false):
+                        return the absent cad analytic bounds
+                set count to the length of polyline's vertices
+                if polyline's closed = false:
+                    set count to the maximum of 0 and (count - 1)
+                loop segmentIndex from 0 to count:
+                    set found to the cad segment arc of polyline at index segmentIndex
+                    if found's valid:
+                        set arc to found's value
+                        set start to arc's startAngle
+                        set end to start + arc's sweep
+                        if (arc's sweep >= 0.0) = false:
+                            set start to arc's startAngle + arc's sweep
+                            set end to arc's startAngle
+                        set result to the cad bounds after circle at arc's centre with radius arc's radius from start to end into result
+                        if result's valid = false:
+                            return result
+            else:
+                return the absent cad analytic bounds
+            if result's valid = false:
+                # An empty polyline does not invalidate earlier bounds or prevent later curves.
+                if curve's kind != cad polyline curve2 kind:
+                    return result
+        return result

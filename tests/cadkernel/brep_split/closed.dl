@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_split.dl
+import lib/cadkernel/brep_make.dl
+
+class:
+    patterns:
+        [a|] cad closed split selected face
+    members:
+        valid as a boolean
+        value as a cad face key
+
+function check cad closed split {boolean:condition} code {integer:code}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, code)
+
+function the cad closed split face of kind {integer:kind} in {cad body:body} at height {a 64 bit floating-point number:zValue}:
+    execute:
+        set found to false
+        set answer to a new cad face key
+        set faceKeys to the cad face keys of body
+        loop cursor from 0 to the length of faceKeys:
+            set faceKey to the item at cursor in faceKeys
+            set faceNode to the cad node pointer for faceKey in body
+            set surfaceNode to the cad node pointer for faceNode's surface in body
+            if surfaceNode's kind = kind:
+                if kind = 1:
+                    set found to true
+                    set answer to faceKey
+                else if (the absolute value of (surfaceNode's plane's origin's z - zValue)) < 1e-12:
+                    set found to true
+                    set answer to faceKey
+        free faceKeys
+        return @intrinsic("construct", a cad closed split selected face, found, answer)
+
+set planarMade to the cad cylinder body at (the cad zero vector3) with radius 5.0 and height 8.0
+set planarBody to planarMade's value
+set topFace to the cad closed split face of kind 0 in planarBody at height 8.0
+check cad closed split topFace's valid code 11
+set topPlane to the cad orthonormal plane with origin (a cad vector3 with x 0.0, y 0.0 and z 8.0), x axis (the cad x axis) and normal (the cad z axis)
+set innerCircle to the cad edge curve3 of (a cad circle3 with plane topPlane's value and radius 3.0)
+set planarSplit to the cad split of topFace's value in planarBody along innerCircle within 1e-9
+check cad closed split planarSplit's valid code 12
+set planarFlaws to the cad flaws of planarBody
+check cad closed split ((the length of planarFlaws) = 0) code 13
+free planarFlaws
+set planarRepeatKept to the cad split of planarSplit's kept in planarBody along innerCircle within 1e-9
+set planarRepeatMade to the cad split of planarSplit's made in planarBody along innerCircle within 1e-9
+check cad closed split (planarRepeatKept's valid = false) code 14
+check cad closed split (planarRepeatMade's valid = false) code 15
+print "a_closed_circle_splits_a_planar_face_once" as a line
+
+set periodicMade to the cad cylinder body at (the cad zero vector3) with radius 5.0 and height 8.0
+set periodicBody to periodicMade's value
+set sideFace to the cad closed split face of kind 1 in periodicBody at height 0.0
+check cad closed split sideFace's valid code 21
+set sectionPlane to the cad orthonormal plane with origin (a cad vector3 with x 0.0, y 0.0 and z 4.0), x axis (the cad x axis) and normal (the cad z axis)
+set sectionCircle to the cad edge curve3 of (a cad circle3 with plane sectionPlane's value and radius 5.0)
+set periodicSplit to the cad split of sideFace's value in periodicBody along sectionCircle within 1e-9
+check cad closed split periodicSplit's valid code 22
+set periodicFlaws to the cad flaws of periodicBody
+check cad closed split ((the length of periodicFlaws) = 0) code 23
+free periodicFlaws
+set periodicRepeatKept to the cad split of periodicSplit's kept in periodicBody along sectionCircle within 1e-9
+set periodicRepeatMade to the cad split of periodicSplit's made in periodicBody along sectionCircle within 1e-9
+check cad closed split (periodicRepeatKept's valid = false) code 24
+check cad closed split (periodicRepeatMade's valid = false) code 25
+print "a_closed_section_splits_a_periodic_face_once" as a line
+
+set upperPlane to the cad orthonormal plane with origin (a cad vector3 with x 0.0, y 0.0 and z 6.0), x axis (the cad x axis) and normal (the cad z axis)
+set upperCircle to the cad edge curve3 of (a cad circle3 with plane upperPlane's value and radius 5.0)
+set upperKept to the cad split of periodicSplit's kept in periodicBody along upperCircle within 1e-9
+set upperMade to the cad split of periodicSplit's made in periodicBody along upperCircle within 1e-9
+check cad closed split (upperKept's valid != upperMade's valid) code 26
+check cad closed split ((the cad count of periodicBody's vertices) = 4) code 27
+check cad closed split ((the cad count of periodicBody's edges) = 7) code 28
+check cad closed split ((the cad count of periodicBody's faces) = 5) code 29
+set twiceFlaws to the cad flaws of periodicBody
+check cad closed split ((the length of twiceFlaws) = 0) code 30
+free twiceFlaws
+print "distinct_closed_sections_split_successive_periodic_bands" as a line
+
+set sphereMade to the cad sphere body at (a cad vector3 with x 2.0, y -1.0 and z 3.0) with radius 5.0
+set sphereBody to sphereMade's value
+set sphereFaces to the cad face keys of sphereBody
+set sphereFace to the item at 0 in sphereFaces
+free sphereFaces
+set latitudePlane to the cad orthonormal plane with origin (a cad vector3 with x 2.0, y -1.0 and z 4.0), x axis (the cad x axis) and normal (the cad z axis)
+set latitude to the cad edge curve3 of (a cad circle3 with plane latitudePlane's value and radius 4.898979485566356)
+set sphereSplit to the cad split of sphereFace in sphereBody along latitude within 1e-9
+check cad closed split sphereSplit's valid code 31
+check cad closed split ((the cad count of sphereBody's vertices) = 3) code 32
+check cad closed split ((the cad count of sphereBody's edges) = 1) code 33
+check cad closed split ((the cad count of sphereBody's faces) = 2) code 34
+set sphereFlaws to the cad flaws of sphereBody
+check cad closed split ((the length of sphereFlaws) = 0) code 35
+free sphereFlaws
+set sphereRepeatKept to the cad split of sphereSplit's kept in sphereBody along latitude within 1e-9
+set sphereRepeatMade to the cad split of sphereSplit's made in sphereBody along latitude within 1e-9
+check cad closed split ((sphereRepeatKept's valid = false) and (sphereRepeatMade's valid = false)) code 36
+print "a_closed_section_replaces_the_artificial_full_sphere_seam" as a line
+
+set obliqueMade to the cad sphere body at (a cad vector3 with x -3.0, y 4.0 and z 2.0) with radius 6.0
+set obliqueBody to obliqueMade's value
+set obliqueFaces to the cad face keys of obliqueBody
+set obliqueFace to the item at 0 in obliqueFaces
+free obliqueFaces
+set obliqueOrigin to a cad vector3 with x 2.0, y 4.0 and z 2.0
+set obliqueXAxis to a cad vector3 with x 0.0, y 1.0 and z 0.0
+set obliqueNormal to a cad vector3 with x 1.0, y 0.0 and z 0.0
+set obliquePlane to the cad orthonormal plane with origin obliqueOrigin, x axis obliqueXAxis and normal obliqueNormal
+check cad closed split obliquePlane's valid code 41
+set obliqueCircle to the cad edge curve3 of (a cad circle3 with plane obliquePlane's value and radius 3.3166247903554)
+set obliqueSplit to the cad split of obliqueFace in obliqueBody along obliqueCircle within 1e-8
+check cad closed split obliqueSplit's valid code 42
+check cad closed split ((the cad count of obliqueBody's vertices) = 3) code 43
+check cad closed split ((the cad count of obliqueBody's edges) = 1) code 44
+check cad closed split ((the cad count of obliqueBody's faces) = 2) code 45
+set obliquePolylineUses to 0
+set obliqueCoedges to the cad keys of (obliqueBody's coedges)
+loop obliqueCursor from 0 to the length of obliqueCoedges:
+    set obliqueUse to the cad node pointer for (the item at obliqueCursor in obliqueCoedges) in (obliqueBody's coedges)
+    if obliqueUse's pcurve's valid:
+        if obliqueUse's pcurve's value's kind = 4:
+            increment obliquePolylineUses
+free obliqueCoedges
+check cad closed split (obliquePolylineUses = 2) code 46
+set obliqueFlaws to the cad flaws of obliqueBody
+check cad closed split ((the length of obliqueFlaws) = 0) code 47
+free obliqueFlaws
+print "an_oblique_sphere_section_keeps_reversed_sampled_pcurves" as a line

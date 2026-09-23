@@ -1,0 +1,3 @@
+helix: native NURBS consumer, shared copies, deep clone and list lifetime
+helix: returned refusals survive copies, lists, reset and cloning
+helix: retained geometry survives repeated regeneration

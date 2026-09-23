@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check periodic isolines {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set toleranceValue to (a cad tessellation tolerance with maximum angle 0.25 within 1e-9) with 1 cad u isolines and 1 cad v isolines
+
+set sphereResult to the cad sphere body at the cad zero vector3 with radius 2.0
+check periodic isolines sphereResult's valid named "sphere"
+set sphereWire to the cad wireframe of sphereResult's value with tolerance toleranceValue
+check periodic isolines ((the length of sphereWire's isolines) = 2) named "sphere uv isolines"
+set sphereMeridian to the item at 0 in sphereWire's isolines
+set sphereEquator to the item at 1 in sphereWire's isolines
+check periodic isolines ((the length of sphereMeridian's positions) > 2) named "sampled meridian"
+check periodic isolines ((the length of sphereEquator's positions) > 2) named "sampled equator"
+set meridianFirst to the item at 0 in sphereMeridian's positions
+set meridianLast to the last item of sphereMeridian's positions
+check periodic isolines ((the absolute value of ((the cad distance from meridianFirst to meridianLast) - 4.0)) < 1e-8) named "pole span"
+set equatorFirst to the item at 0 in sphereEquator's positions
+set equatorLast to the last item of sphereEquator's positions
+check periodic isolines ((the cad distance from equatorFirst to equatorLast) < 1e-8) named "closed equator"
+free cad body wireframe sphereWire
+
+set torusResult to the cad torus at the cad zero vector3 with major radius 4.0 and minor radius 1.0
+check periodic isolines torusResult's valid named "torus"
+set torusWire to the cad wireframe of torusResult's value with tolerance toleranceValue
+check periodic isolines ((the length of torusWire's isolines) = 2) named "torus uv isolines"
+loop torusLineIndex from 0 to the length of torusWire's isolines:
+    set lineValue to the item at torusLineIndex in torusWire's isolines
+    check periodic isolines ((the length of lineValue's positions) > 2) named "sampled torus isoline"
+    set lineFirst to the item at 0 in lineValue's positions
+    set lineLast to the last item of lineValue's positions
+    check periodic isolines ((the cad distance from lineFirst to lineLast) < 1e-8) named "closed torus isoline"
+free cad body wireframe torusWire
+
+set cylinderResult to the cad cylinder body at the cad zero vector3 with radius 3.0 and height 6.0
+check periodic isolines cylinderResult's valid named "cylinder"
+set cylinderBody to cylinderResult's value
+set cylinderFaces to the cad face keys of cylinderBody
+set wallFound to false
+set wallKey to a new cad face key
+loop faceIndex from 0 to the length of cylinderFaces:
+    set candidateKey to the item at faceIndex in cylinderFaces
+    set candidateFace to the cad node pointer for candidateKey in cylinderBody
+    set candidateSurface to the cad node pointer for candidateFace's surface in cylinderBody
+    if candidateSurface's kind = 1:
+        set wallFound to true
+        set wallKey to candidateKey
+free cylinderFaces
+check periodic isolines wallFound named "cylinder wall"
+set wallFace to the cad node pointer for wallKey in cylinderBody
+set originalLoopKey to the item at 0 in ((wallFace's loops's values))
+set originalLoop to the cad node pointer for originalLoopKey in cylinderBody
+set rimUses to an empty list of a cad coedge key
+loop useIndex from 0 to the length of ((originalLoop's coedges's values)):
+    set useKey to the item at useIndex in ((originalLoop's coedges's values))
+    set useNode to the cad node pointer for useKey in cylinderBody
+    set edgeNode to the cad node pointer for useNode's edge in cylinderBody
+    if edgeNode's start = edgeNode's end:
+        append useKey to rimUses
+check periodic isolines ((the length of rimUses) = 2) named "two cylinder rims"
+loop while (the length of ((wallFace's loops's values))) > 0:
+    remove the last item from ((wallFace's loops's values))
+loop rimIndex from 0 to the length of rimUses:
+    set useKey to the item at rimIndex in rimUses
+    set loopKey to the cad body key after inserting (a cad loop owned by wallKey with provenance (the synthesized cad provenance)) into cylinderBody
+    set loopNode to the cad node pointer for loopKey in cylinderBody
+    append useKey to ((loopNode's coedges's values))
+    set useNode to the cad node pointer for useKey in cylinderBody
+    set useNode's owner to loopKey
+    append loopKey to ((wallFace's loops's values))
+free rimUses
+set cylinderWire to the cad wireframe of cylinderBody with tolerance toleranceValue
+check periodic isolines ((the length of cylinderWire's isolines) = 2) named "seamless cylinder uv isolines"
+free cad body wireframe cylinderWire
+
+print "cadkernel brep mesh periodic isolines: PASS" as a line

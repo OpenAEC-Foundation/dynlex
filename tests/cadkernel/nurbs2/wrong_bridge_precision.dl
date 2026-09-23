@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+set narrow to a new (a 32 bit floating-point number array of 2 items)
+set result to the cad nurbs2 vector of narrow

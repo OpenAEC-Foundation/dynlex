@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_debug_variants/support.dl
+set surfaces to a list containing (the cad surface of the cad xy plane)
+append (the cad surface of (a cad cylinder with base the cad xy plane and radius 2.0)) to surfaces
+append (the cad surface of (a cad cone with base the cad xy plane, radius 3.0 and half angle 0.25)) to surfaces
+append (the cad surface of (a cad sphere with frame the cad xy plane and radius 4.0)) to surfaces
+append (the cad surface of (a cad torus with frame the cad xy plane, major radius 5.0 and minor radius 1.0)) to surfaces
+append (the cad surface of surfaceBuild's value) to surfaces
+set surfaceNames to ["Plane {","Cylinder {","Cone {","Sphere {","Torus {","NurbsSurface3 {"]
+loop index from 0 to the length of surfaces:
+    set item to the item at index in surfaces
+    check brep payload item beginning (the item at index in surfaceNames)
+free surfaces
+
+set curves to a list containing (the cad edge curve3 of (a cad line3 with origin the cad zero vector3 and direction the cad x axis))
+append (the cad edge curve3 of (a cad circle3 with plane the cad xy plane and radius 2.0)) to curves
+append (the cad edge curve3 of (a cad ellipse3 with plane the cad xy plane, major radius 3.0 and minor radius 1.0)) to curves
+append (the cad edge curve3 of (a cad planar spline3 with plane the cad xy plane and curve curve2Build's value)) to curves
+append (the cad edge curve3 of curve3Build's value) to curves
+set curveNames to ["Line3 {","Circle3 {","Ellipse3 {","PlanarSpline3 {","NurbsCurve3 {"]
+loop index from 0 to the length of curves:
+    set item to the item at index in curves
+    check brep payload item beginning (the item at index in curveNames)
+free curves
+
+set pcurves to a list containing (cross2 segment [0.0,0.0] to [1.0,2.0])
+append (cross2 circle [0.0,0.0] with radius 2.0) to pcurves
+append (the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 3.0 from 0.0 to 1.0)) to pcurves
+append (cross2 ellipse [0.0,0.0] with radii 4.0 and 2.0) to pcurves
+append (cross2 polyline [[0.0,0.0,0.0],[1.0,2.0,1.0]] with closure false) to pcurves
+append (the cad curve2 of curve2Build's value) to pcurves
+append (cross2 ray [0.0,0.0] along [1.0,0.0]) to pcurves
+append (cross2 xline [0.0,0.0] along [0.0,1.0]) to pcurves
+set pcurveNames to ["Line2 {","Circle2 {","Arc2 {","EllipseArc2 {","Polyline2 {","NurbsCurve2 {","Ray2 {","XLine2 {"]
+loop index from 0 to the length of pcurves:
+    set item to the item at index in pcurves
+    check brep payload item beginning (the item at index in pcurveNames)
+free pcurves
+
+print "all geometry diagnostic variants and clones" as a line

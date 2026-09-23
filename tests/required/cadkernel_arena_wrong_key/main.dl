@@ -1,0 +1,9 @@
+import lib/cadkernel/arena.dl
+
+set integers to a cad arena of an integer
+set reals to a cad arena of a 64 bit floating-point number
+set key to the cad key after inserting 1.5 into reals
+set accepted to (integers contains cad key key)
+print whether accepted as a line
+free cad arena integers
+free cad arena reals

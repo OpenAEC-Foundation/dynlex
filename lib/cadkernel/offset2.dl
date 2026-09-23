@@ -1,0 +1,379 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native implementation of src/geom2d/offset.rs at cadkernel revision
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f. Work is conditioned into a
+# coordinate system where the requested offset is one drawing unit.
+import lib/cadkernel/area2.dl
+import lib/cadkernel/containment2.dl
+
+class:
+    patterns:
+        [a|] cad offset2 primitive
+    members:
+        kind as an integer
+        start as a cad vector2
+        finish as a cad vector2
+        centre as a cad vector2
+        radius as a 64 bit floating-point number
+        sweep as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad offset2 primitive result
+    members:
+        valid as a boolean
+        value as a cad offset2 primitive
+
+class:
+    patterns:
+        [a|] cad offset2 point result
+    members:
+        valid as a boolean
+        value as a cad vector2
+
+local function cad offset2 finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function no cad offset2 primitive:
+    execute:
+        return @intrinsic("construct", a cad offset2 primitive result, false, a new cad offset2 primitive)
+
+local function cad offset2 primitive {cad offset2 primitive:value}:
+    execute:
+        return @intrinsic("construct", a cad offset2 primitive result, true, value)
+
+local function no cad offset2 point:
+    execute:
+        return @intrinsic("construct", a cad offset2 point result, false, the cad zero vector2)
+
+local function cad offset2 point {cad vector2:value}:
+    execute:
+        return @intrinsic("construct", a cad offset2 point result, true, value)
+
+local function cad offset2 cross of {cad vector2:first} and {cad vector2:second}:
+    execute:
+        return (first's x * second's y) - (first's y * second's x)
+
+local function cad offset2 squared distance from {cad vector2:first} to {cad vector2:second}:
+    execute:
+        set dx to first's x - second's x
+        set dy to first's y - second's y
+        return (dx * dx) + (dy * dy)
+
+local function cad offset2 line intersection from {cad vector2:firstStart} to {cad vector2:firstEnd} and from {cad vector2:secondStart} to {cad vector2:secondEnd}:
+    execute:
+        set firstDirection to the cad difference of firstEnd and firstStart
+        set secondDirection to the cad difference of secondEnd and secondStart
+        set denominator to cad offset2 cross of firstDirection and secondDirection
+        if (the absolute value of denominator) <= 1e-12:
+            return no cad offset2 point
+        set delta to the cad difference of secondStart and firstStart
+        set amount to (cad offset2 cross of delta and secondDirection) / denominator
+        return cad offset2 point (the cad sum of firstStart and (firstDirection scaled by amount))
+
+local function cad offset2 nearer of {cad vector2:first} and {cad vector2:second} to {cad vector2:target}:
+    execute:
+        if (cad offset2 squared distance from first to target) <= (cad offset2 squared distance from second to target):
+            return first
+        return second
+
+local function cad offset2 line from {cad vector2:start} to {cad vector2:finish} meets circle at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} near {cad vector2:target}:
+    execute:
+        set direction to the cad difference of finish and start
+        set offset to the cad difference of start and centre
+        set a to the cad dot of direction and direction
+        if a <= 1e-24:
+            return no cad offset2 point
+        set b to 2.0 * (the cad dot of offset and direction)
+        set c to (the cad dot of offset and offset) - (radius * radius)
+        set discriminant to (b * b) - ((4.0 * a) * c)
+        if discriminant < -1e-12:
+            return no cad offset2 point
+        set root to the square root of (the maximum of discriminant and 0.0)
+        set firstAmount to ((the negative of b) - root) / (2.0 * a)
+        set secondAmount to ((the negative of b) + root) / (2.0 * a)
+        set first to the cad sum of start and (direction scaled by firstAmount)
+        set second to the cad sum of start and (direction scaled by secondAmount)
+        return cad offset2 point (cad offset2 nearer of first and second to target)
+
+local function cad offset2 circles at {cad vector2:firstCentre} with radius {a 64 bit floating-point number:firstRadius} and at {cad vector2:secondCentre} with radius {a 64 bit floating-point number:secondRadius} meet near {cad vector2:target}:
+    execute:
+        set between to the cad difference of secondCentre and firstCentre
+        set distance to the cad length of between
+        if (distance <= 1e-12) or (distance > (firstRadius + secondRadius + 1e-9)):
+            return no cad offset2 point
+        if distance < ((the absolute value of (firstRadius - secondRadius)) - 1e-9):
+            return no cad offset2 point
+        set along to (((firstRadius * firstRadius) - (secondRadius * secondRadius)) + (distance * distance)) / (2.0 * distance)
+        set heightSquared to (firstRadius * firstRadius) - (along * along)
+        if heightSquared < -1e-9:
+            return no cad offset2 point
+        set unit to between scaled by (1.0 / distance)
+        set middle to the cad sum of firstCentre and (unit scaled by along)
+        set height to the square root of (the maximum of heightSquared and 0.0)
+        set perpendicular to a cad vector2 with x (the negative of unit's y) and y unit's x
+        set first to the cad sum of middle and (perpendicular scaled by height)
+        set second to the cad difference of middle and (perpendicular scaled by height)
+        return cad offset2 point (cad offset2 nearer of first and second to target)
+
+local function cad offset2 joint between {cad offset2 primitive:first} and {cad offset2 primitive:second} near {cad vector2:target}:
+    execute:
+        if (cad offset2 squared distance from first's finish to second's start) <= 1e-16:
+            return cad offset2 point (cad offset2 nearer of first's finish and second's start to target)
+        if (first's kind = 0) and (second's kind = 0):
+            return cad offset2 line intersection from first's start to first's finish and from second's start to second's finish
+        if (first's kind = 0) and (second's kind = 1):
+            return cad offset2 line from first's start to first's finish meets circle at second's centre with radius second's radius near target
+        if (first's kind = 1) and (second's kind = 0):
+            return cad offset2 line from second's start to second's finish meets circle at first's centre with radius first's radius near target
+        return cad offset2 circles at first's centre with radius first's radius and at second's centre with radius second's radius meet near target
+
+local function cad offset2 shifted primitive from {cad polyline vertex2:startVertex} to {cad polyline vertex2:endVertex} by {a 64 bit floating-point number:signedDistance}:
+    execute:
+        set start to startVertex's position
+        set finish to endVertex's position
+        if ((cad offset2 finite startVertex's bulge) = false) or ((the absolute value of startVertex's bulge) < 1e-12):
+            set direction to the cad difference of finish and start
+            set length to the cad length of direction
+            if length <= 1e-12:
+                return no cad offset2 primitive
+            set shift to a cad vector2 with x (((the negative of direction's y) / length) * signedDistance) and y ((direction's x / length) * signedDistance)
+            set value to @intrinsic("construct", a cad offset2 primitive, 0, the cad sum of start and shift, the cad sum of finish and shift, the cad zero vector2, 0.0, 0.0)
+            return cad offset2 primitive value
+        set arcResult to the cad bulge arc2 from start to finish with bulge startVertex's bulge
+        if arcResult's valid = false:
+            return no cad offset2 primitive
+        set arc to arcResult's value
+        set directionSign to 1.0
+        if arc's sweep < 0.0:
+            set directionSign to -1.0
+        set radius to arc's radius - (signedDistance * directionSign)
+        if radius <= 1e-9:
+            return no cad offset2 primitive
+        set startRadial to the cad difference of start and arc's centre
+        set finishRadial to the cad difference of finish and arc's centre
+        set shiftedStart to the cad sum of arc's centre and (startRadial scaled by (radius / arc's radius))
+        set shiftedFinish to the cad sum of arc's centre and (finishRadial scaled by (radius / arc's radius))
+        set value to @intrinsic("construct", a cad offset2 primitive, 1, shiftedStart, shiftedFinish, arc's centre, radius, arc's sweep)
+        return cad offset2 primitive value
+
+local function cad offset2 bulge for {cad offset2 primitive:primitive} from {cad vector2:start} to {cad vector2:finish}:
+    execute:
+        if primitive's kind = 0:
+            return 0.0
+        set firstAngle to the cad angle of (the cad difference of start and primitive's centre)
+        set secondAngle to the cad angle of (the cad difference of finish and primitive's centre)
+        set sweep to secondAngle - firstAngle
+        if primitive's sweep > 0.0:
+            if sweep <= 0.0:
+                set sweep to sweep + 6.283185307179586
+        else:
+            if sweep >= 0.0:
+                set sweep to sweep - 6.283185307179586
+        return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25)
+
+local function cad offset2 join bulge from {cad vector2:start} to {cad vector2:finish} around {cad vector2:corner} for signed distance {a 64 bit floating-point number:signedDistance}:
+    execute:
+        set firstAngle to the cad angle of (the cad difference of start and corner)
+        set secondAngle to the cad angle of (the cad difference of finish and corner)
+        set sweep to secondAngle - firstAngle
+        if signedDistance < 0.0:
+            if sweep <= 0.0:
+                set sweep to sweep + 6.283185307179586
+        else:
+            if sweep >= 0.0:
+                set sweep to sweep - 6.283185307179586
+        return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25)
+
+local function cad offset2 conditioned clone of {cad polyline2:source} from {cad vector2:origin} over {a 64 bit floating-point number:distance}:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        set count to the length of source's vertices
+        set segmentCount to count - 1
+        if source's closed:
+            set segmentCount to count
+        loop index from 0 to segmentCount:
+            set next to index + 1
+            if next >= count:
+                set next to 0
+            set startVertex to the item at index in source's vertices
+            set endVertex to the item at next in source's vertices
+            set point to the cad difference of startVertex's position and origin
+            set bulge to startVertex's bulge
+            if (cad offset2 finite bulge) = false:
+                set bulge to 0.0
+            set normalized to point scaled by (1.0 / distance)
+            set split to false
+            if (the absolute value of bulge) > 1.0:
+                set arcResult to the cad bulge arc2 from startVertex's position to endVertex's position with bulge bulge
+                if arcResult's valid:
+                    set halfBulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, arcResult's value's sweep / 8.0)
+                    set midpoint to the cad difference of (the cad point on arcResult's value at 0.5) and origin
+                    set normalizedMidpoint to midpoint scaled by (1.0 / distance)
+                    append (a cad polyline vertex2 at normalized with bulge halfBulge) to vertices
+                    append (a cad polyline vertex2 at normalizedMidpoint with bulge halfBulge) to vertices
+                    set split to true
+            if split = false:
+                append (a cad polyline vertex2 at normalized with bulge bulge) to vertices
+        if (source's closed = false) and (count > 0):
+            set lastVertex to the item at (count - 1) in source's vertices
+            set lastPoint to the cad difference of lastVertex's position and origin
+            set normalizedLast to lastPoint scaled by (1.0 / distance)
+            append (a straight cad polyline vertex2 at normalizedLast) to vertices
+        set result to the cad polyline2 with vertices vertices and closure source's closed
+        free vertices
+        return result
+
+local function cad offset2 signed measure of {cad polyline2:shape}:
+    execute:
+        set curve to the cad curve2 of shape
+        set pieces to the cad segments of curve
+        set sum to 0.0
+        loop index from 0 to the length of pieces:
+            set sum to sum + (the cad enclosed area of (the item at index in pieces))
+        free pieces
+        return sum
+
+local function cad offset2 raw of {cad polyline2:source} [toward] {cad vector2:side}:
+    execute:
+        set empty to an empty list of a cad polyline2
+        set count to the length of source's vertices
+        if count < 2:
+            return empty
+        set segmentCount to count - 1
+        if source's closed:
+            set segmentCount to count
+        if segmentCount < 1:
+            return empty
+
+        set sourceCurve to the cad curve2 of source
+        set sourceSegments to the cad segments of sourceCurve
+        set nearest to the cad nearest of sourceSegments to side
+        if nearest's valid = false:
+            free sourceSegments
+            return empty
+        set nearestCurve to the item at nearest's index in sourceSegments
+        set tangent to the cad tangent of nearestCurve at nearest's value's t
+        set toward to the cad difference of side and nearest's value's point
+        set signedDistance to -1.0
+        if (cad offset2 cross of tangent and toward) >= 0.0:
+            set signedDistance to 1.0
+
+        set primitives to an empty list of a cad offset2 primitive
+        loop index from 0 to segmentCount:
+            set next to index + 1
+            if next >= count:
+                set next to 0
+            set shifted to cad offset2 shifted primitive from (the item at index in source's vertices) to (the item at next in source's vertices) by signedDistance
+            if shifted's valid = false:
+                free sourceSegments
+                free primitives
+                return empty
+            append shifted's value to primitives
+
+        set vertices to an empty list of a cad polyline vertex2
+        loop index from 0 to segmentCount:
+            set primitive to the item at index in primitives
+            set start to primitive's start
+            set finish to primitive's finish
+            if source's closed or (index > 0):
+                set previous to index - 1
+                if previous < 0:
+                    set previous to segmentCount - 1
+                set previousPrimitive to the item at previous in primitives
+                if (previousPrimitive's kind = 0) and (primitive's kind = 0):
+                    set startJoint to cad offset2 line intersection from previousPrimitive's start to previousPrimitive's finish and from primitive's start to primitive's finish
+                    if startJoint's valid = false:
+                        free sourceSegments
+                        free primitives
+                        free vertices
+                        return empty
+                    set start to startJoint's value
+            set next to index + 1
+            set hasNext to next < segmentCount
+            if source's closed:
+                set hasNext to true
+                if next >= segmentCount:
+                    set next to 0
+            if hasNext:
+                set nextPrimitive to the item at next in primitives
+                if (primitive's kind = 0) and (nextPrimitive's kind = 0):
+                    set finishJoint to cad offset2 line intersection from primitive's start to primitive's finish and from nextPrimitive's start to nextPrimitive's finish
+                    if finishJoint's valid = false:
+                        free sourceSegments
+                        free primitives
+                        free vertices
+                        return empty
+                    set finish to finishJoint's value
+            set bulge to cad offset2 bulge for primitive from start to finish
+            append (a cad polyline vertex2 at start with bulge bulge) to vertices
+            if (hasNext and (((primitive's kind = 0) and (nextPrimitive's kind = 0)) = false)) and ((cad offset2 squared distance from finish to nextPrimitive's start) > 1e-16):
+                set cornerIndex to index + 1
+                if cornerIndex >= count:
+                    set cornerIndex to 0
+                set corner to (the item at cornerIndex in source's vertices)'s position
+                set joinBulge to cad offset2 join bulge from finish to nextPrimitive's start around corner for signed distance signedDistance
+                append (a cad polyline vertex2 at finish with bulge joinBulge) to vertices
+        if source's closed = false:
+            append (a straight cad polyline vertex2 at (the item at (segmentCount - 1) in primitives)'s finish) to vertices
+
+        # A zero-width inward channel leaves two consecutive raw corners at
+        # the same point. The slice pass keeps the surviving boundary first,
+        # then walks the collapsed spur out and back.
+        if source's closed and ((the length of vertices) > 2):
+            loop index from 0 to the length of vertices:
+                set nextVertexIndex to index + 1
+                if nextVertexIndex >= (the length of vertices):
+                    set nextVertexIndex to 0
+                set afterVertexIndex to nextVertexIndex + 1
+                if afterVertexIndex >= (the length of vertices):
+                    set afterVertexIndex to afterVertexIndex - (the length of vertices)
+                set currentVertex to the item at index in vertices
+                set repeatedVertex to the item at nextVertexIndex in vertices
+                if (((the absolute value of currentVertex's bulge) < 1e-12) and ((the absolute value of repeatedVertex's bulge) < 1e-12)) and ((cad offset2 squared distance from currentVertex's position to repeatedVertex's position) <= 1e-16):
+                    set survivingVertex to the item at afterVertexIndex in vertices
+                    replace item at index index in vertices with (a straight cad polyline vertex2 at survivingVertex's position)
+        set result to the cad polyline2 with vertices vertices and closure source's closed
+
+        if source's closed:
+            set sourceArea to cad offset2 signed measure of source
+            set resultArea to cad offset2 signed measure of result
+            set sideInside to cad boundary sourceSegments contains side within (a cad tolerance of 1e-7)
+            set reversed to (sourceArea * resultArea) < 0.0
+            if (((the absolute value of resultArea) <= 1e-8) or reversed) or (sideInside and ((the absolute value of resultArea) >= ((the absolute value of sourceArea) - 1e-8))):
+                free sourceSegments
+                free primitives
+                free vertices
+                free cad polyline result
+                return empty
+
+        append result to empty
+        free sourceSegments
+        free primitives
+        free vertices
+        return empty
+
+function the cad offset polylines of {cad polyline2:source} [by] {a number:givenDistance} [toward] {cad vector2:side}:
+    execute:
+        set distance to the absolute value of (givenDistance as a 64 bit floating-point number)
+        if (distance < 1e-12) or ((cad offset2 finite distance) = false):
+            return an empty list of a cad polyline2
+        if (the length of source's vertices) < 2:
+            return an empty list of a cad polyline2
+        set origin to (the item at 0 in source's vertices)'s position
+        set workShape to cad offset2 conditioned clone of source from origin over distance
+        set normalizedSide to (the cad difference of side and origin) scaled by (1.0 / distance)
+        set raw to cad offset2 raw of workShape toward normalizedSide
+        set output to an empty list of a cad polyline2
+        loop resultIndex from 0 to the length of raw:
+            set rawShape to the item at resultIndex in raw
+            set vertices to an empty list of a cad polyline vertex2
+            loop vertexIndex from 0 to the length of rawShape's vertices:
+                set vertex to the item at vertexIndex in rawShape's vertices
+                set point to the cad sum of origin and (vertex's position scaled by distance)
+                append (a cad polyline vertex2 at point with bulge vertex's bulge) to vertices
+            append (the cad polyline2 with vertices vertices and closure rawShape's closed) to output
+            free vertices
+        free raw
+        free cad polyline workShape
+        return output

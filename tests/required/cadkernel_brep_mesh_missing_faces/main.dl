@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check mesh missing faces {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set solidResult to the cad cuboid at the cad zero vector3 with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
+check mesh missing faces solidResult's valid named "box"
+set bodyValue to solidResult's value
+set faceKeys to the cad face keys of bodyValue
+set brokenFace to the item at 0 in faceKeys
+set faceNode to the cad node pointer for brokenFace in bodyValue
+ignore the cad removal of faceNode's surface from bodyValue
+free faceKeys
+
+set toleranceValue to ((a cad tessellation tolerance with maximum angle 0.25 within 1e-9) with 1 cad u isolines and 1 cad v isolines) including planar cad isolines true
+set wireValue to the cad wireframe of bodyValue with tolerance toleranceValue
+check mesh missing faces ((the length of wireValue's missingFaces) = 1) named "wireframe reports missing surface"
+check mesh missing faces ((the length of wireValue's isolines) = 10) named "valid face isolines retained"
+
+set meshValue to the cad tessellation of bodyValue with tolerance toleranceValue
+check mesh missing faces ((the length of meshValue's missingFaces) = 1) named "mesh reports missing surface"
+check mesh missing faces ((cad body mesh meshValue is complete) = false) named "mesh incomplete"
+
+free cad body mesh meshValue
+free cad body wireframe wireValue
+print "cadkernel brep mesh missing faces: PASS" as a line

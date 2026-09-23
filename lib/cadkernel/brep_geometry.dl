@@ -1,0 +1,626 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/geometry.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Analytic variants retain their exact type and supplied frame.
+# Tagged records retain managed spline payloads through ordinary field lifecycle.
+# Inactive spline payloads are null-safe zero values and allocate no storage.
+import lib/cadkernel/plane.dl
+import lib/cadkernel/nurbs2.dl
+import lib/cadkernel/nurbs3.dl
+
+class:
+    patterns:
+        [a|] cad cylinder
+    members:
+        base as a cad plane
+        radius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad cone
+    members:
+        base as a cad plane
+        radius as a 64 bit floating-point number
+        halfAngle as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad sphere
+    members:
+        frame as a cad plane
+        radius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad torus
+    members:
+        frame as a cad plane
+        majorRadius as a 64 bit floating-point number
+        minorRadius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad surface
+    members:
+        kind as an integer
+        plane as a cad plane
+        cylinder as a cad cylinder
+        cone as a cad cone
+        sphere as a cad sphere
+        torus as a cad torus
+        nurbs as a cad nurbs surface3
+class:
+    patterns:
+        [a|] cad line3
+    members:
+        origin as a cad vector3
+        direction as a cad vector3
+class:
+    patterns:
+        [a|] cad circle3
+    members:
+        plane as a cad plane
+        radius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad ellipse3
+    members:
+        plane as a cad plane
+        majorRadius as a 64 bit floating-point number
+        minorRadius as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad planar spline3
+    members:
+        plane as a cad plane
+        curve as a cad nurbs curve2
+class:
+    patterns:
+        [a|] cad edge curve3
+    members:
+        kind as an integer
+        line as a cad line3
+        circle as a cad circle3
+        ellipse as a cad ellipse3
+        planar as a cad planar spline3
+        nurbs as a cad nurbs curve3
+
+function a cad cylinder with base {cad plane:base} and radius {a number:radius}:
+    execute:
+        return @intrinsic("construct", a cad cylinder, base, radius as a 64 bit floating-point number)
+function a cad cone with base {cad plane:base}, radius {a number:radius} and half angle {a number:angle}:
+    execute:
+        return @intrinsic("construct", a cad cone, base, radius as a 64 bit floating-point number, angle as a 64 bit floating-point number)
+function a cad sphere with frame {cad plane:frame} and radius {a number:radius}:
+    execute:
+        return @intrinsic("construct", a cad sphere, frame, radius as a 64 bit floating-point number)
+function a cad torus with frame {cad plane:frame}, major radius {a number:major} and minor radius {a number:minor}:
+    execute:
+        return @intrinsic("construct", a cad torus, frame, major as a 64 bit floating-point number, minor as a 64 bit floating-point number)
+function a cad line3 with origin {cad vector3:origin} and direction {cad vector3:direction}:
+    execute:
+        return @intrinsic("construct", a cad line3, origin, direction)
+function a cad circle3 with plane {cad plane:plane} and radius {a number:radius}:
+    execute:
+        return @intrinsic("construct", a cad circle3, plane, radius as a 64 bit floating-point number)
+function a cad ellipse3 with plane {cad plane:plane}, major radius {a number:major} and minor radius {a number:minor}:
+    execute:
+        return @intrinsic("construct", a cad ellipse3, plane, major as a 64 bit floating-point number, minor as a 64 bit floating-point number)
+function a cad planar spline3 with plane {cad plane:plane} and curve {cad nurbs curve2:curve}:
+    execute:
+        return @intrinsic("construct", a cad planar spline3, plane, curve)
+
+# These functions supply concrete types under type-of, without executing at runtime.
+local function the cad geometry nurbs2 witness:
+    execute:
+        set controls to an empty list of a cad vector2
+        set scalars to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve2 of degree 0 with controls controls, knots scalars and weights scalars
+        free controls
+        free scalars
+        return result's value
+local function the cad geometry nurbs3 witness:
+    execute:
+        set controls to an empty list of a cad vector3
+        set scalars to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve3 of degree 0 with controls controls, knots scalars and weights scalars
+        free controls
+        free scalars
+        return result's value
+local function the cad geometry surface witness:
+    execute:
+        set row to an empty list of a cad vector3
+        set controls to an empty list of the type of row
+        set scalars to an empty list of a 64 bit floating-point number
+        set weights to an empty list of the type of scalars
+        set result to the cad nurbs surface3 of degrees 0 and 0 with controls controls, knots scalars and scalars and weights weights
+        free row
+        free controls
+        free scalars
+        free weights
+        return result's value
+local function the cad geometry empty surface:
+    execute:
+        return @intrinsic("construct", a cad surface, 0, a new cad plane, a new cad cylinder, a new cad cone, a new cad sphere, a new cad torus, a new (the type of the cad geometry surface witness))
+local function the cad geometry empty edge:
+    execute:
+        set planar to a cad planar spline3 with plane (a new cad plane) and curve (a new (the type of the cad geometry nurbs2 witness))
+        return @intrinsic("construct", a cad edge curve3, 0, a new cad line3, a new cad circle3, a new cad ellipse3, planar, a new (the type of the cad geometry nurbs3 witness))
+
+function the cad surface of {cad plane:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's plane to value
+        return result
+function the cad surface of {cad cylinder:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's kind to 1
+        set result's cylinder to value
+        return result
+function the cad surface of {cad cone:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's kind to 2
+        set result's cone to value
+        return result
+function the cad surface of {cad sphere:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's kind to 3
+        set result's sphere to value
+        return result
+function the cad surface of {cad torus:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's kind to 4
+        set result's torus to value
+        return result
+function the cad surface of {cad nurbs surface3:value}:
+    execute:
+        set result to the cad geometry empty surface
+        set result's kind to 5
+        set result's nurbs to value
+        return result
+
+function the cad edge curve3 of {cad line3:value}:
+    execute:
+        set result to the cad geometry empty edge
+        set result's line to value
+        return result
+function the cad edge curve3 of {cad circle3:value}:
+    execute:
+        set result to the cad geometry empty edge
+        set result's kind to 1
+        set result's circle to value
+        return result
+function the cad edge curve3 of {cad ellipse3:value}:
+    execute:
+        set result to the cad geometry empty edge
+        set result's kind to 2
+        set result's ellipse to value
+        return result
+function the cad edge curve3 of {cad planar spline3:value}:
+    execute:
+        set result to the cad geometry empty edge
+        set result's kind to 3
+        set result's planar to value
+        return result
+function the cad edge curve3 of {cad nurbs curve3:value}:
+    execute:
+        set result to the cad geometry empty edge
+        set result's kind to 4
+        set result's nurbs to value
+        return result
+
+local function the cad geometry vector {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+local function the cad geometry angle from {a 64 bit floating-point number:y} over {a 64 bit floating-point number:x}:
+    execute:
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
+local function the cad geometry tangent of {a 64 bit floating-point number:angle}:
+    execute:
+        return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
+local function the cad geometry hypot of {a 64 bit floating-point number:x} and {a 64 bit floating-point number:y}:
+    execute:
+        return @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, x, y)
+
+function the cad point on {cad edge curve3:shape} at {a number:parameter}:
+    execute:
+        set t to parameter as a 64 bit floating-point number
+        if shape's kind = 0:
+            return the cad sum of shape's line's origin and (shape's line's direction scaled by t)
+        if shape's kind = 1:
+            set circle to shape's circle
+            return the cad point at (the cad geometry vector (circle's radius * the cosine of t) (circle's radius * the sine of t)) on circle's plane
+        if shape's kind = 2:
+            set ellipse to shape's ellipse
+            return the cad point at (the cad geometry vector (ellipse's majorRadius * the cosine of t) (ellipse's minorRadius * the sine of t)) on ellipse's plane
+        if shape's kind = 3:
+            return the cad point at (the cad point on shape's planar's curve at t) on shape's planar's plane
+        return the cad point on shape's nurbs at knot t
+
+function the cad tangent of {cad edge curve3:shape} at {a number:parameter}:
+    execute:
+        set t to parameter as a 64 bit floating-point number
+        if shape's kind = 0:
+            return shape's line's direction
+        if shape's kind = 1:
+            set circle to shape's circle
+            return the cad vector at (the cad geometry vector ((the negative of circle's radius) * the sine of t) (circle's radius * the cosine of t)) on circle's plane
+        if shape's kind = 2:
+            set ellipse to shape's ellipse
+            return the cad vector at (the cad geometry vector ((the negative of ellipse's majorRadius) * the sine of t) (ellipse's minorRadius * the cosine of t)) on ellipse's plane
+        if shape's kind = 3:
+            return the cad vector at (the cad derivative of shape's planar's curve at t) on shape's planar's plane
+        return the cad tangent of shape's nurbs at knot t
+
+function the cad parameter on {cad edge curve3:shape} nearest {cad vector3:point}:
+    execute:
+        if shape's kind = 0:
+            set squared to the cad squared length of shape's line's direction
+            if squared <= 0.0:
+                return 0.0 as a 64 bit floating-point number
+            return (the cad dot of (the cad difference of point and shape's line's origin) and shape's line's direction) / squared
+        if shape's kind = 1:
+            set local to the cad projection of point onto shape's circle's plane
+            if local's valid:
+                return the cad geometry angle from local's value's y over local's value's x
+            return 0.0
+        if shape's kind = 2:
+            set local to the cad projection of point onto shape's ellipse's plane
+            if local's valid:
+                return the cad geometry angle from (local's value's y / shape's ellipse's minorRadius) over (local's value's x / shape's ellipse's majorRadius)
+            return 0.0
+        if shape's kind = 3:
+            set local to the cad projection of point onto shape's planar's plane
+            if local's valid:
+                return the cad parameter on shape's planar's curve nearest local's value
+            return 0.0
+        return the cad parameter on shape's nurbs nearest point
+
+local function the cad geometry offset of {cad vector3:point} along {cad plane:frame} by {a 64 bit floating-point number:distance}:
+    execute:
+        set normal to the cad normal of frame
+        if normal's valid:
+            return the cad sum of point and (normal's value scaled by distance)
+        return point
+
+function the cad point on {cad surface:shape} at parameters {a number:first} and {a number:second}:
+    execute:
+        set u to first as a 64 bit floating-point number
+        set v to second as a 64 bit floating-point number
+        if shape's kind = 0:
+            return the cad point at (the cad geometry vector u v) on shape's plane
+        if shape's kind = 1:
+            set cylinder to shape's cylinder
+            set around to the cad point at (the cad geometry vector (cylinder's radius * the cosine of u) (cylinder's radius * the sine of u)) on cylinder's base
+            return the cad geometry offset of around along cylinder's base by v
+        if shape's kind = 2:
+            set cone to shape's cone
+            set radius to cone's radius - v * (the cad geometry tangent of cone's halfAngle)
+            set around to the cad point at (the cad geometry vector (radius * the cosine of u) (radius * the sine of u)) on cone's base
+            return the cad geometry offset of around along cone's base by v
+        if shape's kind = 3:
+            set sphere to shape's sphere
+            set ring to sphere's radius * the cosine of v
+            set around to the cad point at (the cad geometry vector (ring * the cosine of u) (ring * the sine of u)) on sphere's frame
+            return the cad geometry offset of around along sphere's frame by (sphere's radius * the sine of v)
+        if shape's kind = 4:
+            set torus to shape's torus
+            set ring to torus's majorRadius + torus's minorRadius * the cosine of v
+            set around to the cad point at (the cad geometry vector (ring * the cosine of u) (ring * the sine of u)) on torus's frame
+            return the cad geometry offset of around along torus's frame by (torus's minorRadius * the sine of v)
+        return the cad point on shape's nurbs at knots u and v
+
+function the cad frame of {cad surface:shape}:
+    execute:
+        if shape's kind = 0:
+            return @intrinsic("construct", a cad plane result, true, shape's plane)
+        if shape's kind = 1:
+            return @intrinsic("construct", a cad plane result, true, shape's cylinder's base)
+        if shape's kind = 2:
+            return @intrinsic("construct", a cad plane result, true, shape's cone's base)
+        if shape's kind = 3:
+            return @intrinsic("construct", a cad plane result, true, shape's sphere's frame)
+        if shape's kind = 4:
+            return @intrinsic("construct", a cad plane result, true, shape's torus's frame)
+        return @intrinsic("construct", a cad plane result, false, the cad xy plane)
+
+local function the cad geometry axial coordinates of {cad vector3:point} in {cad plane:frame}:
+    execute:
+        set offset to the cad difference of point and frame's origin
+        set normal to the cad normal of frame
+        if normal's valid:
+            set along to the cad dot of offset and normal's value
+            set across to the cad length of (the cad difference of offset and (normal's value scaled by along))
+            return the cad geometry vector along across
+        return the cad geometry vector 0.0 (the cad length of offset)
+
+function the cad [distance] from {cad surface:shape} to {cad vector3:point}:
+    execute:
+        if shape's kind = 0:
+            set distance to the cad distance from point to shape's plane
+            if distance's valid:
+                return distance's value
+            return (1.0 as a 64 bit floating-point number) / 0.0
+        if shape's kind = 1:
+            set coordinates to the cad geometry axial coordinates of point in shape's cylinder's base
+            return coordinates's y - shape's cylinder's radius
+        if shape's kind = 2:
+            set cone to shape's cone
+            set coordinates to the cad geometry axial coordinates of point in cone's base
+            set radius to cone's radius - coordinates's x * (the cad geometry tangent of cone's halfAngle)
+            return (coordinates's y - the absolute value of radius) * (the cosine of cone's halfAngle)
+        if shape's kind = 3:
+            return (the cad distance from point to shape's sphere's frame's origin) - shape's sphere's radius
+        if shape's kind = 4:
+            set torus to shape's torus
+            set coordinates to the cad geometry axial coordinates of point in torus's frame
+            set outer to (the cad geometry hypot of (coordinates's y - torus's majorRadius) and coordinates's x) - torus's minorRadius
+            set inner to (the cad geometry hypot of (coordinates's y + torus's majorRadius) and coordinates's x) - torus's minorRadius
+            if (the absolute value of inner) < (the absolute value of outer):
+                return inner
+            return outer
+        return (1.0 as a 64 bit floating-point number) / 0.0
+
+function {cad surface:shape} contains cad point {cad vector3:point} within {a number:tolerance}:
+    execute:
+        return (the absolute value of (the cad distance from shape to point)) <= (tolerance as a 64 bit floating-point number)
+
+function the cad tangents of {cad surface:shape} at parameters {a number:first} and {a number:second}:
+    execute:
+        set u to first as a 64 bit floating-point number
+        set v to second as a 64 bit floating-point number
+        set absent to @intrinsic("construct", a cad nurbs tangents, false, the cad zero vector3, the cad zero vector3)
+        if shape's kind = 5:
+            return the cad tangents of shape's nurbs at knots u and v
+        set framed to the cad frame of shape
+        set frame to framed's value
+        if shape's kind = 0:
+            return @intrinsic("construct", a cad nurbs tangents, true, frame's xAxis, frame's yAxis)
+        set normal to the cad normal of frame
+        if normal's valid = false:
+            return absent
+        if shape's kind = 1:
+            set radius to shape's cylinder's radius
+            set around to the cad vector at (the cad geometry vector ((the negative of radius) * the sine of u) (radius * the cosine of u)) on frame
+            return @intrinsic("construct", a cad nurbs tangents, true, around, normal's value)
+        set radial to the cad vector at (the cad geometry vector (the cosine of u) (the sine of u)) on frame
+        if shape's kind = 2:
+            set slope to the cad geometry tangent of shape's cone's halfAngle
+            set radius to shape's cone's radius - v * slope
+            set around to the cad vector at (the cad geometry vector ((the negative of radius) * the sine of u) (radius * the cosine of u)) on frame
+            set along to the cad difference of normal's value and (radial scaled by slope)
+            return @intrinsic("construct", a cad nurbs tangents, true, around, along)
+        set around to the cad vector at (the cad geometry vector (the negative of the sine of u) (the cosine of u)) on frame
+        set radius to shape's sphere's radius
+        set ring to radius * the cosine of v
+        if shape's kind = 4:
+            set radius to shape's torus's minorRadius
+            set ring to shape's torus's majorRadius + radius * the cosine of v
+        set alongU to around scaled by ring
+        set alongV to the cad sum of (radial scaled by ((the negative of radius) * the sine of v)) and (normal's value scaled by (radius * the cosine of v))
+        return @intrinsic("construct", a cad nurbs tangents, true, alongU, alongV)
+
+function the cad normal of {cad surface:shape} at parameters {a number:first} and {a number:second}:
+    execute:
+        set u to first as a 64 bit floating-point number
+        set v to second as a 64 bit floating-point number
+        if shape's kind = 0:
+            return the cad normal of shape's plane
+        if shape's kind = 1:
+            return the cad normalization of (the cad vector at (the cad geometry vector (the cosine of u) (the sine of u)) on shape's cylinder's base)
+        if shape's kind = 3:
+            return the cad normalization of (the cad difference of (the cad point on shape at parameters u and v) and shape's sphere's frame's origin)
+        if shape's kind = 5:
+            set tangents to the cad tangents of shape at parameters u and v
+            if tangents's valid = false:
+                return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+            return the cad normalization of (the cad cross of tangents's u and tangents's v)
+        set framed to the cad frame of shape
+        set radial to the cad vector at (the cad geometry vector (the cosine of u) (the sine of u)) on framed's value
+        set axis to the cad normal of framed's value
+        if axis's valid = false:
+            return axis
+        if shape's kind = 2:
+            return the cad normalization of (the cad sum of radial and (axis's value scaled by (the cad geometry tangent of shape's cone's halfAngle)))
+        return the cad normalization of (the cad sum of (radial scaled by (the cosine of v)) and (axis's value scaled by (the sine of v)))
+
+function the cad parameters on {cad surface:shape} nearest {cad vector3:point}:
+    execute:
+        set absent to @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        if shape's kind = 5:
+            return absent
+        set framed to the cad frame of shape
+        set projected to the cad projection of point onto framed's value
+        if projected's valid = false:
+            return absent
+        if shape's kind = 0:
+            return projected
+        set distance to the cad distance from point to framed's value
+        if distance's valid = false:
+            return absent
+        set local to projected's value
+        set around to the cad geometry angle from local's y over local's x
+        set height to distance's value
+        if (shape's kind = 1) or (shape's kind = 2):
+            return @intrinsic("construct", a cad plane coordinates result, true, the cad geometry vector around height)
+        set ring to the cad geometry hypot of local's x and local's y
+        if shape's kind = 3:
+            if ring <= 0.0:
+                return absent
+            return @intrinsic("construct", a cad plane coordinates result, true, the cad geometry vector around (the cad geometry angle from height over ring))
+        set radius to shape's torus's majorRadius
+        set outer to the cad geometry vector around (the cad geometry angle from height over (ring - radius))
+        set inner to the cad geometry vector (around + 3.141592653589793) (the cad geometry angle from height over ((the negative of ring) - radius))
+        set outerError to the cad distance from (the cad point on shape at parameters outer's x and outer's y) to point
+        set innerError to the cad distance from (the cad point on shape at parameters inner's x and inner's y) to point
+        if innerError < outerError:
+            return @intrinsic("construct", a cad plane coordinates result, true, inner)
+        return @intrinsic("construct", a cad plane coordinates result, true, outer)
+
+class:
+    patterns:
+        [a|] cad ray hits
+    members:
+        valid as a boolean
+        values
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            store ((the value at owner) + 1) at owner
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to the value at owner
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                store (count - 1) at owner
+
+local function the cad geometry ray result owning {a pointer to a list:values} with validity {boolean:valid}:
+    execute:
+        set owner to the checked allocation from (0 as a pointer to a byte) resized to 1 items of an integer
+        store 0 at owner
+        return @intrinsic("construct", a cad ray hits, valid, values, owner)
+
+# Signed integer transform is the source's IEEE total order, including signed zeros and NaNs.
+local function cad geometry {a 64 bit floating-point number:first} precedes {a 64 bit floating-point number:second}:
+    execute:
+        set left to the value at ((the address of first) as a pointer to a 64 bit integer)
+        set right to the value at ((the address of second) as a pointer to a 64 bit integer)
+        if left < 0:
+            set left to left bitwise xor (9223372036854775807 as a 64 bit integer)
+        if right < 0:
+            set right to right bitwise xor (9223372036854775807 as a 64 bit integer)
+        return left < right
+
+local function the cad geometry roots for {a 64 bit floating-point number:a} {a 64 bit floating-point number:b} {a 64 bit floating-point number:c}:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        if (the absolute value of a) <= 2.2250738585072014e-308:
+            if (the absolute value of b) <= 2.2250738585072014e-308:
+                return result
+            append ((the negative of c) / b) to result
+            return result
+        set discriminant to (b * b) - ((4.0 * a) * c)
+        if discriminant < 0.0:
+            return result
+        set root to the square root of discriminant
+        set sign to @intrinsic("call", "libc", "copysign", a 64 bit floating-point number, 1.0, b)
+        if b != b:
+            set sign to b
+        set stable to -0.5 * (b + sign * root)
+        if stable = 0.0:
+            append 0.0 to result
+        else:
+            set first to stable / a
+            set second to c / stable
+            if cad geometry second precedes first:
+                set temporary to first
+                set first to second
+                set second to temporary
+            append first to result
+            if first != second:
+                append second to result
+        return result
+
+local function the cad geometry perpendicular of {cad vector3:vector} to {cad vector3:axis}:
+    execute:
+        return the cad difference of vector and (axis scaled by (the cad dot of vector and axis))
+
+function the cad ray hits of {cad surface:shape} from {cad vector3:origin} along {cad vector3:direction}:
+    execute:
+        if (shape's kind = 4) or (shape's kind = 5):
+            return the cad geometry ray result owning (an empty list of a 64 bit floating-point number) with validity false
+        if shape's kind = 3:
+            set offset to the cad difference of origin and shape's sphere's frame's origin
+            set roots to the cad geometry roots for (the cad squared length of direction) (2.0 * (the cad dot of offset and direction)) ((the cad squared length of offset) - shape's sphere's radius * shape's sphere's radius)
+            return the cad geometry ray result owning roots with validity true
+        set framed to the cad frame of shape
+        set axis to the cad normal of framed's value
+        if axis's valid = false:
+            return the cad geometry ray result owning (an empty list of a 64 bit floating-point number) with validity false
+        if shape's kind = 0:
+            set roots to an empty list of a 64 bit floating-point number
+            set slope to the cad dot of direction and axis's value
+            if slope != 0.0:
+                set distance to the cad distance from origin to framed's value
+                if distance's valid = false:
+                    free roots
+                    return the cad geometry ray result owning (an empty list of a 64 bit floating-point number) with validity false
+                append ((the negative of distance's value) / slope) to roots
+            return the cad geometry ray result owning roots with validity true
+        set offset to the cad difference of origin and framed's value's origin
+        set acrossOffset to the cad geometry perpendicular of offset to axis's value
+        set acrossAlong to the cad geometry perpendicular of direction to axis's value
+        if shape's kind = 1:
+            set radius to shape's cylinder's radius
+            set roots to the cad geometry roots for (the cad squared length of acrossAlong) (2.0 * (the cad dot of acrossOffset and acrossAlong)) ((the cad squared length of acrossOffset) - radius * radius)
+            return the cad geometry ray result owning roots with validity true
+        set cone to shape's cone
+        set slope to the cad geometry tangent of cone's halfAngle
+        set upOffset to the cad dot of offset and axis's value
+        set upAlong to the cad dot of direction and axis's value
+        set atStart to cone's radius - slope * upOffset
+        set shrink to slope * upAlong
+        set roots to the cad geometry roots for ((the cad squared length of acrossAlong) - shrink * shrink) (2.0 * ((the cad dot of acrossOffset and acrossAlong) + atStart * shrink)) ((the cad squared length of acrossOffset) - atStart * atStart)
+        return the cad geometry ray result owning roots with validity true
+
+function the cad clone of {cad surface:shape}:
+    execute:
+        set result to shape
+        if shape's kind = 5:
+            set result's nurbs to the cad clone of (shape's nurbs)
+        return result
+
+function the cad clone of {cad edge curve3:shape}:
+    execute:
+        set result to shape
+        if shape's kind = 3:
+            set result's planar's curve to the cad clone of (shape's planar's curve)
+        if shape's kind = 4:
+            set result's nurbs to the cad clone of (shape's nurbs)
+        return result
+
+local function cad geometry vectors {cad vector3:first} and {cad vector3:second} are equal:
+    execute:
+        return ((first's x = second's x) and (first's y = second's y)) and (first's z = second's z)
+
+local function cad geometry planes {cad plane:first} and {cad plane:second} are equal:
+    execute:
+        return ((cad geometry vectors first's origin and second's origin are equal) and (cad geometry vectors first's xAxis and second's xAxis are equal)) and (cad geometry vectors first's yAxis and second's yAxis are equal)
+
+function {cad surface:first} = {cad surface:second}:
+    execute:
+        if first's kind != second's kind:
+            return false
+        if first's kind = 5:
+            return first's nurbs = second's nurbs
+        set firstFrame to the cad frame of first
+        set secondFrame to the cad frame of second
+        if (cad geometry planes firstFrame's value and secondFrame's value are equal) = false:
+            return false
+        if first's kind = 0:
+            return true
+        if first's kind = 1:
+            return first's cylinder's radius = second's cylinder's radius
+        if first's kind = 2:
+            return (first's cone's radius = second's cone's radius) and (first's cone's halfAngle = second's cone's halfAngle)
+        if first's kind = 3:
+            return first's sphere's radius = second's sphere's radius
+        return (first's torus's majorRadius = second's torus's majorRadius) and (first's torus's minorRadius = second's torus's minorRadius)
+
+function {cad edge curve3:first} = {cad edge curve3:second}:
+    execute:
+        if first's kind != second's kind:
+            return false
+        if first's kind = 0:
+            return (cad geometry vectors first's line's origin and second's line's origin are equal) and (cad geometry vectors first's line's direction and second's line's direction are equal)
+        if first's kind = 1:
+            return (cad geometry planes first's circle's plane and second's circle's plane are equal) and (first's circle's radius = second's circle's radius)
+        if first's kind = 2:
+            return ((cad geometry planes first's ellipse's plane and second's ellipse's plane are equal) and (first's ellipse's majorRadius = second's ellipse's majorRadius)) and (first's ellipse's minorRadius = second's ellipse's minorRadius)
+        if first's kind = 3:
+            return (cad geometry planes first's planar's plane and second's planar's plane are equal) and (first's planar's curve = second's planar's curve)
+        return first's nurbs = second's nurbs

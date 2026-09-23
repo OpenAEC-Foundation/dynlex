@@ -66,9 +66,9 @@ bool ensureSectionInstantiationInferred(
 	std::string functionName = definition ? (std::string)definition->range.subString : "";
 	bool instantiationFallsThrough = true;
 	bool inferenceSucceeded = runInstantiationReinferenceLoop(
-		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr,
-		[&]() {
+		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
+		beginParameterOutputReinference(inst);
 		inst.writtenGlobalReferences.clear();
 		inst.finalGlobalConstantValues.clear();
 		inst.finalGlobalAddressProvenance.clear();
@@ -98,6 +98,7 @@ bool ensureSectionInstantiationInferred(
 		if (context.trial)
 			inst.body = parseContext.cloneSectionBody(section);
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
+		finishParameterOutputReinference(context, inst, passSucceeded);
 		inst.fallsThrough = instantiationFallsThrough;
 		inst.finalGlobalConstantValues.clear();
 		for (VariableReference *reference : inst.writtenGlobalReferences) {
@@ -170,7 +171,5 @@ bool ensureSectionInstantiationInferred(
 		auto insertResult = section->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
-	if (!inst.needsReinfer && inst.returnType.kind == DataType::Kind::Any)
-		inst.returnType = {DataType::Kind::Void};
 	return inst.returnType.isDeduced();
 }

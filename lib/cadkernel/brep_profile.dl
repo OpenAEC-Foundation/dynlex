@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of src/brep/sweep.rs::path_senses, profile_senses and meets at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad profile senses result
+    members:
+        valid as a boolean
+        value as the type of (a cad topology list of a boolean)
+local function check cad profile expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+function {cad vector2:a} cad profile meets {cad vector2:b}:
+    execute:
+        return (@intrinsic("call", "libc", "hypot", a 64 bit floating-point number, (a's x) - (b's x), (a's y) - (b's y))) <= 1e-9
+function the cad profile senses of {a pointer to a list:profile}:
+    execute:
+        return cad chain senses for profile closing true
+function the cad path senses of {a pointer to a list:path}:
+    execute:
+        return cad chain senses for path closing false
+local function cad chain [senses] for {a pointer to a list:profile} closing {boolean:closed}:
+    execute:
+        check cad profile (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in profile))
+        set empty to a cad topology list of a boolean
+        if (the length of profile) = 0:
+            return @intrinsic("construct", a cad profile senses result, false, empty)
+        loop attempt from 0 to 2:
+            set first to attempt = 0
+            set senses to a cad topology list of a boolean
+            append first to (senses's values)
+            set parameter to 0.0
+            if first:
+                set parameter to 1.0
+            set head to the cad point on (the item at 0 in profile) at parameter
+            set joined to true
+            set index to 1
+            while joined and (index < (the length of profile)):
+                set piece to the item at index in profile
+                set forwards to head cad profile meets (the cad point on piece at 0.0)
+                if (forwards = false) and ((head cad profile meets (the cad point on piece at 1.0)) = false):
+                    set joined to false
+                set parameter to 0.0
+                if forwards:
+                    set parameter to 1.0
+                set head to the cad point on piece at parameter
+                append forwards to (senses's values)
+                set index to index + 1
+            set parameter to 1.0
+            if first:
+                set parameter to 0.0
+            set start to the cad point on (the item at 0 in profile) at parameter
+            if joined and ((closed = false) or (head cad profile meets start)):
+                return @intrinsic("construct", a cad profile senses result, true, senses)
+        return @intrinsic("construct", a cad profile senses result, false, empty)

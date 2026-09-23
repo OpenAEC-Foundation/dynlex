@@ -701,7 +701,12 @@ CodegenResult generateIntrinsicCode(
 		if (!generateRuntimeValue(args[1], val))
 			return CodegenResult::failure();
 		DataType valType = finalizedExpressionType(context, args[1]);
-		if (valType.kind == DataType::Kind::Float)
+		DataType elementType = valType.numericElementType();
+		if (!valType.isNumeric() && !valType.isVector())
+			crashCompilerBug("negate reached code generation with a non-numeric operand");
+		if (!elementType.isNumeric())
+			crashCompilerBug("negate reached code generation with a non-numeric element type");
+		if (elementType.kind == DataType::Kind::Float)
 			return builder.CreateFNeg(val, "fneg");
 		return builder.CreateNeg(val, "neg");
 	}

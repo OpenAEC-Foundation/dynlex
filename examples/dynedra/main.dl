@@ -1,0 +1,54 @@
+import examples/dynedra/render.dl
+import examples/dynedra/input.dl
+
+set window to a new window with width 1280 and height 820
+set the title of window to "Dynedra Lab"
+set loading to the result of loading a font from "tests/games/fonts/LiberationMono-Regular.ttf" at size 18 for window
+set typeface to loading's typeface
+if loading failed:
+    print "Could not load Dynedra Lab's font. Run from the repository root." as a line
+    print loading's status's operation as a line
+    set releasing to the result of releasing (the address of typeface)
+    close window
+    return 1
+
+set state to the initial lab state
+set scene to the lab scene for state's settings
+set previousAction to -1
+set previousMouse to false
+set previousCursor to the cursor position of window
+set previousMotion to the time since start for window
+loop while window remains open:
+    if key the escape key is down in window:
+        request that window close
+    set action to the lab keyboard action in window
+    set mouse to the left mouse button is pressed in window
+    set cursor to the cursor position of window
+    set now to the time since start for window
+    if mouse and (previousMouse = false):
+        if ((the framebuffer width of window) >= 900) and ((the framebuffer height of window) >= 750):
+            set action to the lab click action at cursor's x cursor's y for state
+    set overSolidPanel to (state's settings's operation = 6) and ((cursor's y < 300.0) or (previousCursor's y < 300.0))
+    if (overSolidPanel = false) and ((mouse and previousMouse) and ((cursor's x > 330.0) and (previousCursor's x > 330.0))):
+        set state's yaw to state's yaw + ((cursor's x - previousCursor's x) as a 64 bit floating-point number) * 0.006
+        set state's pitch to (state's pitch + ((cursor's y - previousCursor's y) as a 64 bit floating-point number) * 0.006) clamped between -1.5 and 1.5
+    set changed to false
+    set repeatMotion to ((action >= 12) and (action <= 15)) and ((now - previousMotion) >= 0.033)
+    if (action >= 0) and ((action != previousAction) or repeatMotion):
+        set state to the lab state after action action from state
+        set changed to state's changed
+        set previousMotion to now
+    set previousAction to action
+    set previousMouse to mouse
+    set previousCursor to cursor
+    if changed:
+        set scene to the lab scene for state's settings
+    set frame to a new graphics frame in window with background red 0.9686, green 0.9765, blue 0.9882 and alpha 1.0
+    draw lab scene with state using typeface in frame
+    display frame
+    sleep for 8 milliseconds
+set releasing to the result of releasing (the address of typeface)
+close window
+if releasing failed:
+    print releasing's operation as a line
+    return 1

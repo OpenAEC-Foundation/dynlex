@@ -1,0 +1,1 @@
+buffered delivery drains stderr and enforces its limit

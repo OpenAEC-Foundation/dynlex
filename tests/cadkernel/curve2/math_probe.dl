@@ -1,0 +1,5 @@
+import lib/std.dl
+set args to the command line arguments
+set text to the argument at 0 in args
+set x to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g %.17g\n", the sine of x, @intrinsic("call", "libc", "sin", a 64 bit floating-point number, x))

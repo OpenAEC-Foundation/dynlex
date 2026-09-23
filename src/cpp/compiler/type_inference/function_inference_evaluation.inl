@@ -50,10 +50,8 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
 		DataType valueType = typeRef->type.toReferencedType();
-		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
-			!valueType.classDefinition->instantiations.empty()) {
-			valueType.classInstIndex = 0;
-		}
+		if (!valueType.isConcrete())
+			return {};
 		requireCompilerInvariant(
 			parseContext.llvmModule && parseContext.llvmContext, "size inference requires an initialized target layout"
 		);
@@ -342,13 +340,14 @@ struct PureSectionFlexBodyExecutionFrame {
 	Section *bodySection{};
 	InstantiatedSectionBody *instantiatedBody{};
 	BindingFrameStack callerBindings;
-	bool bodyExecuted = false;
+	Expression::SectionBodyExecution bodyExecution = Expression::SectionBodyExecution::None;
 };
 
 struct PureExecutionState {
 	ParseContext &parseContext;
 	InferenceContext *inferenceContext{};
-	std::vector<std::pair<Section *, std::vector<CompileTimeValue>>> activeCalls;
+	size_t steps = 0;
+	size_t depth = 0;
 	std::vector<InstantiatedSectionBody *> activeBodies;
 	std::vector<PureSectionFlexBodyExecutionFrame> sectionFlexBodyFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
@@ -358,9 +357,35 @@ struct PureExecutionState {
 		: parseContext(context), inferenceContext(inference) {}
 };
 
+// Resource exhaustion unwinds the entire evaluator. Returning an unknown
+// value locally could let a caller continue and cache a partial result.
+struct PureExecutionStopped {
+	const char *detail;
+};
+
+struct ScopedPureExecution {
+	PureExecutionState &state;
+
+	ScopedPureExecution(PureExecutionState &executionState) : state(executionState) {
+		constexpr size_t maxSteps = 1000000;
+		constexpr size_t maxDepth = 256;
+		if (state.steps >= maxSteps)
+			throw PureExecutionStopped{"Compile-time evaluation exceeded the step limit"};
+		if (state.depth >= maxDepth)
+			throw PureExecutionStopped{"Compile-time evaluation exceeded the nesting limit"};
+		state.steps++;
+		state.depth++;
+	}
+
+	~ScopedPureExecution() {
+		requireCompilerInvariant(state.depth != 0, "pure execution depth underflowed");
+		state.depth--;
+	}
+};
+
 struct PureExecutionFrame {
 	Instantiation *instantiation{};
-	std::unordered_map<VariableReference *, CompileTimeValue> localValues;
+	std::map<VariableStorageKey, CompileTimeValue> localValues;
 };
 
 static Expression *resolvePureExecutionBinding(
@@ -378,19 +403,13 @@ static PatternDefinition *selectedDefinitionForPureExecution(Expression *expr, c
 	return expr->selectedPatternDefinition;
 }
 
-static void setPureExecutionLocalValue(PureExecutionFrame &frame, VariableReference *reference, const CompileTimeValue &value) {
-	VariableReference *normalized = normalizeBindingReference(reference);
-	if (!normalized)
-		return;
-	frame.localValues[normalized] = value;
+static void setPureExecutionLocalValue(PureExecutionFrame &frame, VariableStorageKey storage, const CompileTimeValue &value) {
+	frame.localValues[storage] = value;
 }
 
 static bool
-lookupPureExecutionLocalValue(const PureExecutionFrame &frame, VariableReference *reference, CompileTimeValue &outValue) {
-	VariableReference *normalized = normalizeBindingReference(reference);
-	if (!normalized)
-		return false;
-	auto it = frame.localValues.find(normalized);
+lookupPureExecutionLocalValue(const PureExecutionFrame &frame, VariableStorageKey storage, CompileTimeValue &outValue) {
+	auto it = frame.localValues.find(storage);
 	if (it == frame.localValues.end())
 		return false;
 	outValue = it->second;
@@ -490,11 +509,6 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
 	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
 		return cachedIt->second;
-	for (const auto &[activeSection, activeArguments] : state.activeCalls) {
-		if (activeSection == section && activeArguments == argumentValueKey)
-			return {};
-	}
-	state.activeCalls.push_back({section, argumentValueKey});
 	PureExecutionFrame frame;
 	frame.instantiation = &instantiation;
 	requireCompilerInvariant(
@@ -507,7 +521,7 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		Variable *parameterVariable = findExecutionSectionVariable(section, parameterName);
 		if (!parameterVariable || !parameterVariable->definition)
 			continue;
-		setPureExecutionLocalValue(frame, parameterVariable->definition, value);
+		setPureExecutionLocalValue(frame, variableStorageKey(parameterVariable->definition, instantiation.body.get()), value);
 	}
 	PureExpressionExecutionResult executionResult{};
 	bool hasImplicitDefinitionValue = false;
@@ -521,7 +535,6 @@ static CompileTimeValue executePureInstantiationReturnValue(
 									 isCompileTimeKnown(executionResult.value);
 		return !executionResult.returned;
 	});
-	state.activeCalls.pop_back();
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
 	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
@@ -535,6 +548,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 ) {
 	if (!expr)
 		return {};
+	ScopedPureExecution execution(state);
 	if (expr->inferredConversion)
 		return evaluatePureExpression(expr->inferredConversion, state, frame, bindingFrameStack);
 	BindingFrameStack resolvedBindingFrameStack;
@@ -555,13 +569,15 @@ static PureExpressionExecutionResult evaluatePureExpression(
 
 	case Expression::Kind::Variable: {
 		CompileTimeValue localValue{};
-		if (lookupPureExecutionLocalValue(frame, expr->variable, localValue))
+		if (lookupPureExecutionLocalValue(frame, variableStorageKey(expr), localValue))
 			return {localValue, false, {}};
 		return {pureExecutionStoredValue(expr, state), false, {}};
 	}
 
 	case Expression::Kind::IntrinsicCall: {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+		if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::TypeExtent)
+			return {pureExecutionStoredValue(expr, state), false, {}};
 		if (kind == IntrinsicKind::ExecuteBody)
 			return executePureSectionFlexCallerBody(expr, state, frame);
 		if (kind == IntrinsicKind::Return) {
@@ -575,9 +591,8 @@ static PureExpressionExecutionResult evaluatePureExpression(
 		if (kind == IntrinsicKind::Store) {
 			if (expr->arguments.size() <= 2)
 				crashCompilerBug("store intrinsic missing destination or value during pure execution");
-			BindingFrameStack destinationBindingFrameStack;
 			Expression *destinationExpression =
-				resolvePureExecutionBinding(expr->arguments[1], bindingFrameStack, &destinationBindingFrameStack);
+				resolveThroughBindingLayers(expr->arguments[1], bindingFrameStack, selectedFlexBindingExpansion).expression;
 			PureExpressionExecutionResult valueResult =
 				evaluatePureExpression(expr->arguments[2], state, frame, bindingFrameStack);
 			if (valueResult.returned)
@@ -586,7 +601,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 				!destinationExpression->variable) {
 				return {};
 			}
-			setPureExecutionLocalValue(frame, destinationExpression->variable, valueResult.value);
+			setPureExecutionLocalValue(frame, variableStorageKey(destinationExpression), valueResult.value);
 			return {};
 		}
 
@@ -659,7 +674,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 	auto executeOpenedSection = [&](CodeLine *line, Expression *lineExpression) -> PureExpressionExecutionResult {
 		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
 			return {};
-		if (lineExpression && lineExpression->sectionBodyInferred)
+		if (lineExpression && lineExpression->sectionBodyExecution != Expression::SectionBodyExecution::None)
 			return {};
 		InstantiatedSectionBody *openedBody = body->bodyForChild(line->sectionOpening);
 		requireCompilerInvariant(openedBody, "pure execution could not find an inferred child section body");
@@ -744,6 +759,7 @@ static PureExpressionExecutionResult executePureSection(
 	if (!section)
 		return {};
 	requireCompilerInvariant(body && body->sourceSection == section, "pure execution received the wrong inferred section body");
+	ScopedPureExecution execution(state);
 	if (openingExpression && openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
@@ -786,8 +802,7 @@ static PureExpressionExecutionResult executePureSection(
 	}
 	if (!openingExpression || openingExpression->sectionOutcome.kind != Expression::SectionOutcome::Kind::Loop)
 		return executePureSectionBodyOnce(state, frame, section, body, bindingFrameStack);
-	constexpr size_t maxPureLoopIterations = 100000;
-	for (size_t iteration = 0; iteration < maxPureLoopIterations; iteration++) {
+	while (true) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
 			crashCompilerBug("loop condition evaluation returned unexpectedly during pure execution");
@@ -804,7 +819,6 @@ static PureExpressionExecutionResult executePureSection(
 		if (bodyResult.returned)
 			return bodyResult;
 	}
-	return {};
 }
 
 static CompileTimeValue evaluatePureFunctionCallReturnValue(
@@ -822,7 +836,12 @@ static CompileTimeValue evaluatePureFunctionCallReturnValue(
 		return {};
 	}
 	PureExecutionState executionState{context.parseContext, &context};
-	return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
+	try {
+		return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
+	} catch (const PureExecutionStopped &stopped) {
+		context.fail(buildFailureDetailDiagnostic(expr->range, stopped.detail), 0);
+		return {};
+	}
 }
 
 static Instantiation *ensureCallableFunctionInstantiationInferred(

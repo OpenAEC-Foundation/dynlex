@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+# Arena ownership regressions: null-unsafe resources and independent nested clones.
+import lib/cadkernel/arena.dl
+
+class:
+    patterns:
+        [an|] arena resource
+    members:
+        references as a pointer to an integer
+        items
+        destroyed as a pointer to an integer
+        cloned as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner = (0 as a pointer to an integer):
+            @intrinsic("call", "libc", "exit", nothing, 91)
+        @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner = (0 as a pointer to an integer):
+            @intrinsic("call", "libc", "exit", nothing, 92)
+        set remaining to (@intrinsic("dereference", owner)) - 1
+        @intrinsic("store at", owner, remaining)
+        if remaining = 0:
+            free (the items of @intrinsic("lifecycle value"))
+            set counter to the destroyed of @intrinsic("lifecycle value")
+            @intrinsic("store at", counter, (@intrinsic("dereference", counter)) + 1)
+            @intrinsic("call", "libc", "free", nothing, owner)
+
+function an arena resource containing number tracking destroyed and cloned:
+    execute:
+        allocate one slot of 0 and set references to it
+        set items to a list containing number
+        append number + 10 to items
+        return @intrinsic("construct", an arena resource, references, items, destroyed, cloned)
+
+function the cad payload clone of {an arena resource:original}:
+    execute:
+        set counter to the cloned of original
+        @intrinsic("store at", counter, (@intrinsic("dereference", counter)) + 1)
+        set result to an arena resource containing (the item at 0 in the items of original) tracking (the destroyed of original) and counter
+        clear (the items of result)
+        set index to 0
+        loop while index < (the length of the items of original):
+            append (the item at index in the items of original) to (the items of result)
+            increment index
+        return result
+
+function check arena ownership condition:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 93)
+
+function exercise managed arena destroyed and cloned:
+    execute:
+        set original to an arena resource containing 7 tracking destroyed and cloned
+        set nodes to a cad arena of (the type of original)
+        # No lifecycle hook may run on a fabricated empty T.
+        free cad arena nodes
+        print "empty arena accepts null-unsafe payload" as a line
+
+function the detached resource tracking destroyed and cloned:
+    execute:
+        set original to an arena resource containing 7 tracking destroyed and cloned
+        set nodes to a cad arena of (the type of original)
+        set key to the cad key after inserting original into nodes
+        set duplicate to the cad clone of nodes
+        set borrowed to the cad lookup of key in duplicate
+        replace item at index 0 in (the items of (the value of borrowed)) with 88
+        append 99 to (the items of (the value of borrowed))
+        set source to the cad node pointer for key in nodes
+        check arena ownership ((the item at 0 in the items of source) = 7)
+        check arena ownership ((the length of the items of source) = 2)
+        check arena ownership ((the length of the items of (the value of borrowed)) = 3)
+        check arena ownership ((the item at 1 in the items of (the value of borrowed)) = 17)
+        check arena ownership ((the item at 0 in the items of (the value of borrowed)) = 88)
+        check arena ownership ((@intrinsic("dereference", cloned)) = 1)
+        set removed to the cad removal of key from nodes
+        check arena ownership (the valid of removed)
+        check arena ownership ((nodes contains cad key key) = false)
+        check arena ownership ((the valid of (the cad lookup of key in nodes)) = false)
+        set absent to the cad removal of key from nodes
+        check arena ownership ((the valid of absent) = false)
+        # Both ordinary copying of the result and returning it keep the payload alive.
+        set copied to removed
+        free cad arena nodes
+        free cad arena duplicate
+        return copied
+
+function exercise detached lifetime destroyed and cloned:
+    execute:
+        set held to the detached resource tracking destroyed and cloned
+        check arena ownership ((@intrinsic("dereference", destroyed)) = 1)
+        set copied to held
+        set payload to the cad value of copied
+        check arena ownership ((the item at 0 in the items of payload) = 7)
+        print "nested clone independent; detached result owns payload" as a line
+
+set destroyedCount to 0
+set cloneCount to 0
+exercise managed arena (the address of destroyedCount) and (the address of cloneCount)
+check arena ownership (destroyedCount = 1)
+set destroyedCount to 0
+exercise detached lifetime (the address of destroyedCount) and (the address of cloneCount)
+check arena ownership (destroyedCount = 2)
+check arena ownership (cloneCount = 1)
+print "all three nested allocations released exactly once" as a line

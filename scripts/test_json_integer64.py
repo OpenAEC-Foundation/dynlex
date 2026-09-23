@@ -5,12 +5,17 @@ from __future__ import annotations
 
 import os
 import re
-import resource
 import signal
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from native_test_support import resolve_c_compiler
+from process_error_mode import unattended_child_processes
+
+if os.name == "posix":
+    import resource
 
 
 LIBRARY_SOURCE = """\
@@ -57,14 +62,19 @@ def disable_core_dumps() -> None:
 def run(
     arguments: list[str], working_directory: Path, *, disable_core_dump: bool = False
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        arguments,
-        cwd=working_directory,
-        text=True,
-        capture_output=True,
-        check=False,
-        preexec_fn=disable_core_dumps if disable_core_dump else None,
-    )
+    options = {}
+    if disable_core_dump and os.name == "posix":
+        options["preexec_fn"] = disable_core_dumps
+    with unattended_child_processes():
+        return subprocess.run(
+            arguments,
+            cwd=working_directory,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+            **options,
+        )
 
 
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
@@ -73,10 +83,10 @@ def require_success(result: subprocess.CompletedProcess[str]) -> None:
 
 
 def require_abort(result: subprocess.CompletedProcess[str]) -> None:
-    expected_return_code = -signal.SIGABRT
-    if result.returncode != expected_return_code:
+    expected_return_codes = (134, 0xC0000409) if os.name == "nt" else (-signal.SIGABRT,)
+    if result.returncode not in expected_return_codes:
         raise RuntimeError(
-            f"command {result.args} exited {result.returncode}, expected SIGABRT ({expected_return_code}):\\n"
+            f"command {result.args} exited {result.returncode}, expected abort {expected_return_codes}:\n"
             f"{result.stdout}{result.stderr}"
         )
 
@@ -101,7 +111,8 @@ def main() -> int:
         print(f"compiler not found: {compiler}", file=sys.stderr)
         return 2
     repo_root = Path(__file__).resolve().parent.parent
-    c_compiler = os.environ.get("CC", "cc")
+    c_compiler = resolve_c_compiler(compiler)
+    executable_suffix = ".exe" if os.name == "nt" else ""
     try:
         with tempfile.TemporaryDirectory(prefix="dynlex-json-integer64-") as temporary_directory:
             temporary = Path(temporary_directory)
@@ -131,7 +142,7 @@ int main(void) {{
                 encoding="utf-8",
             )
             object_output = temporary / "json_integer64.o"
-            executable = temporary / "caller"
+            executable = temporary / f"caller{executable_suffix}"
             for optimization in ("-O0", "-O2", "-O3"):
                 require_success(
                     run(
@@ -140,7 +151,7 @@ int main(void) {{
                     )
                 )
                 require_success(
-                    run([c_compiler, "-O2", str(caller), str(object_output), "-o", str(executable)], repo_root)
+                    run([c_compiler, optimization, str(caller), str(object_output), "-o", str(executable)], repo_root)
                 )
                 require_success(run([str(executable)], repo_root))
 
@@ -150,10 +161,10 @@ int main(void) {{
             ):
                 failed_getter_source = temporary / f"{name}.dl"
                 failed_getter_source.write_text(source, encoding="utf-8")
-                failed_getter = temporary / name
+                failed_getter = temporary / f"{name}{executable_suffix}"
                 require_success(run([str(compiler), str(failed_getter_source), "-o", str(failed_getter)], repo_root))
                 require_abort(run([str(failed_getter)], repo_root, disable_core_dump=True))
-    except RuntimeError as error:
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
         print(error, file=sys.stderr)
         return 1
     return 0

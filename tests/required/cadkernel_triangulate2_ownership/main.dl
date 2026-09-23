@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+# Managed return, copy, list, clone and reset behavior for triangulation results.
+import lib/cadkernel/triangulate2.dl
+
+function check triangulation ownership {boolean:condition}:
+    execute:
+        if condition = false:
+            print "triangulation ownership failure" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function a triangulation ownership [mesh]:
+    execute:
+        set vertices to an empty list of a cad vector2
+        append (a cad vector2 with x 0.0 and y 0.0) to vertices
+        append (a cad vector2 with x 4.0 and y 0.0) to vertices
+        append (a cad vector2 with x 0.0 and y 3.0) to vertices
+        set holes to an empty list of the type of vertices
+        set mesh to the cad triangulation of vertices with holes holes
+        free vertices
+        free holes
+        return mesh
+
+set mesh to a triangulation ownership mesh
+set alias to mesh
+set deep to the cad clone of mesh
+free cad triangulation mesh
+check triangulation ownership ((the length of the points of alias) = 3)
+replace item at index 0 in the points of deep with (a cad vector2 with x 99.0 and y 99.0)
+check triangulation ownership ((the x of (the item at 0 in the points of alias)) = 0.0)
+free cad triangulation mesh
+free cad triangulation deep
+set meshes to a list containing alias
+free cad triangulation alias
+loop index from 0 to 32:
+    append (a triangulation ownership mesh) to meshes
+set retained to the item at 0 in meshes
+remove item 0 from meshes
+clear meshes
+free meshes
+check triangulation ownership ((the length of the triangles of retained) = 1)
+set framed to the cad polygon frame of (the points of retained) within (the default cad tolerance)
+set framedAlias to framed
+set clonedResult to the cad clone of framed
+set clonedFrame to the cad clone of (the value of framed)
+free cad polygon frame result framed
+check triangulation ownership (the valid of framedAlias)
+check triangulation ownership (cad (the value of framedAlias) equals clonedFrame)
+replace item at index 0 in the points of clonedFrame with (a cad vector2 with x 8.0 and y 8.0)
+check triangulation ownership ((cad (the value of framedAlias) equals clonedFrame) = false)
+free cad polygon frame clonedFrame
+free cad polygon frame result framedAlias
+check triangulation ownership ((the length of the points of the value of clonedResult) = 3)
+free cad polygon frame result clonedResult
+free cad polygon frame result clonedResult
+free cad triangulation retained
+set empty to an empty list of a cad vector2
+set invalid to the cad polygon frame of empty within (the default cad tolerance)
+set invalidAlias to invalid
+set invalidClone to the cad clone of invalid
+free cad polygon frame result invalid
+check triangulation ownership ((the valid of invalidAlias) = false)
+check triangulation ownership ((the length of the points of the value of invalidAlias) = 0)
+free cad polygon frame result invalidAlias
+free cad polygon frame result invalidClone
+free empty
+print "cadkernel triangulate2 ownership: PASS" as a line

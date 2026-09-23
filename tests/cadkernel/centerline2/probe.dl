@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/centerline2.dl
+import tests/cadkernel/arclength2/input.dl
+
+set first to a cad line2 from (measure2 input point 1) to (measure2 input point 3)
+set second to a cad line2 from (measure2 input point 5) to (measure2 input point 7)
+set result to the cad centerline between first and second picked at (measure2 input point 9) and (measure2 input point 11) extended by (measure2 input 13) and (measure2 input 14)
+emit measure2 flag result's valid
+if result's valid:
+    set value to result's value
+    emit measure2 point value's start
+    emit measure2 point value's end
+    emit measure2 point value's baseStart
+    emit measure2 point value's baseEnd
+    emit measure2 flag ((the cad clone of value) = value)

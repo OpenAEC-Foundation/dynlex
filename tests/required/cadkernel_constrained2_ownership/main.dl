@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/constrained2.dl
+
+function an owned constrained fixture mesh:
+    execute:
+        set ringValue to an empty list of a cad vector2
+        append (a cad vector2 with x 0.0 and y 0.0) to ringValue
+        append (a cad vector2 with x 4.0 and y 0.0) to ringValue
+        append (a cad vector2 with x 4.0 and y 3.0) to ringValue
+        append (a cad vector2 with x 0.0 and y 3.0) to ringValue
+        set ringValues to an empty list of the type of ringValue
+        append ringValue to ringValues
+        set resultValue to the cad constrained mesh of rings ringValues
+        free ringValues
+        free ringValue
+        return resultValue
+
+function check constrained ownership {boolean:passed}:
+    execute:
+        if the inverse of passed:
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+loop repetition from 0 to 64:
+    set built to an owned constrained fixture mesh
+    check constrained ownership (the valid of built)
+    set firstView to the value of built
+    set secondView to firstView
+    free cad constrained mesh result built
+    set inserted to the cad constrained insertion of point (a cad vector2 with x 2.0 and y 1.5) into (the address of firstView)
+    check constrained ownership ((the valid of inserted) and (the inserted of inserted))
+    set triangles to the cad constrained triangles of secondView
+    check constrained ownership ((the length of triangles) = 4)
+    free triangles
+    free cad constrained mesh firstView
+    set triangles to the cad constrained triangles of secondView
+    check constrained ownership ((the length of triangles) = 4)
+    free triangles
+    free cad constrained mesh secondView
+print "constrained mesh storage survives returns copies mutation and release" as a line

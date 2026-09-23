@@ -1,0 +1,479 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/band.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Variable full widths are specified at each source segment's two endpoints.
+# Results retain immutable edge/station lists; inputs are borrowed.
+import lib/cadkernel/arrangement2.dl
+import lib/cadkernel/intersect2.dl
+
+class:
+    patterns:
+        [a|] cad band edge2
+    members:
+        start as a cad vector2
+        end as a cad vector2
+        sourceSegment as an integer
+        sourceStart as a 64 bit floating-point number
+        sourceEnd as a 64 bit floating-point number
+        segmentStart as a 64 bit floating-point number
+        segmentEnd as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad band station piece2
+    members:
+        start as a cad vector2
+        end as a cad vector2
+        sourceSegment as an integer
+        sourceStart as a 64 bit floating-point number
+        sourceEnd as a 64 bit floating-point number
+        segmentStart as a 64 bit floating-point number
+        segmentEnd as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad band boundary2
+    members:
+        edges
+        stationPieces
+        sourceLength as a 64 bit floating-point number
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the edges of @intrinsic("lifecycle value"))
+                free (the stationPieces of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+class:
+    patterns:
+        [a|] cad band sampled source2
+    members:
+        edges
+        pieces
+        length as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad band rail2
+    members:
+        points
+        tags
+        sourceSegment as an integer
+class:
+    patterns:
+        [a|] cad band rails2
+    members:
+        left
+        right
+class:
+    patterns:
+        [a|] cad band vector2 result
+    members:
+        valid as a boolean
+        value as a cad vector2
+
+local function cad band2 owning {a pointer to a list:edges} and {a pointer to a list:stationPieces} with length {a 64 bit floating-point number:sourceLength}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad band boundary2, edges, stationPieces, sourceLength, owner)
+function an empty cad band boundary2:
+    execute:
+        return cad band2 owning (an empty list of a cad band edge2) and (an empty list of a cad band station piece2) with length 0.0
+local function cad band2 copied {a pointer to a list:items}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in items)
+        loop index from 0 to the length of items:
+            append (the item at index in items) to result
+        return result
+function the cad clone of {cad band boundary2:boundary}:
+    execute:
+        return cad band2 owning (cad band2 copied boundary's edges) and (cad band2 copied boundary's stationPieces) with length boundary's sourceLength
+function the cad clone of {cad band edge2:edge}:
+    execute:
+        return edge
+function the cad clone of {cad band station piece2:piece}:
+    execute:
+        return piece
+local function cad band2 records {left} equal {right}:
+    execute:
+        return (left's start's x = right's start's x) and ((left's start's y = right's start's y) and ((left's end's x = right's end's x) and ((left's end's y = right's end's y) and ((left's sourceSegment = right's sourceSegment) and ((left's sourceStart = right's sourceStart) and ((left's sourceEnd = right's sourceEnd) and ((left's segmentStart = right's segmentStart) and (left's segmentEnd = right's segmentEnd))))))))
+function {cad band edge2:left} = {cad band edge2:right}:
+    execute:
+        return cad band2 records left equal right
+function {cad band station piece2:left} = {cad band station piece2:right}:
+    execute:
+        return cad band2 records left equal right
+local function cad band2 lists {a pointer to a list:left} equal {a pointer to a list:right}:
+    execute:
+        if (the length of left) != (the length of right):
+            return false
+        loop index from 0 to the length of left:
+            if ((the item at index in left) = (the item at index in right)) = false:
+                return false
+        return true
+function {cad band boundary2:left} = {cad band boundary2:right}:
+    execute:
+        return (left's sourceLength = right's sourceLength) and ((cad band2 lists left's edges equal right's edges) and (cad band2 lists left's stationPieces equal right's stationPieces))
+local function cad band2 hypot of {cad vector2:value}:
+    execute:
+        return @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, value's x, value's y)
+local function cad band2 segment [count] of {cad polyline2:source}:
+    execute:
+        set count to the length of source's vertices
+        if source's closed:
+            return count
+        return the maximum of (count - 1) and 0
+local function cad band2 sampled {cad polyline2:source} within {a 64 bit floating-point number:maxAngle}:
+    execute:
+        set count to the length of source's vertices
+        set edges to an empty list of a cad band station piece2
+        set pieces to an empty list of the type of (an empty list of an integer)
+        set sourceDistance to 0.0
+        loop index from 0 to (cad band2 segment count of source):
+            set tags to an empty list of an integer
+            set start to (the item at index in source's vertices)'s position
+            set end to (the item at (the remainder of (index + 1) divided by count) in source's vertices)'s position
+            set arc to the cad segment arc of source at index index
+            set length to 0.0
+            set samples to an empty list of a cad vector2
+            if arc's valid:
+                free samples
+                set samples to the cad angular samples of arc's value within maxAngle
+                set length to arc's value's radius * (the absolute value of arc's value's sweep)
+            else:
+                append start to samples
+                append end to samples
+                set length to cad band2 hypot of (the cad difference of end and start)
+            set pieceCount to the maximum of ((the length of samples) - 1) and 0
+            loop piece from 0 to pieceCount:
+                set localStart to (length * (piece as a 64 bit floating-point number)) / (pieceCount as a 64 bit floating-point number)
+                set localEnd to (length * ((piece + 1) as a 64 bit floating-point number)) / (pieceCount as a 64 bit floating-point number)
+                append (the length of edges) to tags
+                append (@intrinsic("construct", a cad band station piece2, the item at piece in samples, the item at (piece + 1) in samples, index, sourceDistance + localStart, sourceDistance + localEnd, localStart, localEnd)) to edges
+            append tags to pieces
+            free samples
+            set sourceDistance to sourceDistance + length
+        return @intrinsic("construct", a cad band sampled source2, edges, pieces, sourceDistance)
+local function cad band2 sign of {a 64 bit floating-point number:value}:
+    execute:
+        if value != value:
+            return value
+        return @intrinsic("call", "libc", "copysign", a 64 bit floating-point number, 1.0, value)
+local function cad band2 tangent of {cad bulge arc2 result:arc} from {cad vector2:start} to {cad vector2:end} at {cad vector2:point}:
+    execute:
+        if arc's valid:
+            set sign to cad band2 sign of arc's value's sweep
+            return a cad vector2 with x ((-(point's y - arc's value's centre's y)) * sign) and y ((point's x - arc's value's centre's x) * sign)
+        return the cad difference of end and start
+local function append cad band2 rail point {cad vector2:point} at station {a 64 bit floating-point number:station} on {cad polyline2:source} segment {integer:segment} with widths {a 64 bit floating-point number array of 2 items:widths} and [length] {a 64 bit floating-point number:segmentLength} to {a pointer to a list:left} and {a pointer to a list:right}:
+    execute:
+        set count to the length of source's vertices
+        set start to (the item at segment in source's vertices)'s position
+        set end to (the item at (the remainder of (segment + 1) divided by count) in source's vertices)'s position
+        set tangent to cad band2 tangent of (the cad segment arc of source at index segment) from start to end at point
+        set length to cad band2 hypot of tangent
+        if length <= 1e-12:
+            return nothing
+        set t to 0.0
+        if segmentLength > 1e-12:
+            set t to station / segmentLength
+        set first to the item at 0 in widths
+        set last to the item at 1 in widths
+        set halfWidth to (first + ((last - first) * t)) * 0.5
+        set normal to a cad vector2 with x ((-tangent's y) / length) and y (tangent's x / length)
+        append (the cad sum of point and (normal scaled by halfWidth)) to left
+        append (the cad difference of point and (normal scaled by halfWidth)) to right
+local function cad band2 rails on {cad polyline2:source} with {a pointer to a list:widths} from {cad band sampled source2:sampled}:
+    execute:
+        set left to an empty list of a cad band rail2
+        set right to an empty list of a cad band rail2
+        loop index from 0 to the length of sampled's pieces:
+            set tags to the item at index in sampled's pieces
+            if (the length of tags) > 0:
+                set length to (the item at (the last item of tags) in sampled's edges)'s segmentEnd
+                set leftPoints to an empty list of a cad vector2
+                set rightPoints to an empty list of a cad vector2
+                set width to the item at index in widths
+                loop piece from 0 to the length of tags:
+                    set edge to the item at (the item at piece in tags) in sampled's edges
+                    if piece = 0:
+                        append cad band2 rail point edge's start at station edge's segmentStart on source segment index with widths width and length length to leftPoints and rightPoints
+                    append cad band2 rail point edge's end at station edge's segmentEnd on source segment index with widths width and length length to leftPoints and rightPoints
+                if (the length of leftPoints) >= 2:
+                    # Both rails borrow their immutable tag list until cleanup.
+                    append (@intrinsic("construct", a cad band rail2, leftPoints, tags, index)) to left
+                    append (@intrinsic("construct", a cad band rail2, rightPoints, tags, index)) to right
+                else:
+                    free leftPoints
+                    free rightPoints
+        return @intrinsic("construct", a cad band rails2, left, right)
+
+local function cad band2 rail [tangent] of {cad polyline2:source} with widths {a 64 bit floating-point number array of 2 items:widths} at segment {integer:segment} ending {boolean:atEnd} on side {a 64 bit floating-point number:side}:
+    execute:
+        set count to the length of source's vertices
+        set start to (the item at segment in source's vertices)'s position
+        set end to (the item at (the remainder of (segment + 1) divided by count) in source's vertices)'s position
+        set point to start
+        if atEnd:
+            set point to end
+        set arc to the cad segment arc of source at index segment
+        set tangent to cad band2 tangent of arc from start to end at point
+        set tangentLength to cad band2 hypot of tangent
+        if tangentLength <= 1e-12:
+            return a new cad band vector2 result
+        set unit to tangent cad divided by tangentLength
+        set normal to the cad perpendicular of unit
+        set length to 0.0
+        set curvature to 0.0
+        if arc's valid:
+            set length to arc's value's radius * (the absolute value of arc's value's sweep)
+            set curvature to (cad band2 sign of arc's value's sweep) / arc's value's radius
+        else:
+            set length to cad band2 hypot of (the cad difference of end and start)
+        if length <= 1e-12:
+            return a new cad band vector2 result
+        set halfWidth to (the item at (atEnd as an integer) in widths) * 0.5
+        set gradient to (((the item at 1 in widths) - (the item at 0 in widths)) * 0.5) / length
+        set along to 1.0 - ((side * halfWidth) * curvature)
+        set result to the cad sum of (unit scaled by along) and (normal scaled by (side * gradient))
+        return @intrinsic("construct", a cad band vector2 result, true, result)
+local function cad band2 intersection on {cad polyline2:source} with widths {a pointer to a list:widths} between {cad band rail2:previous} and {cad band rail2:next} on side {a 64 bit floating-point number:side}:
+    execute:
+        set d to cad band2 rail tangent of source with widths (the item at previous's sourceSegment in widths) at segment previous's sourceSegment ending true on side side
+        set e to cad band2 rail tangent of source with widths (the item at next's sourceSegment in widths) at segment next's sourceSegment ending false on side side
+        if (d's valid = false) or (e's valid = false):
+            return a new cad band vector2 result
+        if ((the length of previous's points) = 0) or ((the length of next's points) = 0):
+            return a new cad band vector2 result
+        set p to the last item of previous's points
+        set q to the item at 0 in next's points
+        set crossing to cad line intersection from p along d's value with q along e's value
+        if crossing's valid = false:
+            return a new cad band vector2 result
+        set point to the cad sum of p and (d's value scaled by crossing's value's first)
+        return @intrinsic("construct", a cad band vector2 result, true, point)
+local function join cad band2 {a pointer to a list:rails} on {cad polyline2:source} with widths {a pointer to a list:widths} on side {a 64 bit floating-point number:side}:
+    execute:
+        set railCount to the length of rails
+        set segmentCount to cad band2 segment count of source
+        set joinCount to the maximum of (railCount - 1) and 0
+        if source's closed:
+            set joinCount to railCount
+        loop index from 0 to joinCount:
+            set next to the remainder of (index + 1) divided by railCount
+            set previousRail to the item at index in rails
+            set nextRail to the item at next in rails
+            set sourceSegment to previousRail's sourceSegment
+            set nextSource to nextRail's sourceSegment
+            if nextSource = (the remainder of (sourceSegment + 1) divided by segmentCount):
+                set width to the item at 1 in (the item at sourceSegment in widths)
+                set nextWidth to the item at 0 in (the item at nextSource in widths)
+                set limit to 1e-9 * (the maximum of (the maximum of width and nextWidth) and 1.0)
+                if ((the absolute value of (width - nextWidth)) > limit) = false:
+                    set corner to cad band2 intersection on source with widths widths between previousRail and nextRail on side side
+                    if corner's valid:
+                        replace item at index ((the length of previousRail's points) - 1) in previousRail's points with corner's value
+                        replace item at index 0 in nextRail's points with corner's value
+local function cad band2 chain of {a pointer to a list:rails} closed {boolean:closed} reversed {boolean:reverse}:
+    execute:
+        set count to the length of rails
+        set edges to an empty list of a cad tagged line2
+        loop position from 0 to count:
+            set index to position
+            if reverse:
+                set index to (count - 1) - position
+            set rail to the item at index in rails
+            set tagCount to the length of rail's tags
+            loop cursor from 0 to tagCount:
+                set edge to cursor
+                if reverse:
+                    set edge to (tagCount - 1) - cursor
+                set start to the item at edge in rail's points
+                set end to the item at (edge + 1) in rail's points
+                if reverse:
+                    set start to the item at (edge + 1) in rail's points
+                    set end to the item at edge in rail's points
+                set tag to (the item at edge in rail's tags) as a 64 bit unsigned integer
+                append (a cad tagged line2 from (a cad line2 from start to end) with tag tag) to edges
+            if ((position + 1) < count) or closed:
+                set nextIndex to the remainder of (position + 1) divided by count
+                if reverse:
+                    set nextIndex to (count - 1) - nextIndex
+                set next to the item at nextIndex in rails
+                set start to the last item of rail's points
+                set end to the item at 0 in next's points
+                set tag to (the last item of rail's tags) as a 64 bit unsigned integer
+                if reverse:
+                    set start to the item at 0 in rail's points
+                    set end to the last item of next's points
+                    set tag to (the item at 0 in rail's tags) as a 64 bit unsigned integer
+                append (a cad tagged line2 from (a cad line2 from start to end) with tag tag) to edges
+        return edges
+
+# Exact endpoint identities normalize both zero signs, as the source bit key
+# does. Interning the two coordinate words allows the pair index to also store
+# unordered edges without truncating either coordinate's representation.
+local function cad band2 coordinate bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return 0 as a 64 bit integer
+        return the value at ((the address of value) as a pointer to a 64 bit integer)
+local function cad band2 identity of {cad vector2:point} in {cad pair index:table} with points {a pointer to a list:points}:
+    execute:
+        set x to cad band2 coordinate bits of point's x
+        set y to cad band2 coordinate bits of point's y
+        set index to the cad pair value for key x and y in table
+        if index < 0:
+            set index to the length of points
+            append point to points
+            put cad pair value index for key x and y in table
+        return index
+local function cad band2 [cleaned] {a pointer to a list:edges} around {cad vector2:origin} at scale {a 64 bit floating-point number:scale}:
+    execute:
+        set localEdges to an empty list of a cad tagged line2
+        loop index from 0 to the length of edges:
+            set edge to the item at index in edges
+            set start to (the cad difference of edge's line's start and origin) cad divided by scale
+            set end to (the cad difference of edge's line's end and origin) cad divided by scale
+            append (a cad tagged line2 from (a cad line2 from start to end) with tag edge's tag) to localEdges
+        set tolerance to a cad tolerance of 1e-8
+        set faces to the cad bounded face edges of localEdges within tolerance
+        free localEdges
+        set count to 0
+        loop index from 0 to the length of faces's rings:
+            set length to the length of (the item at index in faces's rings)
+            if length > (268435456 - count):
+                @intrinsic("call", "libc", "abort", nothing)
+            set count to count + length
+        set identities to a cad pair index with room for (count * 2) entries
+        set edgeIndex to a cad pair index with room for count entries
+        set points to an empty list of a cad vector2
+        set counted to an empty list of a cad tagged line2
+        set counts to an empty list of an integer
+        loop ringIndex from 0 to the length of faces's rings:
+            set ring to the item at ringIndex in faces's rings
+            loop index from 0 to the length of ring:
+                set edge to the item at index in ring
+                set a to cad band2 identity of edge's line's start in identities with points points
+                set b to cad band2 identity of edge's line's end in identities with points points
+                set low to (the minimum of a and b) as a 64 bit integer
+                set high to (the maximum of a and b) as a 64 bit integer
+                set found to the cad pair value for key low and high in edgeIndex
+                if found < 0:
+                    set found to the length of counted
+                    append edge to counted
+                    append 0 to counts
+                    put cad pair value found for key low and high in edgeIndex
+                replace item at index found in counts with ((the item at found in counts) + 1)
+        set outside to an empty list of a cad tagged line2
+        loop index from 0 to the length of counted:
+            if (the item at index in counts) = 1:
+                append (the item at index in counted) to outside
+        free points
+        free counted
+        free counts
+        set cleaned to the cad bounded face edges of outside within tolerance
+        free outside
+        set result to an empty list of a cad tagged line2
+        loop ringIndex from 0 to the length of cleaned's rings:
+            set ring to the item at ringIndex in cleaned's rings
+            loop index from 0 to the length of ring:
+                set edge to the item at index in ring
+                set start to the cad sum of origin and (edge's line's start scaled by scale)
+                set end to the cad sum of origin and (edge's line's end scaled by scale)
+                append (a cad tagged line2 from (a cad line2 from start to end) with tag edge's tag) to result
+        return result
+
+local function cad band2 [parameter] of {cad vector2:point} on {cad band station piece2:segment}:
+    execute:
+        set along to the cad difference of segment's end and segment's start
+        set squared to the cad squared length of along
+        if squared <= 2.220446049250313e-16:
+            return 0.0
+        set parameter to (the cad dot of (the cad difference of point and segment's start) and along) / squared
+        if parameter < 0.0:
+            return 0.0
+        if parameter > 1.0:
+            return 1.0
+        return parameter
+local function cad band2 boundary edge from {cad tagged line2:tagged} on {cad band station piece2:source}:
+    execute:
+        set a to cad band2 parameter of tagged's line's start on source
+        set b to cad band2 parameter of tagged's line's end on source
+        set sourceSpan to source's sourceEnd - source's sourceStart
+        set segmentSpan to source's segmentEnd - source's segmentStart
+        return @intrinsic("construct", a cad band edge2, tagged's line's start, tagged's line's end, source's sourceSegment, source's sourceStart + (sourceSpan * a), source's sourceStart + (sourceSpan * b), source's segmentStart + (segmentSpan * a), source's segmentStart + (segmentSpan * b))
+local function free cad band2 [rails] {a pointer to a list:rails}:
+    execute:
+        loop index from 0 to the length of rails:
+            free ((the item at index in rails)'s points)
+        free rails
+local function free cad band2 [pieces] {a pointer to a list:pieces}:
+    execute:
+        loop index from 0 to the length of pieces:
+            free (the item at index in pieces)
+        free pieces
+local function cad band2 valid widths {a 64 bit floating-point number array of 2 items:width}:
+    execute:
+        loop index from 0 to 2:
+            set value to the item at index in width
+            if ((value >= 0.0) and (value <= 1.7976931348623157e308)) = false:
+                return false
+        return true
+function the cad band boundary of {cad polyline2:source} with widths {a pointer to a list:widths} within angle {a 64 bit floating-point number:maxAngle}:
+    execute:
+        set count to the length of source's vertices
+        set segmentCount to cad band2 segment count of source
+        if (count < 2) or ((the length of widths) != segmentCount):
+            return an empty cad band boundary2
+        set scale to 0.0
+        loop index from 0 to the length of widths:
+            set width to the item at index in widths
+            if (cad band2 valid widths width) = false:
+                return an empty cad band boundary2
+            set scale to the maximum of scale and (the item at 0 in width)
+            set scale to the maximum of scale and (the item at 1 in width)
+        if scale <= 1e-12:
+            return an empty cad band boundary2
+        set sampled to cad band2 sampled source within maxAngle
+        set rails to cad band2 rails on source with widths from sampled
+        if (the length of rails's left) = 0:
+            free cad band2 rails rails's left
+            free cad band2 rails rails's right
+            free cad band2 pieces sampled's pieces
+            free sampled's edges
+            return an empty cad band boundary2
+        join cad band2 rails's left on source with widths widths on side 1.0
+        join cad band2 rails's right on source with widths widths on side -1.0
+        set raw to cad band2 chain of rails's left closed source's closed reversed false
+        set right to cad band2 chain of rails's right closed source's closed reversed true
+        loop index from 0 to the length of right:
+            append (the item at index in right) to raw
+        free right
+        if source's closed = false:
+            set lastLeft to the last item of rails's left
+            set lastRight to the last item of rails's right
+            set end to a cad line2 from (the last item of lastLeft's points) to (the last item of lastRight's points)
+            append (a cad tagged line2 from end with tag ((the last item of lastLeft's tags) as a 64 bit unsigned integer)) to raw
+            set firstLeft to the item at 0 in rails's left
+            set firstRight to the item at 0 in rails's right
+            set start to a cad line2 from (the item at 0 in firstRight's points) to (the item at 0 in firstLeft's points)
+            append (a cad tagged line2 from start with tag ((the item at 0 in firstLeft's tags) as a 64 bit unsigned integer)) to raw
+        free cad band2 rails rails's left
+        free cad band2 rails rails's right
+        free cad band2 pieces sampled's pieces
+        set origin to (the item at 0 in source's vertices)'s position
+        set cleaned to cad band2 cleaned raw around origin at scale scale
+        free raw
+        set edges to an empty list of a cad band edge2
+        loop index from 0 to the length of cleaned:
+            set tagged to the item at index in cleaned
+            if tagged's tag < ((the length of sampled's edges) as a 64 bit unsigned integer):
+                set sourceEdge to the item at (tagged's tag as an integer) in sampled's edges
+                append (cad band2 boundary edge from tagged on sourceEdge) to edges
+        free cleaned
+        return cad band2 owning edges and sampled's edges with length sampled's length

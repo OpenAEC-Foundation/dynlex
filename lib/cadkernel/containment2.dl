@@ -1,0 +1,119 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of src/geom2d/containment.rs at cadkernel revision
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Curves and boundary lists are borrowed. Results contain only scalar values.
+# Temporary crossing lists are released on every return path.
+import lib/cadkernel/cross2.dl
+
+class:
+    patterns:
+        [a|] cad closest2
+    members:
+        t as a 64 bit floating-point number
+        point as a cad vector2
+        distance as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad nearest2 result
+    members:
+        valid as a boolean
+        index as an integer
+        value as a cad closest2
+
+class:
+    patterns:
+        [a|] cad containment2 cast result
+    members:
+        valid as a boolean
+        value as a boolean
+
+function {cad closest2:left} = {cad closest2:right}:
+    execute:
+        return ((left's t = right's t) and (left's point's x = right's point's x)) and ((left's point's y = right's point's y) and (left's distance = right's distance))
+
+local function the cad closest2 candidate on {cad curve2:shape} at {a 64 bit floating-point number:parameter} to {cad vector2:target}:
+    execute:
+        set point to the cad point on shape at parameter
+        return @intrinsic("construct", a cad closest2, parameter, point, the cad distance from point to target)
+
+function the cad closest point on {cad curve2:shape} to {cad vector2:target}:
+    execute:
+        set parameter to the cad parameter on shape nearest target
+        set extent to the cad extent of shape
+        if extent = the cad infinite extent2:
+            return the cad closest2 candidate on shape at parameter to target
+        if extent = the cad forward extent2:
+            if (parameter != parameter) or (parameter < 0.0):
+                set parameter to 0.0
+            return the cad closest2 candidate on shape at parameter to target
+        clamp parameter between 0.0 and 1.0
+        set best to the cad closest2 candidate on shape at parameter to target
+        set start to the cad closest2 candidate on shape at 0.0 to target
+        if start's distance < best's distance:
+            set best to start
+        set finish to the cad closest2 candidate on shape at 1.0 to target
+        if finish's distance < best's distance:
+            set best to finish
+        return best
+
+function the cad distance to {cad curve2:shape} from {cad vector2:point}:
+    execute:
+        return (the cad closest point on shape to point)'s distance
+
+function the cad nearest of {a pointer to a list:curves} to {cad vector2:point}:
+    execute:
+        set result to a new cad nearest2 result
+        loop index from 0 to the length of curves:
+            set closest to the cad closest point on (the item at index in curves) to point
+            if (result's valid = false) or (closest's distance < result's value's distance):
+                set result's valid to true
+                set result's index to index
+                set result's value to closest
+        return result
+
+local function the cad containment2 cast through {a pointer to a list:boundary} from {cad vector2:point} along {cad vector2:direction} within {cad tolerance:tolerance}:
+    execute:
+        set ray to the cad curve2 of (a cad ray2 from point along direction)
+        set hits to an empty list of a cad vector2
+        loop index from 0 to the length of boundary:
+            set curve to the item at index in boundary
+            set crossings to the cad crossings of ray and curve within tolerance
+            loop crossingIndex from 0 to the length of crossings:
+                set crossing to the item at crossingIndex in crossings
+                set atEnd to (crossing's tB <= 1e-6) or (crossing's tB >= (1.0 - 1e-6))
+                if atEnd and ((curve is cad closed) = false):
+                    free crossings
+                    free hits
+                    return a new cad containment2 cast result
+                append crossing's point to hits
+            free crossings
+        set unique to an empty list of a cad vector2
+        loop index from 0 to the length of hits:
+            set hit to the item at index in hits
+            loop keptIndex from 0 to the length of unique:
+                if (the cad distance from (the item at keptIndex in unique) to hit) <= tolerance's linear:
+                    free hits
+                    free unique
+                    return a new cad containment2 cast result
+            append hit to unique
+        set inside to (the remainder of (the length of unique) divided by 2) = 1
+        free hits
+        free unique
+        return @intrinsic("construct", a cad containment2 cast result, true, inside)
+
+function cad boundary {a pointer to a list:boundary} contains {cad vector2:point} within {cad tolerance:tolerance}:
+    execute:
+        if (the length of boundary) = 0:
+            return false
+        loop index from 0 to the length of boundary:
+            if (the cad distance to (the item at index in boundary) from point) <= tolerance's linear:
+                return true
+        set directions to [[1.0,0.0],[0.52347,0.85204],[-0.7071067811865475,0.7071067811865475],[0.31737,-0.94831]]
+        loop index from 0 to 4:
+            set components to the item at index in directions
+            set direction to a cad vector2 with x (the item at 0 in components) and y (the item at 1 in components)
+            set cast to the cad containment2 cast through boundary from point along direction within tolerance
+            if cast's valid:
+                return cast's value
+        return false

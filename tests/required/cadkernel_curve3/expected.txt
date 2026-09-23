@@ -1,0 +1,12 @@
+cadkernel curve3: Bezier endpoints
+cadkernel curve3: degree one
+cadkernel curve3: Bernstein comparison
+cadkernel curve3: initial tangent
+cadkernel curve3: sample endpoints
+cadkernel curve3: circle curvature
+cadkernel curve3: spatial curvature
+cadkernel curve3: straight curvature
+cadkernel curve3: survey curvature
+cadkernel curve3: angle bisector
+cadkernel curve3: antiparallel orientation
+cadkernel curve3: invalid and huge rays

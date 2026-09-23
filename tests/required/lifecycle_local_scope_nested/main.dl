@@ -1,0 +1,39 @@
+import lib/std.dl
+
+flex section with scope scratch {scratch}:
+    replacement:
+        set scratch to 0
+        execute the body
+
+class:
+    patterns:
+        [a|] nested scope probe
+    members:
+        marker as an integer
+    retain:
+        with scope scratch total:
+            loop outer from 0 to 2:
+                loop cursor from 0 to 3:
+                    set total to total + cursor
+            if total != 6:
+                @intrinsic("call", "libc", "exit", nothing, 85)
+    release:
+        with scope scratch total:
+            loop outer from 0 to 2:
+                loop cursor from 0 to 3:
+                    set total to total + cursor
+            if total != 6:
+                @intrinsic("call", "libc", "exit", nothing, 86)
+
+function exercise nested lifetime:
+    execute:
+        set held to @intrinsic("construct", a nested scope probe, 0)
+        ignore held
+
+set total to 90
+set outer to 91
+set cursor to 92
+exercise nested lifetime
+print total as a line
+print outer as a line
+print cursor as a line

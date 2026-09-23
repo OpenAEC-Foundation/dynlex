@@ -1,0 +1,392 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native port of src/brep/intersect.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Exact analytic intersections only; Unknown never means disjoint.
+# kind: 0 None, 1 Curves, 2 Points, 3 Coincident, 4 Unknown.
+# Result list fields are immutable borrowed views. Copies retain their owner;
+# clone owns independent lists. Inputs are borrowed and remain unchanged.
+import lib/cadkernel/brep_geometry.dl
+
+class:
+    patterns:
+        [a|] cad surface meeting
+    members:
+        kind as an integer
+        curves
+        points
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the curves of @intrinsic("lifecycle value"))
+                free (the points of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function cad intersect empty curves:
+    execute:
+        return an empty list of the type of (the cad edge curve3 of (a cad line3 with origin (the cad zero vector3) and direction (the cad z axis)))
+local function cad intersect owned {integer:kind} curves {a pointer to a list:curves} points {a pointer to a list:points}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad surface meeting, kind, curves, points, owner)
+local function cad intersect empty {integer:kind}:
+    execute:
+        return cad intersect owned kind curves (cad intersect empty curves) points (an empty list of a cad vector3)
+function no cad surface meeting:
+    execute:
+        return cad intersect empty 0
+function an unknown cad surface meeting:
+    execute:
+        return cad intersect empty 4
+function a coincident cad surface meeting:
+    execute:
+        return cad intersect empty 3
+function free cad meeting {cad surface meeting:value}:
+    replacement:
+        set value to a new (the type of value)
+function the cad clone of {cad surface meeting:value}:
+    execute:
+        set curves to cad intersect empty curves
+        set points to an empty list of a cad vector3
+        if value's kind = 1:
+            loop index from 0 to the length of value's curves:
+                append (the cad clone of (the item at index in value's curves)) to curves
+        if value's kind = 2:
+            loop index from 0 to the length of value's points:
+                append (the item at index in value's points) to points
+        return cad intersect owned value's kind curves curves points points
+function {cad surface meeting:one} = {cad surface meeting:other}:
+    execute:
+        if one's kind != other's kind:
+            return false
+        if one's kind = 1:
+            if (the length of one's curves) != (the length of other's curves):
+                return false
+            loop index from 0 to the length of one's curves:
+                if ((the item at index in one's curves) = (the item at index in other's curves)) = false:
+                    return false
+        if one's kind = 2:
+            if (the length of one's points) != (the length of other's points):
+                return false
+            loop index from 0 to the length of one's points:
+                set left to the item at index in one's points
+                set right to the item at index in other's points
+                if ((left's x = right's x) and ((left's y = right's y) and (left's z = right's z))) = false:
+                    return false
+        return true
+local function cad intersect point {cad vector3:point}:
+    execute:
+        return cad intersect owned 2 curves (cad intersect empty curves) points (a list containing point)
+local function cad intersect curve {cad edge curve3:curve}:
+    execute:
+        return cad intersect owned 1 curves (a list containing curve) points (an empty list of a cad vector3)
+local function cad intersect circle at {cad vector3:centre} normal {cad vector3:normal} radius {a 64 bit floating-point number:radius} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if radius <= tolerance:
+            return cad intersect point centre
+        set seed to the cad y axis
+        if (the absolute value of normal's x) < 0.9:
+            set seed to the cad x axis
+        set frame to the cad orthonormal plane with origin centre, x axis seed and normal normal
+        if frame's valid = false:
+            return an unknown cad surface meeting
+        return cad intersect curve (the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius radius))
+local function cad intersect axis from {cad vector3:origin} along {cad vector3:axis} with {cad plane:plane}:
+    execute:
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set slope to the cad dot of axis and normal's value
+        if slope = 0.0:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set offset to the cad distance from origin to plane
+        if offset's valid = false:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        return @intrinsic("construct", a cad normalization3, true, the cad difference of origin and (axis scaled by (offset's value / slope)))
+local function cad intersect tangent {a 64 bit floating-point number:angle}:
+    execute:
+        return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
+
+local function cad intersect planes {cad plane:one} and {cad plane:other} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set first to the cad normal of one
+        set second to the cad normal of other
+        if (first's valid and second's valid) = false:
+            return an unknown cad surface meeting
+        set along to the cad cross of first's value and second's value
+        if (the cad length of along) <= tolerance:
+            if cad other contains one's origin within tolerance:
+                return a coincident cad surface meeting
+            return no cad surface meeting
+        set oneOffset to the cad dot of first's value and one's origin
+        set otherOffset to the cad dot of second's value and other's origin
+        set cosine to the cad dot of first's value and second's value
+        set determinant to 1.0 - cosine * cosine
+        set scaleFirst to (oneOffset - otherOffset * cosine) / determinant
+        set scaleSecond to (otherOffset - oneOffset * cosine) / determinant
+        set origin to the cad sum of (first's value scaled by scaleFirst) and (second's value scaled by scaleSecond)
+        set unit to the cad normalization of along
+        if unit's valid:
+            set along to unit's value
+        return cad intersect curve (the cad edge curve3 of (a cad line3 with origin origin and direction along))
+
+local function cad intersect plane {cad plane:plane} sphere {cad sphere:sphere} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set offset to the cad distance from sphere's frame's origin to plane
+        if offset's valid = false:
+            return an unknown cad surface meeting
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return an unknown cad surface meeting
+        set centre to the cad difference of sphere's frame's origin and (normal's value scaled by offset's value)
+        set gap to (the absolute value of offset's value) - sphere's radius
+        if gap > tolerance:
+            return no cad surface meeting
+        if (the absolute value of gap) <= tolerance:
+            return cad intersect point centre
+        set radius to the square root of (the maximum of (sphere's radius * sphere's radius - offset's value * offset's value) and 0.0)
+        return cad intersect circle at centre normal normal's value radius radius within tolerance
+
+local function cad intersect spheres {cad sphere:one} and {cad sphere:other} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set from to one's frame's origin
+        set apart to the cad difference of other's frame's origin and from
+        set distance to the cad length of apart
+        if distance <= tolerance:
+            if (the absolute value of (one's radius - other's radius)) <= tolerance:
+                return a coincident cad surface meeting
+            return no cad surface meeting
+        set outer to one's radius + other's radius
+        set inner to the absolute value of (one's radius - other's radius)
+        if ((distance - outer) > tolerance) or ((inner - distance) > tolerance):
+            return no cad surface meeting
+        set axis to the cad normalization of apart
+        if axis's valid = false:
+            return an unknown cad surface meeting
+        set along to ((distance * distance + one's radius * one's radius) - other's radius * other's radius) / (2.0 * distance)
+        set centre to the cad sum of from and (axis's value scaled by along)
+        set squared to one's radius * one's radius - along * along
+        if squared <= tolerance * tolerance:
+            return cad intersect point centre
+        return cad intersect circle at centre normal axis's value radius (the square root of squared) within tolerance
+
+local function cad intersect plane {cad plane:plane} cylinder {cad cylinder:cylinder} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set normal to the cad normal of plane
+        set axis to the cad normal of cylinder's base
+        if (normal's valid and axis's valid) = false:
+            return an unknown cad surface meeting
+        set cosine to the cad dot of normal's value and axis's value
+        if (the absolute value of cosine) <= tolerance:
+            set offset to the cad distance from cylinder's base's origin to plane
+            if offset's valid = false:
+                return an unknown cad surface meeting
+            set gap to (the absolute value of offset's value) - cylinder's radius
+            if gap > tolerance:
+                return no cad surface meeting
+            set onPlane to the cad difference of cylinder's base's origin and (normal's value scaled by offset's value)
+            if (the absolute value of gap) <= tolerance:
+                return cad intersect curve (the cad edge curve3 of (a cad line3 with origin onPlane and direction (axis's value)))
+            set half to the square root of (the maximum of (cylinder's radius * cylinder's radius - offset's value * offset's value) and 0.0)
+            set across to the cad normalization of (the cad cross of axis's value and normal's value)
+            if across's valid = false:
+                return an unknown cad surface meeting
+            set curves to cad intersect empty curves
+            append (the cad edge curve3 of (a cad line3 with origin (the cad sum of onPlane and (across's value scaled by half)) and direction (axis's value))) to curves
+            append (the cad edge curve3 of (a cad line3 with origin (the cad sum of onPlane and (across's value scaled by (the negative of half))) and direction (axis's value))) to curves
+            return cad intersect owned 1 curves curves points (an empty list of a cad vector3)
+        set centre to cad intersect axis from cylinder's base's origin along axis's value with plane
+        if centre's valid = false:
+            return an unknown cad surface meeting
+        if (the absolute value of ((the absolute value of cosine) - 1.0)) <= tolerance:
+            return cad intersect circle at centre's value normal axis's value radius cylinder's radius within tolerance
+        set minor to the cad normalization of (the cad cross of axis's value and normal's value)
+        if minor's valid = false:
+            return an unknown cad surface meeting
+        set major to the cad normalization of (the cad cross of normal's value and minor's value)
+        if major's valid = false:
+            return an unknown cad surface meeting
+        set frame to the cad orthonormal plane with origin centre's value, x axis major's value and normal normal's value
+        if frame's valid = false:
+            return an unknown cad surface meeting
+        return cad intersect curve (the cad edge curve3 of (a cad ellipse3 with plane (frame's value), major radius (cylinder's radius / (the absolute value of cosine)) and minor radius (cylinder's radius)))
+
+local function cad intersect plane {cad plane:plane} cone {cad cone:cone} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set normal to the cad normal of plane
+        set axis to the cad normal of cone's base
+        if (normal's valid and axis's valid) = false:
+            return an unknown cad surface meeting
+        set cosine to the cad dot of normal's value and axis's value
+        if (the absolute value of ((the absolute value of cosine) - 1.0)) <= tolerance:
+            set centre to cad intersect axis from cone's base's origin along axis's value with plane
+            if centre's valid = false:
+                return an unknown cad surface meeting
+            set height to the cad dot of (the cad difference of centre's value and cone's base's origin) and axis's value
+            set radius to cone's radius - height * (cad intersect tangent cone's halfAngle)
+            if (the absolute value of radius) <= tolerance:
+                return cad intersect point centre's value
+            if radius < 0.0:
+                return cad intersect circle at centre's value normal axis's value radius (the negative of radius) within tolerance
+            return cad intersect circle at centre's value normal axis's value radius radius within tolerance
+        return an unknown cad surface meeting
+
+local function cad intersect cylinders {cad cylinder:one} and {cad cylinder:other} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set first to the cad normal of one's base
+        set second to the cad normal of other's base
+        if (first's valid and second's valid) = false:
+            return an unknown cad surface meeting
+        if (the cad length of (the cad cross of first's value and second's value)) > tolerance:
+            return an unknown cad surface meeting
+        set between to the cad difference of other's base's origin and one's base's origin
+        set across to the cad difference of between and (first's value scaled by (the cad dot of between and first's value))
+        set distance to the cad length of across
+        if distance <= tolerance:
+            if (the absolute value of (one's radius - other's radius)) <= tolerance:
+                return a coincident cad surface meeting
+            return no cad surface meeting
+        set outer to one's radius + other's radius
+        set inner to the absolute value of (one's radius - other's radius)
+        if ((distance - outer) > tolerance) or ((inner - distance) > tolerance):
+            return no cad surface meeting
+        set towards to the cad normalization of across
+        if towards's valid = false:
+            return an unknown cad surface meeting
+        set along to ((distance * distance + one's radius * one's radius) - other's radius * other's radius) / (2.0 * distance)
+        set midpoint to the cad sum of one's base's origin and (towards's value scaled by along)
+        set squared to one's radius * one's radius - along * along
+        if squared <= tolerance * tolerance:
+            return cad intersect curve (the cad edge curve3 of (a cad line3 with origin midpoint and direction (first's value)))
+        set sideways to the cad normalization of (the cad cross of first's value and towards's value)
+        if sideways's valid = false:
+            return an unknown cad surface meeting
+        set half to the square root of squared
+        set curves to cad intersect empty curves
+        append (the cad edge curve3 of (a cad line3 with origin (the cad sum of midpoint and (sideways's value scaled by half)) and direction (first's value))) to curves
+        append (the cad edge curve3 of (a cad line3 with origin (the cad sum of midpoint and (sideways's value scaled by (the negative of half))) and direction (first's value))) to curves
+        return cad intersect owned 1 curves curves points (an empty list of a cad vector3)
+
+local function cad intersect sphere {cad sphere:sphere} cylinder {cad cylinder:cylinder} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set axis to the cad normal of cylinder's base
+        set sphereAxis to the cad normal of sphere's frame
+        if (axis's valid and sphereAxis's valid) = false:
+            return an unknown cad surface meeting
+        if (cad axis's value is parallel to sphereAxis's value within tolerance) = false:
+            return an unknown cad surface meeting
+        set offset to the cad difference of sphere's frame's origin and cylinder's base's origin
+        set along to the cad dot of offset and axis's value
+        if (the cad length of (the cad difference of offset and (axis's value scaled by along))) > tolerance:
+            return an unknown cad surface meeting
+        if (cylinder's radius - sphere's radius) > tolerance:
+            return no cad surface meeting
+        set squared to sphere's radius * sphere's radius - cylinder's radius * cylinder's radius
+        if squared < ((the negative of tolerance) * tolerance):
+            return no cad surface meeting
+        set rise to the square root of (the maximum of squared and 0.0)
+        set heights to an empty list of a 64 bit floating-point number
+        if rise <= tolerance:
+            append along to heights
+        else:
+            append (along - rise) to heights
+            append (along + rise) to heights
+        set curves to cad intersect empty curves
+        loop index from 0 to the length of heights:
+            set centre to the cad sum of cylinder's base's origin and (axis's value scaled by (the item at index in heights))
+            set circle to cad intersect circle at centre normal axis's value radius cylinder's radius within tolerance
+            if circle's kind != 1:
+                free curves
+                free heights
+                return an unknown cad surface meeting
+            loop itemIndex from 0 to the length of circle's curves:
+                append (the item at itemIndex in circle's curves) to curves
+        free heights
+        return cad intersect owned 1 curves curves points (an empty list of a cad vector3)
+
+local function cad intersect conics {cad plane:one} [radius] {a 64 bit floating-point number:radiusOne} slope {a 64 bit floating-point number:slopeOne} and {cad plane:other} [radius] {a 64 bit floating-point number:radiusOther} slope {a 64 bit floating-point number:otherSlope} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set axis to the cad normal of one
+        set otherAxis to the cad normal of other
+        if (axis's valid and otherAxis's valid) = false:
+            return an unknown cad surface meeting
+        if (the cad length of (the cad cross of axis's value and otherAxis's value)) > 1e-9:
+            return an unknown cad surface meeting
+        set delta to the cad difference of other's origin and one's origin
+        set shift to the cad dot of delta and axis's value
+        if (the cad length of (the cad difference of delta and (axis's value scaled by shift))) > tolerance:
+            return an unknown cad surface meeting
+        set slopeOther to otherSlope * (the cad dot of axis's value and otherAxis's value)
+        set otherAtOrigin to radiusOther + slopeOther * shift
+        set curves to cad intersect empty curves
+        loop index from 0 to 2:
+            set sign to 1.0
+            if index = 1:
+                set sign to -1.0
+            set denominator to slopeOne - sign * slopeOther
+            set numerator to radiusOne - sign * otherAtOrigin
+            if (the absolute value of denominator) <= 1e-12:
+                if (the absolute value of numerator) <= tolerance:
+                    free curves
+                    return a coincident cad surface meeting
+            else:
+                set height to numerator / denominator
+                set radius to the absolute value of (radiusOne - slopeOne * height)
+                if (radius <= tolerance) = false:
+                    set frame to one
+                    set frame's origin to the cad sum of one's origin and (axis's value scaled by height)
+                    set duplicate to false
+                    loop prior from 0 to the length of curves:
+                        set curve to the item at prior in curves
+                        if curve's kind = 1:
+                            if (the cad distance from curve's circle's plane's origin to frame's origin) <= tolerance:
+                                set duplicate to true
+                    if duplicate = false:
+                        append (the cad edge curve3 of (a cad circle3 with plane frame and radius radius)) to curves
+        if (the length of curves) = 0:
+            free curves
+            return no cad surface meeting
+        return cad intersect owned 1 curves curves points (an empty list of a cad vector3)
+
+function the cad [meeting] of {cad surface:one} and {cad surface:other} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        if one's kind = 0:
+            if other's kind = 0:
+                return cad intersect planes one's plane and other's plane within tolerance
+            if other's kind = 3:
+                return cad intersect plane one's plane sphere other's sphere within tolerance
+            if other's kind = 1:
+                return cad intersect plane one's plane cylinder other's cylinder within tolerance
+            if other's kind = 2:
+                return cad intersect plane one's plane cone other's cone within tolerance
+        if other's kind = 0:
+            if one's kind = 3:
+                return cad intersect plane other's plane sphere one's sphere within tolerance
+            if one's kind = 1:
+                return cad intersect plane other's plane cylinder one's cylinder within tolerance
+            if one's kind = 2:
+                return cad intersect plane other's plane cone one's cone within tolerance
+        if (one's kind = 3) and (other's kind = 3):
+            return cad intersect spheres one's sphere and other's sphere within tolerance
+        if (one's kind = 1) and (other's kind = 1):
+            return cad intersect cylinders one's cylinder and other's cylinder within tolerance
+        if (one's kind = 3) and (other's kind = 1):
+            return cad intersect sphere one's sphere cylinder other's cylinder within tolerance
+        if (one's kind = 1) and (other's kind = 3):
+            return cad intersect sphere other's sphere cylinder one's cylinder within tolerance
+        if (one's kind = 2) and (other's kind = 1):
+            return cad intersect conics one's cone's base radius one's cone's radius slope (cad intersect tangent one's cone's halfAngle) and other's cylinder's base radius other's cylinder's radius slope 0.0 within tolerance
+        if (one's kind = 1) and (other's kind = 2):
+            return cad intersect conics other's cone's base radius other's cone's radius slope (cad intersect tangent other's cone's halfAngle) and one's cylinder's base radius one's cylinder's radius slope 0.0 within tolerance
+        if (one's kind = 2) and (other's kind = 2):
+            return cad intersect conics one's cone's base radius one's cone's radius slope (cad intersect tangent one's cone's halfAngle) and other's cone's base radius other's cone's radius slope (cad intersect tangent other's cone's halfAngle) within tolerance
+        return an unknown cad surface meeting

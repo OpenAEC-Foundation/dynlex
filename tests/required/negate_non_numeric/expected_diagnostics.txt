@@ -1,0 +1,6 @@
+lib/std.dl:16-43: Error: Numeric unary operator 'negate' requires a number or numeric vector, got 'a sample direction'
+  note: while inferring intrinsic 'negate' in 'return @intrinsic("negate", value)' with arguments [a sample direction] -> a sample direction lib/std.dl:16-43
+  note: while inferring call 'return @intrinsic("negate", value)' with arguments [a sample direction] -> an unresolved value lib/std.dl:9-43
+  note: while inferring call 'ignore the negative of direction' with arguments [a sample direction] -> an unresolved value tests/required/negate_non_numeric/main.dl:8-33
+  note: while inferring call 'ignore the negative of direction' with arguments [an unresolved value] -> an unresolved value tests/required/negate_non_numeric/main.dl:1-33
+  note: while inferring call 'return @intrinsic("negate", value)' with arguments [an unresolved value] -> an unresolved value lib/std.dl:9-43

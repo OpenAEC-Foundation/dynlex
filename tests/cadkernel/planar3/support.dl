@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/planar3.dl
+
+function planar check {boolean:condition} named {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function planar v2 {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+
+function planar v3 {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+function planar point {cad vector3:actual} equals {cad vector3:expected}:
+    execute:
+        planar check (((the x of actual) = (the x of expected)) and (((the y of actual) = (the y of expected)) and ((the z of actual) = (the z of expected)))) named "exact planar point"
+
+function planar point {cad vector3:actual} is near {cad vector3:expected} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        planar check (((the absolute value of ((the x of actual) - (the x of expected))) < tolerance) and (((the absolute value of ((the y of actual) - (the y of expected))) < tolerance) and ((the absolute value of ((the z of actual) - (the z of expected))) < tolerance))) named "planar point tolerance"
+
+function the planar unit arc:
+    execute:
+        return the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 1.5707963267948966)
+
+function the planar upright frame:
+    execute:
+        set result to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (planar v3 0.0 -1.0 0.0)
+        planar check (the valid of result) named "upright constructor"
+        return the value of result
+
+function the planar tilted frame:
+    execute:
+        set result to the cad orthonormal plane with origin (planar v3 3.0 4.0 5.0), x axis (planar v3 1.0 1.0 0.0) and normal (planar v3 0.0 1.0 1.0)
+        planar check (the valid of result) named "tilted constructor"
+        return the value of result

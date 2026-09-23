@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/gradient.dl
+
+set boundary to an empty list of a cad vector2
+set result to the cad gradient frame of boundary at angle (0.0 as a 32 bit floating-point number) with shift 0.0 within (the default cad tolerance)
+print (the valid of result) as a line
+free boundary

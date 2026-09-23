@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+set direction to a cad arc fit direction2 along (the cad zero vector3)
+print direction's specified
+

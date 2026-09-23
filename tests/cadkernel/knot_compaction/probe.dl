@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/knot_compaction.dl
+import tests/cadkernel/nurbs3/support.dl
+
+set degree to (the nurbs probe number at 0) as an integer
+set count to (the nurbs probe number at 1) as an integer
+set knotCount to (the nurbs probe number at 2) as an integer
+set closed to (the nurbs probe number at 3) != 0.0
+set strict to (the nurbs probe number at 4) != 0.0
+set tolerance to the nurbs probe number at 5
+set evaluate to (the nurbs probe number at 6) != 0.0
+set cursor to 7
+set points to an empty list of a cad vector3
+loop index from 0 to count:
+    append (the nurbs probe point at cursor) to points
+    set cursor to cursor + 3
+set knots to an empty list of a 64 bit floating-point number
+loop index from 0 to knotCount:
+    append (the nurbs probe number at cursor) to knots
+    increment cursor
+set weights to an empty list of a 64 bit floating-point number
+loop index from 0 to count:
+    append (the nurbs probe number at cursor) to weights
+    increment cursor
+set constructed to the cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+if strict:
+    set constructed to the strict cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+free points
+free knots
+free weights
+emit nurbs flag (the valid of constructed)
+if the valid of constructed:
+    set shape to (the value of constructed) with cad periodicity closed
+    set compacted to the cad knot compaction of shape within tolerance
+    emit nurbs flag (the valid of compacted)
+    if the valid of compacted:
+        set result to the value of compacted
+        emit nurbs curve result
+        if evaluate:
+            loop step from 0 to 21:
+                set parameter to (step as a 64 bit floating-point number) / 20.0
+                emit nurbs point (the cad point on result at parameter)
+        emit nurbs flag ((the controls of shape) != (the controls of result))
+        emit nurbs flag ((the knots of shape) != (the knots of result))
+        emit nurbs flag ((the weights of shape) != (the weights of result))
+        emit nurbs flag ((the owner of shape) != (the owner of result))

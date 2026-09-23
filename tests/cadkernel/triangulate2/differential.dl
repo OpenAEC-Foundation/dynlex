@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime differential driver for cadkernel 953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/triangulate.rs.
+import lib/cadkernel/triangulate2.dl
+
+function the triangulation probe number at {integer:index} in {argument list:arguments}:
+    execute:
+        return @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at index in the data of arguments)
+
+function print triangulation probe scalar {a 64 bit floating-point number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value)
+
+function print triangulation probe points {a pointer to a list:vertices}:
+    execute:
+        print (the length of vertices) as a line
+        loop index from 0 to the length of vertices:
+            set p to the item at index in vertices
+            print triangulation probe scalar (the x of p)
+            print triangulation probe scalar (the y of p)
+
+function print triangulation probe mesh {cad triangulation2:mesh}:
+    execute:
+        print triangulation probe points (the points of mesh)
+        print (the length of the triangles of mesh) as a line
+        loop index from 0 to the length of the triangles of mesh:
+            set face to the item at index in the triangles of mesh
+            print (the first of face) as a line
+            print (the second of face) as a line
+            print (the third of face) as a line
+
+set arguments to the command line arguments
+set mode to (the triangulation probe number at 0 in arguments) as an integer
+set linear to the triangulation probe number at 1 in arguments
+set count to (the triangulation probe number at 2 in arguments) as an integer
+set boundaries to an empty list of the type of (an empty list of a cad vector2)
+set cursor to 3
+loop ringIndex from 0 to count:
+    set vertices to an empty list of a cad vector2
+    set size to (the triangulation probe number at cursor in arguments) as an integer
+    set cursor to cursor + 1
+    loop index from 0 to size:
+        set x to the triangulation probe number at cursor in arguments
+        set y to the triangulation probe number at (cursor + 1) in arguments
+        append (a cad vector2 with x x and y y) to vertices
+        set cursor to cursor + 2
+    append vertices to boundaries
+if mode = 0:
+    set outer to the item at 0 in boundaries
+    set holes to an empty list of the type of outer
+    loop index from 1 to the length of boundaries:
+        append (the item at index in boundaries) to holes
+    set mesh to the cad triangulation of outer with holes holes
+    print triangulation probe mesh mesh
+    free cad triangulation mesh
+    free holes
+if mode = 1:
+    set framed to the cad polygon frame of (the item at 0 in boundaries) within (a cad tolerance of linear)
+    print (the valid of framed) as a line
+    if the valid of framed:
+        set frameValue to the value of framed
+        print triangulation probe scalar (the x of the origin of frameValue)
+        print triangulation probe scalar (the y of the origin of frameValue)
+        print triangulation probe scalar (the x of the size of frameValue)
+        print triangulation probe scalar (the y of the size of frameValue)
+        print triangulation probe points (the points of frameValue)
+    free cad polygon frame result framed
+if mode = 2:
+    set depths to the cad ring nesting depths of boundaries
+    print (the length of depths) as a line
+    loop index from 0 to the length of depths:
+        print (the item at index in depths) as a line
+    free depths
+if mode = 3:
+    set mesh to the cad triangulation of rings boundaries
+    print triangulation probe mesh mesh
+    free cad triangulation mesh
+loop index from 0 to the length of boundaries:
+    free (the item at index in boundaries)
+free boundaries

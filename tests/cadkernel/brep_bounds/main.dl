@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_make.dl
+
+function bounds3 point {a 64 bit floating-point number array of 3 items:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+function check bounds3 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function check bounds3 point {cad vector3:point} near {cad vector3:expected}:
+    execute:
+        check bounds3 ((the cad distance from point to expected) < 1e-12)
+
+set points to a list containing (bounds3 point [1.0,-2.0,3.0])
+append (bounds3 point [-4.0,5.0,-6.0]) to points
+append (the cad zero vector3) to points
+set bounded to the cad box around points
+check bounds3 (bounded's valid)
+check bounds3 point (bounded's value's low) near (bounds3 point [-4.0,-2.0,-6.0])
+check bounds3 point (bounded's value's high) near (bounds3 point [1.0,5.0,3.0])
+loop index from 0 to the length of points:
+    check bounds3 ((bounded's value) holds cad point (the item at index in points))
+free points
+set empty to an empty list of a cad vector3
+set absent to the cad box around empty
+check bounds3 ((absent's valid) = false)
+free empty
+print "a_box_around_points_holds_every_one_of_them" as a line
+
+set one to a cad box3 from (the cad zero vector3) to (bounds3 point [1.0,1.0,1.0])
+set touching to a cad box3 from (bounds3 point [1.0,0.0,0.0]) to (bounds3 point [2.0,1.0,1.0])
+set apart to a cad box3 from (bounds3 point [2.0,0.0,0.0]) to (bounds3 point [3.0,1.0,1.0])
+check bounds3 (one overlaps cad box touching)
+check bounds3 ((one overlaps cad box apart) = false)
+check bounds3 ((the cad separation of one and touching) = 0.0)
+check bounds3 ((the absolute value of ((the cad separation of one and apart) - 1.0)) < 1e-12)
+print "boxes_that_touch_overlap_and_boxes_apart_do_not" as a line
+
+set justPast to a cad box3 from (bounds3 point [1.0000001,0.0,0.0]) to (bounds3 point [2.0,1.0,1.0])
+check bounds3 ((one overlaps cad box justPast) = false)
+check bounds3 ((the cad box one grown by 1e-6) overlaps cad box justPast)
+print "padding_lets_a_touching_pair_through" as a line
+
+set made to the cad cuboid at (bounds3 point [1.0,2.0,3.0]) with size (bounds3 point [4.0,5.0,6.0])
+check bounds3 (made's valid)
+set bounded to the cad bounds of (made's value)
+check bounds3 (bounded's valid)
+check bounds3 point (bounded's value's low) near (bounds3 point [1.0,2.0,3.0])
+check bounds3 point (bounded's value's high) near (bounds3 point [5.0,7.0,9.0])
+check bounds3 point (the cad size of (bounded's value)) near (bounds3 point [4.0,5.0,6.0])
+check bounds3 point (the cad centre of (bounded's value)) near (bounds3 point [3.0,4.5,6.0])
+print "a_box_bounds_its_own_faces" as a line
+
+set faces to the cad face keys of (made's value)
+loop index from 0 to the length of faces:
+    set faceBounds to the cad bounds of (the item at index in faces) in (made's value)
+    check bounds3 (faceBounds's valid)
+    set size to the cad size of (faceBounds's value)
+    set flat to 0
+    if (size's x) < 1e-12:
+        increment flat
+    if (size's y) < 1e-12:
+        increment flat
+    if (size's z) < 1e-12:
+        increment flat
+    check bounds3 (flat = 1)
+free faces
+print "each_face_of_a_box_is_flat_in_one_direction" as a line
+
+set survey to the cad cuboid at (bounds3 point [512345.678,4512345.678,91.5]) with size (bounds3 point [0.001,0.002,0.003])
+check bounds3 (survey's valid)
+set bounded to the cad bounds of (survey's value)
+check bounds3 (bounded's valid)
+set size to the cad size of (bounded's value)
+check bounds3 ((the absolute value of ((size's x) - 0.001)) < 1e-9)
+check bounds3 ((the absolute value of ((size's z) - 0.003)) < 1e-9)
+print "survey_coordinates_bound_without_losing_the_size" as a line
+
+set distant to a cad box3 from (bounds3 point [1e308,0.0,0.0]) to (bounds3 point [1.5e308,0.0,0.0])
+set centre to the cad centre of distant
+check bounds3 ((the absolute value of (centre's x)) <= 1.7976931348623157e308)
+check bounds3 (distant holds cad point centre)
+print "the_centre_of_a_distant_box_is_between_its_corners" as a line

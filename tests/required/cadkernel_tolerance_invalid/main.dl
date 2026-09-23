@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MPL-2.0
+# Tolerance::new refusal test plus nonfinite and negative boundary cases.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/mod.rs
+
+import lib/cadkernel/geometry2.dl
+
+set arguments to the command line arguments
+set linear to 0.0
+if arguments' length > 0:
+    set selected to the argument at 0 in arguments
+    if selected = "negative":
+        set linear to (-1.0)
+    if selected = "negative-zero":
+        set linear to (-0.0)
+    if selected = "infinity":
+        set linear to 1e308 * 1e308
+    if selected = "negative-infinity":
+        set linear to (-1e308) * 1e308
+    if selected = "nan":
+        set linear to the square root of (-1.0)
+set refused to a cad tolerance of linear
+print "invalid tolerance was accepted" as a line
+print the cad linear tolerance of refused as a line

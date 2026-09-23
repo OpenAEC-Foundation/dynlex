@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/area2.dl
+import tests/cadkernel/cross2/input.dl
+
+set shape to pair2 input curve at 1
+set original to the cad clone of shape
+emit measure2 scalar (the cad enclosed area of shape)
+set chord to the cad chord closed area of shape
+emit measure2 flag chord's valid
+if chord's valid:
+    emit measure2 scalar chord's value
+set centre to the cad enclosed centroid of shape
+emit measure2 flag centre's valid
+if centre's valid:
+    emit measure2 point centre's value
+set chordCentre to the cad chord closed centroid of shape
+emit measure2 flag chordCentre's valid
+if chordCentre's valid:
+    emit measure2 point chordCentre's value
+emit measure2 flag (shape = original)

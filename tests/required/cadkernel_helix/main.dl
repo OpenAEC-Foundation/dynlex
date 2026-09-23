@@ -1,0 +1,229 @@
+# SPDX-License-Identifier: MPL-2.0
+# Both upstream tests and independent cases for cadkernel src/space/helix.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/helix.rs
+import lib/cadkernel/helix.dl
+
+function cad helix check {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function cad helix near {a number:actual} to {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad helix check ((the absolute value of (actual - expected)) <= tolerance) named label
+
+function cad helix point {cad vector3:actual} near {cad vector3:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad helix near (the x of actual) to (the x of expected) within tolerance named label
+        cad helix near (the y of actual) to (the y of expected) within tolerance named label
+        cad helix near (the z of actual) to (the z of expected) within tolerance named label
+
+function cad helix scalar {cad helix scalar result:actual} near {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad helix check (the valid of actual) named label
+        cad helix near (the value of actual) to expected within tolerance named label
+
+function a cad helix fixture from radius {a number:baseRadius} to {a number:topRadius} with height {a number:height} and turns {a number:turns}:
+    execute:
+        return a cad helix with center (the cad zero vector3), axis (the cad z axis), start (the cad x axis), base radius baseRadius, top radius topRadius, height height, turns turns and direction (the cad counterclockwise helix direction)
+
+function cad helix reject {cad helix:curve} named {string:label}:
+    execute:
+        set approximation to the cad helix nurbs of curve
+        set length to the cad length of curve
+        set slope to the cad turn slope of curve
+        set reverse to the cad reversal of curve
+        cad helix check ((the valid of approximation) = false) named label
+        cad helix check ((the valid of length) = false) named label
+        cad helix check ((the valid of slope) = false) named label
+        cad helix check ((the valid of reverse) = false) named label
+        free cad nurbs (the value of approximation)
+
+set zero to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set z to the cad z axis
+
+# a_zero_base_radius_reverses_between_the_same_endpoints
+set cone to a cad helix with center (a cad vector3 with x 1, y 2 and z 3), axis z, start x, base radius 0, top radius 2, height 5, turns 1.25 and direction (the cad counterclockwise helix direction)
+set original to the cad helix nurbs of cone
+set reverse to the cad reversal of cone
+cad helix check ((the valid of original) and (the valid of reverse)) named "zero base cone builds and reverses"
+set reversedNurbs to the cad helix nurbs of (the value of reverse)
+cad helix check (the valid of reversedNurbs) named "reversed cone builds"
+set forward to the value of original
+set backward to the value of reversedNurbs
+cad helix point (the cad curve point of forward at 0) near (the cad curve point of backward at 1) within 1e-9 named "reversed end"
+cad helix point (the cad curve point of forward at 1) near (the cad curve point of backward at 0) within 1e-9 named "reversed start"
+cad helix point (the cad curve point of forward at 0) near (a cad vector3 with x 1, y 2 and z 3) within 0 named "cone base"
+cad helix point (the cad curve point of forward at 1) near (a cad vector3 with x 1, y 4 and z 8) within 1e-12 named "cone top"
+loop step from 0 to 11:
+    set t to (step as a 64 bit floating-point number) / 10.0
+    cad helix point (the cad curve point of forward at t) near (the cad curve point of backward at (1.0 - t)) within 1e-12 named "reversed full locus"
+cad helix scalar (the cad length of cone) near 9.956751361994288 within 1e-12 named "conical exact length"
+cad helix scalar (the cad turn slope of cone) near 0.3805063771123649 within 1e-15 named "conical slope"
+free cad nurbs (the value of original)
+free cad nurbs (the value of reversedNurbs)
+print "cadkernel helix: zero base reversal" as a line
+
+# a_zero_turn_zero_height_helix_is_one_exact_point
+set stationary to a cad helix with center (a cad vector3 with x 1, y 2 and z 3), axis z, start x, base radius 2, top radius 4, height 0, turns 0 and direction (the cad counterclockwise helix direction)
+set single to the cad helix nurbs of stationary
+cad helix check (the valid of single) named "zero turns builds"
+set pointCurve to the value of single
+cad helix scalar (the cad length of stationary) near 0 within 0 named "zero turns length"
+cad helix point (the cad curve point of pointCurve at 0) near (a cad vector3 with x 3, y 2 and z 3) within 0 named "stationary start"
+cad helix point (the cad curve point of pointCurve at 1) near (a cad vector3 with x 3, y 2 and z 3) within 0 named "stationary end"
+cad helix point (the cad curve tangent of pointCurve at 0.5) near zero within 0 named "stationary tangent"
+cad helix check ((the degree of pointCurve) = 1) named "stationary degree one"
+cad helix check ((the length of the controls of pointCurve) = 2) named "stationary two controls"
+set reverse to the cad reversal of stationary
+cad helix check (the valid of reverse) named "stationary reversal valid"
+set reversedPoint to the value of reverse
+cad helix point (the baseCenter of reversedPoint) near (the baseCenter of stationary) within 0 named "stationary center unchanged"
+cad helix point (the axisDirection of reversedPoint) near z within 0 named "stationary axis unchanged"
+cad helix check (((the baseRadius of reversedPoint) = 2) and ((the topRadius of reversedPoint) = 4)) named "stationary radii unchanged"
+cad helix point (the startDirection of reversedPoint) near x within 0 named "stationary start direction unchanged"
+cad helix check (((the height of reversedPoint) = 0) and ((the turns of reversedPoint) = 0)) named "stationary height and turns unchanged"
+cad helix check ((the clockwise of the direction of reversedPoint) = false) named "stationary winding unchanged"
+cad helix scalar (the cad turn slope of stationary) near 1.5707963267948966 within 0 named "stationary nonzero taper"
+free cad nurbs (the value of single)
+print "cadkernel helix: zero turn point" as a line
+
+set recovered to the cad helix frame from base (a cad vector3 with x 1, y 2 and z 3), axis (z scaled by 4), start (a cad vector3 with x 4, y 2 and z 20) and tangent zero
+cad helix check (the valid of recovered) named "generating points frame"
+set frame to the value of recovered
+cad helix point (the axis of frame) near z within 0 named "recovered axis"
+cad helix point (the startDirection of frame) near x within 0 named "recovered radial phase"
+cad helix near (the radius of frame) to 3 within 0 named "axial component removed from radius"
+set tip to the cad helix frame from base zero, axis z, start (z scaled by 2) and tangent (a cad vector3 with x 0, y 2 and z 3)
+cad helix check (the valid of tip) named "tip tangent frame"
+set tipFrame to the value of tip
+cad helix point (the startDirection of tipFrame) near y within 0 named "tip tangent determines phase"
+cad helix near (the radius of tipFrame) to 0 within 0 named "tip zero radius"
+set threshold to the cad helix frame from base zero, axis z, start (x scaled by 1e-12) and tangent y
+cad helix check (the valid of threshold) named "threshold tangent frame"
+set thresholdFrame to the value of threshold
+cad helix point (the startDirection of thresholdFrame) near y within 0 named "radius threshold uses tangent"
+set invalidFrame to the cad helix frame from base zero, axis z, start zero and tangent z
+cad helix check ((the valid of invalidFrame) = false) named "axial tangent cannot set phase"
+set invalidFrame to the cad helix frame from base zero, axis zero, start x and tangent y
+cad helix check ((the valid of invalidFrame) = false) named "zero generating axis rejected"
+print "cadkernel helix: generating frame recovery" as a line
+
+set circle to a cad helix fixture from radius 1 to 1 with height 0 and turns 1
+set circleResult to the cad helix nurbs of circle
+cad helix check (the valid of circleResult) named "circle approximation valid"
+set circleNurbs to the value of circleResult
+cad helix check ((the degree of circleNurbs) = 3) named "cubic approximation"
+cad helix check ((the length of the controls of circleNurbs) = 19) named "six cubic spans per turn"
+cad helix check ((the length of the knots of circleNurbs) = 23) named "cubic knot count"
+cad helix check ((the length of the weights of circleNurbs) = 19) named "weight count"
+cad helix check ((the closed of circleNurbs) = false) named "strict curve is not periodic"
+loop index from 0 to 19:
+    cad helix near (the item at index in the weights of circleNurbs) to 1 within 0 named "polynomial weights"
+loop index from 0 to 4:
+    cad helix near (the item at index in the knots of circleNurbs) to 0 within 0 named "clamped start knots"
+    cad helix near (the item at (index + 19) in the knots of circleNurbs) to 6 within 0 named "clamped end knots"
+loop span from 1 to 6:
+    loop index from 0 to 3:
+        cad helix near (the item at (4 + ((span - 1) * 3) + index) in the knots of circleNurbs) to span within 0 named "interior knot multiplicity"
+cad helix point (the item at 1 in the controls of circleNurbs) near (a cad vector3 with x 1, y 0.3490658503988659 and z 0) within 1e-15 named "analytic start tangent control"
+cad helix point (the cad curve point of circleNurbs at (1.0 / 6.0)) near (a cad vector3 with x 0.5, y 0.8660254037844386 and z 0) within 1e-15 named "first span exact endpoint"
+cad helix point (the cad curve point of circleNurbs at (-1)) near x within 0 named "parameter clamps below"
+cad helix point (the cad curve point of circleNurbs at 2) near (the cad curve point of circleNurbs at 1) within 0 named "parameter clamps above"
+set clockwise to circle
+set the direction of clockwise to the cad clockwise helix direction
+set clockwiseResult to the cad helix nurbs of clockwise
+cad helix check (the valid of clockwiseResult) named "clockwise approximation valid"
+cad helix point (the cad curve point of (the value of clockwiseResult) at (1.0 / 6.0)) near (a cad vector3 with x 0.5, y (-0.8660254037844386) and z 0) within 1e-15 named "clockwise winding"
+free cad nurbs (the value of circleResult)
+free cad nurbs (the value of clockwiseResult)
+print "cadkernel helix: cubic controls knots and winding" as a line
+
+cad helix scalar (the cad length of circle) near 6.283185307179586 within 0 named "exact circular length"
+set screw to a cad helix fixture from radius 3 to 3 with height 4 and turns 1
+cad helix scalar (the cad length of screw) near 19.269295743208076 within 1e-13 named "circular screw length"
+set downward to screw
+set the height of downward to -4.0
+cad helix scalar (the cad length of downward) near 19.269295743208076 within 1e-13 named "negative height length"
+cad helix scalar (the cad turn slope of downward) near 0 within 0 named "cylindrical slope"
+set nearly to a cad helix fixture from radius 1 to 1.0000000001 with height 1 and turns 1
+cad helix scalar (the cad length of nearly) near 6.3622651318775825 within 1e-13 named "nearly cylindrical length stability"
+set immense to a cad helix fixture from radius 1 to 1 with height 1e308 and turns 1
+cad helix scalar (the cad length of immense) near 1e308 within 1e294 named "hypot avoids squared overflow"
+set shrinking to a cad helix fixture from radius 2 to 0 with height (-5) and turns 1.25
+cad helix scalar (the cad length of shrinking) near 9.956751361994288 within 1e-12 named "shrinking cone length"
+cad helix scalar (the cad turn slope of shrinking) near (-0.3805063771123649) within 1e-15 named "signed taper absolute height"
+set shallow to a cad helix fixture from radius 1 to 2 with height 0 and turns 1e15
+cad helix scalar (the cad length of shallow) near 9424777960769380.0 within 2 named "vanishing radial rate primitive"
+set shallowReverse to the cad reversal of shallow
+cad helix check (the valid of shallowReverse) named "large finite total angle reverses"
+set shallowValue to the value of shallowReverse
+cad helix point (the startDirection of shallowValue) near (a cad vector3 with x 0.8884105663238324, y (-0.45904974201514076) and z 0) within 1e-12 named "large angle phase"
+print "cadkernel helix: exact length and slope" as a line
+
+cad helix reject (a cad helix fixture from radius (-1) to 1 with height 1 and turns 1) named "negative radius rejected"
+cad helix reject (a cad helix fixture from radius 0 to 0 with height 1 and turns 1) named "both zero radii rejected"
+cad helix reject (a cad helix fixture from radius 1 to 1 with height 1 and turns (-1)) named "negative turns rejected"
+cad helix reject (a cad helix fixture from radius 1 to 1 with height 1 and turns 0) named "zero turns nonzero height rejected"
+set degenerate to circle
+set the startDirection of degenerate to z
+cad helix reject degenerate named "parallel start axis rejected"
+set stationaryBadFrame to stationary
+set the axisDirection of stationaryBadFrame to zero
+set specialReverse to the cad reversal of stationaryBadFrame
+cad helix check (the valid of specialReverse) named "zero turns reversal returns before frame validation"
+set badLength to the cad length of stationaryBadFrame
+set badNurbs to the cad helix nurbs of stationaryBadFrame
+cad helix check ((the valid of badLength) = false) named "zero turns length validates frame"
+cad helix check ((the valid of badNurbs) = false) named "zero turns nurbs validates frame"
+free cad nurbs (the value of badNurbs)
+set limited to a cad helix fixture from radius 1 to 1 with height 0 and turns 16667
+set tooMany to the cad helix nurbs of limited
+cad helix check ((the valid of tooMany) = false) named "segment cap enforced"
+cad helix check (the valid of (the cad length of limited)) named "segment cap does not limit exact length"
+cad helix check (the valid of (the cad reversal of limited)) named "segment cap does not limit reversal"
+free cad nurbs (the value of tooMany)
+set atLimit to a cad helix fixture from radius 1 to 1 with height 0 and turns (100000.0 / 6.0)
+set largest to the cad helix nurbs of atLimit
+cad helix check (the valid of largest) named "segment cap is inclusive"
+set largestCurve to the value of largest
+cad helix check ((the length of the controls of largestCurve) = 300001) named "maximum control count"
+cad helix check ((the length of the knots of largestCurve) = 300005) named "maximum knot count"
+free cad nurbs (the value of largest)
+set fractional to a cad helix fixture from radius 1 to 1 with height 0 and turns 0.01
+set oneSpan to the cad helix nurbs of fractional
+cad helix check (the valid of oneSpan) named "fractional turn valid"
+set fractionalCurve to the value of oneSpan
+cad helix check ((the length of the controls of fractionalCurve) = 4) named "fractional turns ceil to one span"
+free cad nurbs (the value of oneSpan)
+print "cadkernel helix: degeneracies and independent limits" as a line
+
+set infinity to (1e308 as a 64 bit floating-point number) * (1e308 as a 64 bit floating-point number)
+set nan to infinity - infinity
+set invalid to circle
+set the height of invalid to nan
+cad helix reject invalid named "NaN height rejected"
+set invalid to circle
+set the axisDirection of invalid to (a cad vector3 with x 0, y 0 and z infinity)
+cad helix reject invalid named "infinite axis rejected"
+set invalidFrame to the cad helix frame from base zero, axis z, start x and tangent (a cad vector3 with x nan, y 0 and z 0)
+cad helix check ((the valid of invalidFrame) = false) named "unused nonfinite tangent rejected"
+set overflowTurns to a cad helix fixture from radius 1 to 1 with height 0 and turns 1e308
+set overflowLength to the cad length of overflowTurns
+set overflowReverse to the cad reversal of overflowTurns
+set overflowNurbs to the cad helix nurbs of overflowTurns
+cad helix check ((the valid of overflowLength) = false) named "total angle overflow length"
+cad helix check ((the valid of overflowReverse) = false) named "total angle overflow reversal"
+cad helix check ((the valid of overflowNurbs) = false) named "total angle overflow nurbs"
+cad helix scalar (the cad turn slope of overflowTurns) near 0 within 0 named "slope independent of total angle"
+free cad nurbs (the value of overflowNurbs)
+set overflowingPoint to stationary
+set the baseCenter of overflowingPoint to (a cad vector3 with x 1e308, y 0 and z 0)
+set the baseRadius of overflowingPoint to 1e308
+set nonfiniteControls to the cad helix nurbs of overflowingPoint
+cad helix check ((the valid of nonfiniteControls) = false) named "strict nurbs rejects nonfinite controls"
+free cad nurbs (the value of nonfiniteControls)
+print "cadkernel helix: IEEE validation" as a line

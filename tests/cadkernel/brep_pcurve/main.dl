@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_pcurve/support.dl
+import lib/cadkernel/brep_make.dl
+
+set plane to pc plane at (pc point [0.0,0.0,5.0]) normal (the cad z axis)
+set surface to the cad surface of plane
+set curve to the cad edge curve3 of (a cad line3 with origin (pc point [1.0,2.0,5.0]) and direction (pc point [3.0,4.0,0.0]))
+set flat to the cad projection of curve onto surface within 1e-9
+pc round trip surface with curve projected flat from -2.0 to 2.0
+check pc ((the cad distance from (the cad point on (flat's value) at 1.0) to (pc uv [4.0,6.0])) < 1e-12)
+print "a_line_on_a_plane_projects_to_a_line" as a line
+
+set plane to the cad xy plane
+set surface to the cad surface of plane
+set curve to the cad edge curve3 of (a cad circle3 with plane (pc plane at (pc point [2.0,3.0,0.0]) normal (the cad z axis)) and radius 4.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad circle curve2 kind)
+check pc ((the absolute value of ((flat's value's circle's radius) - 4.0)) < 1e-12)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "a_circle_on_a_plane_projects_to_a_circle" as a line
+
+set frame to a cad plane with origin (pc point [1.0,1.0,0.0]), x axis (the cad y axis) and y axis (pc point [-1.0,0.0,0.0])
+set curve to the cad edge curve3 of (a cad ellipse3 with plane frame, major radius 6.0 and minor radius 2.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad ellipse curve2 kind)
+check pc ((the absolute value of ((flat's value's ellipse's ellipse's majorRadius) - 6.0)) < 1e-12)
+check pc ((the absolute value of ((flat's value's ellipse's ellipse's majorAxis's y) - 1.0)) < 1e-12)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "an_ellipse_on_a_plane_keeps_both_its_radii_and_its_direction" as a line
+
+set curve to the cad edge curve3 of (a cad line3 with origin (pc point [0.0,0.0,4.0]) and direction (the cad x axis))
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's valid) = false)
+set curve to the cad edge curve3 of (a cad line3 with origin (pc point [0.0,0.0,-1.0]) and direction (the cad z axis))
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's valid) = false)
+print "a_curve_off_the_surface_has_no_projection" as a line
+
+set surface to the cad surface of (a cad cylinder with base plane and radius 3.0)
+set curve to the cad edge curve3 of (a cad circle3 with plane (pc plane at (pc point [0.0,0.0,7.0]) normal (the cad z axis)) and radius 3.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad line curve2 kind)
+check pc ((the absolute value of ((flat's value's line's start's y) - 7.0)) < 1e-12)
+check pc ((the absolute value of ((flat's value's line's end's x) - 6.283185307179586)) < 1e-12)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "a_circle_round_a_cylinder_becomes_a_straight_band" as a line
+
+set curve to the cad edge curve3 of (a cad line3 with origin (pc point [0.0,3.0,0.0]) and direction (the cad z axis))
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad xline curve2 kind)
+check pc ((the absolute value of ((flat's value's xline's base's x) - 1.5707963267948966)) < 1e-9)
+pc round trip surface with curve projected flat from -3.0 to 3.0
+print "a_generator_on_a_cylinder_becomes_a_line_of_constant_angle" as a line
+
+set curve to the cad edge curve3 of (a cad ellipse3 with plane (pc plane at (the cad zero vector3) normal (pc point [0.0,1.0,1.0])), major radius (3.0 * 1.4142135623730951) and minor radius 3.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's valid) = false)
+print "a_slanted_section_of_a_cylinder_has_no_written_form" as a line
+
+set surface to the cad surface of (a cad cone with base plane, radius 10.0 and half angle 0.7853981633974483)
+set curve to the cad edge curve3 of (a cad circle3 with plane (pc plane at (pc point [0.0,0.0,4.0]) normal (the cad z axis)) and radius 6.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad line curve2 kind)
+check pc ((the absolute value of ((flat's value's line's start's y) - 4.0)) < 1e-12)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "a_circle_round_a_cone_becomes_a_band_at_its_height" as a line
+
+set curve to the cad edge curve3 of (a cad line3 with origin (pc point [10.0,0.0,0.0]) and direction (pc point [-1.0,0.0,1.0]))
+set flat to the cad projection of curve onto surface within 1e-6
+check pc (flat's valid)
+check pc ((flat's value's kind) = cad xline curve2 kind)
+check pc ((the absolute value of (flat's value's xline's base's x)) < 1e-9)
+print "a_generator_on_a_cone_leans_and_is_still_one_angle" as a line
+
+set controls to a list containing (pc uv [0.0,0.0])
+append (pc uv [1.0,5.0]) to controls
+append (pc uv [4.0,5.0]) to controls
+append (pc uv [5.0,0.0]) to controls
+set empty to an empty list of a 64 bit floating-point number
+set spline to the cad nurbs curve2 of degree 3 with controls controls, knots empty and weights empty
+free controls
+free empty
+set surface to the cad surface of plane
+set curve to the cad edge curve3 of (a cad planar spline3 with plane plane and curve (spline's value))
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad nurbs curve2 kind)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "a_spline_on_its_own_plane_carries_over_whole" as a line
+
+set surface to the cad surface of (a cad sphere with frame plane and radius 5.0)
+set curve to the cad edge curve3 of (a cad circle3 with plane plane and radius 5.0)
+set flat to the cad projection of curve onto surface within 1e-9
+check pc ((flat's value's kind) = cad line curve2 kind)
+check pc ((the absolute value of (flat's value's line's start's y)) < 1e-12)
+check pc ((the absolute value of ((flat's value's line's end's x) - 6.283185307179586)) < 1e-12)
+pc round trip surface with curve projected flat from 0.0 to 1.0
+print "a_spheres_equator_becomes_a_straight_band" as a line
+
+set made to the cad cuboid at (the cad zero vector3) with size (pc point [2.0,3.0,4.0])
+set body to (made's value)
+set faces to the cad face keys of body
+set projected to 0
+loop index from 0 to the length of faces:
+    set faceKey to the item at index in faces
+    set faceNode to the cad node pointer for faceKey in body
+    set surfaceLookup to the cad lookup of (faceNode's surface) in body
+    set surface to the cad value of surfaceLookup
+    set uses to the cad face coedges of faceKey in body
+    loop j from 0 to the length of uses:
+        set useNode to the cad node pointer for (the item at j in uses) in body
+        set edgeNode to the cad node pointer for (useNode's edge) in body
+        set curveLookup to the cad lookup of (edgeNode's curve) in body
+        set curve to the cad value of curveLookup
+        set flat to the cad projection of curve onto surface within 1e-9
+        pc round trip surface with curve projected flat from 0.0 to 1.0
+        increment projected
+    free uses
+free faces
+check pc (projected = 24)
+print "a_face_of_a_box_projects_its_own_boundary" as a line
+
+set origin to pc point [512345.678,4512345.678,91.5]
+set plane to pc plane at origin normal (the cad z axis)
+set surface to the cad surface of plane
+set curve to the cad edge curve3 of (a cad circle3 with plane (pc plane at (the cad sum of origin and (pc point [1.0,2.0,0.0])) normal (the cad z axis)) and radius 4.0)
+set flat to the cad projection of curve onto surface within 1e-6
+check pc (flat's valid)
+check pc ((the absolute value of ((flat's value's circle's centre's x) - 1.0)) < 1e-6)
+check pc ((the absolute value of ((flat's value's circle's radius) - 4.0)) < 1e-9)
+print "survey_coordinates_project_to_the_same_place" as a line
+
+set surface to the cad surface of (the cad xy plane)
+set curve to the cad edge curve3 of (a cad circle3 with plane (the cad xy plane) and radius 2.0)
+loop whole from 0 to 2:
+    set first to 3.141592653589793
+    set last to 0.0
+    if whole = 1:
+        set first to 0.0
+        set last to -6.283185307179586
+    set body to pc one edge on surface with curve from first to last
+    set faces to the cad face keys of body
+    set boundary to the cad boundary of (the item at 0 in faces) in body within 1e-9
+    free faces
+    check pc (boundary's valid)
+    set trimmed to the item at 0 in (boundary's curves's values)
+    check pc ((trimmed's kind) = cad nurbs curve2 kind)
+    if whole = 0:
+        check pc ((the cad distance from (the cad point on trimmed at 0.0) to (pc uv [-2.0,0.0])) < 1e-9)
+        check pc ((the cad distance from (the cad point on trimmed at 0.5) to (pc uv [0.0,2.0])) < 1e-9)
+        check pc ((the cad distance from (the cad point on trimmed at 1.0) to (pc uv [2.0,0.0])) < 1e-9)
+    else:
+        check pc ((the cad distance from (the cad point on trimmed at 0.25) to (pc uv [0.0,-2.0])) < 1e-9)
+print "clockwise_circle_spans_keep_their_direction" as a line

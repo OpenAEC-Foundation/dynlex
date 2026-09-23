@@ -1,0 +1,168 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_make.dl
+
+function bounds argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function bounds vector at {integer:index}:
+    execute:
+        return a cad vector3 with x (bounds argument index), y (bounds argument (index + 1)) and z (bounds argument (index + 2))
+function emit bounds number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit bounds flag {boolean:value}:
+    execute:
+        emit bounds number (value as an integer)
+function emit bounds point {cad vector3:point}:
+    execute:
+        emit bounds number (point's x)
+        emit bounds number (point's y)
+        emit bounds number (point's z)
+function emit bounds box {cad box3:value}:
+    execute:
+        emit bounds point (value's low)
+        emit bounds point (value's high)
+function emit bounds result {cad box3 result:value}:
+    execute:
+        emit bounds flag (value's valid)
+        if (value's valid):
+            emit bounds box (value's value)
+function bounds probe nurbs with {a 64 bit floating-point number:value} in coordinates {boolean:coordinate}:
+    execute:
+        set first to a list containing (the cad zero vector3)
+        if coordinate:
+            replace item at index 0 in first with (a cad vector3 with x value, y 0.0 and z 0.0)
+        append (a cad vector3 with x 1.0, y 2.0 and z 3.0) to first
+        set last to a list containing (a cad vector3 with x 4.0, y 5.0 and z 1.0)
+        append (a cad vector3 with x 6.0, y 7.0 and z 2.0) to last
+        set points to a list containing first
+        append last to points
+        set firstWeights to a list containing 1.0
+        if coordinate = false:
+            replace item at index 0 in firstWeights with value
+        append 2.0 to firstWeights
+        set lastWeights to a list containing 3.0
+        append 1.0 to lastWeights
+        set weights to a list containing firstWeights
+        append lastWeights to weights
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set made to the cad nurbs surface3 of degrees 1 and 1 with controls points, knots knots and knots and weights weights
+        free first
+        free last
+        free points
+        free firstWeights
+        free lastWeights
+        free weights
+        free knots
+        return the cad surface of (made's value)
+
+set mode to (bounds argument 0) as an integer
+if mode = 0:
+    set one to a cad box3 from (bounds vector at 2) to (bounds vector at 5)
+    set other to a cad box3 from (bounds vector at 8) to (bounds vector at 11)
+    set point to bounds vector at 14
+    emit bounds box one
+    set changed to one
+    absorb cad point point into changed
+    emit bounds box changed
+    set merged to one
+    merge cad box other into merged
+    emit bounds box merged
+    emit bounds box (the cad box one grown by (bounds argument 1))
+    emit bounds point (the cad size of one)
+    emit bounds point (the cad centre of one)
+    emit bounds flag (one holds cad point point)
+    emit bounds flag (one overlaps cad box other)
+    emit bounds number (the cad separation of one and other)
+    set count to (bounds argument 17) as an integer
+    set points to an empty list of a cad vector3
+    loop index from 0 to count:
+        append (bounds vector at (18 + (3 * index))) to points
+    emit bounds result (the cad box around points)
+    free points
+    emit bounds flag (one = (the cad clone of one))
+else:
+    set kind to (bounds argument 1) as an integer
+    set origin to bounds vector at 2
+    set size to bounds vector at 5
+    set variant to (bounds argument 8) as an integer
+    set value to bounds argument 9
+    set made to no cad body
+    if kind = 0:
+        set made to the cad cuboid at origin with size size
+    else if kind = 1:
+        set made to the cad sphere body at origin with radius (size's x)
+    else if kind = 2:
+        set made to the cad cylinder body at origin with radius (size's x) and height (size's y)
+    else if kind = 3:
+        set made to the cad cone body at origin with radius (size's x) and height (size's y)
+    else:
+        set initial to an empty cad body
+        if kind = 5:
+            set key to the cad body key after inserting (a cad vertex at origin with provenance (the synthesized cad provenance)) into initial
+        set made to the cad body result of initial
+    emit bounds flag (made's valid)
+    if (made's valid):
+        set body to (made's value)
+        set faces to the cad face keys of body
+        if (the length of faces) > 0:
+            set faceKey to the item at 0 in faces
+            set face to the cad node pointer for faceKey in body
+            set surfaceKey to (face's surface)
+            set ringKey to the item at 0 in (face's loops's values)
+            set uses to the cad face coedges of faceKey in body
+            set coedgeKey to the item at 0 in uses
+            set coedge to the cad node pointer for coedgeKey in body
+            set edgeKey to (coedge's edge)
+            set edge to the cad node pointer for edgeKey in body
+            set curveKey to (edge's curve)
+            free uses
+            if variant = 1:
+                set removedFace to the cad removal of faceKey from body
+            else if variant = 2:
+                set removedSurface to the cad removal of surfaceKey from body
+            else if variant = 3:
+                set removedEdge to the cad removal of edgeKey from body
+            else if variant = 4:
+                set removedCurve to the cad removal of curveKey from body
+            else if variant = 5:
+                set removedCoedge to the cad removal of coedgeKey from body
+            else if variant = 6:
+                set removedLoop to the cad removal of ringKey from body
+            else if variant = 7:
+                loop while (the length of (face's loops's values)) > 0:
+                    remove item 0 from (face's loops's values)
+            else if variant = 8:
+                set frame to a cad plane with origin origin, x axis (the cad x axis) and y axis (a cad vector3 with x 0.0, y value and z 0.0)
+                replace cad node surfaceKey in body with (the cad surface of (a cad sphere with frame frame and radius 2.5))
+            else if variant = 9:
+                replace cad node surfaceKey in body with (the cad surface of (a cad torus with frame (the cad xy plane), major radius value and minor radius 2.0))
+            else if (variant = 10) or (variant = 11):
+                replace cad node surfaceKey in body with (bounds probe nurbs with value in coordinates (variant = 11))
+            else if variant = 12:
+                set edge's startParameter to value
+                set edge's endParameter to value + 3.0
+            else if variant = 13:
+                set frame to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+                replace cad node curveKey in body with (the cad edge curve3 of (a cad circle3 with plane frame and radius value))
+        emit bounds number (the length of faces)
+        loop index from 0 to the length of faces:
+            emit bounds result (the cad bounds of (the item at index in faces) in body)
+        free faces
+        emit bounds result (the cad bounds of body)
+        set bodies to a list containing body
+        emit bounds number (the cad operation tolerance of bodies)
+        set empty to an empty list of the type of body
+        emit bounds number (the cad operation tolerance of empty)
+        free empty
+        set remote to an empty cad body
+        set remoteKey to the cad body key after inserting (a cad vertex at (a cad vector3 with x value, y value and z value) with provenance (the synthesized cad provenance)) into remote
+        append remote to bodies
+        emit bounds number (the cad operation tolerance of bodies)
+        free bodies
+

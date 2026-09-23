@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+# Minimal list allocation reproducer; the element type occupies zero bytes.
+import lib/list.dl
+set point to a new (a 64 bit floating-point number array of 0 items)
+set points to a list containing point

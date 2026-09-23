@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MPL-2.0
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+class:
+    patterns:
+        sample
+    members:
+        marker as integer
+    retain:
+        @intrinsic("return")
+    release:
+        @intrinsic("store", index, 0)
+@intrinsic("store", index, 0)
+@intrinsic("store", value, @intrinsic("construct", sample, 0))

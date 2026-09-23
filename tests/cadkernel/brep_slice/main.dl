@@ -1,0 +1,152 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_slice.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_presspull.dl
+
+function check cad slice {boolean:condition} code {integer:code}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, code)
+
+function check cad slice body {cad body:body} code {integer:code}:
+    execute:
+        set flaws to the cad flaws of body
+        check cad slice ((the length of flaws) = 0) code code
+        free flaws
+
+function a cad slice test cutter for {cad surface:surfaceValue} forward {boolean:forwardValue}:
+    execute:
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set surfaceKey to the cad body key after inserting surfaceValue into resultBody
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forwardValue owned by shellKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        set shellNode to the cad node pointer for shellKey in resultBody
+        append faceKey to (shellNode's faces's values)
+        append lumpKey to resultBody's roots
+        return resultBody
+
+set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 4.0, y 2.0 and z 2.0)
+set cuttingPlane to the cad orthonormal plane with origin (a cad vector3 with x 1.5, y 0.0 and z 0.0), x axis (the cad y axis) and normal (the cad x axis)
+check cad slice cuttingPlane's valid code 11
+set sliced to the cad plane slice of (made's value) by (cuttingPlane's value)
+check cad slice sliced's valid code 12
+check cad slice sliced's divided code 13
+check cad slice body sliced's negative code 14
+check cad slice body sliced's positive code 15
+set negativeBounds to the cad bounds of sliced's negative
+set positiveBounds to the cad bounds of sliced's positive
+check cad slice negativeBounds's valid code 16
+check cad slice positiveBounds's valid code 17
+check cad slice ((the absolute value of (negativeBounds's value's high's x - 1.5)) < 1e-8) code 18
+check cad slice ((the absolute value of (positiveBounds's value's low's x - 1.5)) < 1e-8) code 19
+check cad slice ((the cad containment of (a cad vector3 with x 1.0, y 1.0 and z 1.0) in sliced's negative within 1e-9) = the inside cad containment) code 20
+check cad slice ((the cad containment of (a cad vector3 with x 3.0, y 1.0 and z 1.0) in sliced's positive within 1e-9) = the inside cad containment) code 21
+check cad slice ((the cad count of made's value's faces) = 6) code 22
+print "a_plane_splits_a_box_into_two_valid_solids" as a line
+
+set tangentPlane to the cad orthonormal plane with origin (a cad vector3 with x 4.0, y 0.0 and z 0.0), x axis (the cad y axis) and normal (the cad x axis)
+set tangent to the cad plane slice of (made's value) by (tangentPlane's value)
+check cad slice tangent's valid code 31
+check cad slice (tangent's divided = false) code 32
+print "a_tangent_plane_does_not_split_a_box" as a line
+
+set diagonalNormal to the cad normalization of (a cad vector3 with x 1.0, y 1.0 and z 0.0)
+set diagonalPlane to the cad orthonormal plane with origin (a cad vector3 with x 2.0, y 1.0 and z 0.0), x axis (the cad z axis) and normal diagonalNormal's value
+set diagonal to the cad plane slice of (made's value) by (diagonalPlane's value)
+check cad slice diagonal's valid code 41
+check cad slice diagonal's divided code 42
+check cad slice body diagonal's negative code 43
+check cad slice body diagonal's positive code 44
+print "an_oblique_plane_keeps_both_capped_halves_consistent" as a line
+
+set surveyOrigin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set surveyMade to the cad cuboid at surveyOrigin with size (a cad vector3 with x 4.0, y 2.0 and z 2.0)
+set surveyPlane to the cad orthonormal plane with origin (a cad vector3 with x (surveyOrigin's x + 1.5), y surveyOrigin's y and z surveyOrigin's z), x axis (the cad y axis) and normal (the cad x axis)
+set survey to the cad plane slice of (surveyMade's value) by (surveyPlane's value)
+check cad slice survey's valid code 51
+check cad slice survey's divided code 52
+check cad slice body survey's negative code 53
+check cad slice body survey's positive code 54
+print "plane_slicing_remains_stable_at_survey_coordinates" as a line
+
+set emptySlice to the cad plane slice of (an empty cad body) by (cuttingPlane's value)
+check cad slice emptySlice's valid code 61
+check cad slice (emptySlice's divided = false) code 62
+set invalidPlane to a cad plane with origin (the cad zero vector3), x axis (the cad zero vector3) and y axis (the cad y axis)
+set invalidSlice to the cad plane slice of made's value by invalidPlane
+check cad slice (invalidSlice's valid = false) code 63
+check cad slice (invalidSlice's snag = cad imprint cut refused snag) code 64
+print "empty_and_invalid_inputs_keep_their_distinct_results" as a line
+
+set sheetCurves to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0))) to sheetCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 2.0))) to sheetCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 2.0) to (a cad vector2 with x 0.0 and y 2.0))) to sheetCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 2.0) to (a cad vector2 with x 0.0 and y 0.0))) to sheetCurves
+set sheetLoops to a list containing (a cad presspull curve loop from sheetCurves)
+set sheetMade to the cad planar region on (the cad xy plane) with sheetLoops
+check cad slice sheetMade's valid code 71
+set sheetSlice to the cad plane slice of (sheetMade's value) by (cuttingPlane's value)
+check cad slice sheetSlice's valid code 72
+check cad slice sheetSlice's divided code 73
+check cad slice body sheetSlice's negative code 74
+check cad slice body sheetSlice's positive code 75
+check cad slice ((the cad count of sheetSlice's negative's faces) = 1) code 76
+check cad slice ((the cad count of sheetSlice's positive's faces) = 1) code 77
+print "an_open_sheet_retains_two_open_boundaries" as a line
+
+set cutterFrame to a cad plane with origin (a cad vector3 with x 1.5, y -1.0 and z -1.0), x axis (the cad y axis) and y axis (the cad z axis)
+set cutterCurves to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0))) to cutterCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 4.0))) to cutterCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 4.0) to (a cad vector2 with x 0.0 and y 4.0))) to cutterCurves
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 4.0) to (a cad vector2 with x 0.0 and y 0.0))) to cutterCurves
+set cutterLoops to a list containing (a cad presspull curve loop from cutterCurves)
+set cutterMade to the cad planar region on cutterFrame with cutterLoops
+check cad slice cutterMade's valid code 81
+set surfaceSlice to the cad surface slice of (made's value) by (cutterMade's value)
+check cad slice surfaceSlice's valid code 82
+check cad slice surfaceSlice's divided code 83
+check cad slice body surfaceSlice's negative code 84
+check cad slice body surfaceSlice's positive code 85
+set surfaceNegativeBounds to the cad bounds of surfaceSlice's negative
+set surfacePositiveBounds to the cad bounds of surfaceSlice's positive
+check cad slice ((the absolute value of (surfaceNegativeBounds's value's high's x - 1.5)) < 1e-8) code 86
+check cad slice ((the absolute value of (surfacePositiveBounds's value's low's x - 1.5)) < 1e-8) code 87
+set invalidSurfaceSlice to the cad surface slice of (made's value) by (made's value)
+check cad slice (invalidSurfaceSlice's valid = false) code 88
+check cad slice (invalidSurfaceSlice's snag = cad imprint cut refused snag) code 89
+print "an_oriented_planar_sheet_caps_a_surface_slice" as a line
+
+set analyticFrame to the cad xy plane
+set planeCutter to a cad slice test cutter for (the cad surface of analyticFrame) forward true
+set cylinderCutter to a cad slice test cutter for (the cad surface of (a cad cylinder with base analyticFrame and radius 3.0)) forward true
+set coneCutter to a cad slice test cutter for (the cad surface of (a cad cone with base analyticFrame, radius 3.0 and half angle 0.4)) forward true
+set sphereCutter to a cad slice test cutter for (the cad surface of (a cad sphere with frame analyticFrame and radius 3.0)) forward true
+set torusCutter to a cad slice test cutter for (the cad surface of (a cad torus with frame analyticFrame, major radius 3.0 and minor radius 1.0)) forward true
+set reversedSphereCutter to a cad slice test cutter for (the cad surface of (a cad sphere with frame analyticFrame and radius 3.0)) forward false
+set planeSide to the cad surface side of planeCutter at (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+set cylinderSide to the cad surface side of cylinderCutter at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+set coneSide to the cad surface side of coneCutter at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+set sphereSide to the cad surface side of sphereCutter at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+set torusSide to the cad surface side of torusCutter at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+set reversedSphereSide to the cad surface side of reversedSphereCutter at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+check cad slice (((((planeSide's valid and cylinderSide's valid) and coneSide's valid) and sphereSide's valid) and torusSide's valid) and reversedSphereSide's valid) code 91
+check cad slice ((the absolute value of (planeSide's value - 2.0)) < 1e-12) code 92
+check cad slice ((the absolute value of (cylinderSide's value - 2.0)) < 1e-12) code 93
+check cad slice (coneSide's value > 0.0) code 94
+check cad slice ((the absolute value of (sphereSide's value - 2.0)) < 1e-12) code 95
+check cad slice ((the absolute value of (torusSide's value - 1.0)) < 1e-12) code 96
+check cad slice ((the absolute value of (reversedSphereSide's value + 2.0)) < 1e-12) code 97
+print "analytic_surface_sides_follow_face_orientation" as a line
+
+set smallSphereCutter to a cad slice test cutter for (the cad surface of (a cad sphere with frame (a cad plane with origin (a cad vector3 with x 2.0, y 1.0 and z 0.0), x axis (the cad x axis) and y axis (the cad y axis)) and radius 0.75)) forward true
+set sphereSheetSlice to the cad surface slice of (sheetMade's value) by smallSphereCutter
+check cad slice sphereSheetSlice's valid code 101
+check cad slice sphereSheetSlice's divided code 102
+check cad slice body sphereSheetSlice's negative code 103
+check cad slice body sphereSheetSlice's positive code 104
+print "a_sphere_sheet_divides_an_open_planar_region" as a line

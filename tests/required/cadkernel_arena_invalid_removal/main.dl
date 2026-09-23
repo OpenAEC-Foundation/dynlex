@@ -1,0 +1,6 @@
+import lib/cadkernel/arena.dl
+set nodes to a cad arena of an integer
+set stale to the cad key after inserting 1 into nodes
+ignore the cad removal of stale from nodes
+print the cad value of (the cad removal of stale from nodes) as a line
+free cad arena nodes

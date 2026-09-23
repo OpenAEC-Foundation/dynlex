@@ -1,0 +1,137 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/planar3.dl
+
+function the planar probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function the planar probe vector2 at {integer:index}:
+    execute:
+        return a cad vector2 with x (the planar probe number at index) and y (the planar probe number at (index + 1))
+function the planar probe vector3 at {integer:index}:
+    execute:
+        return a cad vector3 with x (the planar probe number at index), y (the planar probe number at (index + 1)) and z (the planar probe number at (index + 2))
+function emit planar number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit planar flag {boolean:value}:
+    execute:
+        if value:
+            emit planar number 1
+        else:
+            emit planar number 0
+function emit planar point {cad vector3:point}:
+    execute:
+        emit planar number (the x of point)
+        emit planar number (the y of point)
+        emit planar number (the z of point)
+function emit planar samples {a pointer to a list:points}:
+    execute:
+        emit planar number (the length of points)
+        loop index from 0 to the length of points:
+            emit planar point (the item at index in points)
+
+set mode to (the planar probe number at 0) as an integer
+set tolerance to the planar probe number at 1
+set parameter to the planar probe number at 2
+set target to the planar probe vector3 at 3
+set density to the planar probe number at 6
+set angle to the planar probe number at 7
+set count to (the planar probe number at 8) as an integer
+set witness to a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2)))
+set curves to an empty list of (the type of witness)
+set cursor to 9
+loop index from 0 to count:
+    set kind to (the planar probe number at cursor) as an integer
+    set plane to a cad plane with origin (the planar probe vector3 at (cursor + 1)), x axis (the planar probe vector3 at (cursor + 4)) and y axis (the planar probe vector3 at (cursor + 7))
+    set start to the planar probe vector2 at (cursor + 10)
+    set end to the planar probe vector2 at (cursor + 12)
+    set radius to the planar probe number at (cursor + 14)
+    set first to the planar probe number at (cursor + 15)
+    set last to the planar probe number at (cursor + 16)
+    set minor to the planar probe number at (cursor + 17)
+    set axis to the planar probe vector2 at (cursor + 18)
+    set pointCount to (the planar probe number at (cursor + 20)) as an integer
+    set closed to (the planar probe number at (cursor + 21)) != 0.0
+    set degree to (the planar probe number at (cursor + 22)) as an integer
+    set knotCount to (the planar probe number at (cursor + 23)) as an integer
+    set weightCount to (the planar probe number at (cursor + 24)) as an integer
+    set cursor to cursor + 25
+    set vertices to an empty list of a cad polyline vertex2
+    set controls to an empty list of a cad vector2
+    loop i from 0 to pointCount:
+        set position to the planar probe vector2 at cursor
+        append position to controls
+        append (a cad polyline vertex2 at position with bulge (the planar probe number at (cursor + 2))) to vertices
+        set cursor to cursor + 3
+    set knots to an empty list of a 64 bit floating-point number
+    loop i from 0 to knotCount:
+        append (the planar probe number at cursor) to knots
+        increment cursor
+    set weights to an empty list of a 64 bit floating-point number
+    loop i from 0 to weightCount:
+        append (the planar probe number at cursor) to weights
+        increment cursor
+    set shape to the cad curve2 of (a cad line2 from start to end)
+    if kind = 1:
+        set shape to the cad curve2 of (a cad circle2 at start with radius radius)
+    else if kind = 2:
+        set shape to the cad curve2 of (a cad arc2 at start with radius radius from first to last)
+    else if kind = 3:
+        set ellipse to a cad ellipse at start with radii radius and minor along axis
+        set shape to the cad curve2 of (a cad ellipse arc2 on ellipse from first to last)
+    else if kind = 4:
+        set shape to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+    else if kind = 5:
+        set result to the cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+        if (the valid of result) = false:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+        set shape to the cad curve2 of (the value of result)
+    else if kind = 6:
+        set shape to the cad curve2 of (a cad ray2 from start along end)
+    else if kind = 7:
+        set shape to the cad curve2 of (a cad xline2 through start along end)
+    append (a cad planar curve3 of shape on plane) to curves
+    free controls
+    free vertices
+    free knots
+    free weights
+if mode = 0:
+    set inferred to the cad common plane of curves within tolerance
+    emit planar flag (the valid of inferred)
+    if the valid of inferred:
+        set frame to the value of inferred
+        emit planar point (the origin of frame)
+        emit planar point (the xAxis of frame)
+        emit planar point (the yAxis of frame)
+else:
+    set shape to the item at 0 in curves
+    emit planar point (the cad point on shape at parameter)
+    set back to the cad parameter on shape nearest target
+    emit planar flag (the valid of back)
+    if the valid of back:
+        emit planar number (the value of back)
+    set normal to the cad normal of shape
+    emit planar flag (the valid of normal)
+    if the valid of normal:
+        emit planar point (the value of normal)
+    emit planar number (the kind of the cad extent of shape)
+    emit planar flag (shape is cad closed)
+    emit planar point (the cad tangent of shape at parameter)
+    emit planar flag ((the cad clone of shape) = shape)
+    if mode = 2:
+        set densityPoints to the cad samples of shape with density density
+        emit planar samples densityPoints
+        free densityPoints
+        set anglePoints to the cad angular samples of shape within angle
+        emit planar samples anglePoints
+        free anglePoints
+    if mode = 3:
+        emit planar number (the cad length of shape)
+        emit planar point (the cad point on shape at distance parameter)
+        emit planar number (the cad parameter on shape at distance parameter)
+        set tolerancePoints to the cad samples of shape within tolerance
+        emit planar samples tolerancePoints
+        free tolerancePoints
+free curves

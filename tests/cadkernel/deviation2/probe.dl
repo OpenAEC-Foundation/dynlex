@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/deviation2.dl
+import tests/cadkernel/arclength2/input.dl
+set shape to measure2 input curve
+set points to the cad samples of shape within deviation (measure2 input 5)
+emit measure2 points points
+free points
+if (((measure2 input 7) as an integer) & 1) != 0:
+    set points to the cad angular samples of shape within (measure2 input 6)
+    emit measure2 points points
+    free points

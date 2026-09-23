@@ -1,0 +1,72 @@
+import examples/dynedra/model.dl
+
+function check lab {boolean:condition}:
+    execute:
+        if condition = false:
+            print "Dynedra model assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set settings to the initial lab settings
+set scene to the lab scene for settings
+check lab scene's valid
+check lab ((the length of scene's segments) = settings's samples)
+check lab ((the absolute value of (scene's length - 1.5707963267948966)) < 0.0001)
+set retained to scene
+set settings's weight to 1.0
+set scene to the lab scene for settings
+check lab (scene's length > retained's length)
+check lab ((the length of retained's segments) = settings's samples)
+set settings's operation to 1
+set scene to the lab scene for settings
+check lab scene's valid
+set before to scene's length
+set settings's height to 3.0
+set scene to the lab scene for settings
+check lab (scene's length > before)
+set settings's operation to 2
+set scene to the lab scene for settings
+check lab scene's valid
+set circumference to 6.283185307179586 * settings's turns
+set wanted to the square root of ((circumference * circumference) + (settings's height * settings's height))
+check lab ((the absolute value of (scene's exactLength - wanted)) < 1e-10)
+check lab (scene's length < scene's exactLength)
+set settings's operation to 3
+set scene to the lab scene for settings
+check lab scene's valid
+check lab ((the length of scene's controls) = 9)
+check lab ((the length of scene's segments) = 24 * settings's samples)
+set settings's operation to 4
+set settings's height to 1.5
+set scene to the lab scene for settings
+check lab scene's valid
+check lab (scene's regions = 4)
+check lab ((the absolute value of (scene's area - 12.0)) < 1e-9)
+check lab ((the absolute value of (scene's length - 28.0)) < 1e-9)
+check lab ((the length of scene's guides) = 6)
+set retained to scene
+set settings's height to 0.0
+set scene to the lab scene for settings
+check lab scene's valid
+check lab (scene's regions = 2)
+check lab (retained's regions = 4)
+check lab ((the length of retained's guides) = 6)
+set settings's operation to 5
+set settings's height to 0.5
+set settings's samples to 16
+set scene to the lab scene for settings
+check lab scene's valid
+check lab ((the length of scene's guides) > 2)
+check lab (scene's exactLength > 4.8)
+set retained to scene
+set settings's height to 1.5
+set settings's samples to 128
+set scene to the lab scene for settings
+check lab scene's valid
+check lab ((the length of scene's guides) > (the length of retained's guides))
+check lab ((the absolute value of (scene's exactLength - retained's exactLength)) < 1e-9)
+check lab ((the absolute value of (scene's length - retained's length)) > 0.1)
+set settings's samples to 0
+set scene to the lab scene for settings
+check lab (scene's valid = false)
+check lab ((the length of scene's segments) = 0)
+print "Dynedra model checks passed" as a line

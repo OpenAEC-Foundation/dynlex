@@ -1,0 +1,248 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of space/source_join.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed. NURBS results own independent control/knot/weight lists.
+import lib/cadkernel/nurbs3.dl
+
+class:
+    patterns:
+        [a|] cad source line result
+    members:
+        valid as a boolean
+        start as a cad vector3
+        end as a cad vector3
+class:
+    patterns:
+        [a|] cad source span result
+    members:
+        valid as a boolean
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad source arc3
+    members:
+        centre as a cad vector3
+        normal as a cad vector3
+        radius as a 64 bit floating-point number
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+
+function a cad source arc3 at {cad vector3:centre} normal {cad vector3:normal} with radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    execute:
+        return @intrinsic("construct", a cad source arc3, centre, normal, radius, start, end)
+
+local function cad source scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad source absent curve:
+    execute:
+        set points to an empty list of a cad vector3
+        set values to an empty list of a 64 bit floating-point number
+        set result to the strict cad nurbs curve3 of degree 0 with controls points, knots values and weights values
+        free points
+        free values
+        return result
+
+function the cad line nurbs from {cad vector3:start} to {cad vector3:end} of degree {integer:degree}:
+    execute:
+        if (degree <= 0) or (degree > 26):
+            return cad source absent curve
+        if ((cad start is finite) = false) or ((cad end is finite) = false):
+            return cad source absent curve
+        set controls to an empty list of a cad vector3
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 through degree:
+            append (the cad lerp from start to end at ((index as a 64 bit floating-point number) / (degree as a 64 bit floating-point number))) to controls
+            append 0.0 to knots
+            append 1.0 to weights
+        loop index from 0 through degree:
+            append 1.0 to knots
+        set result to the strict cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+        free controls
+        free knots
+        free weights
+        return result
+
+local function cad source curve {cad nurbs curve3:shape} is clamped:
+    execute:
+        set domain to the cad domain of shape
+        if ((cad source scalar domain's start is finite) = false) or ((cad source scalar domain's end is finite) = false):
+            return false
+        if domain's start >= domain's end:
+            return false
+        set count to the length of shape's knots
+        loop index from 0 through shape's degree:
+            if ((the item at index in shape's knots) != domain's start) or ((the item at ((count - 1) - index) in shape's knots) != domain's end):
+                return false
+        return true
+
+local function cad source reversed curve {cad nurbs curve3:shape}:
+    execute:
+        set domain to the cad domain of shape
+        set controls to an empty list of a cad vector3
+        set weights to an empty list of a 64 bit floating-point number
+        set knots to an empty list of a 64 bit floating-point number
+        set count to the length of shape's controls
+        loop index from 0 to count:
+            append (the item at ((count - 1) - index) in shape's controls) to controls
+            append (the item at ((count - 1) - index) in shape's weights) to weights
+        set count to the length of shape's knots
+        loop index from 0 to count:
+            append ((domain's start + domain's end) - (the item at ((count - 1) - index) in shape's knots)) to knots
+        set result to the strict cad nurbs curve3 of degree shape's degree with controls controls, knots knots and weights weights
+        free controls
+        free weights
+        free knots
+        return result
+
+function the cad joined nurbs of {cad nurbs curve3:source} and {cad nurbs curve3:other} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad source scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return cad source absent curve
+        if (source is cad closed) or (other is cad closed):
+            return cad source absent curve
+        set degree to the maximum of source's degree and other's degree
+        set sourceCopy to the cad clone of source
+        set otherCopy to the cad clone of other
+        if source's degree < degree:
+            set raised to the cad elevation of source by (degree - source's degree)
+            if raised's valid = false:
+                return raised
+            set sourceCopy to raised's value
+        if other's degree < degree:
+            set raised to the cad elevation of other by (degree - other's degree)
+            if raised's valid = false:
+                return raised
+            set otherCopy to raised's value
+        if ((cad source curve sourceCopy is clamped) = false) or ((cad source curve otherCopy is clamped) = false):
+            return cad source absent curve
+        set sourceStart to the cad point on sourceCopy at 0.0
+        set sourceEnd to the cad point on sourceCopy at 1.0
+        set otherStart to the cad point on otherCopy at 0.0
+        set otherEnd to the cad point on otherCopy at 1.0
+        set first to sourceCopy
+        set second to otherCopy
+        set prepend to false
+        if (the cad distance from sourceEnd to otherStart) <= tolerance:
+            set second to otherCopy
+        else if (the cad distance from sourceEnd to otherEnd) <= tolerance:
+            set reverse to cad source reversed curve otherCopy
+            if reverse's valid = false:
+                return reverse
+            set second to reverse's value
+        else if (the cad distance from sourceStart to otherEnd) <= tolerance:
+            set first to otherCopy
+            set second to sourceCopy
+            set prepend to true
+        else if (the cad distance from sourceStart to otherStart) <= tolerance:
+            set reverse to cad source reversed curve otherCopy
+            if reverse's valid = false:
+                return reverse
+            set first to reverse's value
+            set second to sourceCopy
+            set prepend to true
+        else:
+            return cad source absent curve
+        set firstDomain to the cad domain of first
+        set secondDomain to the cad domain of second
+        set controls to an empty list of a cad vector3
+        set weights to an empty list of a 64 bit floating-point number
+        set knots to an empty list of a 64 bit floating-point number
+        set count to the length of first's controls
+        set ratio to 1.0
+        if prepend:
+            set ratio to (the item at 0 in second's weights) / (the item at (count - 1) in first's weights)
+        loop index from 0 to count:
+            append (the item at index in first's controls) to controls
+            set weight to the item at index in first's weights
+            if prepend:
+                set weight to weight * ratio
+            append weight to weights
+        if prepend:
+            replace item at index (count - 1) in controls with (the item at 0 in (second's controls))
+            replace item at index (count - 1) in weights with (the item at 0 in (second's weights))
+        else:
+            set ratio to (the item at (count - 1) in first's weights) / (the item at 0 in second's weights)
+        loop index from 1 to the length of second's controls:
+            append (the item at index in second's controls) to controls
+            set weight to the item at index in second's weights
+            if prepend = false:
+                set weight to weight * ratio
+            append weight to weights
+        loop index from 0 to ((the length of first's knots) - 1):
+            append (the item at index in first's knots) to knots
+        loop index from (degree + 1) to the length of second's knots:
+            append (((the item at index in second's knots) - secondDomain's start) + firstDomain's end) to knots
+        set result to the strict cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+        free controls
+        free weights
+        free knots
+        return result
+
+function the cad joined line from {cad vector3:start} to {cad vector3:end} with {cad vector3:otherStart} to {cad vector3:otherEnd} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad source scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return a new cad source line result
+        if (((cad start is finite) and (cad end is finite)) and ((cad otherStart is finite) and (cad otherEnd is finite))) = false:
+            return a new cad source line result
+        set delta to the cad difference of end and start
+        set length to the cad length of delta
+        if length <= tolerance:
+            return a new cad source line result
+        set direction to the cad normalization of delta
+        if direction's valid = false:
+            return a new cad source line result
+        set firstOffset to the cad difference of otherStart and start
+        set lastOffset to the cad difference of otherEnd and start
+        if (the cad distance from otherStart to otherEnd) <= tolerance:
+            return a new cad source line result
+        if ((the cad length of (the cad cross of firstOffset and direction's value)) > tolerance) or ((the cad length of (the cad cross of lastOffset and direction's value)) > tolerance):
+            return a new cad source line result
+        set first to the cad dot of firstOffset and direction's value
+        set last to the cad dot of lastOffset and direction's value
+        set low to the minimum of (the minimum of first and last) and 0.0
+        set high to the maximum of (the maximum of first and last) and length
+        return @intrinsic("construct", a cad source line result, true, the cad sum of start and (direction's value scaled by low), the cad sum of start and (direction's value scaled by high))
+
+local function cad source turn [remainder] of {a 64 bit floating-point number:angle}:
+    execute:
+        set remainder to the remainder of angle divided by 6.283185307179586
+        if remainder < 0.0:
+            return remainder + 6.283185307179586
+        return remainder
+
+function the cad joined span from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} with {a 64 bit floating-point number:otherStart} to {a 64 bit floating-point number:otherEnd}:
+    execute:
+        if (((cad source scalar start is finite) and (cad source scalar end is finite)) and ((cad source scalar otherStart is finite) and (cad source scalar otherEnd is finite))) = false:
+            return a new cad source span result
+        set sourceSpan to cad source turn remainder of (end - start)
+        set otherSpan to cad source turn remainder of (otherEnd - otherStart)
+        if (sourceSpan = 0.0) or (otherSpan = 0.0):
+            return a new cad source span result
+        set offset to cad source turn remainder of (otherStart - start)
+        set limit to the minimum of (the maximum of sourceSpan and (offset + otherSpan)) and 6.283185307179586
+        return @intrinsic("construct", a cad source span result, true, start, start + limit)
+
+function the cad joined arc span of {cad source arc3:source} and {cad source arc3:other} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if ((cad source scalar tolerance is finite) = false) or (tolerance < 0.0):
+            return a new cad source span result
+        if ((cad source scalar source's radius is finite) = false) or ((cad source scalar other's radius is finite) = false):
+            return a new cad source span result
+        if (source's radius <= 0.0) or (other's radius <= 0.0):
+            return a new cad source span result
+        if (the absolute value of (source's radius - other's radius)) > tolerance:
+            return a new cad source span result
+        if (((cad (source's centre) is finite) and (cad (source's normal) is finite)) and ((cad (other's centre) is finite) and (cad (other's normal) is finite))) = false:
+            return a new cad source span result
+        if (the cad distance from source's centre to other's centre) > tolerance:
+            return a new cad source span result
+        set sourceNormal to the cad normalization of source's normal
+        set otherNormal to the cad normalization of other's normal
+        if (sourceNormal's valid and otherNormal's valid) = false:
+            return a new cad source span result
+        if (the cad distance from sourceNormal's value to otherNormal's value) > 1e-12:
+            return a new cad source span result
+        return the cad joined span from source's start to source's end with other's start to other's end

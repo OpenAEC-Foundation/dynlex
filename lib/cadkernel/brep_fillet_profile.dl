@@ -1,0 +1,207 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of the round_profile helper in src/brep/fillet_circular.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed. Successful results own a managed concrete curve list.
+import lib/cadkernel/fillet2.dl
+import lib/cadkernel/cross2.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad fillet error
+    members:
+        kind as an integer
+        first as a cad edge key
+        second as a cad edge key
+class:
+    patterns:
+        [a|] cad fillet original arc
+    members:
+        valid as a boolean
+        value as a cad arc2
+class:
+    patterns:
+        [a|] cad fillet profile result
+    members:
+        valid as a boolean
+        error as a cad fillet error
+        value as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+
+function cad fillet no error:
+    replacement:
+        0
+function cad fillet empty selection error:
+    replacement:
+        1
+function cad fillet invalid radius error:
+    replacement:
+        2
+function cad fillet unknown edge error:
+    replacement:
+        3
+function cad fillet invalid body topology error:
+    replacement:
+        4
+function cad fillet unsupported body topology error:
+    replacement:
+        5
+function cad fillet unsupported edge curve error:
+    replacement:
+        6
+function cad fillet non manifold edge error:
+    replacement:
+        7
+function cad fillet unsupported adjacent surface error:
+    replacement:
+        8
+function cad fillet degenerate geometry error:
+    replacement:
+        9
+function cad fillet adjacent selections error:
+    replacement:
+        10
+function cad fillet unsupported body surface error:
+    replacement:
+        11
+function cad fillet non convex body error:
+    replacement:
+        12
+function cad fillet unsupported existing fillet error:
+    replacement:
+        13
+function cad fillet radius interaction error:
+    replacement:
+        14
+function cad fillet unsupported end condition error:
+    replacement:
+        15
+function cad fillet invalid result error:
+    replacement:
+        16
+
+function a cad fillet error of [kind] {integer:kind}:
+    execute:
+        return @intrinsic("construct", a cad fillet error, kind, a new cad edge key, a new cad edge key)
+function a cad fillet error of [kind] {integer:kind} at {cad edge key:first}:
+    execute:
+        return @intrinsic("construct", a cad fillet error, kind, first, a new cad edge key)
+function a cad fillet error of [kind] {integer:kind} between {cad edge key:first} and {cad edge key:second}:
+    execute:
+        return @intrinsic("construct", a cad fillet error, kind, first, second)
+function the cad fillet original [arc] {cad arc2:value}:
+    execute:
+        return @intrinsic("construct", a cad fillet original arc, true, value)
+function no cad fillet original [arc]:
+    execute:
+        return @intrinsic("construct", a cad fillet original arc, false, a cad arc2 at the cad zero vector2 with radius 0.0 from 0.0 to 0.0)
+
+local function the cad fillet [profile] failure of [kind] {integer:kind}:
+    execute:
+        set empty to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        return @intrinsic("construct", a cad fillet profile result, false, a cad fillet error of kind kind, empty)
+local function the cad fillet [profile] success with {cad topology list:value}:
+    execute:
+        return @intrinsic("construct", a cad fillet profile result, true, a cad fillet error of kind (cad fillet no error), value)
+local function cad fillet profile {a pointer to a list:selected} contains {integer:node}:
+    execute:
+        loop index from 0 to the length of selected:
+            if (the item at index in selected) = node:
+                return true
+        return false
+local function cad fillet profile {cad curve2:shape} has endpoint {cad vector2:point} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (the cad distance from (the cad point on shape at 0.0) to point) <= tolerance:
+            return true
+        return (the cad distance from (the cad point on shape at 1.0) to point) <= tolerance
+
+function the cad rounded [profile] through {a pointer to a list:points} in [order] {a pointer to a list:order} at [selected] {a pointer to a list:selected} with [radius] {a number:radius}, [tolerance] {a number:tolerance}, avoiding [axis] {boolean:avoidAxis} and preserving {a pointer to a list:originals}:
+    execute:
+        set count to the length of order
+        if (count < 3) or (((the length of points) < count) or ((the length of originals) != count)):
+            return the cad fillet profile failure of kind (cad fillet invalid result error)
+        set incoming to a cad topology list of a cad vector2
+        set outgoing to a cad topology list of a cad vector2
+        set arcs to a cad topology list of a cad fillet original arc
+        loop index from 0 to count:
+            set node to the item at index in order
+            if (node < 0) or (node >= (the length of points)):
+                return the cad fillet profile failure of kind (cad fillet invalid result error)
+            set point to the item at node in points
+            append point to incoming's values
+            append point to outgoing's values
+            append no cad fillet original arc to arcs's values
+
+        loop index from 0 to count:
+            set node to the item at index in order
+            if cad fillet profile selected contains node:
+                set previous to the remainder of (index + count - 1) divided by count
+                if (the item at index in originals)'s valid or (the item at previous in originals)'s valid:
+                    return the cad fillet profile failure of kind (cad fillet unsupported existing fillet error)
+                set apex to the item at node in points
+                set beforeNode to the item at previous in order
+                set afterNode to the item at (the remainder of (index + 1) divided by count) in order
+                set before to the cad difference of (the item at beforeNode in points) and apex
+                set after to the cad difference of (the item at afterNode in points) and apex
+                set beforeUnit to the cad normalization of before
+                set afterUnit to the cad normalization of after
+                if (beforeUnit's valid = false) or (afterUnit's valid = false):
+                    return the cad fillet profile failure of kind (cad fillet invalid result error)
+                set cornerResult to the cad fillet at apex along beforeUnit's value and afterUnit's value with radius (radius as a 64 bit floating-point number)
+                if cornerResult's valid = false:
+                    return the cad fillet profile failure of kind (cad fillet radius interaction error)
+                set value to cornerResult's value
+                if (the cad distance from value's tangent1 to apex) >= ((the cad length of before) - (tolerance as a 64 bit floating-point number)):
+                    return the cad fillet profile failure of kind (cad fillet radius interaction error)
+                if (the cad distance from value's tangent2 to apex) >= ((the cad length of after) - (tolerance as a 64 bit floating-point number)):
+                    return the cad fillet profile failure of kind (cad fillet radius interaction error)
+                set arc to a cad arc2 at value's centre with radius (radius as a 64 bit floating-point number) from value's startAngle to value's endAngle
+                set minimumRadius to the minimum of value's tangent1's x and value's tangent2's x
+                if (cad arc span from arc's startAngle to 3.141592653589793) <= (the cad sweep of arc):
+                    set minimumRadius to arc's centre's x - (radius as a 64 bit floating-point number)
+                if avoidAxis and (minimumRadius <= (tolerance as a 64 bit floating-point number)):
+                    return the cad fillet profile failure of kind (cad fillet radius interaction error)
+                replace item at index index in incoming's values with value's tangent1
+                replace item at index index in outgoing's values with value's tangent2
+                replace item at index index in arcs's values with (the cad fillet original arc arc)
+
+        set profile to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to count:
+            set cornerArc to the item at index in arcs's values
+            if cornerArc's valid:
+                append (the cad curve2 of cornerArc's value) to profile's values
+            set originalArc to the item at index in originals
+            if originalArc's valid:
+                append (the cad curve2 of originalArc's value) to profile's values
+            else:
+                set next to the remainder of (index + 1) divided by count
+                set node to the item at index in order
+                set nextNode to the item at next in order
+                set original to the cad difference of (the item at nextNode in points) and (the item at node in points)
+                set remaining to the cad difference of (the item at next in incoming's values) and (the item at index in outgoing's values)
+                if (the cad dot of remaining and original) <= ((tolerance as a 64 bit floating-point number) * (the cad length of original)):
+                    return the cad fillet profile failure of kind (cad fillet radius interaction error)
+                append (the cad curve2 of (a cad line2 from (the item at index in outgoing's values) to (the item at next in incoming's values))) to profile's values
+
+        set interacting to false
+        set size to the length of profile's values
+        loop first from 0 to size:
+            loop second from (first + 1) to size:
+                set adjacent to second = (first + 1)
+                if (first = 0) and ((second + 1) = size):
+                    set adjacent to true
+                set firstCurve to the item at first in profile's values
+                set secondCurve to the item at second in profile's values
+                set hits to the cad crossings of firstCurve and secondCurve within (a cad tolerance of (tolerance as a 64 bit floating-point number))
+                loop hitIndex from 0 to the length of hits:
+                    set hit to the item at hitIndex in hits
+                    set allowed to adjacent
+                    if allowed:
+                        set allowed to cad fillet profile firstCurve has endpoint hit's point within (tolerance as a 64 bit floating-point number)
+                    if allowed:
+                        set allowed to cad fillet profile secondCurve has endpoint hit's point within (tolerance as a 64 bit floating-point number)
+                    if allowed = false:
+                        set interacting to true
+                free hits
+        if interacting:
+            return the cad fillet profile failure of kind (cad fillet radius interaction error)
+        return the cad fillet profile success with profile

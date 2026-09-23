@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+# Complete port of cadkernel src/geom2d/gradient.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/gradient.rs
+# Boundary lists are borrowed and contain cad vector2 values. Results own no allocations.
+# A result represents Option<GradientFrame>: inspect valid before using value.
+import lib/cadkernel/geometry2.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad gradient frame
+    members:
+        centre as a cad vector2
+        projectionMinimum as a 64 bit floating-point number
+        projectionSpan as a 64 bit floating-point number
+        radius as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad gradient result
+    members:
+        valid as a boolean
+        value as a cad gradient frame
+
+function a cad gradient frame at {cad vector2:centre} with projection minimum {a 64 bit floating-point number:projectionMinimum}, span {a 64 bit floating-point number:projectionSpan} and radius {a 64 bit floating-point number:radius}:
+    execute:
+        return @intrinsic("construct", a cad gradient frame, centre, projectionMinimum, projectionSpan, radius)
+
+function cad {cad gradient frame:left} equals {cad gradient frame:right}:
+    execute:
+        set sameCentre to ((the x of the centre of left) = (the x of the centre of right)) and ((the y of the centre of left) = (the y of the centre of right))
+        return sameCentre and (((the projectionMinimum of left) = (the projectionMinimum of right)) and (((the projectionSpan of left) = (the projectionSpan of right)) and ((the radius of left) = (the radius of right))))
+
+local function no cad gradient frame:
+    execute:
+        return @intrinsic("construct", a cad gradient result, false, a new cad gradient frame)
+
+local function cad gradient scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function check cad gradient point {cad vector2:pointValue}:
+    execute:
+        ignore pointValue
+
+function the cad gradient frame of {a pointer to a list:boundary} at angle {a 64 bit floating-point number:angle} with shift {a 64 bit floating-point number:shift} within {cad tolerance:tolerance}:
+    execute:
+        # Constrain the payload even for an empty list; typeof does not read an item.
+        check cad gradient point (a new (the type of (the item at 0 in boundary)))
+        if ((cad gradient scalar angle is finite) = false) or ((cad gradient scalar shift is finite) = false):
+            return no cad gradient frame
+        set horizontal to the cosine of angle
+        set vertical to the sine of angle
+        set infinity to 1.0 / 0.0
+        set minimumX to infinity
+        set minimumY to infinity
+        set maximumX to the negative of infinity
+        set maximumY to the negative of infinity
+        set projectionMinimum to infinity
+        set projectionMaximum to the negative of infinity
+        loop index from 0 to the length of boundary:
+            set pointValue to the item at index in boundary
+            set x to the x of pointValue
+            set y to the y of pointValue
+            if (cad gradient scalar x is finite) and (cad gradient scalar y is finite):
+                set minimumX to the minimum of minimumX and x
+                set minimumY to the minimum of minimumY and y
+                set maximumX to the maximum of maximumX and x
+                set maximumY to the maximum of maximumY and y
+                set projection to (x * horizontal) + (y * vertical)
+                set projectionMinimum to the minimum of projectionMinimum and projection
+                set projectionMaximum to the maximum of projectionMaximum and projection
+        if (cad gradient scalar projectionMinimum is finite) = false:
+            return no cad gradient frame
+        # Preserve addition-before-halving and extent-before-scaling, including overflow.
+        set baseX to (minimumX + maximumX) * 0.5
+        set baseY to (minimumY + maximumY) * 0.5
+        set boundedShift to shift
+        clamp boundedShift between 0.0 and 1.0
+        set offsetX to ((the negative of (maximumX - minimumX)) * 0.25) * boundedShift
+        set offsetY to ((maximumY - minimumY) * 0.25) * boundedShift
+        set centreX to baseX + offsetX
+        set centreY to baseY + offsetY
+        set radius to 0.0 as a 64 bit floating-point number
+        loop index from 0 to the length of boundary:
+            set pointValue to the item at index in boundary
+            set x to the x of pointValue
+            set y to the y of pointValue
+            if (cad gradient scalar x is finite) and (cad gradient scalar y is finite):
+                # hypot retains the source's overflow and NaN/infinity behavior.
+                set distance to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, x - centreX, y - centreY)
+                set radius to the maximum of radius and distance
+        set linear to the cad linear tolerance of tolerance
+        set radius to the maximum of radius and linear
+        set minimum to (projectionMinimum + (offsetX * horizontal)) + (offsetY * vertical)
+        set span to the maximum of (projectionMaximum - projectionMinimum) and linear
+        set centre to a cad vector2 with x centreX and y centreY
+        set computedFrame to a cad gradient frame at centre with projection minimum minimum, span span and radius radius
+        return @intrinsic("construct", a cad gradient result, true, computedFrame)

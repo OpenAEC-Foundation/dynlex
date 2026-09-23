@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/construct2.dl
+function construct2 check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 82)
+function construct2 near {a 64 bit floating-point number:left} to {a 64 bit floating-point number:right}:
+    execute:
+        construct2 check ((the absolute value of (left - right)) < 1e-10)
+function construct2 endpoints {cad arc2 result:result} between {cad vector2:first} and {cad vector2:last}:
+    execute:
+        construct2 check result's valid
+        set shape to the cad curve2 of result's value
+        set p0 to the cad point on shape at 0.0
+        set p1 to the cad point on shape at 1.0
+        set forward to (the cad distance from p0 to first) + (the cad distance from p1 to last)
+        set reverse to (the cad distance from p0 to last) + (the cad distance from p1 to first)
+        construct2 check ((the minimum of forward and reverse) < 1e-10)
+
+set first to a cad vector2 with x 1 and y 0
+set last to a cad vector2 with x 0 and y 1
+set middle to a cad vector2 with x 0.7071067811865476 and y 0.7071067811865476
+set bounded to the bounded cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 1.5707963267948966
+construct2 endpoints bounded between first and last
+set angle to the cad arc2 from first to last with included angle 1.5707963267948966
+construct2 endpoints angle between first and last
+construct2 near angle's value's radius to 1.0
+set radius to the cad arc2 from first to last with signed radius 1.0
+construct2 endpoints radius between first and last
+construct2 near (the cad sweep of radius's value) to 1.5707963267948966
+set major to the cad arc2 from first to last with signed radius (-1.0)
+construct2 endpoints major between first and last
+construct2 near (the cad sweep of major's value) to 4.71238898038469
+set sagitta to the cad arc2 from (the cad zero vector2) to (a cad vector2 with x 2 and y 0) with sagitta 1.0
+construct2 endpoints sagitta between (the cad zero vector2) and (a cad vector2 with x 2 and y 0)
+construct2 near sagitta's value's radius to 1.0
+set tangent to the cad arc2 from first along tangent (a cad vector2 with x 0 and y 1) to last flipped false
+construct2 endpoints tangent between first and last
+construct2 near (the cad sweep of tangent's value) to 1.5707963267948966
+set flipped to the cad arc2 from first along tangent (a cad vector2 with x 0 and y 1) to last flipped true
+construct2 near (the cad sweep of flipped's value) to 4.71238898038469
+set triple to the cad arc2 through first then middle to last
+construct2 endpoints triple between first and last
+construct2 near triple's value's radius to 1.0
+set minorSweep to the cad arc2 sweep for radius 1.0 and signed chord 1.4142135623730951
+set majorSweep to the cad arc2 sweep for radius 1.0 and signed chord (-1.4142135623730951)
+construct2 check (minorSweep's valid and majorSweep's valid)
+construct2 near (minorSweep's value + majorSweep's value) to 6.283185307179586
+print "construct2: seven constructors, endpoints, minor/major and tangent flip" as a line
+
+set refused to the bounded cad arc2 at first with radius 1.0 from 0.0 to 6.283185307179586
+construct2 check (refused's valid = false)
+set refused to the cad arc2 from first to first with included angle 1.0
+construct2 check (refused's valid = false)
+set refused to the cad arc2 through (the cad zero vector2) then first to (a cad vector2 with x 2 and y 0)
+construct2 check (refused's valid = false)
+set refused to the cad arc2 from (the cad zero vector2) along tangent first to first flipped false
+construct2 check (refused's valid = false)
+set refusedSweep to the cad arc2 sweep for radius 1.0 and signed chord 2.00001
+construct2 check (refusedSweep's valid = false)
+print "construct2: full-turn, coincidence, collinearity and impossible chord refusals" as a line
+

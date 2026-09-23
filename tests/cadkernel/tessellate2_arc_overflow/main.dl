@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/tessellate2.dl
+set points to the cad arc samples at the cad zero vector2 with radius 1.0 from 0.0 to 1.0 at elevation 0.0 with density 1e12
+free points

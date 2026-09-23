@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MPL-2.0
+# Independent fixture construction and geometric checks.
+import lib/cadkernel/curve2.dl
+function check measure2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 94)
+function measure2 point {a number:x} and {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+function measure2 {cad vector2:left} exactly equals {cad vector2:right}:
+    execute:
+        return (left's x = right's x) and (left's y = right's y)
+function measure2 {cad vector2:left} is near {cad vector2:right} within {a number:slack}:
+    execute:
+        return ((the absolute value of (left's x - right's x)) < slack) and ((the absolute value of (left's y - right's y)) < slack)
+function measure2 [ellipse] at {cad vector2:centre} with radii {a number:major} and {a number:minor} along {cad vector2:axis} from {a number:first} to {a number:last}:
+    execute:
+        set ellipse to a cad ellipse at centre with radii major and minor along axis
+        return the cad curve2 of (a cad ellipse arc2 on ellipse from first to last)
+function measure2 polyline coordinates with closure {boolean:closed}:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of coordinates:
+            set row to the item at index in coordinates
+            append (a cad polyline vertex2 at (measure2 point (the item at 0 in row) and (the item at 1 in row)) with bulge (the item at 2 in row)) to vertices
+        set result to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+        free vertices
+        return result
+function measure2 quarter spline:
+    execute:
+        set points to a list containing (measure2 point 100.0 and 0.0)
+        append (measure2 point 100.0 and 100.0) to points
+        append (measure2 point 0.0 and 100.0) to points
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to a list containing 1.0
+        append (the cosine of 0.7853981633974483) to weights
+        append 1.0 to weights
+        set result to the cad nurbs curve2 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        check measure2 result's valid
+        return the cad curve2 of result's value

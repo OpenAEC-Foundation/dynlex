@@ -1,0 +1,31 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] scope probe
+    members:
+        marker as an integer
+    retain:
+        set localMarker to 111
+        if localMarker != 111:
+            @intrinsic("call", "libc", "exit", nothing, 81)
+    release:
+        set localMarker to 222
+        if localMarker != 222:
+            @intrinsic("call", "libc", "exit", nothing, 82)
+
+function exercise local lifetime:
+    execute:
+        set held to @intrinsic("construct", a scope probe, 0)
+        ignore held
+
+function the unrelated local value:
+    execute:
+        set localMarker to 333
+        return localMarker
+
+set localMarker to 99
+exercise local lifetime
+print localMarker as a line
+print (the unrelated local value) as a line
+print localMarker as a line

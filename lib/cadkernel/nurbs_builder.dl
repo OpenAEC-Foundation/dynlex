@@ -1,0 +1,282 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/nurbs_builder.rs.
+# Intermediate rational builders deliberately defer geometric validation.
+# Constructors borrow and copy input lists. Copies retain read-only storage;
+# clone, reverse, lift and translate allocate independent lists. Raw list fields
+# are borrowed views: do not mutate or free them. Final curve/surface construction
+# uses the existing strict NURBS validators.
+import lib/cadkernel/curve2.dl
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/plane.dl
+
+local function check cad rational expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+
+local function cad rational copied {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return result
+local function cad rational reversed {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at (((the length of values) - 1) - index) in values) to result
+        return result
+local function cad rational reversed knots {a pointer to a list:values}:
+    execute:
+        set result to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of values:
+            append (1.0 - (the item at (((the length of values) - 1) - index) in values)) to result
+        return result
+
+class:
+    patterns:
+        [a|] cad rational curve2
+    members:
+        degree as an integer
+        controls
+        knots
+        weights
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the controls of @intrinsic("lifecycle value"))
+                free (the knots of @intrinsic("lifecycle value"))
+                free (the weights of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function cad rational owned curve2 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        check cad rational (0 as a pointer to a cad vector2) against (0 as a pointer to the type of (the item at 0 in points))
+        check cad rational (0 as a pointer to a 64 bit floating-point number) against (0 as a pointer to the type of (the item at 0 in knots))
+        check cad rational (0 as a pointer to a 64 bit floating-point number) against (0 as a pointer to the type of (the item at 0 in weights))
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad rational curve2, degree, points, knots, weights, owner)
+function the cad rational curve2 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        return cad rational owned curve2 of degree degree with controls (cad rational copied points), knots (cad rational copied knots) and weights (cad rational copied weights)
+function an empty cad rational curve2:
+    execute:
+        return cad rational owned curve2 of degree 0 with controls (an empty list of a cad vector2), knots (an empty list of a 64 bit floating-point number) and weights (an empty list of a 64 bit floating-point number)
+function free cad rational {cad rational curve2:shape}:
+    replacement:
+        set shape to a new (the type of shape)
+function the cad clone of {cad rational curve2:shape}:
+    execute:
+        return the cad rational curve2 of degree shape's degree with controls shape's controls, knots shape's knots and weights shape's weights
+function the cad reverse of {cad rational curve2:shape}:
+    execute:
+        return cad rational owned curve2 of degree shape's degree with controls (cad rational reversed shape's controls), knots (cad rational reversed knots shape's knots) and weights (cad rational reversed shape's weights)
+function the cad curve of {cad rational curve2:shape}:
+    execute:
+        return the strict cad nurbs curve2 of degree shape's degree with controls shape's controls, knots shape's knots and weights shape's weights
+
+class:
+    patterns:
+        [a|] cad rational curve3
+    members:
+        degree as an integer
+        controls
+        knots
+        weights
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the controls of @intrinsic("lifecycle value"))
+                free (the knots of @intrinsic("lifecycle value"))
+                free (the weights of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function cad rational owned curve3 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        check cad rational (0 as a pointer to a cad vector3) against (0 as a pointer to the type of (the item at 0 in points))
+        check cad rational (0 as a pointer to a 64 bit floating-point number) against (0 as a pointer to the type of (the item at 0 in knots))
+        check cad rational (0 as a pointer to a 64 bit floating-point number) against (0 as a pointer to the type of (the item at 0 in weights))
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad rational curve3, degree, points, knots, weights, owner)
+function the cad rational curve3 of degree {integer:degree} with controls {a pointer to a list:points}, knots {a pointer to a list:knots} and weights {a pointer to a list:weights}:
+    execute:
+        return cad rational owned curve3 of degree degree with controls (cad rational copied points), knots (cad rational copied knots) and weights (cad rational copied weights)
+function an empty cad rational curve3:
+    execute:
+        return cad rational owned curve3 of degree 0 with controls (an empty list of a cad vector3), knots (an empty list of a 64 bit floating-point number) and weights (an empty list of a 64 bit floating-point number)
+function free cad rational {cad rational curve3:shape}:
+    replacement:
+        set shape to a new (the type of shape)
+function the cad clone of {cad rational curve3:shape}:
+    execute:
+        return the cad rational curve3 of degree shape's degree with controls shape's controls, knots shape's knots and weights shape's weights
+function the cad reverse of {cad rational curve3:shape}:
+    execute:
+        return cad rational owned curve3 of degree shape's degree with controls (cad rational reversed shape's controls), knots (cad rational reversed knots shape's knots) and weights (cad rational reversed shape's weights)
+function the cad curve of {cad rational curve3:shape}:
+    execute:
+        return the strict cad nurbs curve3 of degree shape's degree with controls shape's controls, knots shape's knots and weights shape's weights
+
+class:
+    patterns:
+        [a|] cad rational builder result
+    members:
+        valid as a boolean
+        value as a cad rational curve2
+local function cad rational absent:
+    execute:
+        return @intrinsic("construct", a cad rational builder result, false, an empty cad rational curve2)
+local function cad rational success {cad rational curve2:value}:
+    execute:
+        return @intrinsic("construct", a cad rational builder result, true, value)
+
+local function cad rational conic {cad ellipse:ellipse} from {a 64 bit floating-point number:start} sweeping {a 64 bit floating-point number:sweep}:
+    execute:
+        if ((((the absolute value of start) <= 1.7976931348623157e308) = false) or (((the absolute value of sweep) <= 1.7976931348623157e308) = false)) or (sweep <= 0.0):
+            return cad rational absent
+        set wanted to the maximum of (the ceiling of (sweep / 1.5707963267948966)) and 1.0
+        # Lists use signed 32-bit counts. Reserve space for 2*spans+4 knots.
+        if wanted > 1073741821.0:
+            @intrinsic("call", "libc", "abort", nothing)
+        set spans to wanted as an integer
+        set step to sweep / (spans as a 64 bit floating-point number)
+        if step > (1.5707963267948966 + 1e-12):
+            return cad rational absent
+        set points to an empty list of a cad vector2
+        set weights to an empty list of a 64 bit floating-point number
+        loop span from 0 to spans:
+            set a to start + (step * (span as a 64 bit floating-point number))
+            set b to a + step
+            set middle to (a + b) * 0.5
+            set weight to the cosine of (step * 0.5)
+            if span = 0:
+                append (the cad point on ellipse at a) to points
+                append 1.0 to weights
+            set major to ellipse's majorAxis
+            set minor to the cad minor axis of ellipse
+            set along to ellipse's majorRadius * (the cosine of middle)
+            set across to ellipse's minorRadius * (the sine of middle)
+            set x to (ellipse's centre's x + ((along * major's x) / weight)) + ((across * minor's x) / weight)
+            set y to (ellipse's centre's y + ((along * major's y) / weight)) + ((across * minor's y) / weight)
+            append (a cad vector2 with x x and y y) to points
+            append weight to weights
+            append (the cad point on ellipse at b) to points
+            append 1.0 to weights
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 0.0 to knots
+        loop split from 1 to spans:
+            set knot to (split as a 64 bit floating-point number) / (spans as a 64 bit floating-point number)
+            append knot to knots
+            append knot to knots
+        loop index from 0 to 3:
+            append 1.0 to knots
+        return cad rational success (cad rational owned curve2 of degree 2 with controls points, knots knots and weights weights)
+
+function the cad rational unit arc with sweep {a 64 bit floating-point number:sweep}:
+    execute:
+        set ellipse to a cad ellipse at (the cad zero vector2) with radii 1.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+        return cad rational conic ellipse from 0.0 sweeping sweep
+
+function the cad rational builder of {cad curve2:shape}:
+    execute:
+        if shape's kind = 0:
+            set points to a list containing shape's line's start
+            append shape's line's end to points
+            set knots to a list containing 0.0
+            append 0.0 to knots
+            append 1.0 to knots
+            append 1.0 to knots
+            set weights to a list containing 1.0
+            append 1.0 to weights
+            return cad rational success (cad rational owned curve2 of degree 1 with controls points, knots knots and weights weights)
+        if shape's kind = 1:
+            set circle to shape's circle
+            set ellipse to a cad ellipse at circle's centre with radii circle's radius and circle's radius along (a cad vector2 with x 1.0 and y 0.0)
+            return cad rational conic ellipse from 0.0 sweeping 6.283185307179586
+        if shape's kind = 2:
+            set arc to shape's arc
+            set ellipse to a cad ellipse at arc's centre with radii arc's radius and arc's radius along (a cad vector2 with x 1.0 and y 0.0)
+            return cad rational conic ellipse from arc's startAngle sweeping (the cad sweep of arc)
+        if shape's kind = 3:
+            return cad rational conic shape's ellipse's ellipse from shape's ellipse's startParameter sweeping (the cad sweep of shape's ellipse)
+        if shape's kind = 5:
+            set nurbs to shape's nurbs
+            set domain to the cad domain of nurbs
+            set span to domain's end - domain's start
+            if (((the absolute value of span) <= 1.7976931348623157e308) = false) or (span <= 0.0):
+                return cad rational absent
+            set normalized to an empty list of a 64 bit floating-point number
+            loop index from 0 to the length of nurbs's knots:
+                append (((the item at index in (nurbs's knots)) - domain's start) / span) to normalized
+            return cad rational success (cad rational owned curve2 of degree nurbs's degree with controls (cad rational copied nurbs's controls), knots normalized and weights (cad rational copied nurbs's weights))
+        return cad rational absent
+
+function the cad lift of {cad rational curve2:shape} onto {cad plane:plane}:
+    execute:
+        set points to an empty list of a cad vector3
+        loop index from 0 to the length of shape's controls:
+            append (the cad point at (the item at index in (shape's controls)) on plane) to points
+        return cad rational owned curve3 of degree shape's degree with controls points, knots (cad rational copied shape's knots) and weights (cad rational copied shape's weights)
+
+function the cad translation of {cad rational curve3:shape} by {cad vector3:offset}:
+    execute:
+        set points to an empty list of a cad vector3
+        loop index from 0 to the length of shape's controls:
+            append (the cad sum of (the item at index in (shape's controls)) and offset) to points
+        return cad rational owned curve3 of degree shape's degree with controls points, knots (cad rational copied shape's knots) and weights (cad rational copied shape's weights)
+
+function {cad rational curve3:shape} is cad compatible with {cad rational curve3:other}:
+    execute:
+        if ((shape's degree != other's degree) or ((the length of shape's controls) != (the length of other's controls))) or ((the length of shape's knots) != (the length of other's knots)):
+            return false
+        loop index from 0 to the length of shape's knots:
+            if ((the absolute value of ((the item at index in (shape's knots)) - (the item at index in (other's knots)))) <= 1e-10) = false:
+                return false
+        return true
+
+function the cad ruled surface from {cad rational curve3:shape} to {cad rational curve3:other}:
+    execute:
+        set points to an empty list of the type of (an empty list of a cad vector3)
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        set vKnots to a list containing 0.0
+        append 0.0 to vKnots
+        append 1.0 to vKnots
+        append 1.0 to vKnots
+        if shape is cad compatible with other:
+            loop index from 0 to the length of shape's controls:
+                set row to a list containing (the item at index in (shape's controls))
+                append (the item at index in (other's controls)) to row
+                append row to points
+            loop index from 0 to the minimum of (the length of shape's weights) and (the length of other's weights):
+                set weightRow to a list containing (the item at index in (shape's weights))
+                append (the item at index in (other's weights)) to weightRow
+                append weightRow to weights
+        set result to the strict cad nurbs surface3 of degrees shape's degree and 1 with controls points, knots shape's knots and vKnots and weights weights
+        loop index from 0 to the length of points:
+            free (the item at index in points)
+        loop index from 0 to the length of weights:
+            free (the item at index in weights)
+        free points
+        free weights
+        free vKnots
+        return result

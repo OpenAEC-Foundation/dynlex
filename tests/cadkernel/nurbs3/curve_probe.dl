@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/nurbs3/support.dl
+
+set constructor to (the nurbs probe number at 0) as an integer
+set degree to (the nurbs probe number at 1) as an integer
+set count to (the nurbs probe number at 2) as an integer
+set knotCount to (the nurbs probe number at 3) as an integer
+set weightCount to (the nurbs probe number at 4) as an integer
+set closed to (the nurbs probe number at 5) != 0.0
+set transform to (the nurbs probe number at 6) as an integer
+set amount to (the nurbs probe number at 7) as an integer
+set u to the nurbs probe number at 8
+set t to the nurbs probe number at 9
+set tessellation to (the nurbs probe number at 10) as an integer
+set limit to the nurbs probe number at 11
+set spacing to @intrinsic("construct", a cad spline parameterization, (the nurbs probe number at 12) as an integer)
+set startValid to (the nurbs probe number at 13) != 0.0
+set endValid to (the nurbs probe number at 14) != 0.0
+set evaluate to (the nurbs probe number at 15) as an integer
+set cursor to 16
+set points to an empty list of a cad vector3
+loop index from 0 to count:
+    append (the nurbs probe point at cursor) to points
+    set cursor to cursor + 3
+set knots to an empty list of a 64 bit floating-point number
+loop index from 0 to knotCount:
+    append (the nurbs probe number at cursor) to knots
+    increment cursor
+set weights to an empty list of a 64 bit floating-point number
+loop index from 0 to weightCount:
+    append (the nurbs probe number at cursor) to weights
+    increment cursor
+set startPoint to the cad nurbs coordinates of (the nurbs probe point at cursor)
+set endPoint to the cad nurbs coordinates of (the nurbs probe point at (cursor + 3))
+set target to the nurbs probe point at (cursor + 6)
+set first to @intrinsic("construct", a cad spline tangent, startValid, startPoint)
+set last to @intrinsic("construct", a cad spline tangent, endValid, endPoint)
+set result to the cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+if constructor = 1:
+    set result to the strict cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+else if constructor = 2:
+    set result to the cad nurbs curve3 of degree degree through control polygon points with weights weights and periodicity closed
+else if constructor = 3:
+    set result to the cad nurbs curve3 of degree degree through control polygon points with periodicity closed
+else if constructor = 4:
+    set result to the cad nurbs fit through points with start tangent first and end tangent last using spacing
+else if constructor = 5:
+    set result to the cad periodic nurbs fit through points using spacing
+if the valid of result:
+    if transform = 1:
+        set result to the cad reversal of (the value of result)
+    else if transform = 2:
+        set result to the cad elevation of (the value of result) by amount
+    else if transform = 3:
+        set result to the cad reduction of (the value of result) without control vertex amount
+    else if transform = 4:
+        set the value of result to (the value of result) with cad periodicity closed
+emit nurbs flag (the valid of result)
+if the valid of result:
+    set shape to the value of result
+    emit nurbs curve shape
+    if evaluate > 0:
+        emit nurbs point (the cad point on shape at knot u)
+        emit nurbs point (the cad point on shape at t)
+    if evaluate = 1:
+        emit nurbs flag (shape is cad closed)
+        emit nurbs point (the cad derivative of shape at knot u)
+        emit nurbs point (the cad tangent of shape at knot u)
+        emit nurbs point (the cad tangent of shape at t)
+        emit nurbs point (the cad acceleration of shape at knot u)
+        emit nurbs scalar (the cad parameter on shape nearest target)
+    if tessellation > 0:
+        set samples to an empty list of a cad vector3
+        if tessellation = 1:
+            free samples
+            set samples to the cad samples of shape within limit
+        else:
+            free samples
+            set samples to the cad samples of shape with maximum angle limit
+        emit nurbs scalar (the length of samples)
+        loop index from 0 to the length of samples:
+            emit nurbs point (the item at index in samples)
+        free samples
+free points
+free knots
+free weights
+

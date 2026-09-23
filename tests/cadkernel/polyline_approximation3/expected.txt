@@ -1,0 +1,2 @@
+precision_is_monotonic_and_bounds_the_sampled_curve
+knot_boundaries_survive_and_discontinuous_curves_are_rejected

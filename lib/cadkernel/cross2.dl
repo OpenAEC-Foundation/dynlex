@@ -1,0 +1,284 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native port of the complete cadkernel src/geom2d/cross.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/cross.rs
+# Inputs are borrowed. Crossing lists own their scalar records; callers free the list.
+import lib/cadkernel/curve2.dl
+import lib/cadkernel/intersect2.dl
+
+class:
+    patterns:
+        [a|] cad crossing2
+    members:
+        point as a cad vector2
+        tA as a 64 bit floating-point number
+        tB as a 64 bit floating-point number
+
+function {cad crossing2:left} = {cad crossing2:right}:
+    execute:
+        return ((left's point's x = right's point's x) and (left's point's y = right's point's y)) and ((left's tA = right's tA) and (left's tB = right's tB))
+
+class:
+    patterns:
+        [a|] cad cross2 parameter result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad cross2 point result
+    members:
+        valid as a boolean
+        value as a cad vector2
+class:
+    patterns:
+        [a|] cad cross2 piece
+    members:
+        from as a 64 bit floating-point number
+        to as a 64 bit floating-point number
+        start as a cad vector2
+        end as a cad vector2
+        low as a cad vector2
+        high as a cad vector2
+        bow as a 64 bit floating-point number
+
+local function the cad cross2 [parameter] on {cad curve2:shape} at {cad vector2:point} within {cad tolerance:tolerance}:
+    execute:
+        set parameter to the cad parameter on shape nearest point
+        if (shape is cad closed) = false:
+            if ((the cad extent of shape) holds cad parameter parameter) = false:
+                return @intrinsic("construct", a cad cross2 parameter result, false, 0.0)
+        if (the cad distance from (the cad point on shape at parameter) to point) > tolerance's linear:
+            return @intrinsic("construct", a cad cross2 parameter result, false, 0.0)
+        if (the cad extent of shape)'s kind = 0:
+            clamp parameter between 0.0 and 1.0
+        return @intrinsic("construct", a cad cross2 parameter result, true, parameter)
+
+local function the cad cross2 piece of {cad curve2:shape} [from] {a 64 bit floating-point number:first} [to] {a 64 bit floating-point number:last}:
+    execute:
+        set start to the cad point on shape at first
+        set end to the cad point on shape at last
+        set low to a cad vector2 with x (the minimum of start's x and end's x) and y (the minimum of start's y and end's y)
+        set high to a cad vector2 with x (the maximum of start's x and end's x) and y (the maximum of start's y and end's y)
+        set bow to 0.0
+        loop step from 1 to 4:
+            set point to the cad point on shape at (first + (((last - first) * (step as a 64 bit floating-point number)) / 4.0))
+            set bow to the maximum of bow and (the cad distance from point to the segment from start to end)
+            set low to a cad vector2 with x (the minimum of low's x and point's x) and y (the minimum of low's y and point's y)
+            set high to a cad vector2 with x (the maximum of high's x and point's x) and y (the maximum of high's y and point's y)
+        set low to a cad vector2 with x (low's x - bow) and y (low's y - bow)
+        set high to a cad vector2 with x (high's x + bow) and y (high's y + bow)
+        return @intrinsic("construct", a cad cross2 piece, first, last, start, end, low, high, bow)
+
+local function cad cross2 {cad cross2 piece:left} overlaps {cad cross2 piece:right}:
+    execute:
+        return ((left's low's x <= right's high's x) and (right's low's x <= left's high's x)) and ((left's low's y <= right's high's y) and (right's low's y <= left's high's y))
+
+local function the cad cross2 refinement of {cad curve2:first} and {cad curve2:second} at {a 64 bit floating-point number:guess} within {cad tolerance:tolerance}:
+    execute:
+        set point to the cad point on first at guess
+        loop iteration from 0 to 40:
+            set onSecond to the cad point on second at (the cad parameter on second nearest point)
+            set onFirst to the cad point on first at (the cad parameter on first nearest onSecond)
+            set gap to the cad distance from onFirst to onSecond
+            set moved to the cad distance from onFirst to point
+            set point to onFirst
+            if gap <= tolerance's linear:
+                return @intrinsic("construct", a cad cross2 point result, true, point)
+            if moved <= (tolerance's linear * 1e-3):
+                return @intrinsic("construct", a cad cross2 point result, false, the cad zero vector2)
+        set onFirst to the cad point on first at (the cad parameter on first nearest point)
+        set onSecond to the cad point on second at (the cad parameter on second nearest point)
+        return @intrinsic("construct", a cad cross2 point result, (the cad distance from onFirst to onSecond) <= tolerance's linear, point)
+
+local function collect cad cross2 against straight {cad curve2:straight} from {cad vector2:origin} along {cad vector2:direction} on {cad curve2:shape} over {cad cross2 piece:piece} within {cad tolerance:tolerance} at depth {integer:depth} into {a pointer to a list:output}:
+    execute:
+        set positive to true
+        set negative to true
+        loop corner from 0 to 4:
+            set x to piece's low's x
+            set y to piece's low's y
+            if (corner = 1) or (corner = 3):
+                set x to piece's high's x
+            if corner >= 2:
+                set y to piece's high's y
+            set side to the cad cross of direction and (the cad difference of (a cad vector2 with x x and y y) and origin)
+            set positive to positive and (side > 0.0)
+            set negative to negative and (side < 0.0)
+        if positive or negative:
+            return nothing
+        if (depth >= 40) or (piece's bow <= tolerance's linear):
+            set chord to the cad difference of piece's end and piece's start
+            set crossed to cad line intersection from origin along direction with piece's start along chord
+            if crossed's valid = false:
+                return nothing
+            set parameter to crossed's value's second
+            if ((parameter >= -1e-9) and (parameter <= (1.0 + 1e-9))) = false:
+                return nothing
+            set guess to piece's from + (parameter * (piece's to - piece's from))
+            set refined to the cad cross2 refinement of shape and straight at guess within tolerance
+            if refined's valid:
+                append refined's value to output
+            return nothing
+        set middle to (piece's from + piece's to) * 0.5
+        set left to the cad cross2 piece of shape from piece's from to middle
+        set right to the cad cross2 piece of shape from middle to piece's to
+        collect cad cross2 against straight straight from origin along direction on shape over left within tolerance at depth (depth + 1) into output
+        collect cad cross2 against straight straight from origin along direction on shape over right within tolerance at depth (depth + 1) into output
+
+local function descend cad cross2 {cad curve2:first} over {cad cross2 piece:firstPiece} and {cad curve2:second} over {cad cross2 piece:secondPiece} within {cad tolerance:tolerance} at depth {integer:depth} into {a pointer to a list:output}:
+    execute:
+        if (cad cross2 firstPiece overlaps secondPiece) = false:
+            return nothing
+        if (depth >= 40) or ((firstPiece's bow <= tolerance's linear) and (secondPiece's bow <= tolerance's linear)):
+            set direction to the cad difference of firstPiece's end and firstPiece's start
+            set otherDirection to the cad difference of secondPiece's end and secondPiece's start
+            set crossed to cad line intersection from firstPiece's start along direction with secondPiece's start along otherDirection
+            if crossed's valid = false:
+                return nothing
+            set firstParameter to crossed's value's first
+            set secondParameter to crossed's value's second
+            if ((firstParameter >= -1e-9) and (firstParameter <= (1.0 + 1e-9))) = false:
+                return nothing
+            if ((secondParameter >= -1e-9) and (secondParameter <= (1.0 + 1e-9))) = false:
+                return nothing
+            set guess to firstPiece's from + (firstParameter * (firstPiece's to - firstPiece's from))
+            set refined to the cad cross2 refinement of first and second at guess within tolerance
+            if refined's valid:
+                append refined's value to output
+            return nothing
+        if firstPiece's bow >= secondPiece's bow:
+            set middle to (firstPiece's from + firstPiece's to) * 0.5
+            set left to the cad cross2 piece of first from firstPiece's from to middle
+            set right to the cad cross2 piece of first from middle to firstPiece's to
+            descend cad cross2 first over left and second over secondPiece within tolerance at depth (depth + 1) into output
+            descend cad cross2 first over right and second over secondPiece within tolerance at depth (depth + 1) into output
+        else:
+            set middle to (secondPiece's from + secondPiece's to) * 0.5
+            set left to the cad cross2 piece of second from secondPiece's from to middle
+            set right to the cad cross2 piece of second from middle to secondPiece's to
+            descend cad cross2 first over firstPiece and second over left within tolerance at depth (depth + 1) into output
+            descend cad cross2 first over firstPiece and second over right within tolerance at depth (depth + 1) into output
+
+local function collect cad cross2 subdivision of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance} into {a pointer to a list:output}:
+    execute:
+        set firstRay to the cad ray of first
+        if firstRay's valid:
+            set piece to the cad cross2 piece of second from 0.0 to 1.0
+            collect cad cross2 against straight first from firstRay's value's origin along firstRay's value's direction on second over piece within tolerance at depth 0 into output
+            return nothing
+        set secondRay to the cad ray of second
+        if secondRay's valid:
+            set piece to the cad cross2 piece of first from 0.0 to 1.0
+            collect cad cross2 against straight second from secondRay's value's origin along secondRay's value's direction on first over piece within tolerance at depth 0 into output
+            return nothing
+        set firstPiece to the cad cross2 piece of first from 0.0 to 1.0
+        set secondPiece to the cad cross2 piece of second from 0.0 to 1.0
+        descend cad cross2 first over firstPiece and second over secondPiece within tolerance at depth 0 into output
+
+local function {cad curve2:shape} is cad cross2 round:
+    execute:
+        return (shape's kind = 1) or (shape's kind = 2)
+
+local function the cad cross2 circle of {cad curve2:shape}:
+    execute:
+        if shape's kind = 1:
+            return shape's circle
+        if shape's kind = 2:
+            return a cad circle2 at shape's arc's centre with radius shape's arc's radius
+        @intrinsic("call", "libc", "abort", nothing)
+        return a new cad circle2
+
+local function collect cad cross2 candidates of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance} into {a pointer to a list:output}:
+    execute:
+        if (first is cad straight) and (second is cad straight):
+            set firstRay to (the cad ray of first)'s value
+            set secondRay to (the cad ray of second)'s value
+            set crossed to cad line intersection from firstRay's origin along firstRay's direction with secondRay's origin along secondRay's direction
+            if crossed's valid:
+                append (the cad sum of firstRay's origin and (firstRay's direction scaled by crossed's value's first)) to output
+            return nothing
+        if (first is cad straight) and (second is cad cross2 round):
+            set ray to (the cad ray of first)'s value
+            set round to the cad cross2 circle of second
+            set parameters to cad line circle intersections from ray's origin along ray's direction around round's centre with radius round's radius
+            loop index from 0 to the length of parameters:
+                append (the cad sum of ray's origin and (ray's direction scaled by (the item at index in parameters))) to output
+            free parameters
+            return nothing
+        if (first is cad cross2 round) and (second is cad straight):
+            collect cad cross2 candidates of second and first within tolerance into output
+            return nothing
+        if (first is cad straight) and (second's kind = 3):
+            set ray to (the cad ray of first)'s value
+            set parameters to cad line ellipse intersections from ray's origin along ray's direction with second's ellipse's ellipse
+            loop index from 0 to the length of parameters:
+                set parameter to the item at index in parameters
+                append (the cad point on second's ellipse's ellipse at parameter's second) to output
+            free parameters
+            return nothing
+        if (first's kind = 3) and (second is cad straight):
+            collect cad cross2 candidates of second and first within tolerance into output
+            return nothing
+        if (first is cad cross2 round) and (second is cad cross2 round):
+            set firstRound to the cad cross2 circle of first
+            set secondRound to the cad cross2 circle of second
+            set points to cad circle intersection points at firstRound's centre with radius firstRound's radius and at secondRound's centre with radius secondRound's radius
+            loop index from 0 to the length of points:
+                append (the item at index in points) to output
+            free points
+            return nothing
+        if first's kind = 4:
+            set pieces to the cad segments of first
+            loop index from 0 to the length of pieces:
+                set piece to the item at index in pieces
+                collect cad cross2 candidates of piece and second within tolerance into output
+            free pieces
+            return nothing
+        if second's kind = 4:
+            collect cad cross2 candidates of second and first within tolerance into output
+            return nothing
+        collect cad cross2 subdivision of first and second within tolerance into output
+
+# Stable parameter ordering: unordered/equal pairs retain their candidate order.
+# The std sort library exposes bytewise ordering and unstable native qsort, not this comparator.
+local function order cad cross2 crossings in {a pointer to a list:values}:
+    execute:
+        loop index from 1 to the length of values:
+            set current to the item at index in values
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in values
+                if current's tA < previous's tA:
+                    replace item at index position in values with previous
+                    set position to position - 1
+                else:
+                    set searching to false
+            replace item at index position in values with current
+
+function the cad [crossings] of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance}:
+    execute:
+        set candidates to an empty list of a cad vector2
+        collect cad cross2 candidates of first and second within tolerance into candidates
+        set crossings to an empty list of a cad crossing2
+        loop index from 0 to the length of candidates:
+            set point to the item at index in candidates
+            set onFirst to the cad cross2 parameter on first at point within tolerance
+            if onFirst's valid:
+                set onSecond to the cad cross2 parameter on second at point within tolerance
+                if onSecond's valid:
+                    append (@intrinsic("construct", a cad crossing2, point, onFirst's value, onSecond's value)) to crossings
+        free candidates
+        order cad cross2 crossings in crossings
+        set unique to an empty list of a cad crossing2
+        loop index from 0 to the length of crossings:
+            set crossing to the item at index in crossings
+            set keep to true
+            if (the length of unique) > 0:
+                set previous to the last item of unique
+                if (the cad distance from crossing's point to previous's point) <= tolerance's linear:
+                    set keep to false
+            if keep:
+                append crossing to unique
+        free crossings
+        return unique

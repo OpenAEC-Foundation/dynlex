@@ -1,0 +1,70 @@
+import lib/cadkernel/brep_geometry.dl
+
+function geometry extra check {boolean:condition}:
+    execute:
+        if condition = false:
+            print "B-rep geometry extra assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function the geometry extra point {a number:x} {a number:y} {a number:z}:
+    execute:
+        return a cad vector3 with x x, y y and z z
+
+set sphere to the cad surface of (a cad sphere with frame the cad xy plane and radius 2.0)
+set hits to the cad ray hits of sphere from (the geometry extra point 5.0 0.0 0.0) along (the geometry extra point -1.0 0.0 0.0)
+geometry extra check hits's valid
+geometry extra check ((the length of hits's values) = 2)
+geometry extra check ((the item at 0 in hits's values) = 3.0)
+geometry extra check ((the item at 1 in hits's values) = 7.0)
+set retained to hits
+set hits to the cad ray hits of sphere from the cad zero vector3 along the cad x axis
+geometry extra check ((the item at 0 in hits's values) = -2.0)
+geometry extra check ((the item at 1 in hits's values) = 2.0)
+geometry extra check ((the item at 0 in retained's values) = 3.0)
+set infinity to (1.0 as a 64 bit floating-point number) / 0.0
+set hits to the cad ray hits of sphere from (the geometry extra point infinity 0.0 0.0) along the cad zero vector3
+geometry extra check hits's valid
+geometry extra check ((the length of hits's values) = 1)
+set nonfinite to the item at 0 in hits's values
+geometry extra check (nonfinite != nonfinite)
+set tangents to the cad tangents of sphere at parameters 0.0 and 0.0
+geometry extra check tangents's valid
+geometry extra check (tangents's u's y = 2.0)
+geometry extra check (tangents's v's z = 2.0)
+set normal to the cad normal of sphere at parameters 0.0 and 0.0
+geometry extra check normal's valid
+geometry extra check (normal's value's x = 1.0)
+set inverse to the cad parameters on sphere nearest (the geometry extra point 0.0 0.0 2.0)
+geometry extra check (inverse's valid = false)
+
+set cylinder to the cad surface of (a cad cylinder with base the cad xy plane and radius 3.0)
+set tangents to the cad tangents of cylinder at parameters 0.0 and 4.0
+geometry extra check (tangents's u's y = 3.0)
+geometry extra check (tangents's v's z = 1.0)
+set inverse to the cad parameters on cylinder nearest (the geometry extra point 3.0 0.0 4.0)
+geometry extra check inverse's valid
+geometry extra check (inverse's value's x = 0.0)
+geometry extra check (inverse's value's y = 4.0)
+set framed to the cad frame of cylinder
+geometry extra check framed's valid
+
+set plane to the cad surface of the cad xy plane
+set hits to the cad ray hits of plane from (the geometry extra point 0.0 0.0 2.0) along (the geometry extra point 0.0 0.0 -1.0)
+geometry extra check ((the item at 0 in hits's values) = 2.0)
+set hits to the cad ray hits of plane from the cad zero vector3 along the cad x axis
+geometry extra check hits's valid
+geometry extra check ((the length of hits's values) = 0)
+set torus to the cad surface of (a cad torus with frame the cad xy plane, major radius 2.0 and minor radius 3.0)
+set hits to the cad ray hits of torus from the cad zero vector3 along the cad x axis
+geometry extra check (hits's valid = false)
+set point to the cad point on torus at parameters 0.2 and 3.141592653589793
+set inverse to the cad parameters on torus nearest point
+geometry extra check inverse's valid
+geometry extra check ((the cad distance from point to (the cad point on torus at parameters inverse's value's x and inverse's value's y)) < 1e-12)
+
+set clone to the cad clone of torus
+geometry extra check (clone = torus)
+set clone's torus's majorRadius to 8.0
+geometry extra check ((clone = torus) = false)
+geometry extra check (torus's nurbs's owner = (0 as a pointer to an integer))
+print "B-rep geometry extra checks passed" as a line

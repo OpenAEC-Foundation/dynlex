@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+function integer:
+    replacement:
+        @intrinsic("type", "int", 32)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+flex section repeat index:
+    replacement:
+        set index to 0
+        @intrinsic("loop while", @intrinsic("less than", index, 1)):
+            @intrinsic("execute body")
+            set index to @intrinsic("add", index, 1)
+class:
+    patterns:
+        sample
+    members:
+        marker as integer
+    retain:
+        @intrinsic("return")
+    release:
+        repeat index:
+            set observed to index
+function exercise:
+    execute:
+        set value to @intrinsic("construct", sample, 0)
+        @intrinsic("return")
+repeat index:
+    set observed to index
+exercise

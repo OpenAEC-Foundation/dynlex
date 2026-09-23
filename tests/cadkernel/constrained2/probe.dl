@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/constrained2.dl
+import tests/cadkernel/arclength2/input.dl
+
+set cursor to 1
+set ringCount to (measure2 input cursor) as an integer
+increment cursor
+set rings to an empty list of the type of (an empty list of a cad vector2)
+loop ringIndex from 0 to ringCount:
+    set pointCount to (measure2 input cursor) as an integer
+    increment cursor
+    set ringValue to an empty list of a cad vector2
+    loop pointIndex from 0 to pointCount:
+        append (measure2 input point cursor) to ringValue
+        set cursor to cursor + 2
+    append ringValue to rings
+set operationCount to (measure2 input cursor) as an integer
+increment cursor
+set built to the cad constrained mesh of rings rings
+if (the valid of built) = false:
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "b 0\n")
+else:
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "b 1\n")
+    set meshValue to the value of built
+    loop operationIndex from 0 to operationCount:
+        set kind to (measure2 input cursor) as an integer
+        increment cursor
+        set fromPoint to measure2 input point cursor
+        set cursor to cursor + 2
+        if kind = 0:
+            set inserted to the cad constrained insertion of point fromPoint into (the address of meshValue)
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "i %d %d\n", inserted's valid as an integer, inserted's inserted as an integer)
+        else:
+            set toPoint to measure2 input point cursor
+            set cursor to cursor + 2
+            set constrained to the cad constrained constraint from fromPoint to toPoint in (the address of meshValue)
+            ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "c %d %d\n", constrained's valid as an integer, constrained's added)
+    set triangles to the cad constrained triangles of meshValue
+    ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "n %d\n", the length of triangles)
+    loop triangleIndex from 0 to the length of triangles:
+        set triangleValue to the item at triangleIndex in triangles
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "t %.17e %.17e %.17e %.17e %.17e %.17e %d %d %d\n", triangleValue's first's x, triangleValue's first's y, triangleValue's second's x, triangleValue's second's y, triangleValue's third's x, triangleValue's third's y, triangleValue's firstConstrained as an integer, triangleValue's secondConstrained as an integer, triangleValue's thirdConstrained as an integer)
+    free triangles
+    free cad constrained mesh meshValue
+free cad constrained mesh result built
+loop ringIndex from 0 to the length of rings:
+    free (the item at ringIndex in rings)
+free rings

@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft/helpers.dl
+set profile to loft test rectangle
+set sections to a list containing (a cad loft section on (the cad xy plane) with profile (profile's values))
+set upper to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 3.0), x axis (the cad x axis) and y axis (the cad y axis)
+append (a cad loft section on upper with profile (profile's values)) to sections
+set result to the cad loft through sections
+check loft (result's valid)
+check loft ((the cad count of (result's value's vertices)) = 8)
+check loft ((the cad count of (result's value's edges)) = 12)
+check loft ((the cad count of (result's value's faces)) = 6)
+check loft ((the cad euler characteristic of (result's value)) = 2)
+check loft ((the cad worst vertex gap of (result's value)) < 1e-12)
+print "rectangle_loft_has_closed_consistent_topology" as a line
+set ordered to the ordered cad polygon loft through sections
+check loft (ordered's valid)
+check loft (loft vertices of (ordered's value) match (result's value))
+print "ordered_polygon_preserves_matching_sections" as a line
+
+set shifted to a cad topology list of the type of (the item at 0 in (profile's values))
+loop index from 0 to 4:
+    append (the item at (the remainder of (index + 1) divided by 4) in (profile's values)) to (shifted's values)
+replace item at index 1 in sections with (a cad loft section on upper with profile (shifted's values))
+set aligned to the cad loft through sections
+check loft (aligned's valid)
+check loft (loft vertices of (aligned's value) match (result's value))
+set ordered to the ordered cad polygon loft through sections
+check loft (ordered's valid)
+check loft ((loft vertices of (ordered's value) match (result's value)) = false)
+print "alignment_rotates_rings_while_ordered_preserves_correspondence" as a line
+
+set reversed to a cad topology list of the type of (the item at 0 in (profile's values))
+loop index from 0 to 4:
+    set line to (the item at (3 - index) in (profile's values))'s line
+    append (the cad curve2 of (a cad line2 from (line's end) to (line's start))) to (reversed's values)
+replace item at index 1 in sections with (a cad loft section on upper with profile (reversed's values))
+set aligned to the cad loft through sections
+check loft (aligned's valid)
+check loft (loft vertices of (aligned's value) match (result's value))
+print "alignment_reverses_ring_winding" as a line
+
+set mixed to the cad clone of profile
+set line to (the item at 0 in (mixed's values))'s line
+replace item at index 0 in (mixed's values) with (the cad curve2 of (a cad line2 from (line's end) to (line's start)))
+set senses to the cad profile senses of (mixed's values)
+check loft (senses's valid)
+check loft ((the item at 0 in (senses's value's values)) = false)
+loop index from 1 to 4:
+    check loft (the item at index in (senses's value's values))
+replace item at index 0 in sections with (a cad loft section on (the cad xy plane) with profile (mixed's values))
+replace item at index 1 in sections with (a cad loft section on upper with profile (mixed's values))
+set aligned to the cad loft through sections
+check loft (aligned's valid)
+check loft (loft vertices of (aligned's value) match (result's value))
+print "profile_retries_the_first_segment_direction" as a line
+
+append (a cad loft section on (loft test frame at 6.0) with profile (profile's values)) to sections
+set result to the cad loft through sections
+check loft (result's valid)
+check loft ((the cad count of (result's value's vertices)) = 12)
+check loft ((the cad count of (result's value's edges)) = 20)
+check loft ((the cad count of (result's value's faces)) = 10)
+check loft topology (result's value)
+print "three_sections_share_middle_rims" as a line
+free sections
+
+set emptySections to an empty list of the type of (a cad loft section on upper with profile (profile's values))
+set absent to the cad loft through emptySections
+check loft ((absent's valid) = false)
+append (a cad loft section on upper with profile (profile's values)) to emptySections
+set absent to the cad loft through emptySections
+check loft ((absent's valid) = false)
+append (a cad loft section on upper with profile (profile's values)) to emptySections
+set absent to the cad loft through emptySections
+check loft ((absent's valid) = false)
+free emptySections
+print "insufficient_and_coincident_sections_are_refused" as a line
+
+set emptyProfile to a cad topology list of the type of (the item at 0 in (profile's values))
+set senses to the cad profile senses of (emptyProfile's values)
+check loft ((senses's valid) = false)
+set senses to the cad path senses of (emptyProfile's values)
+check loft ((senses's valid) = false)
+append (the item at 0 in (profile's values)) to (emptyProfile's values)
+set senses to the cad path senses of (emptyProfile's values)
+check loft (senses's valid)
+check loft (the item at 0 in (senses's value's values))
+set senses to the cad profile senses of (emptyProfile's values)
+check loft ((senses's valid) = false)
+print "open_paths_and_closed_profiles_have_distinct_contracts" as a line
+
+set tiny to a cad vector2 with x 0.6e-9 and y 0.8e-9
+check loft ((the cad zero vector2) cad profile meets tiny)
+set outside to a cad vector2 with x 0.60001e-9 and y 0.8e-9
+check loft (((the cad zero vector2) cad profile meets outside) = false)
+print "profile_join_tolerance_uses_euclidean_distance" as a line

@@ -1,0 +1,197 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_topology/provenance.dl
+
+function verify topology node ownership:
+    execute:
+        set clean to the clean cad provenance of (a cad source reference for (8 as a 32 bit unsigned integer))
+        set vertex to a cad vertex at the cad zero vector3 with provenance clean
+        set copiedVertex to the cad clone of vertex
+        topology check (vertex = copiedVertex) named "vertex clone equality"
+        set copiedVertex's point's x to 1.0
+        topology check ((vertex = copiedVertex) = false) named "vertex point equality"
+        set edge to a cad edge on (a new cad curve key) from 0.0 to 1.0 between (a new cad vertex key) and (a new cad vertex key) with provenance clean
+        append (a new cad coedge key) to edge's coedges's values
+        set copiedEdge to the cad clone of edge
+        topology check (edge = copiedEdge) named "edge clone equality"
+        clear copiedEdge's coedges's values
+        topology check ((the length of edge's coedges's values) = 1) named "edge clone owns adjacency"
+        topology check ((edge = copiedEdge) = false) named "edge adjacency equality"
+        set ring to a cad loop owned by (a new cad face key) with provenance clean
+        append (a new cad coedge key) to ring's coedges's values
+        set copiedRing to the cad clone of ring
+        topology check (ring = copiedRing) named "loop clone equality"
+        clear copiedRing's coedges's values
+        topology check ((ring = copiedRing) = false) named "loop clone owns adjacency"
+        set face to a cad face on (a new cad surface key) forward true owned by (a new cad shell key) with provenance clean
+        append (a new cad loop key) to face's loops's values
+        set copiedFace to the cad clone of face
+        topology check (face = copiedFace) named "face clone equality"
+        clear copiedFace's loops's values
+        topology check ((face = copiedFace) = false) named "face clone owns adjacency"
+        set shell to a cad shell owned by (a new cad lump key) with provenance clean
+        append (a new cad face key) to shell's faces's values
+        set copiedShell to the cad clone of shell
+        topology check (shell = copiedShell) named "shell clone equality"
+        clear copiedShell's faces's values
+        topology check ((shell = copiedShell) = false) named "shell clone owns adjacency"
+        set lump to a cad lump with provenance clean
+        append (a new cad shell key) to lump's shells's values
+        set copiedLump to the cad clone of lump
+        topology check (lump = copiedLump) named "lump clone equality"
+        clear copiedLump's shells's values
+        topology check ((lump = copiedLump) = false) named "lump clone owns adjacency"
+
+        set hashWords to an empty list of a 32 bit unsigned integer
+        set sourceRef to a cad source reference for (4294967295 as a 32 bit unsigned integer)
+        hash cad source reference sourceRef into hashWords
+        topology check ((the length of hashWords) = 1) named "source hash width"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "source hash u32 maximum"
+        clear hashWords
+        set vertexHashKey to @intrinsic("construct", a cad vertex key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key vertexHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "vertex key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "vertex key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "vertex key hash generation"
+        topology check ((the cad slot of vertexHashKey) = (4294967295 as a 32 bit unsigned integer)) named "vertex key slot width"
+        topology check ((the cad debug text of vertexHashKey) = "#4294967295v2147483648") named "vertex key debug"
+        topology check (vertexHashKey = (the cad clone of vertexHashKey)) named "vertex key clone"
+        clear hashWords
+        set edgeHashKey to @intrinsic("construct", a cad edge key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key edgeHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "edge key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "edge key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "edge key hash generation"
+        topology check ((the cad slot of edgeHashKey) = (4294967295 as a 32 bit unsigned integer)) named "edge key slot width"
+        topology check ((the cad debug text of edgeHashKey) = "#4294967295v2147483648") named "edge key debug"
+        topology check (edgeHashKey = (the cad clone of edgeHashKey)) named "edge key clone"
+        clear hashWords
+        set coedgeHashKey to @intrinsic("construct", a cad coedge key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key coedgeHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "coedge key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "coedge key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "coedge key hash generation"
+        topology check ((the cad slot of coedgeHashKey) = (4294967295 as a 32 bit unsigned integer)) named "coedge key slot width"
+        topology check ((the cad debug text of coedgeHashKey) = "#4294967295v2147483648") named "coedge key debug"
+        topology check (coedgeHashKey = (the cad clone of coedgeHashKey)) named "coedge key clone"
+        clear hashWords
+        set loopHashKey to @intrinsic("construct", a cad loop key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key loopHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "loop key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "loop key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "loop key hash generation"
+        topology check ((the cad slot of loopHashKey) = (4294967295 as a 32 bit unsigned integer)) named "loop key slot width"
+        topology check ((the cad debug text of loopHashKey) = "#4294967295v2147483648") named "loop key debug"
+        topology check (loopHashKey = (the cad clone of loopHashKey)) named "loop key clone"
+        clear hashWords
+        set faceHashKey to @intrinsic("construct", a cad face key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key faceHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "face key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "face key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "face key hash generation"
+        topology check ((the cad slot of faceHashKey) = (4294967295 as a 32 bit unsigned integer)) named "face key slot width"
+        topology check ((the cad debug text of faceHashKey) = "#4294967295v2147483648") named "face key debug"
+        topology check (faceHashKey = (the cad clone of faceHashKey)) named "face key clone"
+        clear hashWords
+        set shellHashKey to @intrinsic("construct", a cad shell key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key shellHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "shell key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "shell key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "shell key hash generation"
+        topology check ((the cad slot of shellHashKey) = (4294967295 as a 32 bit unsigned integer)) named "shell key slot width"
+        topology check ((the cad debug text of shellHashKey) = "#4294967295v2147483648") named "shell key debug"
+        topology check (shellHashKey = (the cad clone of shellHashKey)) named "shell key clone"
+        clear hashWords
+        set lumpHashKey to @intrinsic("construct", a cad lump key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key lumpHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "lump key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "lump key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "lump key hash generation"
+        topology check ((the cad slot of lumpHashKey) = (4294967295 as a 32 bit unsigned integer)) named "lump key slot width"
+        topology check ((the cad debug text of lumpHashKey) = "#4294967295v2147483648") named "lump key debug"
+        topology check (lumpHashKey = (the cad clone of lumpHashKey)) named "lump key clone"
+        clear hashWords
+        set surfaceHashKey to @intrinsic("construct", a cad surface key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key surfaceHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "surface key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "surface key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "surface key hash generation"
+        topology check ((the cad slot of surfaceHashKey) = (4294967295 as a 32 bit unsigned integer)) named "surface key slot width"
+        topology check ((the cad debug text of surfaceHashKey) = "#4294967295v2147483648") named "surface key debug"
+        topology check (surfaceHashKey = (the cad clone of surfaceHashKey)) named "surface key clone"
+        clear hashWords
+        set curveHashKey to @intrinsic("construct", a cad curve key, 4294967295 as a 32 bit unsigned integer, 2147483648 as a 32 bit unsigned integer)
+        hash cad key curveHashKey into hashWords
+        topology check ((the length of hashWords) = 2) named "curve key hash length"
+        topology check ((the item at 0 in hashWords) = (4294967295 as a 32 bit unsigned integer)) named "curve key hash slot"
+        topology check ((the item at 1 in hashWords) = (2147483648 as a 32 bit unsigned integer)) named "curve key hash generation"
+        topology check ((the cad slot of curveHashKey) = (4294967295 as a 32 bit unsigned integer)) named "curve key slot width"
+        topology check ((the cad debug text of curveHashKey) = "#4294967295v2147483648") named "curve key debug"
+        topology check (curveHashKey = (the cad clone of curveHashKey)) named "curve key clone"
+        free hashWords
+
+        set points2 to an empty list of a cad vector2
+        append the cad zero vector2 to points2
+        append (a cad vector2 with x 1.0 and y 2.0) to points2
+        set knots to an empty list of a 64 bit floating-point number
+        set built2 to the cad nurbs curve2 of degree 1 with controls points2, knots knots and weights knots
+        topology check built2's valid named "pcurve fixture valid"
+        free points2
+        set pcurve to the cad pcurve of (the cad curve2 of built2's value)
+        set coedge to a cad coedge on (a new cad edge key) forward true with pcurve pcurve owned by (a new cad loop key) with provenance clean
+        set copiedCoedge to the cad clone of coedge
+        topology check (coedge = copiedCoedge) named "coedge clone equality"
+        topology check ((coedge's pcurve's value's nurbs's controls) != (copiedCoedge's pcurve's value's nurbs's controls)) named "pcurve clone owns controls"
+        topology check ((coedge's pcurve's value's nurbs's knots) != (copiedCoedge's pcurve's value's nurbs's knots)) named "pcurve clone owns knots"
+        topology check ((coedge's pcurve's value's nurbs's weights) != (copiedCoedge's pcurve's value's nurbs's weights)) named "pcurve clone owns weights"
+        set copiedCoedge's pcurve to no cad pcurve
+        topology check ((coedge = copiedCoedge) = false) named "coedge optional payload equality"
+        topology check coedge's pcurve's valid named "coedge clone independent option"
+
+        set points3 to an empty list of a cad vector3
+        append the cad zero vector3 to points3
+        append the cad x axis to points3
+        set built3 to the cad nurbs curve3 of degree 1 with controls points3, knots knots and weights knots
+        topology check built3's valid named "curve fixture valid"
+        set row1 to an empty list of a cad vector3
+        append the cad y axis to row1
+        append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to row1
+        set net to an empty list of the type of points3
+        append points3 to net
+        append row1 to net
+        set weights to an empty list of the type of knots
+        set surface to the cad nurbs surface3 of degrees 1 and 1 with controls net, knots knots and knots and weights weights
+        topology check surface's valid named "surface fixture valid"
+        free points3
+        free row1
+        free net
+        free weights
+        free knots
+        set body to an empty cad body
+        set curveKey to the cad body key after inserting (the cad edge curve3 of built3's value) into body
+        set surfaceKey to the cad body key after inserting (the cad surface of surface's value) into body
+        set planarKey to the cad body key after inserting (the cad edge curve3 of (a cad planar spline3 with plane the cad xy plane and curve built2's value)) into body
+        set coedgeKey to the cad body key after inserting coedge into body
+        set duplicate to the cad clone of body
+        set originalCurve to the cad value of (the cad lookup of curveKey in body)
+        set copiedCurve to the cad value of (the cad lookup of curveKey in duplicate)
+        topology check (originalCurve = copiedCurve) named "body curve payload equality"
+        topology check (originalCurve's nurbs's controls != copiedCurve's nurbs's controls) named "body clone owns curve controls"
+        set originalSurface to the cad value of (the cad lookup of surfaceKey in body)
+        set copiedSurface to the cad value of (the cad lookup of surfaceKey in duplicate)
+        topology check (originalSurface = copiedSurface) named "body surface payload equality"
+        topology check (originalSurface's nurbs's controls != copiedSurface's nurbs's controls) named "body clone owns surface net"
+        topology check ((the item at 0 in originalSurface's nurbs's controls) != (the item at 0 in copiedSurface's nurbs's controls)) named "body clone owns surface row"
+        set originalPlanar to the cad value of (the cad lookup of planarKey in body)
+        set copiedPlanar to the cad value of (the cad lookup of planarKey in duplicate)
+        topology check ((originalPlanar's planar's curve's controls) != (copiedPlanar's planar's curve's controls)) named "body clone owns planar curve"
+        set originalUse to the cad value of (the cad lookup of coedgeKey in body)
+        set copiedUse to the cad value of (the cad lookup of coedgeKey in duplicate)
+        topology check ((originalUse's pcurve's value's nurbs's controls) != (copiedUse's pcurve's value's nurbs's controls)) named "body clone owns pcurve"
+        set removed to the cad removal of coedgeKey from duplicate
+        set retained to removed
+        topology check retained's valid named "removal retains managed pcurve"
+        set remaining to the cad value of retained
+        topology check remaining's pcurve's valid named "removed pcurve still usable"
+        print "node equality and nested payload ownership" as a line
+
+verify topology node ownership

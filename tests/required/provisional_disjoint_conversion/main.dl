@@ -1,0 +1,29 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function number:
+    replacement:
+        @intrinsic("type", "float", 64)
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+implicitly convert {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", value, number))
+function measured {number:value}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", value, integer))
+function sample:
+    execute:
+        @intrinsic("return", measured 7)
+class:
+    patterns:
+        container
+    members:
+        value as the type of sample
+implicitly convert {container:item}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", item's value, number))
+@intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, @intrinsic("add", sample, 48)))
+@intrinsic("store", item, @intrinsic("construct", container, 9))
+@intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, @intrinsic("add", measured item, 48)))

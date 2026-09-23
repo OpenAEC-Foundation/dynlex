@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime reference driver for space/{arc_union,line_union}.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/arc_union3.dl
+import lib/cadkernel/line_union3.dl
+
+function union argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function union vector at {integer:index}:
+    execute:
+        return a cad vector3 with x (union argument index), y (union argument (index + 1)) and z (union argument (index + 2))
+
+function union arc at {integer:index}:
+    execute:
+        return a cad circular arc at (union vector at index) with normal (union vector at (index + 3)) and radius (union argument (index + 6)) from (union argument (index + 7)) to (union argument (index + 8))
+
+function emit union {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit union vector {cad vector3:value}:
+    execute:
+        emit union (the x of value)
+        emit union (the y of value)
+        emit union (the z of value)
+
+set mode to (union argument 0) as an integer
+if mode = 0:
+    set joined to the cad circular arc union of (union arc at 2) and (union arc at 11) within (union argument 1)
+    emit union ((the valid of joined) as an integer)
+    if the valid of joined:
+        set result to the value of joined
+        emit union (the startAngle of result)
+        emit union (the endAngle of result)
+        emit union ((the fullCircle of result) as an integer)
+        emit union (the code of the kind of result)
+if mode = 1:
+    emit union ((cad circle at (union vector at 1) with normal (union vector at 4) and radius (union argument 7) contains (union arc at 8)) as an integer)
+if mode = 2:
+    set joined to the cad line union from (union vector at 2) to (union vector at 5) and from (union vector at 8) to (union vector at 11) within (union argument 1)
+    emit union ((the valid of joined) as an integer)
+    if the valid of joined:
+        set result to the value of joined
+        emit union vector (the start of result)
+        emit union vector (the end of result)
+        emit union (the code of the kind of result)
+if mode = 3:
+    set points to an empty list of a cad vector3
+    loop index from 0 to ((union argument 2) as an integer):
+        append (union vector at (3 + (index * 3))) to points
+    set kept to the cad retained indices of linear chain points within (union argument 1)
+    emit union (the length of kept)
+    loop index from 0 to the length of kept:
+        emit union (the item at index in kept)
+    free kept
+    free points
+if mode = 4:
+    set firstKind to @intrinsic("construct", a cad line union kind, (union argument 7) as an integer)
+    set secondKind to @intrinsic("construct", a cad line union kind, (union argument 14) as an integer)
+    set first to @intrinsic("construct", a cad line union, union vector at 1, union vector at 4, firstKind)
+    set second to @intrinsic("construct", a cad line union, union vector at 8, union vector at 11, secondKind)
+    emit union ((cad first equals second) as an integer)
+    emit union ((cad firstKind equals secondKind) as an integer)
+    set firstArcKind to @intrinsic("construct", a cad arc union kind, (union argument 7) as an integer)
+    set secondArcKind to @intrinsic("construct", a cad arc union kind, (union argument 14) as an integer)
+    emit union ((cad firstArcKind equals secondArcKind) as an integer)

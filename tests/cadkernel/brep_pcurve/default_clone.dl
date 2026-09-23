@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_pcurve.dl
+set emptyParts to a new cad boundary parts result
+set copiedParts to the cad clone of emptyParts
+set emptyBoundary to a new cad boundary result
+set copiedBoundary to the cad clone of emptyBoundary
+if (copiedParts's valid) or (copiedBoundary's valid):
+    @intrinsic("call", "libc", "abort", nothing)
+if ((the length of (copiedParts's parts's values)) != 0) or ((the length of (copiedBoundary's curves's values)) != 0):
+    @intrinsic("call", "libc", "abort", nothing)
+print "default_boundary_results_clone_safely" as a line

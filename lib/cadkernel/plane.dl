@@ -1,0 +1,273 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/plane.rs.
+# Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/space/plane.rs
+# Frames retain their supplied scale, shear, orientation and origin.
+# Optional results expose valid and value; invalid payloads are not answers.
+# All coordinates, thresholds and arithmetic retain binary64 semantics.
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad plane
+    members:
+        origin as a cad vector3
+        xAxis as a cad vector3
+        yAxis as a cad vector3
+
+class:
+    patterns:
+        [a|] cad plane result
+    members:
+        valid as a boolean
+        value as a cad plane
+
+class:
+    patterns:
+        [a|] cad plane coordinates result
+    members:
+        valid as a boolean
+        value as a cad vector2
+
+class:
+    patterns:
+        [a|] cad plane distance result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+local function cad plane epsilon:
+    replacement:
+        1e-9 as a 64 bit floating-point number
+
+local function cad plane minimum positive:
+    replacement:
+        2.2250738585072014e-308 as a 64 bit floating-point number
+
+function a cad plane with origin {cad vector3:origin}, x axis {cad vector3:xAxis} and y axis {cad vector3:yAxis}:
+    execute:
+        return @intrinsic("construct", a cad plane, origin, xAxis, yAxis)
+
+function the cad xy plane:
+    execute:
+        return a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad y axis)
+
+function the cad default plane:
+    execute:
+        return the cad xy plane
+
+function the cad orthonormal plane with origin {cad vector3:origin}, x axis {cad vector3:xAxis} and normal {cad vector3:normal}:
+    execute:
+        set normalized to the cad normalization of normal
+        if (the valid of normalized) = false:
+            return @intrinsic("construct", a cad plane result, false, the cad xy plane)
+        set unitNormal to the value of normalized
+        set alongNormal to unitNormal scaled by (the cad dot of xAxis and unitNormal)
+        set squared to the cad normalization of (the cad difference of xAxis and alongNormal)
+        if (the valid of squared) = false:
+            return @intrinsic("construct", a cad plane result, false, the cad xy plane)
+        set unitX to the value of squared
+        set unitY to the cad cross of unitNormal and unitX
+        set constructed to a cad plane with origin origin, x axis unitX and y axis unitY
+        return @intrinsic("construct", a cad plane result, true, constructed)
+
+# Option<Vec3> shares the core normalization3 result representation.
+function the cad normal of {cad plane:plane}:
+    execute:
+        return the cad normalization of (the cad cross of (the xAxis of plane) and (the yAxis of plane))
+
+function cad {cad plane:plane} is orthonormal:
+    execute:
+        set x to the xAxis of plane
+        set y to the yAxis of plane
+        set xError to the absolute value of ((the cad squared length of x) - 1.0)
+        set yError to the absolute value of ((the cad squared length of y) - 1.0)
+        set dot to the absolute value of (the cad dot of x and y)
+        return (xError < (cad plane epsilon)) and ((yError < (cad plane epsilon)) and (dot < (cad plane epsilon)))
+
+function the cad point at {cad vector2:uv} on {cad plane:plane}:
+    execute:
+        return the cad sum of (the origin of plane) and (the cad vector at uv on plane)
+
+function the cad vector at {cad vector2:uv} on {cad plane:plane}:
+    execute:
+        set alongX to (the xAxis of plane) scaled by (the x of uv)
+        set alongY to (the yAxis of plane) scaled by (the y of uv)
+        return the cad sum of alongX and alongY
+
+function the cad projection of {cad vector3:point} onto {cad plane:plane}:
+    execute:
+        return the cad vector projection of (the cad difference of point and (the origin of plane)) onto plane
+
+# Intersect a world-Z line with the frame, rather than projecting normally.
+function the cad coordinates at {cad vector2:xy} on {cad plane:plane}:
+    execute:
+        set finiteXY to a cad vector3 with x (the x of xy), y (the y of xy) and z 0
+        if (cad finiteXY is finite) = false:
+            return @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        set x to the xAxis of plane
+        set y to the yAxis of plane
+        set xx to the x of x
+        set xyAxis to the y of x
+        set yx to the x of y
+        set yy to the y of y
+        set determinant to (xx * yy) - (xyAxis * yx)
+        set scale to ((xx * xx) + (xyAxis * xyAxis)) * ((yx * yx) + (yy * yy))
+        set finiteDeterminant to a cad vector3 with x determinant, y 0 and z 0
+        if (cad finiteDeterminant is finite) = false:
+            return @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        set floor to (1e-24 as a 64 bit floating-point number) * (the maximum of scale and (cad plane minimum positive))
+        if (the absolute value of determinant) <= floor:
+            return @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        set origin to the origin of plane
+        set dx to (the x of xy) - (the x of origin)
+        set dy to (the y of xy) - (the y of origin)
+        set u to ((dx * yy) - (dy * yx)) / determinant
+        set v to ((dy * xx) - (dx * xyAxis)) / determinant
+        return @intrinsic("construct", a cad plane coordinates result, true, a cad vector2 with x u and y v)
+
+# Solve the Gram system so skewed and scaled frames round-trip correctly.
+# Unlike coordinates_at_xy, upstream deliberately has no finiteness guard here.
+function the cad vector projection of {cad vector3:vector} onto {cad plane:plane}:
+    execute:
+        set x to the xAxis of plane
+        set y to the yAxis of plane
+        set xx to the cad squared length of x
+        set xy to the cad dot of x and y
+        set yy to the cad squared length of y
+        set determinant to (xx * yy) - (xy * xy)
+        set floor to (1e-24 as a 64 bit floating-point number) * (the maximum of (xx * yy) and (cad plane minimum positive))
+        if (the absolute value of determinant) <= floor:
+            return @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        set dx to the cad dot of vector and x
+        set dy to the cad dot of vector and y
+        set u to ((dx * yy) - (dy * xy)) / determinant
+        set v to ((dy * xx) - (dx * xy)) / determinant
+        return @intrinsic("construct", a cad plane coordinates result, true, a cad vector2 with x u and y v)
+
+function the cad distance from {cad vector3:point} to {cad plane:plane}:
+    execute:
+        set normal to the cad normal of plane
+        if (the valid of normal) = false:
+            return @intrinsic("construct", a cad plane distance result, false, 0.0 as a 64 bit floating-point number)
+        set offset to the cad difference of point and (the origin of plane)
+        set signedDistance to the cad dot of offset and (the value of normal)
+        return @intrinsic("construct", a cad plane distance result, true, signedDistance)
+
+function cad {cad plane:plane} contains {cad vector3:point} within {a number:tolerance}:
+    execute:
+        set distance to the cad distance from point to plane
+        if (the valid of distance) = false:
+            return false
+        return (the absolute value of (the value of distance)) <= (tolerance as a 64 bit floating-point number)
+
+function cad {cad plane:plane} is xy:
+    execute:
+        set origin to the origin of plane
+        return ((the x of origin) = 0.0) and (((the y of origin) = 0.0) and (((the z of origin) = 0.0) and (cad plane is xy aligned)))
+
+function cad {cad plane:plane} is xy aligned:
+    execute:
+        set x to the xAxis of plane
+        set y to the yAxis of plane
+        set alongX to ((the x of x) = 1.0) and (((the y of x) = 0.0) and ((the z of x) = 0.0))
+        set alongY to ((the x of y) = 0.0) and (((the y of y) = 1.0) and ((the z of y) = 0.0))
+        return alongX and alongY
+
+# Lists contain cad vector3 records and remain owned by the caller.
+local function cad plane list {a pointer to a list:values} is finite:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of values:
+            if (cad (the item at cursor in values) is finite) = false:
+                return false
+            increment cursor
+        return true
+
+function the cad coplanarity tolerance of {a pointer to a list:points}:
+    execute:
+        if (cad plane list points is finite) = false:
+            return (0.0 as a 64 bit floating-point number) / (0.0 as a 64 bit floating-point number)
+        if (the length of points) = 0:
+            return cad plane epsilon
+        set origin to the item at 0 in points
+        set extent to 1.0 as a 64 bit floating-point number
+        set coordinateScale to 1.0 as a 64 bit floating-point number
+        set cursor to 0
+        loop while cursor < the length of points:
+            set point to the item at cursor in points
+            set extent to the maximum of extent and (the cad length of (the cad difference of point and origin))
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the x of point))
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the y of point))
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the z of point))
+            increment cursor
+        set roundoff to ((2.220446049250313e-16 as a 64 bit floating-point number) * coordinateScale) * 64.0
+        return ((cad plane epsilon) * extent) + roundoff
+
+# Preserve the upstream order: the first axis determines the first useful cross.
+local function the cad coplanarity normal of {a pointer to a list:axes}:
+    execute:
+        if (the length of axes) > 0:
+            set axis to the item at 0 in axes
+            set cursor to 0
+            loop while cursor < the length of axes:
+                set cross to the cad cross of axis and (the item at cursor in axes)
+                if (the cad length of cross) > (cad plane epsilon):
+                    set normalizedCross to the cad normalization of cross
+                    if the valid of normalizedCross:
+                        return normalizedCross
+                increment cursor
+        return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+
+local function cad plane offsets {a pointer to a list:offsets} and directions {a pointer to a list:directions} fit normal {cad vector3:normal} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set cursor to 0
+        loop while cursor < the length of offsets:
+            set offset to the item at cursor in offsets
+            if ((the absolute value of (the cad dot of offset and normal)) <= tolerance) = false:
+                return false
+            increment cursor
+        set cursor to 0
+        loop while cursor < the length of directions:
+            set direction to the item at cursor in directions
+            if (the cad squared length of direction) != 0.0:
+                set distance to the absolute value of (the cad dot of direction and normal)
+                if (distance <= ((cad plane epsilon) * (the cad length of direction))) = false:
+                    return false
+            increment cursor
+        return true
+
+function cad {a pointer to a list:points} and {a pointer to a list:directions} are coplanar:
+    execute:
+        if (cad plane list points is finite) = false:
+            return false
+        if (cad plane list directions is finite) = false:
+            return false
+        if (the length of points) = 0:
+            return true
+        set origin to the item at 0 in points
+        set tolerance to the cad coplanarity tolerance of points
+        set offsets to an empty list of a cad vector3
+        set axes to an empty list of a cad vector3
+        set cursor to 1
+        loop while cursor < the length of points:
+            set offset to the cad difference of (the item at cursor in points) and origin
+            append offset to offsets
+            if (the cad length of offset) > tolerance:
+                set normalized to the cad normalization of offset
+                if the valid of normalized:
+                    append (the value of normalized) to axes
+            increment cursor
+        set cursor to 0
+        loop while cursor < the length of directions:
+            set normalized to the cad normalization of (the item at cursor in directions)
+            if the valid of normalized:
+                append (the value of normalized) to axes
+            increment cursor
+        set normal to the cad coplanarity normal of axes
+        set fitsPlane to true
+        if the valid of normal:
+            set fitsPlane to cad plane offsets offsets and directions directions fit normal (the value of normal) within tolerance
+        free axes
+        free offsets
+        return fitsPlane

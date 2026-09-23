@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/snap2/main.dl
+
+function snap2 local candidates:
+    execute:
+        set source to cross2 interpolated spline
+        return the cad characteristic points of source
+
+set first to snap2 local candidates
+set second to snap2 local candidates
+check snap2 (first != second)
+check snap2 ((the length of first) = 3)
+set retained to the item at 0 in first
+set changed to retained
+set the t of changed to 0.75
+replace item at index 0 in first with changed
+check snap2 ((the item at 0 in second) = retained)
+free first
+check snap2 (retained = (the item at 0 in second))
+free second
+
+set target to cross2 point [4.0,3.0]
+set source to cross2 segment [0.0,0.0] to [10.0,0.0]
+set nearest to the cad nearest snap point on source to target
+check snap2 (nearest's kind = (the cad perpendicular snap kind))
+check snap2 (nearest's t = 0.4)
+check snap2 (snap2 near nearest's point to (cross2 point [4.0,0.0]))
+free cad curve source
+check snap2 (snap2 near nearest's point to (cross2 point [4.0,0.0]))
+print "owned snap lists and nearest records outlive source curves" as a line

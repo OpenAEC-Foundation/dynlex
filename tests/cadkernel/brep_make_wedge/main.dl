@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make_cuboid/main.dl
+import lib/cadkernel/brep_bounds.dl
+
+set wedgeResult to the cad wedge at (the cad zero vector3) with length 4.0, width 3.0 and height 5.0
+check solid maker (wedgeResult's valid)
+check solid maker ((the cad count of (wedgeResult's value's faces)) = 5)
+check solid maker ((the cad count of (wedgeResult's value's edges)) = 9)
+check solid maker ((the cad count of (wedgeResult's value's vertices)) = 6)
+check solid maker ((the cad euler characteristic of (wedgeResult's value)) = 2)
+check consistent solid (wedgeResult's value)
+set wedgeBounds to the cad bounds of (wedgeResult's value)
+check solid maker (wedgeBounds's valid)
+check solid maker ((the cad distance from (wedgeBounds's value's high) to (a maker point [4.0,3.0,5.0])) = 0.0)
+print "a_wedge_is_a_prism_on_a_right_triangle" as a line
+set badSphere to the cad sphere body at (the cad zero vector3) with radius 0.0
+check solid maker ((badSphere's valid) = false)
+set badSphere to the cad sphere body at (the cad zero vector3) with radius -1.0
+check solid maker ((badSphere's valid) = false)
+set badCone to the cad cone body at (the cad zero vector3) with radius 1.0 and height 0.0
+check solid maker ((badCone's valid) = false)
+set badWedge to the cad wedge at (the cad zero vector3) with length 1.0, width 0.0 and height 1.0
+check solid maker ((badWedge's valid) = false)
+print "a_sphere_with_no_size_is_refused" as a line

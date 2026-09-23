@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+
+set kind to (maker argument 0) as an integer
+set origin to a cad vector3 with x (maker argument 1), y (maker argument 2) and z (maker argument 3)
+set made to no cad body
+if kind = 0:
+    set size to a cad vector3 with x (maker argument 4), y (maker argument 5) and z (maker argument 6)
+    set made to the cad cuboid at origin with size size
+else if kind = 1:
+    set made to the cad cylinder body at origin with radius (maker argument 4) and height (maker argument 5)
+else if kind = 2:
+    set made to the cad sphere body at origin with radius (maker argument 4)
+else if kind = 3:
+    set made to the cad cone body at origin with radius (maker argument 4) and height (maker argument 5)
+else if kind = 4:
+    set made to the cad polygonal frustum at origin with base radius (maker argument 4), top radius (maker argument 6), height (maker argument 5) and sides ((maker argument 7) as an integer)
+else if kind = 5:
+    set made to the cad elliptical cylinder at origin with x radius (maker argument 4), y radius (maker argument 5) and height (maker argument 6)
+else if kind = 6:
+    set made to the cad frustum at origin with base x radius (maker argument 4), base y radius (maker argument 5), top radius (maker argument 6) and height (maker argument 7)
+else if kind = 7:
+    set made to the cad torus at origin with major radius (maker argument 4) and minor radius (maker argument 5)
+emit maker flag (made's valid)
+if made's valid:
+    emit maker body (made's value)

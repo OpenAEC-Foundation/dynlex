@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_fillet_circular.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function circular fillet probe point2 at {integer:position}:
+    execute:
+        return a cad vector2 with x (maker argument position) and y (maker argument (position + 1))
+function circular fillet probe point3 at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+set frame to a cad plane with origin (circular fillet probe point3 at 0), x axis (circular fillet probe point3 at 3) and y axis (circular fillet probe point3 at 6)
+set pivot to circular fillet probe point3 at 9
+set axis to circular fillet probe point3 at 12
+set angle to maker argument 15
+set pieceCount to (maker argument 16) as an integer
+set cursor to 17
+set profile to an empty list of a cad curve2
+loop pieceIndex from 0 to pieceCount:
+    set kind to (maker argument cursor) as an integer
+    increment cursor
+    set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+    if kind = 0:
+        set piece to the cad curve2 of (a cad line2 from (circular fillet probe point2 at cursor) to (circular fillet probe point2 at (cursor + 2)))
+        set cursor to cursor + 4
+    else if kind = 1:
+        set piece to the cad curve2 of (a cad circle2 at (circular fillet probe point2 at cursor) with radius (maker argument (cursor + 2)))
+        set cursor to cursor + 3
+    else if kind = 2:
+        set piece to the cad curve2 of (a cad arc2 at (circular fillet probe point2 at cursor) with radius (maker argument (cursor + 2)) from (maker argument (cursor + 3)) to (maker argument (cursor + 4)))
+        set cursor to cursor + 5
+    else:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+    append piece to profile
+set selectionCount to (maker argument cursor) as an integer
+increment cursor
+set requested to an empty list of an integer
+loop selectionIndex from 0 to selectionCount:
+    append ((maker argument cursor) as an integer) to requested
+    increment cursor
+set radius to maker argument cursor
+set damageCode to (maker argument (cursor + 1)) as an integer
+set damageValue to maker argument (cursor + 2)
+
+set built to the cad revolution of profile on frame about pivot along axis by angle
+set body to an empty cad body
+if built's valid:
+    set body to built's value
+set edgeKeys to the cad edge keys of body
+set selected to an empty list of a cad edge key
+loop selectionIndex from 0 to selectionCount:
+    if (the length of edgeKeys) > 0:
+        set slot to the remainder of (the absolute value of (the item at selectionIndex in requested)) divided by (the length of edgeKeys)
+        append (the item at slot in edgeKeys) to selected
+
+if damageCode = 1:
+    clear body's roots
+else if (damageCode = 2) and ((the length of edgeKeys) > 0):
+    set damagedEdge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if damagedEdge != (0 as the type of damagedEdge):
+        clear damagedEdge's coedges's values
+else if (damageCode = 3) and ((the length of edgeKeys) > 0):
+    set damagedEdge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if damagedEdge != (0 as the type of damagedEdge):
+        if (the length of damagedEdge's coedges's values) > 0:
+            append (the item at 0 in damagedEdge's coedges's values) to damagedEdge's coedges's values
+else if damageCode = 4:
+    set faceKeys to the cad face keys of body
+    if (the length of faceKeys) > 0:
+        set damagedFace to the cad node pointer for (the item at 0 in faceKeys) in body
+        if damagedFace != (0 as the type of damagedFace):
+            replace cad node damagedFace's surface in body with (the cad surface of (a cad sphere with frame (the cad xy plane) and radius (the maximum of (the absolute value of damageValue) and 1.0)))
+    free faceKeys
+else if (damageCode = 5) and ((the length of edgeKeys) > 0):
+    set damagedEdge to the cad node pointer for (the item at 0 in edgeKeys) in body
+    if damagedEdge != (0 as the type of damagedEdge):
+        replace cad node damagedEdge's curve in body with (the cad edge curve3 of (a cad line3 with origin (the cad zero vector3) and direction (the cad x axis)))
+
+set result to the cad circular fillet of body along selected with radius radius
+emit maker flag result's recognized
+emit maker flag result's valid
+emit maker number result's error's kind
+if result's valid:
+    emit maker body (result's value)
+    emit maker number (the cad worst vertex gap of (result's value))
+
+free selected
+free requested
+free edgeKeys
+free profile

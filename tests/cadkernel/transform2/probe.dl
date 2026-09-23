@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/transform2.dl
+import tests/cadkernel/cross2/input.dl
+
+function emit transform2 curve {cad curve2:shape}:
+    execute:
+        emit measure2 scalar shape's kind
+        if shape's kind = 0:
+            emit measure2 point shape's line's start
+            emit measure2 point shape's line's end
+        if shape's kind = 1:
+            emit measure2 point shape's circle's centre
+            emit measure2 scalar shape's circle's radius
+        if shape's kind = 2:
+            emit measure2 point shape's arc's centre
+            emit measure2 scalar shape's arc's radius
+            emit measure2 scalar shape's arc's startAngle
+            emit measure2 scalar shape's arc's endAngle
+        if shape's kind = 3:
+            emit measure2 point shape's ellipse's ellipse's centre
+            emit measure2 scalar shape's ellipse's ellipse's majorRadius
+            emit measure2 scalar shape's ellipse's ellipse's minorRadius
+            emit measure2 point shape's ellipse's ellipse's majorAxis
+            emit measure2 scalar shape's ellipse's startParameter
+            emit measure2 scalar shape's ellipse's endParameter
+        if shape's kind = 4:
+            emit measure2 flag shape's polyline's closed
+            emit measure2 scalar (the length of shape's polyline's vertices)
+            loop index from 0 to the length of shape's polyline's vertices:
+                set vertex to the item at index in shape's polyline's vertices
+                emit measure2 point vertex's position
+                emit measure2 scalar vertex's bulge
+        if shape's kind = 5:
+            emit measure2 scalar shape's nurbs's degree
+            emit measure2 scalar (the length of shape's nurbs's controls)
+            loop index from 0 to the length of shape's nurbs's controls:
+                emit measure2 point (the item at index in shape's nurbs's controls)
+            emit measure2 scalar (the length of shape's nurbs's knots)
+            loop index from 0 to the length of shape's nurbs's knots:
+                emit measure2 scalar (the item at index in shape's nurbs's knots)
+            emit measure2 scalar (the length of shape's nurbs's weights)
+            loop index from 0 to the length of shape's nurbs's weights:
+                emit measure2 scalar (the item at index in shape's nurbs's weights)
+        if shape's kind = 6:
+            emit measure2 point shape's ray's origin
+            emit measure2 point shape's ray's direction
+        if shape's kind = 7:
+            emit measure2 point shape's xline's base
+            emit measure2 point shape's xline's direction
+
+set mapping to a cad transform2 with axes (measure2 input point 1) and (measure2 input point 3) at (measure2 input point 5)
+set shape to pair2 input curve at 7
+set original to the cad clone of shape
+emit measure2 scalar (the cad determinant of mapping)
+emit measure2 flag (mapping preserves cad circles)
+emit measure2 point (the cad image of (measure2 input point 10) under mapping)
+emit measure2 point (the cad direction of (measure2 input point 10) under mapping)
+set result to the cad transformed shape by mapping
+emit measure2 flag result's valid
+if result's valid:
+    emit transform2 curve result's value
+    set parameters to [-0.25,0.0,0.37,1.0,1.25]
+    loop index from 0 to the length of parameters:
+        set parameter to the item at index in parameters
+        emit measure2 point (the cad point on result's value at parameter)
+        emit measure2 point (the cad tangent of result's value at parameter)
+emit measure2 flag (shape = original)

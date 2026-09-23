@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+# This upstream-supported case also checks list allocation for zero-sized items.
+import lib/cadkernel/spline.dl
+set point to a new (a 64 bit floating-point number array of 0 items)
+set points to a list containing point
+append point to points
+set fit to the cad open spline through points using the cad chord parameterization
+if the inverse of (the valid of fit):
+    @intrinsic("call", "libc", "exit", nothing, 1)
+set value to the cad de Boor value of degree 3 with knots (the knots of fit) and points (the controls of fit) at 0.0
+if (the length of value) != 0:
+    @intrinsic("call", "libc", "exit", nothing, 1)
+free cad spline interpolation fit
+free points

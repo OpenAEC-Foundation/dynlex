@@ -1,0 +1,1031 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/split.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Edge splitting updates every coedge and loop that shares the edge. Face
+# splitting is added below this foundation with its intersection dependency.
+import lib/cadkernel/brep_pcurve.dl
+import lib/cadkernel/transform2.dl
+import lib/cadkernel/area2.dl
+
+class:
+    patterns:
+        [a|] cad split edge result
+    members:
+        valid as a boolean
+        near as a cad edge key
+        far as a cad edge key
+class:
+    patterns:
+        [a|] cad split vertex result
+    members:
+        valid as a boolean
+        value as a cad vertex key
+class:
+    patterns:
+        [a|] cad split pcurve result
+    members:
+        valid as a boolean
+        near as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+        far as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+class:
+    patterns:
+        [a|] cad split edge use
+    members:
+        key as a cad coedge key
+        forward as a boolean
+        owner as a cad loop key
+        nearPcurve as a cad pcurve result
+        farPcurve as a cad pcurve result
+class:
+    patterns:
+        [a|] cad split face result
+    members:
+        valid as a boolean
+        kept as a cad face key
+        made as a cad face key
+class:
+    patterns:
+        [a|] cad split landing
+    members:
+        edge as a cad edge key
+        coedge as a cad coedge key
+        point as a cad vector3
+class:
+    patterns:
+        [a|] cad split period result
+    members:
+        valid as a boolean
+        amount as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad split containment result
+    members:
+        valid as a boolean
+        contained as a boolean
+
+local function no cad split edge:
+    execute:
+        return @intrinsic("construct", a cad split edge result, false, a new cad edge key, a new cad edge key)
+local function no cad split vertex:
+    execute:
+        return @intrinsic("construct", a cad split vertex result, false, a new cad vertex key)
+local function no cad split face:
+    execute:
+        return @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+local function the cad split face keeping {cad face key:kept} and making {cad face key:made}:
+    execute:
+        return @intrinsic("construct", a cad split face result, true, kept, made)
+local function the cad split vertex {cad vertex key:value}:
+    execute:
+        return @intrinsic("construct", a cad split vertex result, true, value)
+local function no cad split period:
+    execute:
+        return @intrinsic("construct", a cad split period result, false, 0.0)
+local function the cad split period {a 64 bit floating-point number:value}:
+    execute:
+        return @intrinsic("construct", a cad split period result, true, value)
+local function no cad split pcurve:
+    execute:
+        set empty to the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)
+        return @intrinsic("construct", a cad split pcurve result, false, empty, empty)
+local function the cad split pcurve near {cad curve2:near} and far {cad curve2:far}:
+    execute:
+        return @intrinsic("construct", a cad split pcurve result, true, near, far)
+local function the cad split location of {cad coedge key:key} in {cad topology list:keys}:
+    execute:
+        loop cursor from 0 to the length of (keys's values):
+            if (the item at cursor in (keys's values)) = key:
+                return cursor
+        return -1
+
+local function the cad split pcurve of {cad curve2:curveValue} at {a 64 bit floating-point number:fraction}:
+    execute:
+        if curveValue's kind = cad line curve2 kind:
+            set middle to the cad lerp from (curveValue's line's start) to (curveValue's line's end) at fraction
+            set nearCurve to the cad curve2 of (a cad line2 from (curveValue's line's start) to middle)
+            set farCurve to the cad curve2 of (a cad line2 from middle to (curveValue's line's end))
+            return the cad split pcurve near nearCurve and far farCurve
+        if curveValue's kind = cad circle curve2 kind:
+            set middle to 6.283185307179586 * fraction
+            set nearCurve to the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from 0.0 to middle)
+            set farCurve to the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from middle to 6.283185307179586)
+            return the cad split pcurve near nearCurve and far farCurve
+        if curveValue's kind = cad arc curve2 kind:
+            set finish to curveValue's arc's startAngle + (the cad sweep of curveValue's arc)
+            set middle to curveValue's arc's startAngle + ((the cad sweep of curveValue's arc) * fraction)
+            set nearCurve to the cad curve2 of (a cad arc2 at curveValue's arc's centre with radius curveValue's arc's radius from curveValue's arc's startAngle to middle)
+            set farCurve to the cad curve2 of (a cad arc2 at curveValue's arc's centre with radius curveValue's arc's radius from middle to finish)
+            return the cad split pcurve near nearCurve and far farCurve
+        if curveValue's kind = cad ellipse curve2 kind:
+            set finish to curveValue's ellipse's startParameter + (the cad sweep of curveValue's ellipse)
+            set middle to curveValue's ellipse's startParameter + ((the cad sweep of curveValue's ellipse) * fraction)
+            set nearCurve to the cad curve2 of (a cad ellipse arc2 on curveValue's ellipse's ellipse from curveValue's ellipse's startParameter to middle)
+            set farCurve to the cad curve2 of (a cad ellipse arc2 on curveValue's ellipse's ellipse from middle to finish)
+            return the cad split pcurve near nearCurve and far farCurve
+        if curveValue's kind = cad nurbs curve2 kind:
+            set divided to the cad split of curveValue's nurbs at fraction
+            if divided's valid = false:
+                return no cad split pcurve
+            return the cad split pcurve near (the cad curve2 of divided's left) and far (the cad curve2 of divided's right)
+        return no cad split pcurve
+
+function the cad split of {cad edge key:edgeKey} in {cad body:body} at parameter {a number:givenParameter}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in body
+        if edgeNode = (0 as the type of edgeNode):
+            return no cad split edge
+        set original to the cad payload clone of (@intrinsic("dereference", edgeNode))
+        set splitValue to givenParameter as a 64 bit floating-point number
+        set span to original's endParameter - original's startParameter
+        if span = 0.0:
+            return no cad split edge
+        set across to (splitValue - original's startParameter) / span
+        if ((across >= 1e-9) and (across <= (1.0 - 1e-9))) = false:
+            return no cad split edge
+
+        set uses to a cad topology list of a cad split edge use
+        loop useIndex from 0 to the length of (original's coedges's values):
+            set useKey to the item at useIndex in (original's coedges's values)
+            set useNode to the cad node pointer for useKey in body
+            if useNode = (0 as the type of useNode):
+                return no cad split edge
+            set ringNode to the cad node pointer for useNode's owner in body
+            if ringNode = (0 as the type of ringNode):
+                return no cad split edge
+            if (the cad split location of useKey in (ringNode's coedges)) < 0:
+                return no cad split edge
+            set nearPcurve to no cad pcurve
+            set farPcurve to no cad pcurve
+            if useNode's pcurve's valid:
+                set useAcross to across
+                if useNode's forward = false:
+                    set useAcross to 1.0 - across
+                set divided to the cad split pcurve of useNode's pcurve's value at useAcross
+                if divided's valid = false:
+                    return no cad split edge
+                if useNode's forward:
+                    set nearPcurve to the cad pcurve of divided's near
+                    set farPcurve to the cad pcurve of divided's far
+                else:
+                    set nearPcurve to the cad pcurve of divided's far
+                    set farPcurve to the cad pcurve of divided's near
+            append (@intrinsic("construct", a cad split edge use, useKey, useNode's forward, useNode's owner, nearPcurve, farPcurve)) to (uses's values)
+
+        set curveNode to the cad node pointer for original's curve in body
+        if curveNode = (0 as the type of curveNode):
+            return no cad split edge
+        set middlePoint to the cad point on (@intrinsic("dereference", curveNode)) at splitValue
+        set middleKey to the cad body key after inserting (a cad vertex at middlePoint with provenance (the synthesized cad provenance)) into body
+        set farKey to the cad body key after inserting (a cad edge on original's curve from splitValue to original's endParameter between middleKey and original's end with provenance (the synthesized cad provenance)) into body
+        set nearNode to the cad node pointer for edgeKey in body
+        if nearNode = (0 as the type of nearNode):
+            return no cad split edge
+        set nearNode's endParameter to splitValue
+        set nearNode's end to middleKey
+        soil cad provenance nearNode's provenance
+
+        loop useIndex from 0 to the length of (uses's values):
+            set splitUse to the item at useIndex in (uses's values)
+            set twinKey to the cad body key after inserting (a cad coedge on farKey forward splitUse's forward with pcurve splitUse's farPcurve owned by splitUse's owner with provenance (the synthesized cad provenance)) into body
+            set farNode to the cad node pointer for farKey in body
+            if farNode = (0 as the type of farNode):
+                return no cad split edge
+            append twinKey to (farNode's coedges's values)
+
+            set ringNode to the cad node pointer for splitUse's owner in body
+            if ringNode = (0 as the type of ringNode):
+                return no cad split edge
+            set position to the cad split location of splitUse's key in (ringNode's coedges)
+            if position < 0:
+                return no cad split edge
+            if splitUse's forward:
+                increment position
+            insert twinKey into (ringNode's coedges's values) at index position
+            soil cad provenance ringNode's provenance
+            set faceNode to the cad node pointer for ringNode's owner in body
+            if faceNode != (0 as the type of faceNode):
+                soil cad provenance faceNode's provenance
+            set originalUse to the cad node pointer for splitUse's key in body
+            if originalUse = (0 as the type of originalUse):
+                return no cad split edge
+            set originalUse's pcurve to splitUse's nearPcurve
+            soil cad provenance originalUse's provenance
+        return @intrinsic("construct", a cad split edge result, true, edgeKey, farKey)
+
+local function the cad split parameter on {cad edge curve3:curveValue} nearest {cad vector3:point} within span {a 64 bit floating-point number:startParameter} to {a 64 bit floating-point number:endParameter}:
+    execute:
+        set locatedParameter to the cad parameter on curveValue nearest point
+        if (curveValue's kind = 1) or (curveValue's kind = 2):
+            set middle to 0.5 * (startParameter + endParameter)
+            set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - locatedParameter) / 6.283185307179586)
+            set locatedParameter to locatedParameter + (6.283185307179586 * turns)
+        return locatedParameter
+
+function the cad split of {cad edge key:edgeKey} in {cad body:body} at point {cad vector3:point}:
+    execute:
+        set edgeNode to the cad node pointer for edgeKey in body
+        if edgeNode = (0 as the type of edgeNode):
+            return no cad split edge
+        set curveNode to the cad node pointer for edgeNode's curve in body
+        if curveNode = (0 as the type of curveNode):
+            return no cad split edge
+        set locatedParameter to the cad split parameter on (@intrinsic("dereference", curveNode)) nearest point within span edgeNode's startParameter to edgeNode's endParameter
+        return the cad split of edgeKey in body at parameter locatedParameter
+
+function the cad shared vertex of {cad edge key:nearKey} and {cad edge key:farKey} in {cad body:body}:
+    execute:
+        set nearNode to the cad node pointer for nearKey in body
+        set farNode to the cad node pointer for farKey in body
+        if (nearNode = (0 as the type of nearNode)) or (farNode = (0 as the type of farNode)):
+            return no cad split vertex
+        if nearNode's end = farNode's start:
+            return the cad split vertex nearNode's end
+        if (nearNode's start = farNode's start) or (nearNode's start = farNode's end):
+            return the cad split vertex nearNode's start
+        if (nearNode's end = farNode's start) or (nearNode's end = farNode's end):
+            return the cad split vertex nearNode's end
+        return no cad split vertex
+
+local function the cad split landing vertex for {cad split landing:landing} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set landedEdge to the cad node pointer for landing's edge in body
+        if landedEdge = (0 as the type of landedEdge):
+            return no cad split vertex
+        set curveKey to landedEdge's curve
+        set curveNode to the cad node pointer for curveKey in body
+        if curveNode = (0 as the type of curveNode):
+            return no cad split vertex
+        set edgeKeys to the cad edge keys of body
+        loop cursor from 0 to the length of edgeKeys:
+            set candidateKey to the item at cursor in edgeKeys
+            set candidateNode to the cad node pointer for candidateKey in body
+            if candidateNode's curve = curveKey:
+                set startNode to the cad node pointer for candidateNode's start in body
+                set endNode to the cad node pointer for candidateNode's end in body
+                if (startNode != (0 as the type of startNode)) and ((the cad distance from startNode's point to landing's point) <= tolerance):
+                    free edgeKeys
+                    return the cad split vertex candidateNode's start
+                if (endNode != (0 as the type of endNode)) and ((the cad distance from endNode's point to landing's point) <= tolerance):
+                    free edgeKeys
+                    return the cad split vertex candidateNode's end
+                set located to the cad split parameter on (@intrinsic("dereference", curveNode)) nearest landing's point within span candidateNode's startParameter to candidateNode's endParameter
+                set low to the minimum of candidateNode's startParameter and candidateNode's endParameter
+                set high to the maximum of candidateNode's startParameter and candidateNode's endParameter
+                if (located > low) and (located < high):
+                    set divided to the cad split of candidateKey in body at parameter located
+                    free edgeKeys
+                    if divided's valid = false:
+                        return no cad split vertex
+                    return the cad shared vertex of divided's near and divided's far in body
+        free edgeKeys
+        return no cad split vertex
+
+local function the cad split landing position for {cad split landing:landing} at {cad vertex key:vertexKey} in {cad topology list:ring} of {cad body:body}:
+    execute:
+        set landingPosition to the cad split location of landing's coedge in ring
+        if landingPosition < 0:
+            return -1
+        set here to the cad coedge vertices of (the item at landingPosition in (ring's values)) in body
+        if here's valid and (here's start = vertexKey):
+            return landingPosition
+        set following to the remainder of (landingPosition + 1) divided by (the length of (ring's values))
+        set nextUse to the cad coedge vertices of (the item at following in (ring's values)) in body
+        if nextUse's valid and (nextUse's start = vertexKey):
+            return following
+        return -1
+
+local function the cad split arc of {cad topology list:ring} from {integer:firstPosition} to {integer:lastPosition}:
+    execute:
+        set result to a cad topology list of a cad coedge key
+        set cursor to firstPosition
+        loop while cursor != lastPosition:
+            append (the item at cursor in (ring's values)) to (result's values)
+            set cursor to the remainder of (cursor + 1) divided by (the length of (ring's values))
+        return result
+
+local function the cad closed period of {cad edge curve3:curveValue}:
+    execute:
+        if (curveValue's kind = 1) or (curveValue's kind = 2):
+            return the cad split period 6.283185307179586
+        if curveValue's kind = 3:
+            if curveValue's planar's curve is cad closed:
+                return the cad split period 1.0
+        if curveValue's kind = 4:
+            if the cad periodicity of curveValue's nurbs:
+                set domain to the cad domain of curveValue's nurbs
+                if domain's end > domain's start:
+                    return the cad split period (domain's end - domain's start)
+        return no cad split period
+
+local function the cad reversed closed pcurve of {cad curve2:curveValue}:
+    execute:
+        if curveValue's kind = cad line curve2 kind:
+            return the cad pcurve of (the cad curve2 of (a cad line2 from curveValue's line's end to curveValue's line's start))
+        if curveValue's kind = cad polyline curve2 kind:
+            set reversedVertices to an empty list of a cad polyline vertex2
+            loop cursor from 0 to the length of curveValue's polyline's vertices:
+                set reverseIndex to ((the length of curveValue's polyline's vertices) - 1) - cursor
+                set vertex to the item at reverseIndex in curveValue's polyline's vertices
+                if vertex's bulge != 0.0:
+                    free reversedVertices
+                    return no cad pcurve
+                append vertex to reversedVertices
+            set reversedPolyline to the cad polyline2 with vertices reversedVertices and closure curveValue's polyline's closed
+            free reversedVertices
+            return the cad pcurve of (the cad curve2 of reversedPolyline)
+        if curveValue's kind = cad nurbs curve2 kind:
+            set builder to the cad rational builder of curveValue
+            if builder's valid = false:
+                return no cad pcurve
+            set reversedBuilder to the cad reverse of builder's value
+            set made to the cad curve of reversedBuilder
+            if made's valid = false:
+                return no cad pcurve
+            return the cad pcurve of (the cad curve2 of made's value)
+        return no cad pcurve
+
+local function the cad split containment of {cad edge curve3:cutter} at {a 64 bit floating-point number:curveAmount} on {cad surface:surfaceValue} bounded by {cad topology list:boundaryCurves} with periods {cad pcurve periods:periods} within {a 64 bit floating-point number:tolerance} requiring clearance {boolean:clearance}:
+    execute:
+        set spatialPoint to the cad point on cutter at curveAmount
+        set uvResult to the cad parameters on surfaceValue nearest spatialPoint
+        if uvResult's valid = false:
+            return @intrinsic("construct", a cad split containment result, false, false)
+        set uSpan to 0
+        set vSpan to 0
+        if periods's uValid:
+            set uSpan to 2
+        if periods's vValid:
+            set vSpan to 2
+        loop uTurn from (0 - uSpan) to (uSpan + 1):
+            loop vTurn from (0 - vSpan) to (vSpan + 1):
+                set uShift to 0.0
+                set vShift to 0.0
+                if periods's uValid:
+                    set uShift to (periods's u) * (uTurn as a 64 bit floating-point number)
+                if periods's vValid:
+                    set vShift to (periods's v) * (vTurn as a 64 bit floating-point number)
+                set shiftedPoint to a cad vector2 with x ((uvResult's value's x) + uShift) and y ((uvResult's value's y) + vShift)
+                if cad boundary (boundaryCurves's values) contains shiftedPoint within (a cad tolerance of tolerance):
+                    set separated to true
+                    if clearance:
+                        loop edgeCursor from 0 to the length of (boundaryCurves's values):
+                            if (the cad distance to (the item at edgeCursor in (boundaryCurves's values)) from shiftedPoint) <= tolerance:
+                                set separated to false
+                    if separated:
+                        return @intrinsic("construct", a cad split containment result, true, true)
+        return @intrinsic("construct", a cad split containment result, true, false)
+
+local function cad split order key {a 64 bit floating-point number:value}:
+    execute:
+        set bits to @intrinsic("dereference", (@intrinsic("address of", value)) as a pointer to a 64 bit integer)
+        if bits < (0 as a 64 bit integer):
+            return bits ^ (9223372036854775807 as a 64 bit integer)
+        return bits
+
+local function sort cad split landings {cad topology list:landings} along {cad edge curve3:cutter}:
+    execute:
+        loop itemCursor from 1 to the length of (landings's values):
+            set current to the item at itemCursor in (landings's values)
+            set currentAmount to the cad parameter on cutter nearest current's point
+            set slot to itemCursor
+            set searching to true
+            loop while searching and (slot > 0):
+                set previous to the item at (slot - 1) in (landings's values)
+                set previousAmount to the cad parameter on cutter nearest previous's point
+                if (cad split order key previousAmount) <= (cad split order key currentAmount):
+                    set searching to false
+                else:
+                    replace item at index slot in (landings's values) with previous
+                    decrement slot
+            replace item at index slot in (landings's values) with current
+
+local function cad split closed between loops in place {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} projected as {cad curve2:flatCutter} with boundary {cad boundary parts result:boundary} over period {a 64 bit floating-point number:periodValue}:
+    execute:
+        if flatCutter's kind != cad line curve2 kind:
+            return no cad split face
+        set cutDirection to the cad difference of flatCutter's line's end and flatCutter's line's start
+        if (the cad length of cutDirection) <= 2.220446049250313e-16:
+            return no cad split face
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return no cad split face
+        set originalFace to the cad payload clone of (@intrinsic("dereference", faceNode))
+        set negativeLoops to a cad topology list of a cad loop key
+        set positiveLoops to a cad topology list of a cad loop key
+        set negativeAlong to 0.0
+        set positiveAlong to 0.0
+        loop ringCursor from 0 to the length of (originalFace's loops's values):
+            set ringKey to the item at ringCursor in (originalFace's loops's values)
+            set ringNode to the cad node pointer for ringKey in body
+            if (ringNode = (0 as the type of ringNode)) or ((the length of (ringNode's coedges's values)) = 0):
+                return no cad split face
+            set firstUseKey to the item at 0 in (ringNode's coedges's values)
+            set boundaryFound to false
+            set boundaryCurve to the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)
+            loop partCursor from 0 to the length of (boundary's parts's values):
+                set candidatePart to the item at partCursor in (boundary's parts's values)
+                if candidatePart's coedge = firstUseKey:
+                    set boundaryFound to true
+                    set boundaryCurve to candidatePart's curve
+            if boundaryFound = false:
+                return no cad split face
+            set ringPoint to the cad point on boundaryCurve at 0.5
+            set tangentStart to the cad point on boundaryCurve at 0.0
+            set tangentEnd to the cad point on boundaryCurve at 1.0
+            set ringTangent to the cad difference of tangentEnd and tangentStart
+            set fromCut to the cad difference of ringPoint and flatCutter's line's start
+            set sideValue to the cad cross of cutDirection and fromCut
+            if sideValue < 0.0:
+                append ringKey to (negativeLoops's values)
+                set negativeAlong to negativeAlong + (the cad dot of ringTangent and cutDirection)
+            else if sideValue > 0.0:
+                append ringKey to (positiveLoops's values)
+                set positiveAlong to positiveAlong + (the cad dot of ringTangent and cutDirection)
+            else:
+                return no cad split face
+        if ((the length of (negativeLoops's values)) = 0) or ((the length of (positiveLoops's values)) = 0):
+            return no cad split face
+        set keptLoops to negativeLoops
+        set movedLoops to positiveLoops
+        set cutForward to false
+        if negativeAlong < positiveAlong:
+            set keptLoops to positiveLoops
+            set movedLoops to negativeLoops
+            set cutForward to true
+
+        set seamPoint to the cad point on cutter at 0.0
+        set seamKey to the cad body key after inserting (a cad vertex at seamPoint with provenance (the synthesized cad provenance)) into body
+        set curveKey to the cad body key after inserting (the cad clone of cutter) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from 0.0 to periodValue between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
+        set keptRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        set keptUse to the cad body key after inserting (a cad coedge on cutKey forward cutForward with pcurve (no cad pcurve) owned by keptRing with provenance (the synthesized cad provenance)) into body
+        set keptRingNode to the cad node pointer for keptRing in body
+        append keptUse to (keptRingNode's coedges's values)
+
+        set otherFace to the cad body key after inserting (a cad face on originalFace's surface forward originalFace's forward owned by originalFace's owner with provenance (the synthesized cad provenance)) into body
+        set movedRing to the cad body key after inserting (a cad loop owned by otherFace with provenance (the synthesized cad provenance)) into body
+        set movedUse to the cad body key after inserting (a cad coedge on cutKey forward (cutForward = false) with pcurve (no cad pcurve) owned by movedRing with provenance (the synthesized cad provenance)) into body
+        set movedRingNode to the cad node pointer for movedRing in body
+        append movedUse to (movedRingNode's coedges's values)
+        set cutNode to the cad node pointer for cutKey in body
+        append keptUse to (cutNode's coedges's values)
+        append movedUse to (cutNode's coedges's values)
+
+        loop ringCursor from 0 to the length of (keptLoops's values):
+            set ringNode to the cad node pointer for (the item at ringCursor in (keptLoops's values)) in body
+            if ringNode = (0 as the type of ringNode):
+                return no cad split face
+            set ringNode's owner to faceKey
+        loop ringCursor from 0 to the length of (movedLoops's values):
+            set ringNode to the cad node pointer for (the item at ringCursor in (movedLoops's values)) in body
+            if ringNode = (0 as the type of ringNode):
+                return no cad split face
+            set ringNode's owner to otherFace
+        append keptRing to (keptLoops's values)
+        append movedRing to (movedLoops's values)
+        set keptFaceNode to the cad node pointer for faceKey in body
+        set keptFaceNode's loops to keptLoops
+        soil cad provenance keptFaceNode's provenance
+        set otherFaceNode to the cad node pointer for otherFace in body
+        set otherFaceNode's loops to movedLoops
+        set ownerNode to the cad node pointer for originalFace's owner in body
+        if ownerNode = (0 as the type of ownerNode):
+            return no cad split face
+        append otherFace to (ownerNode's faces's values)
+        return the cad split face keeping faceKey and making otherFace
+
+local function cad split isolated closed face in place {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} over period {a 64 bit floating-point number:periodValue} starting at {a 64 bit floating-point number:startAmount}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return no cad split face
+        set originalFace to the cad payload clone of (@intrinsic("dereference", faceNode))
+        set surfaceNode to the cad node pointer for originalFace's surface in body
+        if surfaceNode = (0 as the type of surfaceNode):
+            return no cad split face
+        set cutterPlane to a new cad plane
+        set planeValid to false
+        set winding to 1.0
+        if cutter's kind = 1:
+            set cutterPlane to cutter's circle's plane
+            set planeValid to true
+        else if cutter's kind = 2:
+            set cutterPlane to cutter's ellipse's plane
+            set planeValid to true
+        else if cutter's kind = 3:
+            set cutterPlane to cutter's planar's plane
+            set winding to the cad enclosed area of (the cad curve2 of cutter's planar's curve)
+            set planeValid to true
+        if planeValid = false:
+            return no cad split face
+        set seamPoint to the cad point on cutter at startAmount
+        set sampleUV to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest seamPoint
+        set planeNormal to the cad normal of cutterPlane
+        if (sampleUV's valid and planeNormal's valid) = false:
+            return no cad split face
+        set surfaceNormal to the cad normal of (@intrinsic("dereference", surfaceNode)) at parameters sampleUV's value's x and sampleUV's value's y
+        if surfaceNormal's valid = false:
+            return no cad split face
+        set alignment to (the cad dot of planeNormal's value and surfaceNormal's value) * winding
+        if ((the absolute value of alignment) > 1.7976931348623157e308) or (alignment = 0.0):
+            return no cad split face
+        set islandForward to (alignment > 0.0) = originalFace's forward
+
+        set seamKey to the cad body key after inserting (a cad vertex at seamPoint with provenance (the synthesized cad provenance)) into body
+        set curveKey to the cad body key after inserting (the cad clone of cutter) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from startAmount to (startAmount + periodValue) between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
+        set holeRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        set holeUse to the cad body key after inserting (a cad coedge on cutKey forward (islandForward = false) with pcurve (no cad pcurve) owned by holeRing with provenance (the synthesized cad provenance)) into body
+        set holeRingNode to the cad node pointer for holeRing in body
+        append holeUse to (holeRingNode's coedges's values)
+        set keptFaceNode to the cad node pointer for faceKey in body
+        append holeRing to (keptFaceNode's loops's values)
+        soil cad provenance keptFaceNode's provenance
+
+        set otherFace to the cad body key after inserting (a cad face on originalFace's surface forward originalFace's forward owned by originalFace's owner with provenance (the synthesized cad provenance)) into body
+        set islandRing to the cad body key after inserting (a cad loop owned by otherFace with provenance (the synthesized cad provenance)) into body
+        set islandUse to the cad body key after inserting (a cad coedge on cutKey forward islandForward with pcurve (no cad pcurve) owned by islandRing with provenance (the synthesized cad provenance)) into body
+        set islandRingNode to the cad node pointer for islandRing in body
+        append islandUse to (islandRingNode's coedges's values)
+        set otherFaceNode to the cad node pointer for otherFace in body
+        append islandRing to (otherFaceNode's loops's values)
+        set ownerNode to the cad node pointer for originalFace's owner in body
+        if ownerNode = (0 as the type of ownerNode):
+            return no cad split face
+        append otherFace to (ownerNode's faces's values)
+        set cutNode to the cad node pointer for cutKey in body
+        append holeUse to (cutNode's coedges's values)
+        append islandUse to (cutNode's coedges's values)
+        return the cad split face keeping faceKey and making otherFace
+
+local function cad split full sphere in place {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} projected as {cad curve2:flatCutter}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return no cad split face
+        set originalFace to the cad payload clone of (@intrinsic("dereference", faceNode))
+        if (the length of (originalFace's loops's values)) != 1:
+            return no cad split face
+        set periodResult to the cad closed period of cutter
+        if periodResult's valid = false:
+            return no cad split face
+        set surfaceNode to the cad node pointer for originalFace's surface in body
+        if (surfaceNode = (0 as the type of surfaceNode)) or (surfaceNode's kind != 3):
+            return no cad split face
+        set oldRing to the item at 0 in (originalFace's loops's values)
+        set oldRingNode to the cad node pointer for oldRing in body
+        if (oldRingNode = (0 as the type of oldRingNode)) or ((the length of (oldRingNode's coedges's values)) != 2):
+            return no cad split face
+        set firstUse to the cad node pointer for (the item at 0 in (oldRingNode's coedges's values)) in body
+        set secondUse to the cad node pointer for (the item at 1 in (oldRingNode's coedges's values)) in body
+        if (firstUse = (0 as the type of firstUse)) or (secondUse = (0 as the type of secondUse)):
+            return no cad split face
+        if (firstUse's edge != secondUse's edge) or (firstUse's forward = secondUse's forward):
+            return no cad split face
+        set oldEdge to firstUse's edge
+        set firstUseKey to the item at 0 in (oldRingNode's coedges's values)
+        set secondUseKey to the item at 1 in (oldRingNode's coedges's values)
+
+        set planeValid to false
+        set cutterPlane to a new cad plane
+        if cutter's kind = 1:
+            set cutterPlane to cutter's circle's plane
+            set planeValid to true
+        else if cutter's kind = 2:
+            set cutterPlane to cutter's ellipse's plane
+            set planeValid to true
+        else if cutter's kind = 3:
+            set cutterPlane to cutter's planar's plane
+            set planeValid to true
+        if planeValid = false:
+            return no cad split face
+        set planeNormal to the cad normal of cutterPlane
+        if planeNormal's valid = false:
+            return no cad split face
+        set sampleValid to false
+        set startParameter to 0.0
+        set seamPoint to the cad zero vector3
+        set alignment to 0.0
+        loop sampleCursor from 0 to 32:
+            if sampleValid = false:
+                set sampleParameter to ((periodResult's amount) * (sampleCursor as a 64 bit floating-point number)) / 32.0
+                set samplePoint to the cad point on cutter at sampleParameter
+                set sampleUV to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest samplePoint
+                if sampleUV's valid:
+                    set surfaceNormal to the cad normal of (@intrinsic("dereference", surfaceNode)) at parameters sampleUV's value's x and sampleUV's value's y
+                    if surfaceNormal's valid:
+                        set candidateAlignment to the cad dot of planeNormal's value and surfaceNormal's value
+                        if ((the absolute value of candidateAlignment) <= 1.7976931348623157e308) and (candidateAlignment != 0.0):
+                            set sampleValid to true
+                            set startParameter to sampleParameter
+                            set seamPoint to samplePoint
+                            set alignment to candidateAlignment
+        if sampleValid = false:
+            return no cad split face
+        set firstForward to (alignment > 0.0) = originalFace's forward
+        set firstPcurve to the cad pcurve of (the cad clone of flatCutter)
+        if firstForward = false:
+            set firstPcurve to the cad reversed closed pcurve of flatCutter
+        set otherForward to firstForward = false
+        set otherPcurve to the cad pcurve of (the cad clone of flatCutter)
+        if otherForward = false:
+            set otherPcurve to the cad reversed closed pcurve of flatCutter
+        if (firstPcurve's valid and otherPcurve's valid) = false:
+            return no cad split face
+
+        ignore the cad removal of firstUseKey from body
+        ignore the cad removal of secondUseKey from body
+        ignore the cad removal of oldRing from body
+        ignore the cad removal of oldEdge from body
+
+        set seamKey to the cad body key after inserting (a cad vertex at seamPoint with provenance (the synthesized cad provenance)) into body
+        set curveKey to the cad body key after inserting (the cad clone of cutter) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from startParameter to (startParameter + periodResult's amount) between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
+
+        set firstRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        set firstKey to the cad body key after inserting (a cad coedge on cutKey forward firstForward with pcurve firstPcurve owned by firstRing with provenance (the synthesized cad provenance)) into body
+        set firstRingNode to the cad node pointer for firstRing in body
+        append firstKey to (firstRingNode's coedges's values)
+        set keptFace to the cad node pointer for faceKey in body
+        clear (keptFace's loops's values)
+        append firstRing to (keptFace's loops's values)
+        soil cad provenance keptFace's provenance
+
+        set otherFace to the cad body key after inserting (a cad face on originalFace's surface forward originalFace's forward owned by originalFace's owner with provenance (the synthesized cad provenance)) into body
+        set otherRing to the cad body key after inserting (a cad loop owned by otherFace with provenance (the synthesized cad provenance)) into body
+        set otherKey to the cad body key after inserting (a cad coedge on cutKey forward otherForward with pcurve otherPcurve owned by otherRing with provenance (the synthesized cad provenance)) into body
+        set otherRingNode to the cad node pointer for otherRing in body
+        append otherKey to (otherRingNode's coedges's values)
+        set otherFaceNode to the cad node pointer for otherFace in body
+        append otherRing to (otherFaceNode's loops's values)
+        set ownerNode to the cad node pointer for originalFace's owner in body
+        if ownerNode = (0 as the type of ownerNode):
+            return no cad split face
+        append otherFace to (ownerNode's faces's values)
+        set cutNode to the cad node pointer for cutKey in body
+        append firstKey to (cutNode's coedges's values)
+        append otherKey to (cutNode's coedges's values)
+        set flaws to the cad flaws of body
+        set consistent to (the length of flaws) = 0
+        free flaws
+        if consistent = false:
+            return no cad split face
+        return the cad split face keeping faceKey and making otherFace
+
+local function cad split closed planar face in place {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return no cad split face
+        set originalFace to the cad payload clone of (@intrinsic("dereference", faceNode))
+        if (the length of (originalFace's loops's values)) != 1:
+            return no cad split face
+        set surfaceNode to the cad node pointer for originalFace's surface in body
+        if (surfaceNode = (0 as the type of surfaceNode)) or (surfaceNode's kind != 0):
+            return no cad split face
+        if cutter's kind != 1:
+            return no cad split face
+        set flatCutter to the cad projection of cutter onto (@intrinsic("dereference", surfaceNode)) within tolerance
+        if flatCutter's valid = false:
+            return no cad split face
+        set boundary to the cad boundary parts of faceKey in body within tolerance
+        if boundary's valid = false:
+            return no cad split face
+        set boundaryCurves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop partCursor from 0 to the length of (boundary's parts's values):
+            set part to the item at partCursor in (boundary's parts's values)
+            append part's curve to (boundaryCurves's values)
+            set crossings to the cad crossings of flatCutter's value and part's curve within (a cad tolerance of tolerance)
+            if (the length of crossings) != 0:
+                free crossings
+                return no cad split face
+            free crossings
+        set startParameter to 0.0
+        set point to the cad point on cutter at startParameter
+        set sampleUV to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest point
+        if sampleUV's valid = false:
+            return no cad split face
+        if (cad boundary (boundaryCurves's values) contains sampleUV's value within (a cad tolerance of tolerance)) = false:
+            return no cad split face
+        loop partCursor from 0 to the length of (boundary's parts's values):
+            set part to the item at partCursor in (boundary's parts's values)
+            if (the cad distance to part's curve from sampleUV's value) <= tolerance:
+                return no cad split face
+        set cutterNormal to the cad normal of cutter's circle's plane
+        set surfaceNormal to the cad normal of (@intrinsic("dereference", surfaceNode)) at parameters sampleUV's value's x and sampleUV's value's y
+        if (cutterNormal's valid and surfaceNormal's valid) = false:
+            return no cad split face
+        set alignment to the cad dot of cutterNormal's value and surfaceNormal's value
+        if ((the absolute value of alignment) > 1.7976931348623157e308) or (alignment = 0.0):
+            return no cad split face
+        set islandForward to (alignment > 0.0) = originalFace's forward
+
+        set seamKey to the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into body
+        set curveKey to the cad body key after inserting (the cad clone of cutter) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from startParameter to (startParameter + 6.283185307179586) between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
+        set holeRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        set holeKey to the cad body key after inserting (a cad coedge on cutKey forward (islandForward = false) with pcurve (no cad pcurve) owned by holeRing with provenance (the synthesized cad provenance)) into body
+        set holeNode to the cad node pointer for holeRing in body
+        append holeKey to (holeNode's coedges's values)
+        set keptFace to the cad node pointer for faceKey in body
+        append holeRing to (keptFace's loops's values)
+        soil cad provenance keptFace's provenance
+
+        set otherFace to the cad body key after inserting (a cad face on originalFace's surface forward originalFace's forward owned by originalFace's owner with provenance (the synthesized cad provenance)) into body
+        set otherRing to the cad body key after inserting (a cad loop owned by otherFace with provenance (the synthesized cad provenance)) into body
+        set innerKey to the cad body key after inserting (a cad coedge on cutKey forward islandForward with pcurve (no cad pcurve) owned by otherRing with provenance (the synthesized cad provenance)) into body
+        set otherRingNode to the cad node pointer for otherRing in body
+        append innerKey to (otherRingNode's coedges's values)
+        set otherFaceNode to the cad node pointer for otherFace in body
+        append otherRing to (otherFaceNode's loops's values)
+        set ownerNode to the cad node pointer for originalFace's owner in body
+        if ownerNode = (0 as the type of ownerNode):
+            return no cad split face
+        append otherFace to (ownerNode's faces's values)
+        set cutNode to the cad node pointer for cutKey in body
+        append holeKey to (cutNode's coedges's values)
+        append innerKey to (cutNode's coedges's values)
+        return the cad split face keeping faceKey and making otherFace
+
+local function cad split face in place {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if cutter's kind = 1:
+            set closedPlanar to cad split closed planar face in place faceKey in body along cutter within tolerance
+            if closedPlanar's valid:
+                return closedPlanar
+        set faceNode to the cad node pointer for faceKey in body
+        if faceNode = (0 as the type of faceNode):
+            return no cad split face
+        set originalFace to the cad payload clone of (@intrinsic("dereference", faceNode))
+        set surfaceNode to the cad node pointer for originalFace's surface in body
+        if surfaceNode = (0 as the type of surfaceNode):
+            return no cad split face
+        set sphericalCut to surfaceNode's kind = 3
+        set flatCutter to the cad projection of cutter onto (@intrinsic("dereference", surfaceNode)) within tolerance
+        if flatCutter's valid = false:
+            return no cad split face
+        if sphericalCut:
+            set sphericalPcurve to the cad clone of (flatCutter's value)
+            set fullSphere to cad split full sphere in place faceKey in body along cutter projected as sphericalPcurve
+            if fullSphere's valid:
+                return fullSphere
+        set boundary to the cad boundary parts of faceKey in body within tolerance
+        if boundary's valid = false:
+            return no cad split face
+        set boundaryCurves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        set landings to a cad topology list of a cad split landing
+        set periods to the cad parameter periods of (@intrinsic("dereference", surfaceNode))
+        set uSpan to 0
+        set vSpan to 0
+        if periods's uValid:
+            set uSpan to 2
+        if periods's vValid:
+            set vSpan to 2
+        loop uTurn from (0 - uSpan) to (uSpan + 1):
+            loop vTurn from (0 - vSpan) to (vSpan + 1):
+                set uShift to 0.0
+                set vShift to 0.0
+                if periods's uValid:
+                    set uShift to (periods's u) * (uTurn as a 64 bit floating-point number)
+                if periods's vValid:
+                    set vShift to (periods's v) * (vTurn as a 64 bit floating-point number)
+                set shiftedCutter to the cad transformed (flatCutter's value) by (a cad translation2 by (a cad vector2 with x uShift and y vShift))
+                if shiftedCutter's valid:
+                    loop partCursor from 0 to the length of (boundary's parts's values):
+                        set part to the item at partCursor in (boundary's parts's values)
+                        set useNode to the cad node pointer for part's coedge in body
+                        if useNode = (0 as the type of useNode):
+                            return no cad split face
+                        set edgeNode to the cad node pointer for useNode's edge in body
+                        if edgeNode = (0 as the type of edgeNode):
+                            return no cad split face
+                        set edgeCurve to the cad node pointer for edgeNode's curve in body
+                        if edgeCurve = (0 as the type of edgeCurve):
+                            return no cad split face
+                        set crossings to the cad crossings of shiftedCutter's value and part's curve within (a cad tolerance of tolerance)
+                        loop crossingCursor from 0 to the length of crossings:
+                            set crossing to the item at crossingCursor in crossings
+                            set landingPoint to the cad point on (@intrinsic("dereference", surfaceNode)) at parameters crossing's point's x and crossing's point's y
+                            set edgeAlong to the cad split parameter on (@intrinsic("dereference", edgeCurve)) nearest landingPoint within span edgeNode's startParameter to edgeNode's endParameter
+                            set low to the minimum of edgeNode's startParameter and edgeNode's endParameter
+                            set high to the maximum of edgeNode's startParameter and edgeNode's endParameter
+                            set slack to (the absolute value of (high - low)) * 1e-9
+                            if (edgeAlong >= (low - slack)) and (edgeAlong <= (high + slack)):
+                                set duplicate to false
+                                loop seenCursor from 0 to the length of (landings's values):
+                                    set seen to the item at seenCursor in (landings's values)
+                                    if ((the cad distance from seen's point to landingPoint) <= tolerance) and (((seen's edge != useNode's edge) or (seen's coedge = part's coedge))):
+                                        set duplicate to true
+                                if duplicate = false:
+                                    append (@intrinsic("construct", a cad split landing, useNode's edge, part's coedge, landingPoint)) to (landings's values)
+                        free crossings
+        set cutterPeriod to the cad closed period of cutter
+        if cutterPeriod's valid or ((the length of (landings's values)) > 2):
+            loop partCursor from 0 to the length of (boundary's parts's values):
+                append (the item at partCursor in (boundary's parts's values))'s curve to (boundaryCurves's values)
+        if surfaceNode's kind = 0:
+            if cutterPeriod's valid:
+                set filteredLandings to a cad topology list of a cad split landing
+                set tangentStep to (cutterPeriod's amount) * 1e-6
+                loop landingCursor from 0 to the length of (landings's values):
+                    set candidateLanding to the item at landingCursor in (landings's values)
+                    set candidateAmount to the cad parameter on cutter nearest candidateLanding's point
+                    set beforeStatus to the cad split containment of cutter at (candidateAmount - tangentStep) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
+                    set afterStatus to the cad split containment of cutter at (candidateAmount + tangentStep) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
+                    if (beforeStatus's valid and afterStatus's valid) and (beforeStatus's contained != afterStatus's contained):
+                        append candidateLanding to (filteredLandings's values)
+                set landings to filteredLandings
+
+        if (the length of (landings's values)) = 0:
+            set emptyPeriod to cutterPeriod
+            if emptyPeriod's valid = false:
+                return no cad split face
+            if (the length of (originalFace's loops's values)) > 1:
+                return cad split closed between loops in place faceKey in body along cutter projected as flatCutter's value with boundary boundary over period emptyPeriod's amount
+            set sampleFound to false
+            set startAmount to 0.0
+            loop sampleCursor from 0 to 16:
+                if sampleFound = false:
+                    set candidateAmount to ((emptyPeriod's amount) * (sampleCursor as a 64 bit floating-point number)) / 16.0
+                    set sampleStatus to the cad split containment of cutter at candidateAmount on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance true
+                    if sampleStatus's valid and sampleStatus's contained:
+                        set sampleFound to true
+                        set startAmount to candidateAmount
+            if sampleFound = false:
+                return no cad split face
+            return cad split isolated closed face in place faceKey in body along cutter over period emptyPeriod's amount starting at startAmount
+
+        if (the length of (originalFace's loops's values)) != 1:
+            return no cad split face
+        set selectedSpan to false
+        set selectedStart to 0.0
+        set selectedEnd to 0.0
+        if (the length of (landings's values)) > 2:
+            sort cad split landings landings along cutter
+            set pairPeriod to cutterPeriod
+            set landingCount to the length of (landings's values)
+            set pairCount to landingCount - 1
+            if pairPeriod's valid:
+                set pairCount to landingCount
+            set pairFound to false
+            set chosenLandings to a cad topology list of a cad split landing
+            loop pairCursor from 0 to pairCount:
+                if pairFound = false:
+                    set nextCursor to the remainder of (pairCursor + 1) divided by landingCount
+                    set firstCandidate to the item at pairCursor in (landings's values)
+                    set secondCandidate to the item at nextCursor in (landings's values)
+                    set firstAmount to the cad parameter on cutter nearest firstCandidate's point
+                    set secondAmount to the cad parameter on cutter nearest secondCandidate's point
+                    if nextCursor = 0:
+                        if pairPeriod's valid = false:
+                            return no cad split face
+                        set secondAmount to secondAmount + pairPeriod's amount
+                    set spanStatus to the cad split containment of cutter at (0.5 * (firstAmount + secondAmount)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance true
+                    if spanStatus's valid and spanStatus's contained:
+                        set pairFound to true
+                        set selectedStart to firstAmount
+                        set selectedEnd to secondAmount
+                        append firstCandidate to (chosenLandings's values)
+                        append secondCandidate to (chosenLandings's values)
+            if pairFound = false:
+                return no cad split face
+            set landings to chosenLandings
+            set selectedSpan to true
+        if (the length of (landings's values)) != 2:
+            return no cad split face
+
+        set firstLanding to the item at 0 in (landings's values)
+        set secondLanding to the item at 1 in (landings's values)
+        set sameLanding to (the cad distance from firstLanding's point to secondLanding's point) <= tolerance
+        set firstAlong to the cad parameter on cutter nearest firstLanding's point
+        set secondAlong to the cad parameter on cutter nearest secondLanding's point
+        set lowLandingIndex to 0
+        set highLandingIndex to 1
+        set lowAlong to firstAlong
+        set highAlong to secondAlong
+        if secondAlong < firstAlong:
+            set lowLandingIndex to 1
+            set highLandingIndex to 0
+            set lowAlong to secondAlong
+            set highAlong to firstAlong
+        set startLandingIndex to lowLandingIndex
+        set endLandingIndex to highLandingIndex
+        set startAlong to lowAlong
+        set endAlong to highAlong
+        set closedPeriod to cutterPeriod
+        if selectedSpan:
+            set startLandingIndex to 0
+            set endLandingIndex to 1
+            set startAlong to selectedStart
+            set endAlong to selectedEnd
+        else if closedPeriod's valid and sameLanding:
+            set endAlong to lowAlong + closedPeriod's amount
+        else if closedPeriod's valid:
+            set directStatus to the cad split containment of cutter at (0.5 * (lowAlong + highAlong)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
+            set wrappedStatus to the cad split containment of cutter at (0.5 * (highAlong + lowAlong + closedPeriod's amount)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
+            if (directStatus's valid and wrappedStatus's valid) = false:
+                return no cad split face
+            if directStatus's contained and (wrappedStatus's contained = false):
+                ignore directStatus
+            else if (directStatus's contained = false) and wrappedStatus's contained:
+                set startLandingIndex to highLandingIndex
+                set endLandingIndex to lowLandingIndex
+                set startAlong to highAlong
+                set endAlong to lowAlong + closedPeriod's amount
+            else:
+                return no cad split face
+        set midway to the cad point on cutter at (0.5 * (startAlong + endAlong))
+        set midwayUV to the cad parameters on (@intrinsic("dereference", surfaceNode)) nearest midway
+        if midwayUV's valid = false:
+            return no cad split face
+        set touchesBoundary to false
+        loop uTurn from (0 - uSpan) to (uSpan + 1):
+            loop vTurn from (0 - vSpan) to (vSpan + 1):
+                set uShift to 0.0
+                set vShift to 0.0
+                if periods's uValid:
+                    set uShift to (periods's u) * (uTurn as a 64 bit floating-point number)
+                if periods's vValid:
+                    set vShift to (periods's v) * (vTurn as a 64 bit floating-point number)
+                set shiftedMidway to a cad vector2 with x ((midwayUV's value's x) + uShift) and y ((midwayUV's value's y) + vShift)
+                loop partCursor from 0 to the length of (boundary's parts's values):
+                    set part to the item at partCursor in (boundary's parts's values)
+                    if (the cad distance to part's curve from shiftedMidway) <= tolerance:
+                        set touchesBoundary to true
+        if touchesBoundary:
+            return no cad split face
+
+        set firstVertex to the cad split landing vertex for firstLanding in body within tolerance
+        if firstVertex's valid = false:
+            return no cad split face
+        set secondVertex to the cad split landing vertex for secondLanding in body within tolerance
+        if secondVertex's valid = false:
+            return no cad split face
+        if (firstVertex's value = secondVertex's value) and (sameLanding = false):
+            return no cad split face
+        set startVertex to firstVertex's value
+        set endVertex to secondVertex's value
+        if startLandingIndex = 1:
+            set startVertex to secondVertex's value
+        if endLandingIndex = 0:
+            set endVertex to firstVertex's value
+
+        set ringKey to the item at 0 in (originalFace's loops's values)
+        set ringNode to the cad node pointer for ringKey in body
+        if ringNode = (0 as the type of ringNode):
+            return no cad split face
+        set ring to the cad clone of ringNode's coedges
+        set atFirst to the cad split landing position for firstLanding at firstVertex's value in ring of body
+        set atSecond to the cad split landing position for secondLanding at secondVertex's value in ring of body
+        if (atFirst < 0) or (atSecond < 0):
+            return no cad split face
+        set nearUses to the cad split arc of ring from atFirst to atSecond
+        set farUses to the cad split arc of ring from atSecond to atFirst
+        if ((the length of (nearUses's values)) = 0) or ((the length of (farUses's values)) = 0):
+            return no cad split face
+
+        set curveKey to the cad body key after inserting (the cad clone of cutter) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from startAlong to endAlong between startVertex and endVertex with provenance (the synthesized cad provenance)) into body
+        set nearForward to true
+        if sameLanding = false:
+            set nearForward to (startVertex = (secondVertex's value))
+        set nearCloser to the cad body key after inserting (a cad coedge on cutKey forward nearForward with pcurve (no cad pcurve) owned by ringKey with provenance (the synthesized cad provenance)) into body
+        append nearCloser to (nearUses's values)
+        set cutNode to the cad node pointer for cutKey in body
+        append nearCloser to (cutNode's coedges's values)
+        set ringNode's coedges to nearUses
+        soil cad provenance ringNode's provenance
+        set keptFace to the cad node pointer for faceKey in body
+        soil cad provenance keptFace's provenance
+
+        set otherFace to the cad body key after inserting (a cad face on originalFace's surface forward originalFace's forward owned by originalFace's owner with provenance (the synthesized cad provenance)) into body
+        set otherRing to the cad body key after inserting (a cad loop owned by otherFace with provenance (the synthesized cad provenance)) into body
+        set farForward to false
+        if sameLanding = false:
+            set farForward to (startVertex = (firstVertex's value))
+        set farCloser to the cad body key after inserting (a cad coedge on cutKey forward farForward with pcurve (no cad pcurve) owned by otherRing with provenance (the synthesized cad provenance)) into body
+        append farCloser to (cutNode's coedges's values)
+        loop movedCursor from 0 to the length of (farUses's values):
+            set movedUse to the cad node pointer for (the item at movedCursor in (farUses's values)) in body
+            set movedUse's owner to otherRing
+        append farCloser to (farUses's values)
+        set otherRingNode to the cad node pointer for otherRing in body
+        set otherRingNode's coedges to farUses
+        set otherFaceNode to the cad node pointer for otherFace in body
+        append otherRing to (otherFaceNode's loops's values)
+        set ownerNode to the cad node pointer for originalFace's owner in body
+        if ownerNode = (0 as the type of ownerNode):
+            return no cad split face
+        append otherFace to (ownerNode's faces's values)
+        return the cad split face keeping faceKey and making otherFace
+
+function the cad split of {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} within {a number:givenTolerance}:
+    execute:
+        set tolerance to givenTolerance as a 64 bit floating-point number
+        if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+            return no cad split face
+        set candidate to the cad clone of body
+        set proof to cad split face in place faceKey in candidate along cutter within tolerance
+        if proof's valid = false:
+            return no cad split face
+        return cad split face in place faceKey in body along cutter within tolerance

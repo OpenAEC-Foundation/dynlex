@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs2.dl
+set result to the cad nurbs2 absent curve

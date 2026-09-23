@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_make.dl
+
+# Six coedges per side would exceed the signed 32-bit arena capacity.
+# Read the count at runtime so the guard is exercised in the generated binary.
+set sideText to the argument at 1 in the command line arguments
+set sides to @intrinsic("call", "libc", "atoi", integer, the data of sideText)
+set oversized to the cad polygonal frustum at (the cad zero vector3) with base radius 2.0, top radius 1.0, height 3.0 and sides sides

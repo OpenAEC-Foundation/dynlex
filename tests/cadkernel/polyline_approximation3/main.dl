@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/polyline_approximation3.dl
+
+function check approximation3 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function approximation3 distance of {cad vector3:point} to {a pointer to a list:points}:
+    execute:
+        set best to @intrinsic("divide", 1.0, 0.0)
+        loop index from 0 to ((the length of points) - 1):
+            set start to the item at index in points
+            set end to the item at (index + 1) in points
+            set delta to the cad difference of end and start
+            set squared to the cad squared length of delta
+            set parameter to 0.0
+            if squared > 0.0:
+                set parameter to (the cad dot of (the cad difference of point and start) and delta) / squared
+            clamp parameter between 0.0 and 1.0
+            set nearest to the cad sum of start and (delta scaled by parameter)
+            set best to the minimum of best and (the cad distance from point to nearest)
+        return best
+
+set controls to a list containing the cad zero vector3
+append (a cad vector3 with x 1.0, y 3.0 and z 1.0) to controls
+append (a cad vector3 with x 2.0, y -1.0 and z 2.0) to controls
+append (a cad vector3 with x 4.0, y 0.0 and z 3.0) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 0.4 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 3.0 to weights
+append 0.5 to weights
+append 2.0 to weights
+set curve to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check approximation3 curve's valid
+set coarse to the cad spline polyline of curve's value at precision 0
+set fine to the cad spline polyline of curve's value at precision 20
+check approximation3 (coarse's valid and fine's valid)
+check approximation3 (fine's tolerance < coarse's tolerance)
+check approximation3 ((the length of fine's points) >= (the length of coarse's points))
+set first to the item at 0 in (fine's points)
+set last to the last item of (fine's points)
+set start to the cad point on curve's value at 0.0
+set end to the cad point on curve's value at 1.0
+check approximation3 (((first's x = start's x) and (first's y = start's y)) and (first's z = start's z))
+check approximation3 (((last's x = end's x) and (last's y = end's y)) and (last's z = end's z))
+loop step from 0 through 512:
+    set point to the cad point on curve's value at ((step as a 64 bit floating-point number) / 512.0)
+    check approximation3 ((approximation3 distance of point to (fine's points)) <= (fine's tolerance + 1e-10))
+print "precision_is_monotonic_and_bounds_the_sampled_curve" as a line
+
+clear controls
+append the cad zero vector3 to controls
+append (a cad vector3 with x 1.0, y 2.0 and z 0.0) to controls
+append (a cad vector3 with x 2.0, y 0.0 and z 0.0) to controls
+append (a cad vector3 with x 3.0, y 1.0 and z 0.0) to controls
+clear weights
+loop index from 0 to 4:
+    append 1.0 to weights
+set curve to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check approximation3 curve's valid
+set result to the cad spline polyline of curve's value at precision 10
+check approximation3 result's valid
+set boundary to the cad point on curve's value at knot 0.4
+set found to false
+loop index from 0 to the length of result's points:
+    if (the cad distance from (the item at index in (result's points)) to boundary) < 1e-12:
+        set found to true
+check approximation3 found
+set refused to the cad spline polyline of curve's value at precision 100
+check approximation3 (refused's valid = false)
+clear controls
+clear weights
+set coordinates to [0.0,1.0,2.0,4.0,5.0,6.0]
+loop index from 0 to 6:
+    set value to the item at index in coordinates
+    append (a cad vector3 with x value, y value and z value) to controls
+    append 1.0 to weights
+clear knots
+loop index from 0 to 3:
+    append 0.0 to knots
+loop index from 0 to 3:
+    append 0.5 to knots
+loop index from 0 to 3:
+    append 1.0 to knots
+set curve to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check approximation3 curve's valid
+set refused to the cad spline polyline of curve's value at precision 10
+check approximation3 (refused's valid = false)
+free controls
+free knots
+free weights
+print "knot_boundaries_survive_and_discontinuous_curves_are_rejected" as a line

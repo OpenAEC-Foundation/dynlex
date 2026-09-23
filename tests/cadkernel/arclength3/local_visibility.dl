@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength3.dl
+set result to the cad empty arclength result

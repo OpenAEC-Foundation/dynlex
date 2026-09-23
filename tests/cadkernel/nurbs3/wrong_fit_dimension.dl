@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs3.dl
+set points to a list containing (the cad zero vector3)
+append (the cad x axis) to points
+set tangent to a cad spline tangent with value [1.0, 0.0]
+set result to the cad nurbs fit through points with start tangent tangent and end tangent tangent using (the cad uniform parameterization)
+

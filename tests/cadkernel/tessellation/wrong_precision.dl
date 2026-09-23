@@ -1,0 +1,4 @@
+import tests/cadkernel/tessellation/support.dl
+
+set narrow to [(1.0 as a 32 bit floating-point number)]
+ignore the cad direction angle between narrow and narrow

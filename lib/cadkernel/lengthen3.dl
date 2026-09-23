@@ -1,0 +1,354 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of space/lengthen.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Angles are radians. Returned vertices retain original metadata indices and
+# segment fractions. Input storage is borrowed; result views are read-only.
+import lib/cadkernel/planar3.dl
+
+class:
+    patterns:
+        [a|] cad length change
+    members:
+        kind as an integer
+        amount as a 64 bit floating-point number
+        point as a cad vector3
+class:
+    patterns:
+        [a|] cad lengthened line result
+    members:
+        valid as a boolean
+        start as a cad vector3
+        end as a cad vector3
+class:
+    patterns:
+        [a|] cad lengthened span result
+    members:
+        valid as a boolean
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad lengthened vertex
+    members:
+        position as a cad vector2
+        bulge as a 64 bit floating-point number
+        source as an integer
+        startFraction as a 64 bit floating-point number
+        endFraction as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad lengthening storage
+    members:
+        values
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+class:
+    patterns:
+        [a|] cad lengthened polyline result
+    members:
+        valid as a boolean
+        vertices
+        storage as a cad lengthening storage
+
+function a delta cad length change of {a 64 bit floating-point number:amount}:
+    execute:
+        return @intrinsic("construct", a cad length change, 0, amount, the cad zero vector3)
+function a total cad length change of {a 64 bit floating-point number:amount}:
+    execute:
+        return @intrinsic("construct", a cad length change, 1, amount, the cad zero vector3)
+function a percent cad length change of {a 64 bit floating-point number:amount}:
+    execute:
+        return @intrinsic("construct", a cad length change, 2, amount, the cad zero vector3)
+function a delta angle cad length change of {a 64 bit floating-point number:amount}:
+    execute:
+        return @intrinsic("construct", a cad length change, 3, amount, the cad zero vector3)
+function a total angle cad length change of {a 64 bit floating-point number:amount}:
+    execute:
+        return @intrinsic("construct", a cad length change, 4, amount, the cad zero vector3)
+function a dynamic cad length change to {cad vector3:point}:
+    execute:
+        return @intrinsic("construct", a cad length change, 5, 0.0, point)
+
+local function cad lengthening scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad lengthening point {cad vector2:point} is finite:
+    execute:
+        return (cad lengthening scalar point's x is finite) and (cad lengthening scalar point's y is finite)
+local function cad lengthening target from {a 64 bit floating-point number:current} with {cad length change:change}:
+    execute:
+        set value to change's amount
+        if change's kind = 0:
+            set value to current + value
+        else if change's kind = 2:
+            set value to (current * value) / 100.0
+        else if change's kind != 1:
+            return a new cad planar parameter result
+        return @intrinsic("construct", a cad planar parameter result, (cad lengthening scalar value is finite) and (value > 1e-12), value)
+local function cad lengthening turn [remainder] of {a 64 bit floating-point number:angle}:
+    execute:
+        set remainder to the remainder of angle divided by 6.283185307179586
+        if remainder < 0.0:
+            return remainder + 6.283185307179586
+        return remainder
+local function cad lengthening chooses end of {cad planar curve3:curve} picked at {cad vector3:pick}:
+    execute:
+        return (the cad squared distance from pick to (the cad point on curve at 1.0)) <= (the cad squared distance from pick to (the cad point on curve at 0.0))
+local function cad lengthening span from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} with sweep {a 64 bit floating-point number:span} changing end {boolean:changeEnd}:
+    execute:
+        if ((cad lengthening scalar span is finite) = false) or ((span <= 1e-12) or (span >= (6.283185307179586 - 1e-12))):
+            return a new cad lengthened span result
+        if changeEnd:
+            return @intrinsic("construct", a cad lengthened span result, true, start, start + span)
+        return @intrinsic("construct", a cad lengthened span result, true, end - span, end)
+
+function the cad lengthened [line] from {cad vector3:start} to {cad vector3:end} picked at {cad vector3:pick} with {cad length change:change}:
+    execute:
+        if (((cad start is finite) and (cad end is finite)) and (cad pick is finite)) = false:
+            return a new cad lengthened line result
+        set direction to the cad difference of end and start
+        set length to the cad length of direction
+        if ((cad lengthening scalar length is finite) = false) or (length <= 1e-12):
+            return a new cad lengthened line result
+        set direction to direction cad divided by length
+        set changeEnd to (the cad squared distance from pick to end) <= (the cad squared distance from pick to start)
+        set newLength to 0.0
+        if change's kind = 5:
+            set point to change's point
+            if (cad point is finite) = false:
+                return a new cad lengthened line result
+            if changeEnd:
+                set newLength to the cad dot of (the cad difference of point and start) and direction
+            else:
+                set newLength to the cad dot of (the cad difference of end and point) and direction
+        else:
+            set target to cad lengthening target from length with change
+            if target's valid = false:
+                return a new cad lengthened line result
+            set newLength to target's value
+        if ((cad lengthening scalar newLength is finite) = false) or ((the absolute value of newLength) <= 1e-12):
+            return a new cad lengthened line result
+        set first to start
+        set last to end
+        if changeEnd:
+            set last to the cad sum of start and (direction scaled by newLength)
+        else:
+            set first to the cad difference of end and (direction scaled by newLength)
+        if ((cad first is finite) and (cad last is finite)) = false:
+            return a new cad lengthened line result
+        return @intrinsic("construct", a cad lengthened line result, true, first, last)
+
+function the cad lengthened [arc] of {cad planar curve3:curve} picked at {cad vector3:pick} with {cad length change:change}:
+    execute:
+        set shape to curve's curve
+        if shape's kind != 2:
+            return a new cad lengthened span result
+        set arc to shape's arc
+        if ((cad lengthening scalar arc's radius is finite) = false) or ((arc's radius <= 1e-12) or ((cad pick is finite) = false)):
+            return a new cad lengthened span result
+        set changeEnd to cad lengthening chooses end of curve picked at pick
+        set current to the cad sweep of arc
+        set span to 0.0
+        if change's kind = 3:
+            set span to current + change's amount
+        else if change's kind = 4:
+            set span to change's amount
+        else if change's kind = 5:
+            if (cad (change's point) is finite) = false:
+                return a new cad lengthened span result
+            set projected to the cad projection of change's point onto curve's plane
+            if projected's valid = false:
+                return a new cad lengthened span result
+            set offset to the cad difference of projected's value and arc's centre
+            if (@intrinsic("call", "libc", "hypot", a 64 bit floating-point number, offset's x, offset's y)) <= 1e-12:
+                return a new cad lengthened span result
+            set angle to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, offset's y, offset's x)
+            if changeEnd:
+                set span to cad lengthening turn remainder of (angle - arc's startAngle)
+            else:
+                set span to cad lengthening turn remainder of (arc's endAngle - angle)
+        else:
+            set target to cad lengthening target from (current * arc's radius) with change
+            if target's valid = false:
+                return a new cad lengthened span result
+            set span to target's value / arc's radius
+        return cad lengthening span from arc's startAngle to arc's endAngle with sweep span changing end changeEnd
+
+function the cad lengthened [ellipse] of {cad planar curve3:curve} picked at {cad vector3:pick} with {cad length change:change}:
+    execute:
+        set shape to curve's curve
+        if shape's kind != 3:
+            return a new cad lengthened span result
+        set arc to shape's ellipse
+        set ellipse to arc's ellipse
+        if (((cad pick is finite) and (cad lengthening scalar ellipse's majorRadius is finite)) and (cad lengthening scalar ellipse's minorRadius is finite)) = false:
+            return a new cad lengthened span result
+        if (ellipse's majorRadius <= 1e-12) or (ellipse's minorRadius <= 1e-12):
+            return a new cad lengthened span result
+        set start to arc's startParameter
+        set end to arc's endParameter
+        if (end > start) = false:
+            set end to end + 6.283185307179586
+        if (((cad lengthening scalar start is finite) and (cad lengthening scalar end is finite)) = false) or ((end - start) >= (6.283185307179586 - 1e-12)):
+            return a new cad lengthened span result
+        set changeEnd to cad lengthening chooses end of curve picked at pick
+        set parameter to 0.0
+        if change's kind = 5:
+            if (cad (change's point) is finite) = false:
+                return a new cad lengthened span result
+            set projected to the cad projection of change's point onto curve's plane
+            if projected's valid = false:
+                return a new cad lengthened span result
+            set offset to the cad difference of projected's value and ellipse's centre
+            set axis to ellipse's majorAxis
+            set u to ((offset's x * axis's x) + (offset's y * axis's y)) / ellipse's majorRadius
+            set v to (((-offset's x) * axis's y) + (offset's y * axis's x)) / ellipse's minorRadius
+            if (@intrinsic("call", "libc", "hypot", a 64 bit floating-point number, u, v)) <= 1e-12:
+                return a new cad lengthened span result
+            set parameter to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, v, u)
+        else:
+            set target to cad lengthening target from (the cad length of shape) with change
+            if target's valid = false:
+                return a new cad lengthened span result
+            set from to start
+            if changeEnd = false:
+                set from to end - 6.283185307179586
+            set whole to the cad curve2 of (a cad ellipse arc2 on ellipse from from to (from + 6.283185307179586))
+            set circumference to the cad length of whole
+            if target's value >= (circumference - 1e-12):
+                return a new cad lengthened span result
+            set distance to target's value
+            if changeEnd = false:
+                set distance to circumference - target's value
+            set parameter to from + ((the cad parameter on whole at distance distance) * 6.283185307179586)
+        set span to cad lengthening turn remainder of (parameter - start)
+        if changeEnd = false:
+            set span to cad lengthening turn remainder of (end - parameter)
+        return cad lengthening span from start to end with sweep span changing end changeEnd
+
+local function cad lengthening ownership of {a pointer to a list:values}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad lengthening storage, values, owner)
+local function cad lengthening absent polyline:
+    execute:
+        set vertices to an empty list of a cad lengthened vertex
+        return @intrinsic("construct", a cad lengthened polyline result, false, vertices, cad lengthening ownership of vertices)
+
+function the cad lengthened polyline of {cad planar curve3:curve} picked at {cad vector3:pick} with {cad length change:change}:
+    execute:
+        set shape to curve's curve
+        if shape's kind != 4:
+            return cad lengthening absent polyline
+        set poly to shape's polyline
+        set original to poly's vertices
+        set count to the length of original
+        if (poly's closed or (count < 2)) or ((cad pick is finite) = false):
+            return cad lengthening absent polyline
+        loop index from 0 to count:
+            set vertex to the item at index in original
+            if ((cad lengthening scalar vertex's bulge is finite) and (cad lengthening point vertex's position is finite)) = false:
+                return cad lengthening absent polyline
+        set changeEnd to cad lengthening chooses end of curve picked at pick
+        set vertices to an empty list of a cad lengthened vertex
+        set storage to cad lengthening ownership of vertices
+        loop index from 0 to count:
+            set source to index
+            if changeEnd = false:
+                set source to (count - 1) - index
+            set vertex to the item at source in original
+            set bulge to vertex's bulge
+            if changeEnd = false:
+                set bulge to 0.0
+                if (index + 1) < count:
+                    set previous to the item at ((count - 2) - index) in original
+                    set bulge to -previous's bulge
+            append (@intrinsic("construct", a cad lengthened vertex, vertex's position, bulge, source, 0.0, 1.0)) to vertices
+        set lengths to an empty list of a 64 bit floating-point number
+        set lengthStorage to cad lengthening ownership of lengths
+        set total to (-0.0) as a 64 bit floating-point number
+        loop index from 0 to (count - 1):
+            set first to the item at index in vertices
+            set last to the item at (index + 1) in vertices
+            set arc to the cad bulge arc2 from first's position to last's position with bulge first's bulge
+            set length to 0.0
+            if arc's valid:
+                set length to arc's value's radius * (the absolute value of arc's value's sweep)
+            else:
+                set delta to the cad difference of last's position and first's position
+                set length to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, delta's x, delta's y)
+            if ((cad lengthening scalar length is finite) = false) or (length <= 1e-12):
+                return cad lengthening absent polyline
+            append length to lengths
+            set total to total + length
+        if (cad lengthening scalar total is finite) = false:
+            return cad lengthening absent polyline
+        set target to cad lengthening target from total with change
+        if target's valid = false:
+            return cad lengthening absent polyline
+        set remaining to target's value
+        set index to 0
+        loop while ((index + 1) < (the length of lengths)) and (remaining > (the item at index in lengths)):
+            set remaining to remaining - (the item at index in lengths)
+            increment index
+        set fraction to remaining / (the item at index in lengths)
+        set first to the item at index in vertices
+        set last to the item at (index + 1) in vertices
+        set arc to the cad bulge arc2 from first's position to last's position with bulge first's bulge
+        set position to the cad zero vector2
+        set bulge to 0.0
+        if arc's valid:
+            set sweep to cad lengthening turn remainder of (remaining / arc's value's radius)
+            if sweep <= 1e-12:
+                return cad lengthening absent polyline
+            set position to the cad point on arc's value at (sweep / (the absolute value of arc's value's sweep))
+            set sign to 1.0
+            if arc's value's sweep < 0.0:
+                set sign to -1.0
+            set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, (sweep * sign) / 4.0)
+        else:
+            set position to the cad sum of first's position and ((the cad difference of last's position and first's position) scaled by fraction)
+        if ((cad lengthening point position is finite) and (cad lengthening scalar bulge is finite)) = false:
+            return cad lengthening absent polyline
+        set changedFirst to first
+        set changedLast to last
+        set the bulge of changedFirst to bulge
+        set the position of changedLast to position
+        if changeEnd:
+            set the endFraction of changedFirst to fraction
+            if target's value < total:
+                set the source of changedLast to first's source
+                set the bulge of changedLast to bulge
+                set the endFraction of changedLast to fraction
+        replace item at index index in vertices with changedFirst
+        replace item at index (index + 1) in vertices with changedLast
+        set retained to index + 2
+        set output to an empty list of a cad lengthened vertex
+        loop cursor from 0 to retained:
+            set source to cursor
+            if changeEnd = false:
+                set source to (retained - 1) - cursor
+            set vertex to the item at source in vertices
+            if changeEnd = false:
+                if (cursor + 1) < retained:
+                    set previous to the item at ((retained - 2) - cursor) in vertices
+                    set the bulge of vertex to -previous's bulge
+                else:
+                    set originalLast to the last item of original
+                    set the bulge of vertex to originalLast's bulge
+                if cursor = 0:
+                    set the source of vertex to last's source
+                    set the startFraction of vertex to 1.0 - fraction
+            append vertex to output
+        return @intrinsic("construct", a cad lengthened polyline result, true, output, cad lengthening ownership of output)

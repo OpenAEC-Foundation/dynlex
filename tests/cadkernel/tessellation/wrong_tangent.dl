@@ -1,0 +1,22 @@
+import lib/cadkernel/tessellation.dl
+
+class:
+    patterns:
+        [a|] invalid sampling tangent
+    members:
+        unused as an integer
+
+function the cad curve point of {invalid sampling tangent:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        ignore curve
+        return a cad vector3 with x parameter, y 0.0 and z 0.0
+
+function the cad curve tangent of {invalid sampling tangent:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        ignore curve
+        ignore parameter
+        return a cad vector2 with x 1.0 and y 0.0
+
+set curve to a new invalid sampling tangent
+set points to the cad angular samples of curve with maximum angle 0.1
+free points

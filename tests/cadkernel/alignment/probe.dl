@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/alignment.dl
+
+function alignment argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function alignment triple at {integer:index}:
+    execute:
+        return a cad vector3 with x (alignment argument index), y (alignment argument (index + 1)) and z (alignment argument (index + 2))
+
+function emit alignment {a number:value} named {string:label} at {integer:index}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%s.%d %.17g\n", the data of label, index, value as a 64 bit floating-point number)
+
+function emit alignment vector {cad vector3:value} named {string:label} at {integer:index}:
+    execute:
+        emit alignment (the x of value) named label at (3 * index)
+        emit alignment (the y of value) named label at ((3 * index) + 1)
+        emit alignment (the z of value) named label at ((3 * index) + 2)
+
+set ns to (alignment argument 0) as an integer
+set nt to (alignment argument 1) as an integer
+set scale to (alignment argument 2) != 0.0
+set source to an empty list of a cad vector3
+set target to an empty list of a cad vector3
+loop index from 0 to ns:
+    append (alignment triple at (3 + (index * 3))) to source
+loop index from 0 to nt:
+    append (alignment triple at (3 + ((ns + index) * 3))) to target
+set query to alignment triple at (3 + ((ns + nt) * 3))
+set result to the cad alignment from source to target scaling two pairs scale
+emit alignment ((the valid of result) as an integer) named "valid" at 0
+if the valid of result:
+    set matrix to the value of result
+    emit alignment (the m00 of matrix) named "matrix" at 0
+    emit alignment (the m01 of matrix) named "matrix" at 1
+    emit alignment (the m02 of matrix) named "matrix" at 2
+    emit alignment (the m03 of matrix) named "matrix" at 3
+    emit alignment (the m10 of matrix) named "matrix" at 4
+    emit alignment (the m11 of matrix) named "matrix" at 5
+    emit alignment (the m12 of matrix) named "matrix" at 6
+    emit alignment (the m13 of matrix) named "matrix" at 7
+    emit alignment (the m20 of matrix) named "matrix" at 8
+    emit alignment (the m21 of matrix) named "matrix" at 9
+    emit alignment (the m22 of matrix) named "matrix" at 10
+    emit alignment (the m23 of matrix) named "matrix" at 11
+    emit alignment (the m30 of matrix) named "matrix" at 12
+    emit alignment (the m31 of matrix) named "matrix" at 13
+    emit alignment (the m32 of matrix) named "matrix" at 14
+    emit alignment (the m33 of matrix) named "matrix" at 15
+    loop index from 0 to ns:
+        emit alignment vector (the cad alignment of (the item at index in source) through matrix) named "mapped" at index
+    emit alignment vector (the cad alignment of query through matrix) named "mapped" at ns
+loop index from 0 to ns:
+    emit alignment vector (the item at index in source) named "input" at index
+loop index from 0 to nt:
+    emit alignment vector (the item at index in target) named "input" at (ns + index)
+free source
+free target

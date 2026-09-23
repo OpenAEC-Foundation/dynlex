@@ -1,0 +1,132 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/geom2d/deviation.rs.
+# Angular sampling, uniform sampling and normalized knot-span boundaries are
+# shared with curve2.dl. Curve inputs are borrowed. Each returned point list
+# has one caller owner and must be freed once; it contains no borrowed fields.
+# The source limits are 8..16384 circular/elliptic segments and NURBS depth 16,
+# with two forced subdivision levels per span. A limit can leave excess sag.
+import lib/cadkernel/curve2.dl
+
+local function cad deviation tolerance {a 64 bit floating-point number:tolerance} is usable:
+    execute:
+        return ((tolerance - tolerance) = 0.0) and (tolerance > 0.0)
+
+# This is Rust's saturating float-to-usize conversion followed by the source
+# 8..16384 clamp, including NaN -> 0 -> 8. Clamp before narrowing avoids an
+# undefined native conversion of infinity while preserving the final value.
+local function the cad deviation segment count of {a 64 bit floating-point number:requested}:
+    execute:
+        if requested != requested:
+            return 8 as a 64 bit unsigned integer
+        set bounded to requested
+        clamp bounded between 8.0 and 16384.0
+        return bounded as a 64 bit unsigned integer
+
+local function the cad circular segment count with radius {a 64 bit floating-point number:radius} and sweep {a 64 bit floating-point number:sweep} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set magnitude to the absolute value of radius
+        set turn to the absolute value of sweep
+        if ((cad deviation tolerance tolerance is usable) = false) or (magnitude <= tolerance):
+            if magnitude <= tolerance:
+                return 8 as a 64 bit unsigned integer
+            return 16384 as a 64 bit unsigned integer
+        set cosine to 1.0 - (tolerance / magnitude)
+        clamp cosine between -1.0 and 1.0
+        set step to 2.0 * (@intrinsic("call", "libc", "acos", a 64 bit floating-point number, cosine))
+        if step <= 0.0:
+            return 16384 as a 64 bit unsigned integer
+        return the cad deviation segment count of (the ceiling of (turn / step))
+
+local function the cad elliptic segment count of {cad ellipse arc2:shape} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set curvature to the maximum of (the absolute value of shape's ellipse's majorRadius) and (the absolute value of shape's ellipse's minorRadius)
+        set sweep to the absolute value of (the cad sweep of shape)
+        if curvature <= 0.0:
+            return 8 as a 64 bit unsigned integer
+        if (cad deviation tolerance tolerance is usable) = false:
+            return 16384 as a 64 bit unsigned integer
+        set step to the square root of ((8.0 * tolerance) / curvature)
+        if step <= 0.0:
+            return 16384 as a 64 bit unsigned integer
+        return the cad deviation segment count of (the ceiling of (sweep / step))
+
+local function refine cad deviation samples of {cad nurbs curve2:shape} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} within {a 64 bit floating-point number:tolerance} at depth {integer:depth} into {a pointer to a list:output}:
+    execute:
+        set middle to 0.5 * (first + last)
+        set flat to depth >= 16
+        if flat = false:
+            set start to the cad point on shape at first
+            set end to the cad point on shape at last
+            set centre to the cad point on shape at middle
+            set flat to (the cad distance from centre to the segment from start to end) <= tolerance
+        if flat and (depth >= 2):
+            append (the cad point on shape at last) to output
+            return nothing
+        refine cad deviation samples of shape from first to middle within tolerance at depth (depth + 1) into output
+        refine cad deviation samples of shape from middle to last within tolerance at depth (depth + 1) into output
+
+local function the cad deviation samples of {cad nurbs curve2:shape} within {a 64 bit floating-point number:requested}:
+    execute:
+        set tolerance to 0.0
+        if cad deviation tolerance requested is usable:
+            set tolerance to requested
+        set output to a list containing (the cad point on shape at 0.0)
+        set spans to the cad curve2 span boundaries of shape
+        loop index from 0 to ((the length of spans) - 1):
+            refine cad deviation samples of shape from (the item at index in spans) to (the item at (index + 1) in spans) within tolerance at depth 0 into output
+        free spans
+        return output
+
+local function the cad polyline deviation samples of {cad curve2:shape} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set output to an empty list of a cad vector2
+        if shape's kind != 4:
+            return output
+        set vertices to shape's polyline's vertices
+        set count to the length of vertices
+        if count < 2:
+            loop index from 0 to count:
+                append (the position of (the item at index in vertices)) to output
+            return output
+        set segments to the cad segments of shape
+        loop index from 0 to the length of segments:
+            set points to the cad samples of (the item at index in segments) within deviation tolerance
+            if (the length of points) > 0:
+                replace item at index 0 in points with (the position of (the item at index in vertices))
+                replace item at index ((the length of points) - 1) in points with (the position of (the item at (the remainder of (index + 1) divided by (the maximum of count and 1)) in vertices))
+            set skip to 0
+            if (the length of output) > 0:
+                if (the length of points) > 0:
+                    set previous to the last item of output
+                    set first to the item at 0 in points
+                    if (previous's x = first's x) and (previous's y = first's y):
+                        set skip to 1
+            else:
+                if (the length of points) = 0:
+                    set skip to 1
+            loop piece from skip to the length of points:
+                append (the item at piece in points) to output
+            free points
+        free segments
+        return output
+
+function the cad samples of {cad curve2:shape} within deviation {a 64 bit floating-point number:tolerance}:
+    execute:
+        if shape's kind = 0:
+            set output to a list containing shape's line's start
+            append shape's line's end to output
+            return output
+        if (shape's kind = 6) or (shape's kind = 7):
+            set output to a list containing (the cad point on shape at 0.0)
+            append (the cad point on shape at 1.0) to output
+            return output
+        if shape's kind = 1:
+            return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's circle's radius and sweep 6.283185307179586 within tolerance)
+        if shape's kind = 2:
+            return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's arc's radius and sweep (the cad sweep of shape's arc) within tolerance)
+        if shape's kind = 3:
+            return the cad curve2 uniform samples of shape in (the cad elliptic segment count of shape's ellipse within tolerance)
+        if shape's kind = 4:
+            return the cad polyline deviation samples of shape within tolerance
+        return the cad deviation samples of shape's nurbs within tolerance

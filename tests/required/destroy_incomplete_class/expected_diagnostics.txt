@@ -1,0 +1,4 @@
+lib/list.dl:13-67: Error: destroy at requires a pointer to a concrete type; 'a box' has no complete layout
+  note: while inferring intrinsic 'destroy at' in '@intrinsic("destroy at", (the data of values) + index)' with arguments [a pointer to a box] -> an unresolved value lib/list.dl:13-67
+  note: while inferring call 'clear values' with arguments [a pointer to a list] -> an unresolved value lib/list.dl:9-21
+  note: while inferring call 'free values' with arguments [a pointer to a list] -> an unresolved value tests/required/destroy_incomplete_class/main.dl:1-12

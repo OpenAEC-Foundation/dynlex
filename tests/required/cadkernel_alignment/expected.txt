@@ -1,0 +1,5 @@
+cadkernel alignment: upstream spatial frame
+cadkernel alignment: translation rotation and scale
+cadkernel alignment: parallel and antiparallel baselines
+cadkernel alignment: input and degeneracy validation
+cadkernel alignment: IEEE rejection and ownership

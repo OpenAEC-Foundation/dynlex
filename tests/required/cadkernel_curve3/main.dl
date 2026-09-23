@@ -1,0 +1,140 @@
+# SPDX-License-Identifier: MPL-2.0
+# Twelve tests from cadkernel src/space/curve.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/curve3.dl
+
+function check spatial curve {boolean:condition}:
+    execute:
+        if the inverse of condition:
+            print "spatial curve assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function check spatial vector {cad vector3:actual} against {cad vector3:expected} within {a 64 bit floating-point number:limit}:
+    execute:
+        check spatial curve ((the cad distance from actual to expected) <= limit)
+
+function the spatial power of {a 64 bit floating-point number:base} to {integer:exponent}:
+    execute:
+        set result to 1.0
+        loop index from 0 to exponent:
+            set result to result * base
+        return result
+
+function the spatial Bernstein [point] of controls at {a 64 bit floating-point number:parameter}:
+    execute:
+        set degree to (the length of controls) - 1
+        set coefficient to 1.0
+        set point to the cad zero vector3
+        loop index from 0 to (the length of controls):
+            set weight to (coefficient * (the spatial power of parameter to index)) * (the spatial power of (1.0 - parameter) to (degree - index))
+            set point to the cad sum of point and ((the item at index in controls) scaled by weight)
+            set coefficient to (coefficient * ((degree - index) as a 64 bit floating-point number)) / ((index + 1) as a 64 bit floating-point number)
+        return point
+
+function the spatial circle point of radius {a 64 bit floating-point number:radius} at {a 64 bit floating-point number:angle}:
+    execute:
+        return a cad vector3 with x (radius * (the cosine of angle)), y (radius * (the sine of angle)) and z 0.0
+
+set controls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 1, y 5 and z 0) to controls
+append (a cad vector3 with x 4, y 5 and z 2) to controls
+append (a cad vector3 with x 5, y 0 and z 2) to controls
+check spatial vector (the cad bezier point of controls at 0.0) against (the item at 0 in controls) within 0.0
+check spatial vector (the cad bezier point of controls at 1.0) against (the item at 3 in controls) within 0.0
+print "cadkernel curve3: Bezier endpoints" as a line
+
+clear controls
+append (the cad zero vector3) to controls
+append (a cad vector3 with x 10, y 20 and z 30) to controls
+check spatial vector (the cad bezier point of controls at 0.5) against (a cad vector3 with x 5, y 10 and z 15) within 0.0
+print "cadkernel curve3: degree one" as a line
+
+loop degree from 1 to 8:
+    clear controls
+    loop index from 0 to (degree + 1):
+        set value to index as a 64 bit floating-point number
+        append (a cad vector3 with x value, y ((the sine of (value * 1.7)) * 4.0) and z ((the cosine of (value * 0.6)) * 3.0)) to controls
+    loop step from 0 to 11:
+        set parameter to (step as a 64 bit floating-point number) / 10.0
+        check spatial vector (the cad bezier point of controls at parameter) against (the spatial Bernstein point of controls at parameter) within 1e-9
+print "cadkernel curve3: Bernstein comparison" as a line
+
+clear controls
+append (the cad zero vector3) to controls
+append (the cad x axis) to controls
+append (a cad vector3 with x 2, y 1 and z 0) to controls
+append (a cad vector3 with x 3, y 1 and z 0) to controls
+set direction to the cad normalization of (the cad bezier point of controls at 1e-6)
+check spatial curve (the valid of direction)
+check spatial curve ((the absolute value of ((the x of (the value of direction)) - 1.0)) < 1e-5)
+print "cadkernel curve3: initial tangent" as a line
+
+clear controls
+append (the cad zero vector3) to controls
+append (a cad vector3 with x 1, y 1 and z 1) to controls
+append (a cad vector3 with x 2, y 0 and z 0) to controls
+set samples to the cad bezier samples of controls with 8 segments
+check spatial curve ((the length of samples) = 9)
+check spatial vector (the item at 0 in samples) against (the item at 0 in controls) within 0.0
+check spatial vector (the item at 8 in samples) against (the item at 2 in controls) within 0.0
+free samples
+print "cadkernel curve3: sample endpoints" as a line
+
+set curvature to the cad curvature through (the spatial circle point of radius 5.0 at 0.0), (the spatial circle point of radius 5.0 at 0.4) and (the spatial circle point of radius 5.0 at 0.8)
+check spatial curve ((the absolute value of ((the cad length of curvature) - 0.2)) < 1e-9)
+set towards to the cad normalization of curvature
+check spatial curve (the valid of towards)
+check spatial curve ((the absolute value of ((the x of (the value of towards)) + 1.0)) < 1e-9)
+print "cadkernel curve3: circle curvature" as a line
+
+set a to the spatial circle point of radius 2.0 at 0.0
+set b to the spatial circle point of radius 2.0 at 0.5
+set c to the spatial circle point of radius 2.0 at 1.0
+set curvature to the cad curvature through (a cad vector3 with x (the x of a), y 0 and z (the y of a)), (a cad vector3 with x (the x of b), y 0 and z (the y of b)) and (a cad vector3 with x (the x of c), y 0 and z (the y of c))
+check spatial curve ((the absolute value of ((the cad length of curvature) - 0.5)) < 1e-9)
+check spatial curve ((the absolute value of (the y of curvature)) < 1e-9)
+print "cadkernel curve3: spatial curvature" as a line
+
+set zero to the cad zero vector3
+set one to a cad vector3 with x 1, y 1 and z 1
+check spatial vector (the cad curvature through zero, one and (one scaled by 2)) against zero within 0.0
+check spatial vector (the cad curvature through zero, zero and (the cad x axis)) against zero within 0.0
+print "cadkernel curve3: straight curvature" as a line
+
+set origin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set a to the cad sum of origin and (the spatial circle point of radius 5.0 at 0.0)
+set b to the cad sum of origin and (the spatial circle point of radius 5.0 at 0.4)
+set c to the cad sum of origin and (the spatial circle point of radius 5.0 at 0.8)
+set curvature to the cad curvature through a, b and c
+check spatial curve ((the absolute value of ((the cad length of curvature) - 0.2)) < 1e-6)
+print "cadkernel curve3: survey curvature" as a line
+
+set bisector to the cad angle bisector of (the cad x axis) and (the cad y axis) with normal (the cad z axis)
+check spatial curve (the valid of bisector)
+check spatial vector (the value of bisector) against (a cad vector3 with x 0.7071067811865476, y 0.7071067811865476 and z 0.0) within 1e-12
+set bisector to the cad angle bisector of (a cad vector3 with x 1, y 1e-9 and z 0) and (a cad vector3 with x (-1), y 1e-9 and z 0) with normal (the cad z axis)
+check spatial curve (the valid of bisector)
+check spatial vector (the value of bisector) against (the cad y axis) within 1e-12
+print "cadkernel curve3: angle bisector" as a line
+
+set bisector to the cad angle bisector of (the cad x axis) and ((the cad x axis) scaled by (-2)) with normal ((the cad z axis) scaled by 4)
+check spatial curve (the valid of bisector)
+check spatial vector (the value of bisector) against (the cad y axis) within 0.0
+set bisector to the cad angle bisector of ((the cad x axis) scaled by (-2)) and (the cad x axis) with normal ((the cad z axis) scaled by 4)
+check spatial curve (the valid of bisector)
+check spatial vector (the value of bisector) against ((the cad y axis) scaled by (-1)) within 0.0
+set bisector to the cad angle bisector of (the cad x axis) and ((the cad x axis) scaled by (-1)) with normal ((the cad x axis) scaled by 2)
+check spatial curve (the inverse of (the valid of bisector))
+print "cadkernel curve3: antiparallel orientation" as a line
+
+set bisector to the cad angle bisector of zero and (the cad x axis) with normal (the cad z axis)
+check spatial curve (the inverse of (the valid of bisector))
+set infinity to 1.0 / 0.0
+set bisector to the cad angle bisector of (a cad vector3 with x infinity, y 0 and z 0) and (the cad x axis) with normal (the cad z axis)
+check spatial curve (the inverse of (the valid of bisector))
+set huge to a cad vector3 with x 1.7976931348623157e308, y 1.7976931348623157e308 and z 0.0
+set bisector to the cad angle bisector of huge and huge with normal (the cad z axis)
+check spatial curve (the valid of bisector)
+check spatial curve (cad (the value of bisector) is finite)
+check spatial curve ((the absolute value of ((the cad length of (the value of bisector)) - 1.0)) < 1e-12)
+print "cadkernel curve3: invalid and huge rays" as a line
+free controls

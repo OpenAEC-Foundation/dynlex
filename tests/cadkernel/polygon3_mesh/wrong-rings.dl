@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/polygon3_mesh.dl
+set points to an empty list of a cad vector2
+set rings to a list containing points
+ignore the cad spatial triangle soup of rings rings within (the default cad tolerance)
+free rings
+free points

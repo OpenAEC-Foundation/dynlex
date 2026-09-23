@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check periodic mesh {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set made to the cad cylinder body at (the cad zero vector3) with radius 3.0 and height 6.0
+check periodic mesh made's valid named "cylinder"
+set bodyValue to made's value
+set faceKeys to the cad face keys of bodyValue
+set wallFound to false
+set wallKey to a new cad face key
+loop faceIndex from 0 to the length of faceKeys:
+    set candidateKey to the item at faceIndex in faceKeys
+    set candidateFace to the cad node pointer for candidateKey in bodyValue
+    set candidateSurface to the cad node pointer for candidateFace's surface in bodyValue
+    if candidateSurface's kind = 1:
+        set wallFound to true
+        set wallKey to candidateKey
+free faceKeys
+check periodic mesh wallFound named "wall"
+
+set wallFace to the cad node pointer for wallKey in bodyValue
+set originalLoopKey to the item at 0 in ((wallFace's loops's values))
+set originalLoop to the cad node pointer for originalLoopKey in bodyValue
+set rimUses to an empty list of a cad coedge key
+loop useIndex from 0 to the length of ((originalLoop's coedges's values)):
+    set useKey to the item at useIndex in ((originalLoop's coedges's values))
+    set useNode to the cad node pointer for useKey in bodyValue
+    set edgeNode to the cad node pointer for useNode's edge in bodyValue
+    if edgeNode's start = edgeNode's end:
+        append useKey to rimUses
+check periodic mesh ((the length of rimUses) = 2) named "rims"
+loop while (the length of ((wallFace's loops's values))) > 0:
+    remove the last item from ((wallFace's loops's values))
+loop rimIndex from 0 to the length of rimUses:
+    set useKey to the item at rimIndex in rimUses
+    set loopKey to the cad body key after inserting (a cad loop owned by wallKey with provenance (the synthesized cad provenance)) into bodyValue
+    set loopNode to the cad node pointer for loopKey in bodyValue
+    append useKey to ((loopNode's coedges's values))
+    set useNode to the cad node pointer for useKey in bodyValue
+    set useNode's owner to loopKey
+    append loopKey to ((wallFace's loops's values))
+free rimUses
+
+set meshValue to the cad mesh of bodyValue with maximum angle (the cad default sampling angle) within 1e-9
+set areaResult to the cad surface area of meshValue
+check periodic mesh areaResult's valid named "area"
+set expectedArea to (2.0 * 3.141592653589793) * (3.0 * 9.0)
+check periodic mesh ((the absolute value of (areaResult's value - expectedArea)) < (0.02 * expectedArea)) named "periodic wall area"
+free cad mesh meshValue
+print "cadkernel brep mesh periodic: PASS" as a line

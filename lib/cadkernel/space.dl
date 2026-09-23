@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native import surface for src/space/mod.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f. Individual modules can also be
+# imported directly. Planar operations retain their supplied plane frame;
+# distances, tolerances and coordinates use binary64 throughout.
+import lib/cadkernel/core.dl
+import lib/cadkernel/plane.dl
+import lib/cadkernel/alignment.dl
+import lib/cadkernel/spline.dl
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/knot_compaction.dl
+import lib/cadkernel/polyline_approximation3.dl
+import lib/cadkernel/arclength3.dl
+import lib/cadkernel/arc_union3.dl
+import lib/cadkernel/curve3.dl
+import lib/cadkernel/endpoint_join3.dl
+import lib/cadkernel/helix.dl
+import lib/cadkernel/line_union3.dl
+import lib/cadkernel/lengthen3.dl
+import lib/cadkernel/polygon3.dl
+import lib/cadkernel/polygon3_mesh.dl
+import lib/cadkernel/planar3.dl
+import lib/cadkernel/source_join3.dl

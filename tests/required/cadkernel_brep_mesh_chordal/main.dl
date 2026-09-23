@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check mesh chordal {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set cylinderResult to the cad cylinder body at the cad zero vector3 with radius 5.0 and height 10.0
+check mesh chordal (cylinderResult's valid) named "cylinder"
+set coarseTolerance to a cad tessellation tolerance with maximum angle 1.0 within 1e-9
+set coarseMesh to the cad tessellation of cylinderResult's value with tolerance coarseTolerance
+set chordalTolerance to coarseTolerance with chordal cad deflection 0.01
+set chordalMesh to the cad tessellation of cylinderResult's value with tolerance chordalTolerance
+check mesh chordal ((the cad triangle count of chordalMesh's mesh) > (the cad triangle count of coarseMesh's mesh)) named "face refinement"
+set coarseEdgePoints to 0
+loop edgeIndex from 0 to the length of coarseMesh's edges:
+    set coarseEdgePoints to coarseEdgePoints + (the length of (the item at edgeIndex in coarseMesh's edges)'s positions)
+set chordalEdgePoints to 0
+loop edgeIndex from 0 to the length of chordalMesh's edges:
+    set chordalEdgePoints to chordalEdgePoints + (the length of (the item at edgeIndex in chordalMesh's edges)'s positions)
+check mesh chordal (chordalEdgePoints > coarseEdgePoints) named "edge refinement"
+set coarseArea to the cad surface area of coarseMesh's mesh
+set chordalArea to the cad surface area of chordalMesh's mesh
+set exactArea to 150.0 * 3.141592653589793
+check mesh chordal ((the absolute value of (chordalArea's value - exactArea)) < (the absolute value of (coarseArea's value - exactArea))) named "area convergence"
+
+set invalidTolerance to coarseTolerance with chordal cad deflection -1.0
+set invalidMesh to the cad tessellation of cylinderResult's value with tolerance invalidTolerance
+check mesh chordal ((the cad triangle count of invalidMesh's mesh) = (the cad triangle count of coarseMesh's mesh)) named "invalid deflection ignored"
+check mesh chordal ((the length of invalidMesh's edges) = (the length of coarseMesh's edges)) named "invalid edge policy ignored"
+
+free cad body mesh invalidMesh
+free cad body mesh chordalMesh
+free cad body mesh coarseMesh
+print "cadkernel brep mesh chordal: PASS" as a line

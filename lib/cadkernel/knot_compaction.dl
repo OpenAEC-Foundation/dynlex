@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/space/knot_compaction.rs.
+#
+# The input is borrowed and never mutated. Every successful result has its own
+# managed NURBS storage, even when no knot is removed. Ordinary result copies
+# share that storage; its lists remain read-only borrowed views (see nurbs3.dl).
+# Invalid tolerance returns valid=false with an allocation-free, null-safe value.
+# A failed candidate removal leaves the current curve intact and processing
+# continues at the next distinct interior knot. Only repeated knots are removed.
+# Equal weights are compared exactly and preserved exactly after each solve.
+import lib/cadkernel/nurbs3.dl
+
+local function the absent cad knot compaction matching {cad nurbs curve3:shape}:
+    execute:
+        return @intrinsic("construct", a cad nurbs curve result, false, a new (the type of shape))
+
+local function the cad [knot] multiplicity of {64 bit floating-point number:knot} in {a pointer to a list:knots}:
+    execute:
+        set count to 0
+        loop index from 0 to the length of knots:
+            if (the item at index in knots) = knot:
+                increment count
+        return count
+
+local function the cad knot homogeneous control of {cad nurbs curve3:shape} at {integer:index}:
+    execute:
+        set point to the item at index in the controls of shape
+        set weight to the item at index in the weights of shape
+        return [(the x of point) * weight, (the y of point) * weight, (the z of point) * weight, weight]
+
+local function the cad knot projected point of value:
+    execute:
+        set weight to the item at 3 in value
+        return a cad vector3 with x ((the item at 0 in value) / weight), y ((the item at 1 in value) / weight) and z ((the item at 2 in value) / weight)
+
+# Both lists are caller-owned scratch storage. Keeping their ownership in the
+# removal wrapper makes every early refusal release the same allocations.
+local function the cad [knot] [recovered] curve from {cad nurbs curve3:shape} at {64 bit floating-point number:knot} within {64 bit floating-point number:tolerance} using knots and controls:
+    execute:
+        set degree to the degree of shape
+        set count to the length of the controls of shape
+        set span to the cad span of degree degree with knots knots and last (count - 2) at knot
+        set multiplicity to the cad knot multiplicity of knot in knots
+        if span < degree or span < multiplicity:
+            return the absent cad knot compaction matching shape
+        set first to span - degree
+        set last to span - multiplicity
+        if last <= first or last + 1 >= count:
+            return the absent cad knot compaction matching shape
+        loop index from 0 to first + 1:
+            append (the cad knot homogeneous control of shape at index) to controls
+        loop index from first + 1 to last + 1:
+            set width to (the item at (index + degree) in knots) - (the item at index in knots)
+            if width <= 0.0:
+                return the absent cad knot compaction matching shape
+            set alpha to (knot - (the item at index in knots)) / width
+            if alpha <= 0.0:
+                return the absent cad knot compaction matching shape
+            set current to the cad knot homogeneous control of shape at index
+            set previous to the item at (index - 1) in controls
+            set recovered to a new (the type of current)
+            loop axis from 0 to 4:
+                store (((the item at axis in current) - (1.0 - alpha) * (the item at axis in previous)) / alpha) at recovered + axis
+            # A polynomial curve must not acquire rational roundoff.
+            store (the item at 0 in the weights of shape) at recovered + 3
+            append recovered to controls
+        set recovered to the item at last in controls
+        set expected to the cad knot homogeneous control of shape at (last + 1)
+        set recoveredWeight to the item at 3 in recovered
+        set expectedWeight to the item at 3 in expected
+        if recoveredWeight <= 0.0 or expectedWeight <= 0.0:
+            return the absent cad knot compaction matching shape
+        if (the cad distance from (the cad knot projected point of recovered) to (the cad knot projected point of expected)) > tolerance:
+            return the absent cad knot compaction matching shape
+        if (the absolute value of (recoveredWeight - expectedWeight)) > (1e-10 * (the maximum of (the absolute value of recoveredWeight) and (the absolute value of expectedWeight))):
+            return the absent cad knot compaction matching shape
+        loop index from last + 2 to count:
+            append (the cad knot homogeneous control of shape at index) to controls
+        set points to an empty list of a cad vector3
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of controls:
+            set value to the item at index in controls
+            append (the cad knot projected point of value) to points
+            append (the item at 3 in value) to weights
+        set result to the strict cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+        free points
+        free weights
+        if the valid of result:
+            set the value of result to (the value of result) with cad periodicity (the cad periodicity of shape)
+        return result
+
+local function the cad removal of one [knot] {64 bit floating-point number:knot} from {cad nurbs curve3:shape} within {64 bit floating-point number:tolerance}:
+    execute:
+        if (the length of the controls of shape) <= (the degree of shape) + 1:
+            return the absent cad knot compaction matching shape
+        set remove to -1
+        loop index from 0 to the length of the knots of shape:
+            if (the item at index in the knots of shape) = knot:
+                set remove to index
+        if remove < 0:
+            return the absent cad knot compaction matching shape
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of the knots of shape:
+            append (the item at index in the knots of shape) to knots
+        remove item remove from knots
+        set controls to an empty list of (a 64 bit floating-point number array of 4 items)
+        set result to the cad knot recovered curve from shape at knot within tolerance using knots and controls
+        free controls
+        free knots
+        return result
+
+function the cad [knot] compaction of {cad nurbs curve3:shape} within {64 bit floating-point number:tolerance}:
+    execute:
+        if ((the absolute value of tolerance) <= 1.7976931348623157e308) = false or tolerance < 0.0:
+            return the absent cad knot compaction matching shape
+        loop index from 1 to the length of the weights of shape:
+            if (the item at (index - 1) in the weights of shape) != (the item at index in the weights of shape):
+                return @intrinsic("construct", a cad nurbs curve result, true, the cad clone of shape)
+        set curve to the cad clone of shape
+        set domain to the cad domain of shape
+        set interior to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of the knots of shape:
+            set knot to the item at index in the knots of shape
+            if knot > (the start of domain) and knot < (the end of domain):
+                if (the length of interior) = 0:
+                    append knot to interior
+                else if (the last item of interior) != knot:
+                    append knot to interior
+        loop index from 0 to the length of interior:
+            set knot to the item at index in interior
+            set removable to true
+            loop while removable and ((the cad knot multiplicity of knot in (the knots of curve)) > 1):
+                set next to the cad removal of one knot knot from curve within tolerance
+                set removable to the valid of next
+                if removable:
+                    set curve to the value of next
+        free interior
+        return @intrinsic("construct", a cad nurbs curve result, true, curve)

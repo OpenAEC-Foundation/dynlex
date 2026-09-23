@@ -1,0 +1,7 @@
+cadkernel polygon3: flat square
+cadkernel polygon3: repeated closure
+cadkernel polygon3: tilted square
+cadkernel polygon3: winding
+cadkernel polygon3: degenerate rings
+cadkernel polygon3: open chain
+cadkernel polygon3: survey coordinates

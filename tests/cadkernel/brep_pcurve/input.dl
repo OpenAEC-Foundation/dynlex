@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_geometry.dl
+
+function geometry argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function geometry point argument {integer:index}:
+    execute:
+        return a cad vector3 with x (geometry argument index), y (geometry argument (index + 1)) and z (geometry argument (index + 2))
+function emit geometry scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit geometry point {cad vector3:value}:
+    execute:
+        emit geometry scalar (value's x)
+        emit geometry scalar (value's y)
+        emit geometry scalar (value's z)
+function emit geometry normalization {cad normalization3:value}:
+    execute:
+        emit geometry scalar ((value's valid) as an integer)
+        if (value's valid):
+            emit geometry point (value's value)
+function the geometry probe curve2:
+    execute:
+        set points to a list containing (a cad vector2 with x 0.0 and y 0.0)
+        append (a cad vector2 with x 1.0 and y 2.0) to points
+        append (a cad vector2 with x 3.0 and y 0.0) to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.0 to weights
+        set result to the cad nurbs curve2 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return (result's value)
+function the geometry probe curve3:
+    execute:
+        set points to a list containing (a cad vector3 with x 0.0, y 0.0 and z 0.0)
+        append (a cad vector3 with x 1.0, y 2.0 and z 1.0) to points
+        append (a cad vector3 with x 3.0, y 0.0 and z -0.5) to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to a list containing 1.0
+        append 0.7 to weights
+        append 1.0 to weights
+        set result to the cad nurbs curve3 of degree 2 with controls points, knots knots and weights weights
+        free points
+        free knots
+        free weights
+        return (result's value)
+function the geometry probe surface:
+    execute:
+        set points to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 3:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 3:
+                set z to 0.0
+                if (row = 1) and (column = 1):
+                    set z to 1.0
+                append (a cad vector3 with x row, y column and z z) to across
+            append across to points
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to 3:
+            append 2.0 to knots
+        loop index from 0 to 3:
+            append 5.0 to knots
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        set result to the cad nurbs surface3 of degrees 2 and 2 with controls points, knots knots and knots and weights weights
+        loop row from 0 to 3:
+            free (the item at row in points)
+        free points
+        free knots
+        free weights
+        return (result's value)
+

@@ -1,0 +1,17 @@
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function the identity of value:
+    execute:
+        @intrinsic("return", value)
+
+function visit depth:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int"), "visit"))
+        @intrinsic("discard", the identity of depth)
+        if @intrinsic("less than", depth, 3):
+            visit @intrinsic("add", depth, 1)
+        @intrinsic("discard", depth)
+
+visit 0

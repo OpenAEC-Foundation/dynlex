@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/tessellate2.dl
+
+function tessellate2 input {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function emit tessellate2 scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set operation to (tessellate2 input 0) as an integer
+set centre to a cad vector2 with x (tessellate2 input 1) and y (tessellate2 input 2)
+if operation = 2:
+    set endpoint to a cad vector2 with x (tessellate2 input 3) and y (tessellate2 input 4)
+    set point to the cad lerp from centre to endpoint at (tessellate2 input 5)
+    emit tessellate2 scalar point's x
+    emit tessellate2 scalar point's y
+else:
+    set radius to tessellate2 input 3
+    set start to tessellate2 input 7
+    set end to tessellate2 input 8
+    set elevation to tessellate2 input 9
+    set density to tessellate2 input 10
+    set points to an empty list of a cad vector3
+    free points
+    if operation = 0:
+        set points to the cad arc samples at centre with radius radius from start to end at elevation elevation with density density
+    else:
+        set ellipse to a cad ellipse at centre with radii radius and (tessellate2 input 4) along (a cad vector2 with x (tessellate2 input 5) and y (tessellate2 input 6))
+        set points to the cad ellipse samples of ellipse from start to end at elevation elevation with density density
+    emit tessellate2 scalar (the length of points)
+    loop index from 0 to the length of points:
+        set point to the item at index in points
+        emit tessellate2 scalar point's x
+        emit tessellate2 scalar point's y
+        emit tessellate2 scalar point's z
+    free points

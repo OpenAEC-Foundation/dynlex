@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/nurbs_builder.dl
+import tests/cadkernel/cross2/support.dl
+
+function check rational builder {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function rational builder scalar {a 64 bit floating-point number:actual} near {a 64 bit floating-point number:expected}:
+    execute:
+        check rational builder ((the absolute value of (actual - expected)) < 1e-12)
+
+set source to cross2 segment [1.0,2.0] to [4.0,6.0]
+set made to the cad rational builder of source
+check rational builder made's valid
+set line to made's value
+check rational builder (line's degree = 1)
+check rational builder ((the length of line's controls) = 2)
+check rational builder ((the cad distance from (the item at 1 in (line's controls)) to (cross2 point [4.0,6.0])) < 1e-12)
+set converted to the cad curve of line
+check rational builder converted's valid
+print "line_builder_preserves_endpoints" as a line
+
+set arc to the cad rational unit arc with sweep 1.5707963267948966
+check rational builder arc's valid
+set arcCurve to the cad curve of arc's value
+check rational builder arcCurve's valid
+set midpoint to the cad point on arcCurve's value at 0.5
+rational builder scalar midpoint's x near 0.7071067811865476
+rational builder scalar midpoint's y near 0.7071067811865476
+check rational builder ((the length of arc's value's controls) = 3)
+set complete to the cad rational builder of (cross2 circle [0.0,0.0] with radius 2.0)
+check rational builder ((the length of complete's value's controls) = 9)
+print "conics_use_exact_rational_quadratics" as a line
+
+set invalid to the cad rational unit arc with sweep 0.0
+check rational builder (invalid's valid = false)
+set invalid to the cad rational builder of (cross2 ray [0.0,0.0] along [1.0,0.0])
+check rational builder (invalid's valid = false)
+print "unsupported_curves_and_empty_sweeps_are_refused" as a line
+
+set points to a list containing (cross2 point [0.0,0.0])
+append (cross2 point [2.0,3.0]) to points
+set knots to a list containing 2.0
+append 2.0 to knots
+append 6.0 to knots
+append 6.0 to knots
+set weights to a list containing 1.0
+append 2.0 to weights
+set nurbs to the strict cad nurbs curve2 of degree 1 with controls points, knots knots and weights weights
+check rational builder nurbs's valid
+set normalized to the cad rational builder of (the cad curve2 of nurbs's value)
+check rational builder normalized's valid
+rational builder scalar (the item at 0 in (normalized's value's knots)) near 0.0
+rational builder scalar (the item at 3 in (normalized's value's knots)) near 1.0
+print "existing_nurbs_domains_are_normalized" as a line
+
+set reversed to the cad reverse of normalized's value
+check rational builder ((the cad distance from (the item at 0 in (reversed's controls)) to (cross2 point [2.0,3.0])) < 1e-12)
+rational builder scalar (the item at 0 in (reversed's weights)) near 2.0
+set again to the cad reverse of reversed
+check rational builder ((the cad distance from (the item at 0 in (again's controls)) to (cross2 point [0.0,0.0])) < 1e-12)
+print "reversal_preserves_control_weight_pairs" as a line
+
+set frame to a cad plane with origin (a cad vector3 with x 10.0, y 20.0 and z 30.0), x axis (a cad vector3 with x 1.0, y 0.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+set lifted to the cad lift of line onto frame
+set offset to a cad vector3 with x 0.0, y 5.0 and z 0.0
+set translated to the cad translation of lifted by offset
+set first to the item at 0 in (translated's controls)
+rational builder scalar first's x near 11.0
+rational builder scalar first's y near 25.0
+rational builder scalar first's z near 32.0
+set spatial to the cad curve of translated
+check rational builder spatial's valid
+print "lifting_and_translation_preserve_the_rational_basis" as a line
+
+check rational builder (lifted is cad compatible with translated)
+set ruled to the cad ruled surface from lifted to translated
+check rational builder ruled's valid
+set atMiddle to the cad point on ruled's value at parameters 0.5 and 0.5
+rational builder scalar atMiddle's x near 12.5
+rational builder scalar atMiddle's y near 22.5
+rational builder scalar atMiddle's z near 34.0
+set different to the cad lift of arc's value onto frame
+check rational builder ((lifted is cad compatible with different) = false)
+set refused to the cad ruled surface from lifted to different
+check rational builder (refused's valid = false)
+print "ruled_surfaces_require_compatible_bases" as a line
+
+set raw to the cad rational curve2 of degree 0 with controls points, knots knots and weights weights
+set strict to the cad curve of raw
+check rational builder (strict's valid = false)
+check rational builder ((the length of raw's controls) = 2)
+free points
+free knots
+free weights
+print "intermediate_builders_defer_strict_validation" as a line

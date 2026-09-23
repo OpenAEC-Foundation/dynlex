@@ -1,0 +1,179 @@
+# SPDX-License-Identifier: MPL-2.0
+# Full-turn solid revolution coverage from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep.dl
+
+function check revolution {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function revolution point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function revolution line from {cad vector2:first} to {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+function revolution ring through {a pointer to a list:points}:
+    execute:
+        set profile to a list containing (revolution line from (the item at 0 in points) to (the item at 1 in points))
+        loop index from 1 to the length of points:
+            set next to the remainder of (index + 1) divided by (the length of points)
+            append (revolution line from (the item at index in points) to (the item at next in points)) to profile
+        return profile
+
+function check revolution body {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check revolution ((the length of flaws) = 0)
+        free flaws
+        check revolution ((the cad worst vertex gap of body) < 1e-8)
+
+function the revolution surface count of {integer:kind} in {cad body:body}:
+    execute:
+        set keys to the cad keys of (body's surfaces)
+        set total to 0
+        loop index from 0 to the length of keys:
+            set node to the cad node pointer for (the item at index in keys) in (body's surfaces)
+            if node != (0 as the type of node):
+                if (node's kind) = kind:
+                    increment total
+        free keys
+        return total
+
+set halfPlaneResult to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check revolution (halfPlaneResult's valid)
+set cylinderPoints to a list containing (revolution point 0 0)
+append (revolution point 3 0) to cylinderPoints
+append (revolution point 3 6) to cylinderPoints
+append (revolution point 0 6) to cylinderPoints
+set cylinderProfile to revolution ring through cylinderPoints
+set cylinderResult to the cad revolution of cylinderProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (cylinderResult's valid)
+check revolution ((the cad count of (cylinderResult's value's faces)) = 3)
+check revolution ((the cad count of (cylinderResult's value's edges)) = 3)
+check revolution ((the cad count of (cylinderResult's value's vertices)) = 2)
+check revolution body (cylinderResult's value)
+check revolution ((the revolution surface count of 0 in (cylinderResult's value)) = 2)
+check revolution ((the revolution surface count of 1 in (cylinderResult's value)) = 1)
+print "a_rectangle_turned_the_whole_way_is_a_cylinder" as a line
+
+free cylinderProfile
+free cylinderPoints
+
+set conePoints to a list containing (revolution point 0 0)
+append (revolution point 5 0) to conePoints
+append (revolution point 0 12) to conePoints
+set coneProfile to revolution ring through conePoints
+set coneResult to the cad revolution of coneProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (coneResult's valid)
+check revolution ((the cad count of (coneResult's value's faces)) = 2)
+check revolution ((the cad count of (coneResult's value's edges)) = 2)
+check revolution ((the cad count of (coneResult's value's vertices)) = 2)
+check revolution body (coneResult's value)
+check revolution ((the revolution surface count of 0 in (coneResult's value)) = 1)
+check revolution ((the revolution surface count of 2 in (coneResult's value)) = 1)
+print "a_triangle_turned_the_whole_way_is_a_cone" as a line
+free coneProfile
+free conePoints
+
+set sphereProfile to a list containing (the cad curve2 of (a cad arc2 at (revolution point 0 0) with radius 4.0 from -1.5707963267948966 to 1.5707963267948966))
+append (revolution line from (revolution point 0 4) to (revolution point 0 0)) to sphereProfile
+append (revolution line from (revolution point 0 0) to (revolution point 0 -4)) to sphereProfile
+set sphereResult to the cad revolution of sphereProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (sphereResult's valid)
+check revolution ((the cad count of (sphereResult's value's faces)) = 1)
+check revolution ((the cad count of (sphereResult's value's edges)) = 1)
+check revolution ((the cad count of (sphereResult's value's vertices)) = 2)
+check revolution body (sphereResult's value)
+check revolution ((the revolution surface count of 3 in (sphereResult's value)) = 1)
+print "a_half_disc_turned_the_whole_way_is_a_sphere" as a line
+free sphereProfile
+
+set ringPoints to a list containing (revolution point 4 0)
+append (revolution point 7 0) to ringPoints
+append (revolution point 7 2) to ringPoints
+append (revolution point 4 2) to ringPoints
+set ringProfile to revolution ring through ringPoints
+set ringResult to the cad revolution of ringProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (ringResult's valid)
+check revolution ((the cad count of (ringResult's value's faces)) = 4)
+check revolution body (ringResult's value)
+check revolution ((the revolution surface count of 0 in (ringResult's value)) = 2)
+check revolution ((the revolution surface count of 1 in (ringResult's value)) = 2)
+set ringFaceKeys to the cad face keys of (ringResult's value)
+set ringHoledFaces to 0
+loop ringFaceIndex from 0 to the length of ringFaceKeys:
+    set ringFace to the cad node pointer for (the item at ringFaceIndex in ringFaceKeys) in (ringResult's value)
+    if ringFace != (0 as the type of ringFace):
+        if (the length of (ringFace's loops's values)) = 2:
+            increment ringHoledFaces
+check revolution (ringHoledFaces = 2)
+free ringFaceKeys
+print "a_rectangle_held_away_from_the_axis_is_a_ring" as a line
+
+set torusProfile to a list containing (the cad curve2 of (a cad arc2 at (revolution point 10 0) with radius 2.0 from -1.5707963267948966 to 1.5707963267948966))
+append (revolution line from (revolution point 10 2) to (revolution point 10 0)) to torusProfile
+append (revolution line from (revolution point 10 0) to (revolution point 10 -2)) to torusProfile
+set torusResult to the cad revolution of torusProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (torusResult's valid)
+check revolution body (torusResult's value)
+check revolution ((the revolution surface count of 1 in (torusResult's value)) = 2)
+check revolution ((the revolution surface count of 4 in (torusResult's value)) = 1)
+print "an_arc_held_away_from_the_axis_sweeps_into_a_torus" as a line
+free torusProfile
+
+set straddlePoints to a list containing (revolution point -2 0)
+append (revolution point 3 0) to straddlePoints
+append (revolution point 3 4) to straddlePoints
+append (revolution point -2 4) to straddlePoints
+set straddleProfile to revolution ring through straddlePoints
+set refusedResult to the cad revolution of straddleProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution ((refusedResult's valid) = false)
+print "a_profile_that_straddles_the_axis_is_refused" as a line
+free straddleProfile
+free straddlePoints
+
+set farPoints to a list containing (revolution point -7 0)
+append (revolution point -4 0) to farPoints
+append (revolution point -4 2) to farPoints
+append (revolution point -7 2) to farPoints
+set farProfile to revolution ring through farPoints
+set farResult to the cad revolution of farProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check revolution (farResult's valid)
+check revolution body (farResult's value)
+print "a_profile_on_the_far_side_of_the_axis_turns_just_the_same" as a line
+
+set refusedResult to the cad revolution of ringProfile on (halfPlaneResult's value) about (the cad zero vector3) along (a cad vector3 with x 0.0, y 1.0 and z 1.0) by 6.283185307179586
+check revolution ((refusedResult's valid) = false)
+set refusedResult to the cad revolution of ringProfile on (halfPlaneResult's value) about (a cad vector3 with x 0.0, y 5.0 and z 0.0) along (the cad z axis) by 6.283185307179586
+check revolution ((refusedResult's valid) = false)
+print "an_axis_off_the_profiles_plane_is_refused" as a line
+
+set negativeResult to the cad revolution of ringProfile on (halfPlaneResult's value) about (the cad zero vector3) along (the cad z axis) by -6.283185307179586
+check revolution (negativeResult's valid)
+check revolution body (negativeResult's value)
+print "a_negative_full_turn_reverses_the_axis" as a line
+
+set surveyOrigin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set surveyPlaneResult to the cad orthonormal plane with origin surveyOrigin, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check revolution (surveyPlaneResult's valid)
+set surveyPoints to a list containing (revolution point 0 0)
+append (revolution point 0.4 0) to surveyPoints
+append (revolution point 0.4 0.9) to surveyPoints
+append (revolution point 0 0.9) to surveyPoints
+set surveyProfile to revolution ring through surveyPoints
+set surveyResult to the cad revolution of surveyProfile on (surveyPlaneResult's value) about surveyOrigin along (the cad z axis) by 6.283185307179586
+check revolution (surveyResult's valid)
+check revolution body (surveyResult's value)
+check revolution ((the cad worst vertex gap of (surveyResult's value)) < 1e-6)
+print "a_revolution_at_survey_coordinates_is_the_same_solid" as a line
+
+free surveyProfile
+free surveyPoints
+free farProfile
+free farPoints
+free ringProfile
+free ringPoints

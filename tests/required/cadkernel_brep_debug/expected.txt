@@ -1,0 +1,1 @@
+owned body diagnostics preserve fields and binary64 precision

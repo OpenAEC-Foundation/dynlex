@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength3.dl
+
+function assert arc {boolean:condition} labelled {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function retained arc from {cad arclength curve3:curve}:
+    execute:
+        set temporary to curve
+        return temporary
+
+set points to an empty list of a cad vector3
+append (the cad zero vector3) to points
+append (a cad vector3 with x 3.0, y 0.0 and z 0.0) to points
+append (a cad vector3 with x 3.0, y 4.0 and z 0.0) to points
+set result to the cad arclength curve3 through points with closure false
+assert arc (the valid of result) labelled "polyline construction"
+set curve to retained arc from (the value of result)
+set copied to curve
+set cloned to the cad clone of curve
+set originalPoints to the points of the storage of curve
+set originalStations to the stations of the storage of curve
+assert arc ((the points of the storage of copied) = originalPoints) labelled "ordinary shared point storage"
+assert arc ((the points of the storage of cloned) != originalPoints) labelled "deep point clone"
+assert arc ((the stations of the storage of cloned) != originalStations) labelled "deep station clone"
+assert arc ((the length of originalStations) = 3) labelled "exact polyline station count"
+assert arc ((the parameter of (the item at 1 in originalStations)) = 0.5) labelled "exact polyline station parameter"
+assert arc ((the distance of (the item at 1 in originalStations)) = 3.0) labelled "exact polyline station distance"
+replace item at index 1 in points with (a cad vector3 with x 99.0, y 0.0 and z 0.0)
+free points
+free cad arclength (the value of result)
+free cad arclength curve
+free cad arclength curve
+assert arc ((the cad length of copied) = 7.0) labelled "shared copy survives reset and input free"
+set baseline to @intrinsic("dereference", the owner of the storage of copied)
+loop index from 0 to 50:
+    set held to retained arc from copied
+    set ownedList to an empty list of the type of copied
+    append held to ownedList
+    append held to ownedList
+    free ownedList
+assert arc ((@intrinsic("dereference", the owner of the storage of copied)) = baseline) labelled "balanced shared list element lifecycle"
+free cad arclength copied
+set sampled to the cad point on cloned at distance 5.0
+assert arc ((((the x of sampled) = 3.0) and ((the y of sampled) = 2.0)) and ((the z of sampled) = 0.0)) labelled "independent clone survives"
+
+set controls to an empty list of a cad vector3
+append (the cad zero vector3) to controls
+append (a cad vector3 with x 0.0, y 0.0 and z 5.0) to controls
+set knots to an empty list of a 64 bit floating-point number
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to an empty list of a 64 bit floating-point number
+append 1e300 to weights
+append 1e300 to weights
+set splineResult to the strict cad nurbs curve3 of degree 1 with controls controls, knots knots and weights weights
+set arcResult to the cad arclength curve3 of (the value of splineResult)
+assert arc (the valid of arcResult) labelled "normalized weighted line"
+set arc to the value of arcResult
+set shared to retained arc from arc
+set deep to the cad clone of arc
+set normalized to the spline of arc
+set duplicate to the spline of deep
+assert arc ((the controls of normalized) != (the controls of duplicate)) labelled "deep spline controls"
+assert arc ((the knots of normalized) != (the knots of duplicate)) labelled "deep spline knots"
+assert arc ((the weights of normalized) != (the weights of duplicate)) labelled "deep spline weights"
+assert arc ((the item at 0 in the weights of normalized) = 1.0) labelled "normalized weights"
+assert arc ((the item at 0 in the weights of the value of splineResult) = 1e300) labelled "source weights unchanged"
+free controls
+free knots
+free weights
+free cad nurbs (the value of splineResult)
+free cad arclength (the value of arcResult)
+free cad arclength arc
+assert arc ((the absolute value of ((the cad length of shared) - 5.0)) < 1e-12) labelled "nested shared owner lifetime"
+set baseline to @intrinsic("dereference", the owner of the spline of shared)
+loop index from 0 to 50:
+    set held to retained arc from shared
+    set ownedList to an empty list of the type of shared
+    append held to ownedList
+    free ownedList
+assert arc ((@intrinsic("dereference", the owner of the spline of shared)) = baseline) labelled "balanced nested spline lifecycle"
+free cad arclength shared
+assert arc ((the absolute value of ((the z of (the cad point on deep at distance 2.0)) - 2.0)) < 1e-9) labelled "nested deep owner lifetime"
+
+set empty to an empty list of a cad vector3
+loop index from 0 to 100:
+    set absent to the cad arclength curve3 through empty with closure false
+    assert arc ((the valid of absent) = false) labelled "invalid result"
+    set absentCopy to retained arc from (the value of absent)
+    free cad arclength (the value of absent)
+    free cad arclength absentCopy
+free empty
+print "arclength ownership passed" as a line

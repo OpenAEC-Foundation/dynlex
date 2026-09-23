@@ -1,0 +1,302 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/geom2d/polyline.rs.
+# Constructors borrow and copy input lists. Ordinary copies retain shared,
+# read-only storage; clone duplicates all lists. Raw vertices/segments are
+# borrowed views and must not be mutated or freed. Reset releases only the
+# caller's reference. Result validity never changes its lifecycle obligation.
+# Sampling returns a caller-owned list, to be freed once.
+import lib/cadkernel/core.dl
+import lib/cadkernel/tessellation.dl
+
+class:
+    patterns:
+        [a|] cad bulge arc2
+    members:
+        centre as a cad vector2
+        radius as a 64 bit floating-point number
+        startAngle as a 64 bit floating-point number
+        endAngle as a 64 bit floating-point number
+        sweep as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad bulge arc2 result
+    members:
+        valid as a boolean
+        value as a cad bulge arc2
+class:
+    patterns:
+        [a|] cad polyline vertex2
+    members:
+        position as a cad vector2
+        bulge as a 64 bit floating-point number
+
+# Owns precisely one list allocation and its element lifetimes.
+class:
+    patterns:
+        [a|] cad polyline2 storage
+    members:
+        values
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+class:
+    patterns:
+        [a|] cad polyline2
+    members:
+        vertices
+        closed as a boolean
+        storage as a cad polyline2 storage
+class:
+    patterns:
+        [a|] cad polyline range segment2
+    members:
+        sourceIndex as an integer
+        from as a 64 bit floating-point number
+        to as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad polyline range2
+    members:
+        polyline as a cad polyline2
+        segments
+        storage as a cad polyline2 storage
+class:
+    patterns:
+        [a|] cad polyline range2 result
+    members:
+        valid as a boolean
+        value as a cad polyline range2
+
+local function the cad polyline2 storage owning {a pointer to a list:values}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad polyline2 storage, values, owner)
+local function the cad polyline2 copied list of {a pointer to a list:values}:
+    execute:
+        set result to an empty list of the type of (the item at 0 in values)
+        loop index from 0 to the length of values:
+            append (the item at index in values) to result
+        return result
+local function the cad polyline2 owning {a pointer to a list:vertices} with closure {boolean:closed}:
+    execute:
+        return @intrinsic("construct", a cad polyline2, vertices, closed, the cad polyline2 storage owning vertices)
+function a cad polyline vertex2 at {cad vector2:position} with bulge {a 64 bit floating-point number:bulge}:
+    execute:
+        return @intrinsic("construct", a cad polyline vertex2, position, bulge)
+function a straight cad polyline vertex2 at {cad vector2:position}:
+    execute:
+        return a cad polyline vertex2 at position with bulge 0.0
+function the cad polyline2 with vertices {a pointer to a list:vertices} and closure {boolean:closed}:
+    execute:
+        set copied to an empty list of a cad polyline vertex2
+        loop index from 0 to the length of vertices:
+            append (the item at index in vertices) to copied
+        return the cad polyline2 owning copied with closure closed
+function an empty cad polyline2:
+    execute:
+        return the cad polyline2 owning (an empty list of a cad polyline vertex2) with closure false
+function the cad clone of {cad polyline2:shape}:
+    execute:
+        return the cad polyline2 with vertices shape's vertices and closure shape's closed
+function free cad polyline {cad polyline2:shape}:
+    replacement:
+        set shape to a new (the type of shape)
+function free cad polyline range {cad polyline range2:range}:
+    replacement:
+        set range to a new (the type of range)
+function the cad clone of {cad polyline range2:range}:
+    execute:
+        set segments to the cad polyline2 copied list of range's segments
+        return @intrinsic("construct", a cad polyline range2, the cad clone of (range's polyline), segments, the cad polyline2 storage owning segments)
+function {cad polyline vertex2:left} = {cad polyline vertex2:right}:
+    execute:
+        return ((left's position's x = right's position's x) and (left's position's y = right's position's y)) and (left's bulge = right's bulge)
+function {cad polyline range segment2:left} = {cad polyline range segment2:right}:
+    execute:
+        return ((left's sourceIndex = right's sourceIndex) and (left's from = right's from)) and (left's to = right's to)
+function {cad bulge arc2:left} = {cad bulge arc2:right}:
+    execute:
+        return (((((left's centre's x = right's centre's x) and (left's centre's y = right's centre's y)) and (left's radius = right's radius)) and (left's startAngle = right's startAngle)) and (left's endAngle = right's endAngle)) and (left's sweep = right's sweep)
+local function cad polyline2 lists left and right are equal:
+    execute:
+        if (the length of left) != (the length of right):
+            return false
+        loop index from 0 to the length of left:
+            if ((the item at index in left) = (the item at index in right)) = false:
+                return false
+        return true
+function {cad polyline2:left} = {cad polyline2:right}:
+    execute:
+        return (left's closed = right's closed) and (cad polyline2 lists left's vertices and right's vertices are equal)
+function {cad polyline range2:left} = {cad polyline range2:right}:
+    execute:
+        return (left's polyline = right's polyline) and (cad polyline2 lists left's segments and right's segments are equal)
+
+local function the cad polyline2 absent arc:
+    execute:
+        return @intrinsic("construct", a cad bulge arc2 result, false, a new cad bulge arc2)
+function the cad bulge arc2 [from] {cad vector2:start} [to] {cad vector2:end} with bulge {a 64 bit floating-point number:bulge}:
+    execute:
+        set dx to end's x - start's x
+        set dy to end's y - start's y
+        set length to the square root of ((dx * dx) + (dy * dy))
+        if (length < 1e-12) or ((the absolute value of bulge) < 1e-12):
+            return the cad polyline2 absent arc
+        set squared to bulge * bulge
+        set radius to (length * (1.0 + squared)) / (4.0 * (the absolute value of bulge))
+        set offset to (radius * (1.0 - squared)) / (1.0 + squared)
+        set sign to 1.0
+        if bulge < 0.0:
+            set sign to -1.0
+        if bulge != bulge:
+            set sign to bulge
+        set centre to a cad vector2 with x (((start's x + end's x) * 0.5) + ((sign * offset) * ((-dy) / length))) and y (((start's y + end's y) * 0.5) + ((sign * offset) * (dx / length)))
+        set first to the cad angle of (the cad difference of start and centre)
+        set last to the cad angle of (the cad difference of end and centre)
+        set sweep to last - first
+        if bulge > 0.0:
+            if sweep <= 0.0:
+                set sweep to sweep + 6.283185307179586
+        else:
+            if sweep >= 0.0:
+                set sweep to sweep - 6.283185307179586
+        if (the absolute value of sweep) < 1e-9:
+            set sweep to -6.283185307179586
+            if bulge > 0.0:
+                set sweep to 6.283185307179586
+        set value to @intrinsic("construct", a cad bulge arc2, centre, radius, first, last, sweep)
+        return @intrinsic("construct", a cad bulge arc2 result, true, value)
+function the cad point on {cad bulge arc2:arc} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set angle to arc's startAngle + (arc's sweep * parameter)
+        return a cad vector2 with x (arc's centre's x + (arc's radius * (the cosine of angle))) and y (arc's centre's y + (arc's radius * (the sine of angle)))
+# A real evaluator supplies the sampling module's pattern protocol.
+function the cad curve point of {cad bulge arc2:arc} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad point on arc at parameter
+function the cad curve tangent of {cad bulge arc2:arc} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set angle to arc's startAngle + (arc's sweep * parameter)
+        return a cad vector2 with x (((-arc's radius) * (the sine of angle)) * arc's sweep) and y ((arc's radius * (the cosine of angle)) * arc's sweep)
+function the cad angular samples of {cad bulge arc2:arc} within {a 64 bit floating-point number:requested}:
+    execute:
+        set limit to the cad sampling angle for requested
+        set steps to (the maximum of (the ceiling of ((the absolute value of arc's sweep) / limit)) and 1.0) as a 64 bit unsigned integer
+        set output to an empty list of a cad vector2
+        loop index from (0 as a 64 bit unsigned integer) through steps:
+            append (the cad point on arc at ((index as a 64 bit floating-point number) / (steps as a 64 bit floating-point number))) to output
+        return output
+function the cad segment arc of {cad polyline2:shape} at index {integer:index}:
+    execute:
+        set count to the length of shape's vertices
+        if (index < 0) or (index >= count):
+            return the cad polyline2 absent arc
+        set next to index + 1
+        if next >= count:
+            if shape's closed = false:
+                return the cad polyline2 absent arc
+            set next to 0
+        set vertex to the item at index in shape's vertices
+        set following to the item at next in shape's vertices
+        return the cad bulge arc2 from vertex's position to following's position with bulge vertex's bulge
+function the cad interpolation of {cad polyline range segment2:segment} [from] {a 64 bit floating-point number:start} [to] {a 64 bit floating-point number:end}:
+    execute:
+        return [((1.0 - segment's from) * start) + (segment's from * end), ((1.0 - segment's to) * start) + (segment's to * end)]
+
+local function cad polyline2 scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad polyline2 point {cad vector2:point} is finite:
+    execute:
+        return (cad polyline2 scalar point's x is finite) and (cad polyline2 scalar point's y is finite)
+local function the cad polyline2 range sample [from] {cad vector2:start} [to] {cad vector2:end} with {cad bulge arc2 result:arc} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if parameter = 0.0:
+            return start
+        if parameter = 1.0:
+            return end
+        if arc's valid:
+            return the cad point on arc's value at parameter
+        return a cad vector2 with x (((1.0 - parameter) * start's x) + (parameter * end's x)) and y (((1.0 - parameter) * start's y) + (parameter * end's y))
+local function the cad polyline2 range owning {cad polyline2:shape} and {a pointer to a list:segments}:
+    execute:
+        return @intrinsic("construct", a cad polyline range2, shape, segments, the cad polyline2 storage owning segments)
+local function the cad polyline2 absent range:
+    execute:
+        set value to the cad polyline2 range owning (an empty cad polyline2) and (an empty list of a cad polyline range segment2)
+        return @intrinsic("construct", a cad polyline range2 result, false, value)
+function the cad range of {cad polyline2:shape} [from] {a 64 bit floating-point number:from} [to] {a 64 bit floating-point number:to}:
+    execute:
+        set n to the length of shape's vertices
+        if ((n < 2) or ((cad polyline2 scalar from is finite) = false)) or ((cad polyline2 scalar to is finite) = false):
+            return the cad polyline2 absent range
+        if (((from < 0.0) or (from > 1.0)) or (to <= from)) or (to > (from + 1.0)):
+            return the cad polyline2 absent range
+        if (shape's closed = false) and (to > 1.0):
+            return the cad polyline2 absent range
+        loop index from 0 to n:
+            set vertex to the item at index in shape's vertices
+            if ((cad polyline2 scalar vertex's bulge is finite) = false) or ((cad polyline2 point vertex's position is finite) = false):
+                return the cad polyline2 absent range
+        set count to n - 1
+        if shape's closed:
+            set count to n
+        set start to from * (count as a 64 bit floating-point number)
+        set end to to * (count as a 64 bit floating-point number)
+        set first to (the floor of start) as an integer
+        set last to (the ceiling of end) as an integer
+        set vertices to an empty list of a cad polyline vertex2
+        set segments to an empty list of a cad polyline range segment2
+        set endpoint to the cad zero vector2
+        set populated to false
+        loop index from first to last:
+            set source to the remainder of index divided by count
+            set a to the maximum of (start - (index as a 64 bit floating-point number)) and 0.0
+            set b to the minimum of (end - (index as a 64 bit floating-point number)) and 1.0
+            if b > a:
+                set vertex to the item at source in shape's vertices
+                set next to the item at (the remainder of (source + 1) divided by n) in shape's vertices
+                set arc to the cad polyline2 absent arc
+                if (the absolute value of vertex's bulge) >= 1e-12:
+                    set arc to the cad bulge arc2 from vertex's position to next's position with bulge vertex's bulge
+                    if arc's valid = false:
+                        free vertices
+                        free segments
+                        return the cad polyline2 absent range
+                set bulge to 0.0
+                if (a = 0.0) and (b = 1.0):
+                    set bulge to vertex's bulge
+                else:
+                    if arc's valid:
+                        set angle to @intrinsic("call", "libc", "atan", a 64 bit floating-point number, vertex's bulge)
+                        set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle * (b - a))
+                set position to the cad polyline2 range sample from vertex's position to next's position with arc at a
+                set finish to the cad polyline2 range sample from vertex's position to next's position with arc at b
+                if (((cad polyline2 scalar bulge is finite) = false) or ((cad polyline2 point position is finite) = false)) or ((cad polyline2 point finish is finite) = false):
+                    free vertices
+                    free segments
+                    return the cad polyline2 absent range
+                append (a cad polyline vertex2 at position with bulge bulge) to vertices
+                set endpoint to finish
+                set populated to true
+                append (@intrinsic("construct", a cad polyline range segment2, source, a, b)) to segments
+        if populated = false:
+            free vertices
+            free segments
+            return the cad polyline2 absent range
+        append (a straight cad polyline vertex2 at endpoint) to vertices
+        set polyline to the cad polyline2 owning vertices with closure false
+        set value to the cad polyline2 range owning polyline and segments
+        return @intrinsic("construct", a cad polyline range2 result, true, value)

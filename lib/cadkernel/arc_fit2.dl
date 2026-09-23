@@ -1,0 +1,246 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/geom2d/arc_fit.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed typed lists. Output vertices are immutable borrowed views.
+# Copies retain storage; clone duplicates it. All results release automatically,
+# including refusals and results returned after partially computing a chain.
+import lib/cadkernel/construct2.dl
+
+class:
+    patterns:
+        [a|an|] cad arc fit direction2
+    members:
+        specified as a boolean
+        value as a cad vector2
+class:
+    patterns:
+        [a|] cad arc fit vertex2
+    members:
+        point as a cad vector2
+        bulge as a 64 bit floating-point number
+        source as a word sized unsigned integer
+        fraction as a 64 bit floating-point number
+        inserted as a boolean
+class:
+    patterns:
+        [a|] cad arc fit2 storage
+    members:
+        values
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+class:
+    patterns:
+        [a|] cad arc fit result2
+    members:
+        valid as a boolean
+        vertices
+        storage as a cad arc fit2 storage
+class:
+    patterns:
+        [a|] cad arc fit2 piece
+    members:
+        valid as a boolean
+        bulge as a 64 bit floating-point number
+        length as a 64 bit floating-point number
+
+function an automatic cad [arc] fit direction2:
+    execute:
+        return @intrinsic("construct", a cad arc fit direction2, false, the cad zero vector2)
+function a cad [arc] fit direction2 along {cad vector2:direction}:
+    execute:
+        return @intrinsic("construct", a cad arc fit direction2, true, direction)
+local function the cad [arc] fit2 typed direction {cad arc fit direction2:direction}:
+    execute:
+        return direction
+local function cad [arc] fit2 finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad [arc] fit2 finite point {cad vector2:point}:
+    execute:
+        return (cad arc fit2 finite point's x) and (cad arc fit2 finite point's y)
+local function the cad [arc] fit2 storage owning {a pointer to a list:values}:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad arc fit2 storage, values, owner)
+local function the cad [arc] fit2 vertex at {cad vector2:point} with bulge {a 64 bit floating-point number:bulge}, source {integer:source}, fraction {a 64 bit floating-point number:fraction} and inserted {boolean:inserted}:
+    execute:
+        return @intrinsic("construct", a cad arc fit vertex2, point, bulge, source as a word sized unsigned integer, fraction, inserted)
+local function the cad [arc] fit2 unit {cad vector2:direction}:
+    execute:
+        set length to the cad length of direction
+        if (cad arc fit2 finite length) and (length > 1e-12):
+            return @intrinsic("construct", a cad normalization2, true, direction cad divided by length)
+        return @intrinsic("construct", a cad normalization2, false, the cad zero vector2)
+local function the cad [arc] fit2 piece [from] {cad vector2:start} along {cad vector2:tangent} [to] {cad vector2:end}:
+    execute:
+        set chord to the cad difference of end and start
+        set length to the cad length of chord
+        if ((cad arc fit2 finite length) = false) or (length <= 1e-12):
+            return a new cad arc fit2 piece
+        set cross to the cad cross of tangent and chord
+        if (the absolute value of cross) <= (length * 1e-12):
+            if (the cad dot of tangent and chord) > 0.0:
+                return @intrinsic("construct", a cad arc fit2 piece, true, 0.0, length)
+            return a new cad arc fit2 piece
+        set constructed to the cad arc2 from start along tangent tangent to end flipped false
+        if constructed's valid = false:
+            return a new cad arc fit2 piece
+        set arc to constructed's value
+        set sweep to the cad sweep of arc
+        set sign to @intrinsic("call", "libc", "copysign", a 64 bit floating-point number, 1.0, cross)
+        if cross != cross:
+            set sign to cross
+        set bulge to sign * (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25))
+        set length to arc's radius * sweep
+        if (cad arc fit2 finite bulge) and ((cad arc fit2 finite length) and (length > 0.0)):
+            return @intrinsic("construct", a cad arc fit2 piece, true, bulge, length)
+        return a new cad arc fit2 piece
+
+local function cad [arc] fit2 span [from] {cad vector2:p0} [to] {cad vector2:p1} with tangents {cad vector2:t0} and {cad vector2:t1}, chord {cad vector2:chord} and source {integer:index} into {a pointer to a list:result}:
+    execute:
+        set d to the cad difference of p1 and p0
+        set straight to ((the cad squared length of (the cad difference of chord and t0)) < 1e-24) and ((the cad squared length of (the cad difference of chord and t1)) < 1e-24)
+        if straight:
+            append (the cad arc fit2 vertex at p0 with bulge 0.0, source index, fraction 0.0 and inserted false) to result
+            return true
+        set s0 to the cad cross of chord and t0
+        set s1 to the cad cross of chord and t1
+        if ((the absolute value of s0) <= 1e-12) or ((the absolute value of s1) <= 1e-12):
+            append (the cad arc fit2 vertex at p0 with bulge 0.0, source index, fraction 0.0 and inserted false) to result
+            return true
+        set dot to the cad dot of t0 and t1
+        clamp dot between -1.0 and 1.0
+        set a to (-2.0 * (1.0 - dot)) / (s0 * s1)
+        set discriminant to 16.0 - (4.0 * a)
+        set knee to the cad zero vector2
+        if discriminant >= -1e-12:
+            set reach to ((the cad length of d) * 2.0) / (4.0 + (the square root of (the maximum of discriminant and 0.0)))
+            set r0 to (-reach) / s0
+            set r1 to reach / s1
+            set c0 to the cad sum of p0 and ((the cad perpendicular of t0) scaled by r0)
+            set c1 to the cad sum of p1 and ((the cad perpendicular of t1) scaled by r1)
+            if (the absolute value of (r0 - r1)) <= (1e-12 * (the maximum of (the maximum of (the absolute value of r0) and (the absolute value of r1)) and 1.0)):
+                set constructed to the cad arc2 from p0 along tangent t0 to p1 flipped false
+                if constructed's valid = false:
+                    return false
+                set knee to the cad point on (the cad curve2 of constructed's value) at 0.5
+            else:
+                set knee to (the cad difference of (c1 scaled by r0) and (c0 scaled by r1)) cad divided by (r0 - r1)
+        else:
+            set normal to the cad perpendicular of chord
+            set from to the cad difference of (the cad perpendicular of t0) and normal
+            set to to the cad difference of normal and (the cad perpendicular of t1)
+            set determinant to the cad cross of from and to
+            if (the absolute value of determinant) <= 1e-12:
+                return false
+            set radius to (the cad cross of d and to) / determinant
+            set knee to the cad sum of p0 and (from scaled by radius)
+        if (cad arc fit2 finite point knee) = false:
+            return false
+        set first to the cad arc fit2 piece from p0 along t0 to knee
+        if first's valid = false:
+            return false
+        set second to the cad arc fit2 piece from p1 along (the cad negative of t1) to knee
+        if second's valid = false:
+            return false
+        set total to first's length + second's length
+        if ((cad arc fit2 finite total) = false) or (total <= 0.0):
+            return false
+        set fraction to first's length / total
+        append (the cad arc fit2 vertex at p0 with bulge first's bulge, source index, fraction 0.0 and inserted false) to result
+        append (the cad arc fit2 vertex at knee with bulge (-second's bulge), source index, fraction fraction and inserted true) to result
+        return true
+
+local function cad [arc] fit2 build through {a pointer to a list:points} with closure {boolean:closed} and directions {a pointer to a list:directions} into {a pointer to a list:result}:
+    execute:
+        set count to the length of points
+        if (count < 2) or ((the length of directions) != count):
+            return false
+        loop index from 0 to count:
+            if (cad arc fit2 finite point (the item at index in points)) = false:
+                return false
+        set spans to count - 1
+        if closed:
+            set spans to count
+        set chords to an empty list of a cad vector2
+        set chordStorage to the cad arc fit2 storage owning chords
+        loop index from 0 to spans:
+            set next to the remainder of (index + 1) divided by count
+            set chord to the cad arc fit2 unit (the cad difference of (the item at next in points) and (the item at index in points))
+            if chord's valid = false:
+                return false
+            append chord's value to chords
+        set tangents to an empty list of a cad vector2
+        set tangentStorage to the cad arc fit2 storage owning tangents
+        loop index from 0 to count:
+            set tangent to the cad zero vector2
+            if closed or ((index != 0) and ((index + 1) != count)):
+                set previous to the remainder of ((index + spans) - 1) divided by spans
+                set next to the remainder of index divided by spans
+                set tangent to the item at next in chords
+                set normalized to the cad normalization of (the cad sum of (the item at previous in chords) and tangent)
+                if normalized's valid:
+                    set tangent to normalized's value
+            append tangent to tangents
+        if closed = false:
+            if count = 2:
+                replace item at index 0 in tangents with (the item at 0 in chords)
+                replace item at index 1 in tangents with (the item at 0 in chords)
+            else:
+                set firstChord to the item at 0 in chords
+                set firstTangent to the item at 1 in tangents
+                set first to the cad difference of (firstChord scaled by (2.0 * (the cad dot of firstChord and firstTangent))) and firstTangent
+                replace item at index 0 in tangents with first
+                set lastChord to the item at (count - 2) in chords
+                set lastTangent to the item at (count - 2) in tangents
+                set last to the cad difference of (lastChord scaled by (2.0 * (the cad dot of lastChord and lastTangent))) and lastTangent
+                replace item at index (count - 1) in tangents with last
+        loop index from 0 to count:
+            set override to the cad arc fit2 typed direction (the item at index in directions)
+            if override's specified:
+                if (cad arc fit2 finite point override's value) = false:
+                    return false
+                set normalized to the cad arc fit2 unit override's value
+                if normalized's valid = false:
+                    return false
+                replace item at index index in tangents with normalized's value
+        loop index from 0 to spans:
+            set next to the remainder of (index + 1) divided by count
+            set p0 to the item at index in points
+            set p1 to the item at next in points
+            set t0 to the item at index in tangents
+            set t1 to the item at next in tangents
+            if (cad arc fit2 span from p0 to p1 with tangents t0 and t1, chord (the item at index in chords) and source index into result) = false:
+                return false
+        if closed = false:
+            append (the cad arc fit2 vertex at (the item at (count - 1) in points) with bulge 0.0, source (count - 1), fraction 0.0 and inserted false) to result
+        return true
+
+function the cad [arc] chain2 through {a pointer to a list:points} with closure {boolean:closed} and directions {a pointer to a list:directions}:
+    execute:
+        set vertices to an empty list of a cad arc fit vertex2
+        set storage to the cad arc fit2 storage owning vertices
+        set valid to cad arc fit2 build through points with closure closed and directions directions into vertices
+        if valid = false:
+            clear vertices
+        return @intrinsic("construct", a cad arc fit result2, valid, vertices, storage)
+function the cad clone of {cad arc fit result2:fitted}:
+    execute:
+        set vertices to an empty list of a cad arc fit vertex2
+        if fitted's vertices != (0 as the type of fitted's vertices):
+            loop index from 0 to the length of fitted's vertices:
+                append (the item at index in fitted's vertices) to vertices
+        return @intrinsic("construct", a cad arc fit result2, fitted's valid, vertices, the cad arc fit2 storage owning vertices)
+

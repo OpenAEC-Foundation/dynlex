@@ -1,0 +1,55 @@
+import lib/cadkernel/bounds2.dl
+
+function bounds check {boolean:condition}:
+    execute:
+        if condition = false:
+            print "analytic bounds assertion failed" as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+function check bounds {cad bounds2:actual} from {cad vector2:minimum} to {cad vector2:maximum}:
+    execute:
+        bounds check actual's valid
+        bounds check ((the absolute value of (actual's low's x - minimum's x)) < 1e-9)
+        bounds check ((the absolute value of (actual's low's y - minimum's y)) < 1e-9)
+        bounds check ((the absolute value of (actual's high's x - maximum's x)) < 1e-9)
+        bounds check ((the absolute value of (actual's high's y - maximum's y)) < 1e-9)
+function bounds point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+
+set curves to a list containing (the cad curve2 of (a cad arc2 at (bounds point 2 3) with radius 4.0 from 0.0 to 1.5707963267948966))
+check bounds (the cad analytic bounds of curves) from (bounds point 2 3) to (bounds point 6 7)
+free curves
+set ellipse to a cad ellipse at (bounds point 1 -2) with radii 4.0 and 2.0 along (bounds point 0.7071067811865476 0.7071067811865476)
+set curves to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipse))
+set extent to the square root of 10.0
+check bounds (the cad analytic bounds of curves) from (bounds point (1.0 - extent) (-2.0 - extent)) to (bounds point (1.0 + extent) (-2.0 + extent))
+free curves
+print "partial conics include their analytic extrema" as a line
+
+loop index from 0 to 2:
+    set bulge to 1.0 - 2.0 * index
+    set vertices to a list containing (a cad polyline vertex2 at (bounds point -1 0) with bulge bulge)
+    append (a cad polyline vertex2 at (bounds point 1 0) with bulge 0.0) to vertices
+    set polyline to the cad polyline2 with vertices vertices and closure false
+    free vertices
+    set curves to a list containing (the cad curve2 of polyline)
+    if index = 0:
+        check bounds (the cad analytic bounds of curves) from (bounds point -1 -1) to (bounds point 1 0)
+    else:
+        check bounds (the cad analytic bounds of curves) from (bounds point -1 0) to (bounds point 1 1)
+    free curves
+print "signed bulges expand the correct side" as a line
+
+set curves to a list containing (the cad curve2 of (a cad line2 from (bounds point -2 1) to (bounds point 3 4)))
+append (the cad curve2 of (a cad circle2 at (bounds point 8 0) with radius 2.0)) to curves
+check bounds (the cad analytic bounds of curves) from (bounds point -2 -2) to (bounds point 10 4)
+free curves
+set curves to an empty list of a cad curve2
+bounds check ((the valid of the cad analytic bounds of curves) = false)
+append (the cad curve2 of (a cad xline2 through the cad zero vector2 along (bounds point 1 0))) to curves
+bounds check ((the valid of the cad analytic bounds of curves) = false)
+clear curves
+append (the cad curve2 of (a cad circle2 at the cad zero vector2 with radius 0.0)) to curves
+bounds check ((the valid of the cad analytic bounds of curves) = false)
+free curves
+print "collections combine and invalid or unbounded curves fail" as a line

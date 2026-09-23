@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_intersect.dl
+
+function intersect point {a 64 bit floating-point number array of 3 items:values}:
+    execute:
+        return a cad vector3 with x (the item at 0 in values), y (the item at 1 in values) and z (the item at 2 in values)
+function check intersect {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function intersect near {a number:actual} to {a number:expected}:
+    execute:
+        check intersect ((the absolute value of (actual - expected)) < 1e-9)
+function intersect frame at {cad vector3:origin} normal {cad vector3:normal}:
+    execute:
+        set seed to the cad x axis
+        if (the absolute value of normal's x) >= 0.9:
+            set seed to the cad y axis
+        set result to the cad orthonormal plane with origin origin, x axis seed and normal normal
+        check intersect result's valid
+        return result's value
+function intersect plane at {a 64 bit floating-point number array of 3 items:origin} normal {a 64 bit floating-point number array of 3 items:normal}:
+    execute:
+        return the cad surface of (intersect frame at (intersect point origin) normal (intersect point normal))
+function intersect sphere at {a 64 bit floating-point number array of 3 items:origin} radius {a number:radius}:
+    execute:
+        return the cad surface of (a cad sphere with frame (intersect frame at (intersect point origin) normal (the cad z axis)) and radius radius)
+function intersect cylinder at {a 64 bit floating-point number array of 3 items:origin} normal {a 64 bit floating-point number array of 3 items:normal} radius {a number:radius}:
+    execute:
+        return the cad surface of (a cad cylinder with base (intersect frame at (intersect point origin) normal (intersect point normal)) and radius radius)
+function intersect cone:
+    execute:
+        return the cad surface of (a cad cone with base (the cad xy plane), radius 10.0 and half angle (3.141592653589793 / 4.0))
+function check intersect curves {cad surface meeting:meeting} on {cad surface:one} and {cad surface:other}:
+    execute:
+        check intersect (meeting's kind = 1)
+        check intersect ((the length of meeting's curves) > 0)
+        loop index from 0 to the length of meeting's curves:
+            set curve to the item at index in meeting's curves
+            loop sample from 0 to 13:
+                set t to ((6.283185307179586 * (sample as a 64 bit floating-point number)) / 12.0)
+                if curve's kind = 0:
+                    set t to -5.0 + (10.0 * (sample as a 64 bit floating-point number)) / 12.0
+                set point to the cad point on curve at t
+                check intersect (one contains cad point point within 1e-6)
+                check intersect (other contains cad point point within 1e-6)

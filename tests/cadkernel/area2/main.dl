@@ -1,0 +1,102 @@
+# SPDX-License-Identifier: MPL-2.0
+# All 12 source test groups from geom2d/area.rs.
+import lib/cadkernel/area2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check area2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 99)
+
+function check area2 near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        check area2 ((the absolute value of (actual - expected)) < tolerance)
+
+set centres to [[0.0,0.0],[100.0,-250.0]]
+set radii to [0.5,7.0,1000.0]
+loop c from 0 to the length of centres:
+    loop r from 0 to the length of radii:
+        set radius to the item at r in radii
+        set curve to cross2 circle (the item at c in centres) with radius radius
+        set expected to (3.141592653589793 * radius) * radius
+        check area2 near (the cad enclosed area of curve) to expected within (1e-9 * expected)
+print "a_circle_encloses_pi_r_squared" as a line
+
+set circle to cross2 circle [0.0,0.0] with radius 1.0
+set samples to the cad samples of circle with density 20.0
+set signedArea to 0.0
+loop index from 0 to the length of samples:
+    set next to the remainder of (index + 1) divided by (the length of samples)
+    set signedArea to signedArea + (the cad cross of (the item at index in samples) and (the item at next in samples))
+free samples
+check area2 ((signedArea * 0.5) < (3.141592653589793 - 1e-4))
+check area2 near (the cad enclosed area of circle) to 3.141592653589793 within 1e-12
+print "a_circle_beats_the_polygon_that_approximates_it" as a line
+
+set square to cross2 polyline [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,10.0,0.0],[0.0,10.0,0.0]] with closure true
+check area2 near (the cad enclosed area of square) to 100.0 within 1e-9
+print "a_square_given_as_a_closed_polyline_measures_its_side_squared" as a line
+
+set threeSides to cross2 polyline [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,10.0,0.0],[0.0,10.0,0.0]] with closure false
+check area2 near (the cad enclosed area of threeSides) to 100.0 within 1e-9
+print "an_open_polyline_is_closed_by_its_own_chord" as a line
+
+set bulged to cross2 polyline [[0.0,0.0,0.0],[10.0,0.0,0.0],[10.0,10.0,1.0],[0.0,10.0,0.0]] with closure true
+check area2 near (the cad enclosed area of bulged) to (100.0 + ((3.141592653589793 * 25.0) / 2.0)) within 1e-9
+print "a_bulge_adds_its_own_bite_rather_than_its_chord" as a line
+
+set clockwise to cross2 polyline [[0.0,0.0,0.0],[0.0,10.0,0.0],[10.0,10.0,0.0],[10.0,0.0,0.0]] with closure true
+check area2 ((the cad enclosed area of clockwise) < 0.0)
+check area2 near (the cad enclosed area of clockwise) to -100.0 within 1e-9
+print "the_sign_says_which_way_the_loop_runs" as a line
+
+set ellipse to the cad curve2 of (the full cad ellipse arc2 on (a cad ellipse at (cross2 point [3.0,-4.0]) with radii 20.0 and 5.0 along (cross2 point [0.6,0.8])))
+set expected to (3.141592653589793 * 20.0) * 5.0
+check area2 near (the cad enclosed area of ellipse) to expected within (1e-6 * expected)
+print "an_ellipse_encloses_pi_a_b" as a line
+
+set half to the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 10.0 from 0.0 to 3.141592653589793)
+set closing to cross2 segment [-10.0,0.0] to [10.0,0.0]
+check area2 near ((the cad enclosed area of half) + (the cad enclosed area of closing)) to ((3.141592653589793 * 100.0) / 2.0) within 1e-9
+print "a_half_circle_arc_contributes_its_sector_plus_the_chord_triangle" as a line
+
+set quarter to the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 4.0 from 0.0 to 1.5707963267948966)
+set up to cross2 segment [0.0,4.0] to [0.0,0.0]
+set out to cross2 segment [0.0,0.0] to [4.0,0.0]
+set total to ((the cad enclosed area of quarter) + (the cad enclosed area of up)) + (the cad enclosed area of out)
+check area2 near total to ((3.141592653589793 * 16.0) / 4.0) within 1e-9
+print "the_pieces_of_a_boundary_add_up_to_the_whole" as a line
+
+set ray to cross2 ray [1.0,2.0] along [3.0,4.0]
+check area2 ((the cad enclosed area of ray) = 0.0)
+print "an_unbounded_curve_encloses_nothing" as a line
+
+set controls to a list containing (cross2 point [100.0,0.0])
+append (cross2 point [100.0,100.0]) to controls
+append (cross2 point [0.0,100.0]) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append (the cosine of 0.7853981633974483) to weights
+append 1.0 to weights
+set built to the cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+check area2 built's valid
+free controls
+free knots
+free weights
+set quarter to the cad curve2 of built's value
+set back to cross2 segment [0.0,100.0] to [0.0,0.0]
+set out to cross2 segment [0.0,0.0] to [100.0,0.0]
+set total to ((the cad enclosed area of quarter) + (the cad enclosed area of back)) + (the cad enclosed area of out)
+set expected to (3.141592653589793 * 10000.0) / 4.0
+check area2 near total to expected within (1e-4 * expected)
+print "a_spline_tracing_a_circle_encloses_the_circle" as a line
+
+set localArea to the cad enclosed area of (cross2 circle [0.0,0.0] with radius 50.0)
+set remoteArea to the cad enclosed area of (cross2 circle [512345.678,4512345.678] with radius 50.0)
+check area2 near remoteArea to localArea within (1e-6 * localArea)
+print "survey_coordinates_measure_the_same_area" as a line

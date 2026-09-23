@@ -1,0 +1,56 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/arrangement2/main.dl
+
+function arrangement2 local faces:
+    execute:
+        set source to arrangement2 rectangle wide 4.0 high 3.0
+        set result to the cad bounded faces of source within (a cad tolerance of 1e-6)
+        free source
+        return result
+function arrangement2 local edges:
+    execute:
+        set source to arrangement2 rectangle wide 4.0 high 3.0
+        set tagged to an empty list of a cad tagged line2
+        loop index from 0 to 4:
+            set tag to (18446744073709551615 as a 64 bit unsigned integer) - (index as a 64 bit unsigned integer)
+            append (a cad tagged line2 from (the item at index in source) with tag tag) to tagged
+        # A reversed duplicate has a different tag: the first edge wins.
+        set first to the item at 0 in source
+        append (a cad tagged line2 from (a cad line2 from first's end to first's start) with tag (7 as a 64 bit unsigned integer)) to tagged
+        set result to the cad bounded face edges of tagged within (a cad tolerance of 1e-6)
+        free source
+        free tagged
+        return result
+
+loop repetition from 0 to 24:
+    set originalFaces to arrangement2 local faces
+    set retainedFaces to originalFaces
+    set copiedFaces to the cad clone of originalFaces
+    set originalFaces to a new (the type of originalFaces)
+    check arrangement2 ((the length of retainedFaces's rings) = 1)
+    set retainedRing to the item at 0 in retainedFaces's rings
+    set copiedRing to the item at 0 in copiedFaces's rings
+    check arrangement2 (retainedRing != copiedRing)
+    arrangement2 near (the cad signed area of retainedRing) to 12.0 within 1e-12
+    # Deliberate test-only mutation verifies that clone storage is independent.
+    replace item at index 0 in copiedRing with (cross2 point [100.0,100.0])
+    arrangement2 near (the cad signed area of retainedRing) to 12.0 within 1e-12
+    set edges to arrangement2 local edges
+    set retainedEdges to edges
+    set clonedEdges to the cad clone of edges
+    set edges to a new (the type of edges)
+    set boundary to the item at 0 in retainedEdges's rings
+    check arrangement2 ((the length of boundary) = 4)
+    arrangement2 near (the cad signed area of boundary) to 12.0 within 1e-12
+    loop index from 0 to 4:
+        set edge to the item at index in boundary
+        check arrangement2 (edge's tag >= ((18446744073709551615 as a 64 bit unsigned integer) - (3 as a 64 bit unsigned integer)))
+    check arrangement2 ((the item at 0 in clonedEdges's rings) != boundary)
+print "nested face and tagged edge storage survives returns copies resets and clones" as a line
+
+set emptyLines to an empty list of a cad line2
+set empty to the cad bounded faces of emptyLines within (a cad tolerance of 1e-6)
+free emptyLines
+set emptyCopy to the cad clone of empty
+check arrangement2 ((the length of emptyCopy's rings) = 0)
+print "empty region results own valid cloneable storage" as a line

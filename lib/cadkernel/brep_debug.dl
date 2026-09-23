@@ -1,0 +1,446 @@
+# SPDX-License-Identifier: MPL-2.0
+# Structural diagnostics for the native B-rep foundation.
+# Returned strings own their bytes. Formatting borrows all geometry and arenas.
+# Binary64 scalars use 17 significant digits, including signed zero/non-finites.
+# Native field spelling and numeric text are diagnostic, not a serialization ABI.
+import lib/cadkernel/brep_topology.dl
+import lib/cadkernel/transform2.dl
+
+function the cad debug text of {cad transform2:value}:
+    execute:
+        set result to (the string form of "Transform2 { xAxis: ") + (the cad debug text of value's xAxis)
+        set result to (result + (the string form of ", yAxis: ")) + (the cad debug text of value's yAxis)
+        set result to (result + (the string form of ", origin: ")) + (the cad debug text of value's origin)
+        return result + (the string form of " }")
+
+function the cad debug text of {floating-point number:value}:
+    execute:
+        set result to a new string buffer containing 64 bytes
+        set count to @intrinsic("variadic call", "libc", "snprintf", an integer, 3, result's data, 64 as a word sized unsigned integer, "%.17g", value as a 64 bit floating-point number)
+        if (count < 0) or (count >= 64):
+            @intrinsic("call", "libc", "abort", nothing)
+        set result's length to count
+        return result
+
+function the cad debug text of {integer:value}:
+    execute:
+        return the string form of value
+
+function the cad debug text of {unsigned integer:value}:
+    execute:
+        return the string form of value
+
+function the cad debug text of {boolean:value}:
+    execute:
+        return the string form of value
+
+function the cad debug text of {a pointer to a list:items}:
+    execute:
+        set result to the string form of "["
+        if items != (0 as the type of items):
+            loop index from 0 to the length of items:
+                if index > 0:
+                    set result to result + (the string form of ", ")
+                set result to result + (the cad debug text of (the item at index in items))
+        return result + (the string form of "]")
+
+function the cad debug text of {cad topology list:items}:
+    execute:
+        return the cad debug text of items's values
+
+function the cad debug text of {cad source reference:value}:
+    execute:
+        return ((the string form of "SourceRef(") + (the string form of value's index)) + (the string form of ")")
+
+function the cad debug text of {cad provenance:value}:
+    execute:
+        if value's kind = 0:
+            return the string form of "Synthesized"
+        set label to the string form of "Clean("
+        if value's kind = 2:
+            set label to the string form of "Dirty("
+        return (label + (the cad debug text of value's reference)) + (the string form of ")")
+
+function the cad debug text of {cad pcurve result:value}:
+    execute:
+        if value's valid = false:
+            return the string form of "None"
+        return ((the string form of "Some(") + (the cad debug text of value's value)) + (the string form of ")")
+
+function the cad debug text of {cad vector2:value}:
+    execute:
+        set result to the string form of "["
+        set result to result + (the cad debug text of value's x)
+        set result to result + (the string form of ", ")
+        set result to result + (the cad debug text of value's y)
+        return result + (the string form of "]")
+
+function the cad debug text of {cad vector3:value}:
+    execute:
+        set result to the string form of "["
+        set result to result + (the cad debug text of value's x)
+        set result to result + (the string form of ", ")
+        set result to result + (the cad debug text of value's y)
+        set result to result + (the string form of ", ")
+        set result to result + (the cad debug text of value's z)
+        return result + (the string form of "]")
+
+function the cad debug text of {cad plane:value}:
+    execute:
+        set result to the string form of "Plane { "
+        set result to (result + (the string form of "origin: ")) + (the cad debug text of (value's origin))
+        set result to (result + (the string form of ", xAxis: ")) + (the cad debug text of (value's xAxis))
+        set result to (result + (the string form of ", yAxis: ")) + (the cad debug text of (value's yAxis))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad line2:value}:
+    execute:
+        set result to the string form of "Line2 { "
+        set result to (result + (the string form of "start: ")) + (the cad debug text of (value's start))
+        set result to (result + (the string form of ", end: ")) + (the cad debug text of (value's end))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad circle2:value}:
+    execute:
+        set result to the string form of "Circle2 { "
+        set result to (result + (the string form of "centre: ")) + (the cad debug text of (value's centre))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad arc2:value}:
+    execute:
+        set result to the string form of "Arc2 { "
+        set result to (result + (the string form of "centre: ")) + (the cad debug text of (value's centre))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        set result to (result + (the string form of ", startAngle: ")) + (the cad debug text of (value's startAngle))
+        set result to (result + (the string form of ", endAngle: ")) + (the cad debug text of (value's endAngle))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad ellipse:value}:
+    execute:
+        set result to the string form of "Ellipse { "
+        set result to (result + (the string form of "centre: ")) + (the cad debug text of (value's centre))
+        set result to (result + (the string form of ", majorRadius: ")) + (the cad debug text of (value's majorRadius))
+        set result to (result + (the string form of ", minorRadius: ")) + (the cad debug text of (value's minorRadius))
+        set result to (result + (the string form of ", majorAxis: ")) + (the cad debug text of (value's majorAxis))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad ellipse arc2:value}:
+    execute:
+        set result to the string form of "EllipseArc2 { "
+        set result to (result + (the string form of "ellipse: ")) + (the cad debug text of (value's ellipse))
+        set result to (result + (the string form of ", startParameter: ")) + (the cad debug text of (value's startParameter))
+        set result to (result + (the string form of ", endParameter: ")) + (the cad debug text of (value's endParameter))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad ray2:value}:
+    execute:
+        set result to the string form of "Ray2 { "
+        set result to (result + (the string form of "origin: ")) + (the cad debug text of (value's origin))
+        set result to (result + (the string form of ", direction: ")) + (the cad debug text of (value's direction))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad xline2:value}:
+    execute:
+        set result to the string form of "XLine2 { "
+        set result to (result + (the string form of "base: ")) + (the cad debug text of (value's base))
+        set result to (result + (the string form of ", direction: ")) + (the cad debug text of (value's direction))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad polyline vertex2:value}:
+    execute:
+        set result to the string form of "PolylineVertex2 { "
+        set result to (result + (the string form of "position: ")) + (the cad debug text of (value's position))
+        set result to (result + (the string form of ", bulge: ")) + (the cad debug text of (value's bulge))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad polyline2:value}:
+    execute:
+        set result to the string form of "Polyline2 { "
+        set result to (result + (the string form of "vertices: ")) + (the cad debug text of (value's vertices))
+        set result to (result + (the string form of ", closed: ")) + (the cad debug text of (value's closed))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad nurbs curve2:value}:
+    execute:
+        set result to the string form of "NurbsCurve2 { "
+        set result to (result + (the string form of "degree: ")) + (the cad debug text of (value's degree))
+        set result to (result + (the string form of ", controls: ")) + (the cad debug text of (value's controls))
+        set result to (result + (the string form of ", knots: ")) + (the cad debug text of (value's knots))
+        set result to (result + (the string form of ", weights: ")) + (the cad debug text of (value's weights))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad nurbs curve3:value}:
+    execute:
+        set result to the string form of "NurbsCurve3 { "
+        set result to (result + (the string form of "degree: ")) + (the cad debug text of (value's degree))
+        set result to (result + (the string form of ", controls: ")) + (the cad debug text of (value's controls))
+        set result to (result + (the string form of ", knots: ")) + (the cad debug text of (value's knots))
+        set result to (result + (the string form of ", weights: ")) + (the cad debug text of (value's weights))
+        set result to (result + (the string form of ", closed: ")) + (the cad debug text of (value's closed))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad nurbs surface3:value}:
+    execute:
+        set result to the string form of "NurbsSurface3 { "
+        set result to (result + (the string form of "uDegree: ")) + (the cad debug text of (value's uDegree))
+        set result to (result + (the string form of ", vDegree: ")) + (the cad debug text of (value's vDegree))
+        set result to (result + (the string form of ", controls: ")) + (the cad debug text of (value's controls))
+        set result to (result + (the string form of ", uKnots: ")) + (the cad debug text of (value's uKnots))
+        set result to (result + (the string form of ", vKnots: ")) + (the cad debug text of (value's vKnots))
+        set result to (result + (the string form of ", weights: ")) + (the cad debug text of (value's weights))
+        set result to (result + (the string form of ", uClosed: ")) + (the cad debug text of (value's uClosed))
+        set result to (result + (the string form of ", vClosed: ")) + (the cad debug text of (value's vClosed))
+        set result to (result + (the string form of ", vReversed: ")) + (the cad debug text of (value's vReversed))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad cylinder:value}:
+    execute:
+        set result to the string form of "Cylinder { "
+        set result to (result + (the string form of "base: ")) + (the cad debug text of (value's base))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad cone:value}:
+    execute:
+        set result to the string form of "Cone { "
+        set result to (result + (the string form of "base: ")) + (the cad debug text of (value's base))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        set result to (result + (the string form of ", halfAngle: ")) + (the cad debug text of (value's halfAngle))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad sphere:value}:
+    execute:
+        set result to the string form of "Sphere { "
+        set result to (result + (the string form of "frame: ")) + (the cad debug text of (value's frame))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad torus:value}:
+    execute:
+        set result to the string form of "Torus { "
+        set result to (result + (the string form of "frame: ")) + (the cad debug text of (value's frame))
+        set result to (result + (the string form of ", majorRadius: ")) + (the cad debug text of (value's majorRadius))
+        set result to (result + (the string form of ", minorRadius: ")) + (the cad debug text of (value's minorRadius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad line3:value}:
+    execute:
+        set result to the string form of "Line3 { "
+        set result to (result + (the string form of "origin: ")) + (the cad debug text of (value's origin))
+        set result to (result + (the string form of ", direction: ")) + (the cad debug text of (value's direction))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad circle3:value}:
+    execute:
+        set result to the string form of "Circle3 { "
+        set result to (result + (the string form of "plane: ")) + (the cad debug text of (value's plane))
+        set result to (result + (the string form of ", radius: ")) + (the cad debug text of (value's radius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad ellipse3:value}:
+    execute:
+        set result to the string form of "Ellipse3 { "
+        set result to (result + (the string form of "plane: ")) + (the cad debug text of (value's plane))
+        set result to (result + (the string form of ", majorRadius: ")) + (the cad debug text of (value's majorRadius))
+        set result to (result + (the string form of ", minorRadius: ")) + (the cad debug text of (value's minorRadius))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad planar spline3:value}:
+    execute:
+        set result to the string form of "PlanarSpline3 { "
+        set result to (result + (the string form of "plane: ")) + (the cad debug text of (value's plane))
+        set result to (result + (the string form of ", curve: ")) + (the cad debug text of (value's curve))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad vertex:value}:
+    execute:
+        set result to the string form of "Vertex { "
+        set result to (result + (the string form of "point: ")) + (the cad debug text of (value's point))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad edge:value}:
+    execute:
+        set result to the string form of "Edge { "
+        set result to (result + (the string form of "curve: ")) + (the cad debug text of (value's curve))
+        set result to (result + (the string form of ", startParameter: ")) + (the cad debug text of (value's startParameter))
+        set result to (result + (the string form of ", endParameter: ")) + (the cad debug text of (value's endParameter))
+        set result to (result + (the string form of ", start: ")) + (the cad debug text of (value's start))
+        set result to (result + (the string form of ", end: ")) + (the cad debug text of (value's end))
+        set result to (result + (the string form of ", coedges: ")) + (the cad debug text of (value's coedges))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad coedge:value}:
+    execute:
+        set result to the string form of "Coedge { "
+        set result to (result + (the string form of "edge: ")) + (the cad debug text of (value's edge))
+        set result to (result + (the string form of ", forward: ")) + (the cad debug text of (value's forward))
+        set result to (result + (the string form of ", pcurve: ")) + (the cad debug text of (value's pcurve))
+        set result to (result + (the string form of ", owner: ")) + (the cad debug text of (value's owner))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad loop:value}:
+    execute:
+        set result to the string form of "Loop { "
+        set result to (result + (the string form of "coedges: ")) + (the cad debug text of (value's coedges))
+        set result to (result + (the string form of ", owner: ")) + (the cad debug text of (value's owner))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad face:value}:
+    execute:
+        set result to the string form of "Face { "
+        set result to (result + (the string form of "surface: ")) + (the cad debug text of (value's surface))
+        set result to (result + (the string form of ", forward: ")) + (the cad debug text of (value's forward))
+        set result to (result + (the string form of ", loops: ")) + (the cad debug text of (value's loops))
+        set result to (result + (the string form of ", owner: ")) + (the cad debug text of (value's owner))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad shell:value}:
+    execute:
+        set result to the string form of "Shell { "
+        set result to (result + (the string form of "faces: ")) + (the cad debug text of (value's faces))
+        set result to (result + (the string form of ", owner: ")) + (the cad debug text of (value's owner))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad lump:value}:
+    execute:
+        set result to the string form of "Lump { "
+        set result to (result + (the string form of "shells: ")) + (the cad debug text of (value's shells))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad body:value}:
+    execute:
+        set result to the string form of "Body { "
+        set result to (result + (the string form of "vertices: ")) + (the cad debug text of (value's vertices))
+        set result to (result + (the string form of ", edges: ")) + (the cad debug text of (value's edges))
+        set result to (result + (the string form of ", coedges: ")) + (the cad debug text of (value's coedges))
+        set result to (result + (the string form of ", loops: ")) + (the cad debug text of (value's loops))
+        set result to (result + (the string form of ", faces: ")) + (the cad debug text of (value's faces))
+        set result to (result + (the string form of ", shells: ")) + (the cad debug text of (value's shells))
+        set result to (result + (the string form of ", lumps: ")) + (the cad debug text of (value's lumps))
+        set result to (result + (the string form of ", surfaces: ")) + (the cad debug text of (value's surfaces))
+        set result to (result + (the string form of ", curves: ")) + (the cad debug text of (value's curves))
+        set result to (result + (the string form of ", roots: ")) + (the cad debug text of (value's roots))
+        set result to (result + (the string form of ", provenance: ")) + (the cad debug text of (value's provenance))
+        return result + (the string form of " }")
+
+function the cad debug text of {cad curve2:value}:
+    execute:
+        if value's kind = 0:
+            return the cad debug text of (value's line)
+        if value's kind = 1:
+            return the cad debug text of (value's circle)
+        if value's kind = 2:
+            return the cad debug text of (value's arc)
+        if value's kind = 3:
+            return the cad debug text of (value's ellipse)
+        if value's kind = 4:
+            return the cad debug text of (value's polyline)
+        if value's kind = 5:
+            return the cad debug text of (value's nurbs)
+        if value's kind = 6:
+            return the cad debug text of (value's ray)
+        if value's kind = 7:
+            return the cad debug text of (value's xline)
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function the cad debug text of {cad surface:value}:
+    execute:
+        if value's kind = 0:
+            return the cad debug text of (value's plane)
+        if value's kind = 1:
+            return the cad debug text of (value's cylinder)
+        if value's kind = 2:
+            return the cad debug text of (value's cone)
+        if value's kind = 3:
+            return the cad debug text of (value's sphere)
+        if value's kind = 4:
+            return the cad debug text of (value's torus)
+        if value's kind = 5:
+            return the cad debug text of (value's nurbs)
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function the cad debug text of {cad edge curve3:value}:
+    execute:
+        if value's kind = 0:
+            return the cad debug text of (value's line)
+        if value's kind = 1:
+            return the cad debug text of (value's circle)
+        if value's kind = 2:
+            return the cad debug text of (value's ellipse)
+        if value's kind = 3:
+            return the cad debug text of (value's planar)
+        if value's kind = 4:
+            return the cad debug text of (value's nurbs)
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function the cad debug text of {cad topology flaw:value}:
+    execute:
+        if value's kind = 0:
+            return (the string form of "DanglingKey: ") + value's message
+        if value's kind = 1:
+            return (the string form of "BrokenOwnership: ") + value's message
+        if value's kind = 2:
+            return ((the string form of "EmptyLump(") + (the cad debug text of value's lump)) + (the string form of ")")
+        if value's kind = 3:
+            return ((the string form of "EmptyShell(") + (the cad debug text of value's shell)) + (the string form of ")")
+        if value's kind = 4:
+            return ((the string form of "UnboundedFace(") + (the cad debug text of value's face)) + (the string form of ")")
+        if value's kind = 5:
+            return ((the string form of "DegenerateLoop(") + (the cad debug text of value's ring)) + (the string form of ")")
+        if value's kind = 6:
+            return ((the string form of "OpenLoop(") + (the cad debug text of value's ring)) + (the string form of ")")
+        if value's kind = 7:
+            return ((the string form of "UnusedEdge(") + (the cad debug text of value's edge)) + (the string form of ")")
+        if value's kind = 8:
+            return ((the string form of "NonManifoldEdge(") + (the cad debug text of value's edge)) + (the string form of ")")
+        if value's kind = 9:
+            return ((the string form of "SameSidedEdge(") + (the cad debug text of value's edge)) + (the string form of ")")
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function the cad payload debug text of {cad vertex:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad edge:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad coedge:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad loop:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad face:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad shell:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad lump:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad surface:value}:
+    execute:
+        return the cad debug text of value
+
+function the cad payload debug text of {cad edge curve3:value}:
+    execute:
+        return the cad debug text of value

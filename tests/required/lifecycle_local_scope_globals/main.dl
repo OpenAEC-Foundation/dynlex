@@ -1,0 +1,39 @@
+import lib/std.dl
+
+function advance shared counter:
+    globals: marker
+    execute:
+        increment marker
+
+function the shared counter:
+    globals: marker
+    execute:
+        return marker
+
+function the independent counter:
+    execute:
+        set marker to 99
+        return marker
+
+class:
+    patterns:
+        [a|] global name probe
+    members:
+        tag as an integer
+    retain:
+        set marker to 11
+    release:
+        set marker to 22
+
+function exercise global shadow:
+    execute:
+        set held to @intrinsic("construct", a global name probe, 0)
+        ignore held
+
+set marker to 40
+exercise global shadow
+print (the shared counter) as a line
+advance shared counter
+print (the shared counter) as a line
+print (the independent counter) as a line
+print (the shared counter) as a line

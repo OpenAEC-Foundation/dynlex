@@ -1,0 +1,190 @@
+# SPDX-License-Identifier: MPL-2.0
+# Fixtures adapted from cadkernel 953d546b68aef4b6692566a1a9b077fc5bd9fb4f:
+# src/geom2d/vec.rs and src/space/vec.rs; additional independent edge cases.
+import lib/cadkernel/core.dl
+
+function cad check {boolean:condition} named {string:label}:
+    execute:
+        if the inverse of condition:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function cad check scalar {a number:actual} against {a number:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad check ((the absolute value of (actual - expected)) <= tolerance) named label
+
+function cad check vector {cad vector2:actual} against {cad vector2:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad check scalar (the x of actual) against (the x of expected) within tolerance named label
+        cad check scalar (the y of actual) against (the y of expected) within tolerance named label
+
+function cad check vector {cad vector3:actual} against {cad vector3:expected} within {a number:tolerance} named {string:label}:
+    execute:
+        cad check scalar (the x of actual) against (the x of expected) within tolerance named label
+        cad check scalar (the y of actual) against (the y of expected) within tolerance named label
+        cad check scalar (the z of actual) against (the z of expected) within tolerance named label
+
+set zero2 to the cad zero vector2
+set a2 to a cad vector2 with x 1 and y 2
+set b2 to a cad vector2 with x 10 and y 20
+set axis2 to a cad vector2 with x 1 and y 0
+set up2 to a cad vector2 with x 0 and y 1
+cad check ((the size of the type of the x of a2) = 8) named "2D binary64"
+cad check vector (the cad sum of a2 and b2) against (a cad vector2 with x 11 and y 22) within 0 named "2D sum"
+cad check vector (the cad difference of b2 and a2) against (a cad vector2 with x 9 and y 18) within 0 named "2D difference"
+cad check vector (a2 scaled by 3) against (a cad vector2 with x 3 and y 6) within 0 named "2D scale"
+cad check vector (b2 cad divided by 2) against (a cad vector2 with x 5 and y 10) within 0 named "2D divide"
+cad check vector (the cad negative of a2) against (a cad vector2 with x (-1) and y (-2)) within 0 named "2D negative"
+cad check scalar (the cad dot of axis2 and axis2) against 1 within 0 named "2D aligned dot"
+cad check scalar (the cad dot of axis2 and up2) against 0 within 0 named "2D perpendicular dot"
+cad check scalar (the cad dot of axis2 and (the cad negative of axis2)) against (-1) within 0 named "2D opposed dot"
+cad check scalar (the cad cross of axis2 and up2) against 1 within 0 named "2D positive orientation"
+cad check scalar (the cad cross of up2 and axis2) against (-1) within 0 named "2D reversed orientation"
+cad check scalar (the cad cross of axis2 and (axis2 scaled by 2)) against 0 within 0 named "2D parallel cross"
+cad check scalar (the cad cross of (axis2 scaled by 4) and (up2 scaled by 3)) against 12 within 0 named "2D triangle area"
+set p2 to a cad vector2 with x 1 and y 1
+set q2 to a cad vector2 with x 4 and y 5
+cad check scalar (the cad length of (the cad difference of q2 and p2)) against 5 within 0 named "2D length"
+cad check scalar (the cad squared length of (the cad difference of q2 and p2)) against 25 within 0 named "2D squared length"
+cad check scalar (the cad distance from p2 to q2) against 5 within 0 named "2D distance"
+cad check scalar (the cad squared distance from p2 to q2) against 25 within 0 named "2D squared distance"
+set normalized2 to the cad normalization of (a cad vector2 with x 3 and y 4)
+cad check (the valid of normalized2) named "2D normalization valid"
+cad check vector (the value of normalized2) against (a cad vector2 with x 0.6 and y 0.8) within 1e-15 named "2D normalized coordinates"
+cad check scalar (the cad length of (the value of normalized2)) against 1 within 1e-15 named "2D unit length"
+set empty2 to the cad normalization of zero2
+cad check ((the valid of empty2) = false) named "2D zero normalization invalid"
+cad check vector (the value of empty2) against zero2 within 0 named "2D invalid payload initialized"
+cad check vector (the cad perpendicular of axis2) against up2 within 0 named "2D perpendicular"
+cad check vector (the cad perpendicular of a2) against (a cad vector2 with x (-2) and y 1) within 0 named "2D general perpendicular"
+cad check scalar (the cad angle of axis2) against 0 within 0 named "2D angle X"
+cad check scalar (the cad angle of up2) against 1.5707963267948966 within 1e-15 named "2D angle Y"
+cad check scalar (the cad angle of (the cad negative of up2)) against (-1.5707963267948966) within 1e-15 named "2D angle negative Y"
+cad check scalar (the cad angle of (a cad vector2 with x (-1) and y 1)) against 2.356194490192345 within 1e-15 named "2D angle quadrant II"
+cad check vector (the cad lerp from zero2 to b2 at 0) against zero2 within 0 named "2D lerp start"
+cad check vector (the cad lerp from zero2 to b2 at 1) against b2 within 0 named "2D lerp end"
+cad check vector (the cad lerp from zero2 to b2 at 0.5) against (a cad vector2 with x 5 and y 10) within 0 named "2D lerp midpoint"
+cad check vector (the cad lerp from a2 to b2 at (-1)) against (a cad vector2 with x (-8) and y (-16)) within 0 named "2D lerp extrapolation"
+set end2 to a cad vector2 with x 10 and y 0
+cad check scalar (the cad distance from (a cad vector2 with x 4 and y 3) to the segment from zero2 to end2) against 3 within 0 named "2D segment interior"
+cad check scalar (the cad distance from (a cad vector2 with x 14 and y 3) to the segment from zero2 to end2) against 5 within 0 named "2D segment beyond end"
+cad check scalar (the cad distance from (a cad vector2 with x (-4) and y 3) to the segment from zero2 to end2) against 5 within 0 named "2D segment before start"
+cad check scalar (the cad distance from (a cad vector2 with x 4 and y 3) to the segment from end2 to zero2) against 3 within 0 named "2D segment reversed"
+set collapsed2 to a cad vector2 with x 3 and y 4
+cad check scalar (the cad distance from zero2 to the segment from collapsed2 to collapsed2) against 5 within 0 named "2D collapsed segment"
+set short2 to a cad vector2 with x 5e-13 and y 0
+cad check scalar (the cad distance from short2 to the segment from zero2 to short2) against 5e-13 within 1e-28 named "2D short segment collapses to start"
+set boundary2 to a cad vector2 with x 1e-12 and y 0
+cad check scalar (the cad distance from boundary2 to the segment from zero2 to boundary2) against 0 within 0 named "2D exact threshold segment retains end"
+set survey2 to a cad vector2 with x 512345.678 and y 4512345.678
+set nearby2 to the cad sum of survey2 and (a cad vector2 with x 0.001 and y 0)
+cad check scalar (the cad distance from survey2 to nearby2) against 0.001 within 1e-9 named "2D survey precision"
+set tiny2 to the cad normalization of (a cad vector2 with x 1e-200 and y 0)
+cad check ((the valid of tiny2) = false) named "2D squared length underflow invalid"
+set small2 to the cad normalization of (a cad vector2 with x 1e-150 and y 0)
+cad check (the valid of small2) named "2D small representable length valid"
+cad check vector (the value of small2) against axis2 within 1e-15 named "2D small normalized value"
+print "cadkernel vector2 fixtures passed" as a line
+
+set zero3 to the cad zero vector3
+set x3 to the cad x axis
+set y3 to the cad y axis
+set z3 to the cad z axis
+set a3 to a cad vector3 with x 1, y 2 and z 3
+set b3 to a cad vector3 with x 10, y 20 and z 30
+cad check ((the size of the type of the z of a3) = 8) named "3D binary64"
+cad check vector (the cad sum of a3 and b3) against (a cad vector3 with x 11, y 22 and z 33) within 0 named "3D sum"
+cad check vector (the cad difference of b3 and a3) against (a cad vector3 with x 9, y 18 and z 27) within 0 named "3D difference"
+cad check vector (a3 scaled by 3) against (a cad vector3 with x 3, y 6 and z 9) within 0 named "3D scale"
+cad check vector (b3 cad divided by 2) against (a cad vector3 with x 5, y 10 and z 15) within 0 named "3D divide"
+cad check vector (the cad negative of a3) against (a cad vector3 with x (-1), y (-2) and z (-3)) within 0 named "3D negative"
+cad check scalar (the cad dot of a3 and (a cad vector3 with x (-4), y 5 and z 6)) against 24 within 0 named "3D general dot"
+cad check vector (the cad cross of x3 and y3) against z3 within 0 named "3D X cross Y"
+cad check vector (the cad cross of y3 and z3) against x3 within 0 named "3D Y cross Z"
+cad check vector (the cad cross of z3 and x3) against y3 within 0 named "3D Z cross X"
+cad check vector (the cad cross of y3 and x3) against (the cad negative of z3) within 0 named "3D reversed cross"
+set other3 to a cad vector3 with x (-4), y 5 and z 6
+set normal3 to the cad cross of a3 and other3
+cad check vector normal3 against (a cad vector3 with x (-3), y (-18) and z 13) within 0 named "3D general cross"
+cad check scalar (the cad dot of normal3 and a3) against 0 within 1e-12 named "3D normal perpendicular to first"
+cad check scalar (the cad dot of normal3 and other3) against 0 within 1e-12 named "3D normal perpendicular to second"
+cad check vector (the cad cross of a3 and (a3 scaled by 2.5)) against zero3 within 0 named "3D parallel cross"
+set q3 to a cad vector3 with x 1, y 6 and z 6
+cad check scalar (the cad length of (the cad difference of q3 and a3)) against 5 within 0 named "3D length"
+cad check scalar (the cad squared length of (the cad difference of q3 and a3)) against 25 within 0 named "3D squared length"
+cad check scalar (the cad distance from a3 to q3) against 5 within 0 named "3D distance"
+cad check scalar (the cad squared distance from a3 to q3) against 25 within 0 named "3D squared distance"
+set normalized3 to the cad normalization of (a cad vector3 with x 0, y 3 and z 4)
+cad check (the valid of normalized3) named "3D normalization valid"
+cad check vector (the value of normalized3) against (a cad vector3 with x 0, y 0.6 and z 0.8) within 1e-15 named "3D normalized coordinates"
+cad check scalar (the cad length of (the value of normalized3)) against 1 within 1e-15 named "3D unit length"
+set empty3 to the cad normalization of zero3
+cad check ((the valid of empty3) = false) named "3D zero normalization invalid"
+cad check vector (the value of empty3) against zero3 within 0 named "3D invalid payload initialized"
+cad check (cad a3 is parallel to (a3 scaled by 1e6) within 1e-12) named "3D scale independent parallel"
+cad check (cad a3 is parallel to (the cad negative of a3) within 1e-12) named "3D antiparallel"
+cad check ((cad a3 is parallel to (a cad vector3 with x 3, y 2 and z 1) within 1e-12) = false) named "3D nonparallel"
+cad check ((cad a3 is parallel to zero3 within 1) = false) named "3D zero right not parallel"
+cad check ((cad zero3 is parallel to a3 within 1) = false) named "3D zero left not parallel"
+cad check (cad x3 is parallel to y3 within 1) named "3D inclusive sine tolerance"
+cad check ((cad x3 is parallel to y3 within 0.999) = false) named "3D below sine tolerance"
+cad check ((cad x3 is parallel to x3 within (-1)) = false) named "3D negative tolerance"
+cad check vector (the cad lerp from zero3 to b3 at 0) against zero3 within 0 named "3D lerp start"
+cad check vector (the cad lerp from zero3 to b3 at 1) against b3 within 0 named "3D lerp end"
+cad check vector (the cad lerp from zero3 to b3 at 0.5) against (a cad vector3 with x 5, y 10 and z 15) within 0 named "3D lerp midpoint"
+cad check vector (the cad lerp from a3 to b3 at 2) against (a cad vector3 with x 19, y 38 and z 57) within 0 named "3D lerp extrapolation"
+set end3 to a cad vector3 with x 10, y 0 and z 0
+set beside3 to a cad vector3 with x 4, y 0 and z 3
+cad check scalar (the cad distance from beside3 to the segment from zero3 to end3) against 3 within 0 named "3D segment interior"
+cad check scalar (the cad distance from (a cad vector3 with x 14, y 0 and z 3) to the segment from zero3 to end3) against 5 within 0 named "3D segment beyond end"
+cad check scalar (the cad distance from (a cad vector3 with x (-4), y 0 and z 3) to the segment from zero3 to end3) against 5 within 0 named "3D segment before start"
+cad check scalar (the cad distance from beside3 to the segment from end3 to zero3) against 3 within 0 named "3D segment reversed"
+set collapsed3 to a cad vector3 with x 0, y 3 and z 4
+cad check scalar (the cad distance from zero3 to the segment from collapsed3 to collapsed3) against 5 within 0 named "3D collapsed segment"
+set short3 to a cad vector3 with x 0, y 0 and z 5e-13
+cad check scalar (the cad distance from short3 to the segment from zero3 to short3) against 5e-13 within 1e-28 named "3D short segment collapses to start"
+set boundary3 to a cad vector3 with x 0, y 0 and z 1e-12
+cad check scalar (the cad distance from boundary3 to the segment from zero3 to boundary3) against 0 within 0 named "3D exact threshold segment retains end"
+set survey3 to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set nearby3 to the cad sum of survey3 and (a cad vector3 with x 0.001, y 0 and z 0)
+cad check scalar (the cad distance from survey3 to nearby3) against 0.001 within 1e-9 named "3D survey precision"
+set tiny3 to the cad normalization of (a cad vector3 with x 1e-200, y 0 and z 0)
+cad check ((the valid of tiny3) = false) named "3D squared length underflow invalid"
+cad check (cad a3 is finite) named "3D finite"
+print "cadkernel vector3 fixtures passed" as a line
+
+# IEEE cases preserve upstream behavior, including Some(nonfinite) normalization.
+set inf to 1e308 * 1e308
+set nan to inf - inf
+set bad2 to a cad vector2 with x nan and y 0
+set bad3 to a cad vector3 with x nan, y 0 and z 0
+set nanNorm2 to the cad normalization of bad2
+set nanNorm3 to the cad normalization of bad3
+cad check ((the valid of nanNorm2) = false) named "2D NaN normalization invalid"
+cad check ((the valid of nanNorm3) = false) named "3D NaN normalization invalid"
+cad check ((cad bad3 is finite) = false) named "3D NaN not finite"
+cad check ((cad (a cad vector3 with x inf, y 0 and z 0) is finite) = false) named "3D X infinity not finite"
+cad check ((cad (a cad vector3 with x 0, y (0 - inf) and z 0) is finite) = false) named "3D Y negative infinity not finite"
+cad check ((cad (a cad vector3 with x 0, y 0 and z inf) is finite) = false) named "3D Z infinity not finite"
+cad check (cad (a cad vector3 with x 1.7976931348623157e308, y 0 and z 0) is finite) named "3D maximum f64 finite"
+set infNorm2 to the cad normalization of (a cad vector2 with x inf and y 0)
+set infNorm3 to the cad normalization of (a cad vector3 with x inf, y 0 and z 0)
+cad check (the valid of infNorm2) named "2D infinite length normalization valid"
+cad check (the valid of infNorm3) named "3D infinite length normalization valid"
+set infValue2 to the value of infNorm2
+set infValue3 to the value of infNorm3
+cad check ((the x of infValue2) != (the x of infValue2)) named "2D infinity normalized to NaN"
+cad check ((the x of infValue3) != (the x of infValue3)) named "3D infinity normalized to NaN"
+set overflowNorm2 to the cad normalization of (a cad vector2 with x 1e308 and y 0)
+set overflowNorm3 to the cad normalization of (a cad vector3 with x 1e308, y 0 and z 0)
+cad check (the valid of overflowNorm2) named "2D overflow length normalization valid"
+cad check (the valid of overflowNorm3) named "3D overflow length normalization valid"
+cad check vector (the value of overflowNorm2) against zero2 within 0 named "2D overflow length normalized to zero"
+cad check vector (the value of overflowNorm3) against zero3 within 0 named "3D overflow length normalized to zero"
+cad check ((cad x3 is parallel to x3 within nan) = false) named "3D NaN tolerance"
+cad check ((cad bad3 is parallel to x3 within 1) = false) named "3D NaN not parallel"
+set nanDistance2 to the cad distance from bad2 to the segment from zero2 to end2
+set nanDistance3 to the cad distance from bad3 to the segment from zero3 to end3
+cad check (nanDistance2 != nanDistance2) named "2D segment NaN preserved"
+cad check (nanDistance3 != nanDistance3) named "3D segment NaN preserved"
+print "cadkernel IEEE edge fixtures passed" as a line

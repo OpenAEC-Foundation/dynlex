@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength3.dl
+
+function the arc probe number at {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function emit arc scalar {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit arc flag {boolean:value}:
+    execute:
+        if value:
+            emit arc scalar 1
+        else:
+            emit arc scalar 0
+
+function emit arc point {cad vector3:value}:
+    execute:
+        emit arc scalar (the x of value)
+        emit arc scalar (the y of value)
+        emit arc scalar (the z of value)
+
+set kind to (the arc probe number at 0) as an integer
+set degree to (the arc probe number at 1) as an integer
+set count to (the arc probe number at 2) as an integer
+set knotCount to (the arc probe number at 3) as an integer
+set weightCount to (the arc probe number at 4) as an integer
+set closed to (the arc probe number at 5) != 0.0
+set parameter to the arc probe number at 6
+set distance to the arc probe number at 7
+set points to an empty list of a cad vector3
+set knots to an empty list of a 64 bit floating-point number
+set weights to an empty list of a 64 bit floating-point number
+set cursor to 8
+loop index from 0 to count:
+    append (a cad vector3 with x (the arc probe number at cursor), y (the arc probe number at (cursor + 1)) and z (the arc probe number at (cursor + 2))) to points
+    set cursor to cursor + 3
+loop index from 0 to knotCount:
+    append (the arc probe number at cursor) to knots
+    increment cursor
+loop index from 0 to weightCount:
+    append (the arc probe number at cursor) to weights
+    increment cursor
+set result to the cad arclength curve3 through points with closure closed
+if kind != 0:
+    set spline to the strict cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+    if kind = 2:
+        set spline to the cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+    if the valid of spline:
+        set result to the cad arclength curve3 of ((the value of spline) with cad periodicity closed)
+    else:
+        set the valid of result to false
+free points
+free knots
+free weights
+emit arc flag (the valid of result)
+if the valid of result:
+    set curve to the value of result
+    emit arc scalar (the cad length of curve)
+    emit arc flag (curve is cad closed)
+    emit arc point (the cad point on curve at parameter)
+    emit arc point (the cad tangent of curve at parameter)
+    emit arc scalar (the cad parameter on curve at distance distance)
+    emit arc point (the cad point on curve at distance distance)
+    set copied to the cad clone of curve
+    free cad arclength curve
+    free cad arclength (the value of result)
+    emit arc scalar (the cad length of copied)
+    emit arc point (the cad point on copied at distance distance)

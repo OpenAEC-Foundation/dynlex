@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check nurbs mesh {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function check nurbs mesh winding of {cad mesh:meshValue}:
+    execute:
+        loop triangleIndex from 0 to the length of meshValue's triangles:
+            set triangleValue to the item at triangleIndex in meshValue's triangles
+            set firstPoint to the item at triangleValue's first in meshValue's positions
+            set secondPoint to the item at triangleValue's second in meshValue's positions
+            set thirdPoint to the item at triangleValue's third in meshValue's positions
+            set firstEdge to the cad difference of secondPoint and firstPoint
+            set secondEdge to the cad difference of thirdPoint and firstPoint
+            set crossValue to the cad cross of firstEdge and secondEdge
+            set edgeScale to the maximum of (the cad length of firstEdge) and (the cad length of secondEdge)
+            if (the cad length of crossValue) > ((2.842170943040401e-14 * edgeScale) * edgeScale):
+                set geometricNormal to the cad normalization of crossValue
+                set storedNormal to the item at triangleValue's first in meshValue's normals
+                check nurbs mesh ((geometricNormal's valid) and ((the cad dot of geometricNormal's value and storedNormal) > 0.9)) named "outward winding"
+
+set toleranceValue to a cad tessellation tolerance with maximum angle (the cad default sampling angle) within 1e-9
+
+set coneResult to the cad frustum at the cad zero vector3 with base x radius 4.0, base y radius 2.0, top radius 0.0 and height 6.0
+check nurbs mesh coneResult's valid named "elliptical cone"
+set coneDisplay to the cad tessellation of coneResult's value with tolerance toleranceValue
+check nurbs mesh (cad body mesh coneDisplay is complete) named "complete elliptical cone"
+set coneArea to the cad surface area of coneDisplay's mesh
+check nurbs mesh ((coneArea's valid) and ((coneArea's value > 88.0) and (coneArea's value < 90.0))) named "elliptical cone area"
+set coneMass to the cad inertial properties of coneDisplay's mesh
+check nurbs mesh ((coneMass's valid) and ((coneMass's value's volume > 49.5) and (coneMass's value's volume < 50.4))) named "elliptical cone volume"
+check nurbs mesh winding of coneDisplay's mesh
+
+set coarseCone to the cad mesh of coneResult's value with maximum angle 0.5 within 1e-9
+set fineCone to the cad mesh of coneResult's value with maximum angle 0.05 within 1e-9
+check nurbs mesh ((the cad triangle count of fineCone) > (the cad triangle count of coarseCone)) named "elliptical cone refinement"
+free cad mesh coarseCone
+free cad mesh fineCone
+free cad body mesh coneDisplay
+
+set frustumResult to the cad frustum at (a cad vector3 with x 1.0, y -2.0 and z 3.0) with base x radius 4.0, base y radius 2.0, top radius 2.0 and height 6.0
+check nurbs mesh frustumResult's valid named "elliptical frustum"
+set frustumDisplay to the cad tessellation of frustumResult's value with tolerance toleranceValue
+check nurbs mesh (cad body mesh frustumDisplay is complete) named "complete elliptical frustum"
+set frustumArea to the cad surface area of frustumDisplay's mesh
+check nurbs mesh ((frustumArea's valid) and ((frustumArea's value > 119.0) and (frustumArea's value < 122.0))) named "elliptical frustum area"
+set frustumMass to the cad inertial properties of frustumDisplay's mesh
+check nurbs mesh ((frustumMass's valid) and ((frustumMass's value's volume > 87.0) and (frustumMass's value's volume < 89.0))) named "elliptical frustum volume"
+check nurbs mesh winding of frustumDisplay's mesh
+free cad body mesh frustumDisplay
+
+print "cadkernel brep mesh nurbs: PASS" as a line

@@ -1,0 +1,441 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/chamfer_prismatic.rs.
+# The input body and selection are borrowed. Recognized successful results own
+# a newly extruded body; recognized errors own an empty body.
+import lib/cadkernel/brep_chamfer_profile.dl
+import lib/cadkernel/brep_bounds.dl
+import lib/cadkernel/brep_pcurve.dl
+import lib/cadkernel/brep_sweep.dl
+
+class:
+    patterns:
+        [a|] cad prismatic chamfer result
+    members:
+        recognized as a boolean
+        valid as a boolean
+        error as a cad chamfer error
+        value as the type of (an empty cad body)
+
+local function cad prismatic chamfer result recognized {boolean:recognized} valid {boolean:valid} with error {cad chamfer error:error} and body {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad prismatic chamfer result, recognized, valid, error, value)
+local function cad prismatic chamfer not recognized:
+    execute:
+        set error to @intrinsic("construct", a cad chamfer error, cad chamfer no error, a new cad edge key)
+        return cad prismatic chamfer result recognized false valid false with error error and body (an empty cad body)
+local function cad prismatic chamfer failure {cad chamfer error:error}:
+    execute:
+        return cad prismatic chamfer result recognized true valid false with error error and body (an empty cad body)
+local function cad prismatic chamfer invalid result:
+    execute:
+        set error to @intrinsic("construct", a cad chamfer error, cad chamfer invalid result error, a new cad edge key)
+        return cad prismatic chamfer failure error
+local function cad prismatic chamfer success {cad body:value}:
+    execute:
+        set error to @intrinsic("construct", a cad chamfer error, cad chamfer no error, a new cad edge key)
+        return cad prismatic chamfer result recognized true valid true with error error and body value
+
+local function cad prismatic scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function the cad prismatic face keys of {cad body:body}:
+    execute:
+        set raw to the cad face keys of body
+        set result to a cad topology list of a cad face key
+        loop index from 0 to the length of raw:
+            append (the item at index in raw) to result's values
+        free raw
+        return result
+local function the cad prismatic edge keys of {cad body:body}:
+    execute:
+        set raw to the cad edge keys of body
+        set result to a cad topology list of a cad edge key
+        loop index from 0 to the length of raw:
+            append (the item at index in raw) to result's values
+        free raw
+        return result
+local function the cad prismatic vertex keys of {cad body:body}:
+    execute:
+        set raw to the cad vertex keys of body
+        set result to a cad topology list of a cad vertex key
+        loop index from 0 to the length of raw:
+            append (the item at index in raw) to result's values
+        free raw
+        return result
+local function the cad prismatic coedges of {cad face key:face} in {cad body:body}:
+    execute:
+        set raw to the cad face coedges of face in body
+        set result to a cad topology list of a cad coedge key
+        loop index from 0 to the length of raw:
+            append (the item at index in raw) to result's values
+        free raw
+        return result
+local function cad prismatic {a pointer to a list:values} contains edge {cad edge key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function cad prismatic {a pointer to a list:values} contains vertex {cad vertex key:key}:
+    execute:
+        loop index from 0 to the length of values:
+            if (the item at index in values) = key:
+                return true
+        return false
+local function append cad prismatic unique edge {cad edge key:key} to {a pointer to a list:values}:
+    execute:
+        if (cad prismatic values contains edge key) = false:
+            append key to values
+local function append cad prismatic unique vertex {cad vertex key:key} to {a pointer to a list:values}:
+    execute:
+        if (cad prismatic values contains vertex key) = false:
+            append key to values
+
+local function cad prismatic edges {cad edge key:bottomKey} and {cad edge key:topKey} are translated by {cad vector3:shift} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set bottom to the cad node pointer for bottomKey in body
+        set top to the cad node pointer for topKey in body
+        if (bottom = (0 as the type of bottom)) or (top = (0 as the type of top)):
+            return false
+        set first to the cad node pointer for bottom's curve in body
+        set second to the cad node pointer for top's curve in body
+        if (first = (0 as the type of first)) or (second = (0 as the type of second)):
+            return false
+        if (first's kind = 0) and (second's kind = 0):
+            ignore nothing
+        else if (first's kind = 1) and (second's kind = 1):
+            if (the absolute value of (first's circle's radius - second's circle's radius)) > tolerance:
+                return false
+            if (the absolute value of (bottom's endParameter - bottom's startParameter)) >= 6.283185307179586:
+                return false
+            set movedOrigin to the cad sum of first's circle's plane's origin and shift
+            if (the cad distance from movedOrigin to second's circle's plane's origin) > tolerance:
+                return false
+            set firstNormal to the cad normal of first's circle's plane
+            set secondNormal to the cad normal of second's circle's plane
+            if (firstNormal's valid = false) or (secondNormal's valid = false):
+                return false
+            if (the absolute value of (the cad dot of firstNormal's value and secondNormal's value)) < 0.999999999:
+                return false
+            set firstSpan to the absolute value of (bottom's endParameter - bottom's startParameter)
+            set secondSpan to the absolute value of (top's endParameter - top's startParameter)
+            if ((the absolute value of (firstSpan - secondSpan)) * first's circle's radius) > tolerance:
+                return false
+        else:
+            return false
+
+        set from to the cad sum of (the cad point on (@intrinsic("dereference", first)) at bottom's startParameter) and shift
+        set topStart to the cad point on (@intrinsic("dereference", second)) at top's startParameter
+        set topEnd to the cad point on (@intrinsic("dereference", second)) at top's endParameter
+        set reversed to (the cad distance from from to topEnd) < (the cad distance from from to topStart)
+        loop step from 0 to 5:
+            set fraction to (step as a 64 bit floating-point number) * 0.25
+            set parameter to fraction
+            if reversed:
+                set parameter to 1.0 - fraction
+            set firstParameter to bottom's startParameter + fraction * (bottom's endParameter - bottom's startParameter)
+            set secondParameter to top's startParameter + parameter * (top's endParameter - top's startParameter)
+            set firstPoint to the cad sum of (the cad point on (@intrinsic("dereference", first)) at firstParameter) and shift
+            set secondPoint to the cad point on (@intrinsic("dereference", second)) at secondParameter
+            if (the cad distance from firstPoint to secondPoint) > tolerance:
+                return false
+        return true
+
+function the cad prismatic [chamfer] of {cad body:body} along {a pointer to a list:selected} with [base] [face] {cad face key:baseFace}, [base] [distance] {a number:baseDistance} and [other] [distance] {a number:otherDistance}:
+    execute:
+        if (the length of selected) = 0:
+            return cad prismatic chamfer not recognized
+        set firstEdge to the cad node pointer for (the item at 0 in selected) in body
+        if firstEdge = (0 as the type of firstEdge):
+            return cad prismatic chamfer not recognized
+        set firstCurve to the cad node pointer for firstEdge's curve in body
+        if (firstCurve = (0 as the type of firstCurve)) or (firstCurve's kind != 0):
+            return cad prismatic chamfer not recognized
+        set firstStart to the cad node pointer for firstEdge's start in body
+        set firstEnd to the cad node pointer for firstEdge's end in body
+        if (firstStart = (0 as the type of firstStart)) or (firstEnd = (0 as the type of firstEnd)):
+            return cad prismatic chamfer not recognized
+        set normalized to the cad normalization of (the cad difference of firstEnd's point and firstStart's point)
+        if normalized's valid = false:
+            return cad prismatic chamfer not recognized
+        set axis to normalized's value
+
+        set toleranceBodies to a list containing body
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        if (((the length of body's roots) != 1) or ((the cad count of body's lumps) != 1)) or ((the cad count of body's shells) != 1):
+            return cad prismatic chamfer not recognized
+
+        set faceKeys to the cad prismatic face keys of body
+        loop index from 0 to the length of faceKeys's values:
+            set face to the cad node pointer for (the item at index in faceKeys's values) in body
+            if (face = (0 as the type of face)) or ((the length of face's loops's values) != 1):
+                return cad prismatic chamfer not recognized
+        set edgeKeys to the cad prismatic edge keys of body
+        loop index from 0 to the length of edgeKeys's values:
+            set edge to the cad node pointer for (the item at index in edgeKeys's values) in body
+            if (edge = (0 as the type of edge)) or ((the length of edge's coedges's values) != 2):
+                return cad prismatic chamfer not recognized
+            set curve to the cad node pointer for edge's curve in body
+            if (curve = (0 as the type of curve)) or ((curve's kind != 0) and (curve's kind != 1)):
+                return cad prismatic chamfer not recognized
+
+        set capCount to 0
+        set bottomKey to a new cad face key
+        set topKey to a new cad face key
+        set bottomPlane to the cad xy plane
+        set topPlane to the cad xy plane
+        set bottomCoordinate to 0.0
+        set topCoordinate to 0.0
+        loop index from 0 to the length of faceKeys's values:
+            set key to the item at index in faceKeys's values
+            set face to the cad node pointer for key in body
+            set surface to the cad node pointer for face's surface in body
+            if surface = (0 as the type of surface):
+                return cad prismatic chamfer not recognized
+            if surface's kind = 0:
+                set normal to the cad normal of surface's plane
+                if normal's valid = false:
+                    return cad prismatic chamfer not recognized
+                set slope to the absolute value of (the cad dot of normal's value and axis)
+                if slope > 0.999999999:
+                    set coordinate to the cad dot of surface's plane's origin and axis
+                    if capCount = 0:
+                        set bottomKey to key
+                        set topKey to key
+                        set bottomPlane to surface's plane
+                        set topPlane to surface's plane
+                        set bottomCoordinate to coordinate
+                        set topCoordinate to coordinate
+                    else if capCount = 1:
+                        if coordinate < bottomCoordinate:
+                            set topKey to bottomKey
+                            set topPlane to bottomPlane
+                            set topCoordinate to bottomCoordinate
+                            set bottomKey to key
+                            set bottomPlane to surface's plane
+                            set bottomCoordinate to coordinate
+                        else:
+                            set topKey to key
+                            set topPlane to surface's plane
+                            set topCoordinate to coordinate
+                    increment capCount
+                else if slope > 1e-9:
+                    return cad prismatic chamfer not recognized
+            else if surface's kind = 1:
+                set normal to the cad normal of surface's cylinder's base
+                if (normal's valid = false) or ((the absolute value of (the cad dot of normal's value and axis)) <= 0.999999999):
+                    return cad prismatic chamfer not recognized
+            else:
+                return cad prismatic chamfer not recognized
+        if capCount != 2:
+            return cad prismatic chamfer not recognized
+        set height to the cad dot of (the cad difference of topPlane's origin and bottomPlane's origin) and axis
+        if height <= tolerance:
+            return cad prismatic chamfer not recognized
+        set shift to axis scaled by height
+
+        set bottomUses to the cad prismatic coedges of bottomKey in body
+        set vertices to a cad topology list of a cad vertex key
+        set bottomEdges to a cad topology list of a cad edge key
+        loop index from 0 to the length of bottomUses's values:
+            set use to the cad node pointer for (the item at index in bottomUses's values) in body
+            if use = (0 as the type of use):
+                return cad prismatic chamfer not recognized
+            set edge to the cad node pointer for use's edge in body
+            if edge = (0 as the type of edge):
+                return cad prismatic chamfer not recognized
+            set vertex to edge's end
+            if use's forward:
+                set vertex to edge's start
+            append vertex to vertices's values
+            append use's edge to bottomEdges's values
+        set count to the length of vertices's values
+        if (((count < 3) or ((the cad count of body's vertices) != count * 2)) or ((the cad count of body's edges) != count * 3)) or ((the cad count of body's faces) != count + 2):
+            return cad prismatic chamfer not recognized
+
+        set positions to a cad topology list of a cad vector3
+        set points to a cad topology list of a cad vector2
+        loop index from 0 to count:
+            set vertex to the cad node pointer for (the item at index in vertices's values) in body
+            if vertex = (0 as the type of vertex):
+                return cad prismatic chamfer not recognized
+            append vertex's point to positions's values
+            set projected to the cad projection of vertex's point onto bottomPlane
+            if projected's valid = false:
+                return cad prismatic chamfer not recognized
+            append projected's value to points's values
+
+        set boundary to the cad boundary parts of bottomKey in body within tolerance
+        if boundary's valid = false:
+            return cad prismatic chamfer not recognized
+        set profile to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to the length of boundary's parts's values:
+            append (the item at index in boundary's parts's values)'s curve to profile's values
+        if (the length of profile's values) != count:
+            return cad prismatic chamfer not recognized
+        loop index from 0 to count:
+            set next to the remainder of (index + 1) divided by count
+            set piece to the item at index in profile's values
+            set firstGap to the cad distance from (the cad point on piece at 0.0) to (the item at index in points's values)
+            set secondGap to the cad distance from (the cad point on piece at 1.0) to (the item at next in points's values)
+            if (firstGap > tolerance) or (secondGap > tolerance):
+                return cad prismatic chamfer not recognized
+            if (piece's kind != 0) and (piece's kind != 2):
+                return cad prismatic chamfer not recognized
+
+        set allVertices to the cad prismatic vertex keys of body
+        set topVertices to a cad topology list of a cad vertex key
+        loop index from 0 to count:
+            set target to the cad sum of (the item at index in positions's values) and shift
+            set matches to 0
+            set match to a new cad vertex key
+            loop candidateIndex from 0 to the length of allVertices's values:
+                set candidateKey to the item at candidateIndex in allVertices's values
+                set candidate to the cad node pointer for candidateKey in body
+                if candidate != (0 as the type of candidate):
+                    if (the cad distance from candidate's point to target) <= tolerance:
+                        increment matches
+                        set match to candidateKey
+            if matches != 1:
+                return cad prismatic chamfer not recognized
+            append match to topVertices's values
+
+        set topUses to the cad prismatic coedges of topKey in body
+        set topBoundary to a cad topology list of a cad edge key
+        loop index from 0 to the length of topUses's values:
+            set use to the cad node pointer for (the item at index in topUses's values) in body
+            if use = (0 as the type of use):
+                return cad prismatic chamfer not recognized
+            append cad prismatic unique edge use's edge to topBoundary's values
+        if (the length of topBoundary's values) != count:
+            return cad prismatic chamfer not recognized
+        set topEdges to a cad topology list of a cad edge key
+        loop index from 0 to count:
+            set next to the remainder of (index + 1) divided by count
+            set matches to 0
+            set match to a new cad edge key
+            loop candidateIndex from 0 to the length of topBoundary's values:
+                set candidateKey to the item at candidateIndex in topBoundary's values
+                set candidate to the cad node pointer for candidateKey in body
+                if candidate != (0 as the type of candidate):
+                    set direct to (candidate's start = (the item at index in topVertices's values)) and (candidate's end = (the item at next in topVertices's values))
+                    set reverse to (candidate's end = (the item at index in topVertices's values)) and (candidate's start = (the item at next in topVertices's values))
+                    if direct or reverse:
+                        increment matches
+                        set match to candidateKey
+            if matches != 1:
+                return cad prismatic chamfer not recognized
+            if (cad prismatic edges (the item at index in bottomEdges's values) and match are translated by shift in body within tolerance) = false:
+                return cad prismatic chamfer not recognized
+            append match to topEdges's values
+
+        set sideFaces to a cad topology list of a cad chamfer face
+        loop index from 0 to count:
+            append no cad chamfer face to sideFaces's values
+        loop faceIndex from 0 to the length of faceKeys's values:
+            set faceKey to the item at faceIndex in faceKeys's values
+            if (faceKey != bottomKey) and (faceKey != topKey):
+                set uses to the cad prismatic coedges of faceKey in body
+                set faceVertices to a cad topology list of a cad vertex key
+                set sideEdges to a cad topology list of a cad edge key
+                loop useIndex from 0 to the length of uses's values:
+                    set use to the cad node pointer for (the item at useIndex in uses's values) in body
+                    if use = (0 as the type of use):
+                        return cad prismatic chamfer not recognized
+                    set edge to the cad node pointer for use's edge in body
+                    if edge = (0 as the type of edge):
+                        return cad prismatic chamfer not recognized
+                    set vertex to edge's end
+                    if use's forward:
+                        set vertex to edge's start
+                    append cad prismatic unique vertex vertex to faceVertices's values
+                    append use's edge to sideEdges's values
+                if (the length of faceVertices's values) != 4:
+                    return cad prismatic chamfer not recognized
+                set sideIndex to 0 - 1
+                loop index from 0 to count:
+                    if sideIndex < 0:
+                        set next to the remainder of (index + 1) divided by count
+                        set matches to cad prismatic faceVertices's values contains vertex (the item at index in vertices's values)
+                        set matches to matches and (cad prismatic faceVertices's values contains vertex (the item at next in vertices's values))
+                        set matches to matches and (cad prismatic faceVertices's values contains vertex (the item at index in topVertices's values))
+                        set matches to matches and (cad prismatic faceVertices's values contains vertex (the item at next in topVertices's values))
+                        if matches:
+                            set sideIndex to index
+                if sideIndex < 0:
+                    return cad prismatic chamfer not recognized
+                if (the item at sideIndex in sideFaces's values)'s valid:
+                    return cad prismatic chamfer not recognized
+                replace item at index sideIndex in sideFaces's values with (the cad chamfer face faceKey)
+                if ((the length of sideEdges's values) != 4) or ((cad prismatic sideEdges's values contains edge (the item at sideIndex in bottomEdges's values)) = false):
+                    return cad prismatic chamfer not recognized
+                if (cad prismatic sideEdges's values contains edge (the item at sideIndex in topEdges's values)) = false:
+                    return cad prismatic chamfer not recognized
+                set face to the cad node pointer for faceKey in body
+                set surface to the cad node pointer for face's surface in body
+                if surface = (0 as the type of surface):
+                    return cad prismatic chamfer not recognized
+                loop edgeIndex from 0 to the length of sideEdges's values:
+                    set edgeKey to the item at edgeIndex in sideEdges's values
+                    set edge to the cad node pointer for edgeKey in body
+                    set curve to the cad node pointer for edge's curve in body
+                    if curve = (0 as the type of curve):
+                        return cad prismatic chamfer not recognized
+                    if (edgeKey != (the item at sideIndex in bottomEdges's values)) and (edgeKey != (the item at sideIndex in topEdges's values)):
+                        if curve's kind != 0:
+                            return cad prismatic chamfer not recognized
+                        set start to the cad node pointer for edge's start in body
+                        set end to the cad node pointer for edge's end in body
+                        if (start = (0 as the type of start)) or (end = (0 as the type of end)):
+                            return cad prismatic chamfer not recognized
+                        set span to the cad difference of end's point and start's point
+                        set reversedShift to shift scaled by (0.0 - 1.0)
+                        if (the minimum of (the cad distance from span to shift) and (the cad distance from span to reversedShift)) > tolerance:
+                            return cad prismatic chamfer not recognized
+                    loop step from 0 to 5:
+                        set fraction to (step as a 64 bit floating-point number) * 0.25
+                        set parameter to edge's startParameter + fraction * (edge's endParameter - edge's startParameter)
+                        set point to the cad point on (@intrinsic("dereference", curve)) at parameter
+                        set distance to the cad distance from (@intrinsic("dereference", surface)) to point
+                        if ((cad prismatic scalar distance is finite) = false) or ((the absolute value of distance) > tolerance):
+                            return cad prismatic chamfer not recognized
+        loop index from 0 to count:
+            if (the item at index in sideFaces's values)'s valid = false:
+                return cad prismatic chamfer not recognized
+
+        set profileSelections to a cad topology list of a cad chamfer profile selection
+        loop selectedIndex from 0 to the length of selected:
+            set selectedKey to the item at selectedIndex in selected
+            set edge to the cad node pointer for selectedKey in body
+            if edge = (0 as the type of edge):
+                return cad prismatic chamfer not recognized
+            set node to 0 - 1
+            loop index from 0 to count:
+                set direct to (edge's start = (the item at index in vertices's values)) and (edge's end = (the item at index in topVertices's values))
+                set reverse to (edge's end = (the item at index in vertices's values)) and (edge's start = (the item at index in topVertices's values))
+                if direct or reverse:
+                    set node to index
+            if node < 0:
+                return cad prismatic chamfer not recognized
+            set replaced to false
+            loop index from 0 to the length of profileSelections's values:
+                if (the item at index in profileSelections's values)'s node = node:
+                    replace item at index index in profileSelections's values with (a cad chamfer profile selection at node node for edge selectedKey)
+                    set replaced to true
+            if replaced = false:
+                append (a cad chamfer profile selection at node node for edge selectedKey) to profileSelections's values
+
+        set trimmed to the cad chamfer profile of profile's values through points's values with selections profileSelections's values and faces sideFaces's values, base face baseFace, base distance baseDistance, other distance otherDistance, tolerance tolerance, avoiding axis false
+        if trimmed's valid = false:
+            return cad prismatic chamfer failure trimmed's error
+        set extruded to the cad extrusion of trimmed's value's values on bottomPlane along shift
+        if extruded's valid = false:
+            return cad prismatic chamfer invalid result
+        set flaws to the cad flaws of extruded's value
+        set valid to (the length of flaws) = 0
+        free flaws
+        if (valid = false) or ((the cad worst vertex gap of extruded's value) > tolerance):
+            return cad prismatic chamfer invalid result
+        return cad prismatic chamfer success extruded's value

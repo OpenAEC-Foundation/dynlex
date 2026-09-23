@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+import lib/cadkernel/brep_sweep.dl
+
+function revolution probe point2 at {integer:position}:
+    execute:
+        return a cad vector2 with x (maker argument position) and y (maker argument (position + 1))
+function revolution probe point3 at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+set frame to a cad plane with origin (revolution probe point3 at 0), x axis (revolution probe point3 at 3) and y axis (revolution probe point3 at 6)
+set pivot to revolution probe point3 at 9
+set axis to revolution probe point3 at 12
+set angle to maker argument 15
+set count to (maker argument 16) as an integer
+set cursor to 17
+set profile to an empty list of a cad curve2
+loop index from 0 to count:
+    set kind to (maker argument cursor) as an integer
+    set cursor to cursor + 1
+    set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+    if kind = 0:
+        set piece to the cad curve2 of (a cad line2 from (revolution probe point2 at cursor) to (revolution probe point2 at (cursor + 2)))
+        set cursor to cursor + 4
+    else if kind = 1:
+        set piece to the cad curve2 of (a cad circle2 at (revolution probe point2 at cursor) with radius (maker argument (cursor + 2)))
+        set cursor to cursor + 3
+    else if kind = 2:
+        set piece to the cad curve2 of (a cad arc2 at (revolution probe point2 at cursor) with radius (maker argument (cursor + 2)) from (maker argument (cursor + 3)) to (maker argument (cursor + 4)))
+        set cursor to cursor + 5
+    else:
+        @intrinsic("call", "libc", "exit", nothing, 3)
+    append piece to profile
+set result to the cad revolution of profile on frame about pivot along axis by angle
+free profile
+emit maker flag (result's valid)
+if result's valid:
+    emit maker body (result's value)

@@ -1,0 +1,1 @@
+cadkernel brep mesh periodic isolines: PASS

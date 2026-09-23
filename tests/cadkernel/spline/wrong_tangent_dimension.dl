@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/spline.dl
+set points to a list containing [0.0, 0.0]
+append [1.0, 1.0] to points
+set start to a cad spline tangent with value [1.0, 0.0, 0.0]
+set end to no cad spline tangent matching [0.0, 0.0]
+set result to the cad open spline through points with start tangent start and end tangent end using the cad uniform parameterization
+free cad spline interpolation result
+free points

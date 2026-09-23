@@ -211,8 +211,7 @@ resolveCodegenBindingLayers(ParseContext &context, Expression *expression, Bindi
 	if (bindingFrameStack.empty())
 		bindingFrameStack.pushFrame(BindingFrame{});
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack),
-		[&](Expression *expression) -> std::optional<FlexBindingExpansion> {
+		expression, std::move(bindingFrameStack), [&](Expression *expression) -> std::optional<FlexBindingExpansion> {
 		if (!expression || expression->kind != Expression::Kind::PatternCall)
 			return std::nullopt;
 		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
@@ -240,8 +239,7 @@ static DataType finalizedExpressionType(ParseContext &context, Expression *expr,
 		return finalizedExpressionType(context, resolved.expression, resolved.bindingFrameStack);
 	requireCompilerInvariant(expr->type.isDeduced(), "expression reached codegen without a finalized inferred type");
 	if (expr->kind == Expression::Kind::Variable && expr->variable) {
-		VariableReference *definition = normalizeBindingReference(expr->variable);
-		auto finalizedType = context.finalizedVariableTypes.find(definition);
+		auto finalizedType = context.finalizedVariableTypes.find(variableStorageKey(expr));
 		if (finalizedType != context.finalizedVariableTypes.end())
 			return finalizedType->second;
 	}
@@ -283,8 +281,10 @@ std::string getPatternFunctionName(Section *section) {
 	std::string name;
 	if (!section->patternDefinitions.empty()) {
 		name = std::string(section->patternDefinitions.front()->range.subString);
-	} else if ((section->type == SectionType::Retain || section->type == SectionType::Release) && section->parent &&
-			   !section->parent->patternDefinitions.empty()) {
+	} else if (
+		(section->type == SectionType::Retain || section->type == SectionType::Release) && section->parent &&
+		!section->parent->patternDefinitions.empty()
+	) {
 		name = sectionTypeToString(section->type) + " " +
 			   std::string(section->parent->patternDefinitions.front()->range.subString);
 	} else {
@@ -348,8 +348,9 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		if (body)
 			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
 		DataType varType = finalizedType.value_or(var->type);
+		VariableStorageKey storageKey = variableStorageKey(varDef, body);
 		if (varType.isDeduced())
-			context.finalizedVariableTypes[normalizeBindingReference(varDef)] = varType;
+			context.finalizedVariableTypes[storageKey] = varType;
 		VariableReference *normalizedDefinition = normalizeBindingReference(varDef);
 		// Call-bound parameters already have storage behind their argument
 		// pointer; variable resolution finds them there first. Parameters the
@@ -376,8 +377,6 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 				);
 				globalVar->setAlignment(getLLVMABIAlignment(context, varType));
 				context.globalLLVMVariables[name] = globalVar;
-				// Store in alloca field so existing code can find it
-				varDef->alloca = reinterpret_cast<llvm::AllocaInst *>(globalVar);
 				if (typeHasManagedLifecycle(varType))
 					registerManagedGlobalStorage(context, globalVar, varType);
 
@@ -392,11 +391,12 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 					);
 				}
 			}
+			context.variableStorage[storageKey] = context.globalLLVMVariables.at(name);
 		} else {
-			// Local variable - create alloca as before
-			varDef->alloca = createEntryAlloca(context, name, varType);
+			llvm::AllocaInst *storage = createEntryAlloca(context, name, varType);
+			context.variableStorage[storageKey] = storage;
 			if (typeHasManagedLifecycle(varType))
-				registerManagedStorage(context, varDef->alloca, varType, section);
+				registerManagedStorage(context, storage, varType, section);
 
 			// Emit debug info for local variable
 			if (context.diBuilder && varDef->range.line && context.currentDebugScope) {
@@ -406,7 +406,7 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 				if (diType) {
 					auto *diVar = context.diBuilder->createAutoVariable(context.currentDebugScope, name, diFile, line, diType);
 					context.diBuilder->insertDeclare(
-						varDef->alloca, diVar, context.diBuilder->createExpression(),
+						storage, diVar, context.diBuilder->createExpression(),
 						llvm::DILocation::get(*context.llvmContext, line, varDef->range.start() + 1, context.currentDebugScope),
 						static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder).GetInsertBlock()
 					);
@@ -437,8 +437,9 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 		auto bindingIt = context.codegenParameterBindings.find(definition);
 		if (bindingIt != context.codegenParameterBindings.end())
 			return {bindingIt->second, LValueAddressStatus::Addressable};
-		if (definition && definition->alloca)
-			return {definition->alloca, LValueAddressStatus::Addressable};
+		auto storage = context.variableStorage.find(variableStorageKey(expr));
+		if (storage != context.variableStorage.end())
+			return {storage->second, LValueAddressStatus::Addressable};
 		return {};
 	}
 
@@ -646,7 +647,7 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		if (fromType.isInteger() && toType.isInteger()) {
 			if (fromType.numericSize < toType.numericSize)
 				return fromType.isUnsignedInteger() ? builder.CreateZExt(val, targetLLVM, "zext")
-															 : builder.CreateSExt(val, targetLLVM, "sext");
+													: builder.CreateSExt(val, targetLLVM, "sext");
 			return builder.CreateTrunc(val, targetLLVM, "trunc");
 		}
 		if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
@@ -656,9 +657,9 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 		}
 		if (fromType.isInteger() && toType.kind == DataType::Kind::Float)
 			return fromType.isUnsignedInteger() ? builder.CreateUIToFP(val, targetLLVM, "utof")
-													: builder.CreateSIToFP(val, targetLLVM, "itof");
+												: builder.CreateSIToFP(val, targetLLVM, "itof");
 		return toType.isUnsignedInteger() ? builder.CreateFPToUI(val, targetLLVM, "ftou")
-									 : builder.CreateFPToSI(val, targetLLVM, "ftoi");
+										  : builder.CreateFPToSI(val, targetLLVM, "ftoi");
 	}
 
 	// Numeric -> Bool

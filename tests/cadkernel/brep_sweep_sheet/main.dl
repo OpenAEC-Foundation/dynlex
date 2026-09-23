@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_sweep_extrude/main.dl
+
+set openProfile to an empty list of a cad curve2
+append (the cad curve2 of (a cad line2 from (extrusion point [0.0,0.0]) to (extrusion point [3.0,0.0]))) to openProfile
+set sheet to the cad extrusion sheet of openProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+check extrusion (sheet's valid)
+check extrusion ((the cad count of (sheet's value's faces)) = 1)
+check extrusion ((the cad count of (sheet's value's edges)) = 4)
+check extrusion ((the cad count of (sheet's value's vertices)) = 4)
+set defects to the cad flaws of (sheet's value)
+check extrusion ((the length of defects) = 0)
+free defects
+print "an_open_chain_extrudes_without_caps" as a line
+set parallelSheet to the cad extrusion sheet of openProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 2.0 and z 0.0)
+check extrusion (parallelSheet's valid)
+print "an_open_sheet_can_lie_in_the_profile_plane" as a line
+set collapsedSheet to the cad extrusion sheet of openProfile on (the cad xy plane) along (the cad x axis)
+check extrusion ((collapsedSheet's valid) = false)
+set zeroSheet to the cad extrusion sheet of openProfile on (the cad xy plane) along (the cad zero vector3)
+check extrusion ((zeroSheet's valid) = false)
+print "degenerate_sheet_directions_are_refused" as a line
+free openProfile
+set closedProfile to extrusion square of size 3.0
+set wallSheet to the cad extrusion sheet of closedProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+check extrusion (wallSheet's valid)
+check extrusion ((the cad count of (wallSheet's value's faces)) = 4)
+check extrusion ((the cad count of (wallSheet's value's edges)) = 12)
+check extrusion ((the cad count of (wallSheet's value's vertices)) = 8)
+set defects to the cad flaws of (wallSheet's value)
+check extrusion ((the length of defects) = 0)
+free defects
+free closedProfile
+print "a_closed_profile_makes_an_open_lateral_skin" as a line

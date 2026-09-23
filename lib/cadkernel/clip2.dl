@@ -1,0 +1,187 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/clip.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed. Returned raw lists are caller-owned.
+# Break spans returns null for None, and a nonnull (possibly empty) list for Some.
+# Spans are binary64 arrays of two parameters; pieces contain endpoint pairs.
+import lib/cadkernel/containment2.dl
+
+local function cad clip2 scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+# f64 total ordering includes signed zero and the sign/payload of NaNs.
+local function the cad clip2 order key of {a 64 bit floating-point number:value}:
+    execute:
+        set bits to @intrinsic("dereference", (@intrinsic("address of", value)) as a pointer to a 64 bit integer)
+        if bits < (0 as a 64 bit integer):
+            return bits ^ (9223372036854775807 as a 64 bit integer)
+        return bits
+
+local function the cad clip2 unique cuts from {a pointer to a list:values} within {a 64 bit floating-point number:merge}:
+    execute:
+        loop index from 1 to the length of values:
+            set value to the item at index in values
+            set key to the cad clip2 order key of value
+            set position to index
+            set searching to true
+            loop while searching and (position > 0):
+                set previous to the item at (position - 1) in values
+                if key < (the cad clip2 order key of previous):
+                    replace item at index position in values with previous
+                    set position to position - 1
+                else:
+                    set searching to false
+            replace item at index position in values with value
+        set output to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of values:
+            set value to the item at index in values
+            set keep to true
+            if (the length of output) > 0:
+                set previous to the last item of output
+                if (the absolute value of (value - previous)) <= merge:
+                    set keep to false
+            if keep:
+                append value to output
+        return output
+
+function the cad break spans on {cad curve2:shape} [from] {a 64 bit floating-point number:first} [to] {a 64 bit floating-point number:second} within {cad tolerance:tolerance}:
+    execute:
+        set output to an empty list of a 64 bit floating-point number array of 2 items
+        if ((the cad extent of shape) != the cad bounded extent2) or (((cad clip2 scalar first is finite) = false) or ((cad clip2 scalar second is finite) = false)):
+            free output
+            return 0 as the type of output
+        set a to first
+        set b to second
+        clamp a between 0.0 and 1.0
+        clamp b between 0.0 and 1.0
+        set speed to the maximum of (the cad length of (the cad tangent of shape at a)) and (the cad length of (the cad tangent of shape at b))
+        if ((cad clip2 scalar speed is finite) = false) or (speed <= 0.0):
+            free output
+            return 0 as the type of output
+        set epsilon to the minimum of (tolerance's linear / speed) and 1.0
+        if shape is cad closed:
+            if (shape's kind = 4) and ((the absolute value of (a - b)) <= epsilon):
+                if a > epsilon:
+                    append [0.0,a] to output
+                if (1.0 - a) > epsilon:
+                    append [a,1.0] to output
+                return output
+            set removed to the remainder of (b - a) divided by 1.0
+            if removed < 0.0:
+                set removed to removed + 1.0
+            if (removed <= epsilon) or ((1.0 - removed) <= epsilon):
+                free output
+                return 0 as the type of output
+            append [b,((b + 1.0) - removed)] to output
+            return output
+        set low to a
+        set high to b
+        if a > b:
+            set low to b
+            set high to a
+        if low > epsilon:
+            append [0.0,low] to output
+        if (1.0 - high) > epsilon:
+            append [high,1.0] to output
+        return output
+
+function the cad trim spans on {cad curve2:shape} [cut] at {a pointer to a list:cuts} [picked] at {a 64 bit floating-point number:requested} within {cad tolerance:tolerance}:
+    execute:
+        set output to an empty list of a 64 bit floating-point number array of 2 items
+        if (cad clip2 scalar requested is finite) = false:
+            return output
+        set extent to the cad extent of shape
+        set first to 0.0
+        set last to 1.0
+        set picked to requested
+        if extent = the cad bounded extent2:
+            clamp picked between 0.0 and 1.0
+        else:
+            set last to 1.0 / 0.0
+            if extent = the cad forward extent2:
+                set picked to the maximum of picked and 0.0
+            else:
+                set first to the negative of last
+        set speed to the cad length of (the cad tangent of shape at picked)
+        set merge to tolerance's linear
+        if speed > 0.0:
+            set merge to the minimum of (tolerance's linear / speed) and 1.0
+        set values to a list containing first
+        loop index from 0 to the length of cuts:
+            set cut to the item at index in cuts
+            if (cad clip2 scalar cut is finite) and (extent holds cad parameter cut):
+                if extent = the cad bounded extent2:
+                    clamp cut between 0.0 and 1.0
+                if extent = the cad forward extent2:
+                    set cut to the maximum of cut and 0.0
+                append cut to values
+        append last to values
+        set bounds to the cad clip2 unique cuts from values within merge
+        free values
+        loop index from 0 to ((the length of bounds) - 1):
+            set low to the item at index in bounds
+            set high to the item at (index + 1) in bounds
+            if (picked >= (low - merge)) and (picked <= (high + merge)):
+                if (low - first) > merge:
+                    append [first,low] to output
+                if (last - high) > merge:
+                    append [high,last] to output
+                free bounds
+                return output
+        free bounds
+        return output
+
+function the cad spans inside {a pointer to a list:boundary} along {cad curve2:shape} within {cad tolerance:tolerance}:
+    execute:
+        set output to an empty list of a 64 bit floating-point number array of 2 items
+        if (the length of boundary) = 0:
+            return output
+        set cuts to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of boundary:
+            set edge to the item at index in boundary
+            set hits to the cad crossings of shape and edge within tolerance
+            loop hitIndex from 0 to the length of hits:
+                set hit to the item at hitIndex in hits
+                append hit's tA to cuts
+            free hits
+        if (the length of cuts) = 0:
+            if ((the cad extent of shape) = the cad bounded extent2) and (cad boundary boundary contains (the cad point on shape at 0.5) within tolerance):
+                append [0.0,1.0] to output
+            free cuts
+            return output
+        if (the cad extent of shape) = the cad bounded extent2:
+            append 0.0 to cuts
+            append 1.0 to cuts
+        set speed to the cad length of (the cad tangent of shape at 0.5)
+        set merge to tolerance's linear
+        if speed > 0.0:
+            set merge to tolerance's linear / speed
+        set bounds to the cad clip2 unique cuts from cuts within merge
+        free cuts
+        loop index from 0 to ((the length of bounds) - 1):
+            set first to the item at index in bounds
+            set last to the item at (index + 1) in bounds
+            set middle to 0.5 * (first + last)
+            if cad boundary boundary contains (the cad point on shape at middle) within tolerance:
+                set joined to false
+                if (the length of output) > 0:
+                    set previous to the last item of output
+                    if (the absolute value of ((the item at 1 in previous) - first)) <= merge:
+                        replace item at index ((the length of output) - 1) in output with [(the item at 0 in previous),last]
+                        set joined to true
+                if joined = false:
+                    append [first,last] to output
+        free bounds
+        return output
+
+function the cad pieces inside {a pointer to a list:boundary} along {cad curve2:shape} within {cad tolerance:tolerance}:
+    execute:
+        set spans to the cad spans inside boundary along shape within tolerance
+        set output to an empty list of a cad line2
+        loop index from 0 to the length of spans:
+            set span to the item at index in spans
+            set first to the cad point on shape at (the item at 0 in span)
+            set last to the cad point on shape at (the item at 1 in span)
+            append (a cad line2 from first to last) to output
+        free spans
+        return output

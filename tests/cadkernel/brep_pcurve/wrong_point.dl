@@ -1,0 +1,4 @@
+import lib/cadkernel/brep_pcurve.dl
+set boundary to an empty list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+ignore cad (the cad surface of (the cad xy plane)) bounded by boundary contains parameter (the cad zero vector3) within (the default cad tolerance)
+free boundary

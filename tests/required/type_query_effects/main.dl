@@ -1,0 +1,41 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+function witness:
+    execute:
+        @intrinsic("return", @intrinsic("call", "libc", "putchar", integer, 88))
+function echo {the type of witness:value}:
+    execute:
+        @intrinsic("return", value)
+class:
+    patterns:
+        container
+    members:
+        value as the type of witness
+function read {container:item}:
+    execute:
+        @intrinsic("return", item's value)
+function direct query:
+    execute:
+        @intrinsic("store", local, 55)
+        @intrinsic("discard", @intrinsic("type of", @intrinsic("store", local, 57)))
+        @intrinsic("return", local)
+function changed target:
+    replacement:
+        @intrinsic("store", target, 57)
+        @intrinsic("add", target, 0)
+function wrapped query:
+    execute:
+        @intrinsic("store", local, 55)
+        @intrinsic("discard", the type of (changed local))
+        @intrinsic("return", local)
+function emit value:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, value))
+emit (echo 55)
+emit (read @intrinsic("construct", container, 55))
+emit direct query
+emit wrapped query

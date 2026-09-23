@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MPL-2.0
+# Two or more runtime curve records use the measurement driver's wire format.
+import tests/cadkernel/arclength2/input.dl
+function pair2 input at {integer:base} index {integer:index}:
+    execute:
+        return measure2 input (base + index)
+function pair2 input point at {integer:base} index {integer:index}:
+    execute:
+        return measure2 input point (base + index)
+function pair2 input curve at {integer:base}:
+    execute:
+        set kind to (pair2 input at base index 1) as an integer
+        set count to (pair2 input at base index 8) as an integer
+        set closed to (pair2 input at base index 9) != 0.0
+        set degree to (pair2 input at base index 10) as an integer
+        set knotCount to (pair2 input at base index 11) as an integer
+        set weightCount to (pair2 input at base index 12) as an integer
+        set start to pair2 input point at base index 13
+        set end to pair2 input point at base index 15
+        set radius to pair2 input at base index 17
+        set first to pair2 input at base index 18
+        set last to pair2 input at base index 19
+        set minor to pair2 input at base index 20
+        set axis to pair2 input point at base index 21
+        set vertices to an empty list of a cad polyline vertex2
+        set controls to an empty list of a cad vector2
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            set point to pair2 input point at base index (23 + (3 * index))
+            append (a cad polyline vertex2 at point with bulge (pair2 input at base index (25 + (3 * index)))) to vertices
+            append point to controls
+        set offset to 23 + (3 * count)
+        loop index from 0 to knotCount:
+            append (pair2 input at base index (offset + index)) to knots
+        set offset to offset + knotCount
+        loop index from 0 to weightCount:
+            append (pair2 input at base index (offset + index)) to weights
+        set polyline to the cad polyline2 with vertices vertices and closure closed
+        set shape to the cad curve2 of (a cad line2 from start to end)
+        if kind = 1:
+            set shape to the cad curve2 of (a cad circle2 at start with radius radius)
+        if kind = 2:
+            set shape to the cad curve2 of (a cad arc2 at start with radius radius from first to last)
+        if kind = 3:
+            set ellipse to a cad ellipse at start with radii radius and minor along axis
+            set shape to the cad curve2 of (a cad ellipse arc2 on ellipse from first to last)
+        if kind = 4:
+            set shape to the cad curve2 of polyline
+        if kind = 5:
+            set result to the cad nurbs curve2 of degree degree with controls controls, knots knots and weights weights
+            emit measure2 flag result's valid
+            if result's valid = false:
+                free vertices
+                free controls
+                free knots
+                free weights
+                @intrinsic("call", "libc", "exit", nothing, 92)
+            set shape to the cad curve2 of result's value
+        if kind = 6:
+            set shape to the cad curve2 of (a cad ray2 from start along end)
+        if kind = 7:
+            set shape to the cad curve2 of (a cad xline2 through start along end)
+        free vertices
+        free controls
+        free knots
+        free weights
+        return shape

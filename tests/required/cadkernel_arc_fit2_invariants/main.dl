@@ -1,0 +1,97 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arc_fit2.dl
+function fit2 invariant {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 85)
+function fit2 near {a 64 bit floating-point number:left} to {a 64 bit floating-point number:right}:
+    execute:
+        fit2 invariant ((the absolute value of (left - right)) < 1e-10)
+function check fitted circle with orientation {integer:orientation} and closure {boolean:closed}:
+    execute:
+        set points to a list containing (a cad vector2 with x 1 and y 0)
+        append (a cad vector2 with x 0 and y orientation) to points
+        append (a cad vector2 with x -1 and y 0) to points
+        if closed:
+            append (a cad vector2 with x 0 and y (-orientation)) to points
+        set directions to an empty list of a cad arc fit direction2
+        loop index from 0 to the length of points:
+            append (an automatic cad arc fit direction2) to directions
+        set result to the cad arc chain2 through points with closure closed and directions directions
+        fit2 invariant result's valid
+        set count to the length of result's vertices
+        set spans to count - 1
+        if closed:
+            fit2 invariant (count = 8)
+            set spans to count
+        else:
+            fit2 invariant (count = 5)
+        set total to 0.0
+        loop index from 0 to spans:
+            set next to the remainder of (index + 1) divided by count
+            set first to the item at index in result's vertices
+            set last to the item at next in result's vertices
+            set computed to the cad bulge arc2 from first's point to last's point with bulge first's bulge
+            fit2 invariant computed's valid
+            set arc to computed's value
+            fit2 near arc's centre's x to 0.0
+            fit2 near arc's centre's y to 0.0
+            fit2 near arc's radius to 1.0
+            set total to total + (arc's radius * (the absolute value of arc's sweep))
+            set middle to the cad point on arc at 0.5
+            fit2 near (the cad length of middle) to 1.0
+            set startTangent to the cad normalization of (the cad curve tangent of arc at 0.0)
+            set endTangent to the cad normalization of (the cad curve tangent of arc at 1.0)
+            set wantedStart to (the cad perpendicular of first's point) scaled by orientation
+            set wantedEnd to (the cad perpendicular of last's point) scaled by orientation
+            fit2 near (the cad dot of startTangent's value and wantedStart) to 1.0
+            fit2 near (the cad dot of endTangent's value and wantedEnd) to 1.0
+            if first's inserted:
+                fit2 near first's fraction to 0.5
+            else:
+                fit2 near first's fraction to 0.0
+        if closed:
+            fit2 near total to 6.283185307179586
+        else:
+            fit2 near total to 3.141592653589793
+        free points
+        free directions
+check fitted circle with orientation 1 and closure true
+check fitted circle with orientation (-1) and closure true
+check fitted circle with orientation 1 and closure false
+check fitted circle with orientation (-1) and closure false
+print "arc_fit2: circle geometry, G1 tangents, reversal, closure and length fractions" as a line
+
+set points to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1 and y 0) to points
+set directions to a list containing (a cad arc fit direction2 along (a cad vector2 with x 0 and y 8))
+append (a cad arc fit direction2 along (a cad vector2 with x 0 and y 3)) to directions
+set fitted to the cad arc chain2 through points with closure false and directions directions
+fit2 invariant fitted's valid
+fit2 invariant ((the length of fitted's vertices) = 3)
+set first to the item at 0 in fitted's vertices
+set knee to the item at 1 in fitted's vertices
+set last to the item at 2 in fitted's vertices
+fit2 near knee's point's x to 0.5
+fit2 near knee's point's y to 0.0
+fit2 near first's bulge to -1.0
+fit2 near knee's bulge to 1.0
+fit2 near knee's fraction to 0.5
+set firstArc to the cad bulge arc2 from first's point to knee's point with bulge first's bulge
+set secondArc to the cad bulge arc2 from knee's point to last's point with bulge knee's bulge
+set arrive to the cad normalization of (the cad curve tangent of firstArc's value at 1.0)
+set depart to the cad normalization of (the cad curve tangent of secondArc's value at 0.0)
+fit2 near (the cad dot of arrive's value and depart's value) to 1.0
+print "arc_fit2: explicit normalized directions preserve inflection and G1 knee" as a line
+
+replace item at index 0 in directions with (a cad arc fit direction2 along (a cad vector2 with x -1 and y 0))
+replace item at index 1 in directions with (a cad arc fit direction2 along (a cad vector2 with x -1 and y 0))
+set fitted to the cad arc chain2 through points with closure false and directions directions
+fit2 invariant fitted's valid
+fit2 invariant ((the length of fitted's vertices) = 2)
+set first to the item at 0 in fitted's vertices
+fit2 near first's bulge to 0.0
+free points
+free directions
+print "arc_fit2: source collinear fallback remains straight with opposing directions" as a line
+

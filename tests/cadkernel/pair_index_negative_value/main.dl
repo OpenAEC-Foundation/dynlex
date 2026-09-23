@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/pair_index.dl
+set table to a cad pair index with room for 1 entries
+put cad pair value -1 for key (0 as a 64 bit integer) and (0 as a 64 bit integer) in table

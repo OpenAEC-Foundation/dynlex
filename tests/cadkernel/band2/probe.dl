@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/band2.dl
+import tests/cadkernel/arclength2/input.dl
+
+function emit band2 record {record} with prefix {string:prefix}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s %.17g %.17g %.17g %.17g %d %.17g %.17g %.17g %.17g\n", the data of prefix, record's start's x, record's start's y, record's end's x, record's end's y, record's sourceSegment, record's sourceStart, record's sourceEnd, record's segmentStart, record's segmentEnd)
+
+set closed to (measure2 input 1) != 0.0
+set angle to measure2 input 2
+set count to (measure2 input 3) as an integer
+set widthCount to (measure2 input 4) as an integer
+set vertices to an empty list of a cad polyline vertex2
+loop index from 0 to count:
+    append (a cad polyline vertex2 at (measure2 input point (5 + (3 * index))) with bulge (measure2 input (7 + (3 * index)))) to vertices
+set source to the cad polyline2 with vertices vertices and closure closed
+free vertices
+set widths to an empty list of a 64 bit floating-point number array of 2 items
+set offset to 5 + (3 * count)
+loop index from 0 to widthCount:
+    append [(measure2 input (offset + (2 * index))),(measure2 input ((offset + 1) + (2 * index)))] to widths
+set result to the cad band boundary of source with widths widths within angle angle
+free widths
+free cad polyline source
+set copied to the cad clone of result
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "b %.17g %d %d %d\n", result's sourceLength, the length of result's edges, the length of result's stationPieces, (copied = result) as an integer)
+loop index from 0 to the length of result's edges:
+    emit band2 record (the item at index in result's edges) with prefix "e"
+loop index from 0 to the length of result's stationPieces:
+    emit band2 record (the item at index in result's stationPieces) with prefix "s"

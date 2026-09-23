@@ -1,0 +1,203 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/space/endpoint_join.rs,
+# including JoinType and all functions following its test module.
+# A terminal is a fixed array of two cad vector3 values: [fixed, movable].
+# Inputs and raw lists are borrowed; results are plain typed values.
+# Endpoint join result: valid=false preserves both paths; valid=true with an
+# invalid inner joint adds a connector; a valid inner joint moves both ends.
+# Closest selection searches every extension before any connector for Both,
+# ranks by original endpoint gap and retains the first pair on exact ties.
+import lib/cadkernel/plane.dl
+
+class:
+    patterns:
+        [a|] cad endpoint join kind
+    members:
+        code as an integer
+
+class:
+    patterns:
+        [a|] cad endpoint joint
+    members:
+        valid as a boolean
+        value as a cad vector3
+
+class:
+    patterns:
+        [a|] cad endpoint join result
+    members:
+        valid as a boolean
+        value as a cad endpoint joint
+
+class:
+    patterns:
+        [a|] cad endpoint selection
+    members:
+        first as an integer
+        second as an integer
+        joint as a cad endpoint joint
+
+class:
+    patterns:
+        [a|] cad endpoint selection result
+    members:
+        valid as a boolean
+        value as a cad endpoint selection
+
+class:
+    patterns:
+        [a|] cad connector distance result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+function the cad extend join kind:
+    execute:
+        return @intrinsic("construct", a cad endpoint join kind, 0)
+
+function the cad add join kind:
+    execute:
+        return @intrinsic("construct", a cad endpoint join kind, 1)
+
+function the cad both join kind:
+    execute:
+        return @intrinsic("construct", a cad endpoint join kind, 2)
+
+function cad {cad endpoint join kind:left} equals {cad endpoint join kind:right}:
+    execute:
+        return (the code of left) = (the code of right)
+
+local function check cad endpoint join {cad endpoint join kind:kind}:
+    execute:
+        if (the code of kind) < 0 or (the code of kind) > 2:
+            @intrinsic("call", "libc", "abort", nothing)
+
+local function cad endpoint scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the absent cad endpoint joint:
+    execute:
+        return @intrinsic("construct", a cad endpoint joint, false, the cad zero vector3)
+
+local function the absent cad endpoint join:
+    execute:
+        return @intrinsic("construct", a cad endpoint join result, false, the absent cad endpoint joint)
+
+local function the absent cad endpoint selection:
+    execute:
+        set empty to @intrinsic("construct", a cad endpoint selection, 0, 0, the absent cad endpoint joint)
+        return @intrinsic("construct", a cad endpoint selection result, false, empty)
+
+local function cad terminal {a cad vector3 array of 2 items:terminal} is finite:
+    execute:
+        return (cad (the item at 0 in terminal) is finite) and (cad (the item at 1 in terminal) is finite)
+
+function the cad extension joint of {a cad vector3 array of 2 items:first} and {a cad vector3 array of 2 items:second} within {a 64 bit floating-point number:distance}:
+    execute:
+        if ((cad endpoint scalar distance is finite) = false) or distance < 0.0:
+            return the absent cad endpoint joint
+        if ((cad terminal first is finite) and (cad terminal second is finite)) = false:
+            return the absent cad endpoint joint
+        set p to the item at 1 in first
+        set q to the item at 1 in second
+        set u to the cad difference of p and (the item at 0 in first)
+        set v to the cad difference of q and (the item at 0 in second)
+        set lu to the cad length of u
+        set lv to the cad length of v
+        if (((cad endpoint scalar lu is finite) and (cad endpoint scalar lv is finite)) = false) or (lu <= 0.0 or lv <= 0.0):
+            return the absent cad endpoint joint
+        set u to u cad divided by lu
+        set v to v cad divided by lv
+        set n to the cad cross of u and v
+        set denominator to the cad squared length of n
+        if ((cad endpoint scalar denominator is finite) = false) or denominator <= 1e-24:
+            return the absent cad endpoint joint
+        set delta to the cad difference of q and p
+        set ta to (the cad dot of (the cad cross of delta and v) and n) / denominator
+        set tb to (the cad dot of (the cad cross of delta and u) and n) / denominator
+        if ((cad endpoint scalar ta is finite) and (cad endpoint scalar tb is finite)) = false:
+            return the absent cad endpoint joint
+        if ((the absolute value of ta) > distance or (the absolute value of tb) > distance) or (ta <= (0.0 - lu) or tb <= (0.0 - lv)):
+            return the absent cad endpoint joint
+        set pa to the cad sum of p and (u scaled by ta)
+        set pb to the cad sum of q and (v scaled by tb)
+        set points to a list containing (the item at 0 in first)
+        append p to points
+        append (the item at 0 in second) to points
+        append q to points
+        set tolerance to the cad coplanarity tolerance of points
+        free points
+        if ((cad endpoint scalar tolerance is finite) = false) or (((cad pa is finite) and (cad pb is finite)) = false):
+            return the absent cad endpoint joint
+        if (the cad distance from pa to pb) > tolerance:
+            return the absent cad endpoint joint
+        return @intrinsic("construct", a cad endpoint joint, true, pa)
+
+function the cad planar connector [distance] of {a pointer to a list:points} with fuzz {a 64 bit floating-point number:fuzz}:
+    execute:
+        if ((the length of points) = 0) or (((cad endpoint scalar fuzz is finite) = false) or fuzz < 0.0):
+            return @intrinsic("construct", a cad connector distance result, false, 0.0)
+        set scale to 0.0 as a 64 bit floating-point number
+        loop index from 0 to the length of points:
+            set {cad vector2:point} to the item at index in points
+            if ((cad endpoint scalar (the x of point) is finite) and (cad endpoint scalar (the y of point) is finite)) = false:
+                return @intrinsic("construct", a cad connector distance result, false, 0.0)
+            set scale to the maximum of scale and (the absolute value of (the x of point))
+            set scale to the maximum of scale and (the absolute value of (the y of point))
+        set distance to scale * fuzz
+        if (cad endpoint scalar distance is finite) = false:
+            return @intrinsic("construct", a cad connector distance result, false, 0.0)
+        return @intrinsic("construct", a cad connector distance result, true, distance)
+
+function the cad endpoint join of {a cad vector3 array of 2 items:first} and {a cad vector3 array of 2 items:second} with fuzz {a 64 bit floating-point number:fuzz}, connector distance {a 64 bit floating-point number:connectorDistance} and kind {cad endpoint join kind:kind}:
+    execute:
+        check cad endpoint join kind
+        if (((cad endpoint scalar fuzz is finite) = false) or fuzz <= 0.0) or (((cad endpoint scalar connectorDistance is finite) = false) or connectorDistance < 0.0):
+            return the absent cad endpoint join
+        if ((cad terminal first is finite) and (cad terminal second is finite)) = false:
+            return the absent cad endpoint join
+        if (the code of kind) != 1:
+            set joint to the cad extension joint of first and second within fuzz
+            if the valid of joint:
+                return @intrinsic("construct", a cad endpoint join result, true, joint)
+            if (the code of kind) = 0:
+                return the absent cad endpoint join
+        set firstLength to the cad distance from (the item at 0 in first) to (the item at 1 in first)
+        set secondLength to the cad distance from (the item at 0 in second) to (the item at 1 in second)
+        set gap to the cad distance from (the item at 1 in first) to (the item at 1 in second)
+        if (((cad endpoint scalar firstLength is finite) and (cad endpoint scalar secondLength is finite)) and (cad endpoint scalar gap is finite)) = false:
+            return the absent cad endpoint join
+        if ((firstLength <= 0.0 or secondLength <= 0.0) or gap <= 0.0) or gap > connectorDistance:
+            return the absent cad endpoint join
+        return @intrinsic("construct", a cad endpoint join result, true, the absent cad endpoint joint)
+
+function the cad closest endpoint join of {a pointer to a list:first} and {a pointer to a list:second} with fuzz {a 64 bit floating-point number:fuzz}, connector distance {a 64 bit floating-point number:connectorDistance} and kind {cad endpoint join kind:kind}:
+    execute:
+        check cad endpoint join kind
+        set phases to 1
+        if (the code of kind) = 2:
+            set phases to 2
+        loop phaseIndex from 0 to phases:
+            set phase to kind
+            if (the code of kind) = 2:
+                set phase to the cad extend join kind
+                if phaseIndex = 1:
+                    set phase to the cad add join kind
+            set best to the absent cad endpoint selection
+            set bestDistance to (1.0 as a 64 bit floating-point number) / 0.0
+            loop i from 0 to the length of first:
+                set a to the item at i in first
+                loop j from 0 to the length of second:
+                    set b to the item at j in second
+                    set joined to the cad endpoint join of a and b with fuzz fuzz, connector distance connectorDistance and kind phase
+                    if the valid of joined:
+                        set gap to the cad distance from (the item at 1 in a) to (the item at 1 in b)
+                        if (cad endpoint scalar gap is finite) and gap < bestDistance:
+                            set bestDistance to gap
+                            set value to @intrinsic("construct", a cad endpoint selection, i, j, the value of joined)
+                            set best to @intrinsic("construct", a cad endpoint selection result, true, value)
+            if the valid of best:
+                return best
+        return the absent cad endpoint selection

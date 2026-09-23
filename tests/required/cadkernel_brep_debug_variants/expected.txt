@@ -1,0 +1,2 @@
+owned body diagnostics preserve fields and binary64 precision
+all geometry variants, topology fields and flaw diagnostics

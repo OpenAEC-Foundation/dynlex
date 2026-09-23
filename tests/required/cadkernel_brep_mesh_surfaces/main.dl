@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/planar3.dl
+
+function check mesh surface {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+function a square cad mesh profile on {cad plane:profilePlane}:
+    execute:
+        set vertices to an empty list of a cad polyline vertex2
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 0.0)) to vertices
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 0.0)) to vertices
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 1.0)) to vertices
+        append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 1.0)) to vertices
+        set polylineValue to the cad polyline2 with vertices vertices and closure true
+        free vertices
+        return a cad planar curve3 of (the cad curve2 of polylineValue) on profilePlane
+
+set profileValue to a square cad mesh profile on (the cad xy plane)
+set pathPlane to a cad plane with origin the cad zero vector3, x axis the cad z axis and y axis the cad x axis
+set pathValue to a cad planar curve3 of (the cad curve2 of (a cad line2 from the cad zero vector2 to (a cad vector2 with x 2.0 and y 0.0))) on pathPlane
+set sweptResult to the cad swept surface of profileValue along pathValue with maximum angle (the cad default sampling angle)
+check mesh surface (sweptResult's valid) named "closed sweep"
+check mesh surface ((the cad triangle count of sweptResult's value's mesh) = 12) named "sweep triangles"
+check mesh surface ((the length of sweptResult's value's edges) = 2) named "sweep rims"
+set sweptArea to the cad surface area of sweptResult's value's mesh
+check mesh surface ((sweptArea's valid) and ((the absolute value of (sweptArea's value - 10.0)) < 1e-9)) named "sweep area"
+free cad surface mesh result sweptResult
+
+set upperPlane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 2.0), x axis the cad x axis and y axis the cad y axis
+set upperProfile to a square cad mesh profile on upperPlane
+set profileValues to a list containing profileValue
+append upperProfile to profileValues
+set loftedResult to the cad lofted surface through profileValues with maximum angle (the cad default sampling angle)
+check mesh surface (loftedResult's valid) named "closed loft"
+check mesh surface ((the cad triangle count of loftedResult's value's mesh) = 12) named "loft triangles"
+check mesh surface ((the length of loftedResult's value's edges) = 2) named "loft rims"
+set loftedArea to the cad surface area of loftedResult's value's mesh
+check mesh surface ((loftedArea's valid) and ((the absolute value of (loftedArea's value - 10.0)) < 1e-9)) named "loft area"
+free cad surface mesh result loftedResult
+free profileValues
+
+set closedPath to a cad planar curve3 of (the cad curve2 of (a cad circle2 at the cad zero vector2 with radius 2.0)) on (the cad xy plane)
+set refusedSweep to the cad swept surface of profileValue along closedPath with maximum angle (the cad default sampling angle)
+check mesh surface ((refusedSweep's valid) = false) named "closed path refused"
+free cad surface mesh result refusedSweep
+
+set oneProfile to a list containing profileValue
+set refusedLoft to the cad lofted surface through oneProfile with maximum angle (the cad default sampling angle)
+check mesh surface ((refusedLoft's valid) = false) named "one profile refused"
+free cad surface mesh result refusedLoft
+free oneProfile
+
+print "cadkernel brep mesh surfaces: PASS" as a line

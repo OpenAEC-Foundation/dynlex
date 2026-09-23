@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/transform2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check transform ownership {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 98)
+
+function retained transform2 spline:
+    execute:
+        set original to cross2 interpolated spline
+        set by to a cad insertion2 at (cross2 point [2.0,-3.0]) scaling (cross2 point [1.5,0.5]) through 0.7
+        set moved to the cad transformed original by by
+        check transform ownership moved's valid
+        check transform ownership (original's nurbs's controls != moved's value's nurbs's controls)
+        check transform ownership (original's nurbs's knots != moved's value's nurbs's knots)
+        check transform ownership (original's nurbs's weights != moved's value's nurbs's weights)
+        free cad curve original
+        return moved
+
+set base to the cad default transform2
+check transform ownership (base = the cad identity transform2)
+set copied to the cad clone of base
+set copied's origin's x to 17.0
+check transform ownership (base's origin's x = 0.0)
+check transform ownership ((base = copied) = false)
+set result to retained transform2 spline
+set retained to result
+free cad curve result's value
+set point to the cad point on retained's value at 0.0
+check transform ownership ((the cad distance from point to (cross2 point [2.0,-3.0])) < 1e-12)
+
+set chain to cross2 polyline [[1.0,2.0,0.0],[3.0,4.0,0.0],[5.0,6.0,0.0]] with closure true
+set moved to the cad transformed chain by (a cad scale2 by -2.0 and 3.0)
+check transform ownership moved's valid
+check transform ownership (chain's polyline's vertices != moved's value's polyline's vertices)
+check transform ownership moved's value's polyline's closed
+free cad curve chain
+set point to (the item at 0 in moved's value's polyline's vertices)'s position
+check transform ownership ((point's x = -2.0) and (point's y = 6.0))
+set chain to cross2 polyline [[0.0,0.0,1.0],[2.0,0.0,0.0]] with closure false
+set moved to the cad transformed chain by (a cad scale2 by 2.0 and 1.0)
+check transform ownership (moved's valid = false)
+set copy to moved
+free cad curve moved's value
+free cad curve copy's value
+check transform ownership ((the length of chain's polyline's vertices) = 2)
+print "affine values and independently owned transformed curves" as a line

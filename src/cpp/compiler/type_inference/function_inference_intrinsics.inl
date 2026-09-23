@@ -14,6 +14,17 @@ case Expression::Kind::IntrinsicCall: {
 						context.lookupExpressionValue(resolvedArgument.expression)
 					))
 					expr->type = {DataType::Kind::Int, 8};
+				else if (kind == IntrinsicKind::Negate && expr->type.isDeduced()) {
+					bool numericVector = expr->type.isVector() && expr->type.arrayElementType &&
+							expr->type.vectorElementType().isNumeric();
+					if (!expr->type.isNumeric() && !numericVector) {
+						setConfiguredTypeFailure(
+							expr->range, "numeric unary operand invalid", "message",
+							{{"operator", expr->intrinsicName}, {"value_type", typeToUserName(expr->type)}}
+						);
+						break;
+					}
+				}
 			} else {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
@@ -84,6 +95,13 @@ case Expression::Kind::IntrinsicCall: {
 			CompileTimeValue conditionValue;
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {
+				if (context.currentInstantiation) {
+					if (context.trial) {
+						requireCompilerInvariant(context.trialJournal, "trial return inference requires a rollback journal");
+						context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
+					}
+					context.currentInstantiation->hasReturnIntrinsic = true;
+				}
 				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
 				ResolvedBindingLayers resolvedReturnValue =
 					returnValueExpression
@@ -145,8 +163,9 @@ case Expression::Kind::IntrinsicCall: {
 						} else if (!context.currentInstantiation->returnPointerStorageParameterName) {
 							context.currentInstantiation->returnPointerStorageParameterName =
 								std::move(pointerStorageParameter);
-						} else if (*context.currentInstantiation->returnPointerStorageParameterName !=
-								   *pointerStorageParameter) {
+						} else if (
+							*context.currentInstantiation->returnPointerStorageParameterName != *pointerStorageParameter
+						) {
 							context.currentInstantiation->returnPointerStorageParameterName.reset();
 							context.currentInstantiation->returnPointerStorageAmbiguous = true;
 						}
@@ -204,8 +223,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!context.typesValid)
 					break;
 				DataType refinedElementType;
-				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType) &&
-					refinedElementType != elementType) {
+				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType)) {
 					refinePointerStoragePointeeType(expr->arguments[1], valueType, context, flexBindingFrameStack);
 					pointerType = effectiveInferredExpressionType(expr->arguments[1]);
 					elementType = pointerType.dereferenced();
@@ -232,6 +250,14 @@ case Expression::Kind::IntrinsicCall: {
 				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
 					setConfiguredTypeFailure(expr->range, "store at requires pointer");
+					break;
+				}
+				DataType elementType = pointerType.dereferenced();
+				if (!elementType.isConcrete()) {
+					setConfiguredTypeFailure(
+						expr->range, "destroy at requires concrete pointee", "message",
+						{{"type", typeToUserName(elementType)}}
+					);
 					break;
 				}
 			}
@@ -558,6 +584,21 @@ case Expression::Kind::IntrinsicCall: {
 				if (typeArgType.referencedKind == DataType::Kind::Type ||
 					typeArgType.referencedKind == DataType::Kind::Unresolved) {
 					setConfiguredTypeFailure(expr->range, "size of type invalid");
+					break;
+				}
+				if (!typeArgType.toReferencedType().isConcrete() && context.currentInstantiation) {
+					// A later write in the same inference chain can refine an
+					// unspecified class layout. Preserve the known result type and
+					// revisit this body after that refinement reaches the caller.
+					observeUnresolvedRecursiveDependency(context);
+					expr->type = {DataType::Kind::Int, 8};
+					break;
+				}
+				if (!typeArgType.toReferencedType().isConcrete()) {
+					setConfiguredTypeFailure(
+						expr->range, "size of incomplete type", "message",
+						{{"type", typeToUserName(typeArgType.toReferencedType())}}
+					);
 					break;
 				}
 				expr->type = {DataType::Kind::Int, 8};

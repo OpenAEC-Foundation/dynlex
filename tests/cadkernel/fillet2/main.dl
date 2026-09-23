@@ -1,0 +1,199 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/fillet2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check fillet2 {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function fillet2 near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        check fillet2 ((the absolute value of (actual - expected)) < tolerance)
+function fillet2 right angle with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set result to the cad fillet at (cross2 point [0.0,0.0]) along (cross2 point [1.0,0.0]) and (cross2 point [0.0,1.0]) with radius radius
+        check fillet2 result's valid
+        return result's value
+function fillet2 tangency of {cad curve2:first} and {cad curve2:second} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        set found to the cad fillets between first and second with radius radius within (a cad tolerance of 1e-9)
+        loop index from 0 to the length of found:
+            set fillet to the item at index in found
+            loop side from 0 to 2:
+                set curve to first
+                set tangent to fillet's tangent1
+                if side = 1:
+                    set curve to second
+                    set tangent to fillet's tangent2
+                fillet2 near (the cad distance from fillet's centre to tangent) to radius within 1e-6
+                set offset to 0.0
+                if curve's kind = 1:
+                    set offset to the absolute value of ((the cad distance from tangent to curve's circle's centre) - curve's circle's radius)
+                else if curve's kind = 2:
+                    set offset to the absolute value of ((the cad distance from tangent to curve's arc's centre) - curve's arc's radius)
+                else:
+                    set ray to the cad ray of curve
+                    check fillet2 ray's valid
+                    set along to the cad normalization of ray's value's direction
+                    check fillet2 along's valid
+                    set offset to the absolute value of (the cad cross of (the cad difference of tangent and ray's value's origin) and along's value)
+                check fillet2 (offset < 1e-6)
+        return found
+
+set circle to cross2 circle [0.0,0.0] with radius 10.0
+set line to cross2 segment [-100.0,-20.0] to [100.0,-20.0]
+set found to fillet2 tangency of circle and line with radius 5.0
+check fillet2 ((the length of found) > 0)
+loop index from 0 to the length of found:
+    set fillet to the item at index in found
+    set y to fillet's centre's y
+    check fillet2 (((the absolute value of (y + 15.0)) < 1e-6) or ((the absolute value of (y + 25.0)) < 1e-6))
+free found
+print "a_line_and_a_circle_have_four_fillets_of_a_given_radius" as a line
+
+set line to cross2 segment [-50.0,-10.0] to [50.0,-10.0]
+set found to fillet2 tangency of circle and line with radius 3.0
+check fillet2 ((the length of found) > 0)
+free found
+print "a_line_tangent_to_a_circle_still_yields_a_fillet" as a line
+
+set left to cross2 circle [-20.0,0.0] with radius 10.0
+set right to cross2 circle [20.0,0.0] with radius 10.0
+set found to fillet2 tangency of left and right with radius 30.0
+check fillet2 ((the length of found) > 0)
+free found
+print "two_circles_give_fillets_touching_both" as a line
+
+set left to cross2 circle [-3.0,0.0] with radius 1.0
+set right to cross2 circle [3.0,0.0] with radius 1.0
+set found to fillet2 tangency of left and right with radius 5.0
+set hasEnclosing to false
+set y to the square root of 7.0
+loop index from 0 to the length of found:
+    set fillet to the item at index in found
+    if (the absolute value of fillet's centre's x) < 1e-9:
+        if ((the absolute value of (fillet's centre's y - y)) < 1e-9) or ((the absolute value of (fillet's centre's y + y)) < 1e-9):
+            set hasEnclosing to true
+check fillet2 hasEnclosing
+free found
+print "a_larger_circle_can_enclose_two_tangent_circles" as a line
+
+set line to cross2 segment [-10.0,0.0] to [10.0,0.0]
+set circle to cross2 circle [0.0,2.0] with radius 1.0
+set found to fillet2 tangency of line and circle with radius 5.0
+set hasEnclosing to false
+set x to the square root of 7.0
+loop index from 0 to the length of found:
+    set fillet to the item at index in found
+    if (the absolute value of (fillet's centre's y - 5.0)) < 1e-9:
+        if ((the absolute value of (fillet's centre's x - x)) < 1e-9) or ((the absolute value of (fillet's centre's x + x)) < 1e-9):
+            set hasEnclosing to true
+check fillet2 hasEnclosing
+free found
+print "a_larger_circle_can_enclose_a_circle_beside_a_line" as a line
+
+set a to cross2 segment [-10.0,0.0] to [10.0,0.0]
+set b to cross2 segment [0.0,-10.0] to [0.0,10.0]
+set corner to fillet2 right angle with radius 2.0
+set found to fillet2 tangency of a and b with radius 2.0
+check fillet2 ((the length of found) = 4)
+set matched to false
+loop index from 0 to the length of found:
+    set fillet to the item at index in found
+    if (the cad distance from fillet's centre to corner's centre) < 1e-9:
+        set matched to true
+check fillet2 matched
+free found
+print "two_lines_agree_with_the_corner_form" as a line
+
+set left to cross2 circle [-1000.0,0.0] with radius 10.0
+set right to cross2 circle [1000.0,0.0] with radius 10.0
+set found to the cad fillets between left and right with radius 1.0 within (a cad tolerance of 1e-9)
+check fillet2 ((the length of found) = 0)
+free found
+print "circles_too_far_apart_have_no_fillet_of_that_radius" as a line
+
+set ellipse to cross2 ellipse [0.0,0.0] with radii 10.0 and 5.0
+set line to cross2 segment [-50.0,-20.0] to [50.0,-20.0]
+set found to the cad fillets between ellipse and line with radius 2.0 within (a cad tolerance of 1e-9)
+check fillet2 ((the length of found) = 0)
+free found
+print "a_curve_with_no_closed_form_offset_declines" as a line
+
+set nan to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, "nan", 0 as a pointer)
+set infinity to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, "inf", 0 as a pointer)
+set radii to [0.0,-1.0,nan,infinity]
+loop index from 0 to the length of radii:
+    set found to the cad fillets between a and b with radius (the item at index in radii) within (a cad tolerance of 1e-9)
+    check fillet2 ((the length of found) = 0)
+    free found
+print "a_nonsense_radius_is_refused_rather_than_producing_a_point" as a line
+
+set found to the cad fillets between a and b with radius 2.0 within (a cad tolerance of 1e-9)
+loop index from 0 to the length of found:
+    set fillet to the item at index in found
+    check fillet2 ((cad arc span from fillet's startAngle to fillet's endAngle) <= (3.141592653589793 + 1e-9))
+free found
+print "a_fillet_takes_the_short_way_round" as a line
+
+set fillet to fillet2 right angle with radius 1.0
+fillet2 near fillet's tangent1's x to 1.0 within 1e-12
+fillet2 near fillet's tangent1's y to 0.0 within 1e-12
+fillet2 near fillet's tangent2's x to 0.0 within 1e-12
+fillet2 near fillet's tangent2's y to 1.0 within 1e-12
+print "the_tangent_points_sit_on_their_rays" as a line
+
+set result to the cad fillet at (cross2 point [3.0,-2.0]) along (cross2 point [1.0,0.0]) and (cross2 point [0.0,1.0]) with radius 2.5
+check fillet2 result's valid
+set fillet to result's value
+fillet2 near (the cad distance from fillet's tangent1 to fillet's centre) to 2.5 within 1e-9
+fillet2 near (the cad distance from fillet's tangent2 to fillet's centre) to 2.5 within 1e-9
+print "the_centre_is_the_radius_from_both_tangent_points" as a line
+
+set d1 to cross2 point [1.0,0.0]
+set d2 to cross2 point [0.6,0.8]
+set result to the cad fillet at (the cad zero vector2) along d1 and d2 with radius 1.5
+check fillet2 result's valid
+set fillet to result's value
+fillet2 near (the cad dot of (the cad difference of fillet's tangent1 and fillet's centre) and d1) to 0.0 within 1e-9
+fillet2 near (the cad dot of (the cad difference of fillet's tangent2 and fillet's centre) and d2) to 0.0 within 1e-9
+print "the_arc_is_tangent_to_both_rays" as a line
+
+set fillet to fillet2 right angle with radius 1.0
+fillet2 near (cad arc span from fillet's startAngle to fillet's endAngle) to 1.5707963267948966 within 1e-9
+print "the_arc_fills_the_corner_rather_than_going_the_long_way" as a line
+
+set result to the cad fillet at (the cad zero vector2) along (cross2 point [0.0,1.0]) and (cross2 point [1.0,0.0]) with radius 1.0
+check fillet2 result's valid
+set fillet to result's value
+fillet2 near (cad arc span from fillet's startAngle to fillet's endAngle) to 1.5707963267948966 within 1e-9
+print "the_sweep_stays_short_whichever_way_the_corner_turns" as a line
+
+set d2 to a cad vector2 with x 0.5 and y ((the square root of 3.0) / 2.0)
+set result to the cad fillet at (the cad zero vector2) along (cross2 point [1.0,0.0]) and d2 with radius 1.0
+check fillet2 result's valid
+set fillet to result's value
+fillet2 near (cad arc span from fillet's startAngle to fillet's endAngle) to ((2.0 * 3.141592653589793) / 3.0) within 1e-9
+print "a_sharper_corner_needs_a_longer_sweep" as a line
+
+set small to fillet2 right angle with radius 1.0
+set large to fillet2 right angle with radius 4.0
+check fillet2 (large's tangent1's x > small's tangent1's x)
+check fillet2 (large's centre's y > small's centre's y)
+print "a_bigger_radius_pushes_the_tangent_points_further_out" as a line
+
+set result to the cad fillet at (the cad zero vector2) along (cross2 point [1.0,0.0]) and (cross2 point [1.0,0.0]) with radius 1.0
+check fillet2 (result's valid = false)
+set result to the cad fillet at (the cad zero vector2) along (cross2 point [1.0,0.0]) and (cross2 point [-1.0,0.0]) with radius 1.0
+check fillet2 (result's valid = false)
+print "parallel_and_opposed_rays_have_no_fillet" as a line
+
+set result to the cad fillet at (the cad zero vector2) along (cross2 point [1.0,0.0]) and (cross2 point [0.0,1.0]) with radius 0.0
+check fillet2 (result's valid = false)
+print "a_zero_radius_is_a_corner_not_a_fillet" as a line
+
+set result to the cad fillet at (cross2 point [512345.678,4512345.678]) along (cross2 point [1.0,0.0]) and (cross2 point [0.0,1.0]) with radius 0.75
+check fillet2 result's valid
+set fillet to result's value
+fillet2 near (the cad distance from fillet's tangent1 to fillet's centre) to 0.75 within 1e-9
+print "survey_coordinates_keep_the_radius" as a line

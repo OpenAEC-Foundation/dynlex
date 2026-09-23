@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/clip2.dl
+import tests/cadkernel/cross2/support.dl
+
+function check clip storage {boolean:condition} labelled {string:label}:
+    execute:
+        if condition = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 94)
+
+function clipping boundary:
+    execute:
+        return cross2 polyline [[-20.0,-20.0,0.0],[20.0,-20.0,0.0],[20.0,20.0,0.0],[-20.0,20.0,0.0]] with closure true
+
+function verify clip storage of {cad curve2:source}:
+    execute:
+        set shape to source
+        set owner to shape's polyline's storage's owner
+        if shape's kind = 5:
+            set owner to shape's nurbs's owner
+        set outline to clipping boundary
+        set boundary to a list containing outline
+        set outlineOwner to outline's polyline's storage's owner
+        set baseline to @intrinsic("dereference", owner)
+        set outlineBaseline to @intrinsic("dereference", outlineOwner)
+        set tolerance to a cad tolerance of 1e-6
+        set cuts to a list containing 0.25
+        append 0.75 to cuts
+        set start to the cad point on shape at 0.0
+        loop iteration from 0 to 20:
+            set broken to the cad break spans on shape from 0.2 to 0.8 within tolerance
+            check clip storage (broken != (0 as the type of broken)) labelled "bounded break exists"
+            check clip storage ((the length of broken) = 2) labelled "two outside spans"
+            free broken
+            set trimmed to the cad trim spans on shape cut at cuts picked at 0.5 within tolerance
+            check clip storage ((the length of trimmed) = 2) labelled "trim outside spans"
+            free trimmed
+            set inside to the cad spans inside boundary along shape within tolerance
+            check clip storage ((the length of inside) = 1) labelled "whole curve inside"
+            free inside
+            set pieces to the cad pieces inside boundary along shape within tolerance
+            check clip storage ((the length of pieces) = 1) labelled "one endpoint pair"
+            free pieces
+        check clip storage ((@intrinsic("dereference", owner)) = baseline) labelled "balanced curve ownership"
+        check clip storage ((@intrinsic("dereference", outlineOwner)) = outlineBaseline) labelled "balanced boundary ownership"
+        check clip storage ((the item at 0 in cuts) = 0.25) labelled "cuts borrowed unchanged"
+        set after to the cad point on shape at 0.0
+        check clip storage ((start's x = after's x) and (start's y = after's y)) labelled "source unchanged"
+        set first to the cad pieces inside boundary along shape within tolerance
+        set second to the cad pieces inside boundary along shape within tolerance
+        check clip storage (first != second) labelled "independent result lists"
+        set saved to the item at 0 in second
+        replace item at index 0 in first with (a cad line2 from (cross2 point [100.0,100.0]) to (cross2 point [200.0,200.0]))
+        free first
+        free cuts
+        free boundary
+        free cad curve outline
+        free cad curve shape
+        set stillSaved to the item at 0 in second
+        check clip storage ((saved's start's x = stillSaved's start's x) and (saved's end's y = stillSaved's end's y)) labelled "result values independent of inputs"
+        free second
+
+function detached clip values:
+    execute:
+        set shape to cross2 interpolated spline
+        set outline to clipping boundary
+        set boundary to a list containing outline
+        set pieces to the cad pieces inside boundary along shape within (a cad tolerance of 1e-6)
+        free boundary
+        free cad curve outline
+        free cad curve shape
+        return pieces
+
+set polyline to cross2 polyline [[0.0,0.0,0.0],[3.0,3.0,0.0],[6.0,0.0,0.0]] with closure false
+verify clip storage of polyline
+free cad curve polyline
+set spline to cross2 interpolated spline
+verify clip storage of spline
+free cad curve spline
+set detached to detached clip values
+check clip storage ((the length of detached) = 1) labelled "detached result count"
+set piece to the item at 0 in detached
+check clip storage ((piece's start's x = 0.0) and ((the absolute value of (piece's end's x - 9.0)) < 1e-6)) labelled "detached endpoint values"
+free detached
+print "clip ownership passed" as a line

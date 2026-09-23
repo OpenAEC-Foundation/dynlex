@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/clip2.dl
+import tests/cadkernel/cross2/input.dl
+
+function emit clip2 spans {a pointer to a list:spans}:
+    execute:
+        emit measure2 scalar (the length of spans)
+        loop index from 0 to the length of spans:
+            set span to the item at index in spans
+            emit measure2 scalar (the item at 0 in span)
+            emit measure2 scalar (the item at 1 in span)
+        free spans
+
+function run clip2 probe:
+    execute:
+        set tolerance to a cad tolerance of (measure2 input 1)
+        set first to measure2 input 2
+        set second to measure2 input 3
+        set picked to measure2 input 4
+        set count to (measure2 input 5) as an integer
+        set cuts to an empty list of a 64 bit floating-point number
+        loop index from 0 to count:
+            append (measure2 input (6 + index)) to cuts
+        set base to 6 + count
+        set boundaryCount to (measure2 input base) as an integer
+        set base to base + 1
+        set size to (measure2 input base) as an integer
+        set shape to pair2 input curve at base
+        set base to (base + size) + 1
+        set boundary to an empty list of the type of shape
+        loop index from 0 to boundaryCount:
+            set size to (measure2 input base) as an integer
+            set edge to pair2 input curve at base
+            append edge to boundary
+            free cad curve edge
+            set base to (base + size) + 1
+        set broken to the cad break spans on shape from first to second within tolerance
+        emit measure2 flag (broken != (0 as the type of broken))
+        if broken != (0 as the type of broken):
+            emit clip2 spans broken
+        emit clip2 spans (the cad trim spans on shape cut at cuts picked at picked within tolerance)
+        emit clip2 spans (the cad spans inside boundary along shape within tolerance)
+        set pieces to the cad pieces inside boundary along shape within tolerance
+        emit measure2 scalar (the length of pieces)
+        loop index from 0 to the length of pieces:
+            set piece to the item at index in pieces
+            emit measure2 point piece's start
+            emit measure2 point piece's end
+        free pieces
+        free cuts
+        free boundary
+        free cad curve shape
+
+run clip2 probe

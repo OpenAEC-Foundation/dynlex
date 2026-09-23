@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/triangulate2.dl
+set narrow to an empty list of a 32 bit floating-point number
+ignore the cad polygon frame of narrow within (the default cad tolerance)
+free narrow

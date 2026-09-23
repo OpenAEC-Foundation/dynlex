@@ -1,0 +1,508 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native port of src/brep/pcurve.rs, revision
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed. Result curves own their managed children; boundary
+# snapshots retain lists through cad topology list. Copies share read-only
+# storage and explicit clone duplicates every curve. List fields are views.
+import lib/cadkernel/brep_topology.dl
+import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/containment2.dl
+
+local function cad pcurve tau:
+    replacement:
+        6.283185307179586
+local function cad pcurve hypot {a 64 bit floating-point number:x} {a 64 bit floating-point number:y}:
+    execute:
+        return @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, x, y)
+local function cad pcurve angle {a 64 bit floating-point number:y} {a 64 bit floating-point number:x}:
+    execute:
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
+local function cad pcurve finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad pcurve uv {a 64 bit floating-point number:x} {a 64 bit floating-point number:y}:
+    execute:
+        return a cad vector2 with x x and y y
+local function cad pcurve unwound {a 64 bit floating-point number:value} after {a 64 bit floating-point number:previous} with {a 64 bit floating-point number:period}:
+    execute:
+        set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (previous - value) / period)
+        return value + period * turns
+local function cad pcurve band {a 64 bit floating-point number:height}:
+    execute:
+        return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv 0.0 height) to (cad pcurve uv (cad pcurve tau) height)))
+local function cad pcurve generator {a 64 bit floating-point number:angle}:
+    execute:
+        return the cad pcurve of (the cad curve2 of (a cad xline2 through (cad pcurve uv angle 0.0) along (cad pcurve uv 0.0 1.0)))
+
+class:
+    patterns:
+        [a|] cad pcurve periods
+    members:
+        uValid as a boolean
+        vValid as a boolean
+        u as a 64 bit floating-point number
+        v as a 64 bit floating-point number
+
+function the cad parameter periods of {cad surface:surface}:
+    execute:
+        set result to a new cad pcurve periods
+        if (surface's kind) = 5:
+            set domain to the cad domain of (surface's nurbs)
+            set (result's uValid) to (surface's nurbs's uClosed)
+            set (result's vValid) to (surface's nurbs's vClosed)
+            set (result's u) to (domain's u's end) - (domain's u's start)
+            set (result's v) to (domain's v's end) - (domain's v's start)
+        else:
+            set (result's uValid) to (surface's kind) != 0
+            set (result's vValid) to (surface's kind) = 4
+            set (result's u) to cad pcurve tau
+            set (result's v) to cad pcurve tau
+        return result
+
+local function cad pcurve lies on {cad surface:surface} with {cad edge curve3:curve} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        loop index from 0 to 9:
+            set t to (cad pcurve tau * (index as a 64 bit floating-point number)) / 9.0
+            if (curve's kind) = 0:
+                set t to -2.0 + ((4.0 * (index as a 64 bit floating-point number)) / 8.0)
+            if (curve's kind) = 3:
+                set t to (index as a 64 bit floating-point number) / 8.0
+            if (surface contains cad point (the cad point on curve at t) within tolerance) = false:
+                return false
+        return true
+
+local function cad pcurve sampled sphere {cad surface:surface} with {cad edge curve3:curve}:
+    execute:
+        set points to a cad topology list of a cad polyline vertex2
+        set previous to 0.0
+        loop index from 0 to 96:
+            set t to (cad pcurve tau * (index as a 64 bit floating-point number)) / 96.0
+            set uv to the cad parameters on surface nearest (the cad point on curve at t)
+            if (uv's valid) = false:
+                return no cad pcurve
+            set u to (uv's value's x)
+            if index > 0:
+                set u to cad pcurve unwound u after previous with (cad pcurve tau)
+            set previous to u
+            append (a straight cad polyline vertex2 at (cad pcurve uv u ((uv's value's y)))) to (points's values)
+        set ending to the cad parameters on surface nearest (the cad point on curve at (cad pcurve tau))
+        if (ending's valid) = false:
+            return no cad pcurve
+        set u to cad pcurve unwound ((ending's value's x)) after previous with (cad pcurve tau)
+        set first to (the item at 0 in (points's values))'s position
+        if ((the absolute value of (u - (first's x))) > 1e-6) or ((the absolute value of ((ending's value's y) - (first's y))) > 1e-6):
+            return no cad pcurve
+        set sampledPolyline to the cad polyline2 with vertices (points's values) and closure true
+        set sampledCurve to the cad curve2 of sampledPolyline
+        set sampledResult to the cad pcurve of sampledCurve
+        return sampledResult
+
+function the cad projection of {cad edge curve3:curve} onto {cad surface:surface} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if (cad pcurve lies on surface with curve within tolerance) = false:
+            return no cad pcurve
+        if (surface's kind) = 0:
+            set plane to (surface's plane)
+            if (curve's kind) = 0:
+                set base to the cad projection of ((curve's line's origin)) onto plane
+                set direction to the cad vector projection of ((curve's line's direction)) onto plane
+                if ((base's valid) = false) or ((direction's valid) = false):
+                    return no cad pcurve
+                return the cad pcurve of (the cad curve2 of (a cad xline2 through ((base's value)) along ((direction's value))))
+            if (curve's kind) = 1:
+                set centre to the cad projection of ((curve's circle's plane's origin)) onto plane
+                if (centre's valid) = false:
+                    return no cad pcurve
+                return the cad pcurve of (the cad curve2 of (a cad circle2 at ((centre's value)) with radius ((curve's circle's radius))))
+            if (curve's kind) = 2:
+                set major to the cad vector projection of ((curve's ellipse's plane's xAxis)) onto plane
+                if (major's valid) = false:
+                    return no cad pcurve
+                set length to cad pcurve hypot ((major's value's x)) ((major's value's y))
+                if length <= tolerance:
+                    return no cad pcurve
+                set centre to the cad projection of ((curve's ellipse's plane's origin)) onto plane
+                if (centre's valid) = false:
+                    return no cad pcurve
+                set ellipse to a cad ellipse at ((centre's value)) with radii ((curve's ellipse's majorRadius)) and ((curve's ellipse's minorRadius)) along ((major's value) cad divided by length)
+                return the cad pcurve of (the cad curve2 of (the full cad ellipse arc2 on ellipse))
+            if (curve's kind) = 3:
+                return the cad pcurve of (the cad curve2 of (the cad clone of (curve's planar's curve)))
+            return no cad pcurve
+        if (surface's kind) = 5:
+            return no cad pcurve
+        set framed to the cad frame of surface
+        set frame to (framed's value)
+        if (curve's kind) = 0:
+            if ((surface's kind) != 1) and ((surface's kind) != 2):
+                return no cad pcurve
+            set start to the cad projection of ((curve's line's origin)) onto frame
+            if (start's valid) = false:
+                return no cad pcurve
+            set angle to cad pcurve angle ((start's value's y)) ((start's value's x))
+            if (surface's kind) = 1:
+                set axis to the cad normal of frame
+                if (axis's valid) = false:
+                    return no cad pcurve
+                if (cad ((curve's line's direction)) is parallel to ((axis's value)) within tolerance) = false:
+                    return no cad pcurve
+            else:
+                set further to the cad projection of (the cad sum of ((curve's line's origin)) and ((curve's line's direction))) onto frame
+                if (further's valid) = false:
+                    return no cad pcurve
+                set turn to the absolute value of ((cad pcurve angle ((further's value's y)) ((further's value's x))) - angle)
+                if (the minimum of turn and (cad pcurve tau - turn)) > tolerance:
+                    return no cad pcurve
+            return cad pcurve generator angle
+        if (curve's kind) != 1:
+            return no cad pcurve
+        set axis to the cad normal of frame
+        set circleNormal to the cad normal of (curve's circle's plane)
+        if ((axis's valid) = false) or ((circleNormal's valid) = false):
+            return no cad pcurve
+        set offset to the cad difference of ((curve's circle's plane's origin)) and ((frame's origin))
+        set height to the cad dot of offset and (axis's value)
+        set parallel to cad ((circleNormal's value)) is parallel to ((axis's value)) within tolerance
+        if ((surface's kind) = 1) or ((surface's kind) = 2):
+            if parallel:
+                return cad pcurve band height
+            return no cad pcurve
+        if (surface's kind) = 4:
+            if parallel:
+                return cad pcurve band (cad pcurve angle height ((curve's circle's radius) - (surface's torus's majorRadius)))
+            if (the absolute value of (the cad dot of (circleNormal's value) and (axis's value))) <= tolerance:
+                set centre to the cad projection of ((curve's circle's plane's origin)) onto frame
+                if (centre's valid) = false:
+                    return no cad pcurve
+                set angle to cad pcurve angle ((centre's value's y)) ((centre's value's x))
+                return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv angle 0.0) to (cad pcurve uv angle (cad pcurve tau))))
+            return no cad pcurve
+        if parallel:
+            if (the absolute value of height) > ((surface's sphere's radius) + tolerance):
+                return no cad pcurve
+            set latitude to height / (surface's sphere's radius)
+            clamp latitude between -1.0 and 1.0
+            return cad pcurve band (@intrinsic("call", "libc", "asin", a 64 bit floating-point number, latitude))
+        set centred to (the cad distance from (curve's circle's plane's origin) to (frame's origin)) <= tolerance
+        set meridian to ((the absolute value of (the cad dot of (circleNormal's value) and (axis's value))) <= tolerance) and centred
+        if meridian and ((the absolute value of ((curve's circle's radius) - (surface's sphere's radius))) <= tolerance):
+            set start to the cad projection of (the cad point on curve at 0.0) onto frame
+            if (start's valid) = false:
+                return no cad pcurve
+            return cad pcurve generator (cad pcurve angle ((start's value's y)) ((start's value's x)))
+        return cad pcurve sampled sphere surface with curve
+
+class:
+    patterns:
+        [a|] cad boundary part
+    members:
+        coedge as a cad coedge key
+        curve as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+class:
+    patterns:
+        [a|] cad boundary parts result
+    members:
+        valid as a boolean
+        parts as the type of (a cad topology list of a cad boundary part)
+class:
+    patterns:
+        [a|] cad boundary result
+    members:
+        valid as a boolean
+        curves as the type of (a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))))
+
+local function cad pcurve no parts:
+    execute:
+        return @intrinsic("construct", a cad boundary parts result, false, a cad topology list of a cad boundary part)
+
+local function cad pcurve trimmed {cad curve2:flat} on {cad surface:surface} along {cad edge curve3:curve} [from] {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        set periods to the cad parameter periods of surface
+        set raw to a cad topology list of a cad vector2
+        loop step from 0 to 9:
+            set t to first + (((last - first) * (step as a 64 bit floating-point number)) / 8.0)
+            set point to the cad point on curve at t
+            set uv to the cad parameters on surface nearest point
+            if (uv's valid):
+                append ((uv's value)) to (raw's values)
+            else:
+                if (surface's kind) != 3:
+                    return no cad pcurve
+                set local to the cad projection of point onto ((surface's sphere's frame))
+                set axis to the cad normal of (surface's sphere's frame)
+                if ((local's valid) = false) or ((axis's valid) = false):
+                    return no cad pcurve
+                set height to the cad dot of (the cad difference of point and (surface's sphere's frame's origin)) and (axis's value)
+                if (cad pcurve hypot ((local's value's x)) ((local's value's y))) > (2.220446049250313e-16 * (the maximum of ((surface's sphere's radius)) and 1.0)):
+                    return no cad pcurve
+                set nan to @intrinsic("call", "libc", "nan", a 64 bit floating-point number, "")
+                append (cad pcurve uv nan (cad pcurve angle height 0.0)) to (raw's values)
+        loop index from 0 to 9:
+            set here to the item at index in (raw's values)
+            if (cad pcurve finite ((here's x))) = false:
+                set found to false
+                set distance to 1
+                loop while (distance < 9) and (found = false):
+                    if index >= distance:
+                        set near to the item at (index - distance) in (raw's values)
+                        if cad pcurve finite ((near's x)):
+                            set (here's x) to (near's x)
+                            set found to true
+                    if ((index + distance) < 9) and (found = false):
+                        set near to the item at (index + distance) in (raw's values)
+                        if cad pcurve finite ((near's x)):
+                            set (here's x) to (near's x)
+                            set found to true
+                    increment distance
+                if found = false:
+                    return no cad pcurve
+                replace item at index index in (raw's values) with here
+        loop index from 1 to 9:
+            set here to the item at index in (raw's values)
+            set previousUV to the item at (index - 1) in (raw's values)
+            if (periods's uValid):
+                set (here's x) to cad pcurve unwound ((here's x)) after ((previousUV's x)) with ((periods's u))
+            if (periods's vValid):
+                set (here's y) to cad pcurve unwound ((here's y)) after ((previousUV's y)) with ((periods's v))
+            replace item at index index in (raw's values) with here
+        if ((flat's kind) = 0) or (((flat's kind) = 6) or ((flat's kind) = 7)):
+            return the cad pcurve of (the cad curve2 of (a cad line2 from (the item at 0 in (raw's values)) to (the item at 8 in (raw's values))))
+        if ((flat's kind) != 1) and ((flat's kind) != 3):
+            return the cad pcurve of flat
+        set from to 0.0
+        set previous to 0.0
+        loop index from 0 to 9:
+            set uvPoint to the item at index in (raw's values)
+            set angle to 0.0
+            if (flat's kind) = 1:
+                set angle to cad pcurve angle ((uvPoint's y) - (flat's circle's centre's y)) ((uvPoint's x) - (flat's circle's centre's x))
+            else:
+                set angle to (the cad parameter on flat nearest uvPoint) * cad pcurve tau
+            if index > 0:
+                set angle to cad pcurve unwound angle after previous with (cad pcurve tau)
+            else:
+                set from to angle
+            set previous to angle
+        set positive to flat
+        if ((the absolute value of (previous - from)) >= (cad pcurve tau - 1e-9)) = false:
+            set lo to the minimum of from and previous
+            set hi to the maximum of from and previous
+            if (flat's kind) = 1:
+                set positive to the cad curve2 of (a cad arc2 at ((flat's circle's centre)) with radius ((flat's circle's radius)) from lo to hi)
+            else:
+                set positive to the cad curve2 of (a cad ellipse arc2 on ((flat's ellipse's ellipse)) from lo to hi)
+        if previous < from:
+            set builder to the cad rational builder of positive
+            if (builder's valid) = false:
+                return no cad pcurve
+            set reversed to the cad reverse of (builder's value)
+            set made to the cad curve of reversed
+            if (made's valid) = false:
+                return no cad pcurve
+            return the cad pcurve of (the cad curve2 of (made's value))
+        return the cad pcurve of positive
+
+local function cad pcurve chain {a pointer to a list:pieces} with {cad pcurve periods:periods}:
+    execute:
+        if (((periods's uValid) = false) and ((periods's vValid) = false)) or ((the length of pieces) < 2):
+            return nothing
+        set first to (the item at 0 in pieces)'s curve
+        set head to the cad point on first at 1.0
+        set behind to the cad point on first at 0.0
+        set u to 0.0
+        set v to 0.0
+        set uSpan to 0
+        set vSpan to 0
+        if (periods's uValid) and ((cad pcurve finite ((periods's u))) and ((periods's u) > 0.0)):
+            set u to (periods's u)
+            set uSpan to 2
+        if (periods's vValid) and ((cad pcurve finite ((periods's v))) and ((periods's v) > 0.0)):
+            set v to (periods's v)
+            set vSpan to 2
+        loop index from 1 to the length of pieces:
+            set part to the item at index in pieces
+            set start to the cad point on (part's curve) at 0.0
+            set end to the cad point on (part's curve) at 1.0
+            set best to @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, "inf", 0 as a pointer)
+            set shift to the cad zero vector2
+            loop across from (0 - uSpan) to (uSpan + 1):
+                loop along from (0 - vSpan) to (vSpan + 1):
+                    set offset to cad pcurve uv (u * (across as a 64 bit floating-point number)) (v * (along as a 64 bit floating-point number))
+                    set movedStart to the cad sum of start and offset
+                    set movedEnd to the cad sum of end and offset
+                    set retraces to ((cad pcurve hypot ((movedStart's x) - (head's x)) ((movedStart's y) - (head's y))) < 1e-9) and ((cad pcurve hypot ((movedEnd's x) - (behind's x)) ((movedEnd's y) - (behind's y))) < 1e-9)
+                    if retraces = false:
+                        set gap to cad pcurve hypot ((movedStart's x) - (head's x)) ((movedStart's y) - (head's y))
+                        if gap < best:
+                            set best to gap
+                            set shift to offset
+            if (((shift's x) != 0.0) or ((shift's y) != 0.0)) and ((part's curve's kind) = 0):
+                set (part's curve's line's start) to the cad sum of ((part's curve's line's start)) and shift
+                set (part's curve's line's end) to the cad sum of ((part's curve's line's end)) and shift
+                replace item at index index in pieces with part
+            set behind to the cad point on (part's curve) at 0.0
+            set head to the cad point on (part's curve) at 1.0
+
+function the cad boundary parts of {cad face key:face} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set node to the cad node pointer for face in body
+        if node = (0 as the type of node):
+            return cad pcurve no parts
+        set surface to the cad node pointer for (node's surface) in body
+        if surface = (0 as the type of surface):
+            return cad pcurve no parts
+        set output to a cad topology list of a cad boundary part
+        loop i from 0 to the length of ((node's loops's values)):
+            set ring to the cad node pointer for (the item at i in (node's loops's values)) in body
+            if ring = (0 as the type of ring):
+                return cad pcurve no parts
+            set pieces to a cad topology list of a cad boundary part
+            loop j from 0 to the length of ((ring's coedges's values)):
+                set key to the item at j in (ring's coedges's values)
+                set coedge to the cad node pointer for key in body
+                if coedge = (0 as the type of coedge):
+                    return cad pcurve no parts
+                set flat to no cad pcurve
+                if (coedge's pcurve's valid):
+                    set flat to the cad clone of (coedge's pcurve)
+                else:
+                    set edge to the cad node pointer for (coedge's edge) in body
+                    if edge = (0 as the type of edge):
+                        return cad pcurve no parts
+                    set curve to the cad node pointer for (edge's curve) in body
+                    if curve = (0 as the type of curve):
+                        return cad pcurve no parts
+                    set projected to the cad projection of (@intrinsic("dereference", curve)) onto (@intrinsic("dereference", surface)) within tolerance
+                    if (projected's valid) = false:
+                        return cad pcurve no parts
+                    set first to (edge's startParameter)
+                    set last to (edge's endParameter)
+                    if (coedge's forward) = false:
+                        set first to (edge's endParameter)
+                        set last to (edge's startParameter)
+                    set flat to cad pcurve trimmed ((projected's value)) on (@intrinsic("dereference", surface)) along (@intrinsic("dereference", curve)) from first to last
+                if (flat's valid) = false:
+                    return cad pcurve no parts
+                append (@intrinsic("construct", a cad boundary part, key, (flat's value))) to (pieces's values)
+            cad pcurve chain ((pieces's values)) with (the cad parameter periods of (@intrinsic("dereference", surface)))
+            loop j from 0 to the length of ((pieces's values)):
+                append (the item at j in (pieces's values)) to (output's values)
+        return @intrinsic("construct", a cad boundary parts result, true, output)
+
+function the cad boundary of {cad face key:face} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set parts to the cad boundary parts of face in body within tolerance
+        set curves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to the length of ((parts's parts's values)):
+            append ((the item at index in (parts's parts's values))'s curve) to (curves's values)
+        return @intrinsic("construct", a cad boundary result, (parts's valid), curves)
+
+function the cad clone of {cad boundary part:part}:
+    execute:
+        return @intrinsic("construct", a cad boundary part, (part's coedge), the cad clone of (part's curve))
+function the cad clone of {cad boundary parts result:original}:
+    execute:
+        if (original's valid) = false:
+            return cad pcurve no parts
+        set parts to a cad topology list of a cad boundary part
+        loop index from 0 to the length of ((original's parts's values)):
+            append (the cad clone of (the item at index in (original's parts's values))) to (parts's values)
+        return @intrinsic("construct", a cad boundary parts result, (original's valid), parts)
+function the cad clone of {cad boundary result:original}:
+    execute:
+        set curves to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        if (original's valid) = false:
+            return @intrinsic("construct", a cad boundary result, false, curves)
+        loop index from 0 to the length of ((original's curves's values)):
+            append (the cad clone of (the item at index in (original's curves's values))) to (curves's values)
+        return @intrinsic("construct", a cad boundary result, (original's valid), curves)
+
+local function check cad pcurve boundary item {cad curve2:value}:
+    execute:
+        ignore value
+local function cad pcurve checked boundary {a pointer to a list:boundary}:
+    execute:
+        check cad pcurve boundary item (a new (the type of (the item at 0 in boundary)))
+local function cad pcurve order key {a 64 bit floating-point number:value}:
+    execute:
+        set bits to @intrinsic("dereference", (@intrinsic("address of", value)) as a pointer to a 64 bit integer)
+        if bits < (0 as a 64 bit integer):
+            return bits ^ (9223372036854775807 as a 64 bit integer)
+        return bits
+
+local function cad pcurve band [levels] on {cad surface:surface} bounded by {a pointer to a list:boundary} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        cad pcurve checked boundary boundary
+        set absent to @intrinsic("construct", a cad plane coordinates result, false, the cad zero vector2)
+        set periods to the cad parameter periods of surface
+        if (periods's uValid) = false:
+            return absent
+        set levels to a cad topology list of a cad vector2
+        loop index from 0 to the length of boundary:
+            set curve to the item at index in boundary
+            if (curve's kind) != 0:
+                return absent
+            set line to (curve's line)
+            if (the absolute value of ((line's end's y) - (line's start's y))) > tolerance:
+                return absent
+            set level to 0.5 * ((line's start's y) + (line's end's y))
+            set span to the absolute value of ((line's end's x) - (line's start's x))
+            set found to false
+            set j to 0
+            loop while (j < (the length of ((levels's values)))) and (found = false):
+                set existing to the item at j in (levels's values)
+                if (the absolute value of ((existing's x) - level)) <= tolerance:
+                    set (existing's y) to (existing's y) + span
+                    replace item at index j in (levels's values) with existing
+                    set found to true
+                increment j
+            if found = false:
+                append (cad pcurve uv level span) to (levels's values)
+        if (the length of ((levels's values))) != 2:
+            return absent
+        set first to the item at 0 in (levels's values)
+        set last to the item at 1 in (levels's values)
+        if ((first's y) < ((periods's u) - tolerance)) or ((last's y) < ((periods's u) - tolerance)):
+            return absent
+        if (cad pcurve order key ((last's x))) < (cad pcurve order key ((first's x))):
+            return @intrinsic("construct", a cad plane coordinates result, true, cad pcurve uv ((last's x)) ((first's x)))
+        return @intrinsic("construct", a cad plane coordinates result, true, cad pcurve uv ((first's x)) ((last's x)))
+
+function cad {cad surface:surface} bounded by {a pointer to a list:boundary} contains parameter {cad vector2:point} within {cad tolerance:tolerance}:
+    execute:
+        cad pcurve checked boundary boundary
+        set periods to the cad parameter periods of surface
+        set uSpan to 0
+        set vSpan to 0
+        if (periods's uValid):
+            set uSpan to 1
+        if (periods's vValid):
+            set vSpan to 1
+        loop i from (0 - uSpan) to (uSpan + 1):
+            loop j from (0 - vSpan) to (vSpan + 1):
+                set u to 0.0
+                set v to 0.0
+                if i = -1:
+                    set u to the negative of (periods's u)
+                if i = 1:
+                    set u to (periods's u)
+                if j = -1:
+                    set v to the negative of (periods's v)
+                if j = 1:
+                    set v to (periods's v)
+                set shifted to cad pcurve uv ((point's x) + u) ((point's y) + v)
+                if cad boundary boundary contains shifted within tolerance:
+                    return true
+        set levels to cad pcurve band levels on surface bounded by boundary within (tolerance's linear)
+        if (levels's valid) = false:
+            return false
+        return ((point's y) >= ((levels's value's x) - (tolerance's linear))) and ((point's y) <= ((levels's value's y) + (tolerance's linear)))
+
+function the cad periodic band point on {cad surface:surface} bounded by {a pointer to a list:boundary} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set levels to cad pcurve band levels on surface bounded by boundary within tolerance
+        if (levels's valid) = false:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set u to (the cad point on (the item at 0 in boundary) at 0.5)'s x
+        set v to 0.5 * ((levels's value's x) + (levels's value's y))
+        return @intrinsic("construct", a cad normalization3, true, the cad point on surface at parameters u and v)

@@ -1,0 +1,218 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_split.dl
+import lib/cadkernel/brep_make.dl
+import tests/cadkernel/brep_make/emit.dl
+
+function split probe point at {integer:position}:
+    execute:
+        return a cad vector3 with x (maker argument position), y (maker argument (position + 1)) and z (maker argument (position + 2))
+
+function the split probe periodic band at {cad vector3:origin} with radius {a 64 bit floating-point number:radius} and height {a 64 bit floating-point number:height}:
+    execute:
+        set result to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into result
+        append lumpKey to result's roots
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into result
+        set lumpNode to the cad node pointer for lumpKey in result
+        append shellKey to (lumpNode's shells's values)
+        set basePlane to the cad orthonormal plane with origin origin, x axis (the cad x axis) and normal (the cad z axis)
+        set surfaceKey to the cad body key after inserting (the cad surface of (a cad cylinder with base basePlane's value and radius radius)) into result
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward true owned by shellKey with provenance (the synthesized cad provenance)) into result
+        set shellNode to the cad node pointer for shellKey in result
+        append faceKey to (shellNode's faces's values)
+        loop boundaryCursor from 0 to 2:
+            set zValue to origin's z
+            set forwardValue to false
+            if boundaryCursor = 1:
+                set zValue to origin's z + height
+                set forwardValue to true
+            set ringOrigin to a cad vector3 with x origin's x, y origin's y and z zValue
+            set ringPlane to the cad orthonormal plane with origin ringOrigin, x axis (the cad x axis) and normal (the cad z axis)
+            set vertexPoint to a cad vector3 with x (origin's x + radius), y origin's y and z zValue
+            set vertexKey to the cad body key after inserting (a cad vertex at vertexPoint with provenance (the synthesized cad provenance)) into result
+            set curveKey to the cad body key after inserting (the cad edge curve3 of (a cad circle3 with plane ringPlane's value and radius radius)) into result
+            set edgeKey to the cad body key after inserting (a cad edge on curveKey from 0.0 to 6.283185307179586 between vertexKey and vertexKey with provenance (the synthesized cad provenance)) into result
+            set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into result
+            set coedgeKey to the cad body key after inserting (a cad coedge on edgeKey forward forwardValue with pcurve (no cad pcurve) owned by loopKey with provenance (the synthesized cad provenance)) into result
+            set edgeNode to the cad node pointer for edgeKey in result
+            append coedgeKey to (edgeNode's coedges's values)
+            set loopNode to the cad node pointer for loopKey in result
+            append coedgeKey to (loopNode's coedges's values)
+            set faceNode to the cad node pointer for faceKey in result
+            append loopKey to (faceNode's loops's values)
+        return result
+
+set kind to (maker argument 0) as an integer
+set origin to split probe point at 4
+set body to an empty cad body
+if (kind = 0) or (((kind = 2) or (kind = 4)) or (kind = 6)):
+    set made to the cad cuboid at origin with size (split probe point at 1)
+    if made's valid:
+        set body to made's value
+else if kind = 1:
+    set made to the cad cylinder body at origin with radius (maker argument 1) and height (maker argument 2)
+    if made's valid:
+        set body to made's value
+else if kind = 3:
+    set made to the cad sphere body at origin with radius (maker argument 1)
+    if made's valid:
+        set body to made's value
+else if kind = 5:
+    set body to the split probe periodic band at origin with radius (maker argument 1) and height (maker argument 2)
+
+if kind = 6:
+    set ellipseFaceKeys to the cad face keys of body
+    set ellipseFace to a new cad face key
+    loop faceCursor from 0 to the length of ellipseFaceKeys:
+        set faceKey to the item at faceCursor in ellipseFaceKeys
+        set faceNode to the cad node pointer for faceKey in body
+        set surfaceNode to the cad node pointer for faceNode's surface in body
+        if surfaceNode's kind = 0:
+            set faceNormal to the cad normal of surfaceNode's plane
+            if faceNormal's valid and (((the absolute value of (faceNormal's value's z)) > 0.9) and ((the absolute value of (surfaceNode's plane's origin's z - origin's z)) <= (maker argument 9))):
+                set ellipseFace to faceKey
+    set ellipseCentre to a cad vector3 with x (origin's x + 0.5 * (maker argument 1)), y (origin's y + 0.5 * (maker argument 2)) and z origin's z
+    set ellipsePlane to the cad orthonormal plane with origin ellipseCentre, x axis (the cad x axis) and normal (the cad z axis)
+    set ellipseCutter to the cad edge curve3 of (a cad ellipse3 with plane ellipsePlane's value, major radius (maker argument 8) and minor radius (maker argument 11))
+    set firstEllipseResult to the cad split of ellipseFace in body along ellipseCutter within (maker argument 9)
+    emit maker flag firstEllipseResult's valid
+    set secondEllipseResult to @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+    if firstEllipseResult's valid and ((maker argument 10) = 1.0):
+        set secondEllipseResult to the cad split of firstEllipseResult's kept in body along ellipseCutter within (maker argument 9)
+        if secondEllipseResult's valid = false:
+            set secondEllipseResult to the cad split of firstEllipseResult's made in body along ellipseCutter within (maker argument 9)
+    emit maker flag secondEllipseResult's valid
+    emit maker body body
+    free ellipseFaceKeys
+else if kind = 5:
+    set bandFaces to the cad face keys of body
+    set bandFace to the item at 0 in bandFaces
+    set bandRadius to maker argument 1
+    set bandHeight to maker argument 2
+    set firstBandZ to origin's z + (maker argument 8) * bandHeight
+    set firstBandOrigin to a cad vector3 with x origin's x, y origin's y and z firstBandZ
+    set firstBandPlane to the cad orthonormal plane with origin firstBandOrigin, x axis (the cad x axis) and normal (the cad z axis)
+    set firstBandCutter to the cad edge curve3 of (a cad circle3 with plane firstBandPlane's value and radius bandRadius)
+    set firstBandResult to the cad split of bandFace in body along firstBandCutter within (maker argument 9)
+    emit maker flag firstBandResult's valid
+    set secondBandResult to @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+    if firstBandResult's valid and ((maker argument 10) = 1.0):
+        set secondBandZ to origin's z + (maker argument 11) * bandHeight
+        set secondBandOrigin to a cad vector3 with x origin's x, y origin's y and z secondBandZ
+        set secondBandPlane to the cad orthonormal plane with origin secondBandOrigin, x axis (the cad x axis) and normal (the cad z axis)
+        set secondBandCutter to the cad edge curve3 of (a cad circle3 with plane secondBandPlane's value and radius bandRadius)
+        set secondBandResult to the cad split of firstBandResult's kept in body along secondBandCutter within (maker argument 9)
+        if secondBandResult's valid = false:
+            set secondBandResult to the cad split of firstBandResult's made in body along secondBandCutter within (maker argument 9)
+    emit maker flag secondBandResult's valid
+    emit maker body body
+    free bandFaces
+else if kind = 4:
+    set circleFaceKeys to the cad face keys of body
+    set circleFace to a new cad face key
+    loop faceCursor from 0 to the length of circleFaceKeys:
+        set faceKey to the item at faceCursor in circleFaceKeys
+        set faceNode to the cad node pointer for faceKey in body
+        set surfaceNode to the cad node pointer for faceNode's surface in body
+        if surfaceNode's kind = 0:
+            set faceNormal to the cad normal of surfaceNode's plane
+            if faceNormal's valid and (((the absolute value of (faceNormal's value's z)) > 0.9) and ((the absolute value of (surfaceNode's plane's origin's z - origin's z)) <= (maker argument 9))):
+                set circleFace to faceKey
+    set circleCentre to a cad vector3 with x (origin's x + 0.5 * (maker argument 1)), y (origin's y + 0.5 * (maker argument 2)) and z origin's z
+    set circlePlane to the cad orthonormal plane with origin circleCentre, x axis (the cad x axis) and normal (the cad z axis)
+    set circleCutter to the cad edge curve3 of (a cad circle3 with plane circlePlane's value and radius (maker argument 8))
+    set firstCircleResult to the cad split of circleFace in body along circleCutter within (maker argument 9)
+    emit maker flag firstCircleResult's valid
+    set secondCircleResult to @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+    if firstCircleResult's valid and ((maker argument 10) = 1.0):
+        set secondCircleResult to the cad split of firstCircleResult's kept in body along circleCutter within (maker argument 9)
+        if secondCircleResult's valid = false:
+            set secondCircleResult to the cad split of firstCircleResult's made in body along circleCutter within (maker argument 9)
+    emit maker flag secondCircleResult's valid
+    emit maker body body
+    free circleFaceKeys
+else if kind = 3:
+    set sphereKeys to the cad face keys of body
+    set sphereFace to a new cad face key
+    if (the length of sphereKeys) > 0:
+        set sphereFace to the item at 0 in sphereKeys
+    set sphereRadius to maker argument 1
+    set latitudeOffset to (maker argument 8) * sphereRadius
+    set latitudeRadius to @intrinsic("call", "libc", "sqrt", a 64 bit floating-point number, (sphereRadius * sphereRadius) - (latitudeOffset * latitudeOffset))
+    set latitudeOrigin to a cad vector3 with x origin's x, y origin's y and z (origin's z + latitudeOffset)
+    set latitudePlane to the cad orthonormal plane with origin latitudeOrigin, x axis (the cad x axis) and normal (the cad z axis)
+    set sphereCutter to the cad edge curve3 of (a cad circle3 with plane latitudePlane's value and radius latitudeRadius)
+    set firstSphereResult to the cad split of sphereFace in body along sphereCutter within (maker argument 9)
+    emit maker flag firstSphereResult's valid
+    set secondSphereResult to @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+    if firstSphereResult's valid and ((maker argument 10) = 1.0):
+        set secondSphereResult to the cad split of firstSphereResult's kept in body along sphereCutter within (maker argument 9)
+        if secondSphereResult's valid = false:
+            set secondSphereResult to the cad split of firstSphereResult's made in body along sphereCutter within (maker argument 9)
+    emit maker flag secondSphereResult's valid
+    emit maker body body
+    free sphereKeys
+else if kind = 2:
+    set faceKeys to the cad face keys of body
+    set selectedFace to a new cad face key
+    loop faceCursor from 0 to the length of faceKeys:
+        set faceKey to the item at faceCursor in faceKeys
+        set faceNode to the cad node pointer for faceKey in body
+        set surfaceNode to the cad node pointer for faceNode's surface in body
+        if surfaceNode's kind = 0:
+            set normal to the cad normal of surfaceNode's plane
+            if normal's valid and (((the absolute value of (normal's value's z)) > 0.9) and ((the absolute value of (surfaceNode's plane's origin's z - origin's z)) <= (maker argument 9))):
+                set selectedFace to faceKey
+    set style to (maker argument 7) as an integer
+    set fraction to maker argument 8
+    set lineOrigin to a cad vector3 with x (origin's x - (maker argument 1)), y (origin's y + fraction * (maker argument 2)) and z origin's z
+    set lineDirection to the cad x axis
+    if style = 1:
+        set lineOrigin to a cad vector3 with x (origin's x + fraction * (maker argument 1)), y (origin's y - (maker argument 2)) and z origin's z
+        set lineDirection to the cad y axis
+    else if style = 2:
+        set lineOrigin to origin
+        set lineDirection to a cad vector3 with x (maker argument 1), y (maker argument 2) and z 0.0
+    else if style = 3:
+        set lineOrigin to a cad vector3 with x (origin's x - (maker argument 1)), y (origin's y + (2.0 + (the absolute value of fraction)) * (maker argument 2)) and z origin's z
+    else if style = 4:
+        set lineOrigin to a cad vector3 with x (origin's x - (maker argument 1)), y (origin's y + fraction * (maker argument 2)) and z (origin's z + 0.1 * (maker argument 3))
+    set cutter to the cad edge curve3 of (a cad line3 with origin lineOrigin and direction lineDirection)
+    set firstFaceResult to the cad split of selectedFace in body along cutter within (maker argument 9)
+    emit maker flag firstFaceResult's valid
+    set secondFaceResult to @intrinsic("construct", a cad split face result, false, a new cad face key, a new cad face key)
+    if firstFaceResult's valid and ((maker argument 10) = 1.0):
+        set secondOrigin to a cad vector3 with x (origin's x - (maker argument 1)), y (origin's y + (maker argument 11) * (maker argument 2)) and z origin's z
+        set secondCutter to the cad edge curve3 of (a cad line3 with origin secondOrigin and direction the cad x axis)
+        set secondFaceResult to the cad split of firstFaceResult's kept in body along secondCutter within (maker argument 9)
+        if secondFaceResult's valid = false:
+            set secondFaceResult to the cad split of firstFaceResult's made in body along secondCutter within (maker argument 9)
+    emit maker flag secondFaceResult's valid
+    emit maker body body
+    free faceKeys
+else:
+    set edgeKeys to the cad edge keys of body
+    set selectedIndex to the remainder of (the absolute value of ((maker argument 7) as an integer)) divided by (the length of edgeKeys)
+    set selectedKey to the item at selectedIndex in edgeKeys
+    set selectedNode to the cad node pointer for selectedKey in body
+    set splitValue to selectedNode's startParameter + (maker argument 8) * (selectedNode's endParameter - selectedNode's startParameter)
+    set firstResult to @intrinsic("construct", a cad split edge result, false, a new cad edge key, a new cad edge key)
+    if (maker argument 9) = 0.0:
+        set firstResult to the cad split of selectedKey in body at parameter splitValue
+    else:
+        set curveNode to the cad node pointer for selectedNode's curve in body
+        set splitPoint to the cad point on (@intrinsic("dereference", curveNode)) at splitValue
+        set firstResult to the cad split of selectedKey in body at point splitPoint
+    emit maker flag firstResult's valid
+
+    set secondResult to @intrinsic("construct", a cad split edge result, false, a new cad edge key, a new cad edge key)
+    if firstResult's valid and (((maker argument 10) = 1.0) or ((maker argument 10) = 2.0)):
+        set targetKey to firstResult's far
+        if (maker argument 10) = 1.0:
+            set targetKey to firstResult's near
+        set targetNode to the cad node pointer for targetKey in body
+        set secondValue to targetNode's startParameter + (maker argument 11) * (targetNode's endParameter - targetNode's startParameter)
+        set secondResult to the cad split of targetKey in body at parameter secondValue
+    emit maker flag secondResult's valid
+    emit maker body body
+    free edgeKeys

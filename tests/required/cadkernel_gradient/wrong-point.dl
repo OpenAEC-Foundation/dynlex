@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/gradient.dl
+import lib/vector.dl
+
+# Even an empty boundary must have the required binary64 two-coordinate payload.
+set prototype to a new vector with x (1.0 as a 32 bit floating-point number), y (0.0 as a 32 bit floating-point number) and z (0.0 as a 32 bit floating-point number)
+set boundary to an empty list of the type of prototype
+set result to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within (the default cad tolerance)
+print (the valid of result) as a line
+free boundary

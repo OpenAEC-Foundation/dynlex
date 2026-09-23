@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/space/curve.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, including code after its test module.
+# Control lists are borrowed. Sampling returns one caller-owned list.
+import lib/cadkernel/core.dl
+import lib/list.dl
+
+function the cad bezier [point] of {a pointer to a list:control} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set count to the length of control
+        if count = 0:
+            return the cad zero vector3
+        if count = 1:
+            set {cad vector3:point} to the item at 0 in control
+            return point
+        set working to an empty list of a cad vector3
+        loop index from 0 to count:
+            append (the item at index in control) to working
+        loop round from 1 to count:
+            loop index from 0 to (count - round):
+                set blended to the cad lerp from (the item at index in working) to (the item at (index + 1) in working) at parameter
+                replace item at index index in working with blended
+        set result to the item at 0 in working
+        free working
+        return result
+
+function the cad bezier samples of {a pointer to a list:control} with {integer:segments} [segments]:
+    execute:
+        if segments < 0:
+            @intrinsic("call", "libc", "abort", nothing)
+        set count to the maximum of segments and 1
+        set sampleCount to the collection length after adding one item to count
+        set result to an empty list of a cad vector3
+        loop step from 0 to sampleCount:
+            set parameter to (step as a 64 bit floating-point number) / (count as a 64 bit floating-point number)
+            append (the cad bezier point of control at parameter) to result
+        return result
+
+function cad segments from {cad vector3:firstStart} to {cad vector3:firstEnd} and from {cad vector3:secondStart} to {cad vector3:secondEnd} overlap within {a 64 bit floating-point number:linearTolerance}:
+    execute:
+        if (linearTolerance <= 0.0) or (((the absolute value of linearTolerance) <= 1.7976931348623157e308) = false):
+            return false
+        if ((((cad firstStart is finite) and (cad firstEnd is finite)) and (cad secondStart is finite)) and (cad secondEnd is finite)) = false:
+            return false
+        set first to the cad difference of firstEnd and firstStart
+        set second to the cad difference of secondEnd and secondStart
+        set firstLength to the cad length of first
+        set secondLength to the cad length of second
+        if (firstLength <= linearTolerance) or (secondLength <= linearTolerance):
+            return false
+        set coordinateScale to 1.0
+        set endpoints to [firstStart, firstEnd, secondStart, secondEnd]
+        loop index from 0 to 4:
+            set point to the item at index in endpoints
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the x of point))
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the y of point))
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of (the z of point))
+        set tolerance to the maximum of linearTolerance and ((coordinateScale * 2.220446049250313e-16) * 32.0)
+        if (the cad length of (the cad cross of first and second)) > ((1e-12 * firstLength) * secondLength):
+            return false
+        set offset to the cad difference of secondStart and firstStart
+        if (the cad length of (the cad cross of offset and first)) > (tolerance * firstLength):
+            return false
+        set direction to first cad divided by firstLength
+        set secondA to the cad dot of offset and direction
+        set secondB to the cad dot of (the cad difference of secondEnd and firstStart) and direction
+        set end to the minimum of (the maximum of secondA and secondB) and firstLength
+        set start to the maximum of (the minimum of secondA and secondB) and 0.0
+        return (end - start) > tolerance
+
+function the cad curvature through {cad vector3:point}, {cad vector3:next} and {cad vector3:third}:
+    execute:
+        set u to the cad difference of next and point
+        set v to the cad difference of third and point
+        set across to the cad cross of u and v
+        set denominator to 2.0 * (the cad squared length of across)
+        if denominator <= 2.2250738585072014e-308:
+            return the cad zero vector3
+        set first to (the cad cross of v and across) scaled by (the cad squared length of u)
+        set second to (the cad cross of across and u) scaled by (the cad squared length of v)
+        set centre to (the cad sum of first and second) cad divided by denominator
+        set squared to the cad squared length of centre
+        if squared <= 2.2250738585072014e-308:
+            return the cad zero vector3
+        return centre cad divided by squared
+
+local function the cad curve scaled unit of {cad vector3:value}:
+    execute:
+        set scale to the maximum of (the maximum of (the absolute value of (the x of value)) and (the absolute value of (the y of value))) and (the absolute value of (the z of value))
+        if (scale = 0.0) or ((scale <= 1.7976931348623157e308) = false):
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        return the cad normalization of (value cad divided by scale)
+
+function the cad angle bisector of {cad vector3:first} and {cad vector3:second} with normal {cad vector3:normal}:
+    execute:
+        if (((cad first is finite) and (cad second is finite)) and (cad normal is finite)) = false:
+            return @intrinsic("construct", a cad normalization3, false, the cad zero vector3)
+        set a to the cad curve scaled unit of first
+        if (the valid of a) = false:
+            return a
+        set b to the cad curve scaled unit of second
+        if (the valid of b) = false:
+            return b
+        set direction to the cad curve scaled unit of (the cad sum of (the value of a) and (the value of b))
+        if the valid of direction:
+            return direction
+        set planeNormal to the cad curve scaled unit of normal
+        if (the valid of planeNormal) = false:
+            return planeNormal
+        return the cad curve scaled unit of (the cad cross of (the value of planeNormal) and (the value of a))

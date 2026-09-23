@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/source_join3/main.dl
+
+set sourceLine to the cad line nurbs from the cad zero vector3 to the cad x axis of degree 2
+set otherLine to the cad line nurbs from (source join3 point [-1.0,0.0,0.0]) to (source join3 point [1e-10,0.0,0.0]) of degree 2
+set weights to a list containing 2.0
+append 0.5 to weights
+append 2.0 to weights
+set source to the strict cad nurbs curve3 of degree 2 with controls sourceLine's value's controls, knots sourceLine's value's knots and weights weights
+clear weights
+append 0.3 to weights
+append 1.2 to weights
+append 0.3 to weights
+set other to the strict cad nurbs curve3 of degree 2 with controls otherLine's value's controls, knots otherLine's value's knots and weights weights
+free weights
+check source join3 (source's valid and other's valid)
+set beforeSource to the cad clone of source's value
+set beforeOther to the cad clone of other's value
+set joined to the cad joined nurbs of source's value and other's value within 1e-9
+check source join3 joined's valid
+check source join3 (source's value = beforeSource)
+check source join3 (other's value = beforeOther)
+check source join3 (joined's value's controls != source's value's controls)
+check source join3 (joined's value's knots != source's value's knots)
+check source join3 (joined's value's weights != source's value's weights)
+loop index from 0 to 3:
+    set actual to the item at (index + 2) in (joined's value's controls)
+    set expectedPoint to the item at index in (source's value's controls)
+    check source join3 (((actual's x = expectedPoint's x) and (actual's y = expectedPoint's y)) and (actual's z = expectedPoint's z))
+    check source join3 ((the item at (index + 2) in (joined's value's weights)) = (the item at index in (source's value's weights)))
+set retained to joined
+free cad nurbs joined's value
+free cad nurbs source's value
+free cad nurbs other's value
+check source join3 ((the length of retained's value's controls) = 5)
+check source join3 ((the cad distance from (the cad point on retained's value at 1.0) to the cad x axis) < 1e-12)
+
+function source join3 returned result:
+    execute:
+        set first to the cad line nurbs from the cad zero vector3 to the cad x axis of degree 1
+        set second to the cad line nurbs from (source join3 point [2.0,0.0,0.0]) to the cad x axis of degree 1
+        return the cad joined nurbs of first's value and second's value within 0.0
+set retained to source join3 returned result
+check source join3 retained's valid
+check source join3 ((the cad distance from (the cad point on retained's value at 1.0) to (source join3 point [2.0,0.0,0.0])) < 1e-12)
+set refused to the cad line nurbs from the cad zero vector3 to the cad x axis of degree 27
+set copiedRefusal to refused
+check source join3 (copiedRefusal's valid = false)
+free cad nurbs refused's value
+free cad nurbs copiedRefusal's value
+print "rational prepend preserves source data and independent managed lifetimes" as a line

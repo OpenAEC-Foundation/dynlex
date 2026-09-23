@@ -1,0 +1,757 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/make.rs.
+# Source coverage is tracked in docs/cadkernel-coverage.md.
+# Builders allocate independent bodies and synthesized topology. Body copies
+# share their owned arenas; use the cad clone pattern for independent editing.
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/polygon3.dl
+import lib/cadkernel/pair_index.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_loft.dl
+
+class:
+    patterns:
+        [a|] cad make shell
+    members:
+        lump as a cad lump key
+        shell as a cad shell key
+class:
+    patterns:
+        [a|] cad make edge use
+    members:
+        edge as a cad edge key
+        forward as a boolean
+        pcurve as a cad pcurve result
+
+local function cad make use of {cad edge key:edge} forward {boolean:forward}:
+    execute:
+        return @intrinsic("construct", a cad make edge use, edge, forward, no cad pcurve)
+local function cad make use of {cad edge key:edge} forward {boolean:forward} with pcurve {cad curve2:pcurve}:
+    execute:
+        return @intrinsic("construct", a cad make edge use, edge, forward, the cad pcurve of pcurve)
+local function cad make vertex at {cad vector3:point} in {cad body:body}:
+    execute:
+        return the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into body
+local function cad make edge on {cad edge curve3:curve} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} between {cad vertex key:start} and {cad vertex key:end} in {cad body:body}:
+    execute:
+        set key to the cad body key after inserting curve into body
+        return the cad body key after inserting (a cad edge on key from first to last between start and end with provenance (the synthesized cad provenance)) into body
+local function cad make line from {cad vertex key:start} to {cad vertex key:end} in {cad body:body}:
+    execute:
+        set first to the cad node pointer for start in body
+        set last to the cad node pointer for end in body
+        set curve to the cad edge curve3 of (a cad line3 with origin (first's point) and direction (the cad difference of (last's point) and (first's point)))
+        return cad make edge on curve from 0.0 to 1.0 between start and end in body
+local function cad make [shell] in {cad body:body}:
+    execute:
+        set lump to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shell to the cad body key after inserting (a cad shell owned by lump with provenance (the synthesized cad provenance)) into body
+        return @intrinsic("construct", a cad make shell, lump, shell)
+
+# Both source close_shell variants share the same ownership/linking operation.
+# The edge-use record carries the optional pcurve without discarding its sense.
+local function cad make [face] in {cad body:body} within {cad make shell:owner} on {cad surface key:surfaceKey} forward {boolean:forward} using {cad topology list:uses}:
+    execute:
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by (owner's shell) with provenance (the synthesized cad provenance)) into body
+        set ringKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        loop index from 0 to the length of (uses's values):
+            set usage to the item at index in ((uses's values))
+            set key to the cad body key after inserting (a cad coedge on (usage's edge) forward (usage's forward) with pcurve (usage's pcurve) owned by ringKey with provenance (the synthesized cad provenance)) into body
+            set edge to the cad node pointer for (usage's edge) in body
+            if edge = (0 as the type of edge):
+                return false
+            append key to (edge's coedges's values)
+            set ring to the cad node pointer for ringKey in body
+            append key to (ring's coedges's values)
+        set face to the cad node pointer for faceKey in body
+        append ringKey to (face's loops's values)
+        set shell to the cad node pointer for (owner's shell) in body
+        if shell = (0 as the type of shell):
+            return false
+        append faceKey to (shell's faces's values)
+        set lump to the cad node pointer for (owner's lump) in body
+        if lump = (0 as the type of lump):
+            return false
+        if (the length of (lump's shells's values)) = 0:
+            append (owner's shell) to (lump's shells's values)
+        if (the length of (body's roots)) = 0:
+            append (owner's lump) to (body's roots)
+        return true
+
+local function cad make face in {cad body:body} within {cad make shell:owner} on {cad surface:surface} forward {boolean:forward} using {cad topology list:uses}:
+    execute:
+        set key to the cad body key after inserting surface into body
+        return cad make face in body within owner on key forward forward using uses
+
+local function cad make scalar {a 64 bit floating-point number:value} is positive finite:
+    execute:
+        return (value > 0.0) and (value <= 1.7976931348623157e308)
+
+class:
+    patterns:
+        [a|] cad faceted edge
+    members:
+        low as an integer
+        high as an integer
+        firstFace as an integer
+        secondFace as an integer
+        firstForward as a boolean
+        secondForward as a boolean
+        count as an integer
+        key as a cad edge key
+class:
+    patterns:
+        [a|] cad faceted links
+    members:
+        valid as a boolean
+        index as a cad pair index
+        edges as the type of (a cad topology list of a cad faceted edge)
+
+local function check cad faceted expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+local function reverse cad faceted {cad topology list:ring}:
+    execute:
+        set count to the length of (ring's values)
+        loop index from 0 to (count / 2):
+            set opposite to (count - 1) - index
+            set saved to the item at index in (ring's values)
+            replace item at index index in (ring's values) with (the item at opposite in (ring's values))
+            replace item at index opposite in (ring's values) with saved
+local function cad faceted links for {cad topology list:rings}:
+    execute:
+        set total to 0 as a 64 bit integer
+        loop index from 0 to the length of (rings's values):
+            set ring to the item at index in (rings's values)
+            set total to total + ((the length of (ring's values)) as a 64 bit integer)
+        # The index reserves one entry per corner, including invalid open input.
+        # Refuse an unrepresentable capacity before narrowing or allocating.
+        if total > 536870912:
+            @intrinsic("call", "libc", "abort", nothing)
+        set table to a cad pair index with room for (total as an integer) entries
+        set edges to a cad topology list of a cad faceted edge
+        loop faceIndex from 0 to the length of (rings's values):
+            set ring to the item at faceIndex in (rings's values)
+            set count to the length of (ring's values)
+            loop corner from 0 to count:
+                set from to the item at corner in (ring's values)
+                set to to the item at (the remainder of (corner + 1) divided by count) in (ring's values)
+                if from = to:
+                    return @intrinsic("construct", a cad faceted links, false, table, edges)
+                set low to from
+                set high to to
+                if from > to:
+                    set low to to
+                    set high to from
+                set position to the cad pair value for key (low as a 64 bit integer) and (high as a 64 bit integer) in table
+                if position < 0:
+                    set position to the length of (edges's values)
+                    put cad pair value position for key (low as a 64 bit integer) and (high as a 64 bit integer) in table
+                    append (@intrinsic("construct", a cad faceted edge, low, high, faceIndex, -1, from < to, false, 1, a new cad edge key)) to (edges's values)
+                else:
+                    set edge to the item at position in (edges's values)
+                    if (edge's count) != 1:
+                        return @intrinsic("construct", a cad faceted links, false, table, edges)
+                    set edge's count to 2
+                    set edge's secondFace to faceIndex
+                    set edge's secondForward to from < to
+                    replace item at index position in (edges's values) with edge
+        loop position from 0 to the length of (edges's values):
+            set edge to the item at position in (edges's values)
+            if (edge's count) != 2:
+                return @intrinsic("construct", a cad faceted links, false, table, edges)
+        return @intrinsic("construct", a cad faceted links, true, table, edges)
+
+# Inputs are borrowed lists of vector3 and lists of native integer indices.
+# Face order is the source breadth-first order. Edge keys are deterministic
+# first-seen pairs; source hash-map iteration does not define their order.
+function the cad faceted solid with vertices {a pointer to a list:vertices} and faces {a pointer to a list:faces} within {a number:requestedTolerance}:
+    execute:
+        check cad faceted (0 as a pointer to a cad vector3) against (0 as a pointer to the type of (the item at 0 in vertices))
+        check cad faceted (0 as a pointer to an integer) against (0 as a pointer to the type of (the item at 0 in (the item at 0 in faces)))
+        set planarTolerance to requestedTolerance as a 64 bit floating-point number
+        if (planarTolerance < 0.0) or ((the absolute value of planarTolerance) > 1.7976931348623157e308):
+            return no cad body
+        if ((the length of vertices) < 4) or ((the length of faces) < 4):
+            return no cad body
+        loop index from 0 to the length of vertices:
+            set point to the item at index in vertices
+            if (((the absolute value of (point's x)) <= 1.7976931348623157e308) and ((the absolute value of (point's y)) <= 1.7976931348623157e308) and ((the absolute value of (point's z)) <= 1.7976931348623157e308)) = false:
+                return no cad body
+        set rings to a cad topology list of the type of (a cad topology list of an integer)
+        loop faceIndex from 0 to the length of faces:
+            set source to the item at faceIndex in faces
+            set ring to a cad topology list of an integer
+            loop corner from 0 to the length of source:
+                set index to the item at corner in source
+                if (index < 0) or (index >= (the length of vertices)):
+                    return no cad body
+                if (the length of (ring's values)) = 0:
+                    append index to (ring's values)
+                else if (the last item of (ring's values)) != index:
+                    append index to (ring's values)
+            if (the length of (ring's values)) > 0:
+                if (the item at 0 in (ring's values)) = (the last item of (ring's values)):
+                    remove item ((the length of (ring's values)) - 1) from (ring's values)
+            if (the length of (ring's values)) < 3:
+                return no cad body
+            append ring to (rings's values)
+        set links to cad faceted links for rings
+        if (links's valid) = false:
+            return no cad body
+        set flips to a cad topology list of an integer
+        loop index from 0 to the length of (rings's values):
+            append -1 to (flips's values)
+        replace item at index 0 in (flips's values) with 0
+        set component to a cad topology list of an integer
+        append 0 to (component's values)
+        set cursor to 0
+        loop while cursor < (the length of (component's values)):
+            set faceIndex to the item at cursor in (component's values)
+            set flip to the item at faceIndex in (flips's values)
+            set ring to the item at faceIndex in (rings's values)
+            set count to the length of (ring's values)
+            loop corner from 0 to count:
+                set from to the item at corner in (ring's values)
+                set to to the item at (the remainder of (corner + 1) divided by count) in (ring's values)
+                set low to from
+                set high to to
+                if from > to:
+                    set low to to
+                    set high to from
+                set position to the cad pair value for key (low as a 64 bit integer) and (high as a 64 bit integer) in (links's index)
+                set edge to the item at position in (links's edges's values)
+                set other to edge's firstFace
+                set otherForward to edge's firstForward
+                if other = faceIndex:
+                    set other to edge's secondFace
+                    set otherForward to edge's secondForward
+                if other != faceIndex:
+                    set required to flip
+                    if (from < to) = otherForward:
+                        set required to 1 - flip
+                    set existing to the item at other in (flips's values)
+                    if existing < 0:
+                        replace item at index other in (flips's values) with required
+                        append other to (component's values)
+                    else if existing != required:
+                        return no cad body
+            set cursor to cursor + 1
+        # Disconnected and nested shells require explicit cavity ownership.
+        if (the length of (component's values)) != (the length of (rings's values)):
+            return no cad body
+        loop index from 0 to the length of (rings's values):
+            if (the item at index in (flips's values)) = 1:
+                reverse cad faceted (the item at index in (rings's values))
+        set firstRing to the item at (the item at 0 in (component's values)) in (rings's values)
+        set pivot to the item at (the item at 0 in (firstRing's values)) in vertices
+        set scale to 0.0
+        set volume to -0.0
+        loop index from 0 to the length of (component's values):
+            set ring to the item at (the item at index in (component's values)) in (rings's values)
+            loop corner from 0 to the length of (ring's values):
+                set point to the item at (the item at corner in (ring's values)) in vertices
+                set scale to the maximum of scale and (the cad distance from point to pivot)
+            set origin to the cad difference of (the item at (the item at 0 in (ring's values)) in vertices) and pivot
+            set faceVolume to -0.0
+            loop corner from 1 to ((the length of (ring's values)) - 1):
+                set a to the cad difference of (the item at (the item at corner in (ring's values)) in vertices) and pivot
+                set b to the cad difference of (the item at (the item at (corner + 1) in (ring's values)) in vertices) and pivot
+                set faceVolume to faceVolume + ((the cad dot of origin and (the cad cross of a and b)) / 6.0)
+            set volume to volume + faceVolume
+        set scale to the maximum of scale and 1e-12
+        if ((the absolute value of volume) <= 1.7976931348623157e308) = false:
+            return no cad body
+        if (the absolute value of volume) <= (((scale * scale) * scale) * 1e-12):
+            return no cad body
+        if volume > 0.0:
+            loop index from 0 to the length of (component's values):
+                reverse cad faceted (the item at (the item at index in (component's values)) in (rings's values))
+        set links to cad faceted links for rings
+        if (links's valid) = false:
+            return no cad body
+        loop index from 0 to the length of (links's edges's values):
+            set edge to the item at index in (links's edges's values)
+            if (edge's firstForward) = (edge's secondForward):
+                return no cad body
+        set solidBody to an empty cad body
+        set vertexKeys to a cad topology list of a cad vertex key
+        loop index from 0 to the length of vertices:
+            append (cad make vertex at (the item at index in vertices) in solidBody) to (vertexKeys's values)
+        loop index from 0 to the length of (links's edges's values):
+            set edge to the item at index in (links's edges's values)
+            set edge's key to cad make line from (the item at (edge's low) in (vertexKeys's values)) to (the item at (edge's high) in (vertexKeys's values)) in solidBody
+            replace item at index index in (links's edges's values) with edge
+        set owner to cad make shell in solidBody
+        loop index from 0 to the length of (component's values):
+            set ring to the item at (the item at index in (component's values)) in (rings's values)
+            set points to a cad topology list of a cad vector3
+            loop corner from 0 to the length of (ring's values):
+                append (the item at (the item at corner in (ring's values)) in vertices) to (points's values)
+            set normal to the cad ring normal of (points's values)
+            if (normal's valid) = false:
+                return no cad body
+            set origin to the item at 0 in (points's values)
+            set along to the cad zero vector3
+            set found to false
+            loop corner from 1 to the length of (points's values):
+                if found = false:
+                    set direction to the cad difference of (the item at corner in (points's values)) and origin
+                    if (the cad length of direction) > 1e-12:
+                        set along to direction
+                        set found to true
+            if found = false:
+                return no cad body
+            set frame to the cad orthonormal plane with origin origin, x axis along and normal (the cad negative of (normal's value))
+            if (frame's valid) = false:
+                return no cad body
+            loop corner from 0 to the length of (points's values):
+                set gap to the cad distance from (the item at corner in (points's values)) to (frame's value)
+                if (gap's valid) = false:
+                    return no cad body
+                if (the absolute value of (gap's value)) > planarTolerance:
+                    return no cad body
+            set uses to a cad topology list of a cad make edge use
+            loop corner from 0 to the length of (ring's values):
+                set from to the item at corner in (ring's values)
+                set to to the item at (the remainder of (corner + 1) divided by (the length of (ring's values))) in (ring's values)
+                set low to from
+                set high to to
+                if from > to:
+                    set low to to
+                    set high to from
+                set position to the cad pair value for key (low as a 64 bit integer) and (high as a 64 bit integer) in (links's index)
+                set edge to the item at position in (links's edges's values)
+                append (cad make use of (edge's key) forward (from < to)) to (uses's values)
+            if (cad make face in solidBody within owner on (the cad surface of (frame's value)) forward true using uses) = false:
+                return no cad body
+        return the validated cad body result of solidBody
+
+function the cad faceted solid with vertices {a pointer to a list:vertices} and faces {a pointer to a list:faces}:
+    execute:
+        return the cad faceted solid with vertices vertices and faces faces within 1e-8
+
+function the cad cuboid at {cad vector3:origin} with size {cad vector3:size}:
+    execute:
+        if (((cad make scalar (size's x) is positive finite) and (cad make scalar (size's y) is positive finite)) and (cad make scalar (size's z) is positive finite)) = false:
+            return no cad body
+        set body to an empty cad body
+        set corners to a cad topology list of a cad vertex key
+        loop bits from 0 to 8:
+            set dx to 0.0
+            set dy to 0.0
+            set dz to 0.0
+            if (the remainder of bits divided by 2) != 0:
+                set dx to (size's x)
+            if (the remainder of (bits / 2) divided by 2) != 0:
+                set dy to (size's y)
+            if bits >= 4:
+                set dz to (size's z)
+            set point to the cad sum of origin and (a cad vector3 with x dx, y dy and z dz)
+            append (cad make vertex at point in body) to (corners's values)
+        set pairs to [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]]
+        set edges to a cad topology list of a cad edge key
+        loop index from 0 to 12:
+            set pair to the item at index in pairs
+            set start to the item at (the item at 0 in pair) in ((corners's values))
+            set end to the item at (the item at 1 in pair) in ((corners's values))
+            append (cad make line from start to end in body) to (edges's values)
+        set owner to cad make shell in body
+        set rings to [[0,2,6,4],[1,5,7,3],[0,4,5,1],[2,3,7,6],[0,1,3,2],[4,6,7,5]]
+        loop index from 0 to 6:
+            set ring to the item at index in rings
+            set first to the cad node pointer for (the item at (the item at 0 in ring) in ((corners's values))) in body
+            set alongPoint to the cad node pointer for (the item at (the item at 1 in ring) in ((corners's values))) in body
+            set acrossPoint to the cad node pointer for (the item at (the item at 3 in ring) in ((corners's values))) in body
+            set along to the cad difference of (alongPoint's point) and (first's point)
+            set across to the cad difference of (acrossPoint's point) and (first's point)
+            set normal to the cad normalization of (the cad cross of across and along)
+            if (normal's valid) = false:
+                return no cad body
+            set frame to the cad orthonormal plane with origin (first's point), x axis along and normal (normal's value)
+            if (frame's valid) = false:
+                return no cad body
+            set uses to a cad topology list of a cad make edge use
+            loop corner from 0 to 4:
+                set from to the item at corner in ring
+                set to to the item at (the remainder of (corner + 1) divided by 4) in ring
+                loop edgeIndex from 0 to 12:
+                    set pair to the item at edgeIndex in pairs
+                    set a to the item at 0 in pair
+                    set b to the item at 1 in pair
+                    if (a = from) and (b = to):
+                        append (cad make use of (the item at edgeIndex in ((edges's values))) forward true) to (uses's values)
+                    else if (a = to) and (b = from):
+                        append (cad make use of (the item at edgeIndex in ((edges's values))) forward false) to (uses's values)
+            if (cad make face in body within owner on (the cad surface of (frame's value)) forward true using uses) = false:
+                return no cad body
+        return the cad body result of body
+
+local function cad make cap in {cad body:body} within {cad make shell:owner} on {cad plane:plane} bounded by {cad edge key:rim} forward {boolean:forward}:
+    execute:
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of rim forward forward) to (uses's values)
+        return cad make face in body within owner on (the cad surface of plane) forward forward using uses
+
+local function cad make xy frame at {cad vector3:origin}:
+    execute:
+        return the cad orthonormal plane with origin origin, x axis (the cad x axis) and normal (the cad z axis)
+
+local function cad make ellipse profile with x radius {a 64 bit floating-point number:xRadius} and y radius {a 64 bit floating-point number:yRadius}:
+    execute:
+        set ellipseShape to a cad ellipse at (the cad zero vector2) with radii xRadius and yRadius along (a cad vector2 with x 1.0 and y 0.0)
+        set curveList to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to 4:
+            set first to (index as a 64 bit floating-point number) * 1.5707963267948966
+            append (the cad curve2 of (a cad ellipse arc2 on ellipseShape from first to (first + 1.5707963267948966))) to (curveList's values)
+        return curveList
+
+function the cad cylinder [body] at {cad vector3:base} with radius {a 64 bit floating-point number:radius} and height {a 64 bit floating-point number:height}:
+    execute:
+        if ((radius > 0.0) and (height > 0.0)) = false:
+            return no cad body
+        set body to an empty cad body
+        set bottomPlane to cad make xy frame at base
+        set topOrigin to the cad sum of base and ((the cad z axis) scaled by height)
+        set topPlane to cad make xy frame at topOrigin
+        if ((bottomPlane's valid) and (topPlane's valid)) = false:
+            return no cad body
+        set seamLow to the cad point at (a cad vector2 with x radius and y 0.0) on (bottomPlane's value)
+        set seamHigh to the cad point at (a cad vector2 with x radius and y 0.0) on (topPlane's value)
+        set low to cad make vertex at seamLow in body
+        set high to cad make vertex at seamHigh in body
+        set bottomCircle to the cad edge curve3 of (a cad circle3 with plane (bottomPlane's value) and radius radius)
+        set topCircle to the cad edge curve3 of (a cad circle3 with plane (topPlane's value) and radius radius)
+        set rimLow to cad make edge on bottomCircle from 0.0 to 6.283185307179586 between low and low in body
+        set rimHigh to cad make edge on topCircle from 0.0 to 6.283185307179586 between high and high in body
+        set seam to cad make line from low to high in body
+        set owner to cad make shell in body
+        if (cad make cap in body within owner on (bottomPlane's value) bounded by rimLow forward false) = false:
+            return no cad body
+        if (cad make cap in body within owner on (topPlane's value) bounded by rimHigh forward true) = false:
+            return no cad body
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of rimLow forward true) to (uses's values)
+        append (cad make use of seam forward true) to (uses's values)
+        append (cad make use of rimHigh forward false) to (uses's values)
+        append (cad make use of seam forward false) to (uses's values)
+        set surface to the cad surface of (a cad cylinder with base (bottomPlane's value) and radius radius)
+        if (cad make face in body within owner on surface forward true using uses) = false:
+            return no cad body
+        return the cad body result of body
+
+function the cad elliptical cylinder at {cad vector3:base} with x radius {a 64 bit floating-point number:xRadius}, y radius {a 64 bit floating-point number:yRadius} and height {a 64 bit floating-point number:height}:
+    execute:
+        if (((cad make scalar xRadius is positive finite) and (cad make scalar yRadius is positive finite)) and (cad make scalar height is positive finite)) = false:
+            return no cad body
+        set scale to the maximum of (the maximum of (the maximum of (the absolute value of xRadius) and (the absolute value of yRadius)) and (the absolute value of height)) and 1.0
+        if (the absolute value of (xRadius - yRadius)) <= (1e-12 * scale):
+            return the cad cylinder body at base with radius xRadius and height height
+        set bottom to cad make xy frame at base
+        set topOrigin to the cad sum of base and ((the cad z axis) scaled by height)
+        set topFrame to cad make xy frame at topOrigin
+        if ((bottom's valid) and (topFrame's valid)) = false:
+            return no cad body
+        set bottomProfile to cad make ellipse profile with x radius xRadius and y radius yRadius
+        set topProfile to cad make ellipse profile with x radius xRadius and y radius yRadius
+        set sections to a list containing (a cad loft section on (bottom's value) with profile (bottomProfile's values))
+        append (a cad loft section on (topFrame's value) with profile (topProfile's values)) to sections
+        return the cad loft through sections
+
+function the cad sphere [body] at {cad vector3:centre} with radius {a 64 bit floating-point number:radius}:
+    execute:
+        if (radius > 0.0) = false:
+            return no cad body
+        set body to an empty cad body
+        set frame to cad make xy frame at centre
+        set meridian to the cad orthonormal plane with origin centre, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+        if ((frame's valid) and (meridian's valid)) = false:
+            return no cad body
+        set southPoint to the cad point at (a cad vector2 with x 0.0 and y (the negative of radius)) on (meridian's value)
+        set northPoint to the cad point at (a cad vector2 with x 0.0 and y radius) on (meridian's value)
+        set south to cad make vertex at southPoint in body
+        set north to cad make vertex at northPoint in body
+        set curve to the cad edge curve3 of (a cad circle3 with plane (meridian's value) and radius radius)
+        set seam to cad make edge on curve from -1.5707963267948966 to 1.5707963267948966 between south and north in body
+        set owner to cad make shell in body
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of seam forward true) to (uses's values)
+        append (cad make use of seam forward false) to (uses's values)
+        set surface to the cad surface of (a cad sphere with frame (frame's value) and radius radius)
+        if (cad make face in body within owner on surface forward true using uses) = false:
+            return no cad body
+        return the validated cad body result of body
+
+function the cad cone [body] at {cad vector3:base} with radius {a 64 bit floating-point number:radius} and height {a 64 bit floating-point number:height}:
+    execute:
+        if ((radius > 0.0) and (height > 0.0)) = false:
+            return no cad body
+        set body to an empty cad body
+        set frame to cad make xy frame at base
+        if (frame's valid) = false:
+            return no cad body
+        set rimPoint to the cad point at (a cad vector2 with x radius and y 0.0) on (frame's value)
+        set apexPoint to the cad sum of base and ((the cad z axis) scaled by height)
+        set rimVertex to cad make vertex at rimPoint in body
+        set apex to cad make vertex at apexPoint in body
+        set curve to the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius radius)
+        set rim to cad make edge on curve from 0.0 to 6.283185307179586 between rimVertex and rimVertex in body
+        set seam to cad make line from rimVertex to apex in body
+        set owner to cad make shell in body
+        if (cad make cap in body within owner on (frame's value) bounded by rim forward false) = false:
+            return no cad body
+        set angle to @intrinsic("call", "libc", "atan", a 64 bit floating-point number, radius / height)
+        set surface to the cad surface of (a cad cone with base (frame's value), radius radius and half angle angle)
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of rim forward true) to (uses's values)
+        append (cad make use of seam forward true) to (uses's values)
+        append (cad make use of seam forward false) to (uses's values)
+        if (cad make face in body within owner on surface forward true using uses) = false:
+            return no cad body
+        return the validated cad body result of body
+
+local function the cad elliptical cone at {cad vector3:base} with x radius {a 64 bit floating-point number:xRadius}, y radius {a 64 bit floating-point number:yRadius} and height {a 64 bit floating-point number:height}:
+    execute:
+        set frame to cad make xy frame at base
+        if frame's valid = false:
+            return no cad body
+        set apexPoint to the cad sum of base and ((the cad z axis) scaled by height)
+        set rimPoint to the cad point at (a cad vector2 with x xRadius and y 0.0) on (frame's value)
+        set body to an empty cad body
+        set rimVertex to cad make vertex at rimPoint in body
+        set apex to cad make vertex at apexPoint in body
+        set ellipseCurve to the cad edge curve3 of (a cad ellipse3 with plane (frame's value), major radius xRadius and minor radius yRadius)
+        set rim to cad make edge on ellipseCurve from 0.0 to 6.283185307179586 between rimVertex and rimVertex in body
+        set seam to cad make line from rimVertex to apex in body
+        set ellipse to a cad ellipse at (the cad zero vector2) with radii xRadius and yRadius along (a cad vector2 with x 1.0 and y 0.0)
+        set outline to the cad curve2 of (the full cad ellipse arc2 on ellipse)
+        set builder to the cad rational builder of outline
+        if builder's valid = false:
+            return no cad body
+        set baseCurve to the cad lift of (builder's value) onto (frame's value)
+        set tipControls to an empty list of a cad vector3
+        loop index from 0 to the length of (baseCurve's controls):
+            append apexPoint to tipControls
+        set tipCurve to the cad rational curve3 of degree (baseCurve's degree) with controls tipControls, knots (baseCurve's knots) and weights (baseCurve's weights)
+        set ruled to the cad ruled surface from baseCurve to tipCurve
+        if ruled's valid = false:
+            return no cad body
+        set wall to the cad body key after inserting (the cad surface of (ruled's value)) into body
+        set owner to cad make shell in body
+        if (cad make cap in body within owner on (frame's value) bounded by rim forward false) = false:
+            return no cad body
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of rim forward true with pcurve (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 1.0 and y 0.0)))) to (uses's values)
+        append (cad make use of seam forward true with pcurve (the cad curve2 of (a cad line2 from (a cad vector2 with x 1.0 and y 0.0) to (a cad vector2 with x 1.0 and y 1.0)))) to (uses's values)
+        append (cad make use of seam forward false with pcurve (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 1.0) to (a cad vector2 with x 0.0 and y 0.0)))) to (uses's values)
+        if (cad make face in body within owner on wall forward true using uses) = false:
+            return no cad body
+        return the validated cad body result of body
+
+function the cad frustum at {cad vector3:base} with base x radius {a 64 bit floating-point number:baseXRadius}, base y radius {a 64 bit floating-point number:baseYRadius}, top radius {a 64 bit floating-point number:topRadius} and height {a 64 bit floating-point number:height}:
+    execute:
+        if (((cad make scalar baseXRadius is positive finite) and (cad make scalar baseYRadius is positive finite)) and (cad make scalar height is positive finite)) = false:
+            return no cad body
+        if ((topRadius >= 0.0) and (topRadius <= 1.7976931348623157e308)) = false:
+            return no cad body
+        set scale to the maximum of (the maximum of (the maximum of (the maximum of (the absolute value of baseXRadius) and (the absolute value of baseYRadius)) and (the absolute value of topRadius)) and (the absolute value of height)) and 1.0
+        set circular to (the absolute value of (baseXRadius - baseYRadius)) <= (1e-12 * scale)
+        if topRadius <= (1e-12 * scale):
+            if circular:
+                return the cad cone body at base with radius baseXRadius and height height
+            return the cad elliptical cone at base with x radius baseXRadius, y radius baseYRadius and height height
+        if baseXRadius = baseYRadius:
+            set plane to a cad plane with origin base, x axis (the cad x axis) and y axis (the cad z axis)
+            set p0 to the cad zero vector2
+            set p1 to a cad vector2 with x baseXRadius and y 0.0
+            set p2 to a cad vector2 with x topRadius and y height
+            set p3 to a cad vector2 with x 0.0 and y height
+            set profile to a list containing (the cad curve2 of (a cad line2 from p0 to p1))
+            append (the cad curve2 of (a cad line2 from p1 to p2)) to profile
+            append (the cad curve2 of (a cad line2 from p2 to p3)) to profile
+            append (the cad curve2 of (a cad line2 from p3 to p0)) to profile
+            return the cad revolution of profile on plane about base along (the cad z axis) by 6.283185307179586
+        set bottom to cad make xy frame at base
+        set topOrigin to the cad sum of base and ((the cad z axis) scaled by height)
+        set topFrame to cad make xy frame at topOrigin
+        if ((bottom's valid) and (topFrame's valid)) = false:
+            return no cad body
+        set topYRadius to (topRadius * baseYRadius) / baseXRadius
+        set bottomProfile to cad make ellipse profile with x radius baseXRadius and y radius baseYRadius
+        set topProfile to cad make ellipse profile with x radius topRadius and y radius topYRadius
+        set sections to a list containing (a cad loft section on (bottom's value) with profile (bottomProfile's values))
+        append (a cad loft section on (topFrame's value) with profile (topProfile's values)) to sections
+        return the cad loft through sections
+
+local function the cad closed hole torus at {cad vector3:centre} with major radius {a 64 bit floating-point number:majorRadius} and minor radius {a 64 bit floating-point number:minorRadius}:
+    execute:
+        set profilePlane to the cad orthonormal plane with origin centre, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+        if profilePlane's valid = false:
+            return no cad body
+        set ratio to the minimum of (the maximum of (majorRadius / minorRadius) and 0.0) and 1.0
+        set angle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, ratio)
+        set halfAxisLength to the square root of (the maximum of ((minorRadius * minorRadius) - (majorRadius * majorRadius)) and 0.0)
+        set profile to a list containing (the cad curve2 of (a cad arc2 at (a cad vector2 with x majorRadius and y 0.0) with radius minorRadius from (3.141592653589793 + angle) to (3.141592653589793 - angle)))
+        if halfAxisLength > (2.220446049250313e-16 * (the maximum of minorRadius and 1.0)):
+            set high to a cad vector2 with x 0.0 and y halfAxisLength
+            set middle to the cad zero vector2
+            set low to a cad vector2 with x 0.0 and y (the negative of halfAxisLength)
+            append (the cad curve2 of (a cad line2 from high to middle)) to profile
+            append (the cad curve2 of (a cad line2 from middle to low)) to profile
+        return the cad revolution of profile on (profilePlane's value) about centre along (the cad z axis) by 6.283185307179586
+
+function the cad torus at {cad vector3:centre} with major radius {a 64 bit floating-point number:majorRadius} and minor radius {a 64 bit floating-point number:minorRadius}:
+    execute:
+        set coordinatesFinite to (((the absolute value of (centre's x)) <= 1.7976931348623157e308) and ((the absolute value of (centre's y)) <= 1.7976931348623157e308)) and ((the absolute value of (centre's z)) <= 1.7976931348623157e308)
+        if ((coordinatesFinite and (cad make scalar majorRadius is positive finite)) and (cad make scalar minorRadius is positive finite)) = false:
+            return no cad body
+        if majorRadius <= minorRadius:
+            return the cad closed hole torus at centre with major radius majorRadius and minor radius minorRadius
+        set frame to cad make xy frame at centre
+        if frame's valid = false:
+            return no cad body
+        set outer to the cad point at (a cad vector2 with x (majorRadius + minorRadius) and y 0.0) on (frame's value)
+        set body to an empty cad body
+        set corner to cad make vertex at outer in body
+        set ringCurve to the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius (majorRadius + minorRadius))
+        set ring to cad make edge on ringCurve from 0.0 to 6.283185307179586 between corner and corner in body
+        set tubeOrigin to the cad point at (a cad vector2 with x majorRadius and y 0.0) on (frame's value)
+        set tubePlane to the cad orthonormal plane with origin tubeOrigin, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+        if tubePlane's valid = false:
+            return no cad body
+        set tubeCurve to the cad edge curve3 of (a cad circle3 with plane (tubePlane's value) and radius minorRadius)
+        set tube to cad make edge on tubeCurve from 0.0 to 6.283185307179586 between corner and corner in body
+        set owner to cad make shell in body
+        set uses to a cad topology list of a cad make edge use
+        append (cad make use of ring forward true) to (uses's values)
+        append (cad make use of tube forward true) to (uses's values)
+        append (cad make use of ring forward false) to (uses's values)
+        append (cad make use of tube forward false) to (uses's values)
+        set surface to the cad surface of (a cad torus with frame (frame's value), major radius majorRadius and minor radius minorRadius)
+        if (cad make face in body within owner on surface forward true using uses) = false:
+            return no cad body
+        return the validated cad body result of body
+
+function the cad wedge at {cad vector3:origin} with length {a 64 bit floating-point number:length}, width {a 64 bit floating-point number:width} and height {a 64 bit floating-point number:height}:
+    execute:
+        if (((length > 0.0) and (width > 0.0)) and (height > 0.0)) = false:
+            return no cad body
+        set frame to the cad orthonormal plane with origin origin, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+        if (frame's valid) = false:
+            return no cad body
+        set corners to [[0.0,0.0],[length,0.0],[0.0,height]]
+        set profile to a cad topology list of (the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)))
+        loop index from 0 to 3:
+            set first to the item at index in corners
+            set last to the item at (the remainder of (index + 1) divided by 3) in corners
+            set start to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+            set end to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+            append (the cad curve2 of (a cad line2 from start to end)) to (profile's values)
+        return the cad extrusion of (profile's values) on (frame's value) along (a cad vector3 with x 0.0, y width and z 0.0)
+
+function the cad pyramid body at {cad vector3:base} with radius {a 64 bit floating-point number:radius}, height {a 64 bit floating-point number:height} and sides {integer:sides}:
+    execute:
+        return the cad polygonal frustum at base with base radius radius, top radius 0.0, height height and sides sides
+
+function the cad polygonal frustum at {cad vector3:base} with base radius {a 64 bit floating-point number:baseRadius}, top radius {a 64 bit floating-point number:topRadius}, height {a 64 bit floating-point number:height} and sides {integer:sides}:
+    execute:
+        if sides < 3:
+            return no cad body
+        if ((cad make scalar baseRadius is positive finite) and (cad make scalar height is positive finite)) = false:
+            return no cad body
+        if ((topRadius >= 0.0) and (topRadius <= 1.7976931348623157e308)) = false:
+            return no cad body
+        # A truncated polygon produces six coedges per side, the largest arena.
+        if sides > 357913941:
+            @intrinsic("call", "libc", "abort", nothing)
+        set body to an empty cad body
+        set ground to cad make xy frame at base
+        if (ground's valid) = false:
+            return no cad body
+        set baseCorners to a cad topology list of a cad vertex key
+        loop index from 0 to sides:
+            set angle to (6.283185307179586 * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
+            set uv to a cad vector2 with x (baseRadius * (the cosine of angle)) and y (baseRadius * (the sine of angle))
+            set point to the cad point at uv on (ground's value)
+            append (cad make vertex at point in body) to (baseCorners's values)
+        set baseRim to a cad topology list of a cad edge key
+        loop index from 0 to sides:
+            set next to the remainder of (index + 1) divided by sides
+            append (cad make line from (the item at index in (baseCorners's values)) to (the item at next in (baseCorners's values)) in body) to (baseRim's values)
+        set owner to cad make shell in body
+        set groundDown to the cad orthonormal plane with origin base, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y 0.0 and z -1.0)
+        if (groundDown's valid) = false:
+            return no cad body
+        set floorUses to a cad topology list of a cad make edge use
+        loop index from 0 to sides:
+            append (cad make use of (the item at ((sides - 1) - index) in (baseRim's values)) forward false) to (floorUses's values)
+        if (cad make face in body within owner on (the cad surface of (groundDown's value)) forward true using floorUses) = false:
+            return no cad body
+        set topCentre to the cad sum of base and ((the cad z axis) scaled by height)
+        set rails to a cad topology list of a cad edge key
+        if topRadius <= 1e-12:
+            set apex to cad make vertex at topCentre in body
+            loop index from 0 to sides:
+                append (cad make line from (the item at index in (baseCorners's values)) to apex in body) to (rails's values)
+            loop index from 0 to sides:
+                set next to the remainder of (index + 1) divided by sides
+                set here to the cad node pointer for (the item at index in (baseCorners's values)) in body
+                set nextCorner to the cad node pointer for (the item at next in (baseCorners's values)) in body
+                set along to the cad difference of (nextCorner's point) and (here's point)
+                set up to the cad difference of topCentre and (here's point)
+                set normal to the cad normalization of (the cad cross of along and up)
+                if (normal's valid) = false:
+                    return no cad body
+                set frame to the cad orthonormal plane with origin (here's point), x axis along and normal (normal's value)
+                if (frame's valid) = false:
+                    return no cad body
+                set uses to a cad topology list of a cad make edge use
+                append (cad make use of (the item at index in (baseRim's values)) forward true) to (uses's values)
+                append (cad make use of (the item at next in (rails's values)) forward true) to (uses's values)
+                append (cad make use of (the item at index in (rails's values)) forward false) to (uses's values)
+                if (cad make face in body within owner on (the cad surface of (frame's value)) forward true using uses) = false:
+                    return no cad body
+            return the validated cad body result of body
+        set topCorners to a cad topology list of a cad vertex key
+        loop index from 0 to sides:
+            set angle to (6.283185307179586 * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
+            set position to the cad sum of topCentre and (a cad vector3 with x (topRadius * (the cosine of angle)), y (topRadius * (the sine of angle)) and z 0.0)
+            append (cad make vertex at position in body) to (topCorners's values)
+        set topRim to a cad topology list of a cad edge key
+        loop index from 0 to sides:
+            set next to the remainder of (index + 1) divided by sides
+            append (cad make line from (the item at index in (topCorners's values)) to (the item at next in (topCorners's values)) in body) to (topRim's values)
+        loop index from 0 to sides:
+            append (cad make line from (the item at index in (baseCorners's values)) to (the item at index in (topCorners's values)) in body) to (rails's values)
+        set topPlane to cad make xy frame at topCentre
+        if (topPlane's valid) = false:
+            return no cad body
+        set ceilingUses to a cad topology list of a cad make edge use
+        loop index from 0 to sides:
+            append (cad make use of (the item at index in (topRim's values)) forward true) to (ceilingUses's values)
+        if (cad make face in body within owner on (the cad surface of (topPlane's value)) forward true using ceilingUses) = false:
+            return no cad body
+        loop index from 0 to sides:
+            set next to the remainder of (index + 1) divided by sides
+            set here to the cad node pointer for (the item at index in (baseCorners's values)) in body
+            set nextCorner to the cad node pointer for (the item at next in (baseCorners's values)) in body
+            set topCorner to the cad node pointer for (the item at index in (topCorners's values)) in body
+            set along to the cad difference of (nextCorner's point) and (here's point)
+            set up to the cad difference of (topCorner's point) and (here's point)
+            set normal to the cad normalization of (the cad cross of along and up)
+            if (normal's valid) = false:
+                return no cad body
+            set frame to the cad orthonormal plane with origin (here's point), x axis along and normal (normal's value)
+            if (frame's valid) = false:
+                return no cad body
+            set uses to a cad topology list of a cad make edge use
+            append (cad make use of (the item at index in (baseRim's values)) forward true) to (uses's values)
+            append (cad make use of (the item at next in (rails's values)) forward true) to (uses's values)
+            append (cad make use of (the item at index in (topRim's values)) forward false) to (uses's values)
+            append (cad make use of (the item at index in (rails's values)) forward false) to (uses's values)
+            if (cad make face in body within owner on (the cad surface of (frame's value)) forward true using uses) = false:
+                return no cad body
+        return the validated cad body result of body

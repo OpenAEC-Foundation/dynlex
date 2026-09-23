@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_debug/support.dl
+set originTag to the clean cad provenance of (a cad source reference for (4294967295 as a 32 bit unsigned integer))
+set vertexNode to a cad vertex at (a cad vector3 with x 1.0, y 2.0 and z 3.0) with provenance originTag
+check brep text (the cad debug text of vertexNode) against "Vertex { point: [1, 2, 3], provenance: Clean(SourceRef(4294967295)) }"
+set debugBody to an empty cad body
+set inserted to the cad body key after inserting vertexNode into debugBody
+set savedText to the cad debug text of debugBody
+check brep debug (savedText = "Body { vertices: {#0v0: Vertex { point: [1, 2, 3], provenance: Clean(SourceRef(4294967295)) }}, edges: {}, coedges: {}, loops: {}, faces: {}, shells: {}, lumps: {}, surfaces: {}, curves: {}, roots: [], provenance: Synthesized }")
+set removedNode to the cad removal of inserted from debugBody
+check brep debug ((the cad debug text of debugBody) = "Body { vertices: {}, edges: {}, coedges: {}, loops: {}, faces: {}, shells: {}, lumps: {}, surfaces: {}, curves: {}, roots: [], provenance: Synthesized }")
+check brep debug ((the cad debug text of vertexNode) = (the cad debug text of (the cad value of removedNode)))
+check brep debug ((the cad debug text of (-0.0)) = "-0")
+check brep debug ((the cad debug text of 1.2345678901234567) = "1.2345678901234567")
+check brep text (the cad debug text of (a cad insertion2 at the cad zero vector2 scaling (a cad vector2 with x 2.0 and y 3.0) through 0.0)) against "Transform2 { xAxis: [2, 0], yAxis: [0, 3], origin: [0, 0] }"
+print "owned body diagnostics preserve fields and binary64 precision" as a line

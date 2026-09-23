@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_mesh.dl
+import lib/cadkernel/brep_make.dl
+
+function check mesh hole {boolean:passed} named {C string:label}:
+    execute:
+        if passed = false:
+            print label as a line
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set corners to a list containing (a cad vector2 with x 4.0 and y 0.0)
+append (a cad vector2 with x 7.0 and y 0.0) to corners
+append (a cad vector2 with x 7.0 and y 2.0) to corners
+append (a cad vector2 with x 4.0 and y 2.0) to corners
+set profile to an empty list of the type of (the cad curve2 of (a new cad line2))
+loop cornerIndex from 0 to 4:
+    set nextIndex to the remainder of (cornerIndex + 1) divided by 4
+    append (the cad curve2 of (a cad line2 from (the item at cornerIndex in corners) to (the item at nextIndex in corners))) to profile
+set planeResult to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check mesh hole planeResult's valid named "plane"
+set made to the cad revolution of profile on planeResult's value about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check mesh hole made's valid named "ring"
+set bodyValue to made's value
+set faceKeys to the cad face keys of bodyValue
+set faceFound to false
+set holedFace to a new cad face key
+loop faceIndex from 0 to the length of faceKeys:
+    set faceKey to the item at faceIndex in faceKeys
+    set faceNode to the cad node pointer for faceKey in bodyValue
+    if (the length of ((faceNode's loops's values))) = 2:
+        set faceFound to true
+        set holedFace to faceKey
+free faceKeys
+check mesh hole faceFound named "holed face"
+
+set meshResult to the cad mesh result of holedFace in bodyValue with maximum angle (the cad default sampling angle) within 1e-9
+check mesh hole meshResult's valid named "first mesh"
+set areaResult to the cad surface area of meshResult's value
+set expectedArea to 3.141592653589793 * (49.0 - 16.0)
+check mesh hole (areaResult's valid and ((the absolute value of (areaResult's value - expectedArea)) < (0.02 * expectedArea))) named "annulus area"
+set firstArea to areaResult's value
+
+set faceNode to the cad node pointer for holedFace in bodyValue
+set savedLoop to the item at 0 in ((faceNode's loops's values))
+replace item at index 0 in ((faceNode's loops's values)) with (the item at 1 in ((faceNode's loops's values)))
+replace item at index 1 in ((faceNode's loops's values)) with savedLoop
+set swappedResult to the cad mesh result of holedFace in bodyValue with maximum angle (the cad default sampling angle) within 1e-9
+check mesh hole swappedResult's valid named "swapped mesh"
+set swappedArea to the cad surface area of swappedResult's value
+check mesh hole (swappedArea's valid and ((the absolute value of (swappedArea's value - firstArea)) < 1e-9)) named "loop order"
+free profile
+free corners
+print "cadkernel brep mesh hole: PASS" as a line

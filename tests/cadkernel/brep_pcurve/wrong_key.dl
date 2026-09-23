@@ -1,0 +1,3 @@
+import lib/cadkernel/brep_pcurve.dl
+set body to an empty cad body
+ignore the cad boundary of (a new cad edge key) in body within 1e-9

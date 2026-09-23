@@ -1,0 +1,7 @@
+lib/cadkernel/arena.dl:9-62: Error: No overload matches call 'check cad witness (the witness of key) against absent' for argument types [a pointer to a 64-bit floating-point number, a pointer to a 32-bit integer]. Available overloads: 'check cad witness expected against {the type of expected:actual}'
+  note: while inferring call 'check cad witness (the witness of key) against absent' with arguments [a pointer to a 64-bit floating-point number, a pointer to a 32-bit integer] -> an unresolved value lib/cadkernel/arena.dl:9-62
+  note: while inferring call 'the cad node pointer for key in nodes' with arguments [a cad key, a pointer to a cad arena] -> an unresolved value lib/cadkernel/arena.dl:17-54
+  note: while inferring call 'return (the cad node pointer for key in nodes' with arguments [an unresolved value] -> an unresolved value lib/cadkernel/arena.dl:9-54
+  note: while inferring call 'return (the cad node pointer for key in nodes) != (0 as a pointer to the cad payload type of nodes' with arguments [an unresolved value, an unresolved value] -> an unresolved value lib/cadkernel/arena.dl:9-107
+  note: while inferring call 'integers contains cad key key' with arguments [a pointer to a cad arena, a cad key] -> an unresolved value tests/required/cadkernel_arena_wrong_key/main.dl:18-47
+  note: while inferring call 'set accepted to (integers contains cad key key' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/required/cadkernel_arena_wrong_key/main.dl:1-47

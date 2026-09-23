@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MPL-2.0
+# Shared Option<Body> representation for native B-rep operations.
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad body result
+    members:
+        valid as a boolean
+        value as a cad body
+function no cad body:
+    execute:
+        return @intrinsic("construct", a cad body result, false, a new (the type of (an empty cad body)))
+function the cad body result of {cad body:value}:
+    execute:
+        return @intrinsic("construct", a cad body result, true, value)
+function the validated cad body result of {cad body:value}:
+    execute:
+        set flaws to the cad flaws of value
+        set valid to (the length of flaws) = 0
+        free flaws
+        if valid = false:
+            return no cad body
+        return the cad body result of value

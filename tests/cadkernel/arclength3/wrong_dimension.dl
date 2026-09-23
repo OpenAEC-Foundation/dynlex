@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/arclength3.dl
+set points to an empty list of a cad vector2
+append (the cad zero vector2) to points
+set result to the cad arclength curve3 through points with closure false
+free points

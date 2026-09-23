@@ -1,0 +1,211 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of geom2d/transform.rs, revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Affine maps are scalar values. Transforming a curve borrows its input and
+# independently owns any output lists. Invalid optional results are safe values.
+import lib/cadkernel/curve2.dl
+
+class:
+    patterns:
+        [a|] cad transform2
+    members:
+        xAxis as a cad vector2
+        yAxis as a cad vector2
+        origin as a cad vector2
+
+class:
+    patterns:
+        [a|] cad curve2 transform result
+    members:
+        valid as a boolean
+        value as the type of (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+
+function the cad identity transform2:
+    execute:
+        return @intrinsic("construct", a cad transform2, a cad vector2 with x 1.0 and y 0.0, a cad vector2 with x 0.0 and y 1.0, the cad zero vector2)
+
+function the cad default transform2:
+    execute:
+        return the cad identity transform2
+
+function a cad transform2 with axes {cad vector2:x} and {cad vector2:y} at {cad vector2:origin}:
+    execute:
+        return @intrinsic("construct", a cad transform2, x, y, origin)
+
+function a cad translation2 by {cad vector2:shift}:
+    execute:
+        set result to the cad identity transform2
+        set result's origin to shift
+        return result
+
+function a cad rotation2 through {a 64 bit floating-point number:angle}:
+    execute:
+        set sine to the sine of angle
+        set cosine to the cosine of angle
+        return a cad transform2 with axes (a cad vector2 with x cosine and y sine) and (a cad vector2 with x (the negative of sine) and y cosine) at the cad zero vector2
+
+function a cad scale2 by {a 64 bit floating-point number:x} and {a 64 bit floating-point number:y}:
+    execute:
+        return a cad transform2 with axes (a cad vector2 with x x and y 0.0) and (a cad vector2 with x 0.0 and y y) at the cad zero vector2
+
+function the cad image of {cad vector2:point} under {cad transform2:map}:
+    execute:
+        set first to the cad sum of map's origin and (map's xAxis scaled by point's x)
+        return the cad sum of first and (map's yAxis scaled by point's y)
+
+function the cad [direction] of {cad vector2:direction} under {cad transform2:map}:
+    execute:
+        return the cad sum of (map's xAxis scaled by direction's x) and (map's yAxis scaled by direction's y)
+
+function the cad composition of {cad transform2:second} after {cad transform2:first}:
+    execute:
+        return a cad transform2 with axes (the cad direction of first's xAxis under second) and (the cad direction of first's yAxis under second) at (the cad image of first's origin under second)
+
+function a cad insertion2 at {cad vector2:origin} scaling {cad vector2:factors} through {a 64 bit floating-point number:angle}:
+    execute:
+        set scaled to a cad scale2 by factors's x and factors's y
+        set turned to the cad composition of (a cad rotation2 through angle) after scaled
+        return the cad composition of (a cad translation2 by origin) after turned
+
+function the cad determinant of {cad transform2:map}:
+    execute:
+        return the cad cross of map's xAxis and map's yAxis
+
+function {cad transform2:map} preserves cad circles:
+    execute:
+        set x to the cad length of map's xAxis
+        set y to the cad length of map's yAxis
+        if (x < 1e-12) or (y < 1e-12):
+            return false
+        return ((the absolute value of (x - y)) <= (1e-9 * (the maximum of x and y))) and ((the absolute value of (the cad dot of map's xAxis and map's yAxis)) <= ((1e-9 * x) * y))
+
+function the cad clone of {cad transform2:value}:
+    execute:
+        return value
+
+function {cad transform2:first} = {cad transform2:second}:
+    execute:
+        if ((first's xAxis's x = second's xAxis's x) and (first's xAxis's y = second's xAxis's y)) = false:
+            return false
+        if ((first's yAxis's x = second's yAxis's x) and (first's yAxis's y = second's yAxis's y)) = false:
+            return false
+        return (first's origin's x = second's origin's x) and (first's origin's y = second's origin's y)
+
+local function the cad principal shift of {cad vector2:first} and {cad vector2:second}:
+    execute:
+        set numerator to 2.0 * (the cad dot of first and second)
+        set denominator to (the cad squared length of first) - (the cad squared length of second)
+        if ((the absolute value of numerator) < 1e-15) and ((the absolute value of denominator) < 1e-15):
+            return 0.0
+        return 0.5 * @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, numerator, denominator)
+
+local function the cad ellipse transformed from {cad ellipse:shape} by {cad transform2:map}:
+    execute:
+        set p to the cad direction of (shape's majorAxis scaled by shape's majorRadius) under map
+        set q to the cad direction of ((the cad minor axis of shape) scaled by shape's minorRadius) under map
+        set shift to the cad principal shift of p and q
+        set first to the cad sum of (p scaled by (the cosine of shift)) and (q scaled by (the sine of shift))
+        set turn to shift + 1.5707963267948966
+        set second to the cad sum of (p scaled by (the cosine of turn)) and (q scaled by (the sine of turn))
+        set major to first
+        set minor to second
+        if ((the cad length of first) >= (the cad length of second)) = false:
+            set major to second
+            set minor to first
+        set normal to the cad normalization of major
+        set axis to a cad vector2 with x 1.0 and y 0.0
+        if normal's valid:
+            set axis to normal's value
+        return a cad ellipse at (the cad image of shape's centre under map) with radii (the cad length of major) and (the cad length of minor) along axis
+
+local function the cad transformed ellipse parameter {a 64 bit floating-point number:parameter} from {cad ellipse:original} into {cad ellipse:result} under {cad transform2:map}:
+    execute:
+        set world to the cad image of (the cad point on original at parameter) under map
+        set relative to the cad difference of world and result's centre
+        set along to (the cad dot of relative and result's majorAxis) / result's majorRadius
+        set across to (the cad dot of relative and (the cad perpendicular of result's majorAxis)) / result's minorRadius
+        return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, across, along)
+
+local function the cad ellipse arc transformed from {cad ellipse:shape} between {a 64 bit floating-point number:first} and {a 64 bit floating-point number:last} by {cad transform2:map}:
+    execute:
+        set result to the cad ellipse transformed from shape by map
+        set start to the cad transformed ellipse parameter first from shape into result under map
+        set finish to the cad transformed ellipse parameter last from shape into result under map
+        if (the cad determinant of map) < 0.0:
+            set temporary to start
+            set start to finish
+            set finish to temporary
+        set sweep to the remainder of (finish - start) divided by 6.283185307179586
+        if sweep < 0.0:
+            set sweep to sweep + 6.283185307179586
+        if sweep < 1e-12:
+            set finish to start + 6.283185307179586
+        return the cad curve2 of (a cad ellipse arc2 on result from start to finish)
+
+local function the successful cad transform of {cad curve2:shape}:
+    execute:
+        return @intrinsic("construct", a cad curve2 transform result, true, shape)
+
+function the cad [transformed] {cad curve2:shape} by {cad transform2:map}:
+    execute:
+        set invalid to @intrinsic("construct", a cad curve2 transform result, false, a new (the type of shape))
+        if shape's kind = cad line curve2 kind:
+            return the successful cad transform of (the cad curve2 of (a cad line2 from (the cad image of shape's line's start under map) to (the cad image of shape's line's end under map)))
+        if shape's kind = cad ray curve2 kind:
+            return the successful cad transform of (the cad curve2 of (a cad ray2 from (the cad image of shape's ray's origin under map) along (the cad direction of shape's ray's direction under map)))
+        if shape's kind = cad xline curve2 kind:
+            return the successful cad transform of (the cad curve2 of (a cad xline2 through (the cad image of shape's xline's base under map) along (the cad direction of shape's xline's direction under map)))
+        if shape's kind = cad circle curve2 kind:
+            set circle to shape's circle
+            if map preserves cad circles:
+                set radius to circle's radius * (the cad length of map's xAxis)
+                return the successful cad transform of (the cad curve2 of (a cad circle2 at (the cad image of circle's centre under map) with radius radius))
+            set ellipse to a cad ellipse at circle's centre with radii circle's radius and circle's radius along (a cad vector2 with x 1.0 and y 0.0)
+            set transformed to the cad ellipse transformed from ellipse by map
+            return the successful cad transform of (the cad curve2 of (the full cad ellipse arc2 on transformed))
+        if shape's kind = cad arc curve2 kind:
+            set arc to shape's arc
+            if map preserves cad circles:
+                set turn to the cad angle of (the cad direction of (a cad vector2 with x 1.0 and y 0.0) under map)
+                set first to arc's startAngle + turn
+                set last to arc's endAngle + turn
+                if (the cad determinant of map) < 0.0:
+                    set first to turn - arc's endAngle
+                    set last to turn - arc's startAngle
+                set radius to arc's radius * (the cad length of map's xAxis)
+                return the successful cad transform of (the cad curve2 of (a cad arc2 at (the cad image of arc's centre under map) with radius radius from first to last))
+            set ellipse to a cad ellipse at arc's centre with radii arc's radius and arc's radius along (a cad vector2 with x 1.0 and y 0.0)
+            return the successful cad transform of (the cad ellipse arc transformed from ellipse between arc's startAngle and (arc's startAngle + (the cad sweep of arc)) by map)
+        if shape's kind = cad ellipse curve2 kind:
+            set arc to shape's ellipse
+            return the successful cad transform of (the cad ellipse arc transformed from arc's ellipse between arc's startParameter and (arc's startParameter + (the cad sweep of arc)) by map)
+        if shape's kind = cad nurbs curve2 kind:
+            set spline to shape's nurbs
+            set points to an empty list of a cad vector2
+            loop index from 0 to the length of spline's controls:
+                append (the cad image of (the item at index in spline's controls) under map) to points
+            set built to the cad nurbs curve2 of degree spline's degree with controls points, knots spline's knots and weights spline's weights
+            free points
+            if built's valid = false:
+                return invalid
+            return the successful cad transform of (the cad curve2 of built's value)
+        if shape's kind = cad polyline curve2 kind:
+            set chain to shape's polyline
+            set hasArcs to false
+            loop index from 0 to the length of chain's vertices:
+                set vertex to the item at index in chain's vertices
+                if (the absolute value of vertex's bulge) > 1e-12:
+                    set hasArcs to true
+            if hasArcs and ((map preserves cad circles) = false):
+                return invalid
+            set flip to 1.0
+            if (the cad determinant of map) < 0.0:
+                set flip to -1.0
+            set vertices to an empty list of a cad polyline vertex2
+            loop index from 0 to the length of chain's vertices:
+                set vertex to the item at index in chain's vertices
+                append (a cad polyline vertex2 at (the cad image of vertex's position under map) with bulge (vertex's bulge * flip)) to vertices
+            set moved to the cad polyline2 with vertices vertices and closure chain's closed
+            free vertices
+            return the successful cad transform of (the cad curve2 of moved)
+        @intrinsic("call", "libc", "abort", nothing)
+        return invalid

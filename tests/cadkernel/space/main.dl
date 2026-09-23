@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/space.dl
+import tests/cadkernel/lengthen3/main.dl
+
+set splineResult to the cad line nurbs from (the cad zero vector3) to (a cad vector3 with x 2.0, y 0.0 and z 0.0) of degree 3
+require lengthening splineResult's valid
+set approximation to the cad spline polyline of splineResult's value at precision 20
+require lengthening approximation's valid
+require lengthening ((the length of approximation's points) = 2)
+set path to the cad arclength curve3 through approximation's points with closure false
+require lengthening path's valid
+lengthening close (the cad length of path's value) to 2.0
+set samples to the cad bezier samples of approximation's points with 8 segments
+require lengthening ((the length of samples) = 9)
+set union to the cad line union from (the cad zero vector3) to (the cad x axis) and from (the cad x axis) to (a cad vector3 with x 2.0, y 0.0 and z 0.0) within 1e-9
+require lengthening union's valid
+free samples
+set source to a list containing the cad zero vector3
+set targetPoints to a list containing the cad y axis
+set alignment to the cad alignment from source to targetPoints scaling two pairs false
+require lengthening alignment's valid
+lengthening close (the cad distance from (the cad alignment of (the cad zero vector3) through alignment's value) to (the cad y axis)) to 0.0
+free source
+free targetPoints
+set helix to a cad helix with center (the cad zero vector3), axis (the cad z axis), start (the cad x axis), base radius 2.0, top radius 2.0, height 3.0, turns 1.0 and direction (the cad counterclockwise helix direction)
+set helixCurve to the cad helix nurbs of helix
+require lengthening helixCurve's valid
+set outline to a list containing the cad zero vector3
+append the cad x axis to outline
+append the cad y axis to outline
+lengthening close (the cad ring area of outline) to 0.5
+set mesh to the cad spatial triangle soup of outline within (a cad tolerance of 1e-9)
+require lengthening ((the length of mesh) = 3)
+free mesh
+free outline
+print "spatial module composition" as a line

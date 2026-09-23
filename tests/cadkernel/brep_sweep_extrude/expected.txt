@@ -1,0 +1,3 @@
+a_square_extruded_is_a_box
+every_edge_of_an_extrusion_is_shared_the_two_ways
+an_extrusion_reaches_from_its_profile_to_the_far_end

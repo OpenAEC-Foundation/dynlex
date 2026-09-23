@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/lengthen3.dl
+
+function cad pi:
+    replacement:
+        3.141592653589793 as a 64 bit floating-point number
+
+function require lengthening {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function lengthening close {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
+    execute:
+        require lengthening ((the absolute value of (actual - expected)) < 1e-12)
+
+set zero to the cad zero vector3
+set end to a cad vector3 with x 0.0, y 0.0 and z 4.0
+set point to a cad vector3 with x 0.0, y 2.0 and z -3.0
+set line to the cad lengthened line from zero to end picked at end with (a dynamic cad length change to point)
+require lengthening line's valid
+require lengthening ((the cad squared distance from line's start to zero) = 0.0)
+require lengthening ((the cad squared distance from line's end to (a cad vector3 with x 0.0, y 0.0 and z -3.0)) = 0.0)
+print "a_dynamic_endpoint_can_cross_the_fixed_endpoint" as a line
+
+set ellipse to a cad ellipse at (the cad zero vector2) with radii 4.0 and 2.0 along (a cad vector2 with x 1.0 and y 0.0)
+set planar to a flat cad planar curve3 of (the cad curve2 of (a cad ellipse arc2 on ellipse from 0.0 to ((cad pi) / 2.0)))
+set target to (the cad length of planar) * 1.5
+set span to the cad lengthened ellipse of planar picked at (the cad point on planar at 1.0) with (a total cad length change of target)
+require lengthening span's valid
+set result to the cad curve2 of (a cad ellipse arc2 on ellipse from span's start to span's end)
+require lengthening ((the absolute value of ((the cad length of result) - target)) < 1e-8)
+set span to the cad lengthened ellipse of planar picked at (the cad point on planar at 1.0) with (a dynamic cad length change to (a cad vector3 with x -4.0, y 0.0 and z 0.0))
+require lengthening span's valid
+require lengthening (span's start = 0.0 and span's end = (cad pi))
+print "ellipse_scalar_and_dynamic_changes_keep_its_support" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a straight cad polyline vertex2 at (the cad zero vector2)) to vertices
+append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+append (a straight cad polyline vertex2 at (a cad vector2 with x 5.0 and y 0.0)) to vertices
+set open to a flat cad planar curve3 of (the cad curve2 of (the cad polyline2 with vertices vertices and closure false))
+set shortened to the cad lengthened polyline of open picked at (the cad point on open at 1.0) with (a total cad length change of 1.0)
+require lengthening shortened's valid
+require lengthening ((the length of shortened's vertices) = 2)
+set first to the item at 0 in shortened's vertices
+set last to the item at 1 in shortened's vertices
+require lengthening ((the x of first's position) = 0.0 and (the y of first's position) = 0.0)
+require lengthening ((the x of last's position) = 1.0 and (the y of last's position) = 0.0)
+require lengthening (last's source = 0)
+require lengthening (first's endFraction = 0.5 and last's endFraction = 0.5)
+print "polyline_trimming_removes_complete_segments_and_reports_source_fraction" as a line
+
+set extended to the cad lengthened polyline of open picked at (the cad point on open at 1.0) with (a total cad length change of 7.0)
+require lengthening extended's valid
+set last to the last item of extended's vertices
+require lengthening ((the x of last's position) = 7.0 and (the y of last's position) = 0.0)
+set previous to the item at 1 in extended's vertices
+require lengthening (previous's endFraction = (5.0 / 3.0))
+set closed to a flat cad planar curve3 of (the cad curve2 of (the cad polyline2 with vertices vertices and closure true))
+set refused to the cad lengthened polyline of closed picked at (the cad point on closed at 0.0) with (a total cad length change of 2.0)
+require lengthening (refused's valid = false)
+free vertices
+print "polyline_lengthening_rejects_closed_chains_and_extends_open_lines" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a cad polyline vertex2 at (the cad zero vector2) with bulge 1.0) to vertices
+append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+set open to a flat cad planar curve3 of (the cad curve2 of (the cad polyline2 with vertices vertices and closure false))
+free vertices
+set shortened to the cad lengthened polyline of open picked at (the cad point on open at 1.0) with (a total cad length change of ((cad pi) / 2.0))
+require lengthening shortened's valid
+set first to the item at 0 in shortened's vertices
+set last to the item at 1 in shortened's vertices
+lengthening close (the x of last's position) to 1.0
+lengthening close (the y of last's position) to -1.0
+lengthening close first's bulge to (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, (cad pi) / 8.0))
+require lengthening (first's endFraction = 0.5)
+print "bulged_polyline_trim_keeps_the_signed_circular_support" as a line

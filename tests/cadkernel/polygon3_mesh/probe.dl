@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+# Runtime driver for space/polygon.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/polygon3_mesh.dl
+
+function polygon mesh argument {integer:index}:
+    execute:
+        set arguments to the command line arguments
+        set text to the argument at index in arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function emit polygon mesh {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set mode to (polygon mesh argument 0) as an integer
+set tolerance to a cad tolerance of (polygon mesh argument 1)
+set count to (polygon mesh argument 2) as an integer
+set rings to an empty list of the type of (an empty list of a cad vector3)
+set offset to 3
+loop ringIndex from 0 to count:
+    set size to (polygon mesh argument offset) as an integer
+    increment offset
+    set vertices to an empty list of a cad vector3
+    loop index from 0 to size:
+        append (a cad vector3 with x (polygon mesh argument offset), y (polygon mesh argument (offset + 1)) and z (polygon mesh argument (offset + 2))) to vertices
+        set offset to offset + 3
+    append vertices to rings
+set soup to an empty list of a cad vector3
+free soup
+if mode = 0:
+    set soup to the cad spatial triangle soup of (the item at 0 in rings) within tolerance
+else:
+    set soup to the cad spatial triangle soup of rings rings within tolerance
+emit polygon mesh (the length of soup)
+loop index from 0 to the length of soup:
+    set p to the item at index in soup
+    emit polygon mesh (the x of p)
+    emit polygon mesh (the y of p)
+    emit polygon mesh (the z of p)
+free soup
+loop index from 0 to the length of rings:
+    free (the item at index in rings)
+free rings

@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/snap2.dl
+import tests/cadkernel/cross2/input.dl
+
+function emit snap2 point {cad snap point2:value}:
+    execute:
+        emit measure2 scalar value's kind's code
+        emit measure2 point value's point
+        emit measure2 scalar value's t
+        set copied to the cad clone of value
+        emit measure2 flag (copied = value)
+
+set mode to (measure2 input 1) as an integer
+set target to measure2 input point 2
+set shape to pair2 input curve at 4
+set before to the cad clone of shape
+if mode = 3:
+    emit snap2 point (the cad nearest snap point on shape to target)
+else:
+    set points to an empty list of a cad snap point2
+    free points
+    if mode = 0:
+        set points to the cad characteristic points of shape
+    else if mode = 1:
+        set points to the cad perpendicular points on shape from target
+    else:
+        set points to the cad tangent points on shape from target
+    emit measure2 scalar (the length of points)
+    loop index from 0 to the length of points:
+        emit snap2 point (the item at index in points)
+    free points
+emit measure2 flag (shape = before)

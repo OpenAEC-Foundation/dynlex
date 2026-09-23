@@ -1,0 +1,259 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_place/support.dl
+
+function placement argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function emit placement number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit placement flag {boolean:value}:
+    execute:
+        emit placement number (value as an integer)
+function emit placement point {cad vector3:point}:
+    execute:
+        emit placement number (point's x)
+        emit placement number (point's y)
+        emit placement number (point's z)
+function emit placement plane {cad plane:plane}:
+    execute:
+        emit placement point (plane's origin)
+        emit placement point (plane's xAxis)
+        emit placement point (plane's yAxis)
+function emit placement provenance {cad provenance:value}:
+    execute:
+        emit placement number (value's kind)
+        emit placement number (value's reference's index)
+function emit placement keys {a pointer to a list:values}:
+    execute:
+        emit placement number (the length of values)
+        loop index from 0 to the length of values:
+            emit placement number (the cad slot of (the item at index in values))
+function emit placement arena {a pointer to a cad arena:nodes}:
+    execute:
+        emit placement number (the cad count of nodes)
+        set keys to the cad keys of nodes
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            emit placement number (key's index)
+            set nodeAddress to the cad node pointer for key in nodes
+            emit placement node (@intrinsic("dereference", nodeAddress))
+        free keys
+
+function emit placement node {cad vertex:value}:
+    execute:
+        emit placement point (value's point)
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad edge:value}:
+    execute:
+        emit placement number (the cad slot of (value's curve))
+        emit placement number (value's startParameter)
+        emit placement number (value's endParameter)
+        emit placement number (the cad slot of (value's start))
+        emit placement number (the cad slot of (value's end))
+        emit placement keys (value's coedges's values)
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad coedge:value}:
+    execute:
+        emit placement number (the cad slot of (value's edge))
+        emit placement flag (value's forward)
+        emit placement flag (value's pcurve's valid)
+        if value's pcurve's valid:
+            emit placement pcurve (value's pcurve's value)
+        emit placement number (the cad slot of (value's owner))
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad loop:value}:
+    execute:
+        emit placement keys (value's coedges's values)
+        emit placement number (the cad slot of (value's owner))
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad face:value}:
+    execute:
+        emit placement number (the cad slot of (value's surface))
+        emit placement flag (value's forward)
+        emit placement keys (value's loops's values)
+        emit placement number (the cad slot of (value's owner))
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad shell:value}:
+    execute:
+        emit placement keys (value's faces's values)
+        emit placement number (the cad slot of (value's owner))
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad lump:value}:
+    execute:
+        emit placement keys (value's shells's values)
+        emit placement provenance (value's provenance)
+
+function emit placement node {cad edge curve3:value}:
+    execute:
+        emit placement number (value's kind)
+        if (value's kind) = 0:
+            emit placement point (value's line's origin)
+            emit placement point (value's line's direction)
+        else if (value's kind) = 1:
+            emit placement plane (value's circle's plane)
+            emit placement number (value's circle's radius)
+        else if (value's kind) = 2:
+            emit placement plane (value's ellipse's plane)
+            emit placement number (value's ellipse's majorRadius)
+            emit placement number (value's ellipse's minorRadius)
+        else if (value's kind) = 3:
+            emit placement plane (value's planar's plane)
+            emit placement spline2 (value's planar's curve)
+        else:
+            emit placement spline3 (value's nurbs)
+function emit placement node {cad surface:value}:
+    execute:
+        emit placement number (value's kind)
+        if (value's kind) = 0:
+            emit placement plane (value's plane)
+        else if (value's kind) = 1:
+            emit placement plane (value's cylinder's base)
+            emit placement number (value's cylinder's radius)
+        else if (value's kind) = 2:
+            emit placement plane (value's cone's base)
+            emit placement number (value's cone's radius)
+            emit placement number (value's cone's halfAngle)
+        else if (value's kind) = 3:
+            emit placement plane (value's sphere's frame)
+            emit placement number (value's sphere's radius)
+        else if (value's kind) = 4:
+            emit placement plane (value's torus's frame)
+            emit placement number (value's torus's majorRadius)
+            emit placement number (value's torus's minorRadius)
+        else:
+            set shape to value's nurbs
+            emit placement number (shape's uDegree)
+            emit placement number (shape's vDegree)
+            emit placement flag (shape's uClosed)
+            emit placement flag (shape's vClosed)
+            emit placement flag (shape's vReversed)
+            emit placement numbers (shape's uKnots)
+            emit placement numbers (shape's vKnots)
+            emit placement number (the length of (shape's controls))
+            loop index from 0 to the length of (shape's controls):
+                set row to the item at index in (shape's controls)
+                emit placement number (the length of row)
+                loop cursor from 0 to the length of row:
+                    emit placement point (the item at cursor in row)
+                emit placement numbers (the item at index in (shape's weights))
+
+function emit placement body {cad body:body}:
+    execute:
+        emit placement provenance (body's provenance)
+        emit placement keys (body's roots)
+        emit placement arena (body's vertices)
+        emit placement arena (body's edges)
+        emit placement arena (body's coedges)
+        emit placement arena (body's loops)
+        emit placement arena (body's faces)
+        emit placement arena (body's shells)
+        emit placement arena (body's lumps)
+        emit placement arena (body's curves)
+        emit placement arena (body's surfaces)
+        emit placement number (the cad euler characteristic of body)
+        set flaws to the cad flaws of body
+        emit placement number (the length of flaws)
+        free flaws
+
+
+function emit placement point {cad vector2:point}:
+    execute:
+        emit placement number (point's x)
+        emit placement number (point's y)
+function emit placement numbers {a pointer to a list:values}:
+    execute:
+        emit placement number (the length of values)
+        loop index from 0 to the length of values:
+            emit placement number (the item at index in values)
+function emit placement spline2 {cad nurbs curve2:shape}:
+    execute:
+        emit placement number (shape's degree)
+        emit placement numbers (shape's knots)
+        emit placement numbers (shape's weights)
+        emit placement number (the length of (shape's controls))
+        loop index from 0 to the length of (shape's controls):
+            emit placement point (the item at index in (shape's controls))
+function emit placement spline3 {cad nurbs curve3:shape}:
+    execute:
+        emit placement number (shape's degree)
+        emit placement flag (shape's closed)
+        emit placement numbers (shape's knots)
+        emit placement numbers (shape's weights)
+        emit placement number (the length of (shape's controls))
+        loop index from 0 to the length of (shape's controls):
+            emit placement point (the item at index in (shape's controls))
+function emit placement pcurve {cad curve2:shape}:
+    execute:
+        emit placement number (shape's kind)
+        if shape's kind = 0:
+            emit placement point (shape's line's start)
+            emit placement point (shape's line's end)
+        else if shape's kind = 1:
+            emit placement point (shape's circle's centre)
+            emit placement number (shape's circle's radius)
+        else if shape's kind = 2:
+            emit placement point (shape's arc's centre)
+            emit placement number (shape's arc's radius)
+            emit placement number (shape's arc's startAngle)
+            emit placement number (shape's arc's endAngle)
+        else if shape's kind = 3:
+            emit placement point (shape's ellipse's ellipse's centre)
+            emit placement point (shape's ellipse's ellipse's majorAxis)
+            emit placement number (shape's ellipse's ellipse's majorRadius)
+            emit placement number (shape's ellipse's ellipse's minorRadius)
+            emit placement number (shape's ellipse's startParameter)
+            emit placement number (shape's ellipse's endParameter)
+        else if shape's kind = 4:
+            emit placement flag (shape's polyline's closed)
+            emit placement number (the length of (shape's polyline's vertices))
+            loop index from 0 to the length of (shape's polyline's vertices):
+                set item to the item at index in (shape's polyline's vertices)
+                emit placement point (item's position)
+                emit placement number (item's bulge)
+        else if shape's kind = 5:
+            emit placement spline2 (shape's nurbs)
+        else if shape's kind = 6:
+            emit placement point (shape's ray's origin)
+            emit placement point (shape's ray's direction)
+        else:
+            emit placement point (shape's xline's base)
+            emit placement point (shape's xline's direction)
+function emit placement [samples] of {cad body:body} within {a 64 bit floating-point number:sag}:
+    execute:
+        set keys to the cad edge keys of body
+        emit placement number (the length of keys)
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            set samples to the cad edge samples of key in body within sag
+            emit placement flag (samples's valid)
+            if samples's valid:
+                emit placement number (the length of (samples's value's values))
+                loop cursor from 0 to the length of (samples's value's values):
+                    set sample to the item at cursor in (samples's value's values)
+                    emit placement number (sample's parameter)
+                    emit placement point (sample's position)
+                    emit placement flag (sample = (the cad clone of sample))
+            set points to the cad edge points of key in body within sag
+            emit placement flag (points's valid)
+            if points's valid:
+                emit placement number (the length of (points's value's values))
+                loop cursor from 0 to the length of (points's value's values):
+                    emit placement point (the item at cursor in (points's value's values))
+        free keys
+        set polylines to the cad edge polylines of body within sag
+        emit placement number (the length of (polylines's values))
+        loop index from 0 to the length of (polylines's values):
+            set points to the item at index in (polylines's values)
+            emit placement number (the length of (points's values))
+            loop cursor from 0 to the length of (points's values):
+                emit placement point (the item at cursor in (points's values))
+        set missing to @intrinsic("construct", a cad edge key, 99999 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer)
+        emit placement flag ((the cad edge samples of missing in body within sag)'s valid)

@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/pair_index.dl
+
+function check pair index {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set table to a cad pair index with room for 1024 entries
+loop index from 0 to 1024:
+    set first to (index as a 64 bit integer) * (4294967296 as a 64 bit integer)
+    set second to -(index as a 64 bit integer)
+    check pair index ((the cad pair value for key first and second in table) = -1)
+    put cad pair value index for key first and second in table
+loop index from 0 to 1024:
+    set first to (index as a 64 bit integer) * (4294967296 as a 64 bit integer)
+    set second to -(index as a 64 bit integer)
+    check pair index ((the cad pair value for key first and second in table) = index)
+    check pair index ((the cad pair value for key second and first in table) = -1 or index = 0)
+print "wide ordered keys retain all entries" as a line
+
+set copy to table
+set table to a new (the type of table)
+put cad pair value 17 for key (0 as a 64 bit integer) and (0 as a 64 bit integer) in copy
+check pair index ((the cad pair value for key (0 as a 64 bit integer) and (0 as a 64 bit integer) in copy) = 17)
+print "shared index handles retain owned slots" as a line
+
+function local pair index:
+    execute:
+        set table to a cad pair index with room for 4 entries
+        set maximum to 9223372036854775807 as a 64 bit integer
+        set minimum to (-maximum) - (1 as a 64 bit integer)
+        put cad pair value 1 for key minimum and maximum in table
+        put cad pair value 2 for key maximum and minimum in table
+        put cad pair value 3 for key minimum and minimum in table
+        put cad pair value 4 for key maximum and maximum in table
+        return table
+
+set extremes to local pair index
+set maximum to 9223372036854775807 as a 64 bit integer
+set minimum to (-maximum) - (1 as a 64 bit integer)
+check pair index ((the cad pair value for key minimum and maximum in extremes) = 1)
+check pair index ((the cad pair value for key maximum and minimum in extremes) = 2)
+check pair index ((the cad pair value for key minimum and minimum in extremes) = 3)
+check pair index ((the cad pair value for key maximum and maximum in extremes) = 4)
+print "signed key extremes and local lifetime" as a line
+
+set dense to a cad pair index with room for 0 entries
+loop index from 0 to 8:
+    put cad pair value index for key (index as a 64 bit integer) and (0 as a 64 bit integer) in dense
+loop index from 0 to 8:
+    check pair index ((the cad pair value for key (index as a 64 bit integer) and (0 as a 64 bit integer) in dense) = index)
+check pair index ((the cad pair value for key (99 as a 64 bit integer) and (0 as a 64 bit integer) in dense) = -1)
+print "collision chains and full-table misses terminate" as a line

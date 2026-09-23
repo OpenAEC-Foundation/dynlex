@@ -1,0 +1,302 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/space/arclength.rs.
+# Inputs are borrowed and copied. Ordinary copies retain shared READ-ONLY data;
+# the cad clone pattern deeply copies points, stations and all NURBS lists.
+# List fields are borrowed views valid while their owning value remains alive.
+# The outer record uses default field lifecycle, including its typed NURBS field.
+# Invalid results also own their storage safely; query only valid results.
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/polygon3.dl
+
+class:
+    patterns:
+        [a|] cad arclength station
+    members:
+        parameter as a 64 bit floating-point number
+        distance as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad arclength storage
+    members:
+        points
+        stations
+        owner as a pointer to an integer
+    retain:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            @intrinsic("store at", owner, (@intrinsic("dereference", owner)) + 1)
+    release:
+        set owner to the owner of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the points of @intrinsic("lifecycle value"))
+                free (the stations of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+class:
+    patterns:
+        [a|] cad arclength curve3
+    members:
+        kind as an integer
+        storage as a cad arclength storage
+        spline as a cad nurbs curve3
+        closed as a boolean
+
+class:
+    patterns:
+        [a|] cad arclength result
+    members:
+        valid as a boolean
+        value as a cad arclength curve3
+
+function free cad arclength {cad arclength curve3:curve}:
+    replacement:
+        set curve to a new (the type of curve)
+
+local function the cad owned arclength storage with points points and stations stations:
+    execute:
+        allocate one slot of 0 and set owner to it
+        return @intrinsic("construct", a cad arclength storage, points, stations, owner)
+
+local function the cad empty arclength result:
+    execute:
+        set points to an empty list of a cad vector3
+        set stations to an empty list of a cad arclength station
+        set knots to an empty list of a 64 bit floating-point number
+        set weights to an empty list of a 64 bit floating-point number
+        set splineResult to the cad nurbs curve3 of degree 0 with controls points, knots knots and weights weights
+        free knots
+        free weights
+        set storage to the cad owned arclength storage with points points and stations stations
+        set curve to @intrinsic("construct", a cad arclength curve3, 0, storage, the value of splineResult, false)
+        return @intrinsic("construct", a cad arclength result, false, curve)
+
+local function cad arclength scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad arclength points {cad vector3:left} and {cad vector3:right} are equal:
+    execute:
+        return (((the x of left) = (the x of right)) and ((the y of left) = (the y of right))) and ((the z of left) = (the z of right))
+
+function the cad arclength curve3 through {a pointer to a list:points} with closure {boolean:closed}:
+    execute:
+        set result to the cad empty arclength result
+        set curve to the value of result
+        set controls to the points of the storage of curve
+        set stations to the stations of the storage of curve
+        loop index from 0 to the length of points:
+            set {cad vector3:point} to the item at index in points
+            if (cad point is finite) = false:
+                return result
+            if (the length of controls) = 0:
+                append point to controls
+            else if (cad arclength points point and (the last item of controls) are equal) = false:
+                append point to controls
+        if closed and (the length of controls) > 1:
+            if (cad arclength points (the item at 0 in controls) and (the last item of controls) are equal) = false:
+                append (the item at 0 in controls) to controls
+        if (the length of controls) < 2:
+            return result
+        set segments to (the length of controls) - 1
+        append (@intrinsic("construct", a cad arclength station, 0.0, 0.0)) to stations
+        set length to 0.0
+        loop index from 1 to the length of controls:
+            set length to length + (the cad distance from (the item at (index - 1) in controls) to (the item at index in controls))
+            append (@intrinsic("construct", a cad arclength station, (index as a 64 bit floating-point number) / (segments as a 64 bit floating-point number), length)) to stations
+        if ((cad arclength scalar length is finite) = false) or length <= 0.0:
+            return result
+        set the closed of curve to closed
+        set the value of result to curve
+        set the valid of result to true
+        return result
+
+local function the cad arclength integral of {cad nurbs curve3:curve} from {a 64 bit floating-point number:from} to {a 64 bit floating-point number:to}:
+    execute:
+        set nodes to [0.0, -0.5384693101056831, 0.5384693101056831, -0.9061798459386640, 0.9061798459386640]
+        set weights to [0.5688888888888889, 0.4786286704993665, 0.4786286704993665, 0.2369268850561891, 0.2369268850561891]
+        set domain to the cad domain of curve
+        set start to the start of domain
+        set span to (the end of domain) - start
+        set half to (to - from) * 0.5
+        set middle to (from + to) * 0.5
+        set total to -0.0
+        loop index from 0 to 5:
+            set parameter to start + span * (middle + half * (the item at index in nodes))
+            set speed to the cad length of (the cad derivative of curve at knot parameter)
+            set total to total + speed * (the item at index in weights)
+        return (half * span) * total
+
+local function cad arclength stations for {cad nurbs curve3:curve} from {a 64 bit floating-point number:from} to {a 64 bit floating-point number:to} within {a 64 bit floating-point number:tolerance} at depth {integer:depth} into {a pointer to a list:stations} are appended:
+    execute:
+        set middle to (from + to) * 0.5
+        set coarse to the cad arclength integral of curve from from to to
+        set left to the cad arclength integral of curve from from to middle
+        set right to the cad arclength integral of curve from middle to to
+        if (((cad arclength scalar coarse is finite) = false) or ((cad arclength scalar left is finite) = false)) or ((cad arclength scalar right is finite) = false):
+            return false
+        if (the absolute value of ((left + right) - coarse)) <= tolerance:
+            set before to the distance of (the last item of stations)
+            append (@intrinsic("construct", a cad arclength station, middle, before + left)) to stations
+            append (@intrinsic("construct", a cad arclength station, to, (before + left) + right)) to stations
+        else:
+            if depth >= 20:
+                return false
+            if (cad arclength stations for curve from from to middle within (tolerance * 0.5) at depth (depth + 1) into stations are appended) = false:
+                return false
+            if (cad arclength stations for curve from middle to to within (tolerance * 0.5) at depth (depth + 1) into stations are appended) = false:
+                return false
+        return true
+
+function the cad arclength curve3 of {cad nurbs curve3:source}:
+    execute:
+        set result to the cad empty arclength result
+        set scale to 0.0
+        loop index from 0 to the length of the weights of source:
+            set scale to the maximum of scale and (the item at index in the weights of source)
+        if ((cad arclength scalar scale is finite) = false) or scale <= 0.0:
+            return result
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of the weights of source:
+            append ((the item at index in the weights of source) / scale) to weights
+        set normalized to the strict cad nurbs curve3 of degree (the degree of source) with controls (the controls of source), knots (the knots of source) and weights weights
+        free weights
+        if (the valid of normalized) = false:
+            return result
+        set spline to (the value of normalized) with cad periodicity (the cad periodicity of source)
+        set domain to the cad domain of spline
+        set start to the start of domain
+        set end to the end of domain
+        set span to end - start
+        if ((cad arclength scalar span is finite) = false) or span <= 0.0:
+            return result
+        set polygonLength to the cad chain length of (the controls of spline)
+        if (cad arclength scalar polygonLength is finite) = false:
+            return result
+        set tolerance to the maximum of (polygonLength * 1e-10) and 1e-12
+        set parameters to a list containing 0.0
+        loop index from 0 to the length of the knots of spline:
+            set knot to the item at index in the knots of spline
+            if knot > start and knot < end:
+                set parameter to (knot - start) / span
+                if parameter != (the last item of parameters):
+                    append parameter to parameters
+        append 1.0 to parameters
+        set curve to the value of result
+        set stations to the stations of the storage of curve
+        append (@intrinsic("construct", a cad arclength station, 0.0, 0.0)) to stations
+        loop index from 1 to the length of parameters:
+            set from to the item at (index - 1) in parameters
+            set to to the item at index in parameters
+            if (cad arclength stations for spline from from to to within (tolerance * (to - from)) at depth 0 into stations are appended) = false:
+                free parameters
+                return result
+        free parameters
+        if (the distance of (the last item of stations)) <= 0.0:
+            return result
+        set the spline of curve to spline
+        set the kind of curve to 1
+        set the closed of curve to spline is cad closed
+        set the value of result to curve
+        set the valid of result to true
+        return result
+
+function the cad length of {cad arclength curve3:curve}:
+    execute:
+        set stations to the stations of the storage of curve
+        if (the length of stations) = 0:
+            return 0.0
+        return the distance of (the last item of stations)
+
+function {cad arclength curve3:curve} is cad closed:
+    execute:
+        return the closed of curve
+
+# Rust saturates float-to-usize (NaN to zero), then caps to the last segment.
+# Bound first so the remaining cast fits the standard list's integer index type.
+local function the cad arclength segment for {a 64 bit floating-point number:scaled} ending at {integer:last}:
+    execute:
+        if scaled != scaled or scaled <= 0.0:
+            return 0
+        if scaled >= (last as a 64 bit floating-point number):
+            return last
+        return (the floor of scaled) as an integer
+
+function the cad point on {cad arclength curve3:curve} at {a number:parameter}:
+    execute:
+        if (the kind of curve) = 1:
+            return the cad point on (the spline of curve) at parameter
+        set points to the points of the storage of curve
+        set unit to parameter as a 64 bit floating-point number
+        clamp unit between 0.0 and 1.0
+        set scaled to unit * (((the length of points) - 1) as a 64 bit floating-point number)
+        set index to the cad arclength segment for scaled ending at ((the length of points) - 2)
+        return the cad lerp from (the item at index in points) to (the item at (index + 1) in points) at (scaled - (index as a 64 bit floating-point number))
+
+function the cad tangent of {cad arclength curve3:curve} at {a number:parameter}:
+    execute:
+        set unit to parameter as a 64 bit floating-point number
+        clamp unit between 0.0 and 1.0
+        if (the kind of curve) = 1:
+            set spline to the spline of curve
+            set domain to the cad domain of spline
+            return the cad derivative of spline at knot ((the start of domain) + ((the end of domain) - (the start of domain)) * unit)
+        set points to the points of the storage of curve
+        set scaled to unit * (((the length of points) - 1) as a 64 bit floating-point number)
+        set index to the cad arclength segment for scaled ending at ((the length of points) - 2)
+        return the cad difference of (the item at (index + 1) in points) and (the item at index in points)
+
+function the cad parameter on {cad arclength curve3:curve} at distance {a number:requested}:
+    execute:
+        set distance to requested as a 64 bit floating-point number
+        if distance != distance or distance <= 0.0:
+            return 0.0
+        if distance >= (the cad length of curve):
+            return 1.0
+        set stations to the stations of the storage of curve
+        set low to 0
+        set high to the length of stations
+        loop while low < high:
+            set middle to low + (high - low) / 2
+            if (the distance of (the item at middle in stations)) < distance:
+                set low to middle + 1
+            else:
+                set high to middle
+        set first to the item at (low - 1) in stations
+        set last to the item at low in stations
+        set from to the parameter of first
+        set to to the parameter of last
+        set before to the distance of first
+        set after to the distance of last
+        if (the kind of curve) = 1:
+            set lower to from
+            set upper to to
+            loop iteration from 0 to 44:
+                set middle to (lower + upper) * 0.5
+                if before + (the cad arclength integral of (the spline of curve) from from to middle) < distance:
+                    set lower to middle
+                else:
+                    set upper to middle
+            return (lower + upper) * 0.5
+        return from + (((to - from) * (distance - before)) / (after - before))
+
+function the cad point on {cad arclength curve3:curve} at distance {a number:distance}:
+    execute:
+        return the cad point on curve at (the cad parameter on curve at distance distance)
+
+function the cad clone of {cad arclength curve3:curve}:
+    execute:
+        set points to an empty list of a cad vector3
+        set stations to an empty list of a cad arclength station
+        set original to the storage of curve
+        loop index from 0 to the length of the points of original:
+            append (the item at index in the points of original) to points
+        loop index from 0 to the length of the stations of original:
+            append (the item at index in the stations of original) to stations
+        set storage to the cad owned arclength storage with points points and stations stations
+        return @intrinsic("construct", a cad arclength curve3, the kind of curve, storage, the cad clone of (the spline of curve), the closed of curve)

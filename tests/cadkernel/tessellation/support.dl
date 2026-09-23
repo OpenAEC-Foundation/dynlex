@@ -1,0 +1,18 @@
+import lib/cadkernel/tessellation.dl
+
+class:
+    patterns:
+        [a|] sampling contract curve
+    members:
+        unused as an integer
+
+function the cad curve point of {sampling contract curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        ignore curve
+        return a cad vector3 with x parameter, y 0.0 and z 0.0
+
+function the cad curve tangent of {sampling contract curve:curve} at {a 64 bit floating-point number:parameter}:
+    execute:
+        ignore curve
+        ignore parameter
+        return the cad x axis

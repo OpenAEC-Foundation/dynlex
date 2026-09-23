@@ -1,0 +1,197 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of https://github.com/HakanSeven12/cadkernel at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/classify.rs.
+# Classification borrows bodies. Temporary face keys, boundaries and ray-hit
+# lists remain owned by this call.
+import lib/cadkernel/brep_pcurve.dl
+import lib/sort.dl
+
+class:
+    patterns:
+        [a|] cad containment
+    members:
+        kind as an integer
+
+function the inside cad containment:
+    execute:
+        return @intrinsic("construct", a cad containment, 0)
+function the outside cad containment:
+    execute:
+        return @intrinsic("construct", a cad containment, 1)
+function the boundary cad containment:
+    execute:
+        return @intrinsic("construct", a cad containment, 2)
+function the unknown cad containment:
+    execute:
+        return @intrinsic("construct", a cad containment, 3)
+function {cad containment:left} = {cad containment:right}:
+    execute:
+        return left's kind = right's kind
+function {cad containment:left} != {cad containment:right}:
+    execute:
+        return (left = right) = false
+
+class:
+    patterns:
+        [a|] cad classify distance
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+class:
+    patterns:
+        [a|] cad classify crossing count
+    members:
+        valid as a boolean
+        value as an integer
+class:
+    patterns:
+        [a|] cad classify hits
+    members:
+        valid as a boolean
+        values
+
+local function cad classify absent distance:
+    execute:
+        return @intrinsic("construct", a cad classify distance, false, 0.0)
+local function cad classify distance {a 64 bit floating-point number:value}:
+    execute:
+        return @intrinsic("construct", a cad classify distance, true, value)
+local function cad classify absent crossing count:
+    execute:
+        return @intrinsic("construct", a cad classify crossing count, false, 0)
+local function cad classify crossing count {integer:value}:
+    execute:
+        return @intrinsic("construct", a cad classify crossing count, true, value)
+local function cad classify absent hits:
+    execute:
+        return @intrinsic("construct", a cad classify hits, false, a cad topology list of a 64 bit floating-point number)
+local function cad classify hits owning {cad topology list:values}:
+    execute:
+        return @intrinsic("construct", a cad classify hits, true, values)
+
+# Signed integer keys reproduce f64::total_cmp, including NaNs and signed zero.
+local function cad classify total key of {a 64 bit floating-point number:value}:
+    execute:
+        set bits to the value at ((the address of value) as a pointer to a 64 bit integer)
+        if bits < 0:
+            return bits bitwise xor (9223372036854775807 as a 64 bit integer)
+        return bits
+local function cad classify scalar ordering {pointer:left} and {pointer:right}:
+    execute:
+        set a to cad classify total key of (the value at (left as a pointer to a 64 bit floating-point number))
+        set b to cad classify total key of (the value at (right as a pointer to a 64 bit floating-point number))
+        if a < b:
+            return -1
+        if a > b:
+            return 1
+        return 0
+local function sort cad classify scalars {a pointer to a list:values}:
+    execute:
+        set comparator to the function named "cad classify scalar ordering $ and $"
+        sort native array at ((the data of values) as a pointer) with ((the length of values) as a word sized unsigned integer) items of ((the size of a 64 bit floating-point number) as a word sized unsigned integer) bytes using comparator
+
+local function the cad classify hits on {cad face key:faceKey} in {cad body:body} from {cad vector3:origin} along {cad vector3:direction} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return cad classify absent hits
+        set surfacePointer to the cad node pointer for (face's surface) in body
+        if surfacePointer = (0 as the type of surfacePointer):
+            return cad classify absent hits
+        set surface to @intrinsic("dereference", surfacePointer)
+        set boundary to the cad boundary of faceKey in body within tolerance
+        if (boundary's valid) = false:
+            return cad classify absent hits
+        set rayHits to the cad ray hits of surface from origin along direction
+        if (rayHits's valid) = false:
+            return cad classify absent hits
+        set output to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of (rayHits's values):
+            set distance to the item at index in (rayHits's values)
+            set point to the cad sum of origin and (direction scaled by distance)
+            set parameters to the cad parameters on surface nearest point
+            if (parameters's valid) = false:
+                return cad classify absent hits
+            if (distance >= (the negative of tolerance)) and ((surface's kind) = 0):
+                loop edgeIndex from 0 to the length of (boundary's curves's values):
+                    set edge to the item at edgeIndex in (boundary's curves's values)
+                    set closest to the cad closest point on edge to (parameters's value)
+                    set worldPoint to the cad point on surface at parameters (closest's point's x) and (closest's point's y)
+                    if (the cad distance from worldPoint to point) <= tolerance:
+                        return cad classify absent hits
+            set toleranceValue to a cad tolerance of tolerance
+            if cad surface bounded by (boundary's curves's values) contains parameter (parameters's value) within toleranceValue:
+                append distance to (output's values)
+        return cad classify hits owning output
+
+local function the cad classify crossing count in {cad body:body} from {cad vector3:point} along {cad vector3:direction} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set distances to a cad topology list of a 64 bit floating-point number
+        set faces to the cad face keys of body
+        loop faceIndex from 0 to the length of faces:
+            set hits to the cad classify hits on (the item at faceIndex in faces) in body from point along direction within tolerance
+            if (hits's valid) = false:
+                free faces
+                return cad classify absent crossing count
+            loop hitIndex from 0 to the length of (hits's values's values):
+                set distance to the item at hitIndex in (hits's values's values)
+                if distance <= tolerance:
+                    if distance >= (the negative of tolerance):
+                        free faces
+                        return cad classify absent crossing count
+                else:
+                    append distance to (distances's values)
+        free faces
+        sort cad classify scalars (distances's values)
+        loop index from 1 to the length of (distances's values):
+            if (the absolute value of ((the item at index in (distances's values)) - (the item at (index - 1) in (distances's values)))) <= tolerance:
+                return cad classify absent crossing count
+        return cad classify crossing count (the length of (distances's values))
+
+local function the cad classify distance from {cad face key:faceKey} in {cad body:body} to {cad vector3:point} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return cad classify absent distance
+        set surfacePointer to the cad node pointer for (face's surface) in body
+        if surfacePointer = (0 as the type of surfacePointer):
+            return cad classify absent distance
+        set surface to @intrinsic("dereference", surfacePointer)
+        set gap to the absolute value of (the cad distance from surface to point)
+        if gap > tolerance:
+            return cad classify distance gap
+        set boundary to the cad boundary of faceKey in body within tolerance
+        if (boundary's valid) = false:
+            return cad classify absent distance
+        set parameters to the cad parameters on surface nearest point
+        if (parameters's valid) = false:
+            return cad classify absent distance
+        set toleranceValue to a cad tolerance of tolerance
+        if cad surface bounded by (boundary's curves's values) contains parameter (parameters's value) within toleranceValue:
+            return cad classify distance gap
+        return cad classify distance ((1.0 as a 64 bit floating-point number) / 0.0)
+
+function the cad containment of {cad vector3:point} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set faces to the cad face keys of body
+        loop index from 0 to the length of faces:
+            set gap to the cad classify distance from (the item at index in faces) in body to point within tolerance
+            if (gap's valid) and ((gap's value) <= tolerance):
+                free faces
+                return the boundary cad containment
+        free faces
+        set directions to an empty list of a cad vector3
+        append (a cad vector3 with x 0.577350269189626, y 0.577350269189626 and z 0.577350269189626) to directions
+        append (a cad vector3 with x -0.801783725737273, y 0.267261241912424 and z 0.534522483824849) to directions
+        append (a cad vector3 with x 0.358057437019716, y -0.501280411827603 and z 0.787726361443376) to directions
+        append (a cad vector3 with x 0.132453235530744, y 0.794719413184463 and z -0.592363112251313) to directions
+        loop index from 0 to the length of directions:
+            set crossings to the cad classify crossing count in body from point along (the item at index in directions) within tolerance
+            if crossings's valid:
+                if (the remainder of (crossings's value) divided by 2) = 1:
+                    free directions
+                    return the inside cad containment
+                free directions
+                return the outside cad containment
+        free directions
+        return the unknown cad containment

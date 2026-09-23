@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/offset2.dl
+
+function offset probe argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+
+function emit offset probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set closed to ((offset probe argument 0) as an integer) != 0
+set distance to offset probe argument 1
+set side to a cad vector2 with x (offset probe argument 2) and y (offset probe argument 3)
+set count to (offset probe argument 4) as an integer
+set vertices to an empty list of a cad polyline vertex2
+loop index from 0 to count:
+    set position to 5 + (index * 3)
+    set point to a cad vector2 with x (offset probe argument position) and y (offset probe argument (position + 1))
+    append (a cad polyline vertex2 at point with bulge (offset probe argument (position + 2))) to vertices
+set source to the cad polyline2 with vertices vertices and closure closed
+free vertices
+set result to the cad offset polylines of source by distance toward side
+emit offset probe number (the length of result)
+loop resultIndex from 0 to the length of result:
+    set polyline to the item at resultIndex in result
+    emit offset probe number (polyline's closed as an integer)
+    emit offset probe number (the length of polyline's vertices)
+    loop vertexIndex from 0 to the length of polyline's vertices:
+        set vertex to the item at vertexIndex in polyline's vertices
+        emit offset probe number vertex's position's x
+        emit offset probe number vertex's position's y
+        emit offset probe number vertex's bulge
+free result
