@@ -1,0 +1,266 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_records.dl
+
+function check cad sat probe {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set document to an empty cad sat document
+check cad sat probe ((document's header's version's major) = 7)
+check cad sat probe ((document's header's version's minor) = 0)
+check cad sat probe ((document's header's numberOfRecords) = 0)
+check cad sat probe ((document's header's numberOfBodies) = 0)
+check cad sat probe ((document's header's hasHistory) = false)
+check cad sat probe ((document's header's spatialResolution) = 10.0)
+set alternateVersion to a cad sat version numbered 4, 1, 2
+check cad sat probe ((alternateVersion's major) = 4)
+check cad sat probe ((alternateVersion's minor) = 1)
+check cad sat probe ((alternateVersion's patch) = 2)
+print "header_defaults" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+set face to a cad sat record numbered 41 of type "prefix-face"
+set body to a cad sat record numbered 73 of type "body"
+check cad sat probe (face's attribute is cad sat null)
+check cad sat probe ((face's subtypeId) = -1)
+check cad sat probe (face is cad sat type "face")
+check cad sat probe ((face is cad sat type "prefix") = false)
+set firstId to add cad sat record face to (the address of document)
+set secondId to add cad sat record body to (the address of document)
+check cad sat probe (firstId = 0)
+check cad sat probe (secondId = 1)
+check cad sat probe ((document's header's numberOfRecords) = 2)
+print "append_reassigns_ids_and_updates_header" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+set firstRecord to the item at 0 in document's records's values
+set secondRecord to the item at 1 in document's records's values
+replace item at index 0 in document's records's values with secondRecord
+replace item at index 1 in document's records's values with firstRecord
+set foundFace to the cad sat record numbered 0 in document
+set foundBody to the cad sat record numbered 1 in document
+check cad sat probe (foundFace's valid)
+check cad sat probe (foundBody's valid)
+check cad sat probe ((foundFace's value's entityType) = "prefix-face")
+check cad sat probe ((foundBody's value's entityType) = "body")
+check cad sat probe (((the cad sat record numbered 2 in document)'s valid) = false)
+print "reordered_records_resolve_by_id" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+check cad sat probe (((the cad sat record for (the cad sat null pointer) in document)'s valid) = false)
+check cad sat probe (((the cad sat record for (a cad sat pointer to -7) in document)'s valid) = false)
+check cad sat probe (((the cad sat record for (a cad sat pointer to 19) in document)'s valid) = false)
+check cad sat probe (((the cad sat record for (a cad sat pointer to 0) in document)'s valid) = true)
+print "null_and_missing_pointers_are_absent" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+set payload to a cad sat record numbered 5 of type "edge"
+add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of payload)
+add cad sat token (a cad sat float token of 11.0) to (the address of payload)
+add cad sat token (a cad sat position token at 2.0, 3.0, 4.0) to (the address of payload)
+add cad sat token (a cad sat integer token of 5) to (the address of payload)
+add cad sat token (a cad sat pointer token for (a cad sat pointer to 0)) to (the address of payload)
+add cad sat token (a cad sat enum token of "reversed") to (the address of payload)
+add cad sat token (a cad sat integer token of 0) to (the address of payload)
+check cad sat probe (((the cad sat pointer token at 4 in payload)'s value's index) = 0)
+check cad sat probe (((the cad sat pointer token at 3 in payload)'s valid) = false)
+check cad sat probe (((the cad sat pointer token number 0 in payload)'s value is cad sat null) = true)
+check cad sat probe (((the cad sat pointer token number 1 in payload)'s value's index) = 0)
+check cad sat probe (((the cad sat pointer token number 2 in payload)'s valid) = false)
+print "token_positions_and_pointer_ordinals" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+check cad sat probe (((the cad sat float slot 0 in payload)'s valid) = false)
+check cad sat probe (((the cad sat float slot 1 in payload)'s value) = 11.0)
+check cad sat probe (((the cad sat float slot 2 in payload)'s value) = 2.0)
+check cad sat probe (((the cad sat float slot 3 in payload)'s value) = 3.0)
+check cad sat probe (((the cad sat float slot 4 in payload)'s value) = 4.0)
+check cad sat probe (((the cad sat float slot 5 in payload)'s value) = 5.0)
+check cad sat probe (((the cad sat float slot 6 in payload)'s valid) = false)
+print "packed_and_scalar_numeric_slots" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+check cad sat probe ((the cad sat sense at 5 in payload) is reversed)
+check cad sat probe (((the cad sat sense at 6 in payload) is reversed) = false)
+check cad sat probe (((the cad sat sense at 20 in payload) is reversed) = false)
+add cad sat token (a cad sat integer token of 1) to (the address of payload)
+check cad sat probe ((the cad sat sense at 7 in payload) is reversed)
+print "numeric_and_keyword_orientation" as a line
+ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+
+set rawBytes to an empty list of a byte
+append (0 as a byte) to rawBytes
+append (255 as a byte) to rawBytes
+append (127 as a byte) to rawBytes
+add cad sat token (a cad sat binary token tagged 224 with bytes rawBytes) to (the address of payload)
+set unknown to the cad sat token at 8 in payload
+check cad sat probe (unknown's valid)
+check cad sat probe ((unknown's value's kind) = 10)
+check cad sat probe ((unknown's value's binaryTag) = 224)
+check cad sat probe ((the cad sat binary length of unknown's value) = 3)
+check cad sat probe ((the cad sat binary byte at 0 in unknown's value) = 0)
+check cad sat probe ((the cad sat binary byte at 1 in unknown's value) = 255)
+check cad sat probe ((the cad sat binary byte at 2 in unknown's value) = 127)
+replace item at index 1 in rawBytes with (3 as a byte)
+check cad sat probe ((the cad sat binary byte at 1 in unknown's value) = 255)
+check cad sat probe (((the cad sat float slot 9 in payload)'s value) = 1.0)
+check cad sat probe (((the cad sat float slot 10 in payload)'s valid) = false)
+print "unknown_binary_token_preserves_bytes" as a line
+
+set numericBytes to an empty list of a byte
+append (1 as a byte) to numericBytes
+add cad sat token (a cad sat binary token tagged 2 with bytes numericBytes) to (the address of payload)
+set encodedPointerBytes to an empty list of a byte
+loop zero from 0 to 4:
+    append (0 as a byte) to encodedPointerBytes
+add cad sat token (a cad sat binary token tagged 12 with bytes encodedPointerBytes) to (the address of payload)
+check cad sat probe ((the cad sat sense at 9 in payload) is reversed)
+check cad sat probe (((the cad sat float slot 11 in payload)'s value) = 1.0)
+check cad sat probe (((the cad sat pointer token number 2 in payload)'s valid) = false)
+print "sab_numeric_orientation_keeps_pointer_kind" as a line
+
+set xyzBytes to an empty list of a byte
+loop zero from 0 to 6:
+    append (0 as a byte) to xyzBytes
+append (240 as a byte) to xyzBytes
+append (63 as a byte) to xyzBytes
+loop zero from 0 to 7:
+    append (0 as a byte) to xyzBytes
+append (64 as a byte) to xyzBytes
+loop zero from 0 to 6:
+    append (0 as a byte) to xyzBytes
+append (8 as a byte) to xyzBytes
+append (64 as a byte) to xyzBytes
+set uvBytes to an empty list of a byte
+loop zero from 0 to 6:
+    append (0 as a byte) to uvBytes
+append (16 as a byte) to uvBytes
+append (64 as a byte) to uvBytes
+loop zero from 0 to 6:
+    append (0 as a byte) to uvBytes
+append (20 as a byte) to uvBytes
+append (64 as a byte) to uvBytes
+set vectors to a cad sat record numbered 6 of type "transform"
+add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of vectors)
+add cad sat token (a cad sat binary token tagged 19 with bytes xyzBytes) to (the address of vectors)
+add cad sat token (a cad sat integer token of 9) to (the address of vectors)
+add cad sat token (a cad sat binary token tagged 22 with bytes uvBytes) to (the address of vectors)
+add cad sat token (a cad sat float token of 7.0) to (the address of vectors)
+check cad sat probe (((the cad sat float slot 0 in vectors)'s valid) = false)
+check cad sat probe (((the cad sat float slot 1 in vectors)'s value) = 1.0)
+check cad sat probe (((the cad sat float slot 2 in vectors)'s value) = 2.0)
+check cad sat probe (((the cad sat float slot 3 in vectors)'s value) = 3.0)
+check cad sat probe (((the cad sat float slot 4 in vectors)'s value) = 9.0)
+check cad sat probe (((the cad sat float slot 5 in vectors)'s value) = 4.0)
+check cad sat probe (((the cad sat float slot 6 in vectors)'s value) = 5.0)
+check cad sat probe (((the cad sat float slot 7 in vectors)'s value) = 7.0)
+print "sab_coordinate_tokens_expand_numeric_slots" as a line
+
+set malformedBytes to an empty list of a byte
+append (0 as a byte) to malformedBytes
+append (1 as a byte) to malformedBytes
+set malformed to a cad sat record numbered 7 of type "point"
+add cad sat token (a cad sat binary token tagged 19 with bytes malformedBytes) to (the address of malformed)
+add cad sat token (a cad sat float token of 6.0) to (the address of malformed)
+check cad sat probe (((the cad sat float slot 0 in malformed)'s valid) = false)
+check cad sat probe (((the cad sat float slot 1 in malformed)'s value) = 6.0)
+check cad sat probe (((the cad sat token at 0 in malformed)'s value's binaryTag) = 19)
+check cad sat probe ((the cad sat binary byte at 1 in (the cad sat token at 0 in malformed)'s value) = 1)
+print "malformed_binary_vector_remains_opaque" as a line
+
+set int8Bytes to an empty list of a byte
+append (255 as a byte) to int8Bytes
+set int16Bytes to an empty list of a byte
+append (0 as a byte) to int16Bytes
+append (128 as a byte) to int16Bytes
+set int32Bytes to an empty list of a byte
+loop zero from 0 to 3:
+    append (0 as a byte) to int32Bytes
+append (128 as a byte) to int32Bytes
+set minusOneBytes to an empty list of a byte
+loop item from 0 to 8:
+    append (255 as a byte) to minusOneBytes
+set fourMinusOneBytes to an empty list of a byte
+loop item from 0 to 4:
+    append (255 as a byte) to fourMinusOneBytes
+set singleBytes to an empty list of a byte
+append (0 as a byte) to singleBytes
+append (0 as a byte) to singleBytes
+append (192 as a byte) to singleBytes
+append (63 as a byte) to singleBytes
+set doubleBytes to an empty list of a byte
+loop zero from 0 to 6:
+    append (0 as a byte) to doubleBytes
+append (4 as a byte) to doubleBytes
+append (64 as a byte) to doubleBytes
+set widths to a cad sat record numbered 8 of type "value"
+add cad sat token (a cad sat binary token tagged 2 with bytes int8Bytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 3 with bytes int16Bytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 4 with bytes int32Bytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 21 with bytes fourMinusOneBytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 23 with bytes minusOneBytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 5 with bytes singleBytes) to (the address of widths)
+add cad sat token (a cad sat binary token tagged 6 with bytes doubleBytes) to (the address of widths)
+check cad sat probe (((the cad sat float slot 0 in widths)'s value) = -1.0)
+check cad sat probe (((the cad sat float slot 1 in widths)'s value) = -32768.0)
+check cad sat probe (((the cad sat float slot 2 in widths)'s value) = -2147483648.0)
+check cad sat probe (((the cad sat float slot 3 in widths)'s value) = -1.0)
+check cad sat probe (((the cad sat float slot 4 in widths)'s value) = -1.0)
+check cad sat probe (((the cad sat float slot 5 in widths)'s value) = 1.5)
+check cad sat probe (((the cad sat float slot 6 in widths)'s value) = 2.5)
+check cad sat probe ((the cad sat sense at 0 in widths) is reversed)
+check cad sat probe (((the cad sat integer of (the cad sat token at 5 in widths)'s value)'s valid) = false)
+print "sab_numeric_widths_and_signs" as a line
+
+set variants to a cad sat record numbered 9 of type "value"
+add cad sat token (a cad sat ident token of "forward") to (the address of variants)
+add cad sat token (a cad sat string token of "label") to (the address of variants)
+add cad sat token (a cad sat true token) to (the address of variants)
+add cad sat token (a cad sat false token) to (the address of variants)
+add cad sat token (a cad sat terminator token) to (the address of variants)
+check cad sat probe (((the cad sat token at 0 in variants)'s value's kind) = 0)
+check cad sat probe (((the cad sat token at 0 in variants)'s value's text) = "forward")
+check cad sat probe (((the cad sat token at 1 in variants)'s value's kind) = 4)
+check cad sat probe (((the cad sat token at 1 in variants)'s value's text) = "label")
+check cad sat probe (((the cad sat token at 2 in variants)'s value's kind) = 6)
+check cad sat probe (((the cad sat token at 3 in variants)'s value's kind) = 7)
+check cad sat probe (((the cad sat token at 4 in variants)'s value's kind) = 8)
+check cad sat probe (((the cad sat float slot 4 in variants)'s valid) = false)
+print "other_token_variants_keep_their_kind" as a line
+
+set snapshot to the cad sat clone of document
+set changed to a cad sat record numbered 1 of type "changed"
+replace item at index 0 in document's records's values with changed
+check cad sat probe (((the cad sat record numbered 1 in snapshot)'s value's entityType) = "body")
+check cad sat probe (((the cad sat record numbered 0 in snapshot)'s value's entityType) = "prefix-face")
+set payloadCopy to the cad sat clone of payload
+set originalBinary to the cad sat token at 8 in payload
+@intrinsic("store at", originalBinary's value's binaryData's data + 1, 5 as a byte)
+set copiedBinary to the cad sat token at 8 in payloadCopy
+check cad sat probe ((the cad sat binary byte at 1 in copiedBinary's value) = 255)
+print "explicit_clone_preserves_ids_and_binary_payload" as a line
+
+set ownedDocument to an empty cad sat document
+set externalRecord to a cad sat record numbered 99 of type "value"
+set ownedBytes to an empty list of a byte
+append (0 as a byte) to ownedBytes
+append (255 as a byte) to ownedBytes
+add cad sat token (a cad sat binary token tagged 224 with bytes ownedBytes) to (the address of externalRecord)
+set ownedId to add cad sat record externalRecord to (the address of ownedDocument)
+set externalBinary to the cad sat token at 0 in externalRecord
+@intrinsic("store at", externalBinary's value's binaryData's data + 1, 7 as a byte)
+set storedRecord to the cad sat record numbered ownedId in ownedDocument
+set storedBinary to the cad sat token at 0 in storedRecord's value
+check cad sat probe ((the cad sat binary byte at 1 in storedBinary's value) = 255)
+print "append_takes_an_independent_record_value" as a line
+
+set upperBoundary to the cad sat integer of (a cad sat float token of 9223372036854775808.0)
+set lowerBoundary to the cad sat integer of (a cad sat float token of -9223372036854775808.0)
+set beyondBoundary to the cad sat integer of (a cad sat float token of 18446744073709551616.0)
+check cad sat probe (upperBoundary's valid)
+check cad sat probe ((upperBoundary's value) = (9223372036854775807 as a 64 bit integer))
+check cad sat probe (lowerBoundary's valid)
+check cad sat probe ((lowerBoundary's value) = (-9223372036854775808 as a 64 bit integer))
+check cad sat probe ((beyondBoundary's valid) = false)
+print "exact_integer_float_boundary_matches_codec" as a line

@@ -1,0 +1,626 @@
+# SPDX-License-Identifier: MPL-2.0
+# In-memory SAT record model from the pinned cadcodec entities/acis/types.rs.
+# Record identifiers are distinct from vector positions. The leading bookkeeping
+# pointer is a token only when a caller explicitly appends one.
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad sat list
+    members:
+        values
+        references as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 2147483647:
+                @intrinsic("call", "libc", "abort", nothing)
+            @intrinsic("store at", owner, count + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                free (the values of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function a cad sat reference counter:
+    execute:
+        set result to @intrinsic("call", "libc", "malloc", a pointer to an integer, (the size of an integer) as a word sized unsigned integer)
+        if result = (0 as a pointer to an integer):
+            @intrinsic("call", "libc", "abort", nothing)
+        @intrinsic("initialize at", result, 0)
+        return result
+
+function a cad sat list of {type:kind}:
+    execute:
+        return @intrinsic("construct", a cad sat list, an empty list of kind, a cad sat reference counter)
+
+class:
+    patterns:
+        [a|] cad sat version
+    members:
+        major as a 32 bit unsigned integer
+        minor as a 32 bit unsigned integer
+        patch as a 32 bit unsigned integer
+
+function a cad sat version numbered {an integer:major}, {an integer:minor}, {an integer:patch}:
+    execute:
+        return @intrinsic("construct", a cad sat version, major as a 32 bit unsigned integer, minor as a 32 bit unsigned integer, patch as a 32 bit unsigned integer)
+
+class:
+    patterns:
+        [a|] cad sat header
+    members:
+        version as a cad sat version
+        numberOfRecords as an integer
+        numberOfBodies as an integer
+        hasHistory as a boolean
+        productId as a string
+        productVersion as a string
+        date as a string
+        spatialResolution as a 64 bit floating-point number
+        normalTolerance as a 64 bit floating-point number
+        hasResfitTolerance as a boolean
+        resfitTolerance as a 64 bit floating-point number
+
+function a default cad sat header:
+    execute:
+        set version to a cad sat version numbered 7, 0, 0
+        return @intrinsic("construct", a cad sat header, version, 0 as an integer, 0 as an integer, false as a boolean, "acadrust" as a string, "ACIS 7.0" as a string, "Thu Jan 01 00:00:00 2023" as a string, 10.0 as a 64 bit floating-point number, 9.9999999999999995e-07 as a 64 bit floating-point number, true as a boolean, 1e-10 as a 64 bit floating-point number)
+
+class:
+    patterns:
+        [a|] cad sat pointer
+    members:
+        index as an integer
+
+function a cad sat pointer to {an integer:index}:
+    execute:
+        return @intrinsic("construct", a cad sat pointer, index)
+
+function the cad sat null pointer:
+    execute:
+        return a cad sat pointer to -1
+
+function {cad sat pointer:value} is cad sat null:
+    execute:
+        return value's index < 0
+
+class:
+    patterns:
+        [a|] cad sat binary buffer
+    members:
+        data as a pointer to a byte
+        length as an integer
+        references as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 2147483647:
+                @intrinsic("call", "libc", "abort", nothing)
+            @intrinsic("store at", owner, count + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                @intrinsic("call", "libc", "free", nothing, the data of @intrinsic("lifecycle value"))
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+local function an empty cad sat binary buffer:
+    execute:
+        return @intrinsic("construct", a cad sat binary buffer, 0 as a pointer to a byte, 0, 0 as a pointer to an integer)
+
+local function a cad sat binary buffer from {a pointer to a list:source}:
+    execute:
+        set count to the length of source
+        set allocationSize to count
+        if allocationSize = 0:
+            set allocationSize to 1
+        set data to @intrinsic("call", "libc", "malloc", a pointer to a byte, allocationSize as a word sized unsigned integer)
+        if data = (0 as a pointer to a byte):
+            @intrinsic("call", "libc", "abort", nothing)
+        loop index from 0 to count:
+            @intrinsic("store at", data + index, (the item at index in source) as a byte)
+        return @intrinsic("construct", a cad sat binary buffer, data, count, a cad sat reference counter)
+
+local function the cad sat clone of {cad sat binary buffer:original}:
+    execute:
+        if original's references = (0 as a pointer to an integer):
+            return an empty cad sat binary buffer
+        set count to original's length
+        set allocationSize to count
+        if allocationSize = 0:
+            set allocationSize to 1
+        set data to @intrinsic("call", "libc", "malloc", a pointer to a byte, allocationSize as a word sized unsigned integer)
+        if data = (0 as a pointer to a byte):
+            @intrinsic("call", "libc", "abort", nothing)
+        loop index from 0 to count:
+            @intrinsic("store at", data + index, the value at (original's data + index))
+        return @intrinsic("construct", a cad sat binary buffer, data, count, a cad sat reference counter)
+
+class:
+    patterns:
+        [a|] cad sat token
+    members:
+        kind as an integer
+        text as a string
+        reference as a cad sat pointer
+        integerValue as a 64 bit integer
+        floatValue as a 64 bit floating-point number
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+        z as a 64 bit floating-point number
+        binaryTag as an integer
+        binaryData as a cad sat binary buffer
+
+# Kinds match the source enum's order: Ident, Pointer, Integer, Float,
+# String, Position, True, False, Terminator, Enum, Sab.
+local function a cad sat token with kind {an integer:kind}:
+    execute:
+        return @intrinsic("construct", a cad sat token, kind, "" as a string, the cad sat null pointer, 0 as a 64 bit integer, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 0, an empty cad sat binary buffer)
+
+function a cad sat ident token of {a string:value}:
+    execute:
+        set result to a cad sat token with kind 0
+        set result's text to value
+        return result
+
+function a cad sat pointer token for {cad sat pointer:value}:
+    execute:
+        set result to a cad sat token with kind 1
+        set result's reference to value
+        return result
+
+function a cad sat integer token of {a 64 bit integer:value}:
+    execute:
+        set result to a cad sat token with kind 2
+        set result's integerValue to value
+        return result
+
+function a cad sat integer token of {an integer:value}:
+    execute:
+        return a cad sat integer token of (value as a 64 bit integer)
+
+function a cad sat float token of {a number:value}:
+    execute:
+        set result to a cad sat token with kind 3
+        set result's floatValue to value as a 64 bit floating-point number
+        return result
+
+function a cad sat string token of {a string:value}:
+    execute:
+        set result to a cad sat token with kind 4
+        set result's text to value
+        return result
+
+function a cad sat position token at {a number:x}, {a number:y}, {a number:z}:
+    execute:
+        set result to a cad sat token with kind 5
+        set result's x to x as a 64 bit floating-point number
+        set result's y to y as a 64 bit floating-point number
+        set result's z to z as a 64 bit floating-point number
+        return result
+
+function a cad sat true token:
+    execute:
+        return a cad sat token with kind 6
+
+function a cad sat false token:
+    execute:
+        return a cad sat token with kind 7
+
+function a cad sat terminator token:
+    execute:
+        return a cad sat token with kind 8
+
+function a cad sat enum token of {a string:value}:
+    execute:
+        set result to a cad sat token with kind 9
+        set result's text to value
+        return result
+
+function a cad sat binary token tagged {an integer:tag} with bytes {a pointer to a list:source}:
+    execute:
+        if (tag < 0) or (tag > 255):
+            @intrinsic("call", "libc", "abort", nothing)
+        set result to a cad sat token with kind 10
+        set result's binaryTag to tag
+        set result's binaryData to a cad sat binary buffer from source
+        return result
+
+function the cad sat clone of {cad sat token:original}:
+    execute:
+        set duplicate to original
+        set duplicate's binaryData to the cad sat clone of original's binaryData
+        return duplicate
+
+function the cad sat binary length of {cad sat token:token}:
+    execute:
+        return token's binaryData's length
+
+function the cad sat binary byte at {an integer:index} in {cad sat token:token}:
+    execute:
+        if (index < 0) or (index >= (token's binaryData's length)):
+            return -1
+        return ((the value at (token's binaryData's data + index)) as an integer) bitwise and 255
+
+local function the cad sat binary bits of {cad sat token:value} at {an integer:offset} spanning {an integer:width}:
+    execute:
+        set rawWord to 0 as a 64 bit unsigned integer
+        loop byteIndex from 0 to width:
+            set octet to the cad sat binary byte at (offset + byteIndex) in value
+            set shift to (byteIndex * 8) as a 64 bit unsigned integer
+            set rawWord to rawWord bitwise or ((octet as a 64 bit unsigned integer) shifted left by shift)
+        return rawWord
+
+local function the cad sat binary double of {cad sat token:value} at {an integer:offset}:
+    execute:
+        set rawWord to the cad sat binary bits of value at offset spanning 8
+        return the value at ((the address of rawWord) as a pointer to a 64 bit floating-point number)
+
+local function the cad sat binary single of {cad sat token:value} at {an integer:offset}:
+    execute:
+        set rawWord to (the cad sat binary bits of value at offset spanning 4) as a 32 bit unsigned integer
+        return (the value at ((the address of rawWord) as a pointer to a 32 bit floating-point number)) as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad sat token result
+    members:
+        valid as a boolean
+        value
+
+local function no cad sat token:
+    execute:
+        return @intrinsic("construct", a cad sat token result, false, a cad sat token with kind 8)
+
+class:
+    patterns:
+        [a|] cad sat float result
+    members:
+        valid as a boolean
+        value as a 64 bit floating-point number
+
+local function no cad sat float:
+    execute:
+        return @intrinsic("construct", a cad sat float result, false, 0.0)
+
+local function a cad sat float result of {a 64 bit floating-point number:value}:
+    execute:
+        return @intrinsic("construct", a cad sat float result, true, value)
+
+class:
+    patterns:
+        [a|] cad sat pointer result
+    members:
+        valid as a boolean
+        value as a cad sat pointer
+
+local function no cad sat pointer result:
+    execute:
+        return @intrinsic("construct", a cad sat pointer result, false, the cad sat null pointer)
+
+class:
+    patterns:
+        [a|] cad sat integer result
+    members:
+        valid as a boolean
+        value as a 64 bit integer
+
+local function no cad sat integer:
+    execute:
+        return @intrinsic("construct", a cad sat integer result, false, 0 as a 64 bit integer)
+
+local function a cad sat integer result of {a 64 bit integer:value}:
+    execute:
+        return @intrinsic("construct", a cad sat integer result, true, value)
+
+local function the cad sat exact integer from {a 64 bit floating-point number:real}:
+    execute:
+        if real <= 9223372036854775808.0:
+            if real >= -9223372036854775808.0:
+                if real = 9223372036854775808.0:
+                    return a cad sat integer result of (9223372036854775807 as a 64 bit integer)
+                set integral to real as a 64 bit integer
+                if real = (integral as a 64 bit floating-point number):
+                    return a cad sat integer result of integral
+        return no cad sat integer
+
+function the cad sat integer of {cad sat token:value}:
+    execute:
+        if value's kind = 2:
+            return a cad sat integer result of value's integerValue
+        if value's kind = 3:
+            return the cad sat exact integer from value's floatValue
+        if value's kind = 10:
+            set tag to value's binaryTag
+            set length to value's binaryData's length
+            if (tag = 2) and (length = 1):
+                set rawWord to the cad sat binary bits of value at 0 spanning 1
+                set signed to rawWord as a 64 bit integer
+                if signed >= 128:
+                    set signed to signed - 256
+                return a cad sat integer result of signed
+            if (tag = 3) and (length = 2):
+                set rawWord to the cad sat binary bits of value at 0 spanning 2
+                set signed to rawWord as a 64 bit integer
+                if signed >= 32768:
+                    set signed to signed - 65536
+                return a cad sat integer result of signed
+            if (tag = 4) and (length = 4):
+                set rawWord to the cad sat binary bits of value at 0 spanning 4
+                set signed to rawWord as a 64 bit integer
+                if signed >= 2147483648:
+                    set signed to signed - 4294967296
+                return a cad sat integer result of signed
+            if (tag = 21) and (length = 4):
+                set rawWord to the cad sat binary bits of value at 0 spanning 4
+                set signed to rawWord as a 64 bit integer
+                if signed >= 2147483648:
+                    set signed to signed - 4294967296
+                return a cad sat integer result of signed
+            if (tag = 23) and (length = 8):
+                set rawWord to the cad sat binary bits of value at 0 spanning 8
+                return a cad sat integer result of (the value at ((the address of rawWord) as a pointer to a 64 bit integer))
+            if (tag = 5) and (length = 4):
+                return the cad sat exact integer from (the cad sat binary single of value at 0)
+            if (tag = 6) and (length = 8):
+                return the cad sat exact integer from (the cad sat binary double of value at 0)
+        return no cad sat integer
+
+function the cad sat float of {cad sat token:value}:
+    execute:
+        if value's kind = 2:
+            return a cad sat float result of (value's integerValue as a 64 bit floating-point number)
+        if value's kind = 3:
+            return a cad sat float result of value's floatValue
+        if value's kind = 10:
+            set tag to value's binaryTag
+            set length to value's binaryData's length
+            if (tag = 5) and (length = 4):
+                return a cad sat float result of (the cad sat binary single of value at 0)
+            if (tag = 6) and (length = 8):
+                return a cad sat float result of (the cad sat binary double of value at 0)
+            set integerValue to the cad sat integer of value
+            if integerValue's valid:
+                return a cad sat float result of (integerValue's value as a 64 bit floating-point number)
+        return no cad sat float
+
+class:
+    patterns:
+        [a|] cad sat coordinates result
+    members:
+        valid as a boolean
+        count as an integer
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+        z as a 64 bit floating-point number
+
+local function no cad sat coordinates:
+    execute:
+        return @intrinsic("construct", a cad sat coordinates result, false, 0, 0.0, 0.0, 0.0)
+
+function the cad sat coordinates of {cad sat token:value}:
+    execute:
+        if value's kind = 5:
+            return @intrinsic("construct", a cad sat coordinates result, true, 3, value's x, value's y, value's z)
+        if value's kind = 10:
+            set tag to value's binaryTag
+            set length to value's binaryData's length
+            if (tag = 19) and (length = 24):
+                return @intrinsic("construct", a cad sat coordinates result, true, 3, the cad sat binary double of value at 0, the cad sat binary double of value at 8, the cad sat binary double of value at 16)
+            if (tag = 20) and (length = 24):
+                return @intrinsic("construct", a cad sat coordinates result, true, 3, the cad sat binary double of value at 0, the cad sat binary double of value at 8, the cad sat binary double of value at 16)
+            if (tag = 22) and (length = 16):
+                return @intrinsic("construct", a cad sat coordinates result, true, 2, the cad sat binary double of value at 0, the cad sat binary double of value at 8, 0.0)
+        return no cad sat coordinates
+
+class:
+    patterns:
+        [a|] cad sat sense
+    members:
+        reversed as a boolean
+
+function {cad sat sense:value} is reversed:
+    execute:
+        return value's reversed
+
+class:
+    patterns:
+        [a|] cad sat record
+    members:
+        recordId as an integer
+        entityType as a string
+        hasSubType as a boolean
+        subType as a string
+        attribute as a cad sat pointer
+        subtypeId as an integer
+        tokens
+        hasRawText as a boolean
+        rawText as a string
+
+function a cad sat record numbered {an integer:index} of type {a string:entityType}:
+    execute:
+        return @intrinsic("construct", a cad sat record, index, entityType, false, "" as a string, the cad sat null pointer, -1, a cad sat list of the type of (a cad sat token with kind 8), false, "" as a string)
+
+function the cad sat clone of {cad sat record:original}:
+    execute:
+        set duplicate to a cad sat record numbered original's recordId of type original's entityType
+        set duplicate's hasSubType to original's hasSubType
+        set duplicate's subType to original's subType
+        set duplicate's attribute to original's attribute
+        set duplicate's subtypeId to original's subtypeId
+        set duplicate's hasRawText to original's hasRawText
+        set duplicate's rawText to original's rawText
+        loop index from 0 to the length of original's tokens's values:
+            append (the cad sat clone of (the item at index in original's tokens's values)) to duplicate's tokens's values
+        return duplicate
+
+function {cad sat record:record} is cad sat type {a string:requested}:
+    execute:
+        if record's entityType = requested:
+            return true
+        set found to false
+        set start to 0
+        loop index from 0 to the length of record's entityType:
+            if (the character at index in record's entityType) = 45:
+                set start to index + 1
+                set found to true
+        if found:
+            return (the substring of record's entityType from start spanning ((the length of record's entityType) - start) bytes) = requested
+        return false
+
+function add cad sat token {cad sat token:token} to {a pointer to a cad sat record:record}:
+    execute:
+        append token to record's tokens's values
+
+function the cad sat token at {an integer:index} in {cad sat record:record}:
+    execute:
+        if (index < 0) or (index >= (the length of record's tokens's values)):
+            return no cad sat token
+        return @intrinsic("construct", a cad sat token result, true, the item at index in record's tokens's values)
+
+function the cad sat pointer token at {an integer:index} in {cad sat record:record}:
+    execute:
+        set found to the cad sat token at index in record
+        if found's valid:
+            if found's value's kind = 1:
+                return @intrinsic("construct", a cad sat pointer result, true, found's value's reference)
+        return no cad sat pointer result
+
+function the cad sat pointer token number {an integer:ordinal} in {cad sat record:record}:
+    execute:
+        if ordinal < 0:
+            return no cad sat pointer result
+        set current to 0
+        loop index from 0 to the length of record's tokens's values:
+            set itemValue to the item at index in record's tokens's values
+            if itemValue's kind = 1:
+                if current = ordinal:
+                    return @intrinsic("construct", a cad sat pointer result, true, itemValue's reference)
+                set current to current + 1
+        return no cad sat pointer result
+
+function the cad sat float slot {an integer:index} in {cad sat record:record}:
+    execute:
+        if index < 0:
+            return no cad sat float
+        set numericSlot to 0
+        set tokenCount to the length of (record's tokens's values)
+        loop tokenIndex from 0 to tokenCount:
+            set itemValue to the item at tokenIndex in record's tokens's values
+            set coordinates to the cad sat coordinates of itemValue
+            if coordinates's valid:
+                if numericSlot = index:
+                    return a cad sat float result of coordinates's x
+                if coordinates's count > 1:
+                    if (numericSlot + 1) = index:
+                        return a cad sat float result of coordinates's y
+                if coordinates's count > 2:
+                    if (numericSlot + 2) = index:
+                        return a cad sat float result of coordinates's z
+                set numericSlot to numericSlot + coordinates's count
+            else:
+                if numericSlot = index:
+                    return the cad sat float of itemValue
+                set numericSlot to numericSlot + 1
+        return no cad sat float
+
+function the cad sat sense at {an integer:index} in {cad sat record:record}:
+    execute:
+        set found to the cad sat token at index in record
+        if found's valid:
+            set numeric to the cad sat integer of found's value
+            if numeric's valid:
+                return @intrinsic("construct", a cad sat sense, numeric's value != 0)
+            set isText to false
+            if found's value's kind = 0:
+                set isText to true
+            if found's value's kind = 4:
+                set isText to true
+            if found's value's kind = 9:
+                set isText to true
+            if isText:
+                set word to found's value's text
+                if word = "reversed":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "REVERSED":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "reversed_v":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "REVERSED_V":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "reverse_v":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "REVERSE_V":
+                    return @intrinsic("construct", a cad sat sense, true)
+                if word = "1":
+                    return @intrinsic("construct", a cad sat sense, true)
+        return @intrinsic("construct", a cad sat sense, false)
+
+class:
+    patterns:
+        [a|] cad sat record result
+    members:
+        valid as a boolean
+        value
+
+local function no cad sat record:
+    execute:
+        return @intrinsic("construct", a cad sat record result, false, a cad sat record numbered -1 of type "")
+
+class:
+    patterns:
+        [a|] cad sat document
+    members:
+        header as a cad sat header
+        records
+
+function an empty cad sat document:
+    execute:
+        return @intrinsic("construct", a cad sat document, a default cad sat header, a cad sat list of the type of (a cad sat record numbered -1 of type ""))
+
+function the cad sat clone of {cad sat document:original}:
+    execute:
+        set duplicate to an empty cad sat document
+        set duplicate's header to original's header
+        loop index from 0 to the length of original's records's values:
+            append (the cad sat clone of (the item at index in original's records's values)) to duplicate's records's values
+        return duplicate
+
+function add cad sat record {cad sat record:record} to {a pointer to a cad sat document:document}:
+    execute:
+        set index to the length of document's records's values
+        set record's recordId to index
+        append (the cad sat clone of record) to document's records's values
+        set document's header's numberOfRecords to the length of document's records's values
+        return index
+
+function the cad sat record numbered {an integer:index} in {cad sat document:document}:
+    execute:
+        if index < 0:
+            return no cad sat record
+        set count to the length of document's records's values
+        if index < count:
+            set candidate to the item at index in document's records's values
+            if (candidate's recordId) = index:
+                return @intrinsic("construct", a cad sat record result, true, candidate)
+        loop position from 0 to count:
+            set candidate to the item at position in document's records's values
+            if (candidate's recordId) = index:
+                return @intrinsic("construct", a cad sat record result, true, candidate)
+        return no cad sat record
+
+function the cad sat record for {cad sat pointer:reference} in {cad sat document:document}:
+    execute:
+        if reference is cad sat null:
+            return no cad sat record
+        return the cad sat record numbered reference's index in document
