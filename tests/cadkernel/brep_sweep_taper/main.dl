@@ -85,3 +85,30 @@ check extrusion ((the length of arcFlaws) = 0)
 free arcFlaws
 free arcProfile
 print "a_segmented_circular_taper_preserves_an_analytic_cone" as a line
+
+set taperedSheetProfile to extrusion square of size 8.0
+set taperedSheet to the tapered cad extrusion sheet of taperedSheetProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 2.0) by 0.2
+check extrusion (taperedSheet's valid)
+check extrusion ((the cad count of (taperedSheet's value's faces)) = 4)
+set taperedSheetFlaws to the cad flaws of (taperedSheet's value)
+check extrusion ((the length of taperedSheetFlaws) = 0)
+free taperedSheetFlaws
+set obliqueTaperedSheet to the tapered cad extrusion sheet of taperedSheetProfile on (the cad xy plane) along (a cad vector3 with x 1.0, y 0.0 and z 2.0) by 0.2
+check extrusion (obliqueTaperedSheet's valid)
+check extrusion ((the cad count of (obliqueTaperedSheet's value's faces)) = 4)
+set obliqueSheetFlaws to the cad flaws of (obliqueTaperedSheet's value)
+check extrusion ((the length of obliqueSheetFlaws) = 0)
+free obliqueSheetFlaws
+free taperedSheetProfile
+print "a_closed_tapered_profile_makes_an_open_lateral_skin" as a line
+
+set conicSheetProfile to a list containing (the cad curve2 of (a cad circle2 at (the cad zero vector2) with radius 2.0))
+set conicSheet to the tapered cad extrusion sheet of conicSheetProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0) by 0.2
+check extrusion (conicSheet's valid)
+check extrusion ((the cad count of (conicSheet's value's faces)) = 1)
+check extrusion ((taper cone surface count in (conicSheet's value)) = 1)
+set conicSheetFlaws to the cad flaws of (conicSheet's value)
+check extrusion ((the length of conicSheetFlaws) = 0)
+free conicSheetFlaws
+free conicSheetProfile
+print "a_tapered_circle_makes_an_analytic_cone_sheet" as a line

@@ -1032,6 +1032,105 @@ function the tapered cad extrusion of {a pointer to a list:profile} on {cad plan
         free topProfile
         return result
 
+class:
+    patterns:
+        [a|] cad sweep cap result
+    members:
+        valid as a boolean
+        key as a cad face key
+
+local function cad sweep tolerance in {cad body:body}:
+    execute:
+        set lowerX to 1.0 / 0.0
+        set lowerY to 1.0 / 0.0
+        set lowerZ to 1.0 / 0.0
+        set upperX to the negative of lowerX
+        set upperY to the negative of lowerY
+        set upperZ to the negative of lowerZ
+        set coordinateScale to 1.0
+        set keys to the cad keys of (body's vertices)
+        loop index from 0 to the length of keys:
+            set vertex to the cad node pointer for (the item at index in keys) in (body's vertices)
+            set point to vertex's point
+            set lowerX to the minimum of lowerX and point's x
+            set lowerY to the minimum of lowerY and point's y
+            set lowerZ to the minimum of lowerZ and point's z
+            set upperX to the maximum of upperX and point's x
+            set upperY to the maximum of upperY and point's y
+            set upperZ to the maximum of upperZ and point's z
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of point's x)
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of point's y)
+            set coordinateScale to the maximum of coordinateScale and (the absolute value of point's z)
+        free keys
+        set extent to 1.0
+        set extent to the maximum of extent and (upperX - lowerX)
+        set extent to the maximum of extent and (upperY - lowerY)
+        set extent to the maximum of extent and (upperZ - lowerZ)
+        return (extent * 1e-8) + ((2.220446049250313e-16 * coordinateScale) * 64.0)
+
+local function cad sweep cap on {cad plane:plane} in {cad body:body} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return @intrinsic("construct", a cad sweep cap result, false, a new cad face key)
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set faceKey to the item at index in faceKeys
+            set face to the cad node pointer for faceKey in body
+            set surface to the cad node pointer for (face's surface) in body
+            if surface's kind = 0:
+                set candidateNormal to the cad normal of (surface's plane)
+                set distance to the cad distance from (surface's plane's origin) to plane
+                if (candidateNormal's valid) and (distance's valid):
+                    if ((the absolute value of (the cad dot of (normal's value) and (candidateNormal's value))) > (1.0 - 1e-9)) and ((the absolute value of (distance's value)) <= tolerance):
+                        free faceKeys
+                        return @intrinsic("construct", a cad sweep cap result, true, faceKey)
+        free faceKeys
+        return @intrinsic("construct", a cad sweep cap result, false, a new cad face key)
+
+local function cad sweep remove cap {cad face key:faceKey} from {cad body:body}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return false
+        set shellKey to face's owner
+        set surfaceKey to face's surface
+        loop loopIndex from 0 to the length of (face's loops's values):
+            set loopKey to the item at loopIndex in (face's loops's values)
+            set ring to the cad node pointer for loopKey in body
+            if ring = (0 as the type of ring):
+                return false
+            loop useIndex from 0 to the length of (ring's coedges's values):
+                set useKey to the item at useIndex in (ring's coedges's values)
+                set use to the cad node pointer for useKey in body
+                if use = (0 as the type of use):
+                    return false
+                set edge to the cad node pointer for (use's edge) in body
+                if edge = (0 as the type of edge):
+                    return false
+                loop removeIndex from ((the length of (edge's coedges's values)) - 1) down through 0:
+                    if (the item at removeIndex in (edge's coedges's values)) = useKey:
+                        remove item removeIndex from (edge's coedges's values)
+                ignore the cad removal of useKey from body
+            ignore the cad removal of loopKey from body
+        ignore the cad removal of faceKey from body
+        set shell to the cad node pointer for shellKey in body
+        if shell = (0 as the type of shell):
+            return false
+        loop removeIndex from ((the length of (shell's faces's values)) - 1) down through 0:
+            if (the item at removeIndex in (shell's faces's values)) = faceKey:
+                remove item removeIndex from (shell's faces's values)
+        set remaining to the cad face keys of body
+        set shared to false
+        loop index from 0 to the length of remaining:
+            set other to the cad node pointer for (the item at index in remaining) in body
+            if other's surface = surfaceKey:
+                set shared to true
+        free remaining
+        if shared = false:
+            ignore the cad removal of surfaceKey from body
+        return true
+
 function the tapered cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
     execute:
         set angle to givenAngle as a 64 bit floating-point number
@@ -1039,7 +1138,26 @@ function the tapered cad extrusion sheet of {a pointer to a list:profile} on {ca
             return no cad body
         if (the absolute value of angle) <= 1e-12:
             return the cad extrusion sheet of profile on plane along direction
-        return no cad body
+        set ordered to the cad profile senses of profile
+        if ordered's valid = false:
+            return no cad body
+        set solid to the tapered cad extrusion of profile on plane along direction by angle
+        if solid's valid = false:
+            return no cad body
+        set body to solid's value
+        set tolerance to cad sweep tolerance in body
+        set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
+        set baseCap to cad sweep cap on plane in body within tolerance
+        set farCap to cad sweep cap on far in body within tolerance
+        if (baseCap's valid = false) or (farCap's valid = false):
+            return no cad body
+        if baseCap's key = farCap's key:
+            return no cad body
+        if (cad sweep remove cap (baseCap's key) from body) = false:
+            return no cad body
+        if (cad sweep remove cap (farCap's key) from body) = false:
+            return no cad body
+        return the validated cad body result of body
 
 function the cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction}:
     execute:
