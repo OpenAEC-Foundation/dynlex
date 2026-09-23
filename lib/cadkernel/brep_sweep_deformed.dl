@@ -1,0 +1,182 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/sweep.rs::sweep_along_deformed and
+# deformation_stations at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep_planar.dl
+import lib/cadkernel/arclength2.dl
+
+class:
+    patterns:
+        [a|] cad deformation station
+    members:
+        point as a cad vector3
+        tangent as a cad vector3
+        fraction as a 64 bit floating-point number
+        miter as a 64 bit floating-point number
+
+local function cad deform scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad deform path tangent of {cad curve2:piece} on {cad plane:plane} forward {boolean:forward} at end {boolean:atEnd}:
+    execute:
+        set parameter to 0.0
+        if atEnd = forward:
+            set parameter to 1.0
+        set vector to the cad vector at (the cad tangent of piece at parameter) on plane
+        if forward = false:
+            set vector to the cad negative of vector
+        return the cad normalization of vector
+
+local function cad sample deform path {a pointer to a list:path} on {cad plane:plane} with {cad topology list:senses} twisted by {a 64 bit floating-point number:twistAngle}:
+    execute:
+        set empty to a cad topology list of a cad deformation station
+        if (((the length of path) != (the length of (senses's values))) or ((the length of path) = 0)) or ((cad deform scalar twistAngle is finite) = false):
+            return empty
+        set totalLength to 0.0
+        loop index from 0 to the length of path:
+            set totalLength to totalLength + (the cad length of (the item at index in path))
+        if ((cad deform scalar totalLength is finite) = false) or (totalLength <= 1e-12):
+            return empty
+        set angleStep to 0.17453292519943295 as a 64 bit floating-point number
+        if (the ceiling of ((the absolute value of twistAngle) / angleStep)) > 4096.0:
+            return empty
+        set firstParameter to 1.0
+        if the item at 0 in (senses's values):
+            set firstParameter to 0.0
+        set lastParameter to 0.0
+        if the last item of (senses's values):
+            set lastParameter to 1.0
+        set firstPoint to the cad point on (the item at 0 in path) at firstParameter
+        set lastPoint to the cad point on (the last item of path) at lastParameter
+        if firstPoint cad profile meets lastPoint:
+            return empty
+        set samples to a cad topology list of a cad deformation station
+        set traversed to 0.0
+        loop index from 0 to the length of path:
+            set piece to the item at index in path
+            set forward to the item at index in (senses's values)
+            set pieceLength to the cad length of piece
+            if ((cad deform scalar pieceLength is finite) = false) or (pieceLength <= 1e-12):
+                return empty
+            set pathSubdivisions to 1
+            if piece's kind = 2:
+                set arcSteps to (the absolute value of (the cad sweep of (piece's arc))) / angleStep
+                set arcCeiling to the ceiling of arcSteps
+                set pathSubdivisions to (the maximum of arcCeiling and 1.0) as an integer
+            else if piece's kind != 0:
+                return empty
+            set twistSteps to (((the absolute value of twistAngle) * pieceLength) / totalLength) / angleStep
+            set twistCeiling to the ceiling of twistSteps
+            set twistSubdivisions to (the maximum of twistCeiling and 1.0) as an integer
+            set subdivisions to the maximum of pathSubdivisions and twistSubdivisions
+            loop step from 0 to (subdivisions + 1):
+                if (index = 0) or (step > 0):
+                    set localFraction to (step as a 64 bit floating-point number) / (subdivisions as a 64 bit floating-point number)
+                    set parameter to localFraction
+                    if forward = false:
+                        set parameter to 1.0 - localFraction
+                    set point to the cad point at (the cad point on piece at parameter) on plane
+                    set travelVector to the cad vector at (the cad tangent of piece at parameter) on plane
+                    if forward = false:
+                        set travelVector to the cad negative of travelVector
+                    set normalized to the cad normalization of travelVector
+                    if normalized's valid = false:
+                        return empty
+                    set direction to normalized's value
+                    set miterFactor to 1.0
+                    if (step = subdivisions) and ((index + 1) < (the length of path)):
+                        set nextTangent to cad deform path tangent of (the item at (index + 1) in path) on plane forward (the item at (index + 1) in (senses's values)) at end false
+                        if nextTangent's valid = false:
+                            return empty
+                        set bisector to the cad normalization of (the cad sum of direction and (nextTangent's value))
+                        if bisector's valid = false:
+                            return empty
+                        set normal to the cad normal of plane
+                        if normal's valid = false:
+                            return empty
+                        set left to the cad normalization of (the cad cross of (normal's value) and (bisector's value))
+                        set previousLeft to the cad normalization of (the cad cross of (normal's value) and direction)
+                        if (left's valid = false) or (previousLeft's valid = false):
+                            return empty
+                        set cosine to the cad dot of (left's value) and (previousLeft's value)
+                        if cosine <= 1e-6:
+                            return empty
+                        set direction to bisector's value
+                        set miterFactor to 1.0 / cosine
+                    set fraction to (traversed + (pieceLength * localFraction)) / totalLength
+                    append (@intrinsic("construct", a cad deformation station, point, direction, fraction, miterFactor)) to (samples's values)
+            set traversed to traversed + pieceLength
+        return samples
+
+function the cad deformed sweep of {a pointer to a list:profile} on {cad plane:profilePlane} following {a pointer to a list:path} on {cad plane:pathPlane} rotated by {a 64 bit floating-point number:profileRotation} twisted by {a 64 bit floating-point number:twistAngle} scaled by {a 64 bit floating-point number:scaleFactor}:
+    execute:
+        if ((((cad deform scalar profileRotation is finite) = false) or ((cad deform scalar twistAngle is finite) = false)) or ((cad deform scalar scaleFactor is finite) = false)) or (scaleFactor <= 1e-9):
+            return no cad body
+        if (((the absolute value of profileRotation) <= 1e-12) and ((the absolute value of twistAngle) <= 1e-12)) and ((the absolute value of (scaleFactor - 1.0)) <= 1e-12):
+            return the cad planar sweep of profile on profilePlane following path on pathPlane
+        loop index from 0 to the length of profile:
+            if ((the item at index in profile)'s kind) != 0:
+                return no cad body
+        set senses to the cad path senses of path
+        if senses's valid = false:
+            return no cad body
+        set planeNormal to the cad normal of pathPlane
+        if planeNormal's valid = false:
+            return no cad body
+        set pathNormal to the cad normalization of (planeNormal's value)
+        if pathNormal's valid = false:
+            return no cad body
+        set samples to cad sample deform path path on pathPlane with (senses's value) twisted by twistAngle
+        set stationCount to the length of (samples's values)
+        if stationCount < 2:
+            return no cad body
+        set startSample to the item at 0 in (samples's values)
+        set endSample to the last item of (samples's values)
+        if (the cad distance from (endSample's point) to (startSample's point)) <= 1e-9:
+            return no cad body
+        set ordered to the cad profile senses of profile
+        if ordered's valid = false:
+            return no cad body
+        set startLeft to the cad normalization of (the cad cross of (pathNormal's value) and (startSample's tangent))
+        if startLeft's valid = false:
+            return no cad body
+        set coordinates to a cad topology list of a cad vector2
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set parameter to 1.0
+            if the item at index in (ordered's value's values):
+                set parameter to 0.0
+            set point to the cad point at (the cad point on piece at parameter) on profilePlane
+            set delta to the cad difference of point and (startSample's point)
+            if (the absolute value of (the cad dot of delta and (startSample's tangent))) > (1e-8 * (the maximum of (the cad length of delta) and 1.0)):
+                return no cad body
+            append (a cad vector2 with x (the cad dot of delta and (startLeft's value)) and y (the cad dot of delta and (pathNormal's value))) to (coordinates's values)
+        set sections to an empty list of a cad loft section
+        loop stationIndex from 0 to stationCount:
+            set sample to the item at stationIndex in (samples's values)
+            set left to the cad normalization of (the cad cross of (pathNormal's value) and (sample's tangent))
+            if left's valid = false:
+                return no cad body
+            set angle to profileRotation + (twistAngle * (sample's fraction))
+            set sectionScale to 1.0 + ((scaleFactor - 1.0) * (sample's fraction))
+            if ((cad deform scalar sectionScale is finite) = false) or (sectionScale <= 1e-9):
+                return no cad body
+            set sine to the sine of angle
+            set cosine to the cosine of angle
+            set sectionPoints to a cad topology list of a cad vector2
+            loop index from 0 to the length of (coordinates's values):
+                set coordinate to the item at index in (coordinates's values)
+                set across to ((((coordinate's x) * cosine) - ((coordinate's y) * sine)) * sectionScale) * (sample's miter)
+                set height to (((coordinate's x) * sine) + ((coordinate's y) * cosine)) * sectionScale
+                append (a cad vector2 with x across and y height) to (sectionPoints's values)
+            set pieces to an empty list of a cad curve2
+            loop index from 0 to the length of (sectionPoints's values):
+                set first to the item at index in (sectionPoints's values)
+                set next to the item at (the remainder of (index + 1) divided by (the length of (sectionPoints's values))) in (sectionPoints's values)
+                append (the cad curve2 of (a cad line2 from first to next)) to pieces
+            set frame to a cad plane with origin (sample's point), x axis (left's value) and y axis (pathNormal's value)
+            append (a cad loft section on frame with profile pieces) to sections
+            free pieces
+        set result to the ordered cad polygon loft through sections
+        free sections
+        return result

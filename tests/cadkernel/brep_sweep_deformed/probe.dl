@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_deformed.dl
+
+function deform probe argument {integer:index}:
+    execute:
+        set valueText to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of valueText, 0 as a pointer)
+
+function deform probe point {integer:index}:
+    execute:
+        return a cad vector2 with x (deform probe argument index) and y (deform probe argument (index + 1))
+
+function deform probe vector {integer:index}:
+    execute:
+        return a cad vector3 with x (deform probe argument index), y (deform probe argument (index + 1)) and z (deform probe argument (index + 2))
+
+function deform probe emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function deform probe body {cad body:body}:
+    execute:
+        deform probe emit (the cad count of (body's vertices))
+        deform probe emit (the cad count of (body's edges))
+        deform probe emit (the cad count of (body's coedges))
+        deform probe emit (the cad count of (body's loops))
+        deform probe emit (the cad count of (body's faces))
+        deform probe emit (the cad count of (body's shells))
+        deform probe emit (the cad count of (body's lumps))
+        deform probe emit (the cad count of (body's surfaces))
+        deform probe emit (the cad count of (body's curves))
+        deform probe emit (the length of (body's roots))
+        set flaws to the cad flaws of body
+        deform probe emit (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set manifoldEdges to 0
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of (edgeNode's coedges's values)) = 2:
+                increment manifoldEdges
+        deform probe emit manifoldEdges
+        free edgeKeys
+        set coedgeKeys to the cad keys of (body's coedges)
+        set pcurveCount to 0
+        loop index from 0 to the length of coedgeKeys:
+            set coedgeNode to the cad node pointer for (the item at index in coedgeKeys) in (body's coedges)
+            if coedgeNode's pcurve's valid:
+                increment pcurveCount
+        deform probe emit pcurveCount
+        free coedgeKeys
+        set faceKeys to the cad keys of (body's faces)
+        set forwardFaces to 0
+        loop index from 0 to the length of faceKeys:
+            set faceNode to the cad node pointer for (the item at index in faceKeys) in (body's faces)
+            if faceNode's forward:
+                increment forwardFaces
+        deform probe emit forwardFaces
+        free faceKeys
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertexNode to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            deform probe emit (vertexNode's point's x)
+            deform probe emit (vertexNode's point's y)
+            deform probe emit (vertexNode's point's z)
+        free vertexKeys
+
+set profilePlane to a cad plane with origin (deform probe vector 0), x axis (deform probe vector 3) and y axis (deform probe vector 6)
+set pathPlane to a cad plane with origin (deform probe vector 9), x axis (deform probe vector 12) and y axis (deform probe vector 15)
+set rotation to deform probe argument 18
+set twist to deform probe argument 19
+set scale to deform probe argument 20
+set cursor to 21
+set profile to an empty list of a cad curve2
+set path to an empty list of a cad curve2
+loop group from 0 to 2:
+    set count to (deform probe argument cursor) as an integer
+    set cursor to cursor + 1
+    loop index from 0 to count:
+        set kind to (deform probe argument cursor) as an integer
+        set cursor to cursor + 1
+        set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+        if kind = 0:
+            set piece to the cad curve2 of (a cad line2 from (deform probe point cursor) to (deform probe point (cursor + 2)))
+            set cursor to cursor + 4
+        else if kind = 1:
+            set piece to the cad curve2 of (a cad circle2 at (deform probe point cursor) with radius (deform probe argument (cursor + 2)))
+            set cursor to cursor + 3
+        else if kind = 2:
+            set piece to the cad curve2 of (a cad arc2 at (deform probe point cursor) with radius (deform probe argument (cursor + 2)) from (deform probe argument (cursor + 3)) to (deform probe argument (cursor + 4)))
+            set cursor to cursor + 5
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+        if group = 0:
+            append piece to profile
+        else:
+            append piece to path
+set result to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by rotation twisted by twist scaled by scale
+deform probe emit (result's valid as an integer)
+if result's valid:
+    deform probe body (result's value)

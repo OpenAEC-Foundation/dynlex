@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_deformed.dl
+
+function check deformed {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function deformed point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function deformed line from {cad vector2:start} to {cad vector2:finish}:
+    execute:
+        return the cad curve2 of (a cad line2 from start to finish)
+
+function deformed triangle:
+    execute:
+        set profile to a list containing (deformed line from (deformed point 0 0) to (deformed point 1 0))
+        append (deformed line from (deformed point 1 0) to (deformed point 0.5 1)) to profile
+        append (deformed line from (deformed point 0.5 1) to (deformed point 0 0)) to profile
+        return profile
+
+function check deformed solid {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check deformed ((the length of flaws) = 0)
+        free flaws
+        check deformed ((the length of (body's roots)) = 1)
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in body
+            check deformed ((the length of (edgeNode's coedges's values)) = 2)
+        free edgeKeys
+
+set profilePlane to a cad plane with origin (the cad zero vector3), x axis (the cad y axis) and y axis (the cad z axis)
+set pathPlane to the cad xy plane
+set profile to deformed triangle
+set path to a list containing (deformed line from (deformed point 0 0) to (deformed point 3 0))
+
+set identity to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 0.0 scaled by 1.0
+check deformed (identity's valid)
+check deformed solid (identity's value)
+set ordinary to the cad planar sweep of profile on profilePlane following path on pathPlane
+check deformed (ordinary's valid)
+check deformed ((the cad count of (identity's value's faces)) = (the cad count of (ordinary's value's faces)))
+check deformed ((the cad count of (identity's value's vertices)) = (the cad count of (ordinary's value's vertices)))
+print "identity_delegates_to_planar_sweep" as a line
+
+set rotated to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.4 twisted by 0.0 scaled by 1.0
+check deformed (rotated's valid)
+check deformed solid (rotated's value)
+set twisted to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 0.5 scaled by 1.0
+check deformed (twisted's valid)
+check deformed solid (twisted's value)
+check deformed ((the cad count of (twisted's value's vertices)) = 12)
+set scaled to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 0.0 scaled by 1.5
+check deformed (scaled's valid)
+check deformed solid (scaled's value)
+print "rotation_twist_and_scale_produce_valid_lofts" as a line
+
+append (deformed line from (deformed point 3 0) to (deformed point 3 3)) to path
+set bent to the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.1 twisted by 0.2 scaled by 1.2
+check deformed (bent's valid)
+check deformed solid (bent's value)
+check deformed ((the cad count of (bent's value's vertices)) = 9)
+print "bent_path_uses_mitered_stations" as a line
+
+set arcPlane to a cad plane with origin (a cad vector3 with x 1.0, y 0.0 and z 0.0), x axis (the cad z axis) and y axis (the cad x axis)
+set arcProfile to deformed triangle
+clear path
+append (the cad curve2 of (a cad arc2 at (deformed point 0 0) with radius 1.0 from 0.0 to 1.5707963267948966)) to path
+set curved to the cad deformed sweep of arcProfile on arcPlane following path on pathPlane rotated by 0.1 twisted by 0.2 scaled by 1.2
+check deformed (curved's valid)
+check deformed solid (curved's value)
+check deformed ((the cad count of (curved's value's vertices)) = 30)
+print "arc_path_uses_ordered_polygon_sections" as a line
+
+check deformed (((the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 0.0 scaled by 0.0)'s valid) = false)
+check deformed (((the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 0.0 scaled by 1e-9)'s valid) = false)
+check deformed (((the cad deformed sweep of profile on profilePlane following path on pathPlane rotated by 0.0 twisted by 800.0 scaled by 1.0)'s valid) = false)
+print "invalid_scale_and_excessive_twist_are_refused" as a line
+
+set openProfile to a list containing (deformed line from (deformed point 0 0) to (deformed point 1 0))
+check deformed (((the cad deformed sweep of openProfile on profilePlane following path on pathPlane rotated by 0.2 twisted by 0.0 scaled by 1.0)'s valid) = false)
+set circularProfile to a list containing (the cad curve2 of (a cad circle2 at (deformed point 0 0) with radius 1.0))
+check deformed (((the cad deformed sweep of circularProfile on profilePlane following path on pathPlane rotated by 0.2 twisted by 0.0 scaled by 1.0)'s valid) = false)
+set shiftedPlane to a cad plane with origin (a cad vector3 with x 2.0, y 0.0 and z 0.0), x axis (the cad y axis) and y axis (the cad z axis)
+check deformed (((the cad deformed sweep of profile on shiftedPlane following path on pathPlane rotated by 0.2 twisted by 0.0 scaled by 1.0)'s valid) = false)
+print "open_curved_and_misaligned_profiles_are_refused" as a line
+
+set disconnected to a list containing (deformed line from (deformed point 0 0) to (deformed point 2 0))
+append (deformed line from (deformed point 4 0) to (deformed point 5 0)) to disconnected
+check deformed (((the cad deformed sweep of profile on profilePlane following disconnected on pathPlane rotated by 0.2 twisted by 0.0 scaled by 1.0)'s valid) = false)
+set closedPath to a list containing (deformed line from (deformed point 0 0) to (deformed point 2 0))
+append (deformed line from (deformed point 2 0) to (deformed point 0 0)) to closedPath
+check deformed (((the cad deformed sweep of profile on profilePlane following closedPath on pathPlane rotated by 0.2 twisted by 0.0 scaled by 1.0)'s valid) = false)
+print "disconnected_and_closed_paths_are_refused" as a line

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MPL-2.0
+# The separate expression prints 3, while the equivalent nested expression
+# prints 1 without a compiler diagnostic. Both should produce 3.
+import lib/cadkernel/core.dl
+
+set angleStep to 0.17453292519943295 as a 64 bit floating-point number
+set twistAngle to 0.5 as a 64 bit floating-point number
+set pieceLength to 3.0 as a 64 bit floating-point number
+set totalLength to 3.0 as a 64 bit floating-point number
+set raw to (((the absolute value of twistAngle) * pieceLength) / totalLength) / angleStep
+set rounded to the ceiling of raw
+set separate to (the maximum of rounded and 1.0) as an integer
+set nested to (the maximum of (the ceiling of (((the absolute value of twistAngle) * pieceLength) / totalLength / angleStep)) and 1.0) as an integer
+print separate as a line
+print nested as a line
