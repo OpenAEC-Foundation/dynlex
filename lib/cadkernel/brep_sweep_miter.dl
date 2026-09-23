@@ -1,0 +1,162 @@
+# SPDX-License-Identifier: MPL-2.0
+# Mitered rectangular line sweep from cadkernel src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep.dl
+
+local function cad miter line unit of {cad vector2:value}:
+    execute:
+        set length to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, value's x, value's y)
+        if length > 1e-12:
+            return @intrinsic("construct", a cad normalization2, true, value cad divided by length)
+        return @intrinsic("construct", a cad normalization2, false, the cad zero vector2)
+
+local function cad miter offset point {cad vector2:point} along {cad vector2:direction} by {a 64 bit floating-point number:distance}:
+    execute:
+        return a cad vector2 with x ((point's x) - ((direction's y) * distance)) and y ((point's y) + ((direction's x) * distance))
+
+local function cad miter offset line rail through {cad topology list:points} by {a 64 bit floating-point number:distance}:
+    execute:
+        set absent to a cad topology list of a cad vector2
+        set count to the length of (points's values)
+        if count < 2:
+            return absent
+        set directions to a cad topology list of a cad vector2
+        loop index from 0 to (count - 1):
+            set start to the item at index in (points's values)
+            set finish to the item at (index + 1) in (points's values)
+            set unit to cad miter line unit of (the cad difference of finish and start)
+            if unit's valid = false:
+                return absent
+            append (unit's value) to (directions's values)
+        set railPoints to a cad topology list of a cad vector2
+        append (cad miter offset point (the item at 0 in (points's values)) along (the item at 0 in (directions's values)) by distance) to (railPoints's values)
+        loop index from 1 to (count - 1):
+            set previous to the item at (index - 1) in (directions's values)
+            set nextDirection to the item at index in (directions's values)
+            set corner to the item at index in (points's values)
+            set previousPoint to cad miter offset point corner along previous by distance
+            set nextPoint to cad miter offset point corner along nextDirection by distance
+            set cross to the cad cross of previous and nextDirection
+            set joint to the cad zero vector2
+            if (the absolute value of cross) <= 1e-12:
+                if (the cad dot of previous and nextDirection) <= 0.0:
+                    return absent
+                set joint to (the cad sum of previousPoint and nextPoint) scaled by 0.5
+            else:
+                set along to (the cad cross of (the cad difference of nextPoint and previousPoint) and nextDirection) / cross
+                set joint to the cad sum of previousPoint and (previous scaled by along)
+            append joint to (railPoints's values)
+        append (cad miter offset point (the last item of (points's values)) along (the last item of (directions's values)) by distance) to (railPoints's values)
+        return railPoints
+
+local function cad miter near either {a 64 bit floating-point number:value} with {a 64 bit floating-point number:first} and {a 64 bit floating-point number:second} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        return ((the absolute value of (value - first)) <= tolerance) or ((the absolute value of (value - second)) <= tolerance)
+
+function the cad mitered rectangular sweep of {a pointer to a list:profile} on {cad plane:profilePlane} along {a pointer to a list:path} on {cad plane:pathPlane}:
+    execute:
+        set pathOrdered to the cad path senses of path
+        if pathOrdered's valid = false:
+            return no cad body
+        if (the length of profile) != 4:
+            return no cad body
+        if (the length of path) != (the length of (pathOrdered's value's values)):
+            return no cad body
+        loop index from 0 to the length of profile:
+            if ((the item at index in profile)'s kind) != 0:
+                return no cad body
+        set pathPoints to a cad topology list of a cad vector2
+        loop index from 0 to the length of path:
+            set piece to the item at index in path
+            if (piece's kind) != 0:
+                return no cad body
+            set first to piece's line's start
+            set last to piece's line's end
+            if (the item at index in (pathOrdered's value's values)) = false:
+                set first to piece's line's end
+                set last to piece's line's start
+            if index = 0:
+                append first to (pathPoints's values)
+            else:
+                if ((the last item of (pathPoints's values)) cad profile meets first) = false:
+                    return no cad body
+            if first cad profile meets last:
+                return no cad body
+            append last to (pathPoints's values)
+        if ((the length of (pathPoints's values)) < 2) or ((the item at 0 in (pathPoints's values)) cad profile meets (the last item of (pathPoints's values))):
+            return no cad body
+        set firstSegment to the cad difference of (the item at 1 in (pathPoints's values)) and (the item at 0 in (pathPoints's values))
+        set firstDirection to cad miter line unit of firstSegment
+        if firstDirection's valid = false:
+            return no cad body
+        set planeNormal to the cad normal of pathPlane
+        if planeNormal's valid = false:
+            return no cad body
+        set pathNormal to the cad normalization of (planeNormal's value)
+        set tangent to the cad normalization of (the cad vector at (firstDirection's value) on pathPlane)
+        if (pathNormal's valid = false) or (tangent's valid = false):
+            return no cad body
+        set leftResult to the cad normalization of (the cad cross of (pathNormal's value) and (tangent's value))
+        if leftResult's valid = false:
+            return no cad body
+        set leftDirection to leftResult's value
+        set pathStart to the cad point at (the item at 0 in (pathPoints's values)) on pathPlane
+        set profileOrdered to the cad profile senses of profile
+        if profileOrdered's valid = false:
+            return no cad body
+        set profileCorners to a cad topology list of a cad vector3
+        loop index from 0 to the length of profile:
+            set piece to the item at index in profile
+            set parameter to 1.0
+            if the item at index in (profileOrdered's value's values):
+                set parameter to 0.0
+            append (the cad point at (the cad point on piece at parameter) on profilePlane) to (profileCorners's values)
+        set scale to 1.0 as a 64 bit floating-point number
+        loop index from 0 to the length of (profileCorners's values):
+            set corner to the item at index in (profileCorners's values)
+            set scale to the maximum of scale and (the cad length of (the cad difference of corner and pathStart))
+        set tolerance to scale * 1e-9
+        set acrossMin to 1.0 / 0.0
+        set acrossMax to the negative of acrossMin
+        set heightMin to 1.0 / 0.0
+        set heightMax to the negative of heightMin
+        set coordinates to a cad topology list of a cad vector2
+        loop index from 0 to the length of (profileCorners's values):
+            set delta to the cad difference of (the item at index in (profileCorners's values)) and pathStart
+            if (the absolute value of (the cad dot of delta and (tangent's value))) > tolerance:
+                return no cad body
+            set across to the cad dot of delta and leftDirection
+            set height to the cad dot of delta and (pathNormal's value)
+            set acrossMin to the minimum of acrossMin and across
+            set acrossMax to the maximum of acrossMax and across
+            set heightMin to the minimum of heightMin and height
+            set heightMax to the maximum of heightMax and height
+            append (a cad vector2 with x across and y height) to (coordinates's values)
+        if ((acrossMax - acrossMin) <= tolerance) or ((heightMax - heightMin) <= tolerance):
+            return no cad body
+        loop index from 0 to the length of (coordinates's values):
+            set coordinate to the item at index in (coordinates's values)
+            if ((cad miter near either (coordinate's x) with acrossMin and acrossMax within tolerance) = false) or ((cad miter near either (coordinate's y) with heightMin and heightMax within tolerance) = false):
+                return no cad body
+        set highRail to cad miter offset line rail through pathPoints by acrossMax
+        set lowRail to cad miter offset line rail through pathPoints by acrossMin
+        if ((the length of (highRail's values)) = 0) or ((the length of (lowRail's values)) = 0):
+            return no cad body
+        set outlinePoints to a cad topology list of a cad vector2
+        loop index from 0 to the length of (highRail's values):
+            append (the item at index in (highRail's values)) to (outlinePoints's values)
+        loop index from 0 to the length of (lowRail's values):
+            append (the item at (((the length of (lowRail's values)) - 1) - index) in (lowRail's values)) to (outlinePoints's values)
+        set outline to an empty list of a cad curve2
+        loop index from 0 to the length of (outlinePoints's values):
+            set start to the item at index in (outlinePoints's values)
+            set finish to the item at (the remainder of (index + 1) divided by (the length of (outlinePoints's values))) in (outlinePoints's values)
+            if start cad profile meets finish:
+                return no cad body
+            append (the cad curve2 of (a cad line2 from start to finish)) to outline
+        set baseOrigin to the cad sum of (pathPlane's origin) and ((pathNormal's value) scaled by heightMin)
+        set basePlane to a cad plane with origin baseOrigin, x axis (pathPlane's xAxis) and y axis (pathPlane's yAxis)
+        set direction to (pathNormal's value) scaled by (heightMax - heightMin)
+        set result to the cad extrusion of outline on basePlane along direction
+        free outline
+        return result

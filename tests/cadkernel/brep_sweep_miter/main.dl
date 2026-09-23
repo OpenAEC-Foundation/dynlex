@@ -1,0 +1,131 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_miter.dl
+
+function check miter {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function miter point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function miter line from {cad vector2:first} to {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+function miter path through {a pointer to a list:points}:
+    execute:
+        set pieces to an empty list of a cad curve2
+        loop index from 0 to ((the length of points) - 1):
+            append (miter line from (the item at index in points) to (the item at (index + 1) in points)) to pieces
+        return pieces
+
+function miter ring through {a pointer to a list:points}:
+    execute:
+        set pieces to an empty list of a cad curve2
+        loop index from 0 to the length of points:
+            append (miter line from (the item at index in points) to (the item at (the remainder of (index + 1) divided by (the length of points)) in points)) to pieces
+        return pieces
+
+function check miter solid {cad body:body} faces {integer:faceCount}:
+    execute:
+        set flaws to the cad flaws of body
+        check miter ((the length of flaws) = 0)
+        free flaws
+        check miter ((the length of (body's roots)) = 1)
+        check miter ((the cad count of (body's faces)) = faceCount)
+        check miter ((the cad count of (body's vertices)) = (faceCount - 2) * 2)
+        check miter ((the cad worst vertex gap of body) < 1e-8)
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edgeNode to the cad node pointer for (the item at index in edgeKeys) in body
+            check miter ((the length of (edgeNode's coedges's values)) = 2)
+        free edgeKeys
+
+function miter has vertex {cad body:body} near {cad vector3:point}:
+    execute:
+        set keys to the cad keys of (body's vertices)
+        set found to false
+        loop index from 0 to the length of keys:
+            set node to the cad node pointer for (the item at index in keys) in (body's vertices)
+            if (the cad distance from (node's point) to point) < 1e-8:
+                set found to true
+        free keys
+        return found
+
+set profilePlane to a cad plane with origin (the cad zero vector3), x axis (the cad y axis) and y axis (the cad z axis)
+set pathPlane to the cad xy plane
+set rectanglePoints to a list containing (miter point -1 0)
+append (miter point 1 0) to rectanglePoints
+append (miter point 1 3) to rectanglePoints
+append (miter point -1 3) to rectanglePoints
+set rectangle to miter ring through rectanglePoints
+set elbowPoints to a list containing (miter point 0 0)
+append (miter point 5 0) to elbowPoints
+append (miter point 5 5) to elbowPoints
+set elbowPath to miter path through elbowPoints
+set elbow to the cad mitered rectangular sweep of rectangle on profilePlane along elbowPath on pathPlane
+check miter (elbow's valid)
+check miter solid (elbow's value) faces 8
+check miter (miter has vertex (elbow's value) near (a cad vector3 with x 4.0, y 1.0 and z 0.0))
+check miter (miter has vertex (elbow's value) near (a cad vector3 with x 6.0, y -1.0 and z 3.0))
+print "a_right_angle_joins_offset_rails_at_exact_miters" as a line
+
+set obliquePoints to a list containing (miter point 0 0)
+append (miter point 5 0) to obliquePoints
+append (miter point 8 4) to obliquePoints
+set obliquePath to miter path through obliquePoints
+set oblique to the cad mitered rectangular sweep of rectangle on profilePlane along obliquePath on pathPlane
+check miter (oblique's valid)
+check miter solid (oblique's value) faces 8
+print "an_oblique_corner_keeps_a_single_analytic_footprint" as a line
+
+set straightPoints to a list containing (miter point 0 0)
+append (miter point 5 0) to straightPoints
+append (miter point 8 0) to straightPoints
+set straightPath to miter path through straightPoints
+set straight to the cad mitered rectangular sweep of rectangle on profilePlane along straightPath on pathPlane
+check miter (straight's valid)
+check miter solid (straight's value) faces 8
+check miter (miter has vertex (straight's value) near (a cad vector3 with x 5.0, y 1.0 and z 0.0))
+print "collinear_runs_keep_the_source_stations" as a line
+
+set reversedPath to a list containing (miter line from (miter point 5 0) to (miter point 0 0))
+append (miter line from (miter point 5 5) to (miter point 5 0)) to reversedPath
+set reversed to the cad mitered rectangular sweep of rectangle on profilePlane along reversedPath on pathPlane
+check miter (reversed's valid)
+check miter solid (reversed's value) faces 8
+print "reversed_path_pieces_follow_the_connected_chain" as a line
+
+set trianglePoints to a list containing (miter point -1 0)
+append (miter point 1 0) to trianglePoints
+append (miter point 0 3) to trianglePoints
+set triangle to miter ring through trianglePoints
+check miter (((the cad mitered rectangular sweep of triangle on profilePlane along elbowPath on pathPlane)'s valid) = false)
+set skewPoints to a list containing (miter point -1 0)
+append (miter point 1 0) to skewPoints
+append (miter point 2 3) to skewPoints
+append (miter point -1 3) to skewPoints
+set skew to miter ring through skewPoints
+check miter (((the cad mitered rectangular sweep of skew on profilePlane along elbowPath on pathPlane)'s valid) = false)
+set shiftedPlane to a cad plane with origin (a cad vector3 with x 2.0, y 0.0 and z 0.0), x axis (the cad y axis) and y axis (the cad z axis)
+check miter (((the cad mitered rectangular sweep of rectangle on shiftedPlane along elbowPath on pathPlane)'s valid) = false)
+print "nonrectangular_and_misaligned_profiles_are_refused" as a line
+
+set openProfile to a list containing (miter line from (miter point -1 0) to (miter point 1 0))
+check miter (((the cad mitered rectangular sweep of openProfile on profilePlane along elbowPath on pathPlane)'s valid) = false)
+set arcPath to a list containing (the cad curve2 of (a cad arc2 at (miter point 0 0) with radius 5.0 from 0.0 to 1.5707963267948966))
+check miter (((the cad mitered rectangular sweep of rectangle on profilePlane along arcPath on pathPlane)'s valid) = false)
+set disconnectedPath to a list containing (miter line from (miter point 0 0) to (miter point 5 0))
+append (miter line from (miter point 7 0) to (miter point 8 0)) to disconnectedPath
+check miter (((the cad mitered rectangular sweep of rectangle on profilePlane along disconnectedPath on pathPlane)'s valid) = false)
+set backtrackPoints to a list containing (miter point 0 0)
+append (miter point 5 0) to backtrackPoints
+append (miter point 0 0) to backtrackPoints
+set backtrack to miter path through backtrackPoints
+check miter (((the cad mitered rectangular sweep of rectangle on profilePlane along backtrack on pathPlane)'s valid) = false)
+set stillPath to a list containing (miter line from (miter point 0 0) to (miter point 0 0))
+check miter (((the cad mitered rectangular sweep of rectangle on profilePlane along stillPath on pathPlane)'s valid) = false)
+print "nonlinear_disconnected_stationary_and_backtracking_paths_are_refused" as a line

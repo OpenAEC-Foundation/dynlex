@@ -3,6 +3,7 @@
 # 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
 import lib/cadkernel/brep_sweep.dl
 import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_sweep_miter.dl
 
 local function cad planar sweep rotation of {cad vector3:vector} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
     execute:
@@ -36,6 +37,9 @@ function the cad planar sweep of {a pointer to a list:profile} on {cad plane:pro
         set senses to the cad path senses of path
         if senses's valid = false:
             return no cad body
+        set mitered to the cad mitered rectangular sweep of profile on profilePlane along path on pathPlane
+        if mitered's valid:
+            return mitered
         set normal to the cad normal of pathPlane
         if normal's valid = false:
             return no cad body
