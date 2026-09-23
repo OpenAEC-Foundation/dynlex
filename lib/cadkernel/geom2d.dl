@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+# Public 2D geometry entry point corresponding to cadkernel src/geom2d/mod.rs.
+# The imported modules preserve the upstream layering and expose the verified
+# curve, topology, offset and sampling operations through one DynLex import.
+import lib/cadkernel/core.dl
+import lib/cadkernel/geometry2.dl
+import lib/cadkernel/angle.dl
+import lib/cadkernel/arc_fit2.dl
+import lib/cadkernel/arclength2.dl
+import lib/cadkernel/area2.dl
+import lib/cadkernel/arrangement2.dl
+import lib/cadkernel/band2.dl
+import lib/cadkernel/bounds2.dl
+import lib/cadkernel/centerline2.dl
+import lib/cadkernel/clip2.dl
+import lib/cadkernel/constrained2.dl
+import lib/cadkernel/construct2.dl
+import lib/cadkernel/containment2.dl
+import lib/cadkernel/cross2.dl
+import lib/cadkernel/curve2.dl
+import lib/cadkernel/deviation2.dl
+import lib/cadkernel/fillet2.dl
+import lib/cadkernel/frame.dl
+import lib/cadkernel/gradient.dl
+import lib/cadkernel/intersect2.dl
+import lib/cadkernel/nurbs2.dl
+import lib/cadkernel/offset2.dl
+import lib/cadkernel/polyline2.dl
+import lib/cadkernel/snap2.dl
+import lib/cadkernel/tessellate2.dl
+import lib/cadkernel/transform2.dl
+import lib/cadkernel/triangulate2.dl
