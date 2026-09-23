@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_base.dl
+
+function check cad path sweep base {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+function cad path sweep base near {a 64 bit floating-point number:actual} and {a 64 bit floating-point number:expected}:
+    execute:
+        return (the absolute value of (actual - expected)) < 1e-9
+
+set first to a cad vector2 with x 0.0 and y 0.0
+set last to a cad vector2 with x 2.0 and y 0.0
+set wire to a list containing (the cad curve2 of (a cad line2 from first to last))
+set wires to a list containing wire
+set base to the cad path sweep profile base of wires on (the cad xy plane)
+check cad path sweep base (base's valid)
+check cad path sweep base (cad path sweep base near (base's value's x) and 1.0)
+check cad path sweep base (cad path sweep base near (base's value's y) and 0.0)
+print "open_line_anchor_uses_twenty_boundary_samples" as a line
+
+set path to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 3.0)))
+set pathPlane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 5.0), x axis (the cad x axis) and y axis (the cad y axis)
+set start to the cad path sweep start of path on pathPlane
+check cad path sweep base (start's valid)
+check cad path sweep base (cad path sweep base near (start's value's x) and 4.0)
+check cad path sweep base (cad path sweep base near (start's value's z) and 5.0)
+set placed to the cad path sweep placement of wires on (the cad xy plane) following path on pathPlane using (the default cad path sweep options)
+check cad path sweep base (placed's valid)
+check cad path sweep base (cad path sweep base near (placed's value's origin's x) and 3.0)
+check cad path sweep base (cad path sweep base near (placed's value's zAxis's y) and 1.0)
+print "planar_path_start_and_aligned_placement" as a line
+
+set points to a list containing (a cad vector3 with x 7.0, y 8.0 and z 9.0)
+append (a cad vector3 with x 8.0, y 8.0 and z 9.0) to points
+set spaceStart to the cad path sweep start of points points closed false
+check cad path sweep base (spaceStart's valid)
+check cad path sweep base (cad path sweep base near (spaceStart's value's z) and 9.0)
+set reversedPath to a list containing (the cad curve2 of (a cad line2 from first to last))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to last)) to reversedPath
+set reversedStart to the cad path sweep start of reversedPath on (the cad xy plane)
+check cad path sweep base (reversedStart's valid)
+check cad path sweep base (cad path sweep base near (reversedStart's value's x) and 0.0)
+print "spatial_and_reversed_path_starts" as a line
+
+set stationary to a list containing (the cad zero vector3)
+append (the cad zero vector3) to stationary
+check cad path sweep base (((the cad path sweep start of points stationary closed false)'s valid) = false)
+set emptyWires to an empty list of the type of wire
+check cad path sweep base (((the cad path sweep profile base of emptyWires on (the cad xy plane))'s valid) = false)
+print "empty_and_stationary_inputs_are_refused" as a line
+
+free emptyWires
+free stationary
+free reversedPath
+free points
+free path
+free wires
+free wire

@@ -1,0 +1,139 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_base.dl
+
+function emit cad path sweep number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17e\n", value as a 64 bit floating-point number)
+function emit cad path sweep point {cad path sweep point result:result}:
+    execute:
+        emit cad path sweep number (result's valid as an integer)
+        emit cad path sweep number (result's value's x)
+        emit cad path sweep number (result's value's y)
+        emit cad path sweep number (result's value's z)
+function emit cad path sweep placement {cad path sweep placement result:result}:
+    execute:
+        emit cad path sweep number (result's valid as an integer)
+        set value to result's value
+        emit cad path sweep number (value's xAxis's x)
+        emit cad path sweep number (value's xAxis's y)
+        emit cad path sweep number (value's xAxis's z)
+        emit cad path sweep number (value's yAxis's x)
+        emit cad path sweep number (value's yAxis's y)
+        emit cad path sweep number (value's yAxis's z)
+        emit cad path sweep number (value's zAxis's x)
+        emit cad path sweep number (value's zAxis's y)
+        emit cad path sweep number (value's zAxis's z)
+        emit cad path sweep number (value's origin's x)
+        emit cad path sweep number (value's origin's y)
+        emit cad path sweep number (value's origin's z)
+
+set xy to the cad xy plane
+set wire to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 2.0 and y 0.0)))
+set wires to a list containing wire
+emit cad path sweep point (the cad path sweep profile base of wires on xy)
+set bent to a list containing (the item at 0 in wire)
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 2.0 and y 2.0) to (a cad vector2 with x 2.0 and y 0.0))) to bent
+set bentWires to a list containing bent
+emit cad path sweep point (the cad path sweep profile base of bentWires on xy)
+set circleWire to a list containing (the cad curve2 of (a cad circle2 at (a cad vector2 with x 8.0 and y -3.0) with radius 2.0))
+set circleWires to a list containing circleWire
+emit cad path sweep point (the cad path sweep profile base of circleWires on xy)
+set arcWire to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from 0.0 to 1.5707963267948966))
+set arcWires to a list containing arcWire
+emit cad path sweep point (the cad path sweep profile base of arcWires on xy)
+set longWire to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 10.0 and y 0.0) to (a cad vector2 with x 10.0 and y 4.0)))
+set twoWires to a list containing wire
+append longWire to twoWires
+emit cad path sweep point (the cad path sweep profile base of twoWires on xy)
+set elevated to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 3.0), x axis (the cad x axis) and y axis (the cad y axis)
+set secondWire to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 10.0 and y 0.0) to (a cad vector2 with x 14.0 and y 0.0)))
+set secondWires to a list containing secondWire
+set profiles to a list containing wires
+append secondWires to profiles
+set planes to a list containing xy
+append elevated to planes
+emit cad path sweep point (the cad path sweep group base of profiles on planes)
+set ellipse to a cad ellipse at (a cad vector2 with x 3.0 and y -5.0) with radii 2.0 and 1.0 along (a cad vector2 with x 1.0 and y 0.0)
+set ellipseWire to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipse))
+set ellipseWires to a list containing ellipseWire
+emit cad path sweep point (the cad path sweep profile base of ellipseWires on xy)
+set vertices to a list containing (a cad polyline vertex2 at (the cad zero vector2) with bulge -1.0)
+append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+set polyline to the cad polyline2 with vertices vertices and closure false
+set bulgeWire to a list containing (the cad curve2 of polyline)
+set bulgeWires to a list containing bulgeWire
+emit cad path sweep point (the cad path sweep profile base of bulgeWires on xy)
+set scaled to a cad plane with origin (a cad vector3 with x 1.0, y 2.0 and z 3.0), x axis (a cad vector3 with x 2.0, y 0.0 and z 0.0) and y axis (a cad vector3 with x 0.0, y 3.0 and z 0.0)
+set scaledArc to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 2.0 from 0.0 to 1.5707963267948966))
+set scaledWires to a list containing scaledArc
+emit cad path sweep point (the cad path sweep profile base of scaledWires on scaled)
+set splineControls to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1.0 and y 1.0) to splineControls
+append (a cad vector2 with x 2.0 and y 0.0) to splineControls
+set splineKnots to a list containing 0.0
+append 0.0 to splineKnots
+append 0.0 to splineKnots
+append 1.0 to splineKnots
+append 1.0 to splineKnots
+append 1.0 to splineKnots
+set splineWeights to a list containing 1.0
+append 1.0 to splineWeights
+append 1.0 to splineWeights
+set profileSpline to the strict cad nurbs curve2 of degree 2 with controls splineControls, knots splineKnots and weights splineWeights
+set splineWire to a list containing (the cad curve2 of (profileSpline's value))
+set splineWires to a list containing splineWire
+emit cad path sweep point (the cad path sweep profile base of splineWires on xy)
+set rayWire to a list containing (the cad curve2 of (a cad ray2 from (the cad zero vector2) along (a cad vector2 with x 1.0 and y 0.0)))
+set rayWires to a list containing rayWire
+emit cad path sweep point (the cad path sweep profile base of rayWires on xy)
+set emptyWires to an empty list of (the type of wire)
+emit cad path sweep point (the cad path sweep profile base of emptyWires on xy)
+
+set pathPlane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z 5.0), x axis (the cad x axis) and y axis (the cad y axis)
+set path to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 3.0)))
+emit cad path sweep point (the cad path sweep start of path on pathPlane)
+set points to a list containing (a cad vector3 with x 7.0, y 8.0 and z 9.0)
+append (a cad vector3 with x 8.0, y 8.0 and z 9.0) to points
+emit cad path sweep point (the cad path sweep start of points points closed false)
+set still to a list containing (the cad zero vector3)
+append (the cad zero vector3) to still
+emit cad path sweep point (the cad path sweep start of points still closed false)
+set reversed to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 2.0 and y 0.0)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 2.0 and y 0.0))) to reversed
+emit cad path sweep point (the cad path sweep start of reversed on xy)
+set controls to a list containing (a cad vector3 with x 3.0, y 4.0 and z 5.0)
+append (a cad vector3 with x 5.0, y 4.0 and z 5.0) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+set spline to the strict cad nurbs curve3 of degree 1 with controls controls, knots knots and weights weights
+emit cad path sweep point (the cad path sweep start of (spline's value))
+set disconnected to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+append (the cad curve2 of (a cad line2 from (a cad vector2 with x 3.0 and y 0.0) to (a cad vector2 with x 4.0 and y 0.0))) to disconnected
+emit cad path sweep point (the cad path sweep start of disconnected on xy)
+set curvedPath to a list containing (the cad curve2 of (a cad arc2 at (a cad vector2 with x 4.0 and y 0.0) with radius 3.0 from 0.0 to 1.5707963267948966))
+emit cad path sweep point (the cad path sweep start of curvedPath on pathPlane)
+
+emit cad path sweep placement (the cad path sweep placement of wires on xy following path on pathPlane using (the default cad path sweep options))
+set unaligned to the default cad path sweep options
+set unaligned's align to false
+set unaligned's rotation to 1.5707963267948966
+emit cad path sweep placement (the cad path sweep placement of wires on xy following path on pathPlane using unaligned)
+emit cad path sweep placement (the cad path sweep placement of wires on xy along points points closed false using (the default cad path sweep options))
+set backward to a list containing (a cad vector3 with x 7.0, y 8.0 and z 9.0)
+append (a cad vector3 with x 6.0, y 8.0 and z 9.0) to backward
+emit cad path sweep placement (the cad path sweep placement of wires on xy along points backward closed false using (the default cad path sweep options))
+set override to the default cad path sweep options
+set override's hasBasePoint to true
+set override's basePoint to a cad vector3 with x 10.0, y 20.0 and z 30.0
+emit cad path sweep placement (the cad path sweep placement of emptyWires on xy following path on pathPlane using override)
+emit cad path sweep placement (the cad path sweep placement of wires on xy along (spline's value) using (the default cad path sweep options))
+set deformed to the default cad path sweep options
+set deformed's twist to 0.5
+set deformed's scale to 2.0
+set deformed's bank to true
+set deformed's surface to true
+emit cad path sweep placement (the cad path sweep placement of wires on xy following path on pathPlane using deformed)

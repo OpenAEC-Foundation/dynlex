@@ -1,0 +1,564 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native profile anchors, path starts and initial placements from
+# cadkernel src/brep/sweep_path.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Lists passed to public helpers are borrowed. Expansion lists are owned here.
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/arclength2.dl
+import lib/cadkernel/nurbs_builder.dl
+
+class:
+    patterns:
+        [a|] cad path sweep point result
+    members:
+        valid as a boolean
+        value as a cad vector3
+class:
+    patterns:
+        [a|] cad path sweep placement result
+    members:
+        valid as a boolean
+        value as a cad placement
+class:
+    patterns:
+        [a|] cad path sweep options
+    members:
+        align as a boolean
+        hasBasePoint as a boolean
+        basePoint as a cad vector3
+        rotation as a 64 bit floating-point number
+        twist as a 64 bit floating-point number
+        scale as a 64 bit floating-point number
+        bank as a boolean
+        surface as a boolean
+class:
+    patterns:
+        [a|] cad path sweep segment
+    members:
+        curve as a cad curve2
+        conic as a boolean
+class:
+    patterns:
+        [a|] cad path sweep expansion
+    members:
+        valid as a boolean
+        value
+class:
+    patterns:
+        [a|] cad path sweep senses
+    members:
+        valid as a boolean
+        value
+class:
+    patterns:
+        [a|] cad path sweep head result
+    members:
+        valid as a boolean
+        start as a cad vector3
+        tangent as a cad vector3
+
+function the default cad path sweep options:
+    execute:
+        return @intrinsic("construct", a cad path sweep options, true, false, the cad zero vector3, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number, false, false)
+local function no cad path sweep point:
+    execute:
+        return @intrinsic("construct", a cad path sweep point result, false, the cad zero vector3)
+local function no cad path sweep placement:
+    execute:
+        return @intrinsic("construct", a cad path sweep placement result, false, the cad identity placement)
+local function no cad path sweep head:
+    execute:
+        return @intrinsic("construct", a cad path sweep head result, false, the cad zero vector3, the cad zero vector3)
+local function cad path sweep {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+local function cad path sweep {cad vector2:value} is finite:
+    execute:
+        return (cad path sweep (value's x) is finite) and (cad path sweep (value's y) is finite)
+local function cad path sweep {cad vector2:left} meets {cad vector2:right}:
+    execute:
+        set scale to the maximum of (the maximum of (the maximum of (the absolute value of left's x) and (the absolute value of left's y)) and (the maximum of (the absolute value of right's x) and (the absolute value of right's y))) and 1.0
+        return (the cad distance from left to right) <= (1e-8 + (scale * 2.220446049250313e-16 * 64.0))
+local function the cad path sweep point on {cad path sweep segment:segment} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad point on segment's curve at parameter
+local function the cad path sweep tangent on {cad path sweep segment:segment} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad tangent of segment's curve at parameter
+local function the cad path sweep segment of {cad curve2:curve} conic {boolean:conic}:
+    execute:
+        return @intrinsic("construct", a cad path sweep segment, curve, conic)
+local function the cad path sweep segment witness:
+    execute:
+        return the cad path sweep segment of (the cad curve2 of (a new cad line2)) conic false
+local function the cad path sweep expanded {a pointer to a list:curves}:
+    execute:
+        set result to an empty list of (the type of (the cad path sweep segment witness))
+        loop index from 0 to the length of curves:
+            set curve to the item at index in curves
+            if (curve's kind = cad ray curve2 kind) or (curve's kind = cad xline curve2 kind):
+                free result
+                return @intrinsic("construct", a cad path sweep expansion, false, an empty list of (the type of (the cad path sweep segment witness)))
+            if curve's kind = cad polyline curve2 kind:
+                set pieces to the cad segments of curve
+                loop part from 0 to the length of pieces:
+                    set piece to the item at part in pieces
+                    set directedStart to (the item at part in (curve's polyline's vertices))'s position
+                    set reversed to (cad path sweep directedStart meets (the cad point on piece at 0.0)) = false
+                    if reversed:
+                        # The source expands a clockwise bulge to a reversed
+                        # rational NURBS, including its length parameterization.
+                        set rational to the cad rational builder of piece
+                        if rational's valid = false:
+                            free pieces
+                            free result
+                            return @intrinsic("construct", a cad path sweep expansion, false, an empty list of (the type of (the cad path sweep segment witness)))
+                        set backward to the cad reverse of (rational's value)
+                        set nurbs to the cad curve of backward
+                        if nurbs's valid = false:
+                            free pieces
+                            free result
+                            return @intrinsic("construct", a cad path sweep expansion, false, an empty list of (the type of (the cad path sweep segment witness)))
+                        append (the cad path sweep segment of (the cad curve2 of (nurbs's value)) conic false) to result
+                    else:
+                        append (the cad path sweep segment of piece conic true) to result
+                free pieces
+            else if curve's kind = cad circle curve2 kind:
+                set arc to a cad arc2 at curve's circle's centre with radius curve's circle's radius from 0.0 to 6.283185307179586
+                append (the cad path sweep segment of (the cad curve2 of arc) conic true) to result
+            else:
+                append (the cad path sweep segment of curve conic true) to result
+        return @intrinsic("construct", a cad path sweep expansion, ((the length of result) > 0), result)
+local function the cad path sweep chain directions for {a pointer to a list:segments}:
+    execute:
+        set empty to an empty list of a boolean
+        if (the length of segments) = 0:
+            return @intrinsic("construct", a cad path sweep senses, false, empty)
+        loop attempt from 0 to 2:
+            set senses to an empty list of a boolean
+            set first to attempt = 0
+            append first to senses
+            set parameter to 0.0
+            if first:
+                set parameter to 1.0
+            set head to the cad path sweep point on (the item at 0 in segments) at parameter
+            set joined to true
+            loop index from 1 to the length of segments:
+                set segment to the item at index in segments
+                set forward to cad path sweep head meets (the cad path sweep point on segment at 0.0)
+                if (forward = false) and ((cad path sweep head meets (the cad path sweep point on segment at 1.0)) = false):
+                    set joined to false
+                append forward to senses
+                set parameter to 0.0
+                if forward:
+                    set parameter to 1.0
+                set head to the cad path sweep point on segment at parameter
+            if joined:
+                return @intrinsic("construct", a cad path sweep senses, true, senses)
+            free senses
+        return @intrinsic("construct", a cad path sweep senses, false, empty)
+local function cad path sweep {a pointer to a list:segments} closes with {a pointer to a list:senses}:
+    execute:
+        set startParameter to 1.0
+        if the item at 0 in senses:
+            set startParameter to 0.0
+        set endParameter to 0.0
+        if the last item of senses:
+            set endParameter to 1.0
+        return cad path sweep (the cad path sweep point on (the item at 0 in segments) at startParameter) meets (the cad path sweep point on (the last item of segments) at endParameter)
+local function the cad path sweep point on {cad path sweep segment:segment} on {cad plane:plane} forward {boolean:forward} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set directed to parameter
+        if forward = false:
+            set directed to 1.0 - parameter
+        return the cad point at (the cad path sweep point on segment at directed) on plane
+local function the cad path sweep speed of {cad path sweep segment:segment} on {cad plane:plane} forward {boolean:forward} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set directed to parameter
+        if forward = false:
+            set directed to 1.0 - parameter
+        return the cad length of (the cad vector at (the cad path sweep tangent on segment at directed) on plane)
+local function the cad path sweep length of {cad path sweep segment:segment} on {cad plane:plane} forward {boolean:forward} to {a 64 bit floating-point number:end}:
+    execute:
+        if segment's curve's kind = cad line curve2 kind:
+            set direction to the cad vector at (the cad direction of segment's curve's line) on plane
+            return (the cad length of direction) * end
+        if (segment's curve's kind = cad arc curve2 kind) and (cad (plane) is orthonormal):
+            return (the cad length of segment's curve) * end
+        set nodes to [[-0.906179845938664,0.236926885056189],[-0.538469310105683,0.478628670499366],[0.0,0.568888888888889],[0.538469310105683,0.478628670499366],[0.906179845938664,0.236926885056189]]
+        set total to 0.0 as a 64 bit floating-point number
+        loop panel from 0 to 16:
+            loop index from 0 to 5:
+                set node to the item at index in nodes
+                set parameter to (end * ((panel as a 64 bit floating-point number) + 0.5 + ((the item at 0 in node) * 0.5))) / 16.0
+                set speed to the cad path sweep speed of segment on plane forward forward at parameter
+                set contribution to ((speed * (the item at 1 in node)) * end) / 32.0
+                set total to total + contribution
+        return total
+local function the cad path sweep conic anchor of {a pointer to a list:segments} with {a pointer to a list:senses}:
+    execute:
+        set invalid to @intrinsic("construct", a cad path sweep expansion, false, the cad zero vector2)
+        set first to the item at 0 in segments
+        if (first's conic = false) or ((first's curve's kind != cad arc curve2 kind) and (first's curve's kind != cad ellipse curve2 kind)):
+            return invalid
+        set spans to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of segments:
+            set piece to the item at index in segments
+            if (piece's conic = false) or (piece's curve's kind != first's curve's kind):
+                free spans
+                return invalid
+            if first's curve's kind = cad arc curve2 kind:
+                set sameCentre to cad path sweep (piece's curve's arc's centre) meets (first's curve's arc's centre)
+                set radius to first's curve's arc's radius
+                set sameRadius to (the absolute value of ((piece's curve's arc's radius) - radius)) <= ((the maximum of (the absolute value of radius) and 1.0) * 1e-10)
+                if (sameCentre and sameRadius) = false:
+                    free spans
+                    return invalid
+                append (the cad sweep of piece's curve's arc) to spans
+            else:
+                if (cad (piece's curve's ellipse's ellipse) equals (first's curve's ellipse's ellipse)) = false:
+                    free spans
+                    return invalid
+                append (the cad sweep of piece's curve's ellipse) to spans
+        set centre to the cad zero vector2
+        if first's curve's kind = cad arc curve2 kind:
+            set centre to first's curve's arc's centre
+        else:
+            set centre to first's curve's ellipse's ellipse's centre
+        if cad path sweep segments closes with senses:
+            free spans
+            return @intrinsic("construct", a cad path sweep expansion, true, centre)
+        set middle to 0.0 as a 64 bit floating-point number
+        loop index from 0 to the length of spans:
+            set middle to middle + (the item at index in spans)
+        set middle to middle * 0.5
+        set index to 0
+        while ((index + 1) < (the length of spans)) and (middle > (the item at index in spans)):
+            set middle to middle - (the item at index in spans)
+            set index to index + 1
+        set parameter to middle / (the item at index in spans)
+        if (the item at index in senses) = false:
+            set parameter to 1.0 - parameter
+        set point to the cad path sweep point on (the item at index in segments) at parameter
+        free spans
+        return @intrinsic("construct", a cad path sweep expansion, true, point)
+
+# The outer list contains independently connected wires, each a list of cad curve2.
+function the cad path sweep profile base of {a pointer to a list:wires} on {cad plane:plane}:
+    execute:
+        set normal to the cad normal of plane
+        if (normal's valid = false) or ((the length of wires) = 0):
+            return no cad path sweep point
+        set firstWire to the item at 0 in wires
+        if (the length of firstWire) = 0:
+            return no cad path sweep point
+        set origin to the cad point at (the cad point on (the item at 0 in firstWire) at 0.0) on plane
+        set total to 0.0 as a 64 bit floating-point number
+        set moment to the cad zero vector3
+        loop wireIndex from 0 to the length of wires:
+            set wire to the item at wireIndex in wires
+            set expanded to the cad path sweep expanded wire
+            if expanded's valid = false:
+                free expanded's value
+                return no cad path sweep point
+            set segments to expanded's value
+            set sensed to the cad path sweep chain directions for segments
+            if sensed's valid = false:
+                free segments
+                free sensed's value
+                return no cad path sweep point
+            set senses to sensed's value
+            set lengths to an empty list of a 64 bit floating-point number
+            set length to 0.0 as a 64 bit floating-point number
+            loop index from 0 to the length of segments:
+                set pieceLength to the cad path sweep length of (the item at index in segments) on plane forward (the item at index in senses) to 1.0
+                append pieceLength to lengths
+                set length to length + pieceLength
+            if ((cad path sweep length is finite) = false) or (length <= 1e-14):
+                free lengths
+                free senses
+                free segments
+                return no cad path sweep point
+            set conic to the cad path sweep conic anchor of segments with senses
+            set anchor to the cad zero vector3
+            if conic's valid:
+                set anchor to the cad point at conic's value on plane
+            else:
+                set samples to the cad zero vector3
+                loop sample from 0 to 20:
+                    set distance to (length * (sample as a 64 bit floating-point number)) / 19.0
+                    set index to 0
+                    while ((index + 1) < (the length of segments)) and (distance > (the item at index in lengths)):
+                        set distance to distance - (the item at index in lengths)
+                        set index to index + 1
+                    set segment to the item at index in segments
+                    set pieceLength to the item at index in lengths
+                    set parameter to 0.0 as a 64 bit floating-point number
+                    if ((segment's curve's kind = cad line curve2 kind) or (segment's curve's kind = cad arc curve2 kind)) and (cad (plane) is orthonormal):
+                        set parameter to distance / pieceLength
+                        clamp parameter between 0.0 and 1.0
+                    else:
+                        set low to 0.0 as a 64 bit floating-point number
+                        set high to 1.0 as a 64 bit floating-point number
+                        loop step from 0 to 40:
+                            set middle to (low + high) * 0.5
+                            if (the cad path sweep length of segment on plane forward (the item at index in senses) to middle) < distance:
+                                set low to middle
+                            else:
+                                set high to middle
+                        set parameter to (low + high) * 0.5
+                    set point to the cad path sweep point on segment on plane forward (the item at index in senses) at parameter
+                    set samples to the cad sum of samples and (the cad difference of point and origin)
+                set anchor to the cad sum of origin and (samples scaled by 0.05)
+            set moment to the cad sum of moment and ((the cad difference of anchor and origin) scaled by length)
+            set total to total + length
+            free lengths
+            free senses
+            free segments
+        if ((cad path sweep total is finite) = false) or ((total <= 1e-14) or ((cad moment is finite) = false)):
+            return no cad path sweep point
+        return @intrinsic("construct", a cad path sweep point result, true, the cad sum of origin and (moment cad divided by total))
+
+# Both input lists are borrowed and have equal length. Every entry of profiles
+# is itself a wire-list in the same format as profile base.
+function the cad path sweep group base of {a pointer to a list:profiles} on {a pointer to a list:planes}:
+    execute:
+        if ((the length of profiles) = 0) or ((the length of profiles) != (the length of planes)):
+            return no cad path sweep point
+        set firstBase to the cad path sweep profile base of (the item at 0 in profiles) on (the item at 0 in planes)
+        if firstBase's valid = false:
+            return no cad path sweep point
+        set origin to firstBase's value
+        set moment to the cad zero vector3
+        set total to 0.0 as a 64 bit floating-point number
+        loop profileIndex from 0 to the length of profiles:
+            set wires to the item at profileIndex in profiles
+            set plane to the item at profileIndex in planes
+            set profileBase to the cad path sweep profile base of wires on plane
+            if profileBase's valid = false:
+                return no cad path sweep point
+            set profileLength to 0.0 as a 64 bit floating-point number
+            loop wireIndex from 0 to the length of wires:
+                set expanded to the cad path sweep expanded (the item at wireIndex in wires)
+                if expanded's valid = false:
+                    free expanded's value
+                    return no cad path sweep point
+                loop index from 0 to the length of expanded's value:
+                    set segment to the item at index in expanded's value
+                    set profileLength to profileLength + (the cad path sweep length of segment on plane forward true to 1.0)
+                free expanded's value
+            set moment to the cad sum of moment and ((the cad difference of profileBase's value and origin) scaled by profileLength)
+            set total to total + profileLength
+        if ((cad path sweep total is finite) = false) or ((total <= 1e-14) or ((cad moment is finite) = false)):
+            return no cad path sweep point
+        return @intrinsic("construct", a cad path sweep point result, true, the cad sum of origin and (moment cad divided by total))
+
+local function the cad path sweep planar head of {a pointer to a list:path} on {cad plane:plane}:
+    execute:
+        set normal to the cad normal of plane
+        if normal's valid = false:
+            return no cad path sweep head
+        set expanded to the cad path sweep expanded path
+        if expanded's valid = false:
+            free expanded's value
+            return no cad path sweep head
+        set segments to expanded's value
+        set sensed to the cad path sweep chain directions for segments
+        if sensed's valid = false:
+            free segments
+            free sensed's value
+            return no cad path sweep head
+        set senses to sensed's value
+        loop index from 0 to the length of segments:
+            set length to the cad path sweep length of (the item at index in segments) on plane forward (the item at index in senses) to 1.0
+            if ((cad path sweep length is finite) = false) or (length <= 1e-12):
+                free senses
+                free segments
+                return no cad path sweep head
+        set first to the item at 0 in segments
+        set forward to the item at 0 in senses
+        set start to the cad path sweep point on first on plane forward forward at 0.0
+        set parameter to 0.0
+        if forward = false:
+            set parameter to 1.0
+        set direction to the cad vector at (the cad path sweep tangent on first at parameter) on plane
+        if forward = false:
+            set direction to the cad negative of direction
+        set tangent to the cad normalization of direction
+        if (tangent's valid = false) or ((cad direction is finite) = false):
+            set sample to the cad path sweep point on first on plane forward forward at 0.000001
+            set tangent to the cad normalization of (the cad difference of sample and start)
+        free senses
+        free segments
+        if tangent's valid = false:
+            return no cad path sweep head
+        return @intrinsic("construct", a cad path sweep head result, true, start, tangent's value)
+local function the cad path sweep polyline head of {a pointer to a list:points} closed {boolean:closed}:
+    execute:
+        if (the length of points) < 2:
+            return no cad path sweep head
+        loop index from 0 to the length of points:
+            if (cad (the item at index in points) is finite) = false:
+                return no cad path sweep head
+        loop index from 0 to ((the length of points) - 1):
+            set length to the cad distance from (the item at index in points) to (the item at (index + 1) in points)
+            if ((cad path sweep length is finite) = false) or (length <= 1e-12):
+                return no cad path sweep head
+        if closed:
+            set closing to the cad distance from (the last item of points) to (the item at 0 in points)
+            if (closing > 1e-9) and ((cad path sweep closing is finite) = false):
+                return no cad path sweep head
+        set tangent to the cad normalization of (the cad difference of (the item at 1 in points) and (the item at 0 in points))
+        if tangent's valid = false:
+            return no cad path sweep head
+        return @intrinsic("construct", a cad path sweep head result, true, the item at 0 in points, tangent's value)
+local function the cad path sweep spline point of {cad nurbs curve3:curve} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} at {a 64 bit floating-point number:parameter}:
+    execute:
+        return the cad point on curve at knot (start + ((end - start) * parameter))
+local function the cad path sweep spline speed of {cad nurbs curve3:curve} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set a to the maximum of (parameter - 0.00001) and 0.0
+        set b to the minimum of (parameter + 0.00001) and 1.0
+        set first to the cad path sweep spline point of curve from start to end at a
+        set last to the cad path sweep spline point of curve from start to end at b
+        return (the cad distance from first to last) / (b - a)
+local function the cad path sweep spline head of {cad nurbs curve3:curve}:
+    execute:
+        set domain to the cad domain of curve
+        set start to domain's start
+        set end to domain's end
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of curve's knots:
+            set knot to the item at index in curve's knots
+            if (knot >= start) and (knot <= end):
+                if (the length of knots) = 0:
+                    append knot to knots
+                else if (the absolute value of (knot - (the last item of knots))) > 1e-14:
+                    append knot to knots
+        if (the length of knots) < 2:
+            free knots
+            return no cad path sweep head
+        set firstEnd to the item at 1 in knots
+        set nodes to [[-0.906179845938664,0.236926885056189],[-0.538469310105683,0.478628670499366],[0.0,0.568888888888889],[0.538469310105683,0.478628670499366],[0.906179845938664,0.236926885056189]]
+        loop span from 0 to ((the length of knots) - 1):
+            set a to the item at span in knots
+            set b to the item at (span + 1) in knots
+            set length to 0.0 as a 64 bit floating-point number
+            loop panel from 0 to 16:
+                loop index from 0 to 5:
+                    set node to the item at index in nodes
+                    set parameter to ((panel as a 64 bit floating-point number) + 0.5 + ((the item at 0 in node) * 0.5)) / 16.0
+                    set length to length + ((the cad path sweep spline speed of curve from a to b at parameter) * (the item at 1 in node) / 32.0)
+            if ((cad path sweep length is finite) = false) or (length <= 1e-12):
+                free knots
+                return no cad path sweep head
+        free knots
+        set point to the cad path sweep spline point of curve from start to firstEnd at 0.0
+        set sample to the cad path sweep spline point of curve from start to firstEnd at 0.00001
+        set direction to the cad difference of sample and point
+        set tangent to the cad normalization of direction
+        if tangent's valid = false:
+            set sample to the cad path sweep spline point of curve from start to firstEnd at 0.000001
+            set tangent to the cad normalization of (the cad difference of sample and point)
+        if tangent's valid = false:
+            return no cad path sweep head
+        return @intrinsic("construct", a cad path sweep head result, true, point, tangent's value)
+
+function the cad path sweep start of {a pointer to a list:path} on {cad plane:plane}:
+    execute:
+        set head to the cad path sweep planar head of path on plane
+        return @intrinsic("construct", a cad path sweep point result, head's valid, head's start)
+function the cad path sweep start of points {a pointer to a list:points} closed {boolean:closed}:
+    execute:
+        set head to the cad path sweep polyline head of points closed closed
+        return @intrinsic("construct", a cad path sweep point result, head's valid, head's start)
+function the cad path sweep start of {cad nurbs curve3:curve}:
+    execute:
+        set head to the cad path sweep spline head of curve
+        return @intrinsic("construct", a cad path sweep point result, head's valid, head's start)
+
+local function the cad path sweep rotated {cad vector3:vector} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set cosine to the cosine of angle
+        set sine to the sine of angle
+        set direct to vector scaled by cosine
+        set crossed to (the cad cross of axis and vector) scaled by sine
+        set axial to axis scaled by ((the cad dot of axis and vector) * (1.0 - cosine))
+        return the cad sum of (the cad sum of direct and crossed) and axial
+local function the cad path sweep mapped {cad vector3:vector} from {cad vector3:sourceX}, {cad vector3:sourceY} and {cad vector3:normal} to {cad vector3:targetX}, {cad vector3:targetY} and {cad vector3:targetNormal} aligned {boolean:align} rotated by {a 64 bit floating-point number:angle}:
+    execute:
+        set alignedVector to vector
+        set axis to normal
+        if align:
+            set first to targetX scaled by (the cad dot of vector and sourceX)
+            set second to targetY scaled by (the cad dot of vector and sourceY)
+            set third to targetNormal scaled by (the cad dot of vector and normal)
+            set alignedVector to the cad sum of (the cad sum of first and second) and third
+            set axis to targetNormal
+        return the cad path sweep rotated alignedVector about axis by angle
+local function the cad path sweep initial placement of {cad plane:plane} at base {cad vector3:base} starting {cad vector3:start} tangent {cad vector3:tangent} using {cad path sweep options:options}:
+    execute:
+        if ((cad base is finite) = false) or (((cad start is finite) = false) or ((cad path sweep (options's rotation) is finite) = false)):
+            return no cad path sweep placement
+        set normalResult to the cad normal of plane
+        set xResult to the cad normalization of plane's xAxis
+        if (normalResult's valid = false) or (xResult's valid = false):
+            return no cad path sweep placement
+        set normal to normalResult's value
+        set sourceX to xResult's value
+        set yResult to the cad normalization of (the cad cross of normal and sourceX)
+        if yResult's valid = false:
+            return no cad path sweep placement
+        set sourceY to yResult's value
+        set projected to the cad difference of sourceX and (tangent scaled by (the cad dot of sourceX and tangent))
+        set targetX to sourceY
+        set targetY to normal
+        set targetNormal to sourceX
+        if (the cad length of projected) > 1e-10:
+            set targetXResult to the cad normalization of projected
+            if targetXResult's valid = false:
+                return no cad path sweep placement
+            set targetX to targetXResult's value
+            set targetYResult to the cad normalization of (the cad cross of tangent and targetX)
+            if targetYResult's valid = false:
+                return no cad path sweep placement
+            set targetY to targetYResult's value
+            set targetNormal to tangent
+        set x to the cad path sweep mapped (the cad x axis) from sourceX, sourceY and normal to targetX, targetY and targetNormal aligned (options's align) rotated by (options's rotation)
+        set y to the cad path sweep mapped (the cad y axis) from sourceX, sourceY and normal to targetX, targetY and targetNormal aligned (options's align) rotated by (options's rotation)
+        set z to the cad path sweep mapped (the cad z axis) from sourceX, sourceY and normal to targetX, targetY and targetNormal aligned (options's align) rotated by (options's rotation)
+        set mappedBase to the cad path sweep mapped base from sourceX, sourceY and normal to targetX, targetY and targetNormal aligned (options's align) rotated by (options's rotation)
+        set origin to the cad difference of start and mappedBase
+        set placedValue to a cad placement with axes x, y and z at origin
+        return @intrinsic("construct", a cad path sweep placement result, true, placedValue)
+local function the cad path sweep base for {a pointer to a list:wires} on {cad plane:plane} using {cad path sweep options:options}:
+    execute:
+        if options's hasBasePoint:
+            return @intrinsic("construct", a cad path sweep point result, true, options's basePoint)
+        return the cad path sweep profile base of wires on plane
+function the cad path sweep placement of {a pointer to a list:wires} on {cad plane:profilePlane} following {a pointer to a list:path} on {cad plane:pathPlane} using {cad path sweep options:options}:
+    execute:
+        set head to the cad path sweep planar head of path on pathPlane
+        if head's valid = false:
+            return no cad path sweep placement
+        set base to the cad path sweep base for wires on profilePlane using options
+        if base's valid = false:
+            return no cad path sweep placement
+        return the cad path sweep initial placement of profilePlane at base (base's value) starting (head's start) tangent (head's tangent) using options
+function the cad path sweep placement of {a pointer to a list:wires} on {cad plane:profilePlane} along points {a pointer to a list:points} closed {boolean:closed} using {cad path sweep options:options}:
+    execute:
+        set head to the cad path sweep polyline head of points closed closed
+        if head's valid = false:
+            return no cad path sweep placement
+        set base to the cad path sweep base for wires on profilePlane using options
+        if base's valid = false:
+            return no cad path sweep placement
+        return the cad path sweep initial placement of profilePlane at base (base's value) starting (head's start) tangent (head's tangent) using options
+function the cad path sweep placement of {a pointer to a list:wires} on {cad plane:profilePlane} along {cad nurbs curve3:curve} using {cad path sweep options:options}:
+    execute:
+        set head to the cad path sweep spline head of curve
+        if head's valid = false:
+            return no cad path sweep placement
+        set base to the cad path sweep base for wires on profilePlane using options
+        if base's valid = false:
+            return no cad path sweep placement
+        return the cad path sweep initial placement of profilePlane at base (base's value) starting (head's start) tangent (head's tangent) using options
