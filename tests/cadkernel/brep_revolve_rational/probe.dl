@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_revolve_rational.dl
+
+function rational probe argument {integer:index}:
+    execute:
+        set valueText to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of valueText, 0 as a pointer)
+
+function emit rational probe {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set kind to (rational probe argument 0) as an integer
+set angle to rational probe argument 1
+set piece to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+if kind = 3:
+    set ellipse to a cad ellipse at (a cad vector2 with x (rational probe argument 2) and y (rational probe argument 3)) with radii (rational probe argument 4) and (rational probe argument 5) along (a cad vector2 with x (rational probe argument 6) and y (rational probe argument 7))
+    set piece to the cad curve2 of (a cad ellipse arc2 on ellipse from (rational probe argument 8) to (rational probe argument 9))
+if kind = 5:
+    set controls to a list containing (a cad vector2 with x (rational probe argument 2) and y (rational probe argument 3))
+    append (a cad vector2 with x (rational probe argument 4) and y (rational probe argument 5)) to controls
+    append (a cad vector2 with x (rational probe argument 6) and y (rational probe argument 7)) to controls
+    set weights to a list containing (rational probe argument 8)
+    append (rational probe argument 9) to weights
+    append (rational probe argument 10) to weights
+    set knots to an empty list of a 64 bit floating-point number
+    loop index from 11 to 17:
+        append (rational probe argument index) to knots
+    set made to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+    set piece to the cad curve2 of made's value
+    free controls
+    free weights
+    free knots
+set profile to a list containing piece
+set frame to the cad rational revolution turn of profile on (the cad xy plane) about (the cad zero vector3) along (the cad y axis) by angle
+if frame's valid = false:
+    emit rational probe 0.0
+else:
+    set result to the cad rational revolution surface of piece on (the cad xy plane) for frame
+    if result's valid = false:
+        emit rational probe 0.0
+    else:
+        set surface to result's value
+        emit rational probe 1.0
+        emit rational probe surface's uDegree
+        emit rational probe surface's vDegree
+        emit rational probe (the length of surface's controls)
+        emit rational probe (the length of (the item at 0 in surface's controls))
+        emit rational probe (surface's uClosed as an integer)
+        emit rational probe (surface's vClosed as an integer)
+        emit rational probe (the length of surface's uKnots)
+        emit rational probe (the length of surface's vKnots)
+        loop index from 0 to the length of surface's uKnots:
+            emit rational probe (the item at index in surface's uKnots)
+        loop index from 0 to the length of surface's vKnots:
+            emit rational probe (the item at index in surface's vKnots)
+        loop row from 0 to the length of surface's controls:
+            set points to the item at row in surface's controls
+            set weights to the item at row in surface's weights
+            loop column from 0 to the length of points:
+                set point to the item at column in points
+                emit rational probe point's x
+                emit rational probe point's y
+                emit rational probe point's z
+                emit rational probe (the item at column in weights)
+free profile

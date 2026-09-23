@@ -1,0 +1,108 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_revolve_rational.dl
+
+function check rational revolution {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function rational revolution near {a number:actual} to {a number:expected}:
+    execute:
+        check rational revolution ((the absolute value of (actual - expected)) < 1e-9)
+
+set plane to the cad xy plane
+set pivot to the cad zero vector3
+set axis to the cad y axis
+set ellipse to a cad ellipse at (a cad vector2 with x 3.0 and y 1.0) with radii 1.0 and 0.5 along (a cad vector2 with x 1.0 and y 0.0)
+set piece to the cad curve2 of (a cad ellipse arc2 on ellipse from 0.0 to 3.141592653589793)
+set profile to a list containing piece
+set frame to the cad rational revolution turn of profile on plane about pivot along axis by 1.5707963267948966
+check rational revolution frame's valid
+check rational revolution (frame's radial's x > 0.0)
+set swept to the cad rational revolution surface of piece on plane for frame
+check rational revolution swept's valid
+check rational revolution (swept's collapsed = false)
+check rational revolution (swept's value's uDegree = 2)
+check rational revolution (swept's value's vDegree = 2)
+set onSurface to the cad point on swept's value at parameters 0.0 and 0.0
+rational revolution near onSurface's x to 4.0
+rational revolution near onSurface's y to 1.0
+rational revolution near onSurface's z to 0.0
+print "ellipse_revolution_is_exact_rational_surface" as a line
+
+free profile
+set piece to the cad curve2 of (the full cad ellipse arc2 on ellipse)
+set profile to a list containing piece
+set frame to the cad rational revolution turn of profile on plane about pivot along axis by 1.5707963267948966
+check rational revolution frame's valid
+set swept to the cad rational revolution surface of piece on plane for frame
+check rational revolution swept's valid
+check rational revolution swept's value's uClosed
+check rational revolution (swept's value's vClosed = false)
+print "closed_profile_preserves_source_periodicity" as a line
+
+set controls to a list containing (a cad vector2 with x 1.0 and y 0.0)
+append (a cad vector2 with x -0.1 and y 1.0) to controls
+append (a cad vector2 with x 1.0 and y 2.0) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+append 1.0 to weights
+set nurbs to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+check rational revolution nurbs's valid
+set piece to the cad curve2 of nurbs's value
+free profile
+set profile to a list containing piece
+set frame to the cad rational revolution turn of profile on plane about pivot along axis by 6.283185307179586
+check rational revolution frame's valid
+set validFrame to frame
+set swept to the cad rational revolution surface of piece on plane for frame
+check rational revolution swept's valid
+check rational revolution swept's value's vClosed
+
+set axisControls to a list containing (a cad vector2 with x 0.0 and y 0.0)
+append (a cad vector2 with x 0.0 and y 2.0) to axisControls
+set axisKnots to a list containing 0.0
+append 0.0 to axisKnots
+append 1.0 to axisKnots
+append 1.0 to axisKnots
+set axisWeights to a list containing 1.0
+append 1.0 to axisWeights
+set axisCurve to the strict cad nurbs curve2 of degree 1 with controls axisControls, knots axisKnots and weights axisWeights
+check rational revolution axisCurve's valid
+set axisPiece to the cad curve2 of axisCurve's value
+free profile
+set profile to a list containing (the cad curve2 of nurbs's value)
+append axisPiece to profile
+set frame to the cad rational revolution turn of profile on plane about pivot along axis by 1.5707963267948966
+check rational revolution frame's valid
+set omitted to the cad rational revolution surface of axisPiece on plane for frame
+check rational revolution ((omitted's valid = false) and omitted's collapsed)
+free profile
+free axisControls
+free axisKnots
+free axisWeights
+print "axis_collapsed_nurbs_piece_is_omitted" as a line
+check rational revolution ((the length of swept's value's controls) = 3)
+print "nurbs_hull_refines_and_full_turn_closes" as a line
+
+replace item at index 1 in controls with (a cad vector2 with x -2.0 and y 1.0)
+set crossing to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+set piece to the cad curve2 of crossing's value
+set profile to a list containing piece
+set frame to the cad rational revolution turn of profile on plane about pivot along axis by 1.5707963267948966
+check rational revolution (frame's valid = false)
+set refused to the cad rational revolution surface of piece on plane for validFrame
+check rational revolution (refused's valid = false)
+print "nurbs_axis_crossing_is_refused" as a line
+
+free controls
+free knots
+free weights
+free profile
+check rational revolution swept's value's vClosed
