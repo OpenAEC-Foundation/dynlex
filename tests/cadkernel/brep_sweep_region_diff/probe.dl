@@ -1,0 +1,164 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep.dl
+
+function region argument {integer:index}:
+    execute:
+        set text to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of text, 0 as a pointer)
+function region point2 at {integer:index}:
+    execute:
+        return a cad vector2 with x (region argument index) and y (region argument (index + 1))
+function emit region number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+function emit region flag {boolean:value}:
+    execute:
+        emit region number (value as an integer)
+function emit region body {cad body:body}:
+    execute:
+        emit region number (the cad count of (body's vertices))
+        emit region number (the cad count of (body's edges))
+        emit region number (the cad count of (body's coedges))
+        emit region number (the cad count of (body's loops))
+        emit region number (the cad count of (body's faces))
+        emit region number (the cad count of (body's shells))
+        emit region number (the cad count of (body's lumps))
+        emit region number (the cad count of (body's surfaces))
+        emit region number (the cad count of (body's curves))
+        emit region number (the length of (body's roots))
+        set flaws to the cad flaws of body
+        emit region number (the length of flaws)
+        free flaws
+        loop rootIndex from 0 to the length of (body's roots):
+            set lump to the cad node pointer for (the item at rootIndex in (body's roots)) in body
+            emit region number (the length of (lump's shells's values))
+            loop shellIndex from 0 to the length of (lump's shells's values):
+                set shell to the cad node pointer for (the item at shellIndex in (lump's shells's values)) in body
+                emit region number (the length of (shell's faces's values))
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            emit region number (vertex's point's x)
+            emit region number (vertex's point's y)
+            emit region number (vertex's point's z)
+        free vertexKeys
+        set surfaceKeys to the cad keys of (body's surfaces)
+        loop index from 0 to the length of surfaceKeys:
+            set surface to the cad node pointer for (the item at index in surfaceKeys) in (body's surfaces)
+            emit region number (surface's kind)
+            if surface's kind = 5:
+                set shape to surface's nurbs
+                emit region number (shape's uDegree)
+                emit region number (shape's vDegree)
+                emit region number (the length of (shape's uKnots))
+                loop knot from 0 to the length of (shape's uKnots):
+                    emit region number (the item at knot in (shape's uKnots))
+                emit region number (the length of (shape's vKnots))
+                loop knot from 0 to the length of (shape's vKnots):
+                    emit region number (the item at knot in (shape's vKnots))
+                emit region number (the length of (shape's controls))
+                loop rowIndex from 0 to the length of (shape's controls):
+                    set controlRow to the item at rowIndex in (shape's controls)
+                    emit region number (the length of controlRow)
+                    loop column from 0 to the length of controlRow:
+                        set point to the item at column in controlRow
+                        emit region number (point's x)
+                        emit region number (point's y)
+                        emit region number (point's z)
+                emit region number (the length of (shape's weights))
+                loop rowIndex from 0 to the length of (shape's weights):
+                    set weightRow to the item at rowIndex in (shape's weights)
+                    emit region number (the length of weightRow)
+                    loop column from 0 to the length of weightRow:
+                        emit region number (the item at column in weightRow)
+        free surfaceKeys
+        set faceKeys to the cad keys of (body's faces)
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in (body's faces)
+            emit region flag (face's forward)
+            emit region number (the length of (face's loops's values))
+        free faceKeys
+        set coedgeKeys to the cad keys of (body's coedges)
+        loop index from 0 to the length of coedgeKeys:
+            set coedge to the cad node pointer for (the item at index in coedgeKeys) in (body's coedges)
+            emit region flag (coedge's forward)
+            set pcurve to coedge's pcurve
+            if pcurve's valid = false:
+                emit region number 0
+            else if pcurve's value's kind = 0:
+                emit region number 1
+                set line to pcurve's value's line
+                emit region number (line's start's x)
+                emit region number (line's start's y)
+                emit region number (line's end's x)
+                emit region number (line's end's y)
+            else if pcurve's value's kind = 2:
+                emit region number 2
+                set arc to pcurve's value's arc
+                emit region number (arc's centre's x)
+                emit region number (arc's centre's y)
+                emit region number (arc's radius)
+                emit region number (arc's startAngle)
+                emit region number (arc's endAngle)
+            else if pcurve's value's kind = 1:
+                emit region number 3
+                set circle to pcurve's value's circle
+                emit region number (circle's centre's x)
+                emit region number (circle's centre's y)
+                emit region number (circle's radius)
+            else:
+                emit region number 4
+        free coedgeKeys
+
+set mode to (region argument 0) as an integer
+set direction to a cad vector3 with x (region argument 1), y (region argument 2) and z (region argument 3)
+set angle to region argument 4
+set loopCount to (region argument 5) as an integer
+set cursor to 6
+set prototype to a list containing (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+set profiles to an empty list of (the type of prototype)
+free prototype
+loop loopIndex from 0 to loopCount:
+    set pieceCount to (region argument cursor) as an integer
+    set cursor to cursor + 1
+    set profile to an empty list of a cad curve2
+    loop pieceIndex from 0 to pieceCount:
+        set kind to (region argument cursor) as an integer
+        set cursor to cursor + 1
+        set piece to the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2)
+        if kind = 0:
+            set piece to the cad curve2 of (a cad line2 from (region point2 at cursor) to (region point2 at (cursor + 2)))
+            set cursor to cursor + 4
+        else if kind = 1:
+            set piece to the cad curve2 of (a cad circle2 at (region point2 at cursor) with radius (region argument (cursor + 2)))
+            set cursor to cursor + 3
+        else if kind = 2:
+            set piece to the cad curve2 of (a cad arc2 at (region point2 at cursor) with radius (region argument (cursor + 2)) from (region argument (cursor + 3)) to (region argument (cursor + 4)))
+            set cursor to cursor + 5
+        else if kind = 4:
+            set closed to (region argument cursor) != 0.0
+            set vertexCount to (region argument (cursor + 1)) as an integer
+            set cursor to cursor + 2
+            set vertices to an empty list of a cad polyline vertex2
+            loop vertexIndex from 0 to vertexCount:
+                append (a cad polyline vertex2 at (region point2 at cursor) with bulge (region argument (cursor + 2))) to vertices
+                set cursor to cursor + 3
+            set piece to the cad curve2 of (the cad polyline2 with vertices vertices and closure closed)
+            free vertices
+        else:
+            @intrinsic("call", "libc", "exit", nothing, 3)
+        append piece to profile
+    append profile to profiles
+set result to no cad body
+if mode = 0:
+    set result to the cad extrusion sheets of profiles on (the cad xy plane) along direction
+else if mode = 1:
+    set result to the tapered cad extrusion sheets of profiles on (the cad xy plane) along direction by angle
+else:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+loop loopIndex from 0 to the length of profiles:
+    free (the item at loopIndex in profiles)
+free profiles
+emit region flag (result's valid)
+if result's valid:
+    emit region body (result's value)

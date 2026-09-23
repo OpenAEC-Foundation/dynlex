@@ -95,8 +95,15 @@ check extrusion ((taper cone surface count in (arcResult's value)) = 1)
 set arcFlaws to the cad flaws of (arcResult's value)
 check extrusion ((the length of arcFlaws) = 0)
 free arcFlaws
+set obliqueArcSheet to the tapered cad extrusion sheet of arcProfile on (the cad xy plane) along (a cad vector3 with x 1.0, y 0.0 and z 2.0) by 0.1
+check extrusion (obliqueArcSheet's valid)
+check extrusion ((the cad count of (obliqueArcSheet's value's faces)) = 4)
+set obliqueArcFlaws to the cad flaws of (obliqueArcSheet's value)
+check extrusion ((the length of obliqueArcFlaws) = 0)
+free obliqueArcFlaws
 free arcProfile
 print "a_segmented_circular_taper_preserves_an_analytic_cone" as a line
+print "an_oblique_segmented_circle_uses_a_ruled_skin" as a line
 
 set taperedSheetProfile to extrusion square of size 8.0
 set taperedSheet to the tapered cad extrusion sheet of taperedSheetProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 2.0) by 0.2

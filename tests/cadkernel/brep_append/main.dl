@@ -139,3 +139,24 @@ set flaws to the cad flaws of largeTarget
 check append ((the length of flaws) = 0) named "large body topology"
 free flaws
 print "thousands_of_linked_nodes_append_with_valid_topology" as a line
+
+set sparseSource to an empty cad body
+set disposableKeys to an empty list of a cad vertex key
+loop vertexIndex from 0 to 2048:
+    set point to a cad vector3 with x (vertexIndex as a 64 bit floating-point number), y 0.0 and z 0.0
+    append (the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into sparseSource) to disposableKeys
+set sparseSheet to an append sheet starting at 10000.0
+check append sparseSheet's valid named "sparse source sheet"
+check append (append cad body sparseSheet's value into sparseSource) named "insert linked high slots"
+loop vertexIndex from 0 to the length of disposableKeys:
+    ignore the cad removal of (the item at vertexIndex in disposableKeys) from sparseSource
+free disposableKeys
+check append ((the cad count of sparseSource's vertices) = 4) named "sparse source live vertices"
+set sparseTarget to an empty cad body
+check append (append cad body sparseSource into sparseTarget) named "append sparse body"
+check append ((the cad count of sparseTarget's vertices) = 4) named "sparse vertex remap"
+check append ((the cad count of sparseTarget's edges) = 4) named "sparse edge remap"
+set flaws to the cad flaws of sparseTarget
+check append ((the length of flaws) = 0) named "sparse body topology"
+free flaws
+print "sparse_arena_slots_remap_without_dense_tables" as a line

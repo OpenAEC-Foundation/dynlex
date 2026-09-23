@@ -9,5 +9,9 @@ without modifying the target. A final case appends 512 separate sheets with
 more than two thousand linked vertices and edges, exercising the indexed key
 tables used for large bodies.
 
+The sparse-arena case creates more than two thousand old vertex slots, adds a
+linked sheet at high slot indices, removes the unused vertices, and appends the
+remaining sheet. It checks the sorted sparse-key path and its topology.
+
 This verifies body copying and key remapping; it does not establish complete
 `src/brep/sweep.rs` parity.

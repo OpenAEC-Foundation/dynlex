@@ -898,26 +898,26 @@ function the tapered cad extrusion of {a pointer to a list:profile} on {cad plan
             set axis to normal's value
             set parallelError to the cad length of (the cad cross of direction and axis)
             set parallelLimit to 1e-10 * (the maximum of (the cad length of direction) and 1.0)
-            if parallelError > parallelLimit:
-                return no cad body
-            set signedHeight to the cad dot of direction and axis
-            set radius to circularRadius
-            set topRadius to radius - ((the absolute value of signedHeight) * @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle))
-            if (topRadius <= 1e-12) or ((the absolute value of signedHeight) <= 1e-12):
-                return no cad body
-            set pivot to the cad point at circularCentre on plane
-            set sectionPlane to a cad plane with origin pivot, x axis (plane's xAxis) and y axis axis
-            set corners to [[0.0,0.0],[radius,0.0],[topRadius,signedHeight],[0.0,signedHeight]]
-            set section to an empty list of a cad curve2
-            loop index from 0 to 4:
-                set start to the item at index in corners
-                set finish to the item at (the remainder of (index + 1) divided by 4) in corners
-                set firstPoint to a cad vector2 with x (the item at 0 in start) and y (the item at 1 in start)
-                set lastPoint to a cad vector2 with x (the item at 0 in finish) and y (the item at 1 in finish)
-                append (the cad curve2 of (a cad line2 from firstPoint to lastPoint)) to section
-            set result to the cad revolution of section on sectionPlane about pivot along axis by 6.283185307179586
-            free section
-            return result
+            # Oblique segmented circles continue through the offset/loft path.
+            if parallelError <= parallelLimit:
+                set signedHeight to the cad dot of direction and axis
+                set radius to circularRadius
+                set topRadius to radius - ((the absolute value of signedHeight) * @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle))
+                if (topRadius <= 1e-12) or ((the absolute value of signedHeight) <= 1e-12):
+                    return no cad body
+                set pivot to the cad point at circularCentre on plane
+                set sectionPlane to a cad plane with origin pivot, x axis (plane's xAxis) and y axis axis
+                set corners to [[0.0,0.0],[radius,0.0],[topRadius,signedHeight],[0.0,signedHeight]]
+                set section to an empty list of a cad curve2
+                loop index from 0 to 4:
+                    set start to the item at index in corners
+                    set finish to the item at (the remainder of (index + 1) divided by 4) in corners
+                    set firstPoint to a cad vector2 with x (the item at 0 in start) and y (the item at 1 in start)
+                    set lastPoint to a cad vector2 with x (the item at 0 in finish) and y (the item at 1 in finish)
+                    append (the cad curve2 of (a cad line2 from firstPoint to lastPoint)) to section
+                set result to the cad revolution of section on sectionPlane about pivot along axis by 6.283185307179586
+                free section
+                return result
         set height to the absolute value of (the cad dot of direction and (normal's value))
         set tangentAngle to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
         set offsetDistance to height * (the absolute value of tangentAngle)

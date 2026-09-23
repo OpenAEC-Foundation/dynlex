@@ -3,52 +3,75 @@
 # 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
 import lib/cadkernel/brep_topology.dl
 
-# Arena keys already contain a source slot index. A dense table keeps all
-# remapping and adjacency lookups independent of the number of prior nodes.
+# Arena keys already contain a source slot index. Dense tables give direct
+# lookup; sparse tables keep only live, sorted indices after many removals.
 class:
     patterns:
         [a|] cad append mapping
     members:
+        indices
         values
         generations
-        occupied
+        dense as a boolean
 
 local function an empty cad append mapping for {a pointer to a cad arena:nodes} default missing:
     execute:
+        set indices to an empty list of an integer
         set values to an empty list of the type of missing
         set generations to an empty list of a 32 bit unsigned integer
-        set occupied to an empty list of a boolean
-        loop index from 0 to the length of (nodes's slots):
-            append missing to values
-            append (0 as a 32 bit unsigned integer) to generations
-            append false to occupied
-        set initial to @intrinsic("construct", a cad append mapping, values, generations, occupied)
+        set slotCount to the length of (nodes's slots)
+        set dense to (slotCount <= 1024) or ((the cad count of nodes) * 4 >= slotCount)
+        if dense:
+            loop index from 0 to slotCount:
+                append (-1) to indices
+                append missing to values
+                append (0 as a 32 bit unsigned integer) to generations
+        set initial to @intrinsic("construct", a cad append mapping, indices, values, generations, dense)
         allocate one slot of initial and set result to it
         return result
 
 local function put value for key in {a pointer to a cad append mapping:mapping}:
     execute:
         set position to key's index as an integer
-        if (position < 0) or (position >= (the length of mapping's values)):
-            @intrinsic("call", "libc", "abort", nothing)
-        replace item at index position in (mapping's values) with value
-        replace item at index position in (mapping's generations) with key's generation
-        replace item at index position in (mapping's occupied) with true
+        if mapping's dense:
+            if (position < 0) or (position >= (the length of mapping's values)):
+                @intrinsic("call", "libc", "abort", nothing)
+            replace item at index position in (mapping's indices) with position
+            replace item at index position in (mapping's values) with value
+            replace item at index position in (mapping's generations) with key's generation
+        else:
+            if (the length of mapping's indices) > 0:
+                if (the last item of mapping's indices) >= position:
+                    @intrinsic("call", "libc", "abort", nothing)
+            append position to mapping's indices
+            append value to mapping's values
+            append key's generation to mapping's generations
 
 local function the value for key in {a pointer to a cad append mapping:mapping}:
     execute:
         set position to key's index as an integer
-        if (position < 0) or (position >= (the length of mapping's values)):
+        set found to position
+        if mapping's dense = false:
+            set low to 0
+            set high to the length of mapping's indices
+            loop while low < high:
+                set middle to low + ((high - low) / 2)
+                if (the item at middle in (mapping's indices)) < position:
+                    set low to middle + 1
+                else:
+                    set high to middle
+            set found to low
+        if (found < 0) or (found >= (the length of mapping's values)):
             @intrinsic("call", "libc", "abort", nothing)
-        if ((the item at position in (mapping's occupied)) = false) or ((the item at position in (mapping's generations)) != key's generation):
+        if ((the item at found in (mapping's indices)) != position) or ((the item at found in (mapping's generations)) != key's generation):
             @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in (mapping's values)
+        return the item at found in (mapping's values)
 
 local function free cad append mapping {a pointer to a cad append mapping:mapping}:
     execute:
+        free mapping's indices
         free mapping's values
         free mapping's generations
-        free mapping's occupied
         @intrinsic("call", "libc", "free", nothing, mapping)
 
 local function cad append source {cad body:body} has linked keys:
