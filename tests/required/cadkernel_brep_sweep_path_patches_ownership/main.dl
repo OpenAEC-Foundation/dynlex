@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_patches.dl
+
+function check patch ownership {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set start to the cad zero vector3
+set end to a cad vector3 with x 0.0, y 0.0 and z 2.0
+set line to the cad path sweep patch line from start to end
+set degenerate to the cad path sweep patch line from end to end
+set reverse to the cad path sweep patch line from end to start
+set frame to a cad path sweep frame at start with x (the cad x axis) and y (the cad y axis)
+set validPieces to a list containing line
+set invalidPieces to a list containing line
+append degenerate to invalidPieces
+set reversedPieces to a list containing line
+append reverse to reversedPieces
+
+loop repetition from 0 to 4096:
+    set division to the cad path sweep patch division of line
+    check patch ownership division's valid
+    check patch ownership ((the length of division's values) = 2)
+    release cad path sweep patch division division
+
+    set invalidDivision to the cad path sweep patch division of degenerate
+    check patch ownership (invalidDivision's valid = false)
+    check patch ownership ((the length of invalidDivision's values) = 0)
+    release cad path sweep patch division invalidDivision
+
+    set walk to the cad path sweep patch walk of validPieces starting frame bank false
+    check patch ownership walk's valid
+    check patch ownership ((the length of walk's sections) = 1)
+    release cad path sweep patch walk walk
+
+    set invalidWalk to the cad path sweep patch walk of invalidPieces starting frame bank false
+    check patch ownership (invalidWalk's valid = false)
+    check patch ownership ((the length of invalidWalk's sections) = 0)
+    release cad path sweep patch walk invalidWalk
+
+    set opposite to the cad path sweep patch walk of reversedPieces starting frame bank false
+    check patch ownership (opposite's valid = false)
+    check patch ownership ((the length of opposite's sections) = 0)
+    release cad path sweep patch walk opposite
+
+free validPieces
+free invalidPieces
+free reversedPieces
+print "patch_list_ownership_repeated_success_and_refusal" as a line

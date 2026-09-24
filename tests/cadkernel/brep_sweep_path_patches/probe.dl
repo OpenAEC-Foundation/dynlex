@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_patches.dl
+
+function emit patch probe {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17e\n", value as a 64 bit floating-point number)
+
+function emit patch probe vector {cad vector3:value}:
+    execute:
+        emit patch probe value's x
+        emit patch probe value's y
+        emit patch probe value's z
+
+function emit patch probe frame {cad path sweep frame:value}:
+    execute:
+        emit patch probe vector value's origin
+        emit patch probe vector value's xAxis
+        emit patch probe vector value's yAxis
+
+function emit patch probe tangent {cad path sweep vector result:value}:
+    execute:
+        emit patch probe (value's valid as an integer)
+        if value's valid:
+            emit patch probe vector value's value
+
+set caseText to the argument at 0 in the command line arguments
+set case to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set zero to the cad zero vector3
+set line to the cad path sweep patch line from zero to (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+set pieces to a list containing line
+if case = 1:
+    append (the cad path sweep patch line from (a cad vector3 with x 0.0, y 0.0 and z 2.0) to (a cad vector3 with x 2.0, y 0.0 and z 2.0)) to pieces
+else if case = 2:
+    append (the cad path sweep patch line from (a cad vector3 with x 0.0, y 0.0 and z 2.0) to zero) to pieces
+else if (case = 3) or ((case = 4) or (case = 5)):
+    set arc to the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 1.5707963267948966)
+    set forward to case != 5
+    replace item at index 0 in pieces with (the cad path sweep patch planar arc on (the cad xy plane) forward forward)
+else if ((case = 6) or (case = 7)) or (case = 9):
+    set spatial to (case = 7) or (case = 9)
+    set controls to a list containing zero
+    append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to controls
+    set lastHeight to 0.0
+    if spatial:
+        set lastHeight to 1.0
+    append (a cad vector3 with x 2.0, y 0.0 and z lastHeight) to controls
+    if spatial:
+        append (a cad vector3 with x 3.0, y 1.0 and z 2.0) to controls
+    set knots to a list containing 0.0
+    append 0.0 to knots
+    append 0.0 to knots
+    if spatial:
+        append 0.0 to knots
+    append 1.0 to knots
+    append 1.0 to knots
+    append 1.0 to knots
+    if spatial:
+        append 1.0 to knots
+    set weights to a list containing 1.0
+    append 1.0 to weights
+    append 1.0 to weights
+    set degree to 2
+    if spatial:
+        set degree to 3
+        append 1.0 to weights
+    set spline to the strict cad nurbs curve3 of degree degree with controls controls, knots knots and weights weights
+    replace item at index 0 in pieces with (the cad path sweep patch spline (spline's value) from knot 0.0 to 1.0)
+    free controls
+    free knots
+    free weights
+else if case = 8:
+    replace item at index 0 in pieces with (the cad path sweep patch line from zero to zero)
+
+set piece to the item at 0 in pieces
+emit patch probe vector (the cad path sweep patch point on piece at 0.5)
+emit patch probe tangent (the cad path sweep patch tangent on piece at 0.0)
+emit patch probe tangent (the cad path sweep patch tangent on piece at 0.5)
+emit patch probe tangent (the cad path sweep patch tangent on piece at 1.0)
+emit patch probe (the cad path sweep patch speed of piece at 0.5)
+emit patch probe (the cad path sweep patch length of piece to 0.4)
+emit patch probe (the cad path sweep patch length of piece to 1.0)
+set parameters to the cad path sweep patch division of piece
+emit patch probe (parameters's valid as an integer)
+if parameters's valid:
+    emit patch probe (the length of parameters's values)
+    loop index from 0 to the length of parameters's values:
+        emit patch probe (the item at index in parameters's values)
+release cad path sweep patch division parameters
+set first to a cad path sweep frame at (the cad path sweep patch point on piece at 0.0) with x (the cad x axis) and y (the cad y axis)
+set other to a cad path sweep frame at (a cad vector3 with x 1.0, y 2.0 and z 3.0) with x (the cad y axis) and y (the cad z axis)
+set algebra to the cad path sweep patch frame sum of first and other
+emit patch probe frame (the cad path sweep patch frame interpolation from first to algebra at 0.25)
+emit patch probe vector (the cad path sweep patch point at (a cad vector2 with x 2.0 and y 3.0) on first)
+emit patch probe (the cad path sweep patch frame error between first and algebra at radius 2.0)
+set bank to (case = 4) or (case = 7)
+set walked to the cad path sweep patch walk of pieces starting first bank bank
+emit patch probe (walked's valid as an integer)
+if walked's valid:
+    emit patch probe (the length of walked's sections)
+    loop sectionIndex from 0 to the length of walked's sections:
+        set section to the item at sectionIndex in walked's sections
+        emit patch probe (the length of section's parameters)
+        loop parameterIndex from 0 to the length of section's parameters:
+            emit patch probe (the item at parameterIndex in section's parameters)
+        emit patch probe (the length of section's frames)
+        loop frameIndex from 0 to the length of section's frames:
+            emit patch probe frame (the item at frameIndex in section's frames)
+release cad path sweep patch walk walked
+free pieces

@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_fit.dl
+
+class:
+    patterns:
+        [a|] path fit probe polynomial
+    members:
+        quartic as a boolean
+        refuse as a boolean
+
+class:
+    patterns:
+        [a|] path fit probe spatial
+    members:
+        factor as a 64 bit floating-point number
+
+function the cad path sweep fit sample of {path fit probe polynomial:source} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set emptyFrame to a cad path sweep frame at (the cad zero vector3) with x (the cad x axis) and y (the cad y axis)
+        if source's refuse and (parameter > 0.5):
+            return @intrinsic("construct", a cad path sweep frame result, false, emptyFrame)
+        set height to parameter
+        if source's quartic:
+            set height to (((parameter * parameter) * parameter) * parameter)
+        set evaluated to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z height) with x (the cad x axis) and y (the cad y axis)
+        return @intrinsic("construct", a cad path sweep frame result, true, evaluated)
+
+function the cad path sweep fit sample of {path fit probe spatial:source} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set origin to a cad vector3 with x parameter, y (source's factor * ((parameter * parameter) * parameter)) and z (parameter * parameter)
+        set xAxis to a cad vector3 with x 1.0, y (0.2 * parameter) and z 0.0
+        set yAxis to a cad vector3 with x 0.0, y 1.0 and z (0.1 * (parameter * parameter))
+        return @intrinsic("construct", a cad path sweep frame result, true, a cad path sweep frame at origin with x xAxis and y yAxis)
+
+function emit fit value {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17e\n", value as a 64 bit floating-point number)
+
+function emit fit vector {cad vector3:value}:
+    execute:
+        emit fit value value's x
+        emit fit value value's y
+        emit fit value value's z
+
+function emit fit frame {cad path sweep frame:value}:
+    execute:
+        emit fit vector value's origin
+        emit fit vector value's xAxis
+        emit fit vector value's yAxis
+
+function emit fit result {cad path sweep fit result:result}:
+    execute:
+        emit fit value (result's valid as an integer)
+        emit fit value (the length of result's patches)
+        loop index from 0 to the length of result's patches:
+            set patch to the item at index in result's patches
+            emit fit frame patch's first
+            emit fit frame patch's second
+            emit fit frame patch's third
+            emit fit frame patch's last
+            emit fit frame (the cad path sweep cubic frame of patch at 0.37)
+            emit fit frame (the cad path sweep cubic derivative of patch at 0.37)
+            emit fit value (the cad path sweep patch frame error between patch's first and patch's last at radius 1.3)
+        release cad path sweep fit result
+
+set caseText to the argument at 0 in the command line arguments
+set case to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set tolerance to 1e-7 as a 64 bit floating-point number
+if case = 1:
+    set tolerance to 1e-5
+if case = 4:
+    set tolerance to 1e-18
+
+if case = 3:
+    set source to @intrinsic("construct", a path fit probe spatial, 0.5 as a 64 bit floating-point number)
+    set result to the cad path sweep fit of source from 0.0 to 1.0 at radius 1.3 within tolerance tolerance
+    emit fit result result
+else:
+    set quartic to (case = 1) or (case = 4)
+    set refuse to case = 2
+    set source to @intrinsic("construct", a path fit probe polynomial, quartic, refuse)
+    set result to the cad path sweep fit of source from 0.0 to 1.0 at radius 1.3 within tolerance tolerance
+    emit fit result result
+
+set zero to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set first to a cad path sweep frame at zero with x x and y y
+set second to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 1.0) with x x and y y
+set third to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 1.0) with x x and y y
+set last to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 2.0) with x x and y y
+set patch to a cad path sweep cubic patch with frames first, second, third and last
+if case = 1:
+    set patch to a cad path sweep cubic patch with frames last, third, second and first
+else if case = 2:
+    set patch to a cad path sweep cubic patch with frames first, second, third and first
+else if case = 5:
+    set narrow to a cad path sweep frame at zero with x x and y x
+    set patch to a cad path sweep cubic patch with frames narrow, narrow, narrow and narrow
+set samples to a list containing (the cad zero vector2)
+append (a cad vector2 with x 0.4 and y 0.2) to samples
+if case = 4:
+    clear samples
+set patches to a list containing patch
+if case = 6:
+    append (a cad path sweep cubic patch with frames last, third, second and first) to patches
+set regular to the cad path sweep regular transport of samples with patches
+emit fit value (regular's valid as an integer)
+emit fit value (regular's forward as an integer)
+free samples
+free patches

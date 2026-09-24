@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_patches.dl
+
+set start to the cad zero vector3
+set end to a cad vector3 with x 0.0, y 0.0 and z 2.0
+set line to the cad path sweep patch line from start to end
+set degenerate to the cad path sweep patch line from end to end
+set first to a cad path sweep frame at start with x (the cad x axis) and y (the cad y axis)
+set validPieces to a list containing line
+set refusedPieces to a list containing line
+append degenerate to refusedPieces
+
+loop iteration from 0 to 250000:
+    set division to the cad path sweep patch division of line
+    release cad path sweep patch division division
+    set refusedDivision to the cad path sweep patch division of degenerate
+    release cad path sweep patch division refusedDivision
+    set walk to the cad path sweep patch walk of validPieces starting first bank false
+    release cad path sweep patch walk walk
+    set refused to the cad path sweep patch walk of refusedPieces starting first bank false
+    release cad path sweep patch walk refused
+    if (iteration = 49999) or (iteration = 249999):
+        print "checkpoint" as a line
+        ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+        ignore @intrinsic("call", "libc", "getchar", an integer)
+
+free validPieces
+free refusedPieces

@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_patches.dl
+
+function check path patches {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set origin to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set z to the cad z axis
+set frame to a cad path sweep frame at origin with x x and y y
+set shifted to the cad path sweep patch frame sum of frame and (a cad path sweep frame at (a cad vector3 with x 1.0, y 2.0 and z 3.0) with x x and y y)
+check path patches ((the cad distance from shifted's origin to (a cad vector3 with x 1.0, y 2.0 and z 3.0)) < 1e-12)
+set halfway to the cad path sweep patch frame interpolation from frame to shifted at 0.5
+check path patches ((the cad distance from halfway's origin to (a cad vector3 with x 0.5, y 1.0 and z 1.5)) < 1e-12)
+check path patches ((the cad distance from (the cad path sweep patch point at (a cad vector2 with x 2.0 and y 3.0) on frame) to (a cad vector3 with x 2.0, y 3.0 and z 0.0)) < 1e-12)
+check path patches ((the absolute value of ((the cad path sweep patch frame error between frame and shifted at radius 2.0) - 7.741657386773941)) < 1e-12)
+print "frame_algebra" as a line
+
+set line to the cad path sweep patch line from origin to (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+set middle to the cad path sweep patch point on line at 0.5
+check path patches ((the cad distance from middle to (a cad vector3 with x 0.0, y 0.0 and z 1.0)) < 1e-12)
+set tangent to the cad path sweep patch tangent on line at 0.5
+check path patches tangent's valid
+check path patches ((the cad distance from tangent's value to z) < 1e-12)
+check path patches ((the absolute value of ((the cad path sweep patch length of line to 1.0) - 2.0)) < 1e-12)
+set lineParameters to the cad path sweep patch division of line
+check path patches lineParameters's valid
+check path patches ((the length of lineParameters's values) = 2)
+release cad path sweep patch division lineParameters
+print "line_piece_evaluation" as a line
+
+set arc to the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 1.5707963267948966)
+set curved to the cad path sweep patch planar arc on (the cad xy plane) forward true
+set curvedMiddle to the cad path sweep patch point on curved at 0.5
+check path patches ((the cad distance from curvedMiddle to (a cad vector3 with x 0.7071067811865476, y 0.7071067811865476 and z 0.0)) < 1e-12)
+set curvedTangent to the cad path sweep patch tangent on curved at 0.0
+check path patches curvedTangent's valid
+check path patches ((the cad distance from curvedTangent's value to y) < 1e-12)
+set arcParameters to the cad path sweep patch division of curved
+check path patches arcParameters's valid
+check path patches ((the length of arcParameters's values) > 2)
+release cad path sweep patch division arcParameters
+print "planar_piece_and_adaptive_division" as a line
+
+set controls to a list containing origin
+append (a cad vector3 with x 1.0, y 1.0 and z 0.0) to controls
+append (a cad vector3 with x 2.0, y 0.0 and z 0.0) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+append 1.0 to weights
+set spline to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check path patches spline's valid
+set splinePiece to the cad path sweep patch spline (spline's value) from knot 0.0 to 1.0
+set splineMiddle to the cad path sweep patch point on splinePiece at 0.5
+check path patches ((the cad distance from splineMiddle to (a cad vector3 with x 1.0, y 0.5 and z 0.0)) < 1e-12)
+set splineTangent to the cad path sweep patch tangent on splinePiece at 0.5
+check path patches splineTangent's valid
+check path patches ((the cad distance from splineTangent's value to x) < 1e-8)
+set splineParameters to the cad path sweep patch division of splinePiece
+check path patches splineParameters's valid
+check path patches ((the length of splineParameters's values) > 2)
+release cad path sweep patch division splineParameters
+print "spline_piece_evaluation" as a line
+
+set pieces to a list containing line
+append (the cad path sweep patch line from (a cad vector3 with x 0.0, y 0.0 and z 2.0) to (a cad vector3 with x 2.0, y 0.0 and z 2.0)) to pieces
+set walked to the cad path sweep patch walk of pieces starting frame bank false
+check path patches walked's valid
+check path patches ((the length of walked's sections) = 2)
+set lastSection to the item at 1 in walked's sections
+check path patches ((the length of lastSection's parameters) = 2)
+set lastFrame to the last item of lastSection's frames
+check path patches ((the cad distance from lastFrame's origin to (a cad vector3 with x 2.0, y 0.0 and z 2.0)) < 1e-12)
+release cad path sweep patch walk walked
+free pieces
+free controls
+free knots
+free weights
+print "multi_piece_frame_walk" as a line

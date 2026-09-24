@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_fit.dl
+
+function check path fit {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+class:
+    patterns:
+        [a|] path fit polynomial evaluator
+    members:
+        quartic as a boolean
+        refuse as a boolean
+
+function the cad path sweep fit sample of {path fit polynomial evaluator:source} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set zeroFrame to a cad path sweep frame at (the cad zero vector3) with x (the cad x axis) and y (the cad y axis)
+        if source's refuse and (parameter > 0.5):
+            return @intrinsic("construct", a cad path sweep frame result, false, zeroFrame)
+        set height to parameter
+        if source's quartic:
+            set height to (((parameter * parameter) * parameter) * parameter)
+        set frame to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z height) with x (the cad x axis) and y (the cad y axis)
+        return @intrinsic("construct", a cad path sweep frame result, true, frame)
+
+class:
+    patterns:
+        [a|] path fit spatial evaluator
+    members:
+        factor as a 64 bit floating-point number
+
+function the cad path sweep fit sample of {path fit spatial evaluator:source} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set origin to a cad vector3 with x parameter, y (source's factor * ((parameter * parameter) * parameter)) and z (parameter * parameter)
+        set xAxis to a cad vector3 with x 1.0, y (0.2 * parameter) and z 0.0
+        set yAxis to a cad vector3 with x 0.0, y 1.0 and z (0.1 * (parameter * parameter))
+        return @intrinsic("construct", a cad path sweep frame result, true, a cad path sweep frame at origin with x xAxis and y yAxis)
+
+set zero to the cad zero vector3
+set x to the cad x axis
+set y to the cad y axis
+set first to a cad path sweep frame at zero with x x and y y
+set second to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 1.0) with x x and y y
+set third to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 1.0) with x x and y y
+set last to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 2.0) with x x and y y
+set patch to a cad path sweep cubic patch with frames first, second, third and last
+set middle to the cad path sweep cubic frame of patch at 0.5
+check path fit ((the cad distance from middle's origin to (a cad vector3 with x 0.0, y 0.0 and z 1.0)) < 1e-12)
+set slope to the cad path sweep cubic derivative of patch at 0.5
+check path fit ((the cad distance from slope's origin to (a cad vector3 with x 0.0, y 0.0 and z 1.5)) < 1e-12)
+check path fit ((the cad length of slope's xAxis) < 1e-12)
+print "cubic_frame_and_derivative" as a line
+
+set linear to @intrinsic("construct", a path fit polynomial evaluator, false, false)
+set fittedLine to the cad path sweep fit of linear from 0.0 to 1.0 at radius 1.0 within tolerance 1e-7
+check path fit fittedLine's valid
+check path fit ((the length of fittedLine's patches) = 1)
+set linePatch to the item at 0 in fittedLine's patches
+check path fit ((the cad distance from (the cad path sweep cubic frame of linePatch at 0.5)'s origin to (a cad vector3 with x 0.0, y 0.0 and z 0.5)) < 1e-12)
+print "exact_linear_fit" as a line
+
+set quartic to @intrinsic("construct", a path fit polynomial evaluator, true, false)
+set fittedCurve to the cad path sweep fit of quartic from 0.0 to 1.0 at radius 1.0 within tolerance 1e-5
+check path fit fittedCurve's valid
+check path fit ((the length of fittedCurve's patches) > 1)
+set spatial to @intrinsic("construct", a path fit spatial evaluator, 0.5 as a 64 bit floating-point number)
+set fittedSpatial to the cad path sweep fit of spatial from 0.0 to 1.0 at radius 1.0 within tolerance 1e-7
+check path fit fittedSpatial's valid
+check path fit ((the length of fittedSpatial's patches) = 1)
+set spatialPatch to the item at 0 in fittedSpatial's patches
+check path fit ((the cad distance from (the cad path sweep cubic frame of spatialPatch at 0.5)'s origin to (a cad vector3 with x 0.5, y 0.0625 and z 0.25)) < 1e-12)
+set declined to @intrinsic("construct", a path fit polynomial evaluator, false, true)
+set refused to the cad path sweep fit of declined from 0.0 to 1.0 at radius 1.0 within tolerance 1e-5
+check path fit (refused's valid = false)
+print "adaptive_fit_and_refusal" as a line
+
+set samples to a list containing (the cad zero vector2)
+append (a cad vector2 with x 0.4 and y 0.2) to samples
+set patches to a list containing patch
+set regular to the cad path sweep regular transport of samples with patches
+check path fit regular's valid
+check path fit regular's forward
+set reverse to a cad path sweep cubic patch with frames last, third, second and first
+replace item at index 0 in patches with reverse
+set backward to the cad path sweep regular transport of samples with patches
+check path fit backward's valid
+check path fit (backward's forward = false)
+set folded to a cad path sweep cubic patch with frames first, second, third and first
+replace item at index 0 in patches with folded
+set singular to the cad path sweep regular transport of samples with patches
+check path fit (singular's valid = false)
+release cad path sweep fit fittedLine
+release cad path sweep fit fittedCurve
+release cad path sweep fit fittedSpatial
+release cad path sweep fit refused
+free samples
+free patches
+print "regular_transport_orientation_and_fold" as a line

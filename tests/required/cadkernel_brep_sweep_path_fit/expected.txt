@@ -1,0 +1,4 @@
+cubic_frame_and_derivative
+exact_linear_fit
+adaptive_fit_and_refusal
+regular_transport_orientation_and_fold

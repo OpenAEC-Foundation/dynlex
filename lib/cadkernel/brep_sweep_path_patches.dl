@@ -1,0 +1,309 @@
+# SPDX-License-Identifier: MPL-2.0
+# Frame algebra, path-piece evaluation and transport walks from pinned
+# cadkernel src/brep/sweep_path.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep_path_base.dl
+import lib/cadkernel/brep_sweep_path_transport.dl
+
+class:
+    patterns:
+        [a|] cad path sweep patch piece
+    members:
+        kind as an integer
+        first as a cad vector3
+        last as a cad vector3
+        plane as a cad plane
+        curve as a cad curve2
+        forward as a boolean
+        spline as a cad nurbs curve3
+        knotStart as a 64 bit floating-point number
+        knotEnd as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad path sweep patch parameters result
+    members:
+        valid as a boolean
+        values
+
+class:
+    patterns:
+        [a|] cad path sweep patch section
+    members:
+        parameters
+        frames
+
+class:
+    patterns:
+        [a|] cad path sweep patch walk result
+    members:
+        valid as a boolean
+        sections
+
+# These result records own raw list pointers, including nested section lists.
+# Raw pointer copies alias the same allocation. Call each release pattern once
+# for every returned result, valid or invalid; do not use its lists afterwards.
+function release cad path sweep patch division {cad path sweep patch parameters result:result}:
+    execute:
+        free result's values
+
+local function free cad path sweep patch sections {a pointer to a list:sections}:
+    execute:
+        loop index from 0 to the length of sections:
+            set section to the item at index in sections
+            free section's parameters
+            free section's frames
+        free sections
+
+function release cad path sweep patch walk {cad path sweep patch walk result:result}:
+    execute:
+        free cad path sweep patch sections result's sections
+
+local function cad path sweep patch {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+function the cad path sweep patch frame sum of {cad path sweep frame:left} and {cad path sweep frame:right}:
+    execute:
+        return a cad path sweep frame at (the cad sum of left's origin and right's origin) with x (the cad sum of left's xAxis and right's xAxis) and y (the cad sum of left's yAxis and right's yAxis)
+
+function the cad path sweep patch frame scaling of {cad path sweep frame:frame} by {a 64 bit floating-point number:factor}:
+    execute:
+        return a cad path sweep frame at (frame's origin scaled by factor) with x (frame's xAxis scaled by factor) and y (frame's yAxis scaled by factor)
+
+function the cad path sweep patch frame difference of {cad path sweep frame:left} and {cad path sweep frame:right}:
+    execute:
+        return the cad path sweep patch frame sum of left and (the cad path sweep patch frame scaling of right by -1.0)
+
+function the cad path sweep patch frame interpolation from {cad path sweep frame:first} to {cad path sweep frame:last} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set difference to the cad path sweep patch frame difference of last and first
+        return the cad path sweep patch frame sum of first and (the cad path sweep patch frame scaling of difference by parameter)
+
+function the cad path sweep patch point at {cad vector2:coordinate} on {cad path sweep frame:frame}:
+    execute:
+        return the cad sum of (the cad sum of frame's origin and (frame's xAxis scaled by coordinate's x)) and (frame's yAxis scaled by coordinate's y)
+
+function the cad path sweep patch frame error between {cad path sweep frame:first} and {cad path sweep frame:last} at radius {a 64 bit floating-point number:radius}:
+    execute:
+        return (the cad distance from first's origin to last's origin) + (radius * ((the cad distance from first's xAxis to last's xAxis) + (the cad distance from first's yAxis to last's yAxis)))
+
+local function the cad path sweep patch spline witness:
+    execute:
+        set controls to an empty list of a cad vector3
+        set scalars to an empty list of a 64 bit floating-point number
+        set result to the cad nurbs curve3 of degree 0 with controls controls, knots scalars and weights scalars
+        free controls
+        free scalars
+        return result's value
+
+function the cad path sweep patch line from {cad vector3:first} to {cad vector3:last}:
+    execute:
+        return @intrinsic("construct", a cad path sweep patch piece, 0, first, last, a new cad plane, the cad curve2 of (a new cad line2), true, the cad path sweep patch spline witness, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
+
+function the cad path sweep patch planar {cad curve2:curve} on {cad plane:plane} forward {boolean:forward}:
+    execute:
+        return @intrinsic("construct", a cad path sweep patch piece, 1, the cad zero vector3, the cad zero vector3, plane, the cad clone of curve, forward, the cad path sweep patch spline witness, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
+
+function the cad path sweep patch spline {cad nurbs curve3:curve} from knot {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        return @intrinsic("construct", a cad path sweep patch piece, 2, the cad zero vector3, the cad zero vector3, a new cad plane, the cad curve2 of (a new cad line2), true, the cad clone of curve, first, last)
+
+function the cad path sweep patch point on {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if piece's kind = 0:
+            return the cad sum of piece's first and ((the cad difference of piece's last and piece's first) scaled by parameter)
+        if piece's kind = 1:
+            set directed to parameter
+            if piece's forward = false:
+                set directed to 1.0 - parameter
+            return the cad point at (the cad point on piece's curve at directed) on piece's plane
+        if piece's kind = 2:
+            return the cad point on piece's spline at knot (piece's knotStart + ((piece's knotEnd - piece's knotStart) * parameter))
+        @intrinsic("call", "libc", "abort", nothing)
+        return the cad zero vector3
+
+local function the cad path sweep patch spline derivative of {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set first to the maximum of (parameter - 1e-5) and 0.0
+        set last to the minimum of (parameter + 1e-5) and 1.0
+        set startPoint to the cad path sweep patch point on piece at first
+        set endPoint to the cad path sweep patch point on piece at last
+        return (the cad difference of endPoint and startPoint) cad divided by (last - first)
+
+local function the cad path sweep patch derivative of {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if piece's kind = 0:
+            return the cad difference of piece's last and piece's first
+        if piece's kind = 1:
+            set directed to parameter
+            set sign to 1.0
+            if piece's forward = false:
+                set directed to 1.0 - parameter
+                set sign to -1.0
+            return (the cad vector at (the cad tangent of piece's curve at directed) on piece's plane) scaled by sign
+        if piece's kind = 2:
+            return the cad path sweep patch spline derivative of piece at parameter
+        @intrinsic("call", "libc", "abort", nothing)
+        return the cad zero vector3
+
+function the cad path sweep patch tangent on {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set direction to the cad path sweep patch derivative of piece at parameter
+        if (cad direction is finite) = false:
+            return @intrinsic("construct", a cad path sweep vector result, false, the cad zero vector3)
+        if (the cad length of direction) > 1e-12:
+            set normalized to the cad normalization of direction
+            return @intrinsic("construct", a cad path sweep vector result, normalized's valid, normalized's value)
+        set first to the maximum of (parameter - 1e-6) and 0.0
+        set last to the minimum of (parameter + 1e-6) and 1.0
+        set fallback to the cad difference of (the cad path sweep patch point on piece at last) and (the cad path sweep patch point on piece at first)
+        set normalized to the cad normalization of fallback
+        return @intrinsic("construct", a cad path sweep vector result, normalized's valid, normalized's value)
+
+function the cad path sweep patch speed of {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        if piece's kind = 0:
+            return the cad distance from piece's first to piece's last
+        return the cad length of (the cad path sweep patch derivative of piece at parameter)
+
+function the cad path sweep patch length of {cad path sweep patch piece:piece} to {a 64 bit floating-point number:end}:
+    execute:
+        if piece's kind = 0:
+            return (the cad distance from piece's first to piece's last) * end
+        if piece's kind = 1:
+            if piece's curve's kind = cad line curve2 kind:
+                return (the cad length of (the cad vector at (the cad direction of piece's curve's line) on piece's plane)) * end
+            if (piece's curve's kind = cad arc curve2 kind) and (cad (piece's plane) is orthonormal):
+                return (the cad length of piece's curve) * end
+        set nodes to [[-0.906179845938664,0.236926885056189],[-0.538469310105683,0.478628670499366],[0.0,0.568888888888889],[0.538469310105683,0.478628670499366],[0.906179845938664,0.236926885056189]]
+        set total to 0.0 as a 64 bit floating-point number
+        loop panel from 0 to 16:
+            loop index from 0 to 5:
+                set node to the item at index in nodes
+                set parameter to (end * ((panel as a 64 bit floating-point number) + 0.5 + ((the item at 0 in node) * 0.5))) / 16.0
+                set speed to the cad path sweep patch speed of piece at parameter
+                set total to total + ((speed * (the item at 1 in node) * end) / 32.0)
+        return total
+
+local function cad path sweep patch divide {cad path sweep patch piece:piece} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} depth {integer:depth} into {a pointer to a list:parameters}:
+    execute:
+        set middle to (first + last) * 0.5
+        set startTangent to the cad path sweep patch tangent on piece at first
+        set middleTangent to the cad path sweep patch tangent on piece at middle
+        set endTangent to the cad path sweep patch tangent on piece at last
+        if (((startTangent's valid) and (middleTangent's valid)) and (endTangent's valid)) = false:
+            return false
+        set startPoint to the cad path sweep patch point on piece at first
+        set middlePoint to the cad path sweep patch point on piece at middle
+        set endPoint to the cad path sweep patch point on piece at last
+        set chord to the cad distance from startPoint to endPoint
+        set broken to (the cad distance from startPoint to middlePoint) + (the cad distance from middlePoint to endPoint)
+        if (((the cad dot of startTangent's value and middleTangent's value) < 0.99875) or ((the cad dot of middleTangent's value and endTangent's value) < 0.99875)) or ((broken - chord) > ((the maximum of broken and 1.0) * 0.0001)):
+            if (depth >= 16) or ((the length of parameters) >= 8192):
+                return false
+            if (cad path sweep patch divide piece from first to middle depth (depth + 1) into parameters) = false:
+                return false
+            return cad path sweep patch divide piece from middle to last depth (depth + 1) into parameters
+        append last to parameters
+        return true
+
+function the cad path sweep patch division of {cad path sweep patch piece:piece}:
+    execute:
+        set parameters to a list containing (0.0 as a 64 bit floating-point number)
+        set valid to cad path sweep patch divide piece from 0.0 to 1.0 depth 0 into parameters
+        if valid = false:
+            free parameters
+            return @intrinsic("construct", a cad path sweep patch parameters result, false, an empty list of a 64 bit floating-point number)
+        return @intrinsic("construct", a cad path sweep patch parameters result, true, parameters)
+
+local function the cad path sweep patch binormal on {cad path sweep patch piece:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set start to the cad path sweep patch tangent on piece at (the maximum of (parameter - 1e-3) and 0.0)
+        set end to the cad path sweep patch tangent on piece at (the minimum of (parameter + 1e-3) and 1.0)
+        if (start's valid = false) or (end's valid = false):
+            return @intrinsic("construct", a cad path sweep vector result, false, the cad zero vector3)
+        set crosswise to the cad cross of start's value and end's value
+        if (the cad length of crosswise) <= 1e-9:
+            return @intrinsic("construct", a cad path sweep vector result, false, the cad zero vector3)
+        set normal to the cad normalization of crosswise
+        return @intrinsic("construct", a cad path sweep vector result, normal's valid, normal's value)
+
+local function the cad path sweep patch curved transport of {cad path sweep frame:frame} along {cad path sweep patch piece:piece} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} bank {boolean:bank}:
+    execute:
+        set source to the cad path sweep patch tangent on piece at first
+        set target to the cad path sweep patch tangent on piece at last
+        if (source's valid = false) or (target's valid = false):
+            return @intrinsic("construct", a cad path sweep frame result, false, frame)
+        set point to the cad path sweep patch point on piece at last
+        set moved to the cad path sweep moved frame frame from source's value to target's value between (the cad path sweep patch point on piece at first) and point
+        if (moved's valid = false) or (bank = false):
+            return moved
+        set previous to the cad path sweep patch binormal on piece at first
+        set next to the cad path sweep patch binormal on piece at last
+        if (previous's valid = false) or (next's valid = false):
+            return moved
+        set carried to the cad path sweep transport of previous's value from source's value to target's value
+        if carried's valid = false:
+            return @intrinsic("construct", a cad path sweep frame result, false, frame)
+        set roll to @intrinsic("atan2", (the cad dot of target's value and (the cad cross of carried's value and next's value)), (the cad dot of carried's value and next's value))
+        set rolled to a cad path sweep frame at (the cad sum of point and (the cad path sweep rotation of (the cad difference of moved's value's origin and point) about target's value by roll)) with x (the cad path sweep rotation of moved's value's xAxis about target's value by roll) and y (the cad path sweep rotation of moved's value's yAxis about target's value by roll)
+        return @intrinsic("construct", a cad path sweep frame result, true, rolled)
+
+local function the cad path sweep patch section witness:
+    execute:
+        return @intrinsic("construct", a cad path sweep patch section, an empty list of a 64 bit floating-point number, an empty list of a cad path sweep frame)
+
+local function no cad path sweep patch walk:
+    execute:
+        return @intrinsic("construct", a cad path sweep patch walk result, false, an empty list of (the type of (the cad path sweep patch section witness)))
+
+local function the cad path sweep patch walk refusal from {a pointer to a list:sections}:
+    execute:
+        free cad path sweep patch sections sections
+        return no cad path sweep patch walk
+
+function the cad path sweep patch walk of {a pointer to a list:pieces} starting {cad path sweep frame:first} bank {boolean:bank}:
+    execute:
+        if (the length of pieces) = 0:
+            return no cad path sweep patch walk
+        set previousPiece to the item at 0 in pieces
+        set previousPoint to the cad path sweep patch point on previousPiece at 0.0
+        set previousTangent to the cad path sweep patch tangent on previousPiece at 0.0
+        if previousTangent's valid = false:
+            return no cad path sweep patch walk
+        set frame to first
+        set sections to an empty list of (the type of (the cad path sweep patch section witness))
+        loop index from 0 to the length of pieces:
+            set piece to the item at index in pieces
+            set length to the cad path sweep patch length of piece to 1.0
+            if ((cad path sweep patch length is finite) = false) or (length <= 1e-12):
+                return the cad path sweep patch walk refusal from sections
+            set tangent to the cad path sweep patch tangent on piece at 0.0
+            if tangent's valid = false:
+                return the cad path sweep patch walk refusal from sections
+            if (the cad dot of previousTangent's value and tangent's value) <= -0.9999999999:
+                return the cad path sweep patch walk refusal from sections
+            set moved to the cad path sweep moved frame frame from previousTangent's value to tangent's value between previousPoint and (the cad path sweep patch point on piece at 0.0)
+            if moved's valid = false:
+                return the cad path sweep patch walk refusal from sections
+            set frame to moved's value
+            set division to the cad path sweep patch division of piece
+            if division's valid = false:
+                release cad path sweep patch division division
+                return the cad path sweep patch walk refusal from sections
+            set parameters to division's values
+            set frames to a list containing frame
+            loop part from 0 to ((the length of parameters) - 1):
+                set carried to the cad path sweep patch curved transport of frame along piece from (the item at part in parameters) to (the item at (part + 1) in parameters) bank bank
+                if carried's valid = false:
+                    free parameters
+                    free frames
+                    return the cad path sweep patch walk refusal from sections
+                set frame to carried's value
+                append frame to frames
+            append (@intrinsic("construct", a cad path sweep patch section, parameters, frames)) to sections
+            set previousPoint to the cad path sweep patch point on piece at 1.0
+            set previousTangent to the cad path sweep patch tangent on piece at 1.0
+            if previousTangent's valid = false:
+                return the cad path sweep patch walk refusal from sections
+        return @intrinsic("construct", a cad path sweep patch walk result, true, sections)

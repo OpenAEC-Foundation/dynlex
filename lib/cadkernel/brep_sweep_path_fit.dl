@@ -1,0 +1,150 @@
+# SPDX-License-Identifier: MPL-2.0
+# Cubic frame fitting and sampled local regularity from pinned
+# cadkernel src/brep/sweep_path.rs at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep_path_patches.dl
+
+class:
+    patterns:
+        [a|] cad path sweep cubic patch
+    members:
+        first as a cad path sweep frame
+        second as a cad path sweep frame
+        third as a cad path sweep frame
+        last as a cad path sweep frame
+
+class:
+    patterns:
+        [a|] cad path sweep fit result
+    members:
+        valid as a boolean
+        patches
+
+class:
+    patterns:
+        [a|] cad path sweep regularity result
+    members:
+        valid as a boolean
+        forward as a boolean
+
+function a cad path sweep cubic patch with frames {cad path sweep frame:first}, {cad path sweep frame:second}, {cad path sweep frame:third} and {cad path sweep frame:last}:
+    execute:
+        return @intrinsic("construct", a cad path sweep cubic patch, first, second, third, last)
+
+function the cad path sweep cubic frame of {cad path sweep cubic patch:patch} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set complement to 1.0 - parameter
+        set first to the cad path sweep patch frame scaling of patch's first by ((complement * complement) * complement)
+        set second to the cad path sweep patch frame scaling of patch's second by (((3.0 * complement) * complement) * parameter)
+        set third to the cad path sweep patch frame scaling of patch's third by (((3.0 * complement) * parameter) * parameter)
+        set last to the cad path sweep patch frame scaling of patch's last by ((parameter * parameter) * parameter)
+        return the cad path sweep patch frame sum of (the cad path sweep patch frame sum of (the cad path sweep patch frame sum of first and second) and third) and last
+
+function the cad path sweep cubic derivative of {cad path sweep cubic patch:patch} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set complement to 1.0 - parameter
+        set firstDifference to the cad path sweep patch frame difference of patch's second and patch's first
+        set secondDifference to the cad path sweep patch frame difference of patch's third and patch's second
+        set thirdDifference to the cad path sweep patch frame difference of patch's last and patch's third
+        set first to the cad path sweep patch frame scaling of firstDifference by ((3.0 * complement) * complement)
+        set second to the cad path sweep patch frame scaling of secondDifference by ((6.0 * complement) * parameter)
+        set third to the cad path sweep patch frame scaling of thirdDifference by ((3.0 * parameter) * parameter)
+        return the cad path sweep patch frame sum of (the cad path sweep patch frame sum of first and second) and third
+
+local function cad path sweep fit {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+# The evaluator implements "the cad path sweep fit sample of evaluator at t"
+# and returns a cad path sweep frame result. It remains borrowed during fit.
+local function cad path sweep fit evaluator from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} at radius {a 64 bit floating-point number:radius} within tolerance {a 64 bit floating-point number:tolerance} depth {integer:depth} into {a pointer to a list:patches}:
+    execute:
+        set p0Result to the cad path sweep fit sample of evaluator at first
+        if p0Result's valid = false:
+            return false
+        set p3Result to the cad path sweep fit sample of evaluator at last
+        if p3Result's valid = false:
+            return false
+        set q1Result to the cad path sweep fit sample of evaluator at (first + ((last - first) / 3.0))
+        if q1Result's valid = false:
+            return false
+        set q2Result to the cad path sweep fit sample of evaluator at (first + (((last - first) * 2.0) / 3.0))
+        if q2Result's valid = false:
+            return false
+        set p0 to p0Result's value
+        set p3 to p3Result's value
+        set q1 to q1Result's value
+        set q2 to q2Result's value
+        set c to the cad path sweep patch frame difference of (the cad path sweep patch frame difference of (the cad path sweep patch frame scaling of q1 by 27.0) and (the cad path sweep patch frame scaling of p0 by 8.0)) and p3
+        set d to the cad path sweep patch frame difference of (the cad path sweep patch frame difference of (the cad path sweep patch frame scaling of q2 by 27.0) and p0) and (the cad path sweep patch frame scaling of p3 by 8.0)
+        set control1 to the cad path sweep patch frame scaling of (the cad path sweep patch frame difference of (the cad path sweep patch frame scaling of c by 2.0) and d) by (1.0 / 18.0)
+        set control2 to the cad path sweep patch frame scaling of (the cad path sweep patch frame difference of (the cad path sweep patch frame scaling of d by 2.0) and c) by (1.0 / 18.0)
+        set patch to a cad path sweep cubic patch with frames p0, control1, control2 and p3
+        set samples to [0.125,0.25,0.5,0.75,0.875]
+        set error to 0.0 as a 64 bit floating-point number
+        loop index from 0 to the length of samples:
+            set parameter to the item at index in samples
+            set expected to the cad path sweep fit sample of evaluator at (first + ((last - first) * parameter))
+            if expected's valid = false:
+                return false
+            set currentError to the cad path sweep patch frame error between (the cad path sweep cubic frame of patch at parameter) and expected's value at radius radius
+            if currentError > error:
+                set error to currentError
+        if (cad path sweep fit error is finite) = false:
+            return false
+        if error > tolerance:
+            if (depth >= 14) or ((the length of patches) >= 8192):
+                return false
+            set middle to (first + last) * 0.5
+            if (cad path sweep fit evaluator from first to middle at radius radius within tolerance tolerance depth (depth + 1) into patches) = false:
+                return false
+            return cad path sweep fit evaluator from middle to last at radius radius within tolerance tolerance depth (depth + 1) into patches
+        append patch to patches
+        return true
+
+# The returned raw patch list is owned by the caller on both success and
+# refusal. Record copies alias it; release exactly once after the last use.
+function release cad path sweep fit {cad path sweep fit result:result}:
+    execute:
+        free result's patches
+
+function the cad path sweep fit of evaluator from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last} at radius {a 64 bit floating-point number:radius} within tolerance {a 64 bit floating-point number:tolerance}:
+    execute:
+        set patches to an empty list of a cad path sweep cubic patch
+        set valid to cad path sweep fit evaluator from first to last at radius radius within tolerance tolerance depth 0 into patches
+        if valid = false:
+            free patches
+            return @intrinsic("construct", a cad path sweep fit result, false, an empty list of a cad path sweep cubic patch)
+        return @intrinsic("construct", a cad path sweep fit result, true, patches)
+
+# The caller supplies the rational-profile sampling performed by the source
+# before its regular_transport loop. Profile samples and patches are borrowed.
+function the cad path sweep regular transport of {a pointer to a list:profilePoints} with {a pointer to a list:patches}:
+    execute:
+        set orientation to 0
+        set stations to [0.0,0.125,0.25,0.5,0.75,0.875,1.0]
+        loop patchIndex from 0 to the length of patches:
+            set patch to the item at patchIndex in patches
+            loop stationIndex from 0 to the length of stations:
+                set parameter to the item at stationIndex in stations
+                set frame to the cad path sweep cubic frame of patch at parameter
+                set derivative to the cad path sweep cubic derivative of patch at parameter
+                set normal to the cad cross of frame's xAxis and frame's yAxis
+                set normalLength to the cad length of normal
+                if ((cad path sweep fit normalLength is finite) = false) or (normalLength <= 0.0):
+                    return @intrinsic("construct", a cad path sweep regularity result, false, false)
+                loop pointIndex from 0 to the length of profilePoints:
+                    set point to the item at pointIndex in profilePoints
+                    set velocity to the cad path sweep patch point at point on derivative
+                    set jacobian to the cad dot of normal and velocity
+                    set threshold to (normalLength * (the cad length of velocity)) * 1e-10
+                    if (((cad path sweep fit jacobian is finite) = false) or ((cad path sweep fit threshold is finite) = false)) or ((the absolute value of jacobian) <= threshold):
+                        return @intrinsic("construct", a cad path sweep regularity result, false, false)
+                    set direction to 1
+                    if jacobian < 0.0:
+                        set direction to -1
+                    if (orientation != 0) and (orientation != direction):
+                        return @intrinsic("construct", a cad path sweep regularity result, false, false)
+                    set orientation to direction
+        if orientation = 0:
+            return @intrinsic("construct", a cad path sweep regularity result, false, false)
+        return @intrinsic("construct", a cad path sweep regularity result, true, orientation > 0)
