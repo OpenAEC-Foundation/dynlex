@@ -4,6 +4,7 @@
 import lib/cadkernel/brep_result.dl
 import lib/cadkernel/brep_profile.dl
 import lib/cadkernel/brep_append.dl
+import lib/cadkernel/brep_revolve_rational.dl
 
 class:
     patterns:
@@ -106,6 +107,21 @@ local function cad revolve sheet lift of {cad curve2:piece} on {cad plane:plane}
             set start to the cad normalized angle of (piece's arc's startAngle)
             set curve to the cad edge curve3 of (a cad circle3 with plane frame and radius (piece's arc's radius))
             return @intrinsic("construct", a cad revolve sheet lifted result, true, curve, start, start + (the cad sweep of (piece's arc)))
+        if (piece's kind) = 3:
+            set centre to the cad point at (piece's ellipse's ellipse's centre) on plane
+            set normal to the cad normal of plane
+            if (normal's valid) = false:
+                return absent
+            set along to the cad vector at (piece's ellipse's ellipse's majorAxis) on plane
+            set frame to the cad orthonormal plane with origin centre, x axis along and normal (normal's value)
+            if (frame's valid) = false:
+                return absent
+            set curve to the cad edge curve3 of (a cad ellipse3 with plane (frame's value), major radius (piece's ellipse's ellipse's majorRadius) and minor radius (piece's ellipse's ellipse's minorRadius))
+            set start to piece's ellipse's startParameter
+            return @intrinsic("construct", a cad revolve sheet lifted result, true, curve, start, start + (the cad sweep of (piece's ellipse)))
+        if (piece's kind) = 5:
+            set curve to the cad edge curve3 of (a cad planar spline3 with plane plane and curve (the cad clone of (piece's nurbs)))
+            return @intrinsic("construct", a cad revolve sheet lifted result, true, curve, 0.0, 1.0)
         return absent
 
 local function cad revolve sheet profile [edge] of {cad curve2:piece} on {cad plane:plane} from {cad vertex key:first} to {cad vertex key:last} in {cad body:body}:
@@ -237,6 +253,18 @@ local function no cad revolve sheet revolution turn:
 
 local function cad revolve sheet revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
     execute:
+        set rational to false
+        loop index from 0 to the length of profile:
+            set kind to (the item at index in profile)'s kind
+            if (kind = 3) or (kind = 5):
+                set rational to true
+            else if (kind != 0) and (kind != 2):
+                return no cad revolve sheet revolution turn
+        if rational:
+            set built to the cad rational revolution turn of profile on plane about pivot along axis by angle
+            if built's valid = false:
+                return no cad revolve sheet revolution turn
+            return @intrinsic("construct", a cad revolve sheet revolution turn, true, built's pivot, built's axis, built's radial, built's spin, built's tolerance, built's angle, built's full)
         set normalResult to the cad normal of plane
         set directionResult to the cad normalization of axis
         if ((normalResult's valid) and (directionResult's valid)) = false:
@@ -328,6 +356,14 @@ local function cad revolve sheet revolution piece on {cad surface:surface} flat 
 
 local function cad revolve sheet revolution surface of {cad curve2:piece} on {cad plane:plane} for {cad revolve sheet revolution turn:turn} in {cad body:body}:
     execute:
+        if ((piece's kind) = 3) or ((piece's kind) = 5):
+            set rationalTurn to @intrinsic("construct", a cad rational revolution turn, turn's valid, turn's pivot, turn's axis, turn's radial, turn's spin, turn's tolerance, turn's angle, turn's full)
+            set made to the cad rational revolution surface of piece on plane for rationalTurn
+            if made's collapsed:
+                return collapsed cad revolve sheet revolution piece
+            if made's valid = false:
+                return no cad revolve sheet revolution piece
+            return cad revolve sheet revolution piece on (the cad surface of made's value) flat false in body
         set radialBounds to cad revolve sheet projection bounds of piece on plane from (turn's pivot) along (turn's radial)
         if radialBounds's valid = false:
             return no cad revolve sheet revolution piece
@@ -646,6 +682,18 @@ local function cad revolve sheet partial {a pointer to a list:profile} on {cad p
                     append (cad revolve sheet arc usage on (topEdge's value) forward (sense = false) from (a cad vector2 with x farAngle and y ending) to (a cad vector2 with x farAngle and y beginning)) to (circuit's values)
                     if firstRail's valid:
                         append (cad revolve sheet arc usage on (firstRail's value) forward false from (a cad vector2 with x farAngle and y beginning) to (a cad vector2 with x nearAngle and y beginning)) to (circuit's values)
+                else if (pieceShape's surfaceKind) = 5:
+                    set start to 0.0
+                    set end to 1.0
+                    if sense = false:
+                        set start to 1.0
+                        set end to 0.0
+                    append (cad revolve sheet arc usage on (baseEdge's value) forward sense from (a cad vector2 with x start and y 0.0) to (a cad vector2 with x end and y 0.0)) to (circuit's values)
+                    if nextRail's valid:
+                        append (cad revolve sheet arc usage on (nextRail's value) forward true from (a cad vector2 with x end and y 0.0) to (a cad vector2 with x end and y 1.0)) to (circuit's values)
+                    append (cad revolve sheet arc usage on (topEdge's value) forward (sense = false) from (a cad vector2 with x end and y 1.0) to (a cad vector2 with x start and y 1.0)) to (circuit's values)
+                    if firstRail's valid:
+                        append (cad revolve sheet arc usage on (firstRail's value) forward false from (a cad vector2 with x start and y 1.0) to (a cad vector2 with x start and y 0.0)) to (circuit's values)
                 else:
                     append (cad revolve sheet use of (baseEdge's value) forward sense) to (circuit's values)
                     if nextRail's valid:
@@ -801,6 +849,18 @@ local function cad revolve sheet whole {a pointer to a list:profile} on {cad pla
                         if lastRim's valid:
                             append (cad revolve sheet arc usage on (lastRim's value) forward false from (a cad vector2 with x farAngle and y ending) to (a cad vector2 with x nearAngle and y ending)) to (circuit's values)
                         append (cad revolve sheet arc usage on (seam's value) forward (sense = false) from (a cad vector2 with x nearAngle and y ending) to (a cad vector2 with x nearAngle and y beginning)) to (circuit's values)
+                    else if (pieceShape's surfaceKind) = 5:
+                        set start to 0.0
+                        set end to 1.0
+                        if sense = false:
+                            set start to 1.0
+                            set end to 0.0
+                        if firstRim's valid:
+                            append (cad revolve sheet arc usage on (firstRim's value) forward true from (a cad vector2 with x start and y 0.0) to (a cad vector2 with x start and y 1.0)) to (circuit's values)
+                        append (cad revolve sheet arc usage on (seam's value) forward sense from (a cad vector2 with x start and y 1.0) to (a cad vector2 with x end and y 1.0)) to (circuit's values)
+                        if lastRim's valid:
+                            append (cad revolve sheet arc usage on (lastRim's value) forward false from (a cad vector2 with x end and y 1.0) to (a cad vector2 with x end and y 0.0)) to (circuit's values)
+                        append (cad revolve sheet arc usage on (seam's value) forward (sense = false) from (a cad vector2 with x end and y 0.0) to (a cad vector2 with x start and y 0.0)) to (circuit's values)
                     else:
                         if firstRim's valid:
                             append (cad revolve sheet use of (firstRim's value) forward true) to (circuit's values)

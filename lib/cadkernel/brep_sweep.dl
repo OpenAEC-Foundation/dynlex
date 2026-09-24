@@ -11,6 +11,7 @@ import lib/cadkernel/offset2.dl
 import lib/cadkernel/brep_loft.dl
 import lib/cadkernel/brep_profile_pieces.dl
 import lib/cadkernel/brep_append.dl
+import lib/cadkernel/brep_revolve_rational.dl
 
 class:
     patterns:
@@ -396,6 +397,18 @@ local function no cad sweep revolution turn:
 
 local function cad sweep complete revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
     execute:
+        set rational to false
+        loop index from 0 to the length of profile:
+            set kind to (the item at index in profile)'s kind
+            if (kind = 3) or (kind = 5):
+                set rational to true
+            else if (kind != 0) and (kind != 2):
+                return no cad sweep revolution turn
+        if rational:
+            set built to the cad rational revolution turn of profile on plane about pivot along axis by angle
+            if built's valid = false:
+                return no cad sweep revolution turn
+            return @intrinsic("construct", a cad sweep revolution turn, true, built's pivot, built's axis, built's radial, built's spin, built's tolerance, built's angle, built's full)
         set normalResult to the cad normal of plane
         set directionResult to the cad normalization of axis
         if ((normalResult's valid) and (directionResult's valid)) = false:
@@ -488,6 +501,14 @@ local function cad sweep revolution piece on {cad surface:surface} flat {boolean
 
 local function cad sweep revolution surface of {cad curve2:piece} on {cad plane:plane} for {cad sweep revolution turn:turn} in {cad body:body}:
     execute:
+        if ((piece's kind) = 3) or ((piece's kind) = 5):
+            set rationalTurn to @intrinsic("construct", a cad rational revolution turn, turn's valid, turn's pivot, turn's axis, turn's radial, turn's spin, turn's tolerance, turn's angle, turn's full)
+            set made to the cad rational revolution surface of piece on plane for rationalTurn
+            if made's collapsed:
+                return collapsed cad sweep revolution piece
+            if made's valid = false:
+                return no cad sweep revolution piece
+            return cad sweep revolution piece on (the cad surface of made's value) flat false in body
         set radialBounds to cad sweep projection bounds of piece on plane from (turn's pivot) along (turn's radial)
         if radialBounds's valid = false:
             return no cad sweep revolution piece
@@ -666,6 +687,9 @@ local function cad sweep partial revolution of {a pointer to a list:profile} on 
                 set firstRail to the item at index in (rails's values)
                 if firstRail's valid:
                     append (cad sweep use of (firstRail's value) forward false) to (circuit's values)
+                # The pinned partial-solid trim requires all four rational boundary uses.
+                if ((pieceShape's surfaceKind) = 5) and (((nextRail's valid) = false) or ((firstRail's valid) = false)):
+                    return no cad body
                 if (((pieceShape's surfaceKind) = 3) or ((pieceShape's surfaceKind) = 4)) and ((piece's kind) = 2):
                     set parameters to cad sweep revolved parameters of (piece's arc) on plane for turn
                     if parameters's valid = false:
@@ -686,6 +710,23 @@ local function cad sweep partial revolution of {a pointer to a list:profile} on 
                             increment uvIndex
                             set first to the item at uvIndex in uv
                             set last to the item at (the remainder of (uvIndex + 1) divided by 4) in uv
+                        set p to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
+                        set q to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
+                        set use to the item at useIndex in (circuit's values)
+                        set use's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from p to q))
+                        replace item at index useIndex in (circuit's values) with use
+                        increment uvIndex
+                if (pieceShape's surfaceKind) = 5:
+                    set start to 0.0
+                    set end to 1.0
+                    if (the item at index in (senses's values)) = false:
+                        set start to 1.0
+                        set end to 0.0
+                    set uv to [[start,0.0],[end,0.0],[end,1.0],[start,1.0]]
+                    set uvIndex to 0
+                    loop useIndex from 0 to the length of (circuit's values):
+                        set first to the item at uvIndex in uv
+                        set last to the item at (the remainder of (uvIndex + 1) divided by 4) in uv
                         set p to a cad vector2 with x (the item at 0 in first) and y (the item at 1 in first)
                         set q to a cad vector2 with x (the item at 0 in last) and y (the item at 1 in last)
                         set use to the item at useIndex in (circuit's values)
@@ -854,23 +895,36 @@ function the cad revolution of {a pointer to a list:profile} on {cad plane:plane
                             set ending to arcParameters's start
                         set near to arcParameters's around
                         set far to near + 6.283185307179586
+                    set splineStart to 0.0
+                    set splineEnd to 1.0
+                    if (the item at index in (senses's values)) = false:
+                        set splineStart to 1.0
+                        set splineEnd to 0.0
                     if firstRim's valid:
                         set usage to cad sweep use of (firstRim's value) forward true
                         if arcParameters's valid:
                             set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x near and y beginning) to (a cad vector2 with x far and y beginning)))
+                        if (pieceShape's surfaceKind) = 5:
+                            set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x splineStart and y 0.0) to (a cad vector2 with x splineStart and y 1.0)))
                         append usage to (circuit's values)
                     set usage to cad sweep use of (seam's value) forward (the item at index in (senses's values))
                     if arcParameters's valid:
                         set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x far and y beginning) to (a cad vector2 with x far and y ending)))
+                    if (pieceShape's surfaceKind) = 5:
+                        set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x splineStart and y 1.0) to (a cad vector2 with x splineEnd and y 1.0)))
                     append usage to (circuit's values)
                     if lastRim's valid:
                         set usage to cad sweep use of (lastRim's value) forward false
                         if arcParameters's valid:
                             set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x far and y ending) to (a cad vector2 with x near and y ending)))
+                        if (pieceShape's surfaceKind) = 5:
+                            set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x splineEnd and y 1.0) to (a cad vector2 with x splineEnd and y 0.0)))
                         append usage to (circuit's values)
                     set usage to cad sweep use of (seam's value) forward ((the item at index in (senses's values)) = false)
                     if arcParameters's valid:
                         set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x near and y ending) to (a cad vector2 with x near and y beginning)))
+                    if (pieceShape's surfaceKind) = 5:
+                        set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (a cad vector2 with x splineEnd and y 0.0) to (a cad vector2 with x splineStart and y 0.0)))
                     append usage to (circuit's values)
                     set reordered to cad sweep reordered circuit outward outward
                     if (cad sweep ring on faceKey in body using reordered) = false:

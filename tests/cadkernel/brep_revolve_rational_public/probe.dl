@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+
+function rational public argument {integer:index}:
+    execute:
+        set valueText to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of valueText, 0 as a pointer)
+
+function emit rational public {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit rational public body {cad body:body}:
+    execute:
+        emit rational public (the cad count of (body's vertices))
+        emit rational public (the cad count of (body's edges))
+        emit rational public (the cad count of (body's coedges))
+        emit rational public (the cad count of (body's loops))
+        emit rational public (the cad count of (body's faces))
+        emit rational public (the cad count of (body's shells))
+        emit rational public (the cad count of (body's lumps))
+        emit rational public (the cad count of (body's surfaces))
+        emit rational public (the cad count of (body's curves))
+        emit rational public (the length of (body's roots))
+        set flaws to the cad flaws of body
+        emit rational public (the length of flaws)
+        free flaws
+        set surfaces to the cad keys of (body's surfaces)
+        set nurbsCount to 0
+        loop index from 0 to the length of surfaces:
+            set node to the cad node pointer for (the item at index in surfaces) in (body's surfaces)
+            if (node's kind) = 5:
+                increment nurbsCount
+        free surfaces
+        emit rational public nurbsCount
+        set coedges to the cad keys of (body's coedges)
+        set pcurveCount to 0
+        loop index from 0 to the length of coedges:
+            set node to the cad node pointer for (the item at index in coedges) in (body's coedges)
+            if node's pcurve's valid:
+                increment pcurveCount
+        emit rational public pcurveCount
+        loop index from 0 to the length of coedges:
+            set node to the cad node pointer for (the item at index in coedges) in (body's coedges)
+            emit rational public (node's forward as an integer)
+            if node's pcurve's valid:
+                emit rational public 1
+                set line to node's pcurve's value's line
+                emit rational public (line's start's x)
+                emit rational public (line's start's y)
+                emit rational public (line's end's x)
+                emit rational public (line's end's y)
+            else:
+                emit rational public 0
+        free coedges
+        set vertices to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertices:
+            set node to the cad node pointer for (the item at index in vertices) in (body's vertices)
+            emit rational public (node's point's x)
+            emit rational public (node's point's y)
+            emit rational public (node's point's z)
+        free vertices
+        set faces to the cad keys of (body's faces)
+        loop index from 0 to the length of faces:
+            set node to the cad node pointer for (the item at index in faces) in (body's faces)
+            emit rational public (node's forward as an integer)
+            emit rational public (the length of (node's loops's values))
+        free faces
+
+set mode to (rational public argument 0) as an integer
+set kind to (rational public argument 1) as an integer
+set angle to rational public argument 2
+set side to rational public argument 3
+set axisEnd to (rational public argument 4) != 0.0
+set curve to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+set closing to the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+if kind = 3:
+    set ellipse to a cad ellipse at (a cad vector2 with x (3.0 * side) and y 1.0) with radii 1.0 and 0.5 along (a cad vector2 with x 1.0 and y 0.0)
+    set curve to the cad curve2 of (a cad ellipse arc2 on ellipse from 0.0 to 3.141592653589793)
+    set closing to the cad curve2 of (a cad line2 from (a cad vector2 with x ((3.0 * side) - 1.0) and y 1.0) to (a cad vector2 with x ((3.0 * side) + 1.0) and y 1.0))
+else if kind = 5:
+    set firstX to side
+    if axisEnd:
+        set firstX to 0.0
+    set controls to a list containing (a cad vector2 with x firstX and y 0.0)
+    append (a cad vector2 with x (4.0 * side) and y 2.0) to controls
+    append (a cad vector2 with x side and y 4.0) to controls
+    set knots to a list containing 0.0
+    append 0.0 to knots
+    append 0.0 to knots
+    append 1.0 to knots
+    append 1.0 to knots
+    append 1.0 to knots
+    set weights to a list containing 1.0
+    append 1.0 to weights
+    append 1.0 to weights
+    set spline to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+    set curve to the cad curve2 of spline's value
+    set closing to the cad curve2 of (a cad line2 from (a cad vector2 with x side and y 4.0) to (a cad vector2 with x firstX and y 0.0))
+    free controls
+    free knots
+    free weights
+set profile to a list containing curve
+if mode = 1:
+    append closing to profile
+set frame to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+set result to no cad body
+if frame's valid:
+    if mode = 0:
+        set result to the cad revolved sheet of profile on (frame's value) about (the cad zero vector3) along (the cad z axis) by angle
+    else if mode = 1:
+        set result to the cad revolution of profile on (frame's value) about (the cad zero vector3) along (the cad z axis) by angle
+emit rational public (result's valid as an integer)
+if result's valid:
+    emit rational public body (result's value)
+free profile

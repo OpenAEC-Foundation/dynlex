@@ -1,0 +1,90 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+
+function check rational public {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function rational public point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function rational public pcurves in {cad body:body}:
+    execute:
+        set count to 0
+        set keys to the cad keys of (body's coedges)
+        loop index from 0 to the length of keys:
+            set node to the cad node pointer for (the item at index in keys) in (body's coedges)
+            if node's pcurve's valid:
+                increment count
+        free keys
+        return count
+
+function check rational public body {cad body:body} with pcurves {integer:expected}:
+    execute:
+        set flaws to the cad flaws of body
+        check rational public ((the length of flaws) = 0)
+        free flaws
+        check rational public ((the cad count of (body's surfaces)) >= 1)
+        check rational public ((rational public pcurves in body) = expected)
+
+set frame to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+check rational public (frame's valid)
+
+set ellipse to a cad ellipse at (rational public point 3 1) with radii 1.0 and 0.5 along (rational public point 1 0)
+set curved to the cad curve2 of (a cad ellipse arc2 on ellipse from 0.0 to 3.141592653589793)
+set openProfile to a list containing curved
+set halfSheet to the cad revolved sheet of openProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check rational public (halfSheet's valid)
+check rational public body (halfSheet's value) with pcurves 4
+set wholeSheet to the cad revolved sheet of openProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check rational public (wholeSheet's valid)
+check rational public body (wholeSheet's value) with pcurves 4
+print "ellipse_sheet_partial_and_full" as a line
+
+set solidProfile to a list containing curved
+append (the cad curve2 of (a cad line2 from (rational public point 2 1) to (rational public point 4 1))) to solidProfile
+set halfSolid to the cad revolution of solidProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check rational public (halfSolid's valid)
+check rational public body (halfSolid's value) with pcurves 4
+set wholeSolid to the cad revolution of solidProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check rational public (wholeSolid's valid)
+check rational public body (wholeSolid's value) with pcurves 4
+print "ellipse_solid_partial_and_full" as a line
+
+set controls to a list containing (rational public point 1 0)
+append (rational public point 4 2) to controls
+append (rational public point 1 4) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+append 1.0 to weights
+set spline to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
+check rational public (spline's valid)
+set splinePiece to the cad curve2 of spline's value
+set splineOpen to a list containing splinePiece
+set splineSheetPart to the cad revolved sheet of splineOpen on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check rational public (splineSheetPart's valid)
+check rational public body (splineSheetPart's value) with pcurves 4
+set splineSheetFull to the cad revolved sheet of splineOpen on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check rational public (splineSheetFull's valid)
+check rational public body (splineSheetFull's value) with pcurves 4
+print "nurbs_sheet_partial_and_full" as a line
+
+set splineSolidProfile to a list containing splinePiece
+append (the cad curve2 of (a cad line2 from (rational public point 1 4) to (rational public point 1 0))) to splineSolidProfile
+set splineSolidPart to the cad revolution of splineSolidProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check rational public (splineSolidPart's valid)
+check rational public body (splineSolidPart's value) with pcurves 4
+set splineSolidFull to the cad revolution of splineSolidProfile on (frame's value) about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check rational public (splineSolidFull's valid)
+check rational public body (splineSolidFull's value) with pcurves 4
+print "nurbs_solid_partial_and_full" as a line

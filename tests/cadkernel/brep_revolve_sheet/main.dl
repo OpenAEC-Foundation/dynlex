@@ -212,7 +212,18 @@ set disconnected to a list containing (sheet line from (sheet point 2 0) to (she
 append (sheet line from (sheet point 3 0) to (sheet point 3 1)) to disconnected
 check sheet (((the cad revolved sheet of (disconnected) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
 set ellipseProfile to a list containing (the cad curve2 of (a cad ellipse arc2 on (a cad ellipse at (sheet point 10 0) with radii 2.0 and 1.0 along (sheet point 1 0)) from 0.0 to 1.5707963267948966))
-check sheet (((the cad revolved sheet of (ellipseProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)
+set ellipseResult to the cad revolved sheet of (ellipseProfile) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0
+check sheet ellipseResult's valid
+check sheet body ellipseResult's value
+set ellipseSurfaceKeys to the cad keys of ellipseResult's value's surfaces
+set rationalSurfaceCount to 0
+loop surfaceIndex from 0 to the length of ellipseSurfaceKeys:
+    set surfaceNode to the cad node pointer for (the item at surfaceIndex in ellipseSurfaceKeys) in ellipseResult's value's surfaces
+    if surfaceNode's kind = 5:
+        increment rationalSurfaceCount
+check sheet (rationalSurfaceCount > 0)
+free ellipseSurfaceKeys
+print "elliptical_profile_builds_rational_sheet" as a line
 set invalidRegion to a list containing ring
 append crossing to invalidRegion
 check sheet (((the cad revolved sheets of (invalidRegion) on (frame's value) about (the cad zero vector3) along (the cad z axis) by 1.0)'s valid) = false)

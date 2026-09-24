@@ -1,0 +1,4 @@
+ellipse_sheet_partial_and_full
+ellipse_solid_partial_and_full
+nurbs_sheet_partial_and_full
+nurbs_solid_partial_and_full
