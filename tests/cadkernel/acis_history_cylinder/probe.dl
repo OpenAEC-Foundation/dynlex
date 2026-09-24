@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_cylinder.dl
+
+function check history cylinder {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a history cylinder identity matrix:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+        loop index from 0 to 16:
+            append (the item at index in entries) to values
+        return values
+
+set matrix to a history cylinder identity matrix
+set round to the cad history rebuilt cylinder with major radius 3.0, minor radius 3.0, x radius 7.0, height 5.0 and transform matrix
+check history cylinder round's valid
+check history cylinder (round's failure = 0)
+check history cylinder ((the cad count of (round's value's faces)) = 3)
+set flaws to the cad flaws of round's value
+check history cylinder ((the length of flaws) = 0)
+free flaws
+print "circular_history_cylinder_is_a_valid_solid" as a line
+
+set elliptical to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 5.0 and transform matrix
+check history cylinder elliptical's valid
+check history cylinder ((the cad count of (elliptical's value's faces)) > 3)
+set flaws to the cad flaws of elliptical's value
+check history cylinder ((the length of flaws) = 0)
+free flaws
+print "elliptical_history_cylinder_uses_lofted_solid" as a line
+
+set invalidX to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 0.0, height 5.0 and transform matrix
+check history cylinder ((invalidX's valid = false) and (invalidX's failure = 2))
+set invalidHeight to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 0.0 and transform matrix
+check history cylinder ((invalidHeight's valid = false) and (invalidHeight's failure = 2))
+print "unused_x_radius_and_height_are_validated" as a line
+
+replace item at index 3 in matrix with 2e-9
+set bad to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 5.0 and transform matrix
+check history cylinder ((bad's valid = false) and (bad's failure = 1))
+check history cylinder ((the item at 3 in matrix) = 2e-9)
+set bad to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 0.0, height 5.0 and transform matrix
+check history cylinder ((bad's valid = false) and (bad's failure = 2))
+set bad to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 0.0 and transform matrix
+check history cylinder ((bad's valid = false) and (bad's failure = 2))
+print "invalid_parameters_precede_invalid_placement" as a line
+
+replace item at index 3 in matrix with 0.0
+replace item at index 4 in matrix with 0.25
+set bad to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 5.0 and transform matrix
+check history cylinder ((bad's valid = false) and (bad's failure = 1))
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+set bad to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 7.0, height 5.0 and transform shortMatrix
+check history cylinder ((bad's valid = false) and (bad's failure = 1))
+free shortMatrix
+print "shear_and_short_transform_are_refused" as a line
+
+replace item at index 4 in matrix with 0.0
+replace item at index 12 in matrix with 5.0
+set moved to the cad history rebuilt cylinder with major radius 3.0, minor radius 3.0, x radius 7.0, height 5.0 and transform matrix
+check history cylinder moved's valid
+set retained to moved's value
+set moved to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 0.0, height 5.0 and transform matrix
+free matrix
+set keys to the cad vertex keys of retained
+set first to the cad node pointer for (the item at 0 in keys) in retained
+check history cylinder ((first's point's x) = 8.0)
+free keys
+set copied to the cad clone of retained
+set retained to an empty cad body
+check history cylinder ((the cad count of (copied's faces)) = 3)
+set copied to an empty cad body
+print "matrix_borrow_and_body_ownership_are_independent" as a line
+
+loop cycle from 0 to 40:
+    set temporary to a history cylinder identity matrix
+    set current to the cad history rebuilt cylinder with major radius 3.0, minor radius 3.0, x radius 7.0, height 5.0 and transform temporary
+    check history cylinder current's valid
+    free temporary
+    set current to the cad history rebuilt cylinder with major radius 3.0, minor radius 2.0, x radius 0.0, height 5.0 and transform (a history cylinder identity matrix)
+print "repeated_rebuild_and_release" as a line

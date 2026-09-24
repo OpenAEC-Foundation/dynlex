@@ -2,7 +2,7 @@
 
 `lib/cadkernel/acis_lower_geometry.dl` ports the bounded geometry-writing
 branch of pinned `src/acis/lower.rs`. It counts pending nodes and writes dirty
-planar faces, straight edges and vertices through their provenance record IDs.
+analytic faces, line/circle/ellipse edges and vertices through their provenance record IDs.
 It follows the topology record's geometry pointer and resolves the target by
 record ID, which may differ from its array position. Other document records
 and record metadata remain intact.
@@ -16,5 +16,6 @@ the same cases with the native compiler.
 python tests/cadkernel/acis_lower_geometry/verify.py --source PATH_TO_PINNED_KERNEL --codec PATH_TO_PINNED_CODEC
 ```
 
-This slice writes existing geometry records only. Other analytic and NURBS
-forms, newly synthesized topology, full lifting, and history remain open.
+The analytic extension is verified separately in
+`tests/cadkernel/acis_lower_analytic/README.md`. This slice writes existing
+geometry records only. NURBS forms and newly synthesized topology remain open.

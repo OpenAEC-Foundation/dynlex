@@ -88,22 +88,57 @@ local function lower cad acis face {cad face key:key} from {cad body:body} into 
         set surfaceNode to the cad node pointer for (faceNode's surface) in body
         if surfaceNode = (0 as a pointer to a cad surface):
             return a cad acis lower unsupported surface
-        if surfaceNode's kind != 0:
+        if surfaceNode's kind > 4:
             return a cad acis lower unsupported surface
-        set normal to the cad normal of (surfaceNode's plane)
+        set framed to the cad frame of (@intrinsic("dereference", surfaceNode))
+        if framed's valid = false:
+            return a cad acis lower unsupported surface
+        set frame to framed's value
+        set normal to the cad normal of frame
         if normal's valid = false:
             return a cad acis lower unsupported surface
+        set expectedKind to "plane-surface"
+        if (surfaceNode's kind = 1) or (surfaceNode's kind = 2):
+            set expectedKind to "cone-surface"
+        if surfaceNode's kind = 3:
+            set expectedKind to "sphere-surface"
+        if surfaceNode's kind = 4:
+            set expectedKind to "torus-surface"
         set targetSlot to the cad acis lower geometry slot for sourceId of type "face" at token 5 ordinal false in (@intrinsic("dereference", document))
         if targetSlot < 0:
             return a cad acis lower missing sourceId
         set destination to the cad acis lower record at targetSlot in (@intrinsic("dereference", document))
-        if destination's entityType != "plane-surface":
-            return a cad acis lower wrong record found (destination's entityType) expected "plane-surface"
+        if destination's entityType != expectedKind:
+            return a cad acis lower wrong record found (destination's entityType) expected expectedKind
         set replacement to the cad acis lower metadata of destination
         add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of replacement)
-        add cad sat token (the cad acis lower position of (surfaceNode's plane's origin)) to (the address of replacement)
-        add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
-        add cad sat token (the cad acis lower position of (surfaceNode's plane's xAxis)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (frame's origin)) to (the address of replacement)
+        if surfaceNode's kind = 0:
+            add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (frame's xAxis)) to (the address of replacement)
+        if (surfaceNode's kind = 1) or (surfaceNode's kind = 2):
+            set radius to surfaceNode's cylinder's radius
+            set halfAngle to 0.0
+            if surfaceNode's kind = 2:
+                set radius to surfaceNode's cone's radius
+                set halfAngle to surfaceNode's cone's halfAngle
+            add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (frame's xAxis scaled by radius)) to (the address of replacement)
+            add cad sat token (a cad sat float token of 1.0) to (the address of replacement)
+            add cad sat token (a cad sat ident token of "I") to (the address of replacement)
+            add cad sat token (a cad sat ident token of "I") to (the address of replacement)
+            add cad sat token (a cad sat float token of (the sine of (the negative of halfAngle))) to (the address of replacement)
+            add cad sat token (a cad sat float token of (the cosine of (the negative of halfAngle))) to (the address of replacement)
+            add cad sat token (a cad sat float token of radius) to (the address of replacement)
+        if surfaceNode's kind = 3:
+            add cad sat token (a cad sat float token of (surfaceNode's sphere's radius)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (frame's xAxis)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+        if surfaceNode's kind = 4:
+            add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+            add cad sat token (a cad sat float token of (surfaceNode's torus's majorRadius)) to (the address of replacement)
+            add cad sat token (a cad sat float token of (surfaceNode's torus's minorRadius)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (frame's xAxis)) to (the address of replacement)
         replace item at index targetSlot in document's records's values with replacement
         return a cad acis lower success with 1
 
@@ -116,18 +151,37 @@ local function lower cad acis edge {cad edge key:key} from {cad body:body} into 
         set curveNode to the cad node pointer for (edgeNode's curve) in body
         if curveNode = (0 as a pointer to a cad edge curve3):
             return a cad acis lower unsupported curve
-        if curveNode's kind != 0:
+        if curveNode's kind > 2:
             return a cad acis lower unsupported curve
+        set expectedKind to "straight-curve"
+        if curveNode's kind != 0:
+            set expectedKind to "ellipse-curve"
         set targetSlot to the cad acis lower geometry slot for sourceId of type "edge" at token 6 ordinal false in (@intrinsic("dereference", document))
         if targetSlot < 0:
             return a cad acis lower missing sourceId
         set destination to the cad acis lower record at targetSlot in (@intrinsic("dereference", document))
-        if destination's entityType != "straight-curve":
-            return a cad acis lower wrong record found (destination's entityType) expected "straight-curve"
+        if destination's entityType != expectedKind:
+            return a cad acis lower wrong record found (destination's entityType) expected expectedKind
         set replacement to the cad acis lower metadata of destination
         add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of replacement)
-        add cad sat token (the cad acis lower position of (curveNode's line's origin)) to (the address of replacement)
-        add cad sat token (the cad acis lower position of (curveNode's line's direction)) to (the address of replacement)
+        if curveNode's kind = 0:
+            add cad sat token (the cad acis lower position of (curveNode's line's origin)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (curveNode's line's direction)) to (the address of replacement)
+        else:
+            set frame to curveNode's circle's plane
+            set radius to curveNode's circle's radius
+            set ratio to 1.0
+            if curveNode's kind = 2:
+                set frame to curveNode's ellipse's plane
+                set radius to curveNode's ellipse's majorRadius
+                set ratio to (curveNode's ellipse's minorRadius) / radius
+            set normal to the cad normal of frame
+            if normal's valid = false:
+                return a cad acis lower unsupported curve
+            add cad sat token (the cad acis lower position of (frame's origin)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+            add cad sat token (the cad acis lower position of (frame's xAxis scaled by radius)) to (the address of replacement)
+            add cad sat token (a cad sat float token of ratio) to (the address of replacement)
         replace item at index targetSlot in document's records's values with replacement
         return a cad acis lower success with 1
 

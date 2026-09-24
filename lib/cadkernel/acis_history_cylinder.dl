@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: MPL-2.0
+# Cylinder creation path of cadkernel src/acis/history.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Scalars project SolidHistoryCylinder; matrix projects its base transform.
+# The matrix is borrowed and a successful result owns its B-rep body.
+import lib/cadkernel/acis_history_frames.dl
+import lib/cadkernel/brep_make.dl
+
+class:
+    patterns:
+        [a|] cad history cylinder body result
+    members:
+        valid as a boolean
+        value as a cad body
+        failure as an integer
+
+# 1 = InvalidTransform, 2 = InvalidParameters. Read value only if valid.
+local function the cad history cylinder refusal for {an integer:reason}:
+    execute:
+        set empty to no cad body
+        return @intrinsic("construct", a cad history cylinder body result, false, empty's value, reason)
+
+local function cad history cylinder {a 64 bit floating-point number:value} is positive finite:
+    execute:
+        return (value > 0.0) and ((the absolute value of value) <= (1.7976931348623157e308 as a 64 bit floating-point number))
+
+# The codec's x_radius is validated by Rust but does not enter the geometry.
+# Rust validates all three radii, builds the elliptical cylinder (which
+# validates height), parses placement, then applies the similarity transform.
+function the cad history rebuilt cylinder with major radius {a 64 bit floating-point number:majorRadius}, minor radius {a 64 bit floating-point number:minorRadius}, x radius {a 64 bit floating-point number:xRadius}, height {a 64 bit floating-point number:height} and transform {a pointer to a list:matrix}:
+    execute:
+        if (((cad history cylinder majorRadius is positive finite) and (cad history cylinder minorRadius is positive finite)) and (cad history cylinder xRadius is positive finite)) = false:
+            return the cad history cylinder refusal for 2
+        set created to the cad elliptical cylinder at (the cad zero vector3) with x radius majorRadius, y radius minorRadius and height height
+        if created's valid = false:
+            return the cad history cylinder refusal for 2
+        set parsed to the cad history placement of matrix
+        if parsed's valid = false:
+            return the cad history cylinder refusal for 1
+        set moved to the cad transformed (created's value) by (parsed's value)
+        if moved's valid = false:
+            return the cad history cylinder refusal for 1
+        return @intrinsic("construct", a cad history cylinder body result, true, moved's value, 0)

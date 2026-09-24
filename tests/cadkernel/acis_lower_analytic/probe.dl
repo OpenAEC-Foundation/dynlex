@@ -1,0 +1,286 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_lower_geometry.dl
+import lib/cadkernel/brep_make.dl
+
+function check acis lower {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function clean lower nodes in {cad body:body}:
+    execute:
+        set cleanMark to the clean cad provenance of (a cad source reference for (99 as a 32 bit unsigned integer))
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set node to the cad node pointer for (the item at index in faceKeys) in body
+            set node's provenance to cleanMark
+        free faceKeys
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set node to the cad node pointer for (the item at index in edgeKeys) in body
+            set node's provenance to cleanMark
+        free edgeKeys
+        set vertexKeys to the cad vertex keys of body
+        loop index from 0 to the length of vertexKeys:
+            set node to the cad node pointer for (the item at index in vertexKeys) in body
+            set node's provenance to cleanMark
+        free vertexKeys
+
+function the lower probe bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set rawValue to value
+        set rawWord to the value at ((the address of rawValue) as a pointer to a 64 bit unsigned integer)
+        set high to (rawWord shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to rawWord as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the lower probe token of {cad sat token:token}:
+    execute:
+        if token's kind = 1:
+            return (the string form of "p") + (the string form of (token's reference's index))
+        if token's kind = 3:
+            return (the string form of "f") + (the lower probe bits of (token's floatValue))
+        if token's kind = 5:
+            set result to (the string form of "v") + (the lower probe bits of (token's x))
+            set result to (result + (the string form of ",")) + (the lower probe bits of (token's y))
+            return (result + (the string form of ",")) + (the lower probe bits of (token's z))
+        if token's kind = 2:
+            return (the string form of "n") + (the string form of (token's integerValue as an integer))
+        if token's kind = 0:
+            return (the string form of "i") + (the string form of (token's text))
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function trace lower document {cad sat document:documentValue}:
+    execute:
+        loop slot from 0 to the length of documentValue's records's values:
+            set recordValue to the item at slot in documentValue's records's values
+            set lineValue to (the string form of slot) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's recordId))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's entityType))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's attribute's index))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's subtypeId))) + (the string form of ";")
+            if recordValue's hasRawText:
+                set lineValue to lineValue + (the string form of (recordValue's rawText))
+            else:
+                set lineValue to lineValue + (the string form of "-")
+            set lineValue to (lineValue + (the string form of ";")) + (the string form of (the length of recordValue's tokens's values))
+            loop tokenIndex from 0 to the length of recordValue's tokens's values:
+                set tokenValue to the item at tokenIndex in recordValue's tokens's values
+                set lineValue to (lineValue + (the string form of ";")) + (the lower probe token of tokenValue)
+            print lineValue as a line
+
+function a lower analytic document with surface {a string:surfaceKind} and curve {a string:curveKind}:
+    execute:
+        set documentValue to an empty cad sat document
+        set entry to a cad sat record numbered -1 of type "marker"
+        add cad sat token (a cad sat ident token of "unrelated") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 0)
+
+        set entry to a cad sat record numbered -1 of type "face"
+        loop index from 0 to 5:
+            add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 2)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "forward") to (the address of entry)
+        add cad sat token (a cad sat ident token of "single") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 1)
+
+        set entry to a cad sat record numbered -1 of type surfaceKind
+        set entry's attribute to a cad sat pointer to 0
+        set entry's subtypeId to 19
+        set entry's hasRawText to true
+        set entry's rawText to "raw-2"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "old-surface") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 2)
+
+        set entry to a cad sat record numbered -1 of type "edge"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat float token of 0.0) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat float token of 1.0) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 4)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "forward") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 3)
+
+        set entry to a cad sat record numbered -1 of type curveKind
+        set entry's attribute to a cad sat pointer to 0
+        set entry's subtypeId to 21
+        set entry's hasRawText to true
+        set entry's rawText to "raw-4"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "old-curve") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 4)
+
+        set entry to a cad sat record numbered -1 of type surfaceKind
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "other-surface") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 5)
+        set entry to a cad sat record numbered -1 of type curveKind
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "other-curve") to (the address of entry)
+        check acis lower ((add cad sat record entry to (the address of documentValue)) = 6)
+
+        set firstRecord to the item at 0 in documentValue's records's values
+        set secondRecord to the item at 4 in documentValue's records's values
+        replace item at index 0 in documentValue's records's values with secondRecord
+        replace item at index 4 in documentValue's records's values with firstRecord
+        set firstRecord to the item at 1 in documentValue's records's values
+        set secondRecord to the item at 6 in documentValue's records's values
+        replace item at index 1 in documentValue's records's values with secondRecord
+        replace item at index 6 in documentValue's records's values with firstRecord
+        set firstRecord to the item at 2 in documentValue's records's values
+        set secondRecord to the item at 3 in documentValue's records's values
+        replace item at index 2 in documentValue's records's values with secondRecord
+        replace item at index 3 in documentValue's records's values with firstRecord
+        check acis lower (((the item at 0 in documentValue's records's values)'s recordId) = 4)
+        check acis lower (((the item at 3 in documentValue's records's values)'s recordId) = 2)
+        return documentValue
+
+function make analytic surface sample from {cad surface:shape}:
+    execute:
+        set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 2.0 and z 3.0)
+        check acis lower (made's valid)
+        set body to made's value
+        clean lower nodes in body
+        set keys to the cad face keys of body
+        set faceNode to the cad node pointer for (the item at 0 in keys) in body
+        set faceNode's provenance to the dirty cad provenance of (a cad source reference for (1 as a 32 bit unsigned integer))
+        replace cad node (faceNode's surface) in body with shape
+        free keys
+        return body
+
+function make analytic curve sample from {cad edge curve3:shape}:
+    execute:
+        set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 2.0 and z 3.0)
+        check acis lower (made's valid)
+        set body to made's value
+        clean lower nodes in body
+        set keys to the cad edge keys of body
+        set edgeNode to the cad node pointer for (the item at 0 in keys) in body
+        set edgeNode's provenance to the dirty cad provenance of (a cad source reference for (3 as a 32 bit unsigned integer))
+        replace cad node (edgeNode's curve) in body with shape
+        free keys
+        return body
+
+function check lower analytic surface {cad surface:shape} of type {a string:kind} as {a string:label}:
+    execute:
+        set body to make analytic surface sample from shape
+        set documentValue to a lower analytic document with surface kind and curve "straight-curve"
+        check acis lower ((the pending cad acis geometry of body) = 1)
+        set outcome to lower cad acis geometry of body into (the address of documentValue)
+        check acis lower (outcome's valid)
+        check acis lower (outcome's written = 1)
+        set target to (the cad sat record numbered 2 in documentValue)'s value
+        check acis lower (target's attribute's index = 0)
+        check acis lower (target's subtypeId = 19)
+        check acis lower (target's rawText = "raw-2")
+        set other to (the cad sat record numbered 5 in documentValue)'s value
+        check acis lower (((the cad sat token at 1 in other)'s value's text) = "other-surface")
+        set owner to (the cad sat record numbered 1 in documentValue)'s value
+        check acis lower (((the cad sat pointer token at 5 in owner)'s value's index) = 2)
+        print ((the string form of "case;") + label) as a line
+        trace lower document documentValue
+
+function check lower analytic curve {cad edge curve3:shape} of type {a string:kind} as {a string:label}:
+    execute:
+        set body to make analytic curve sample from shape
+        set documentValue to a lower analytic document with surface "plane-surface" and curve kind
+        check acis lower ((the pending cad acis geometry of body) = 1)
+        set outcome to lower cad acis geometry of body into (the address of documentValue)
+        check acis lower (outcome's valid)
+        check acis lower (outcome's written = 1)
+        set target to (the cad sat record numbered 4 in documentValue)'s value
+        check acis lower (target's attribute's index = 0)
+        check acis lower (target's subtypeId = 21)
+        check acis lower (target's rawText = "raw-4")
+        set other to (the cad sat record numbered 6 in documentValue)'s value
+        check acis lower (((the cad sat token at 1 in other)'s value's text) = "other-curve")
+        set owner to (the cad sat record numbered 3 in documentValue)'s value
+        check acis lower (((the cad sat pointer token at 6 in owner)'s value's index) = 4)
+        print ((the string form of "case;") + label) as a line
+        trace lower document documentValue
+
+set frame to a cad plane with origin (a cad vector3 with x 1.0, y 2.0 and z 3.0), x axis (a cad vector3 with x 0.0, y 1.0 and z 0.0) and y axis (a cad vector3 with x -1.0, y 0.0 and z 0.0)
+check lower analytic surface (the cad surface of (a cad cylinder with base frame and radius 2.5)) of type "cone-surface" as "cylinder"
+check lower analytic surface (the cad surface of (a cad cone with base frame, radius 3.0 and half angle 0.3)) of type "cone-surface" as "cone"
+check lower analytic surface (the cad surface of (a cad sphere with frame frame and radius 2.25)) of type "sphere-surface" as "sphere"
+check lower analytic surface (the cad surface of (a cad torus with frame frame, major radius 4.0 and minor radius 1.25)) of type "torus-surface" as "torus"
+check lower analytic curve (the cad edge curve3 of (a cad circle3 with plane frame and radius 2.5)) of type "ellipse-curve" as "circle"
+check lower analytic curve (the cad edge curve3 of (a cad ellipse3 with plane frame, major radius 3.0 and minor radius 1.5)) of type "ellipse-curve" as "ellipse"
+
+set sphereBody to make analytic surface sample from (the cad surface of (a cad sphere with frame frame and radius 2.25))
+set wrongSurface to a lower analytic document with surface "sphere-surface" and curve "straight-curve"
+set changed to the cad sat clone of (the item at 3 in wrongSurface's records's values)
+set changed's entityType to "torus-surface"
+replace item at index 3 in wrongSurface's records's values with changed
+set outcome to lower cad acis geometry of sphereBody into (the address of wrongSurface)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 2)
+check acis lower (outcome's found = "torus-surface")
+check acis lower (outcome's expected = "sphere-surface")
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 2 in wrongSurface)'s value))'s value's text) = "old-surface")
+print "wrong_surface;torus-surface;sphere-surface" as a line
+
+set circleBody to make analytic curve sample from (the cad edge curve3 of (a cad circle3 with plane frame and radius 2.5))
+set wrongCurve to a lower analytic document with surface "plane-surface" and curve "ellipse-curve"
+set changed to the cad sat clone of (the item at 0 in wrongCurve's records's values)
+set changed's entityType to "straight-curve"
+replace item at index 0 in wrongCurve's records's values with changed
+set outcome to lower cad acis geometry of circleBody into (the address of wrongCurve)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 2)
+check acis lower (outcome's found = "straight-curve")
+check acis lower (outcome's expected = "ellipse-curve")
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 4 in wrongCurve)'s value))'s value's text) = "old-curve")
+print "wrong_curve;straight-curve;ellipse-curve" as a line
+
+set wrongOwner to a lower analytic document with surface "sphere-surface" and curve "straight-curve"
+set changed to the cad sat clone of (the item at 6 in wrongOwner's records's values)
+set changed's entityType to "edge"
+replace item at index 6 in wrongOwner's records's values with changed
+set outcome to lower cad acis geometry of sphereBody into (the address of wrongOwner)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 1)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 2 in wrongOwner)'s value))'s value's text) = "old-surface")
+print "wrong_owner;1" as a line
+
+set wrongCurveOwner to a lower analytic document with surface "plane-surface" and curve "ellipse-curve"
+set changed to the cad sat clone of (the item at 2 in wrongCurveOwner's records's values)
+set changed's entityType to "face"
+replace item at index 2 in wrongCurveOwner's records's values with changed
+set outcome to lower cad acis geometry of circleBody into (the address of wrongCurveOwner)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 3)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 4 in wrongCurveOwner)'s value))'s value's text) = "old-curve")
+print "wrong_curve_owner;3" as a line
+
+set missingTarget to a lower analytic document with surface "sphere-surface" and curve "straight-curve"
+set changed to the cad sat clone of (the item at 6 in missingTarget's records's values)
+replace item at index 5 in changed's tokens's values with (a cad sat pointer token for (a cad sat pointer to 999))
+replace item at index 6 in missingTarget's records's values with changed
+set outcome to lower cad acis geometry of sphereBody into (the address of missingTarget)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 1)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 2 in missingTarget)'s value))'s value's text) = "old-surface")
+print "missing_target;1" as a line
+
+set missingBody to make analytic surface sample from (the cad surface of (a cad sphere with frame frame and radius 2.25))
+set faceKeys to the cad face keys of missingBody
+set faceNode to the cad node pointer for (the item at 0 in faceKeys) in missingBody
+set faceNode's provenance to the dirty cad provenance of (a cad source reference for (999 as a 32 bit unsigned integer))
+free faceKeys
+set missingSource to a lower analytic document with surface "sphere-surface" and curve "straight-curve"
+set outcome to lower cad acis geometry of missingBody into (the address of missingSource)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 999)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 2 in missingSource)'s value))'s value's text) = "old-surface")
+print "missing_source;999" as a line
