@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_frames.dl
+
+function check history {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function history vector {cad vector3:first} equals {cad vector3:second}:
+    execute:
+        return ((first's x = second's x) and (first's y = second's y)) and (first's z = second's z)
+
+function a history identity transform:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        append 1.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 1.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 1.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 0.0 to values
+        append 1.0 to values
+        return values
+
+set matrix to a history identity transform
+set parsed to the cad history placement of matrix
+check history parsed's valid
+check history (parsed's failure = 0)
+check history (parsed's value = the cad identity placement)
+print "placement_identity" as a line
+
+replace item at index 3 in matrix with 2e-9
+check history (parsed's value = the cad identity placement)
+set refused to the cad history placement of matrix
+check history (refused's valid = false)
+check history (refused's failure = 1)
+print "placement_refuses_bad_homogeneous_column" as a line
+free matrix
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+check history ((the cad history placement of shortMatrix)'s valid = false)
+free shortMatrix
+
+set frame to the cad history ocs plane with normal (the cad z axis) and elevation 4.0
+check history frame's valid
+check history ((frame's value's origin's z) = 4.0)
+set emptyFrame to the cad history ocs plane with normal (the cad zero vector3) and elevation 4.0
+check history (emptyFrame's valid = false)
+check history (emptyFrame's failure = 2)
+print "ocs_axis_and_zero_refusal" as a line
+
+set start to a cad vector3 with x 1.0, y 2.0 and z 3.0
+set end to a cad vector3 with x 4.0, y 6.0 and z 3.0
+set lineResult to the cad history straight curve from start to end
+check history lineResult's valid
+check history (history vector (the cad point on lineResult's value at 0.0) equals start)
+check history (history vector (the cad point on lineResult's value at 1.0) equals end)
+set short to the cad history straight curve from start to start
+check history (short's valid = false)
+check history (short's failure = 2)
+print "straight_curve_and_short_refusal" as a line
+
+set outer to a cad placement at (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+set inner to a cad placement at (a cad vector3 with x 0.0, y 7.0 and z 0.0)
+set combined to the cad history composition of outer and inner
+check history (history vector combined's origin equals (a cad vector3 with x 5.0, y 7.0 and z 0.0))
+set matrix to a history identity transform
+replace item at index 12 in matrix with 5.0
+set placed to the cad history placed curve lineResult's value by matrix
+check history placed's valid
+check history (placed's failure = 0)
+check history (history vector (the cad point on placed's value at 0.0) equals (a cad vector3 with x 6.0, y 2.0 and z 3.0))
+replace item at index 4 in matrix with 0.25
+set sheared to the cad history placed curve lineResult's value by matrix
+check history (sheared's valid = false)
+check history (sheared's failure = 1)
+free matrix
+print "composition_and_curve_placement" as a line
+
+set vertices to an empty list of a cad polyline vertex2
+append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 0.0)) to vertices
+append (a straight cad polyline vertex2 at (a cad vector2 with x 2.0 and y 0.0)) to vertices
+set path to the cad polyline2 with vertices vertices and closure false
+free vertices
+set source to a cad planar curve3 of (the cad curve2 of path) on (the cad xy plane)
+free cad polyline path
+set matrix to a history identity transform
+replace item at index 12 in matrix with 5.0
+set moved to the cad history placed curve source by matrix
+check history moved's valid
+check history (source's plane's origin's x = 0.0)
+set retained to moved's value
+set moved to the cad history straight curve from (the cad zero vector3) to (the cad zero vector3)
+free cad planar curve source
+check history ((the length of retained's curve's polyline's vertices) = 2)
+set cloned to the cad clone of retained
+free cad planar curve retained
+check history ((the length of cloned's curve's polyline's vertices) = 2)
+loop cycle from 0 to 100:
+    set borrowed to the cad history placed curve cloned by matrix
+    check history borrowed's valid
+    check history ((the length of borrowed's value's curve's polyline's vertices) = 2)
+free cad planar curve cloned
+free matrix
+print "ownership_and_borrowed_inputs" as a line

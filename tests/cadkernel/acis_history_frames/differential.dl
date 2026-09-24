@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_frames.dl
+
+function history argument {integer:index}:
+    execute:
+        set raw to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of raw, 0 as a pointer)
+
+function history matrix starting {integer:offset}:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        loop cursor from 0 to 16:
+            append (history argument (offset + cursor)) to values
+        return values
+
+function history bits {a 64 bit floating-point number:value}:
+    execute:
+        if value != value:
+            return the string form of "nan"
+        if value = 0.0:
+            return the string form of "0:0"
+        set raw to value
+        set word to the value at ((the address of raw) as a pointer to a 64 bit unsigned integer)
+        set high to (word shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to word as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function history vector {cad vector3:value}:
+    execute:
+        set result to (history bits value's x) + (the string form of ",")
+        set result to (result + (history bits value's y)) + (the string form of ",")
+        return result + (history bits value's z)
+
+function history vector2 {cad vector2:value}:
+    execute:
+        set result to (history bits value's x) + (the string form of ",")
+        return result + (history bits value's y)
+
+function history placement trace {cad placement:value}:
+    execute:
+        set result to (history vector value's xAxis) + (the string form of "|")
+        set result to (result + (history vector value's yAxis)) + (the string form of "|")
+        set result to (result + (history vector value's zAxis)) + (the string form of "|")
+        return result + (history vector value's origin)
+
+function history plane trace {cad plane:value}:
+    execute:
+        set result to (history vector value's origin) + (the string form of "|")
+        set result to (result + (history vector value's xAxis)) + (the string form of "|")
+        return result + (history vector value's yAxis)
+
+function history curve trace {cad planar curve3:value}:
+    execute:
+        set result to (history plane trace value's plane) + (the string form of "|")
+        set result to (result + (history vector2 value's curve's line's start)) + (the string form of "|")
+        return result + (history vector2 value's curve's line's end)
+
+function history failure {an integer:code}:
+    execute:
+        if code = 1:
+            return the string form of "invalid-transform"
+        return the string form of "invalid-parameters"
+
+set mode to the argument at 0 in the command line arguments
+if mode = "placement":
+    set matrix to history matrix starting 1
+    set result to the cad history placement of matrix
+    if result's valid:
+        print (history placement trace result's value) as a line
+    else:
+        print (history failure result's failure) as a line
+    free matrix
+else if mode = "compose":
+    set first to history matrix starting 1
+    set second to history matrix starting 17
+    set outer to the cad history placement of first
+    set inner to the cad history placement of second
+    if outer's valid and inner's valid:
+        print (history placement trace (the cad history composition of outer's value and inner's value)) as a line
+    else:
+        print "invalid-transform" as a line
+    free first
+    free second
+else if mode = "ocs":
+    set normal to a cad vector3 with x (history argument 1), y (history argument 2) and z (history argument 3)
+    set frame to the cad history ocs plane with normal normal and elevation (history argument 4)
+    if frame's valid:
+        print (history plane trace frame's value) as a line
+    else:
+        print (history failure frame's failure) as a line
+else if mode = "straight":
+    set first to a cad vector3 with x (history argument 1), y (history argument 2) and z (history argument 3)
+    set second to a cad vector3 with x (history argument 4), y (history argument 5) and z (history argument 6)
+    set result to the cad history straight curve from first to second
+    if result's valid:
+        print (history curve trace result's value) as a line
+    else:
+        print (history failure result's failure) as a line
+else if mode = "placed":
+    set matrix to history matrix starting 1
+    set first to a cad vector3 with x 1.0, y 2.0 and z 3.0
+    set second to a cad vector3 with x 4.0, y 6.0 and z 3.0
+    set base to the cad history straight curve from first to second
+    set result to the cad history placed curve base's value by matrix
+    if result's valid:
+        print (history curve trace result's value) as a line
+    else:
+        print (history failure result's failure) as a line
+    free matrix

@@ -1,0 +1,145 @@
+# SPDX-License-Identifier: MPL-2.0
+# Frame preparation from cadkernel src/acis/history.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The input matrix and curves are borrowed. Results own their managed curves.
+import lib/cadkernel/brep_place.dl
+import lib/cadkernel/planar3.dl
+
+class:
+    patterns:
+        [a|] cad history placement result
+    members:
+        valid as a boolean
+        value as a cad placement
+        failure as an integer
+
+class:
+    patterns:
+        [a|] cad history plane result
+    members:
+        valid as a boolean
+        value as a cad plane
+        failure as an integer
+
+class:
+    patterns:
+        [a|] cad history curve result
+    members:
+        valid as a boolean
+        value as a cad planar curve3
+        failure as an integer
+
+local function the cad history invalid placement:
+    execute:
+        return @intrinsic("construct", a cad history placement result, false, the cad identity placement, 1)
+
+local function the cad history invalid plane:
+    execute:
+        return @intrinsic("construct", a cad history plane result, false, the cad xy plane, 2)
+
+local function the cad history invalid curve for {an integer:reason}:
+    execute:
+        set zero to the cad zero vector2
+        set placeholder to a cad planar curve3 of (the cad curve2 of (a cad line2 from zero to zero)) on (the cad xy plane)
+        return @intrinsic("construct", a cad history curve result, false, placeholder, reason)
+
+local function cad history {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (the absolute value of value) <= (1.7976931348623157e308 as a 64 bit floating-point number)
+
+# Source placement() reads the axes as columns and only checks the affine
+# homogeneous column. Similarity is checked later by placed_curve().
+function the cad history placement of {a pointer to a list:matrix}:
+    execute:
+        if (the length of matrix) != 16:
+            return the cad history invalid placement
+        loop index from 0 to 16:
+            if (cad history (the item at index in matrix) is finite) = false:
+                return the cad history invalid placement
+        set tolerance to 1e-9 as a 64 bit floating-point number
+        if (the absolute value of (the item at 3 in matrix)) > tolerance:
+            return the cad history invalid placement
+        if (the absolute value of (the item at 7 in matrix)) > tolerance:
+            return the cad history invalid placement
+        if (the absolute value of (the item at 11 in matrix)) > tolerance:
+            return the cad history invalid placement
+        if (the absolute value of ((the item at 15 in matrix) - 1.0)) > tolerance:
+            return the cad history invalid placement
+        set xAxis to a cad vector3 with x (the item at 0 in matrix), y (the item at 1 in matrix) and z (the item at 2 in matrix)
+        set yAxis to a cad vector3 with x (the item at 4 in matrix), y (the item at 5 in matrix) and z (the item at 6 in matrix)
+        set zAxis to a cad vector3 with x (the item at 8 in matrix), y (the item at 9 in matrix) and z (the item at 10 in matrix)
+        set origin to a cad vector3 with x (the item at 12 in matrix), y (the item at 13 in matrix) and z (the item at 14 in matrix)
+        set place to a cad placement with axes xAxis, yAxis and zAxis at origin
+        return @intrinsic("construct", a cad history placement result, true, place, 0)
+
+# Same order as compose_placements(): outer.point(inner.origin), then
+# outer.vector() for each of the inner axes.
+function the cad history composition of {cad placement:outer} and {cad placement:inner}:
+    execute:
+        set origin to the cad image of (inner's origin) under outer
+        set xAxis to the cad direction of (inner's xAxis) under outer
+        set yAxis to the cad direction of (inner's yAxis) under outer
+        set zAxis to the cad direction of (inner's zAxis) under outer
+        return a cad placement with axes xAxis, yAxis and zAxis at origin
+
+# The source normalizes through the spatial Vec3 first, then its codec's
+# arbitrary-axis algorithm normalizes again and chooses Y near world Z.
+function the cad history ocs [plane] with [normal] {cad vector3:inputNormal} and elevation {a 64 bit floating-point number:elevation}:
+    execute:
+        set first to the cad normalization of inputNormal
+        if first's valid = false:
+            return the cad history invalid plane
+        set second to the cad normalization of first's value
+        set normal to second's value
+        set referenceAxis to the cad z axis
+        set threshold to (1.0 / 64.0) as a 64 bit floating-point number
+        if ((the absolute value of normal's x) < threshold) and ((the absolute value of normal's y) < threshold):
+            set referenceAxis to the cad y axis
+        set xResult to the cad normalization of (the cad cross of referenceAxis and normal)
+        set yResult to the cad normalization of (the cad cross of normal and xResult's value)
+        set origin to normal scaled by elevation
+        set plane to a cad plane with origin origin, x axis xResult's value and y axis yResult's value
+        return @intrinsic("construct", a cad history plane result, true, plane, 0)
+
+function the cad history straight [curve] from {cad vector3:start} to {cad vector3:end}:
+    execute:
+        set direction to the cad difference of end and start
+        if (the cad squared length of direction) <= (1e-24 as a 64 bit floating-point number):
+            return the cad history invalid curve for 2
+        set extent to the cad length of direction
+        # Rust f64::max(1.0) chooses 1.0 when the length is NaN.
+        if (extent != extent) or (extent < 1.0):
+            set extent to 1.0 as a 64 bit floating-point number
+        set plane to the cad xy plane
+        if (the absolute value of (end's z - start's z)) <= ((1e-9 as a 64 bit floating-point number) * extent):
+            set plane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z start's z), x axis (the cad x axis) and y axis (the cad y axis)
+        else:
+            set transverse to the cad normalization of (the cad cross of direction and (the cad z axis))
+            set normal to the cad y axis
+            if transverse's valid:
+                set normal to transverse's value
+            set squared to the cad orthonormal plane with origin start, x axis direction and normal normal
+            if squared's valid = false:
+                return the cad history invalid curve for 2
+            set plane to squared's value
+        set first to the cad projection of start onto plane
+        set last to the cad projection of end onto plane
+        if (first's valid = false) or (last's valid = false):
+            return the cad history invalid curve for 2
+        set line to a cad line2 from first's value to last's value
+        set curve to a cad planar curve3 of (the cad curve2 of line) on plane
+        return @intrinsic("construct", a cad history curve result, true, curve, 0)
+
+function the cad history placed [curve] {cad planar curve3:source} by {a pointer to a list:matrix}:
+    execute:
+        set parsed to the cad history placement of matrix
+        if parsed's valid = false:
+            return the cad history invalid curve for 1
+        set place to parsed's value
+        set scale to the cad scale of place
+        if scale's valid = false:
+            return the cad history invalid curve for 1
+        set original to source's plane
+        set frame to a cad plane with origin (the cad image of original's origin under place), x axis (the cad direction of original's xAxis under place) and y axis (the cad direction of original's yAxis under place)
+        set curve to a cad planar curve3 of source's curve on frame
+        return @intrinsic("construct", a cad history curve result, true, curve, 0)

@@ -1,0 +1,6 @@
+placement_identity
+placement_refuses_bad_homogeneous_column
+ocs_axis_and_zero_refusal
+straight_curve_and_short_refusal
+composition_and_curve_placement
+ownership_and_borrowed_inputs
