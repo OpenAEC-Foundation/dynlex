@@ -235,6 +235,20 @@ static bool surface_usable(DynlexGraphics *graphics, VkPhysicalDevice device) {
 		   format_count > 0 && mode_count > 0;
 }
 
+static bool graphics_queue_supports_compute(VkPhysicalDevice device, uint32_t family_index) {
+	uint32_t count = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, NULL);
+	if (family_index >= count)
+		return false;
+	VkQueueFamilyProperties *families = calloc(count, sizeof(*families));
+	if (families == NULL)
+		return false;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families);
+	bool supported = family_index < count && (families[family_index].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+	free(families);
+	return supported;
+}
+
 static bool create_device(DynlexGraphics *graphics) {
 	uint32_t count = 0;
 	VkResult result = vkEnumeratePhysicalDevices(graphics->instance, &count, NULL);
@@ -299,12 +313,18 @@ static bool create_device(DynlexGraphics *graphics) {
 		queues[1].queueFamilyIndex = graphics->present_queue_family;
 	}
 	const char *extensions[2] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset"};
+	VkPhysicalDeviceFeatures supported_features;
+	vkGetPhysicalDeviceFeatures(graphics->physical_device, &supported_features);
+	VkPhysicalDeviceFeatures enabled_features = {0};
+	if (graphics_queue_supports_compute(graphics->physical_device, graphics->graphics_queue_family))
+		enabled_features.shaderFloat64 = supported_features.shaderFloat64;
 	VkDeviceCreateInfo device_info = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.queueCreateInfoCount = queue_count,
 		.pQueueCreateInfos = queues,
 		.enabledExtensionCount = selected_portability ? 2u : 1u,
 		.ppEnabledExtensionNames = extensions,
+		.pEnabledFeatures = &enabled_features,
 	};
 	result = vkCreateDevice(graphics->physical_device, &device_info, NULL, &graphics->device);
 	if (result != VK_SUCCESS) {
@@ -312,6 +332,7 @@ static bool create_device(DynlexGraphics *graphics) {
 		return false;
 	}
 	graphics->portability_enabled = selected_portability;
+	graphics->compute_float64_enabled = enabled_features.shaderFloat64 == VK_TRUE;
 	vkGetPhysicalDeviceProperties(graphics->physical_device, &graphics->physical_properties);
 	vkGetDeviceQueue(graphics->device, graphics->graphics_queue_family, 0, &graphics->graphics_queue);
 	vkGetDeviceQueue(graphics->device, graphics->present_queue_family, 0, &graphics->present_queue);

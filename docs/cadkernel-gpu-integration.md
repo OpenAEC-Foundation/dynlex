@@ -16,3 +16,6 @@ one triangle batch through the runtime's persistently mapped per-frame upload
 buffer, with Vulkan depth testing and interpolated vertex color. A fair language
 comparison still needs an equivalent Rust renderer, identical shaders and mesh
 buffers, GPU timestamp queries, warm-up frames and the same device selection.
+
+The planned compute path and correctness checks are in
+[GPU geometry path](cadkernel-gpu-geometry.md).

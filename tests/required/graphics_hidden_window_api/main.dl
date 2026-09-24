@@ -12,10 +12,12 @@ if false:
 	set {visible window} to a new window with width 1 and height 1
 	set version to the Vulkan API version of visible window
 	set portability to Vulkan portability is enabled for visible window
+	set compute64 to Vulkan 64 bit compute is available for visible window
 	set device to the graphics device name of visible window
 	set {graphics error} to the current graphics error message
 	ignore version
 	ignore portability
+	ignore compute64
 	ignore device
 	ignore graphics error
 	set {fullscreen window} to a new fullscreen window

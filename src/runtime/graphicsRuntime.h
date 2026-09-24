@@ -41,6 +41,7 @@ size_t dynlex_graphics_error_message(char *buffer, size_t capacity);
 
 uint32_t dynlex_graphics_api_version(const DynlexGraphics *graphics);
 int32_t dynlex_graphics_portability_enabled(const DynlexGraphics *graphics);
+int32_t dynlex_graphics_compute_float64_available(const DynlexGraphics *graphics);
 size_t dynlex_graphics_device_name(const DynlexGraphics *graphics, char *buffer, size_t capacity);
 
 int32_t dynlex_graphics_set_orthographic_projection(

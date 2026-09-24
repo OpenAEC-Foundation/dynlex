@@ -356,6 +356,10 @@ uint32_t dynlex_graphics_api_version(const DynlexGraphics *graphics) { return gr
 
 int32_t dynlex_graphics_portability_enabled(const DynlexGraphics *graphics) { return graphics->portability_enabled; }
 
+int32_t dynlex_graphics_compute_float64_available(const DynlexGraphics *graphics) {
+	return graphics != NULL && graphics->compute_float64_enabled;
+}
+
 size_t dynlex_graphics_device_name(const DynlexGraphics *graphics, char *buffer, size_t capacity) {
 	size_t length = strlen(graphics->physical_properties.deviceName);
 	if (buffer != NULL && capacity > 0) {

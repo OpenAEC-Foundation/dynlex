@@ -262,6 +262,10 @@ function Vulkan portability is enabled for {pointer:window}:
 	execute:
 		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_portability_enabled", an integer, window) != 0
 
+function Vulkan 64 bit compute is available for {pointer:window}:
+	execute:
+		return @intrinsic("call", "dynlex_graphics", "dynlex_graphics_compute_float64_available", an integer, window) != 0
+
 function the graphics device name of {pointer:window}:
 	execute:
 		set length to @intrinsic("call", "dynlex_graphics", "dynlex_graphics_device_name", a word sized integer, window, 0 as a pointer to a byte, 0 as a word sized integer)
