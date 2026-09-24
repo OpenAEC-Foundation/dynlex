@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: MPL-2.0
 # In-memory faceted SAT lift from the pinned src/acis/lift.rs.
-# This slice accepts planar and ring-torus faces, straight and circular edges,
-# and closed coedge rings. Circular edges with distinct endpoints remain outside
-# this slice because periodic parameter reconciliation is not implemented here.
+# This slice accepts planar, cylindrical and ring-torus faces, straight and
+# circular edges, and closed coedge rings. Circular edges with distinct
+# endpoints remain outside this slice because periodic parameter reconciliation
+# is not implemented here.
 # It refuses unsupported or malformed records instead of returning a partial body.
 import lib/cadkernel/acis_records.dl
 import lib/cadkernel/brep_topology.dl
@@ -214,19 +215,35 @@ local function the cad acis faceted surface at {cad sat pointer:reference} in {a
                 return absent
             set surfaceValue to the cad surface of frame's value
         else:
-            if record's entityType != "torus-surface":
-                cad acis faceted lift failure 4 at id in state
-                return absent
-            set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
-            set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
-            set majorRadius to the cad acis faceted lift float at 7 in record or 1.0
-            set minorRadius to the cad acis faceted lift float at 8 in record or 0.5
-            set uAxis to the cad acis faceted lift vector at 9 in record or (the cad x axis)
-            set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
-            if frame's valid = false:
-                cad acis faceted lift failure 4 at id in state
-                return absent
-            set surfaceValue to the cad surface of (a cad torus with frame frame's value, major radius majorRadius and minor radius minorRadius)
+            if record's entityType = "torus-surface":
+                set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+                set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+                set majorRadius to the cad acis faceted lift float at 7 in record or 1.0
+                set minorRadius to the cad acis faceted lift float at 8 in record or 0.5
+                set uAxis to the cad acis faceted lift vector at 9 in record or (the cad x axis)
+                set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
+                if frame's valid = false:
+                    cad acis faceted lift failure 4 at id in state
+                    return absent
+                set surfaceValue to the cad surface of (a cad torus with frame frame's value, major radius majorRadius and minor radius minorRadius)
+            else:
+                if record's entityType != "cone-surface":
+                    cad acis faceted lift failure 4 at id in state
+                    return absent
+                set sine to the cad acis faceted lift float at 13 in record or 0.0
+                set isCylinder to (the absolute value of sine) < 1e-12
+                if isCylinder = false:
+                    cad acis faceted lift failure 4 at id in state
+                    return absent
+                set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+                set axis to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+                set majorAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
+                set radius to the cad length of majorAxis
+                set base to the cad orthonormal plane with origin origin, x axis majorAxis and normal axis
+                if base's valid = false:
+                    cad acis faceted lift failure 4 at id in state
+                    return absent
+                set surfaceValue to the cad surface of (a cad cylinder with base base's value and radius radius)
         set key to the cad body key after inserting surfaceValue into state's body
         append (@intrinsic("construct", a cad acis faceted seen surface, id, key)) to state's surfaces's values
         return @intrinsic("construct", a cad acis faceted surface result, true, key)
@@ -392,6 +409,8 @@ local function cad acis faceted lift faces of {cad sat record:shellRecord} into 
             set sensePosition to 10
             if surfaceRecord's value's entityType = "torus-surface":
                 set sensePosition to 12
+            if surfaceRecord's value's entityType = "cone-surface":
+                set sensePosition to 16
             set reversedSurface to (the cad sat sense at sensePosition in surfaceRecord's value)'s reversed
             set forward to ((the cad sat sense at 6 in record)'s reversed = false) != reversedSurface
             set surfaceKey to surfaceResult's value
