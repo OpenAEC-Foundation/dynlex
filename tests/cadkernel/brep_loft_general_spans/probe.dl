@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_spans.dl
+
+function loft general probe argument {integer:index}:
+    execute:
+        set raw to the argument at index in the command line arguments
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of raw, 0 as a pointer)
+
+function loft general probe emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+set cursor to 0
+set degree to (loft general probe argument cursor) as an integer
+increment cursor
+set count to (loft general probe argument cursor) as an integer
+increment cursor
+set points to an empty list of a cad vector3
+loop index from 0 to count:
+    append (a cad vector3 with x (loft general probe argument cursor), y (loft general probe argument (cursor + 1)) and z (loft general probe argument (cursor + 2))) to points
+    set cursor to cursor + 3
+set count to (loft general probe argument cursor) as an integer
+increment cursor
+set knots to an empty list of a 64 bit floating-point number
+loop index from 0 to count:
+    append (loft general probe argument cursor) to knots
+    increment cursor
+set count to (loft general probe argument cursor) as an integer
+increment cursor
+set weights to an empty list of a 64 bit floating-point number
+loop index from 0 to count:
+    append (loft general probe argument cursor) to weights
+    increment cursor
+set curve to the cad rational curve3 of degree degree with controls points, knots knots and weights weights
+free points
+free knots
+free weights
+set result to the cad loft general decomposition of curve
+loft general probe emit (result's valid as an integer)
+loft general probe emit result's errorCode
+loft general probe emit (the length of result's spans's values)
+if result's valid:
+    loop index from 0 to the length of result's spans's values:
+        set span to the item at index in result's spans's values
+        loft general probe emit span's start
+        loft general probe emit span's end
+        loft general probe emit (the length of span's controls's values)
+        loop column from 0 to the length of span's controls's values:
+            set point to the item at column in span's controls's values
+            loft general probe emit point's x
+            loft general probe emit point's y
+            loft general probe emit point's z
+            loft general probe emit point's w

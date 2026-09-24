@@ -1,0 +1,113 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_spans.dl
+
+function check loft general {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function loft general sample:
+    execute:
+        set points to a list containing (a cad vector3 with x 0.0, y 0.0 and z 0.0)
+        append (a cad vector3 with x 1.0, y 2.0 and z 0.0) to points
+        append (a cad vector3 with x 2.0, y 0.0 and z 0.0) to points
+        set knots to a list containing 0.0
+        append 0.0 to knots
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing 1.0
+        append 0.5 to weights
+        append 1.0 to weights
+        set curve to the cad rational curve3 of degree 2 with controls points, knots knots and weights weights
+        replace item at index 1 in points with (a cad vector3 with x 100.0, y 100.0 and z 100.0)
+        replace item at index 1 in weights with 100.0
+        free points
+        free knots
+        free weights
+        set result to the cad loft general decomposition of curve
+        free cad rational curve
+        return result
+
+set sample to loft general sample
+check loft general (sample's valid)
+check loft general ((the length of sample's spans's values) = 1)
+set piece to the item at 0 in sample's spans's values
+check loft general ((piece's start = 0.0) and (piece's end = 1.0))
+check loft general ((the length of piece's controls's values) = 3)
+set middle to the item at 1 in piece's controls's values
+check loft general (((middle's x = 0.5) and (middle's y = 1.0)) and (middle's w = 0.5))
+print "weighted_bezier_controls_are_homogeneous_and_independent" as a line
+
+set points to a list containing (a cad vector3 with x 0.0, y 0.0 and z 0.0)
+append (a cad vector3 with x 1.0, y 2.0 and z 0.0) to points
+append (a cad vector3 with x 2.0, y 2.0 and z 0.0) to points
+append (a cad vector3 with x 3.0, y 0.0 and z 0.0) to points
+set knots to a list containing 0.0
+append 0.0 to knots
+append 0.0 to knots
+append 0.5 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+append 1.0 to weights
+append 1.0 to weights
+set curve to the cad rational curve3 of degree 2 with controls points, knots knots and weights weights
+set result to the cad loft general decomposition of curve
+check loft general (result's valid)
+check loft general ((the length of result's spans's values) = 2)
+set left to the item at 0 in result's spans's values
+set right to the item at 1 in result's spans's values
+check loft general ((left's end = 0.5) and (right's start = 0.5))
+check loft general (((the item at 2 in left's controls's values)'s x) = ((the item at 0 in right's controls's values)'s x))
+print "interior_knot_refinement_preserves_the_join" as a line
+
+set unclampedKnots to a list containing 0.0
+append 1.0 to unclampedKnots
+append 2.0 to unclampedKnots
+append 3.0 to unclampedKnots
+append 4.0 to unclampedKnots
+append 5.0 to unclampedKnots
+append 6.0 to unclampedKnots
+set unclamped to the cad rational curve3 of degree 2 with controls points, knots unclampedKnots and weights weights
+set result to the cad loft general decomposition of unclamped
+check loft general (result's valid)
+check loft general ((the length of result's spans's values) = 2)
+set left to the item at 0 in result's spans's values
+set right to the item at 1 in result's spans's values
+check loft general ((left's start = 0.0) and (right's end = 1.0))
+check loft general (((the item at 0 in left's controls's values)'s x) > 0.0)
+check loft general (((the item at 2 in right's controls's values)'s x) < 3.0)
+print "unclamped_domain_endpoints_are_refined" as a line
+
+set badWeights to a list containing 1.0
+append 0.0 to badWeights
+append 1.0 to badWeights
+append 1.0 to badWeights
+set invalid to the cad rational curve3 of degree 2 with controls points, knots knots and weights badWeights
+set rejected to the cad loft general decomposition of invalid
+check loft general ((rejected's valid = false) and (rejected's errorCode = 2))
+set reversedKnots to a list containing 0.0
+append 0.0 to reversedKnots
+append 0.0 to reversedKnots
+append 0.75 to reversedKnots
+append 0.5 to reversedKnots
+append 1.0 to reversedKnots
+append 1.0 to reversedKnots
+set invalid to the cad rational curve3 of degree 2 with controls points, knots reversedKnots and weights weights
+set rejected to the cad loft general decomposition of invalid
+check loft general ((rejected's valid = false) and (rejected's errorCode = 3))
+print "invalid_weights_and_knot_domain_are_refused" as a line
+
+loop iteration from 0 to 2000:
+    set temporary to loft general sample
+    check loft general (temporary's valid)
+    set retained to temporary
+    set temporary to a new (the type of temporary)
+    check loft general ((the length of retained's spans's values) = 1)
+    check loft general (((the item at 1 in ((the item at 0 in retained's spans's values)'s controls's values))'s w) = 0.5)
+print "repeated_result_retention_and_source_release_are_stable" as a line

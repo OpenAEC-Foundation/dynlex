@@ -1,0 +1,167 @@
+# SPDX-License-Identifier: MPL-2.0
+# Exact homogeneous Bezier span preparation from pinned src/brep/loft_general.rs
+# at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The input is borrowed. Returned spans own their control lists independently.
+import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad loft general homogeneous point
+    members:
+        x as a 64 bit floating-point number
+        y as a 64 bit floating-point number
+        z as a 64 bit floating-point number
+        w as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad loft general Bezier span
+    members:
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+        controls as the type of (a cad topology list of a cad loft general homogeneous point)
+
+# Error codes follow the six distinct refusals of rational_spans, in source order.
+# 0 success; 1 spline shape; 2 homogeneous weights; 3 knot domain;
+# 4 refinement search; 5 zero refinement width; 6 no nonzero span.
+class:
+    patterns:
+        [a|] cad loft general span result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        spans as the type of (a cad topology list of a cad loft general Bezier span)
+
+local function cad loft general span failure {integer:code}:
+    execute:
+        return @intrinsic("construct", a cad loft general span result, false, code, a cad topology list of a cad loft general Bezier span)
+
+local function cad loft general finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad loft general homogeneous {cad vector3:point} with weight {a 64 bit floating-point number:weight}:
+    execute:
+        return @intrinsic("construct", a cad loft general homogeneous point, point's x * weight, point's y * weight, point's z * weight, weight)
+
+local function cad loft general mix {cad loft general homogeneous point:first} and {cad loft general homogeneous point:second} by {a 64 bit floating-point number:fraction}:
+    execute:
+        set remaining to 1.0 - fraction
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (first's x * remaining) + (second's x * fraction),
+            (first's y * remaining) + (second's y * fraction),
+            (first's z * remaining) + (second's z * fraction),
+            (first's w * remaining) + (second's w * fraction))
+
+local function cad loft general multiplicity of {a 64 bit floating-point number:knot} in {cad topology list:knots}:
+    execute:
+        set count to 0
+        loop index from 0 to the length of knots's values:
+            if (the absolute value of ((the item at index in knots's values) - knot)) <= 1e-12:
+                increment count
+        return count
+
+function the cad loft general decomposition of {cad rational curve3:source}:
+    execute:
+        set degree to source's degree
+        set count to the length of source's controls
+        if (degree <= 0) or (degree > 24):
+            return cad loft general span failure 1
+        if (count <= degree) or ((the length of source's knots) != ((count + degree) + 1)):
+            return cad loft general span failure 1
+
+        set knots to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of source's knots:
+            append (the item at index in source's knots) to knots's values
+        set control to a cad topology list of a cad loft general homogeneous point
+        set paired to the minimum of count and (the length of source's weights)
+        loop index from 0 to paired:
+            append (cad loft general homogeneous (the item at index in source's controls) with weight (the item at index in source's weights)) to control's values
+        if paired != count:
+            return cad loft general span failure 2
+        loop index from 0 to count:
+            set point to the item at index in control's values
+            if ((((cad loft general finite point's x) and (cad loft general finite point's y)) and ((cad loft general finite point's z) and (cad loft general finite point's w))) and (point's w > 0.0)) = false:
+                return cad loft general span failure 2
+
+        set start to the item at degree in knots's values
+        set finish to the item at count in knots's values
+        if (((cad loft general finite start) and (cad loft general finite finish)) = false) or ((finish - start) <= 1e-12):
+            return cad loft general span failure 3
+        loop index from 0 to ((the length of knots's values) - 1):
+            if (the item at (index + 1) in knots's values) < (the item at index in knots's values):
+                return cad loft general span failure 3
+
+        set breaks to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of knots's values:
+            set candidate to the item at index in knots's values
+            if (candidate >= start) and (candidate <= finish):
+                append candidate to breaks's values
+        # Finite monotone knots are already ordered. A NaN outside the active
+        # break filter can hide a local inversion from the source domain check.
+        loop index from 1 to the length of breaks's values:
+            set position to index
+            set searching to true
+            loop while (position > 0) and searching:
+                set left to the item at (position - 1) in breaks's values
+                set right to the item at position in breaks's values
+                if right < left:
+                    replace item at index (position - 1) in breaks's values with right
+                    replace item at index position in breaks's values with left
+                    set position to position - 1
+                else:
+                    set searching to false
+        set uniqueBreaks to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of breaks's values:
+            set candidate to the item at index in breaks's values
+            set duplicate to false
+            if (the length of uniqueBreaks's values) > 0:
+                set duplicate to (the absolute value of (candidate - (the last item of uniqueBreaks's values))) <= 1e-10
+            if duplicate = false:
+                append candidate to uniqueBreaks's values
+        set breaks to uniqueBreaks
+
+        loop breakIndex from 0 to the length of breaks's values:
+            set knot to the item at breakIndex in breaks's values
+            loop while (cad loft general multiplicity of knot in knots) < degree:
+                set last to (the length of control's values) - 1
+                set span to -1
+                if (the absolute value of (knot - finish)) <= 1e-12:
+                    set span to last + 1
+                else:
+                    loop index from degree through last:
+                        if (span < 0) and (((the item at index in knots's values) <= knot) and (knot < (the item at (index + 1) in knots's values))):
+                            set span to index
+                if span < 0:
+                    return cad loft general span failure 4
+                set multiplicity to cad loft general multiplicity of knot in knots
+                set refined to a cad topology list of a cad loft general homogeneous point
+                loop index from 0 to ((the length of control's values) + 1):
+                    append (a new cad loft general homogeneous point) to refined's values
+                loop index from 0 through (span - degree):
+                    replace item at index index in refined's values with (the item at index in control's values)
+                loop index from (span - multiplicity) through last:
+                    replace item at index (index + 1) in refined's values with (the item at index in control's values)
+                loop index from ((span - degree) + 1) through (span - multiplicity):
+                    set width to (the item at (index + degree) in knots's values) - (the item at index in knots's values)
+                    if width <= 0.0:
+                        return cad loft general span failure 5
+                    set fraction to (knot - (the item at index in knots's values)) / width
+                    replace item at index index in refined's values with (cad loft general mix (the item at (index - 1) in control's values) and (the item at index in control's values) by fraction)
+                insert knot into knots's values at index (span + 1)
+                set control to refined
+
+        set spans to a cad topology list of a cad loft general Bezier span
+        loop span from degree to the length of control's values:
+            set low to the item at span in knots's values
+            set high to the item at (span + 1) in knots's values
+            set skipped to ((low < (start - 1e-12)) or (high > (finish + 1e-12))) or ((high - low) <= 1e-12)
+            if skipped = false:
+                set piece to a cad topology list of a cad loft general homogeneous point
+                loop index from (span - degree) through span:
+                    append (the item at index in control's values) to piece's values
+                append (@intrinsic("construct", a cad loft general Bezier span, (low - start) / (finish - start), (high - start) / (finish - start), piece)) to spans's values
+        if (the length of spans's values) = 0:
+            return cad loft general span failure 6
+        return @intrinsic("construct", a cad loft general span result, true, 0, spans)
