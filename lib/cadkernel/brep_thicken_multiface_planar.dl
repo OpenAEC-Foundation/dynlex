@@ -14,7 +14,7 @@ local function cad planar pair distance {a 64 bit floating-point number:value} i
             return false
         return (the absolute value of value) <= 1.7976931348623157e308
 
-local function the cad planar pair single face {cad face key:faceKey} from {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+function the cad planar pair single face {cad face key:faceKey} from {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
     execute:
         set resultBody to an empty cad body
         set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
@@ -31,7 +31,7 @@ local function the cad planar pair single face {cad face key:faceKey} from {cad 
             return no cad body
         return the cad body result of resultBody
 
-local function the cad planar pair join of {cad body:firstBody} and {cad body:secondBody} within {a 64 bit floating-point number:tolerance}:
+function the cad planar pair join of {cad body:firstBody} and {cad body:secondBody} within {a 64 bit floating-point number:tolerance}:
     execute:
         set firstKeys to the cad face keys of firstBody
         set secondKeys to the cad face keys of secondBody

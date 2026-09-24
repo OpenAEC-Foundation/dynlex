@@ -21,5 +21,6 @@ python -B tests/cadkernel/brep_thicken_multiface_planar/verify.py --source <pinn
 python -B tests/cadkernel/verify.py --filter cadkernel_brep_thicken_multiface_planar
 ```
 
-Angled face pairs need the source's edge connector and are not yet supported
-by this route. Larger multi-face sheets and NURBS patches also remain open.
+Angled face pairs use a separate edge-connector route documented in
+`tests/cadkernel/brep_thicken_multiface_angled/README.md`. Larger multi-face
+sheets and NURBS patches remain open.

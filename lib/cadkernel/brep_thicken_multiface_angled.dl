@@ -1,0 +1,168 @@
+# SPDX-License-Identifier: MPL-2.0
+# Bounded connected planar-pair route from pinned src/brep/thicken.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_thicken_multiface_planar.dl
+import lib/cadkernel/brep_sweep.dl
+
+local function cad angled pair distance {a 64 bit floating-point number:value} is valid:
+    execute:
+        if value != value:
+            return false
+        if (the absolute value of value) <= 2.220446049250313e-16:
+            return false
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad angled pair connector of {cad edge key:edgeKey} in {cad body:sourceBody} with offsets {cad vector3:firstOffset} and {cad vector3:secondOffset} at {a 64 bit floating-point number:distance} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set crossLength to the cad length of (the cad cross of firstOffset and secondOffset)
+        if crossLength <= ((distance * distance) * 1e-10):
+            return no cad body
+        set cosine to (the cad dot of firstOffset and secondOffset) / (distance * distance)
+        set denominator to 1.0 + cosine
+        if denominator <= 1e-8:
+            return no cad body
+        set miterOffset to (the cad sum of firstOffset and secondOffset) scaled by (1.0 / denominator)
+        set edge to the cad node pointer for edgeKey in sourceBody
+        set curve to the cad node pointer for edge's curve in sourceBody
+        if curve's kind != 0:
+            return no cad body
+        set startNode to the cad node pointer for edge's start in sourceBody
+        set endNode to the cad node pointer for edge's end in sourceBody
+        set startPoint to startNode's point
+        set endPoint to endNode's point
+        set along to the cad difference of endPoint and startPoint
+        set midpoint to the cad point on (@intrinsic("dereference", curve)) at (0.5 * (edge's startParameter + edge's endParameter))
+        set chordMidpoint to (the cad sum of startPoint and endPoint) scaled by 0.5
+        if (the cad distance from midpoint to chordMidpoint) > tolerance:
+            return no cad body
+        set planeResult to the cad orthonormal plane with origin startPoint, x axis firstOffset and normal along
+        if planeResult's valid = false:
+            return no cad body
+        set plane to planeResult's value
+        set firstCorner to the cad projection of startPoint onto plane
+        set secondCorner to the cad projection of (the cad sum of startPoint and firstOffset) onto plane
+        set thirdCorner to the cad projection of (the cad sum of startPoint and miterOffset) onto plane
+        set fourthCorner to the cad projection of (the cad sum of startPoint and secondOffset) onto plane
+        if ((firstCorner's valid and secondCorner's valid) and (thirdCorner's valid and fourthCorner's valid)) = false:
+            return no cad body
+        set firstPoint to firstCorner's value
+        set secondPoint to secondCorner's value
+        set thirdPoint to thirdCorner's value
+        set fourthPoint to fourthCorner's value
+        set profile to a list containing (the cad curve2 of (a cad line2 from firstPoint to secondPoint))
+        append (the cad curve2 of (a cad line2 from secondPoint to thirdPoint)) to profile
+        append (the cad curve2 of (a cad line2 from thirdPoint to fourthPoint)) to profile
+        append (the cad curve2 of (a cad line2 from fourthPoint to firstPoint)) to profile
+        set bridgeBody to the cad extrusion of profile on plane along along
+        free profile
+        return bridgeBody
+
+local function the cad angled pair joined solids {cad body:firstBody}, {cad body:connectorBody} and {cad body:secondBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set firstJoin to the cad planar pair join of firstBody and connectorBody within tolerance
+        if firstJoin's valid = false:
+            set unionResult to the cad combination of firstBody and connectorBody using cad union operation within tolerance
+            if unionResult's valid = false:
+                return no cad body
+            set firstJoin to the cad body result of unionResult's value
+        if firstJoin's valid = false:
+            return no cad body
+        set secondJoin to the cad planar pair join of firstJoin's value and secondBody within tolerance
+        if secondJoin's valid = false:
+            set unionResult to the cad combination of firstJoin's value and secondBody using cad union operation within tolerance
+            if unionResult's valid = false:
+                return no cad body
+            set secondJoin to the cad body result of unionResult's value
+        if secondJoin's valid = false:
+            return no cad body
+        set resultBody to secondJoin's value
+        if (the length of resultBody's roots) != 1:
+            return no cad body
+        set flaws to the cad flaws of resultBody
+        set consistent to (the length of flaws) = 0
+        free flaws
+        if consistent = false:
+            return no cad body
+        set edgeKeys to the cad edge keys of resultBody
+        set closed to true
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in resultBody
+            if (the length of edge's coedges's values) != 2:
+                set closed to false
+        free edgeKeys
+        if closed = false:
+            return no cad body
+        return the cad body result of resultBody
+
+function the cad angled pair thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if (cad angled pair distance distance is valid) = false:
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set consistent to (the length of flaws) = 0
+        free flaws
+        if consistent = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 2:
+            free faces
+            return no cad body
+        set firstKey to the item at 0 in faces
+        set secondKey to the item at 1 in faces
+        set firstFace to the cad node pointer for firstKey in sourceBody
+        set secondFace to the cad node pointer for secondKey in sourceBody
+        set firstSurface to the cad node pointer for firstFace's surface in sourceBody
+        set secondSurface to the cad node pointer for secondFace's surface in sourceBody
+        if (firstSurface's kind != 0) or (secondSurface's kind != 0):
+            free faces
+            return no cad body
+        set firstNormal to the cad normal of firstSurface's plane
+        set secondNormal to the cad normal of secondSurface's plane
+        if (firstNormal's valid and secondNormal's valid) = false:
+            free faces
+            return no cad body
+        set firstOffset to firstNormal's value scaled by distance
+        set secondOffset to secondNormal's value scaled by distance
+        if firstFace's forward = false:
+            set firstOffset to firstOffset scaled by -1.0
+        if secondFace's forward = false:
+            set secondOffset to secondOffset scaled by -1.0
+        set edgeKeys to the cad edge keys of sourceBody
+        set hasBoundary to false
+        set sharedFound to false
+        set sharedKey to a new cad edge key
+        loop index from 0 to the length of edgeKeys:
+            set candidateKey to the item at index in edgeKeys
+            set edge to the cad node pointer for candidateKey in sourceBody
+            set useCount to the length of edge's coedges's values
+            if useCount = 1:
+                set hasBoundary to true
+            if useCount = 2:
+                set firstUse to the cad node pointer for (the item at 0 in edge's coedges's values) in sourceBody
+                set secondUse to the cad node pointer for (the item at 1 in edge's coedges's values) in sourceBody
+                set firstRing to the cad node pointer for firstUse's owner in sourceBody
+                set secondRing to the cad node pointer for secondUse's owner in sourceBody
+                if ((firstRing's owner = firstKey) and (secondRing's owner = secondKey)) or ((firstRing's owner = secondKey) and (secondRing's owner = firstKey)):
+                    set sharedFound to true
+                    set sharedKey to candidateKey
+        free edgeKeys
+        if (hasBoundary and sharedFound) = false:
+            free faces
+            return no cad body
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set firstSheet to the cad planar pair single face firstKey from sourceBody within tolerance
+        set secondSheet to the cad planar pair single face secondKey from sourceBody within tolerance
+        free faces
+        if (firstSheet's valid and secondSheet's valid) = false:
+            return no cad body
+        set firstSolid to the cad planar thickening of firstSheet's value by distance
+        set secondSolid to the cad planar thickening of secondSheet's value by distance
+        if (firstSolid's valid and secondSolid's valid) = false:
+            return no cad body
+        set bridgeBody to the cad angled pair connector of sharedKey in sourceBody with offsets firstOffset and secondOffset at distance within tolerance
+        if bridgeBody's valid = false:
+            return no cad body
+        return the cad angled pair joined solids firstSolid's value, bridgeBody's value and secondSolid's value within tolerance

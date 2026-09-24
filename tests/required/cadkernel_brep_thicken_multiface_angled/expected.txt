@@ -1,0 +1,4 @@
+positive_angled_pair_closed
+negative_angled_pair_closed
+zero_distance_refused
+source_preserved

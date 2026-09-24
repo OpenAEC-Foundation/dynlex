@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_multiface_angled.dl
+import lib/cadkernel/brep_sweep.dl
+
+function check angled pair {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set start to the cad zero vector2
+set middle to a cad vector2 with x 2.0 and y 0.0
+set end to a cad vector2 with x 2.0 and y 2.0
+set profile to a list containing (the cad curve2 of (a cad line2 from start to middle))
+append (the cad curve2 of (a cad line2 from middle to end)) to profile
+set source to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+free profile
+check angled pair source's valid
+check angled pair ((the cad count of source's value's faces) = 2)
+set beforeKeys to the cad vertex keys of source's value
+set beforePoint to (the cad node pointer for (the item at 0 in beforeKeys) in source's value)'s point
+free beforeKeys
+
+loop side from 0 to 3:
+    set distance to 0.25 as a 64 bit floating-point number
+    if side = 1:
+        set distance to -0.25
+    else if side = 2:
+        set distance to 0.0
+    set thickened to the cad angled pair thickening of source's value by distance
+    if side = 2:
+        check angled pair (thickened's valid = false)
+        print "zero_distance_refused" as a line
+    else:
+        check angled pair thickened's valid
+        check angled pair ((the cad count of thickened's value's vertices) = 16)
+        check angled pair ((the cad count of thickened's value's edges) = 28)
+        check angled pair ((the cad count of thickened's value's faces) = 14)
+        check angled pair ((the length of thickened's value's roots) = 1)
+        set flaws to the cad flaws of thickened's value
+        check angled pair ((the length of flaws) = 0)
+        free flaws
+        set edges to the cad edge keys of thickened's value
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in thickened's value
+            check angled pair ((the length of edge's coedges's values) = 2)
+        free edges
+        if side = 0:
+            print "positive_angled_pair_closed" as a line
+        else:
+            print "negative_angled_pair_closed" as a line
+
+check angled pair ((the cad count of source's value's faces) = 2)
+set afterKeys to the cad vertex keys of source's value
+set afterPoint to (the cad node pointer for (the item at 0 in afterKeys) in source's value)'s point
+check angled pair ((the cad distance from beforePoint to afterPoint) = 0.0)
+free afterKeys
+print "source_preserved" as a line
