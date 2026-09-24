@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_transport.dl
+
+function check path transport {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set value to a cad vector3 with x 1.0, y 0.0 and z 0.0
+set alongX to a cad vector3 with x 1.0, y 0.0 and z 0.0
+set alongY to a cad vector3 with x 0.0, y 1.0 and z 0.0
+set oppositeX to a cad vector3 with x -1.0, y 0.0 and z 0.0
+set quarter to the cad path sweep transport of value from alongX to alongY
+check path transport quarter's valid
+check path transport ((the cad distance from quarter's value to alongY) < 1e-12)
+set opposite to the cad path sweep transport of value from alongX to oppositeX
+check path transport opposite's valid
+check path transport ((the cad distance from opposite's value to oppositeX) < 1e-12)
+print "parallel_and_antiparallel_transport" as a line
+
+set frame to a cad path sweep frame at (the cad zero vector3) with x alongX and y (the cad z axis)
+set moved to the cad path sweep moved frame frame from alongX to alongY between (the cad zero vector3) and (a cad vector3 with x 0.0, y 3.0 and z 0.0)
+check path transport moved's valid
+check path transport ((the cad distance from moved's value's origin to (a cad vector3 with x 0.0, y 3.0 and z 0.0)) < 1e-12)
+check path transport ((the cad distance from moved's value's xAxis to alongY) < 1e-12)
+print "frame_moves_with_path" as a line
+
+set cut to the cad path sweep miter of frame at (the cad zero vector3) between alongX and alongY
+check path transport cut's valid
+check path transport ((the cad distance from cut's value's xAxis to (the cad zero vector3)) < 1e-12)
+set twisted to the cad path sweep twist of frame about (the cad zero vector3) by 1.5707963267948966 scaled 2.0
+check path transport twisted's valid
+check path transport ((the cad distance from twisted's value's xAxis to (a cad vector3 with x 0.0, y 0.0 and z 2.0)) < 1e-12)
+print "miter_and_twist" as a line

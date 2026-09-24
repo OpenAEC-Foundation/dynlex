@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MPL-2.0
+# Transport and frame operations from cadkernel src/brep/sweep_path.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f. The caller supplies unit tangents.
+import lib/cadkernel/core.dl
+
+class:
+    patterns:
+        [a|] cad path sweep frame
+    members:
+        origin as a cad vector3
+        xAxis as a cad vector3
+        yAxis as a cad vector3
+class:
+    patterns:
+        [a|] cad path sweep vector result
+    members:
+        valid as a boolean
+        value as a cad vector3
+class:
+    patterns:
+        [a|] cad path sweep frame result
+    members:
+        valid as a boolean
+        value as a cad path sweep frame
+
+function a cad path sweep frame at {cad vector3:origin} with x {cad vector3:xAxis} and y {cad vector3:yAxis}:
+    execute:
+        return @intrinsic("construct", a cad path sweep frame, origin, xAxis, yAxis)
+local function no cad path sweep transported vector:
+    execute:
+        return @intrinsic("construct", a cad path sweep vector result, false, the cad zero vector3)
+local function no cad path sweep transported frame:
+    execute:
+        return @intrinsic("construct", a cad path sweep frame result, false, a cad path sweep frame at (the cad zero vector3) with x (the cad zero vector3) and y (the cad zero vector3))
+local function the cad path sweep rotation of {cad vector3:value} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    execute:
+        set cosine to the cosine of angle
+        set sine to the sine of angle
+        set direct to value scaled by cosine
+        set crossed to (the cad cross of axis and value) scaled by sine
+        set axial to axis scaled by ((the cad dot of axis and value) * (1.0 - cosine))
+        return the cad sum of (the cad sum of direct and crossed) and axial
+
+function the cad path sweep transport of {cad vector3:value} from {cad vector3:source} to {cad vector3:target}:
+    execute:
+        set crosswise to the cad cross of source and target
+        set sine to the cad length of crosswise
+        set cosine to the cad dot of source and target
+        clamp cosine between -1.0 and 1.0
+        if sine <= 1e-12:
+            if cosine >= 0.0:
+                return @intrinsic("construct", a cad path sweep vector result, true, value)
+            set axisDirection to the cad cross of source and (the cad x axis)
+            if (the absolute value of source's x) >= 0.8:
+                set axisDirection to the cad cross of source and (the cad y axis)
+            set axis to the cad normalization of axisDirection
+            if axis's valid = false:
+                return no cad path sweep transported vector
+            return @intrinsic("construct", a cad path sweep vector result, true, the cad path sweep rotation of value about (axis's value) by 3.141592653589793)
+        set normalizedAxis to crosswise cad divided by sine
+        set angle to @intrinsic("atan2", sine, cosine)
+        return @intrinsic("construct", a cad path sweep vector result, true, the cad path sweep rotation of value about normalizedAxis by angle)
+
+function the cad path sweep [moved] frame {cad path sweep frame:frame} from {cad vector3:source} to {cad vector3:target} between {cad vector3:oldPoint} and {cad vector3:point}:
+    execute:
+        set oldOffset to the cad difference of frame's origin and oldPoint
+        set shifted to the cad path sweep transport of oldOffset from source to target
+        set x to the cad path sweep transport of frame's xAxis from source to target
+        set y to the cad path sweep transport of frame's yAxis from source to target
+        if ((shifted's valid) and (x's valid)) and (y's valid):
+            set moved to a cad path sweep frame at (the cad sum of point and shifted's value) with x (x's value) and y (y's value)
+            return @intrinsic("construct", a cad path sweep frame result, true, moved)
+        return no cad path sweep transported frame
+
+function the cad path sweep miter of {cad path sweep frame:frame} at {cad vector3:point} between {cad vector3:tangent} and {cad vector3:other}:
+    execute:
+        set normal to the cad normalization of (the cad sum of tangent and other)
+        if normal's valid = false:
+            return no cad path sweep transported frame
+        set denominator to the cad dot of normal's value and tangent
+        if denominator <= 1e-6:
+            return no cad path sweep transported frame
+        set offset to the cad difference of frame's origin and point
+        set originCut to the cad difference of offset and (tangent scaled by ((the cad dot of offset and normal's value) / denominator))
+        set xCut to the cad difference of frame's xAxis and (tangent scaled by ((the cad dot of frame's xAxis and normal's value) / denominator))
+        set yCut to the cad difference of frame's yAxis and (tangent scaled by ((the cad dot of frame's yAxis and normal's value) / denominator))
+        set cut to a cad path sweep frame at (the cad sum of point and originCut) with x xCut and y yCut
+        return @intrinsic("construct", a cad path sweep frame result, true, cut)
+
+function the cad path sweep twist of {cad path sweep frame:frame} about {cad vector3:point} by {a 64 bit floating-point number:angle} scaled {a 64 bit floating-point number:scale}:
+    execute:
+        set normal to the cad normalization of (the cad cross of frame's xAxis and frame's yAxis)
+        if normal's valid = false:
+            return no cad path sweep transported frame
+        set offset to the cad difference of frame's origin and point
+        set origin to the cad sum of point and ((the cad path sweep rotation of offset about normal's value by angle) scaled by scale)
+        set x to (the cad path sweep rotation of frame's xAxis about normal's value by angle) scaled by scale
+        set y to (the cad path sweep rotation of frame's yAxis about normal's value by angle) scaled by scale
+        set twisted to a cad path sweep frame at origin with x x and y y
+        return @intrinsic("construct", a cad path sweep frame result, true, twisted)
