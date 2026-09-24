@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: MPL-2.0
 # In-memory faceted SAT lift from the pinned src/acis/lift.rs.
 # This slice accepts planar, cylindrical, conical, spherical and ring-torus faces,
-# straight, circular and closed elliptical edges, and closed coedge rings. Circular edges with
+# straight, circular, closed elliptical and inline spline edges, and closed coedge rings. Circular edges with
 # separated endpoints reconcile projected and stored parameters.
-# It refuses unsupported or malformed records instead of returning a partial body.
+# It refuses unsupported required geometry instead of returning a partial body;
+# malformed optional pcurves are skipped like the pinned source.
 import lib/cadkernel/acis_records.dl
 import lib/cadkernel/brep_topology.dl
+import lib/cadkernel/acis_lift_spline.dl
 
 class:
     patterns:
@@ -169,6 +171,14 @@ local function the cad acis faceted curve at {cad sat pointer:reference} in {a p
             cad acis faceted lift failure 1 at id in state
             return absent
         set record to found's value
+        if (record's entityType = "intcurve-curve") or ((record's entityType = "bs3-curve") or (record's entityType = "exactcur-curve")):
+            set decoded to the cad acis inline spline3 in record
+            if decoded's valid = false:
+                cad acis faceted lift failure 3 at id in state
+                return absent
+            set key to the cad body key after inserting decoded's value into state's body
+            append (@intrinsic("construct", a cad acis faceted seen curve, id, key)) to state's curves's values
+            return @intrinsic("construct", a cad acis faceted curve result, true, key)
         if record's entityType = "straight-curve":
             set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
             set direction to the cad acis faceted lift vector at 4 in record or (the cad z axis)
@@ -315,9 +325,13 @@ local function the cad acis faceted edge at {cad sat pointer:reference} in {a po
         set endNode to the cad node pointer for endKey in state's body
         set shape to the cad node pointer for curveResult's value in state's body
         set apart to (the cad distance from startNode's point to endNode's point) > 1e-9
+        if shape's kind = 4:
+            if (the cad periodicity of shape's nurbs) or (apart = false):
+                cad acis faceted lift failure 3 at id in state
+                return absent
         if shape's kind != 0:
             if startKey != endKey:
-                if shape's kind != 1:
+                if (shape's kind != 1) and (shape's kind != 4):
                     cad acis faceted lift failure 3 at id in state
                     return absent
                 if apart = false:
@@ -359,11 +373,13 @@ local function cad acis faceted lift ring {cad sat record:record} into {cad loop
             if (coedgeRecord is cad sat type "coedge") = false:
                 cad acis faceted lift failure 2 at currentRef's index in state
                 return false
+            set pcurveValue to no cad pcurve
             set pcurvePointer to the cad sat pointer token number 6 in coedgeRecord
             if pcurvePointer's valid:
                 if (pcurvePointer's value is cad sat null) = false:
-                    cad acis faceted lift failure 6 at currentRef's index in state
-                    return false
+                    set pcurveRecord to the cad sat record for pcurvePointer's value in state's document
+                    if pcurveRecord's valid:
+                        set pcurveValue to the cad acis inline pcurve in (pcurveRecord's value)
             set edgePointer to the cad acis faceted lift pointer at 4 in coedgeRecord
             set edgeResult to the cad acis faceted edge at edgePointer in state
             if edgeResult's valid = false:
@@ -380,7 +396,7 @@ local function cad acis faceted lift ring {cad sat record:record} into {cad loop
             set sourceForward to (the cad sat sense at 5 in coedgeRecord)'s reversed = false
             set useForward to sourceForward = edgeForward
             set edgeKey to edgeResult's value
-            set useKey to the cad body key after inserting (a cad coedge on edgeKey forward useForward with pcurve (no cad pcurve) owned by ringKey with provenance (the cad acis faceted lift provenance of coedgeRecord)) into state's body
+            set useKey to the cad body key after inserting (a cad coedge on edgeKey forward useForward with pcurve pcurveValue owned by ringKey with provenance (the cad acis faceted lift provenance of coedgeRecord)) into state's body
             append useKey to edgeNode's coedges's values
             set ringNode to the cad node pointer for ringKey in state's body
             append useKey to ringNode's coedges's values

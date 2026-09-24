@@ -1,0 +1,217 @@
+# SPDX-License-Identifier: MPL-2.0
+# Inline SAT spline blocks from the pinned codec's direct curve and pcurve accessors.
+# Referenced subtype blocks and referenced pcurves remain outside this bounded route.
+import lib/cadkernel/acis_records.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad acis inline spline layout
+    members:
+        valid as a boolean
+        degree as an integer
+        firstControl as an integer
+        controlCount as an integer
+        rational as a boolean
+        closed as a boolean
+
+class:
+    patterns:
+        [a|] cad acis inline spline3 result
+    members:
+        valid as a boolean
+        value as a cad edge curve3
+
+local function no cad acis inline spline layout:
+    execute:
+        return @intrinsic("construct", a cad acis inline spline layout, false, 0, 0, 0, false, false)
+
+local function no cad acis inline spline3:
+    execute:
+        set line to a cad line3 with origin (the cad zero vector3) and direction (the cad z axis)
+        return @intrinsic("construct", a cad acis inline spline3 result, false, the cad edge curve3 of line)
+
+local function the cad acis inline spline token at {integer:index} in {cad sat record:record}:
+    execute:
+        return the cad sat token at index in record
+
+local function the cad acis inline spline float at {integer:index} in {cad sat record:record}:
+    execute:
+        set found to the cad acis inline spline token at index in record
+        if found's valid:
+            if found's value's kind = 3:
+                return @intrinsic("construct", a cad sat float result, true, found's value's floatValue)
+        return @intrinsic("construct", a cad sat float result, false, 0.0)
+
+local function the cad acis inline spline integer at {integer:index} in {cad sat record:record}:
+    execute:
+        set found to the cad acis inline spline token at index in record
+        if found's valid:
+            if found's value's kind = 2:
+                return @intrinsic("construct", a cad sat integer result, true, found's value's integerValue)
+        return @intrinsic("construct", a cad sat integer result, false, 0 as a 64 bit integer)
+
+local function the cad acis inline spline layout in {cad sat record:record} with dimension {integer:dimension} into {a pointer to a list:knots}:
+    execute:
+        set tokenCount to the length of record's tokens's values
+        set start to -1
+        set rational to false
+        loop index from 0 to tokenCount:
+            set token to the item at index in record's tokens's values
+            if ((token's kind = 0) or (token's kind = 9)) and (start < 0):
+                if token's text = "nubs":
+                    set start to index
+                if token's text = "nurbs":
+                    set start to index
+                    set rational to true
+        if start < 0:
+            return no cad acis inline spline layout
+        set degreeToken to the cad acis inline spline integer at (start + 1) in record
+        set knotCountToken to the cad acis inline spline integer at (start + 3) in record
+        if (degreeToken's valid and knotCountToken's valid) = false:
+            return no cad acis inline spline layout
+        set degree to degreeToken's value as an integer
+        set knotCount to knotCountToken's value as an integer
+        if ((degree < 1) or (knotCount < 2)) or (knotCount > tokenCount):
+            return no cad acis inline spline layout
+        set position to start + 4
+        loop index from 0 to knotCount:
+            set value to the cad acis inline spline float at position in record
+            set multiplicity to the cad acis inline spline integer at (position + 1) in record
+            if (value's valid and multiplicity's valid) = false:
+                return no cad acis inline spline layout
+            if (multiplicity's value < 0) or (multiplicity's value > tokenCount):
+                return no cad acis inline spline layout
+            loop copyIndex from 0 to (multiplicity's value as an integer):
+                append value's value to knots
+            set position to position + 2
+        if (the length of knots) < 2:
+            return no cad acis inline spline layout
+        set stride to dimension
+        if rational:
+            set stride to dimension + 1
+        set availableScalars to 0
+        loop index from position to tokenCount:
+            set token to the item at index in record's tokens's values
+            if (token's kind = 3) and (availableScalars = (index - position)):
+                set availableScalars to availableScalars + 1
+        set available to availableScalars / stride
+        set baseCount to ((the length of knots) - degree) - 1
+        if baseCount < 0:
+            return no cad acis inline spline layout
+        set count to baseCount
+        if available >= (baseCount + 2):
+            set first to the item at 0 in knots
+            set last to the item at ((the length of knots) - 1) in knots
+            insert first into knots at index 0
+            append last to knots
+            set count to baseCount + 2
+        if (count <= degree) or (available < count):
+            return no cad acis inline spline layout
+        set formToken to the cad acis inline spline token at (start + 2) in record
+        set closed to false
+        if formToken's valid:
+            if (formToken's value's kind = 0) or (formToken's value's kind = 9):
+                set closed to (formToken's value's text = "closed") or (formToken's value's text = "periodic")
+            if formToken's value's kind = 2:
+                set closed to formToken's value's integerValue != 0
+        return @intrinsic("construct", a cad acis inline spline layout, true, degree, position, count, rational, closed)
+
+function the cad acis inline spline3 in {cad sat record:record}:
+    execute:
+        set knots to an empty list of a 64 bit floating-point number
+        set layout to the cad acis inline spline layout in record with dimension 3 into knots
+        if layout's valid = false:
+            free knots
+            return no cad acis inline spline3
+        set points to an empty list of a cad vector3
+        set weights to an empty list of a 64 bit floating-point number
+        set position to layout's firstControl
+        set valid to true
+        loop index from 0 to layout's controlCount:
+            set x to the cad acis inline spline float at position in record
+            set y to the cad acis inline spline float at (position + 1) in record
+            set z to the cad acis inline spline float at (position + 2) in record
+            if (x's valid and y's valid and z's valid) = false:
+                set valid to false
+            set weight to 1.0
+            if layout's rational:
+                set w to the cad acis inline spline float at (position + 3) in record
+                if w's valid:
+                    set weight to w's value
+                else:
+                    set valid to false
+            if (weight <= 0.0) or (weight > 1.7976931348623157e308):
+                set valid to false
+            append (a cad vector3 with x x's value, y y's value and z z's value) to points
+            append weight to weights
+            set position to position + 3
+            if layout's rational:
+                set position to position + 1
+        set result to no cad acis inline spline3
+        if valid:
+            set made to the strict cad nurbs curve3 of degree layout's degree with controls points, knots knots and weights weights
+            if made's valid:
+                set curve to made's value with cad periodicity layout's closed
+                set result to @intrinsic("construct", a cad acis inline spline3 result, true, the cad edge curve3 of curve)
+        free points
+        free weights
+        free knots
+        return result
+
+function the cad acis inline pcurve in {cad sat record:record}:
+    execute:
+        if record's entityType != "pcurve":
+            return no cad pcurve
+        set knots to an empty list of a 64 bit floating-point number
+        set layout to the cad acis inline spline layout in record with dimension 2 into knots
+        if layout's valid = false:
+            free knots
+            return no cad pcurve
+        set tokenCount to the length of record's tokens's values
+        set offsets to an empty list of a 64 bit floating-point number
+        set position to tokenCount - 1
+        loop while (position >= 0) and ((the length of offsets) < 2):
+            set token to the item at position in record's tokens's values
+            if token's kind = 3:
+                append token's floatValue to offsets
+            set position to position - 1
+        if (the length of offsets) != 2:
+            free knots
+            free offsets
+            return no cad pcurve
+        set uOffset to the item at 1 in offsets
+        set vOffset to the item at 0 in offsets
+        free offsets
+        set points to an empty list of a cad vector2
+        set weights to an empty list of a 64 bit floating-point number
+        set position to layout's firstControl
+        set valid to true
+        loop index from 0 to layout's controlCount:
+            set u to the cad acis inline spline float at position in record
+            set v to the cad acis inline spline float at (position + 1) in record
+            if (u's valid and v's valid) = false:
+                set valid to false
+            set weight to 1.0
+            if layout's rational:
+                set w to the cad acis inline spline float at (position + 2) in record
+                if w's valid:
+                    set weight to w's value
+                else:
+                    set valid to false
+            if (weight <= 0.0) or (weight > 1.7976931348623157e308):
+                set valid to false
+            append (a cad vector2 with x (u's value + uOffset) and y (v's value + vOffset)) to points
+            append weight to weights
+            set position to position + 2
+            if layout's rational:
+                set position to position + 1
+        set result to no cad pcurve
+        if valid:
+            set made to the strict cad nurbs curve2 of degree layout's degree with controls points, knots knots and weights weights
+            if made's valid:
+                set result to the cad pcurve of (the cad curve2 of made's value)
+        free points
+        free weights
+        free knots
+        return result
