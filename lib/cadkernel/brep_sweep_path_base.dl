@@ -5,6 +5,7 @@
 import lib/cadkernel/brep_place.dl
 import lib/cadkernel/arclength2.dl
 import lib/cadkernel/nurbs_builder.dl
+import lib/cadkernel/brep_sweep_path_transport.dl
 
 class:
     patterns:
@@ -476,14 +477,6 @@ function the cad path sweep start of {cad nurbs curve3:curve}:
         set head to the cad path sweep spline head of curve
         return @intrinsic("construct", a cad path sweep point result, head's valid, head's start)
 
-local function the cad path sweep rotated {cad vector3:vector} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
-    execute:
-        set cosine to the cosine of angle
-        set sine to the sine of angle
-        set direct to vector scaled by cosine
-        set crossed to (the cad cross of axis and vector) scaled by sine
-        set axial to axis scaled by ((the cad dot of axis and vector) * (1.0 - cosine))
-        return the cad sum of (the cad sum of direct and crossed) and axial
 local function the cad path sweep mapped {cad vector3:vector} from {cad vector3:sourceX}, {cad vector3:sourceY} and {cad vector3:normal} to {cad vector3:targetX}, {cad vector3:targetY} and {cad vector3:targetNormal} aligned {boolean:align} rotated by {a 64 bit floating-point number:angle}:
     execute:
         set alignedVector to vector
@@ -494,7 +487,7 @@ local function the cad path sweep mapped {cad vector3:vector} from {cad vector3:
             set third to targetNormal scaled by (the cad dot of vector and normal)
             set alignedVector to the cad sum of (the cad sum of first and second) and third
             set axis to targetNormal
-        return the cad path sweep rotated alignedVector about axis by angle
+        return the cad path sweep rotation of alignedVector about axis by angle
 local function the cad path sweep initial placement of {cad plane:plane} at base {cad vector3:base} starting {cad vector3:start} tangent {cad vector3:tangent} using {cad path sweep options:options}:
     execute:
         if ((cad base is finite) = false) or (((cad start is finite) = false) or ((cad path sweep (options's rotation) is finite) = false)):

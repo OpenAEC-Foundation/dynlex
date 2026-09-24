@@ -32,7 +32,7 @@ local function no cad path sweep transported vector:
 local function no cad path sweep transported frame:
     execute:
         return @intrinsic("construct", a cad path sweep frame result, false, a cad path sweep frame at (the cad zero vector3) with x (the cad zero vector3) and y (the cad zero vector3))
-local function the cad path sweep rotation of {cad vector3:value} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+function the cad path sweep rotation of {cad vector3:value} about {cad vector3:axis} by {a 64 bit floating-point number:angle}:
     execute:
         set cosine to the cosine of angle
         set sine to the sine of angle
