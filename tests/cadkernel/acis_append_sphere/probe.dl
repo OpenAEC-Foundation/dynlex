@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_append_faceted.dl
+import lib/cadkernel/brep_make.dl
+
+function check sphere append {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function the sphere append bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set raw to value
+        set word to the value at ((the address of raw) as a pointer to a 64 bit unsigned integer)
+        set high to (word shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to word as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the sphere append token trace of {cad sat token:token}:
+    execute:
+        if token's kind = 1:
+            return (the string form of "p") + (the string form of (token's reference's index))
+        if token's kind = 3:
+            return (the string form of "f") + (the sphere append bits of (token's floatValue))
+        if token's kind = 5:
+            set result to (the string form of "v") + (the sphere append bits of (token's x))
+            set result to (result + (the string form of ",")) + (the sphere append bits of (token's y))
+            return (result + (the string form of ",")) + (the sphere append bits of (token's z))
+        if token's kind = 0:
+            return (the string form of "i") + (the string form of (token's text))
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function trace sphere append {cad sat document:documentValue}:
+    execute:
+        loop index from 0 to the length of documentValue's records's values:
+            set record to the item at index in documentValue's records's values
+            set line to (the string form of record's recordId) + (the string form of ";")
+            set line to (line + (the string form of record's entityType)) + (the string form of ";")
+            set line to line + (the string form of (the length of record's tokens's values))
+            loop tokenIndex from 0 to the length of record's tokens's values:
+                set token to the item at tokenIndex in record's tokens's values
+                set line to (line + (the string form of ";")) + (the sphere append token trace of token)
+            print line as a line
+
+set documentValue to an empty cad sat document
+ignore add cad sat record (a cad sat record numbered -1 of type "seed") to (the address of documentValue)
+set made to the cad sphere body at (a cad vector3 with x 1.0, y 2.0 and z 3.0) with radius 2.0
+check sphere append made's valid
+set written to append cad faceted body (made's value) to (the address of documentValue)
+check sphere append written's valid
+check sphere append (written's body = 14)
+check sphere append (written's records = 14)
+set summary to (the string form of "append;") + (the string form of (written's body))
+set summary to summary + (the string form of ";")
+set summary to summary + (the string form of (written's records))
+print summary as a line
+set second to the cad sphere body at (a cad vector3 with x -3.0, y 1.0 and z 0.5) with radius 1.5
+check sphere append second's valid
+set written to append cad faceted body (second's value) to (the address of documentValue)
+check sphere append written's valid
+check sphere append (written's body = 28)
+check sphere append (written's records = 14)
+set summary to (the string form of "append;") + (the string form of (written's body))
+set summary to summary + (the string form of ";")
+set summary to summary + (the string form of (written's records))
+print summary as a line
+check sphere append ((the length of documentValue's records's values) = 29)
+trace sphere append documentValue

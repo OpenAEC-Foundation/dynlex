@@ -86,7 +86,7 @@ set curved to the cad cylinder body at (the cad zero vector3) with radius 1.0 an
 check acis append (curved's valid)
 set rejected to append cad faceted body (curved's value) to (the address of document)
 check acis append (rejected's valid = false)
-check acis append (rejected's failure = 1)
+check acis append (rejected's failure = 2)
 check acis append ((the length of document's records's values) = 171)
 check acis append ((document's header's numberOfRecords) = 171)
 trace acis append document

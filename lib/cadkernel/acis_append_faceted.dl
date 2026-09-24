@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # First in-memory append slice from the pinned src/acis/append.rs.
-# Dense arena slots permit direct key-to-record offsets. Only line curves,
-# planar surfaces and coedges without pcurves are written here.
+# Dense arena slots permit direct key-to-record offsets. Lines, circles,
+# planes and spheres are supported without pcurves.
 import lib/cadkernel/acis_records.dl
 import lib/cadkernel/brep_topology.dl
 
@@ -34,17 +34,25 @@ local function cad acis geometry is supported in {cad body:body}:
         set curves to the cad keys of body's curves
         loop index from 0 to the length of curves:
             set curve to the cad node pointer for (the item at index in curves) in body's curves
-            if curve's kind != 0:
+            if (curve's kind != 0) and (curve's kind != 1):
                 free curves
                 return 1
+            if curve's kind = 1:
+                set circleNormal to the cad normal of (curve's circle's plane)
+                if circleNormal's valid = false:
+                    free curves
+                    return 1
         free curves
         set surfaces to the cad keys of body's surfaces
         loop index from 0 to the length of surfaces:
             set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
-            if surface's kind != 0:
+            if (surface's kind != 0) and (surface's kind != 3):
                 free surfaces
                 return 2
-            set normal to the cad normal of (surface's plane)
+            set frame to surface's plane
+            if surface's kind = 3:
+                set frame to surface's sphere's frame
+            set normal to the cad normal of frame
             if normal's valid = false:
                 free surfaces
                 return 2
@@ -159,18 +167,38 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
         loop index from 0 to curveCount:
             set curve to the cad node pointer for (the item at index in curves) in body's curves
             set curveRecord to a cad acis initial record of "straight-curve"
-            add cad sat token (the cad acis position of (curve's line's origin)) to (the address of curveRecord)
-            add cad sat token (the cad acis position of (curve's line's direction)) to (the address of curveRecord)
+            if curve's kind = 0:
+                add cad sat token (the cad acis position of (curve's line's origin)) to (the address of curveRecord)
+                add cad sat token (the cad acis position of (curve's line's direction)) to (the address of curveRecord)
+            else:
+                set circle to curve's circle
+                set normal to the cad normal of circle's plane
+                set majorAxis to circle's plane's xAxis scaled by circle's radius
+                set curveRecord to a cad acis initial record of "ellipse-curve"
+                add cad sat token (the cad acis position of (circle's plane's origin)) to (the address of curveRecord)
+                add cad sat token (the cad acis position of (normal's value)) to (the address of curveRecord)
+                add cad sat token (the cad acis position of majorAxis) to (the address of curveRecord)
+                add cad sat token (a cad sat float token of 1.0) to (the address of curveRecord)
             ignore add cad sat record curveRecord to document
 
         set surfaces to the cad keys of body's surfaces
         loop index from 0 to surfaceCount:
             set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
-            set normal to the cad normal of (surface's plane)
+            set frame to surface's plane
+            if surface's kind = 3:
+                set frame to surface's sphere's frame
+            set normal to the cad normal of frame
             set surfaceRecord to a cad acis initial record of "plane-surface"
-            add cad sat token (the cad acis position of (surface's plane's origin)) to (the address of surfaceRecord)
-            add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
-            add cad sat token (the cad acis position of (surface's plane's xAxis)) to (the address of surfaceRecord)
+            if surface's kind = 0:
+                add cad sat token (the cad acis position of (frame's origin)) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of (frame's xAxis)) to (the address of surfaceRecord)
+            else:
+                set surfaceRecord to a cad acis initial record of "sphere-surface"
+                add cad sat token (the cad acis position of (frame's origin)) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of (surface's sphere's radius)) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of (frame's xAxis)) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
             ignore add cad sat record surfaceRecord to document
 
         loop index from 0 to edgeCount:
