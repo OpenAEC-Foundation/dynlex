@@ -36,7 +36,13 @@ local function a cad acis lower unsupported curve:
 
 local function the cad acis lower slot for {an integer:id} in {cad sat document:document}:
     execute:
-        loop position from 0 to the length of document's records's values:
+        set count to the length of document's records's values
+        if (id < 0) or (id >= count):
+            return -1
+        set direct to the item at id in document's records's values
+        if direct's recordId = id:
+            return id
+        loop position from 0 to count:
             set candidate to the item at position in document's records's values
             if candidate's recordId = id:
                 return position
@@ -156,6 +162,12 @@ local function lower cad acis edge {cad edge key:key} from {cad body:body} into 
         set expectedKind to "straight-curve"
         if curveNode's kind != 0:
             set expectedKind to "ellipse-curve"
+            set checkedFrame to curveNode's circle's plane
+            if curveNode's kind = 2:
+                set checkedFrame to curveNode's ellipse's plane
+            set checkedNormal to the cad normal of checkedFrame
+            if checkedNormal's valid = false:
+                return a cad acis lower unsupported curve
         set targetSlot to the cad acis lower geometry slot for sourceId of type "edge" at token 6 ordinal false in (@intrinsic("dereference", document))
         if targetSlot < 0:
             return a cad acis lower missing sourceId

@@ -1,0 +1,184 @@
+pending_synth;26
+pending_clean;0
+pending_dirty;3
+lower_written;3
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;3;p-1;v1073741824:0,1074266112:0,1074790400:0;v1075052544:0,0:0,0:0
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;4;p-1;v1072693248:0,1073741824:0,1074266112:0;v0:0,0:0,1072693248:0;v0:0,1072693248:0,0:0
+5;0;point;3;12;raw point;2;p-1;v1075970048:0,1075838976:0,1075576832:0
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+pending_vertex;1
+wrong;plane-surface;point
+missing_source;50
+missing_target;4
+audit;synth_only;26;ok:0
+audit;synth_mixed;2;ok:1
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;3;p-1;v1073741824:0,1074266112:0,1074790400:0;v1075052544:0,0:0,0:0
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;nurbs_surface_before_source;1;surface
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;nurbs_curve_before_source;1;curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;planar_spline_before_source;1;curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;invalid_circle_before_source;1;curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;invalid_ellipse_before_source;1;curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;missing_surface_node;1;surface
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;missing_curve_node;1;curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;partial_edge;3;wrong:ellipse-curve:straight-curve
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;ellipse-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;4;p-1;v1072693248:0,1073741824:0,1074266112:0;v0:0,0:0,1072693248:0;v0:0,1072693248:0,0:0
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;partial_vertex;3;wrong:plane-surface:point
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;3;p-1;v1073741824:0,1074266112:0,1074790400:0;v1075052544:0,0:0,0:0
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;4;p-1;v1072693248:0,1073741824:0,1074266112:0;v0:0,0:0,1072693248:0;v0:0,1072693248:0,0:0
+5;0;plane-surface;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;partial_second_face;2;missing:99
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;4;p-1;v0:0,0:0,0:0;v0:0,0:0,1072693248:0;v1072693248:0,0:0,0:0
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;sparse_source;1;missing:99
+0;99;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;sparse_target;1;missing:5
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p99;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;99;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;duplicate_source;1;missing:5
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;5;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;face_nonpointer;1;missing:5
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;ibad-pointer;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;face_null;1;missing:5
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p-1;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;edge_nonpointer;1;missing:1
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;ibad-pointer;iforward
+audit;edge_null;1;missing:1
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p-1;iforward
+audit;vertex_nonpointer;1;missing:4
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;ibad-pointer
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;vertex_null;1;missing:4
+0;5;face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;2;p-1;iold-line
+2;4;vertex;-1;-1;-;4;p-1;p1;n7;p-1
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;2;p-1;iold-plane
+5;0;point;3;12;raw point;2;p-1;iold-point
+6;1;edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward
+audit;derived_owner;3;ok:3
+0;5;vendor-face;-1;-1;-;8;p-1;p-1;p-1;p-1;p-1;p2;iforward;isingle
+1;6;straight-curve;-1;-1;-;3;p-1;v1073741824:0,1074266112:0,1074790400:0;v1075052544:0,0:0,0:0
+2;4;vendor-vertex;-1;-1;-;4;p-1;p1;n7;p0
+3;3;marker;-1;-1;-;1;iuntouched
+4;2;plane-surface;-1;-1;-;4;p-1;v1072693248:0,1073741824:0,1074266112:0;v0:0,0:0,1072693248:0;v0:0,1072693248:0,0:0
+5;0;point;3;12;raw point;2;p-1;v1075970048:0,1075838976:0,1075576832:0
+6;1;vendor-edge;-1;-1;-;8;p-1;p-1;f0:0;p-1;f1072693248:0;p-1;p6;iforward

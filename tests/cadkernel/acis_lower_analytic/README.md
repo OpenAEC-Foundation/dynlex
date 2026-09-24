@@ -22,5 +22,6 @@ python -B tests/cadkernel/acis_lower_analytic/verify.py --source <pinned-source-
 python -B tests/cadkernel/verify.py --filter cadkernel_acis_lower_analytic --filter cadkernel_acis_lower_geometry
 ```
 
-NURBS geometry and insertion of synthesized topology remain outside this
-bounded route.
+The pinned `lower.rs` source refuses NURBS geometry and skips synthesized
+topology even though `pending` counts it. The separate lower audit verifies
+these behaviors, error priority and partial-write order for the whole module.
