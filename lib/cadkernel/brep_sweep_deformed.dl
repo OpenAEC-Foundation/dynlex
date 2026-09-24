@@ -60,14 +60,10 @@ local function cad sample deform path {a pointer to a list:path} on {cad plane:p
                 return empty
             set pathSubdivisions to 1
             if piece's kind = 2:
-                set arcSteps to (the absolute value of (the cad sweep of (piece's arc))) / angleStep
-                set arcCeiling to the ceiling of arcSteps
-                set pathSubdivisions to (the maximum of arcCeiling and 1.0) as an integer
+                set pathSubdivisions to (the maximum of (the ceiling of ((the absolute value of (the cad sweep of (piece's arc))) / angleStep)) and 1.0) as an integer
             else if piece's kind != 0:
                 return empty
-            set twistSteps to (((the absolute value of twistAngle) * pieceLength) / totalLength) / angleStep
-            set twistCeiling to the ceiling of twistSteps
-            set twistSubdivisions to (the maximum of twistCeiling and 1.0) as an integer
+            set twistSubdivisions to (the maximum of (the ceiling of ((((the absolute value of twistAngle) * pieceLength) / totalLength) / angleStep)) and 1.0) as an integer
             set subdivisions to the maximum of pathSubdivisions and twistSubdivisions
             loop step from 0 to (subdivisions + 1):
                 if (index = 0) or (step > 0):

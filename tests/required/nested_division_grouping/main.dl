@@ -1,0 +1,39 @@
+function return value:
+    replacement:
+        @intrinsic("return", value)
+
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function left / right:
+    execute:
+        return @intrinsic("divide", left, right)
+
+function the ceiling of value:
+    after: default
+    execute:
+        return @intrinsic("ceil", value)
+
+function the maximum of left and right:
+    after: default
+    execute:
+        return @intrinsic("max", left, right)
+
+function show value:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.0f\n", value)
+
+set numerator to 1.5
+set first to 3.0
+set second to 0.17453292519943295
+set nested to the maximum of (the ceiling of (numerator / first / second)) and 1.0
+show nested

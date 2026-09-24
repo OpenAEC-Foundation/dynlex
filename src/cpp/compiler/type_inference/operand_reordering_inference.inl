@@ -186,10 +186,11 @@ static bool inferExpression(
 		}
 		if (candidateDeferred == selectedGroupingDeferred &&
 			snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping)) {
-			selectedGrouping = std::move(candidateGrouping);
-			selectedGroupingWarnings = std::move(candidateGroupingWarnings);
-			selectedFixedGroupingRoots = std::move(resolvedGroupingRoots);
-			lastAcceptedTransaction = std::move(candidateTransaction);
+			// Internal groupings at an opaque boundary are locally equivalent.
+			// Preserve the first, prioritized choice instead of replacing it
+			// with a later candidate that may evaluate to a different value.
+			candidateTransaction->rollback(expr);
+			candidateTransaction.reset();
 			return GroupingEnumerationProgress::EmittedContinue;
 		}
 		candidateTransaction->rollback(expr);

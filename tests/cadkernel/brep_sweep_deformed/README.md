@@ -4,7 +4,7 @@ The native operation follows pinned `src/brep/sweep.rs::sweep_along_deformed` an
 
 The required fixture covers the main valid operations and refusals at O0 and O2. `verify.py` pins the Rust source revision and file hash, then compares validity, all nine arena counts, roots, flaws, two-coedge edges, pcurve counts, face direction counts, and normalized vertex coordinates. Coordinates are sorted because arena insertion order may differ.
 
-`expression_reproducer.dl` isolates a compiler expression discrepancy: separately evaluating `ceiling` and `maximum` prints `3`, while the mathematically equivalent nested expression prints `1` at both O0 and O2 without diagnostics. The sweep uses separate assignments for arc and twist subdivision counts. The compiler is unchanged.
+`expression_reproducer.dl` isolates the former compiler grouping discrepancy: separately evaluating `ceiling` and `maximum` printed `3`, while the equivalent nested expression printed `1` without diagnostics. The repaired compiler now prints `3` for both at O0/O2. The sweep uses the source's nested expressions directly for arc and twist subdivision counts; the required expression fixture preserves that behavior.
 
 Run from the repository root:
 
