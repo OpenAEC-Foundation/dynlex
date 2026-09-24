@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MPL-2.0
+# Cone creation path of cadkernel src/acis/history.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The four scalars project SolidHistoryCone; the borrowed matrix projects
+# SolidHistoryNodeBase.transform. A successful result owns its B-rep body.
+import lib/cadkernel/acis_history_frames.dl
+import lib/cadkernel/brep_make.dl
+
+class:
+    patterns:
+        [a|] cad history cone body result
+    members:
+        valid as a boolean
+        value as a cad body
+        failure as an integer
+
+# 1 = InvalidTransform, 2 = InvalidParameters. Read value only if valid.
+local function the cad history cone refusal for {an integer:reason}:
+    execute:
+        set empty to no cad body
+        return @intrinsic("construct", a cad history cone body result, false, empty's value, reason)
+
+# Match finish(make::frustum([0; 3], base_x_radius, base_y_radius,
+# top_radius, height), base.transform): both pointed and nonpointed forms
+# are built before placement parsing, then similarity is checked.
+function the cad history rebuilt cone with base x radius {a 64 bit floating-point number:baseXRadius}, base y radius {a 64 bit floating-point number:baseYRadius}, top radius {a 64 bit floating-point number:topRadius}, height {a 64 bit floating-point number:height} and transform {a pointer to a list:matrix}:
+    execute:
+        set created to the cad frustum at (the cad zero vector3) with base x radius baseXRadius, base y radius baseYRadius, top radius topRadius and height height
+        if created's valid = false:
+            return the cad history cone refusal for 2
+        set parsed to the cad history placement of matrix
+        if parsed's valid = false:
+            return the cad history cone refusal for 1
+        set moved to the cad transformed (created's value) by (parsed's value)
+        if moved's valid = false:
+            return the cad history cone refusal for 1
+        return @intrinsic("construct", a cad history cone body result, true, moved's value, 0)

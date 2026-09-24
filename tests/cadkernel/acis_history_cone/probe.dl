@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_cone.dl
+
+function check history cone {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a history cone identity matrix:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+        loop index from 0 to 16:
+            append (the item at index in entries) to values
+        return values
+
+function check history cone solid {cad body:body}:
+    execute:
+        set flaws to the cad flaws of body
+        check history cone ((the length of flaws) = 0)
+        free flaws
+        check history cone ((the cad euler characteristic of body) = 2)
+
+set matrix to a history cone identity matrix
+set circularPoint to the cad history rebuilt cone with base x radius 4.0, base y radius 4.0, top radius 0.0, height 7.0 and transform matrix
+check history cone circularPoint's valid
+check history cone (circularPoint's failure = 0)
+check history cone ((the cad count of (circularPoint's value's faces)) = 2)
+check history cone solid circularPoint's value
+print "circular_pointed_cone_is_analytic_solid" as a line
+
+set ellipticPoint to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 0.0, height 7.0 and transform matrix
+check history cone ellipticPoint's valid
+check history cone ((the cad count of (ellipticPoint's value's faces)) = 2)
+check history cone solid ellipticPoint's value
+print "elliptical_pointed_cone_is_ruled_solid" as a line
+
+set circularFrustum to the cad history rebuilt cone with base x radius 4.0, base y radius 4.0, top radius 1.5, height 7.0 and transform matrix
+check history cone circularFrustum's valid
+check history cone solid circularFrustum's value
+set ellipticFrustum to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 1.5, height 7.0 and transform matrix
+check history cone ellipticFrustum's valid
+check history cone ((the cad count of (ellipticFrustum's value's faces)) = 6)
+check history cone solid ellipticFrustum's value
+print "circular_revolution_and_elliptical_loft_frusta" as a line
+
+set vertices to the cad vertex keys of ellipticFrustum's value
+set first to the cad node pointer for (the item at 0 in vertices) in ellipticFrustum's value
+check history cone ((first's provenance's kind) = 0)
+check history cone ((ellipticFrustum's value's provenance's kind) = 0)
+free vertices
+print "history_cone_provenance_is_synthesized" as a line
+
+set refused to the cad history rebuilt cone with base x radius 0.0, base y radius 2.0, top radius 1.5, height 7.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius -1.0, height 7.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 1.5, height 0.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 2))
+print "invalid_base_top_and_height_are_refused" as a line
+
+replace item at index 3 in matrix with 2e-9
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 1.5, height 7.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 1))
+check history cone ((the item at 3 in matrix) = 2e-9)
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius -1.0, height 7.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 2))
+print "invalid_cone_parameters_precede_invalid_matrix" as a line
+
+replace item at index 3 in matrix with 0.0
+replace item at index 4 in matrix with 0.25
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 1.5, height 7.0 and transform matrix
+check history cone ((refused's valid = false) and (refused's failure = 1))
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+set refused to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius 1.5, height 7.0 and transform shortMatrix
+check history cone ((refused's valid = false) and (refused's failure = 1))
+free shortMatrix
+print "shear_and_short_transform_are_refused" as a line
+
+replace item at index 4 in matrix with 0.0
+replace item at index 12 in matrix with 5.0
+set moved to the cad history rebuilt cone with base x radius 4.0, base y radius 4.0, top radius 0.0, height 7.0 and transform matrix
+check history cone moved's valid
+set retained to moved's value
+set moved to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius -1.0, height 7.0 and transform matrix
+free matrix
+set keys to the cad vertex keys of retained
+set first to the cad node pointer for (the item at 0 in keys) in retained
+check history cone ((first's point's x) = 9.0)
+free keys
+set copied to the cad clone of retained
+set retained to an empty cad body
+check history cone ((the cad count of (copied's faces)) = 2)
+set copied to an empty cad body
+print "matrix_borrow_and_body_ownership_are_independent" as a line
+
+loop cycle from 0 to 32:
+    set temporary to a history cone identity matrix
+    set current to the cad history rebuilt cone with base x radius 4.0, base y radius 4.0, top radius 0.0, height 7.0 and transform temporary
+    check history cone current's valid
+    free temporary
+    set current to the cad history rebuilt cone with base x radius 4.0, base y radius 2.0, top radius -1.0, height 7.0 and transform (a history cone identity matrix)
+print "repeated_rebuild_and_release" as a line

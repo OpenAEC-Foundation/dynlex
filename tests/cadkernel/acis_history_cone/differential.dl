@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+import lib/cadkernel/acis_history_cone.dl
+
+set baseXRadius to maker argument 1
+set baseYRadius to maker argument 2
+set topRadius to maker argument 3
+set height to maker argument 4
+set matrix to an empty list of a 64 bit floating-point number
+loop index from 0 to 16:
+    append (maker argument (index + 5)) to matrix
+set rebuilt to the cad history rebuilt cone with base x radius baseXRadius, base y radius baseYRadius, top radius topRadius, height height and transform matrix
+emit maker number (rebuilt's failure)
+if rebuilt's valid:
+    emit maker body (rebuilt's value)
+free matrix
