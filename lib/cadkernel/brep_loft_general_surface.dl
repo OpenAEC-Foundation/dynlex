@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+# Strict NURBS construction from one homogeneous base patch, pinned
+# loft_general.rs::Patch::surface() at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_loft_general_base_patch.dl
+import lib/cadkernel/nurbs3.dl
+
+# Code 1: invalid upstream result/column or malformed net; 2: strict rational
+# refusal; 3: degenerate midpoint when the assemble() check is requested.
+class:
+    patterns:
+        [a|] cad loft general strict surface result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+        surface as a cad nurbs surface3
+
+local function cad loft general surface failure {integer:code}:
+    execute:
+        set points to an empty list of the type of (an empty list of a cad vector3)
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        set knots to an empty list of a 64 bit floating-point number
+        set absent to the strict cad nurbs surface3 of degrees 0 and 0 with controls points, knots knots and knots and weights weights
+        free points
+        free weights
+        free knots
+        return @intrinsic("construct", a cad loft general strict surface result,
+            false, code, 0.0, 0.0, absent's value)
+
+local function free cad loft general surface point rows {a pointer to a list:rows}:
+    execute:
+        loop index from 0 to the length of rows:
+            free (the item at index in rows)
+        free rows
+
+local function free cad loft general surface weight rows {a pointer to a list:rows}:
+    execute:
+        loop index from 0 to the length of rows:
+            free (the item at index in rows)
+        free rows
+
+local function cad loft general make bezierknots {integer:degree}:
+    execute:
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to (degree + 1):
+            append 0.0 to knots
+        loop index from 0 to (degree + 1):
+            append 1.0 to knots
+        return knots
+
+function cad loft general construct strict nurbspatch {cad loft general base patch result:base} columnnumber {integer:column} midpointregular {boolean:checkMidpoint}:
+    execute:
+        if base's valid = false:
+            return cad loft general surface failure 1
+        set patchCount to the length of base's patches's values
+        if (column < 0) or (column >= patchCount):
+            return cad loft general surface failure 1
+        set patch to the item at column in base's patches's values
+        set rowCount to the length of patch's rows's values
+        if rowCount < 2:
+            return cad loft general surface failure 1
+        set firstRow to the item at 0 in patch's rows's values
+        set columnCount to the length of firstRow's values
+        if columnCount < 2:
+            return cad loft general surface failure 1
+        set controls to an empty list of the type of (an empty list of a cad vector3)
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        loop rowIndex from 0 to rowCount:
+            set sourceRow to the item at rowIndex in patch's rows's values
+            if (the length of sourceRow's values) != columnCount:
+                free cad loft general surface point rows controls
+                free cad loft general surface weight rows weights
+                return cad loft general surface failure 1
+            set points to an empty list of a cad vector3
+            set rowWeights to an empty list of a 64 bit floating-point number
+            loop columnIndex from 0 to columnCount:
+                set h to the item at columnIndex in sourceRow's values
+                append (a cad vector3 with x (h's x / h's w), y (h's y / h's w) and z (h's z / h's w)) to points
+                append h's w to rowWeights
+            append points to controls
+            append rowWeights to weights
+        set uDegree to rowCount - 1
+        set vDegree to columnCount - 1
+        set uKnots to cad loft general make bezierknots uDegree
+        set vKnots to cad loft general make bezierknots vDegree
+        set made to the strict cad nurbs surface3 of degrees uDegree and vDegree with controls controls, knots uKnots and vKnots and weights weights
+        free cad loft general surface point rows controls
+        free cad loft general surface weight rows weights
+        free uKnots
+        free vKnots
+        if made's valid = false:
+            return cad loft general surface failure 2
+        if checkMidpoint:
+            set normal to the cad normal of made's value at parameters 0.5 and 0.5
+            if normal's valid = false:
+                return cad loft general surface failure 3
+        return @intrinsic("construct", a cad loft general strict surface result,
+            true, 0, patch's start, patch's end, made's value)

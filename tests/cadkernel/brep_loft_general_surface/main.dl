@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_surface.dl
+
+function check loft surface {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function loft surface profile at {a number:height}:
+    execute:
+        set origin to a cad vector3 with x 0.0, y 0.0 and z (height as a 64 bit floating-point number)
+        set plane to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+        set start to a cad vector2 with x 0.0 and y 0.0
+        set finish to a cad vector2 with x 2.0 and y 0.0
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        append (the cad curve2 of (a cad line2 from start to finish)) to pieces's values
+        set wires to a cad topology list of the type of pieces
+        append pieces to wires's values
+        set result to a cad loft general alignment input on plane with wires wires's values closing false
+        set wires to a new (the type of wires)
+        set pieces to a new (the type of pieces)
+        return result
+
+function loft surface preparetwoprofiles:
+    execute:
+        set inputs to an empty list of a cad loft general alignment input
+        append (loft surface profile at 0) to inputs
+        append (loft surface profile at 4) to inputs
+        set aligned to the cad loft general alignment of inputs with cycle false and direction matching true
+        set options to the default cad loft general patch options
+        set base to cad loft general construct base grid aligned boundary 0 transition 0 configured options
+        free inputs
+        return base
+
+function loft surface retained:
+    execute:
+        set base to loft surface preparetwoprofiles
+        set result to cad loft general construct strict nurbspatch base columnnumber 0 midpointregular true
+        set options to the default cad loft general patch options
+        set options's normalMode to 7
+        set emptyAligned to the cad loft general alignment of (an empty list of a cad loft general alignment input) with cycle false and direction matching true
+        set base to cad loft general construct base grid emptyAligned boundary 0 transition 0 configured options
+        return result
+
+function loft surface homogeneous {a number:x} {a number:y} {a number:z} weight {a number:weight}:
+    execute:
+        set w to weight as a 64 bit floating-point number
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (x as a 64 bit floating-point number) * w, (y as a 64 bit floating-point number) * w,
+            (z as a 64 bit floating-point number) * w, w)
+
+function loft surface synthesize net {boolean:negativeWeight} collapse {boolean:degenerate}:
+    execute:
+        set first to a cad topology list of a cad loft general homogeneous point
+        append (loft surface homogeneous 0 0 0 weight 1) to first's values
+        append (loft surface homogeneous 0 0 1 weight 1) to first's values
+        set second to a cad topology list of a cad loft general homogeneous point
+        set offset to 1
+        if degenerate:
+            set offset to 0
+        append (loft surface homogeneous offset 0 0 weight 1) to second's values
+        set weight to 1
+        if negativeWeight:
+            set weight to -1
+        append (loft surface homogeneous offset 0 1 weight weight) to second's values
+        set rows to a cad topology list of the type of first
+        append first to rows's values
+        append second to rows's values
+        set patch to @intrinsic("construct", a cad loft general base patch, 0.0, 1.0, rows)
+        set patches to a cad topology list of a cad loft general base patch
+        append patch to patches's values
+        set lengths to a cad topology list of a 64 bit floating-point number
+        append 1.0 to lengths's values
+        return @intrinsic("construct", a cad loft general base patch result, true, 0, lengths, patches)
+
+set base to loft surface preparetwoprofiles
+check loft surface base's valid
+set result to cad loft general construct strict nurbspatch base columnnumber 0 midpointregular true
+check loft surface result's valid
+check loft surface ((result's surface's uDegree = 1) and (result's surface's vDegree = 3))
+check loft surface (((the length of result's surface's uKnots) = 4) and ((the length of result's surface's vKnots) = 8))
+set normal to the cad normal of result's surface at parameters 0.5 and 0.5
+check loft surface normal's valid
+set point to the cad point on result's surface at parameters 0.25 and 0.75
+check loft surface ((the absolute value of (point's z - 3.0)) < 1e-12)
+print "prepared_patch_converts_to_strict_surface" as a line
+
+set invalid to cad loft general construct strict nurbspatch base columnnumber -1 midpointregular true
+check loft surface ((invalid's valid = false) and (invalid's errorCode = 1))
+set invalid to cad loft general construct strict nurbspatch base columnnumber 1 midpointregular true
+check loft surface ((invalid's valid = false) and (invalid's errorCode = 1))
+set invalidBase to loft surface synthesize net true collapse false
+set invalid to cad loft general construct strict nurbspatch invalidBase columnnumber 0 midpointregular false
+check loft surface ((invalid's valid = false) and (invalid's errorCode = 2))
+print "invalid_column_and_negative_weight_refused" as a line
+
+set flatBase to loft surface synthesize net false collapse true
+set unchecked to cad loft general construct strict nurbspatch flatBase columnnumber 0 midpointregular false
+check loft surface unchecked's valid
+set checked to cad loft general construct strict nurbspatch flatBase columnnumber 0 midpointregular true
+check loft surface ((checked's valid = false) and (checked's errorCode = 3))
+print "midpoint_regular_check_refuses_degenerate_surface" as a line
+
+set failureBase to loft surface synthesize net false collapse false
+set failureBase's valid to false
+loop iteration from 0 to 500:
+    set temporary to loft surface retained
+    check loft surface temporary's valid
+    set retained to temporary
+    set temporary to cad loft general construct strict nurbspatch failureBase columnnumber 0 midpointregular true
+    check loft surface (temporary's valid = false)
+    set point to the cad point on retained's surface at parameters 0.25 and 0.75
+    check loft surface ((the absolute value of (point's z - 3.0)) < 1e-12)
+print "surface_owner_survives_base_release_and_repetition" as a line

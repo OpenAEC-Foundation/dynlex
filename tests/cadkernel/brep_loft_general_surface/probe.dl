@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft_general_align/input.dl
+import lib/cadkernel/brep_loft_general_surface.dl
+
+allocate one slot of (a new loft general align reader) and set reader to it
+set cyclic to (loft general align next reader) != 0.0
+set matching to (loft general align next reader) != 0.0
+set mode to (loft general align next reader) as an integer
+set periodic to (loft general align next reader) != 0.0
+set startAngle to loft general align next reader
+set endAngle to loft general align next reader
+set startMagnitude to loft general align next reader
+set endMagnitude to loft general align next reader
+set wireIndex to (loft general align next reader) as an integer
+set band to (loft general align next reader) as an integer
+set regular to (loft general align next reader) != 0.0
+set sectionCount to (loft general align next reader) as an integer
+set inputs to an empty list of a cad loft general alignment input
+loop sectionIndex from 0 to sectionCount:
+    set origin to loft general align point3 from reader
+    set xAxis to loft general align point3 from reader
+    set yAxis to loft general align point3 from reader
+    set plane to a cad plane with origin origin, x axis xAxis and y axis yAxis
+    set closing to (loft general align next reader) != 0.0
+    set wireCount to (loft general align next reader) as an integer
+    set wires to a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+    loop wireNumber from 0 to wireCount:
+        set pieceCount to (loft general align next reader) as an integer
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop pieceIndex from 0 to pieceCount:
+            append (loft general align curve from reader) to pieces's values
+        append pieces to wires's values
+    append (a cad loft general alignment input on plane with wires wires's values closing closing) to inputs
+@intrinsic("call", "libc", "free", nothing, reader)
+set aligned to the cad loft general alignment of inputs with cycle cyclic and direction matching matching
+set settings to @intrinsic("construct", a cad loft general patch options,
+    cyclic, periodic, mode, startAngle, endAngle, startMagnitude, endMagnitude)
+set base to cad loft general construct base grid aligned boundary wireIndex transition band configured settings
+set resultCount to the length of base's patches's values
+if resultCount = 0:
+    set resultCount to 1
+loft general align emit resultCount
+loop patchIndex from 0 to resultCount:
+    set result to cad loft general construct strict nurbspatch base columnnumber patchIndex midpointregular regular
+    loft general align emit (result's valid as an integer)
+    loft general align emit result's errorCode
+    if result's valid:
+        loft general align emit result's start
+        loft general align emit result's end
+        set shape to result's surface
+        loft general align emit shape's uDegree
+        loft general align emit shape's vDegree
+        loft general align emit (shape's uClosed as an integer)
+        loft general align emit (shape's vClosed as an integer)
+        loft general align emit (shape's vReversed as an integer)
+        loft general align emit (the length of shape's uKnots)
+        loop index from 0 to the length of shape's uKnots:
+            loft general align emit (the item at index in shape's uKnots)
+        loft general align emit (the length of shape's vKnots)
+        loop index from 0 to the length of shape's vKnots:
+            loft general align emit (the item at index in shape's vKnots)
+        loft general align emit (the length of shape's controls)
+        loop rowIndex from 0 to the length of shape's controls:
+            set row to the item at rowIndex in shape's controls
+            set weights to the item at rowIndex in shape's weights
+            loft general align emit (the length of row)
+            loop index from 0 to the length of row:
+                loft general align emit point (the item at index in row)
+                loft general align emit (the item at index in weights)
+        set normal to the cad normal of shape at parameters 0.5 and 0.5
+        loft general align emit (normal's valid as an integer)
+        if normal's valid:
+            loft general align emit point normal's value
+        loft general align emit point (the cad point on shape at parameters 0.25 and 0.75)
