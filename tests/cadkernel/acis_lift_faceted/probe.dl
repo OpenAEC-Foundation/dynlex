@@ -1,0 +1,317 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_lift_faceted.dl
+import lib/cadkernel/acis_append_faceted.dl
+import lib/cadkernel/brep_make.dl
+
+function check acis lift {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function the acis lift bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set raw to value
+        set word to the value at ((the address of raw) as a pointer to a 64 bit unsigned integer)
+        set high to (word shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to word as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the acis lift vector of {cad vector3:value}:
+    execute:
+        set result to (the acis lift bits of value's x) + (the string form of ",")
+        set result to (result + (the acis lift bits of value's y)) + (the string form of ",")
+        return result + (the acis lift bits of value's z)
+
+function the acis lift source of {cad provenance:value}:
+    execute:
+        if value's kind = 0:
+            return -1
+        if value's kind = 2:
+            return -2 - (value's reference's index as an integer)
+        return value's reference's index as an integer
+
+function the acis lift flag of {boolean:value}:
+    execute:
+        if value:
+            return the string form of "1"
+        return the string form of "0"
+
+function the acis lift join {a string:lineValue} with {a string:entry}:
+    execute:
+        return (lineValue + (the string form of ";")) + entry
+
+function the acis lift list join {a string:lineValue} with {a string:entry}:
+    execute:
+        if (the length of lineValue) = 0:
+            return entry
+        return (lineValue + (the string form of ",")) + entry
+
+function the acis lift coedge sources of {cad topology list:keys} in {cad body:body}:
+    execute:
+        set result to the string form of ""
+        loop index from 0 to the length of (keys's values):
+            set key to the item at index in (keys's values)
+            set node to the cad node pointer for key in body
+            set result to the acis lift list join result with (the string form of (the acis lift source of node's provenance))
+        return result
+
+function the acis lift loop sources of {cad topology list:keys} in {cad body:body}:
+    execute:
+        set result to the string form of ""
+        loop index from 0 to the length of (keys's values):
+            set key to the item at index in (keys's values)
+            set node to the cad node pointer for key in body
+            set result to the acis lift list join result with (the string form of (the acis lift source of node's provenance))
+        return result
+
+function the acis lift face sources of {cad topology list:keys} in {cad body:body}:
+    execute:
+        set result to the string form of ""
+        loop index from 0 to the length of (keys's values):
+            set key to the item at index in (keys's values)
+            set node to the cad node pointer for key in body
+            set result to the acis lift list join result with (the string form of (the acis lift source of node's provenance))
+        return result
+
+function the acis lift shell sources of {cad topology list:keys} in {cad body:body}:
+    execute:
+        set result to the string form of ""
+        loop index from 0 to the length of (keys's values):
+            set key to the item at index in (keys's values)
+            set node to the cad node pointer for key in body
+            set result to the acis lift list join result with (the string form of (the acis lift source of node's provenance))
+        return result
+
+function trace acis lifted {cad body:body} as {a string:label}:
+    execute:
+        set flaws to the cad flaws of body
+        check acis lift ((the length of flaws) = 0)
+        check acis lift ((the cad worst vertex gap of body) = 0.0)
+        print (the acis lift join "case" with label) as a line
+        set lineValue to the acis lift join "body" with (the string form of (the acis lift source of body's provenance))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's vertices))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's edges))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's coedges))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's loops))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's faces))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's shells))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's lumps))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's surfaces))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad count of body's curves))
+        set lineValue to the acis lift join lineValue with (the string form of (the length of flaws))
+        set lineValue to the acis lift join lineValue with (the string form of (the cad euler characteristic of body))
+        set lineValue to the acis lift join lineValue with (the acis lift bits of (the cad worst vertex gap of body))
+        print lineValue as a line
+        free flaws
+        set rootSources to the string form of ""
+        loop index from 0 to the length of body's roots:
+            set node to the cad node pointer for (the item at index in body's roots) in body
+            set rootSources to the acis lift list join rootSources with (the string form of (the acis lift source of node's provenance))
+        print (the acis lift join "roots" with rootSources) as a line
+
+        set surfaceKeys to the cad keys of body's surfaces
+        loop index from 0 to the length of surfaceKeys:
+            set key to the item at index in surfaceKeys
+            set surfaceNode to the cad node pointer for key in body's surfaces
+            check acis lift (surfaceNode's kind = 0)
+            set lineValue to the acis lift join "surface" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's plane's origin)
+            set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's plane's xAxis)
+            set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's plane's yAxis)
+            print lineValue as a line
+        free surfaceKeys
+        set curveKeys to the cad keys of body's curves
+        loop index from 0 to the length of curveKeys:
+            set key to the item at index in curveKeys
+            set curveNode to the cad node pointer for key in body's curves
+            check acis lift (curveNode's kind = 0)
+            set lineValue to the acis lift join "curve" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's origin)
+            set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's direction)
+            print lineValue as a line
+        free curveKeys
+        set vertexKeys to the cad vertex keys of body
+        loop index from 0 to the length of vertexKeys:
+            set key to the item at index in vertexKeys
+            set node to the cad node pointer for key in body
+            set lineValue to the acis lift join "vertex" with (the string form of (the cad slot of key))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift vector of node's point)
+            print lineValue as a line
+        free vertexKeys
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set key to the item at index in edgeKeys
+            set node to the cad node pointer for key in body
+            set startNode to the cad node pointer for node's start in body
+            set endNode to the cad node pointer for node's end in body
+            set lineValue to the acis lift join "edge" with (the string form of (the cad slot of key))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the cad slot of node's curve))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of startNode's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of endNode's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift bits of node's startParameter)
+            set lineValue to the acis lift join lineValue with (the acis lift bits of node's endParameter)
+            set lineValue to the acis lift join lineValue with (the acis lift coedge sources of node's coedges in body)
+            print lineValue as a line
+        free edgeKeys
+        set coedgeKeys to the cad keys of body's coedges
+        loop index from 0 to the length of coedgeKeys:
+            set key to the item at index in coedgeKeys
+            set node to the cad node pointer for key in body's coedges
+            set edgeNode to the cad node pointer for node's edge in body
+            set ringNode to the cad node pointer for node's owner in body
+            set lineValue to the acis lift join "coedge" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of edgeNode's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of ringNode's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift flag of node's forward)
+            set lineValue to the acis lift join lineValue with (the acis lift flag of node's pcurve's valid)
+            print lineValue as a line
+        free coedgeKeys
+        set loopKeys to the cad keys of body's loops
+        loop index from 0 to the length of loopKeys:
+            set key to the item at index in loopKeys
+            set node to the cad node pointer for key in body's loops
+            set faceNode to the cad node pointer for node's owner in body
+            set lineValue to the acis lift join "loop" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of faceNode's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift coedge sources of node's coedges in body)
+            print lineValue as a line
+        free loopKeys
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set key to the item at index in faceKeys
+            set node to the cad node pointer for key in body
+            set shellNode to the cad node pointer for node's owner in body
+            set lineValue to the acis lift join "face" with (the string form of (the cad slot of key))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the cad slot of node's surface))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of shellNode's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift flag of node's forward)
+            set lineValue to the acis lift join lineValue with (the acis lift loop sources of node's loops in body)
+            print lineValue as a line
+        free faceKeys
+        set shellKeys to the cad keys of body's shells
+        loop index from 0 to the length of shellKeys:
+            set key to the item at index in shellKeys
+            set node to the cad node pointer for key in body's shells
+            set lumpNode to the cad node pointer for node's owner in body
+            set lineValue to the acis lift join "shell" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of lumpNode's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift face sources of node's faces in body)
+            print lineValue as a line
+        free shellKeys
+        set lumpKeys to the cad keys of body's lumps
+        loop index from 0 to the length of lumpKeys:
+            set key to the item at index in lumpKeys
+            set node to the cad node pointer for key in body's lumps
+            set lineValue to the acis lift join "lump" with (the string form of (key's index))
+            set lineValue to the acis lift join lineValue with (the string form of (the acis lift source of node's provenance))
+            set lineValue to the acis lift join lineValue with (the acis lift shell sources of node's shells in body)
+            print lineValue as a line
+        free lumpKeys
+
+set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 2.0 and z 4.0)
+check acis lift (made's valid)
+set document to an empty cad sat document
+ignore add cad sat record (a cad sat record numbered -1 of type "seed") to (the address of document)
+set appended to append cad faceted body (made's value) to (the address of document)
+check acis lift (appended's valid)
+set lifted to lift cad faceted body numbered (appended's body) from document
+check acis lift (lifted's valid)
+trace acis lifted lifted's body as "base"
+
+set changed to the cad sat clone of document
+set edgeRecord to the cad sat clone of ((the cad sat record numbered 35 in changed)'s value)
+replace item at index 2 in edgeRecord's tokens's values with (a cad sat float token of -123.0)
+replace item at index 4 in edgeRecord's tokens's values with (a cad sat float token of 123.0)
+replace item at index 7 in edgeRecord's tokens's values with (a cad sat ident token of "reversed")
+replace item at index 35 in changed's records's values with edgeRecord
+set firstRecord to the item at 0 in changed's records's values
+set secondRecord to the item at 85 in changed's records's values
+replace item at index 0 in changed's records's values with secondRecord
+replace item at index 85 in changed's records's values with firstRecord
+set firstRecord to the item at 1 in changed's records's values
+set secondRecord to the item at 77 in changed's records's values
+replace item at index 1 in changed's records's values with secondRecord
+replace item at index 77 in changed's records's values with firstRecord
+set firstRecord to the item at 35 in changed's records's values
+set secondRecord to the item at 47 in changed's records's values
+replace item at index 35 in changed's records's values with secondRecord
+replace item at index 47 in changed's records's values with firstRecord
+check acis lift (((the item at 0 in changed's records's values)'s recordId) = 85)
+set lifted to lift cad faceted body numbered (appended's body) from changed
+check acis lift (lifted's valid)
+trace acis lifted lifted's body as "reordered"
+
+set unsupported to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 29 in unsupported)'s value)
+set altered's entityType to "unsupported-surface"
+replace item at index 29 in unsupported's records's values with altered
+set rejected to lift cad faceted body numbered 85 from unsupported
+check acis lift (rejected's valid = false)
+check acis lift (rejected's failure = 4)
+check acis lift (rejected's source = 29)
+check acis lift ((the cad count of rejected's body's faces) = 0)
+
+set wrong to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 71 in wrong)'s value)
+set altered's entityType to "marker"
+replace item at index 71 in wrong's records's values with altered
+set rejected to lift cad faceted body numbered 85 from wrong
+check acis lift (rejected's valid = false)
+check acis lift (rejected's failure = 2)
+check acis lift (rejected's source = 71)
+check acis lift ((the cad count of rejected's body's faces) = 0)
+
+set missing to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 77 in missing)'s value)
+replace item at index 5 in altered's tokens's values with (a cad sat pointer token for (a cad sat pointer to 999))
+replace item at index 77 in missing's records's values with altered
+set rejected to lift cad faceted body numbered 85 from missing
+check acis lift (rejected's valid = false)
+check acis lift (rejected's failure = 1)
+check acis lift (rejected's source = 999)
+check acis lift ((the cad count of rejected's body's faces) = 0)
+
+set openRing to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 47 in openRing)'s value)
+replace item at index 1 in altered's tokens's values with (a cad sat pointer token for (a cad sat pointer to 47))
+replace item at index 47 in openRing's records's values with altered
+set rejected to lift cad faceted body numbered 85 from openRing
+check acis lift (rejected's valid = false)
+check acis lift (rejected's failure = 7)
+check acis lift ((the cad count of rejected's body's faces) = 0)
+
+set reversedFace to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 77 in reversedFace)'s value)
+replace item at index 6 in altered's tokens's values with (a cad sat ident token of "reversed")
+replace item at index 77 in reversedFace's records's values with altered
+set oriented to lift cad faceted body numbered 85 from reversedFace
+check acis lift (oriented's valid)
+set faceKeys to the cad face keys of oriented's body
+set faceNode to the cad node pointer for (the item at 0 in faceKeys) in oriented's body
+check acis lift (faceNode's forward = false)
+print "orientation;face77;0" as a line
+free faceKeys
+
+set tolerantVertex to the cad sat clone of document
+set altered to the cad sat clone of ((the cad sat record numbered 2 in tolerantVertex)'s value)
+set pointToken to the item at 2 in altered's tokens's values
+replace item at index 2 in altered's tokens's values with (a cad sat integer token of 7)
+add cad sat token pointToken to (the address of altered)
+replace item at index 2 in tolerantVertex's records's values with altered
+set tolerant to lift cad faceted body numbered 85 from tolerantVertex
+check acis lift (tolerant's valid)
+check acis lift ((the cad count of tolerant's body's vertices) = 8)
+set vertexKeys to the cad vertex keys of tolerant's body
+set vertexNode to the cad node pointer for (the item at 0 in vertexKeys) in tolerant's body
+check acis lift ((the cad squared length of vertexNode's point) = 0.0)
+check acis lift ((vertexNode's provenance's reference's index as an integer) = 2)
+print "tolerance;vertex2;0" as a line
+free vertexKeys

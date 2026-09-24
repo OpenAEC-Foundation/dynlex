@@ -1,0 +1,443 @@
+# SPDX-License-Identifier: MPL-2.0
+# In-memory faceted SAT lift from the pinned src/acis/lift.rs.
+# This slice accepts planar faces, straight edges and closed coedge rings.
+# It refuses unsupported or malformed records instead of returning a partial body.
+import lib/cadkernel/acis_records.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad acis faceted lift result
+    members:
+        valid as a boolean
+        body as a cad body
+        failure as an integer
+        source as an integer
+
+class:
+    patterns:
+        [a|] cad acis faceted vertex result
+    members:
+        valid as a boolean
+        value as a cad vertex key
+class:
+    patterns:
+        [a|] cad acis faceted edge result
+    members:
+        valid as a boolean
+        value as a cad edge key
+class:
+    patterns:
+        [a|] cad acis faceted curve result
+    members:
+        valid as a boolean
+        value as a cad curve key
+class:
+    patterns:
+        [a|] cad acis faceted surface result
+    members:
+        valid as a boolean
+        value as a cad surface key
+
+class:
+    patterns:
+        [a|] cad acis faceted seen vertex
+    members:
+        id as an integer
+        key as a cad vertex key
+class:
+    patterns:
+        [a|] cad acis faceted seen edge
+    members:
+        id as an integer
+        key as a cad edge key
+class:
+    patterns:
+        [a|] cad acis faceted seen curve
+    members:
+        id as an integer
+        key as a cad curve key
+class:
+    patterns:
+        [a|] cad acis faceted seen surface
+    members:
+        id as an integer
+        key as a cad surface key
+
+class:
+    patterns:
+        [a|] cad acis faceted lift state
+    members:
+        document as a cad sat document
+        body as a cad body
+        vertices as the type of (a cad topology list of a cad acis faceted seen vertex)
+        edges as the type of (a cad topology list of a cad acis faceted seen edge)
+        curves as the type of (a cad topology list of a cad acis faceted seen curve)
+        surfaces as the type of (a cad topology list of a cad acis faceted seen surface)
+        failure as an integer
+        source as an integer
+
+local function cad acis faceted lift failure {an integer:reason} at {an integer:id} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        if state's failure = 0:
+            set state's failure to reason
+            set state's source to id
+
+local function the cad acis faceted lift pointer at {an integer:position} in {cad sat record:record}:
+    execute:
+        set found to the cad sat pointer token at position in record
+        if found's valid:
+            return found's value
+        return the cad sat null pointer
+
+local function the cad acis faceted lift float at {an integer:position} in {cad sat record:record} or {a 64 bit floating-point number:fallback}:
+    execute:
+        set found to the cad sat float slot position in record
+        if found's valid:
+            return found's value
+        return fallback
+
+local function the cad acis faceted lift vector at {an integer:position} in {cad sat record:record} or {cad vector3:fallback}:
+    execute:
+        set x to the cad acis faceted lift float at position in record or fallback's x
+        set y to the cad acis faceted lift float at (position + 1) in record or fallback's y
+        set z to the cad acis faceted lift float at (position + 2) in record or fallback's z
+        return a cad vector3 with x x, y y and z z
+
+local function the cad acis faceted lift provenance of {cad sat record:record}:
+    execute:
+        if record's recordId < 0:
+            return the synthesized cad provenance
+        return the clean cad provenance of (a cad source reference for (record's recordId as a 32 bit unsigned integer))
+
+local function the cad acis faceted vertex at {cad sat pointer:reference} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set absent to @intrinsic("construct", a cad acis faceted vertex result, false, a new cad vertex key)
+        set id to reference's index
+        if id < 0:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        loop position from 0 to the length of (state's vertices's values):
+            set cached to the item at position in (state's vertices's values)
+            if cached's id = id:
+                return @intrinsic("construct", a cad acis faceted vertex result, true, cached's key)
+        set found to the cad sat record for reference in state's document
+        if found's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        set record to found's value
+        if (record is cad sat type "vertex") = false:
+            cad acis faceted lift failure 2 at id in state
+            return absent
+        set pointPointer to the cad sat pointer token number 2 in record
+        if pointPointer's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        set pointRecord to the cad sat record for pointPointer's value in state's document
+        if pointRecord's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        if pointRecord's value's entityType != "point":
+            cad acis faceted lift failure 2 at pointPointer's value's index in state
+            return absent
+        set point to the cad acis faceted lift vector at 1 in pointRecord's value or (the cad zero vector3)
+        set key to the cad body key after inserting (a cad vertex at point with provenance (the cad acis faceted lift provenance of record)) into state's body
+        append (@intrinsic("construct", a cad acis faceted seen vertex, id, key)) to state's vertices's values
+        return @intrinsic("construct", a cad acis faceted vertex result, true, key)
+
+local function the cad acis faceted curve at {cad sat pointer:reference} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set absent to @intrinsic("construct", a cad acis faceted curve result, false, a new cad curve key)
+        set id to reference's index
+        if id < 0:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        loop position from 0 to the length of (state's curves's values):
+            set cached to the item at position in (state's curves's values)
+            if cached's id = id:
+                return @intrinsic("construct", a cad acis faceted curve result, true, cached's key)
+        set found to the cad sat record for reference in state's document
+        if found's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        set record to found's value
+        if record's entityType != "straight-curve":
+            cad acis faceted lift failure 3 at id in state
+            return absent
+        set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+        set direction to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+        set key to the cad body key after inserting (the cad edge curve3 of (a cad line3 with origin origin and direction direction)) into state's body
+        append (@intrinsic("construct", a cad acis faceted seen curve, id, key)) to state's curves's values
+        return @intrinsic("construct", a cad acis faceted curve result, true, key)
+
+local function the cad acis faceted surface at {cad sat pointer:reference} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set absent to @intrinsic("construct", a cad acis faceted surface result, false, a new cad surface key)
+        set id to reference's index
+        if id < 0:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        loop position from 0 to the length of (state's surfaces's values):
+            set cached to the item at position in (state's surfaces's values)
+            if cached's id = id:
+                return @intrinsic("construct", a cad acis faceted surface result, true, cached's key)
+        set found to the cad sat record for reference in state's document
+        if found's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        set record to found's value
+        if record's entityType != "plane-surface":
+            cad acis faceted lift failure 4 at id in state
+            return absent
+        set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+        set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+        set uAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
+        set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
+        if frame's valid = false:
+            cad acis faceted lift failure 4 at id in state
+            return absent
+        set key to the cad body key after inserting (the cad surface of frame's value) into state's body
+        append (@intrinsic("construct", a cad acis faceted seen surface, id, key)) to state's surfaces's values
+        return @intrinsic("construct", a cad acis faceted surface result, true, key)
+
+local function the cad acis faceted edge at {cad sat pointer:reference} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set absent to @intrinsic("construct", a cad acis faceted edge result, false, a new cad edge key)
+        set id to reference's index
+        if id < 0:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        loop position from 0 to the length of (state's edges's values):
+            set cached to the item at position in (state's edges's values)
+            if cached's id = id:
+                return @intrinsic("construct", a cad acis faceted edge result, true, cached's key)
+        set found to the cad sat record for reference in state's document
+        if found's valid = false:
+            cad acis faceted lift failure 1 at id in state
+            return absent
+        set record to found's value
+        if (record is cad sat type "edge") = false:
+            cad acis faceted lift failure 2 at id in state
+            return absent
+        set curvePointer to the cad acis faceted lift pointer at 6 in record
+        set curveResult to the cad acis faceted curve at curvePointer in state
+        if curveResult's valid = false:
+            return absent
+        set firstPointer to the cad acis faceted lift pointer at 1 in record
+        set lastPointer to the cad acis faceted lift pointer at 3 in record
+        set firstResult to the cad acis faceted vertex at firstPointer in state
+        if firstResult's valid = false:
+            return absent
+        set lastResult to the cad acis faceted vertex at lastPointer in state
+        if lastResult's valid = false:
+            return absent
+        set forward to (the cad sat sense at 7 in record)'s reversed = false
+        set startKey to firstResult's value
+        set endKey to lastResult's value
+        if forward = false:
+            set startKey to lastResult's value
+            set endKey to firstResult's value
+        set low to the cad acis faceted lift float at 2 in record or 0.0
+        set high to the cad acis faceted lift float at 4 in record or 0.0
+        if high < low:
+            set saved to low
+            set low to high
+            set high to saved
+        set startNode to the cad node pointer for startKey in state's body
+        set endNode to the cad node pointer for endKey in state's body
+        if (the cad distance from startNode's point to endNode's point) > 1e-9:
+            set shape to the cad node pointer for curveResult's value in state's body
+            set low to the cad parameter on (@intrinsic("dereference", shape)) nearest startNode's point
+            set high to the cad parameter on (@intrinsic("dereference", shape)) nearest endNode's point
+        set curveKey to curveResult's value
+        set provenance to the cad acis faceted lift provenance of record
+        set edgeValue to a cad edge on curveKey from low to high between startKey and endKey with provenance provenance
+        set key to the cad body key after inserting edgeValue into state's body
+        append (@intrinsic("construct", a cad acis faceted seen edge, id, key)) to state's edges's values
+        return @intrinsic("construct", a cad acis faceted edge result, true, key)
+
+local function cad acis faceted lift ring {cad sat record:record} into {cad loop key:ringKey} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set first to the cad acis faceted lift pointer at 2 in record
+        if first is cad sat null:
+            cad acis faceted lift failure 5 at record's recordId in state
+            return false
+        set currentRef to first
+        set steps to 0
+        set limit to the length of (state's document's records's values)
+        loop while steps < limit:
+            set found to the cad sat record for currentRef in state's document
+            if found's valid = false:
+                cad acis faceted lift failure 1 at currentRef's index in state
+                return false
+            set coedgeRecord to found's value
+            if (coedgeRecord is cad sat type "coedge") = false:
+                cad acis faceted lift failure 2 at currentRef's index in state
+                return false
+            set pcurvePointer to the cad sat pointer token number 6 in coedgeRecord
+            if pcurvePointer's valid:
+                if (pcurvePointer's value is cad sat null) = false:
+                    cad acis faceted lift failure 6 at currentRef's index in state
+                    return false
+            set edgePointer to the cad acis faceted lift pointer at 4 in coedgeRecord
+            set edgeResult to the cad acis faceted edge at edgePointer in state
+            if edgeResult's valid = false:
+                return false
+            set edgeRecord to the cad sat record for edgePointer in state's document
+            set edgeNode to the cad node pointer for edgeResult's value in state's body
+            set edgeForward to false
+            if edgeNode's start = edgeNode's end:
+                set edgeForward to (the cad sat sense at 7 in edgeRecord's value)'s reversed = false
+            else:
+                set sourceStart to the cad acis faceted lift pointer at 1 in edgeRecord's value
+                set kernelStart to the cad node pointer for edgeNode's start in state's body
+                set edgeForward to sourceStart's index = (kernelStart's provenance's reference's index as an integer)
+            set sourceForward to (the cad sat sense at 5 in coedgeRecord)'s reversed = false
+            set useForward to sourceForward = edgeForward
+            set edgeKey to edgeResult's value
+            set useKey to the cad body key after inserting (a cad coedge on edgeKey forward useForward with pcurve (no cad pcurve) owned by ringKey with provenance (the cad acis faceted lift provenance of coedgeRecord)) into state's body
+            append useKey to edgeNode's coedges's values
+            set ringNode to the cad node pointer for ringKey in state's body
+            append useKey to ringNode's coedges's values
+            set currentRef to the cad acis faceted lift pointer at 1 in coedgeRecord
+            if currentRef's index = first's index:
+                return true
+            if currentRef is cad sat null:
+                cad acis faceted lift failure 5 at coedgeRecord's recordId in state
+                return false
+            set steps to steps + 1
+        cad acis faceted lift failure 5 at record's recordId in state
+        return false
+
+local function cad acis faceted lift loops of {cad sat record:faceRecord} into {cad face key:faceKey} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set currentRef to the cad acis faceted lift pointer at 2 in faceRecord
+        set steps to 0
+        set limit to the length of (state's document's records's values)
+        loop while (currentRef's index >= 0) and (steps < limit):
+            set found to the cad sat record for currentRef in state's document
+            if found's valid = false:
+                cad acis faceted lift failure 1 at currentRef's index in state
+                return false
+            set record to found's value
+            if (record is cad sat type "loop") = false:
+                cad acis faceted lift failure 2 at currentRef's index in state
+                return false
+            set ringKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the cad acis faceted lift provenance of record)) into state's body
+            set faceNode to the cad node pointer for faceKey in state's body
+            append ringKey to faceNode's loops's values
+            if (cad acis faceted lift ring record into ringKey in state) = false:
+                return false
+            set currentRef to the cad acis faceted lift pointer at 1 in record
+            set steps to steps + 1
+        if currentRef's index >= 0:
+            cad acis faceted lift failure 5 at currentRef's index in state
+            return false
+        return true
+
+local function cad acis faceted lift faces of {cad sat record:shellRecord} into {cad shell key:shellKey} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set currentRef to the cad acis faceted lift pointer at 3 in shellRecord
+        set steps to 0
+        set limit to the length of (state's document's records's values)
+        loop while (currentRef's index >= 0) and (steps < limit):
+            set found to the cad sat record for currentRef in state's document
+            if found's valid = false:
+                cad acis faceted lift failure 1 at currentRef's index in state
+                return false
+            set record to found's value
+            if (record is cad sat type "face") = false:
+                cad acis faceted lift failure 2 at currentRef's index in state
+                return false
+            set surfacePointer to the cad acis faceted lift pointer at 5 in record
+            set surfaceRecord to the cad sat record for surfacePointer in state's document
+            set surfaceResult to the cad acis faceted surface at surfacePointer in state
+            if surfaceResult's valid = false:
+                return false
+            set reversedSurface to (the cad sat sense at 10 in surfaceRecord's value)'s reversed
+            set forward to ((the cad sat sense at 6 in record)'s reversed = false) != reversedSurface
+            set surfaceKey to surfaceResult's value
+            set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by shellKey with provenance (the cad acis faceted lift provenance of record)) into state's body
+            set shellNode to the cad node pointer for shellKey in state's body
+            append faceKey to shellNode's faces's values
+            if (cad acis faceted lift loops of record into faceKey in state) = false:
+                return false
+            set currentRef to the cad acis faceted lift pointer at 1 in record
+            set steps to steps + 1
+        if currentRef's index >= 0:
+            cad acis faceted lift failure 5 at currentRef's index in state
+            return false
+        return true
+
+local function cad acis faceted lift shells of {cad sat record:lumpRecord} into {cad lump key:lumpKey} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set currentRef to the cad acis faceted lift pointer at 2 in lumpRecord
+        set steps to 0
+        set limit to the length of (state's document's records's values)
+        loop while (currentRef's index >= 0) and (steps < limit):
+            set found to the cad sat record for currentRef in state's document
+            if found's valid = false:
+                cad acis faceted lift failure 1 at currentRef's index in state
+                return false
+            set record to found's value
+            if (record is cad sat type "shell") = false:
+                cad acis faceted lift failure 2 at currentRef's index in state
+                return false
+            set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the cad acis faceted lift provenance of record)) into state's body
+            set lumpNode to the cad node pointer for lumpKey in state's body
+            append shellKey to lumpNode's shells's values
+            if (cad acis faceted lift faces of record into shellKey in state) = false:
+                return false
+            set currentRef to the cad acis faceted lift pointer at 1 in record
+            set steps to steps + 1
+        if currentRef's index >= 0:
+            cad acis faceted lift failure 5 at currentRef's index in state
+            return false
+        return true
+
+local function cad acis faceted lift lumps of {cad sat record:bodyRecord} in {a pointer to a cad acis faceted lift state:state}:
+    execute:
+        set currentRef to the cad acis faceted lift pointer at 1 in bodyRecord
+        set steps to 0
+        set limit to the length of (state's document's records's values)
+        loop while (currentRef's index >= 0) and (steps < limit):
+            set found to the cad sat record for currentRef in state's document
+            if found's valid = false:
+                cad acis faceted lift failure 1 at currentRef's index in state
+                return false
+            set record to found's value
+            if (record is cad sat type "lump") = false:
+                cad acis faceted lift failure 2 at currentRef's index in state
+                return false
+            set lumpKey to the cad body key after inserting (a cad lump with provenance (the cad acis faceted lift provenance of record)) into state's body
+            append lumpKey to state's body's roots
+            if (cad acis faceted lift shells of record into lumpKey in state) = false:
+                return false
+            set currentRef to the cad acis faceted lift pointer at 1 in record
+            set steps to steps + 1
+        if currentRef's index >= 0:
+            cad acis faceted lift failure 5 at currentRef's index in state
+            return false
+        return (the length of (state's body's roots)) > 0
+
+function lift cad faceted body numbered {an integer:bodyId} from {cad sat document:document}:
+    execute:
+        set liftedBody to an empty cad body
+        set found to the cad sat record numbered bodyId in document
+        if found's valid = false:
+            return @intrinsic("construct", a cad acis faceted lift result, false, liftedBody, 1, bodyId)
+        if (found's value is cad sat type "body") = false:
+            return @intrinsic("construct", a cad acis faceted lift result, false, liftedBody, 2, bodyId)
+        set liftedBody's provenance to the cad acis faceted lift provenance of found's value
+        set state to @intrinsic("construct", a cad acis faceted lift state, document, liftedBody, a cad topology list of a cad acis faceted seen vertex, a cad topology list of a cad acis faceted seen edge, a cad topology list of a cad acis faceted seen curve, a cad topology list of a cad acis faceted seen surface, 0, 0)
+        set succeeded to cad acis faceted lift lumps of found's value in (the address of state)
+        if succeeded = false:
+            if state's failure = 0:
+                cad acis faceted lift failure 5 at bodyId in (the address of state)
+            return @intrinsic("construct", a cad acis faceted lift result, false, an empty cad body, state's failure, state's source)
+        set flaws to the cad flaws of state's body
+        set consistent to (the length of flaws) = 0
+        free flaws
+        if consistent = false:
+            return @intrinsic("construct", a cad acis faceted lift result, false, an empty cad body, 7, bodyId)
+        return @intrinsic("construct", a cad acis faceted lift result, true, state's body, 0, 0)
