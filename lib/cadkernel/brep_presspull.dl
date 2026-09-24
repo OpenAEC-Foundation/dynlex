@@ -309,9 +309,49 @@ local function the cad presspull lift of {cad curve2:piece} on {cad plane:basePl
             return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
         return absent
 
-function the cad planar region on {cad plane:basePlane} with {a pointer to a list:sourceLoops}:
+local function cad presspull region loops are valid {a pointer to a list:sourceLoops}:
     execute:
         if (the length of sourceLoops) = 0:
+            return false
+        set expanded to a cad topology list of a cad presspull curve loop
+        loop loopIndex from 0 to the length of sourceLoops:
+            set sourceLoop to the item at loopIndex in sourceLoops
+            set pieces to the cad extrusion profile pieces of sourceLoop's values's values
+            append (a cad presspull curve loop from pieces) to expanded's values
+            free pieces
+        set outer to the item at 0 in expanded's values
+        if (the length of (outer's values's values)) = 0:
+            return false
+        set tolerance to a cad tolerance of 1e-9
+        loop holeIndex from 1 to the length of expanded's values:
+            set hole to the item at holeIndex in expanded's values
+            if (the length of (hole's values's values)) = 0:
+                return false
+            set firstHolePoint to the cad point on (the item at 0 in (hole's values's values)) at 0.5
+            if (cad boundary (outer's values's values) contains firstHolePoint within tolerance) = false:
+                return false
+            loop previousIndex from 0 to holeIndex:
+                set previous to the item at previousIndex in expanded's values
+                loop curveIndex from 0 to the length of (hole's values's values):
+                    set curve to the item at curveIndex in (hole's values's values)
+                    set middle to the cad point on curve at 0.5
+                    loop otherIndex from 0 to the length of (previous's values's values):
+                        set other to the item at otherIndex in (previous's values's values)
+                        set crossings to the cad crossings of curve and other within tolerance
+                        set touching to ((the length of crossings) != 0) or ((the cad distance to other from middle) <= tolerance's linear)
+                        free crossings
+                        if touching:
+                            return false
+            loop previousIndex from 1 to holeIndex:
+                set previous to the item at previousIndex in expanded's values
+                set firstPreviousPoint to the cad point on (the item at 0 in (previous's values's values)) at 0.5
+                if (cad boundary (previous's values's values) contains firstHolePoint within tolerance) or (cad boundary (hole's values's values) contains firstPreviousPoint within tolerance):
+                    return false
+        return true
+
+function the cad planar region on {cad plane:basePlane} with {a pointer to a list:sourceLoops}:
+    execute:
+        if (cad presspull region loops are valid sourceLoops) = false:
             return no cad body
         set normalResult to the cad normal of basePlane
         if normalResult's valid = false:
@@ -329,6 +369,18 @@ function the cad planar region on {cad plane:basePlane} with {a pointer to a lis
             set senseResult to the cad profile senses of pieces
             if senseResult's valid = false:
                 return no cad body
+            set signedArea to 0.0 as a 64 bit floating-point number
+            loop pieceIndex from 0 to the length of pieces:
+                set areaValue to the cad enclosed area of (the item at pieceIndex in pieces)
+                if the item at pieceIndex in senseResult's value's values:
+                    set signedArea to signedArea + areaValue
+                else:
+                    set signedArea to signedArea - areaValue
+            if (signedArea = 0.0) or (signedArea != signedArea):
+                return no cad body
+            set reverseRing to (signedArea < 0.0)
+            if loopIndex > 0:
+                set reverseRing to signedArea > 0.0
             set vertices to a cad topology list of a cad vertex key
             loop pieceIndex from 0 to the length of pieces:
                 set pieceValue to the item at pieceIndex in pieces
@@ -359,9 +411,9 @@ function the cad planar region on {cad plane:basePlane} with {a pointer to a lis
                     return no cad body
                 append useKey to edgeNode's coedges's values
                 append useKey to loopNode's coedges's values
-            if loopIndex > 0:
-                # The source copies a bottom cap with flipped winding. Its
-                # hole loops therefore traverse opposite to the input rings.
+            if reverseRing:
+                # The copied bottom cap has a CCW outer ring and CW holes
+                # regardless of the incoming profiles' winding.
                 set ringNode to the cad node pointer for loopKey in outputBody
                 if ringNode = (0 as the type of ringNode):
                     return no cad body

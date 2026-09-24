@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_region_solid.dl
+
+function check owned profile {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function owned profile square from {a 64 bit floating-point number:x0} {a 64 bit floating-point number:y0} to {a 64 bit floating-point number:x1} {a 64 bit floating-point number:y1}:
+    execute:
+        set corners to a list containing (a cad vector2 with x x0 and y y0)
+        append (a cad vector2 with x x1 and y y0) to corners
+        append (a cad vector2 with x x1 and y y1) to corners
+        append (a cad vector2 with x x0 and y y1) to corners
+        set ring to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at (the remainder of (index + 1) divided by 4) in corners))) to ring
+        free corners
+        return ring
+
+function verify nested ring ownership:
+    execute:
+        set vertices to a list containing (a cad polyline vertex2 at (a cad vector2 with x 0.0 and y 0.0) with bulge 0.0)
+        append (a cad polyline vertex2 at (a cad vector2 with x 10.0 and y 0.0) with bulge 0.0) to vertices
+        append (a cad polyline vertex2 at (a cad vector2 with x 10.0 and y 10.0) with bulge 0.0) to vertices
+        append (a cad polyline vertex2 at (a cad vector2 with x 0.0 and y 10.0) with bulge 0.0) to vertices
+        set outer to a list containing (the cad curve2 of (the cad polyline2 with vertices vertices and closure true))
+        free vertices
+        set hole to owned profile square from 3.0 3.0 to 5.0 5.0
+        set copiedOuter to an empty list of a cad curve2
+        append (the cad clone of (the item at 0 in outer)) to copiedOuter
+        set copiedHole to an empty list of a cad curve2
+        loop index from 0 to the length of hole:
+            append (the cad clone of (the item at index in hole)) to copiedHole
+        set profiles to a list containing copiedOuter
+        append copiedHole to profiles
+        set result to the cad extrusion region of profiles on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 2.0)
+        check owned profile result's valid
+        loop index from 0 to the length of profiles:
+            free (the item at index in profiles)
+        free profiles
+        set flaws to the cad flaws of result's value
+        check owned profile ((the length of flaws) = 0)
+        free flaws
+        check owned profile ((the cad point on (the item at 0 in outer) at 0.25)'s x > 0.0)
+        free outer
+        free hole
+
+loop iteration from 0 to 16:
+    verify nested ring ownership
+print "borrowed_nested_profiles_survive_owned_ring_free" as a line

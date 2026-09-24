@@ -53,5 +53,7 @@ function the cad planar thickening of {cad body:sourceBody} by {a number:givenDi
             append ring to profiles
         set direction to (region's value's outward) scaled by distance
         set result to the cad extrusion region of profiles on (region's value's plane) along direction
+        loop profileIndex from 0 to the length of profiles:
+            free (the item at profileIndex in profiles)
         free profiles
         return result

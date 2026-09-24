@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_presspull.dl
+
+function region review rectangle from {a 64 bit floating-point number:x0} {a 64 bit floating-point number:y0} to {a 64 bit floating-point number:x1} {a 64 bit floating-point number:y1} clockwise {boolean:clockwise}:
+    execute:
+        set points to a list containing (a cad vector2 with x x0 and y y0)
+        append (a cad vector2 with x x1 and y y0) to points
+        append (a cad vector2 with x x1 and y y1) to points
+        append (a cad vector2 with x x0 and y y1) to points
+        set curves to an empty list of a cad curve2
+        loop index from 0 to 4:
+            set firstIndex to index
+            set secondIndex to (the remainder of (index + 1) divided by 4)
+            if clockwise:
+                set firstIndex to 3 - index
+                set secondIndex to 3 - secondIndex
+            append (the cad curve2 of (a cad line2 from (the item at firstIndex in points) to (the item at secondIndex in points))) to curves
+        set ring to a cad presspull curve loop from curves
+        free curves
+        free points
+        return ring
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set clockwiseOuter to (caseNumber = 1) or ((caseNumber = 3) or (caseNumber = 4))
+set loops to a list containing (region review rectangle from 0.0 0.0 to 10.0 10.0 clockwise clockwiseOuter)
+if (caseNumber = 2) or (caseNumber = 4):
+    append (region review rectangle from 3.0 3.0 to 5.0 5.0 clockwise false) to loops
+else if caseNumber = 3:
+    append (region review rectangle from 3.0 3.0 to 5.0 5.0 clockwise true) to loops
+else if caseNumber = 5:
+    append (region review rectangle from 12.0 2.0 to 14.0 4.0 clockwise false) to loops
+else if caseNumber = 6:
+    append (region review rectangle from 8.0 2.0 to 10.0 4.0 clockwise false) to loops
+else if caseNumber = 7:
+    append (region review rectangle from 9.0 2.0 to 11.0 4.0 clockwise false) to loops
+else if caseNumber = 8:
+    append (region review rectangle from 2.0 2.0 to 8.0 8.0 clockwise false) to loops
+    append (region review rectangle from 4.0 4.0 to 6.0 6.0 clockwise false) to loops
+else if caseNumber = 9:
+    append (region review rectangle from 2.0 2.0 to 5.0 5.0 clockwise false) to loops
+    append (region review rectangle from 4.0 4.0 to 7.0 7.0 clockwise false) to loops
+else if caseNumber = 10:
+    append (region review rectangle from 2.0 2.0 to 3.0 3.0 clockwise false) to loops
+    append (region review rectangle from 6.0 6.0 to 7.0 7.0 clockwise false) to loops
+set body to the cad planar region on (the cad xy plane) with loops
+free loops
+if body's valid = false:
+    print "0" as a line
+else:
+    set flaws to the cad flaws of body's value
+    set faceKeys to the cad face keys of body's value
+    set faceKey to the item at 0 in faceKeys
+    set face to the cad node pointer for faceKey in body's value
+    set profile to the cad planar face profile of body's value at faceKey
+    ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "1 %d %d %d\n", (the length of flaws) as an integer, (face's forward) as an integer, (the length of (profile's value's loops's values)) as an integer)
+    loop loopIndex from 0 to the length of (profile's value's loops's values):
+        set ring to the item at loopIndex in (profile's value's loops's values)
+        set signedArea to 0.0 as a 64 bit floating-point number
+        loop curveIndex from 0 to the length of (ring's values's values):
+            set signedArea to signedArea + (the cad enclosed area of (the item at curveIndex in (ring's values's values)))
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", signedArea)
+    free faceKeys
+    free flaws
