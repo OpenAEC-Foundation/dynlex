@@ -359,6 +359,23 @@ function the cad planar region on {cad plane:basePlane} with {a pointer to a lis
                     return no cad body
                 append useKey to edgeNode's coedges's values
                 append useKey to loopNode's coedges's values
+            if loopIndex > 0:
+                # The source copies a bottom cap with flipped winding. Its
+                # hole loops therefore traverse opposite to the input rings.
+                set ringNode to the cad node pointer for loopKey in outputBody
+                if ringNode = (0 as the type of ringNode):
+                    return no cad body
+                set previousOrder to a cad topology list of a cad coedge key
+                loop useIndex from 0 to the length of (ringNode's coedges's values):
+                    append (the item at useIndex in (ringNode's coedges's values)) to previousOrder's values
+                loop useIndex from 0 to the length of (previousOrder's values):
+                    set lastIndex to (the length of (previousOrder's values)) - 1
+                    set reversedIndex to lastIndex - useIndex
+                    set useKey to the item at reversedIndex in (previousOrder's values)
+                    set useNode to the cad node pointer for useKey in outputBody
+                    set previousSense to useNode's forward
+                    set useNode's forward to previousSense = false
+                    replace item at index useIndex in (ringNode's coedges's values) with useKey
             set faceNode to the cad node pointer for faceKey in outputBody
             if faceNode = (0 as the type of faceNode):
                 return no cad body

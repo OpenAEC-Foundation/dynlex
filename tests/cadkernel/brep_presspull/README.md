@@ -15,7 +15,8 @@ result is returned.
 
 Closed circles and ellipses are split into exact quarter pieces before an
 extrusion. `planar_region` builds a bounded planar sheet directly from exact
-line, circle, ellipse and planar-spline loops, including inner loops. The
+line, circle, ellipse and planar-spline loops, including inner loops. Inner
+loops follow the reversed traversal of the source's copied bottom cap. The
 source body and caller-owned curves remain independent of successful results.
 Extrude mode builds a translated solid while preserving the input body.
 Planar union, intersection and subtraction use the native split, imprint and

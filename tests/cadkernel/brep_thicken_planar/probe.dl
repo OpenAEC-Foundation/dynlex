@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_planar.dl
+import lib/cadkernel/brep_presspull.dl
+
+function thicken probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function thicken probe square at {cad vector2:origin} with size {a 64 bit floating-point number:size}:
+    execute:
+        set corners to a list containing origin
+        append (a cad vector2 with x ((origin's x) + size) and y (origin's y)) to corners
+        append (a cad vector2 with x ((origin's x) + size) and y ((origin's y) + size)) to corners
+        append (a cad vector2 with x (origin's x) and y ((origin's y) + size)) to corners
+        set pieces to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at (the remainder of (index + 1) divided by 4) in corners))) to pieces
+        free corners
+        return pieces
+
+function thicken probe body {cad body:body}:
+    execute:
+        thicken probe number (the cad count of (body's vertices))
+        thicken probe number (the cad count of (body's edges))
+        thicken probe number (the cad count of (body's coedges))
+        thicken probe number (the cad count of (body's loops))
+        thicken probe number (the cad count of (body's faces))
+        thicken probe number (the cad count of (body's shells))
+        thicken probe number (the cad count of (body's lumps))
+        thicken probe number (the cad count of (body's surfaces))
+        thicken probe number (the cad count of (body's curves))
+        thicken probe number (the length of (body's roots))
+        set flaws to the cad flaws of body
+        thicken probe number (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set manifold to 0
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of (edge's coedges's values)) = 2:
+                increment manifold
+        thicken probe number manifold
+        free edgeKeys
+        set coedgeKeys to the cad keys of (body's coedges)
+        set pcurves to 0
+        loop index from 0 to the length of coedgeKeys:
+            set coedge to the cad node pointer for (the item at index in coedgeKeys) in (body's coedges)
+            if coedge's pcurve's valid:
+                increment pcurves
+        thicken probe number pcurves
+        free coedgeKeys
+        set faceKeys to the cad face keys of body
+        set forwards to 0
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in body
+            if face's forward:
+                increment forwards
+        thicken probe number forwards
+        free faceKeys
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            thicken probe number (vertex's point's x)
+            thicken probe number (vertex's point's y)
+            thicken probe number (vertex's point's z)
+        free vertexKeys
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set outer to thicken probe square at (a cad vector2 with x 0.0 and y 0.0) with size 10.0
+set loops to a list containing (a cad presspull curve loop from outer)
+set profiles to a list containing outer
+if (caseNumber = 2) or (caseNumber = 3):
+    set hole to thicken probe square at (a cad vector2 with x 3.0 and y 3.0) with size 2.0
+    append (a cad presspull curve loop from hole) to loops
+    append hole to profiles
+set source to no cad body
+if caseNumber = 5:
+    set source to the cad extrusion region of profiles on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+else:
+    set source to the cad planar region on (the cad xy plane) with loops
+if source's valid = false:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+set distance to 2.0 as a 64 bit floating-point number
+if (caseNumber = 1) or (caseNumber = 3):
+    set distance to -2.0
+else if caseNumber = 4:
+    set distance to 0.0
+set result to the cad planar thickening of source's value by distance
+thicken probe number (result's valid as an integer)
+if result's valid:
+    thicken probe body (result's value)

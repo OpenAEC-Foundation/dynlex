@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: MPL-2.0
+# Planar single-face branch of cadkernel src/brep/thicken.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_region_solid.dl
+import lib/cadkernel/brep_presspull.dl
+
+local function cad planar thicken distance {a 64 bit floating-point number:value} is valid:
+    execute:
+        if value != value:
+            return false
+        if (the absolute value of value) <= 2.220446049250313e-16:
+            return false
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+function the cad planar thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if (cad planar thicken distance distance is valid) = false:
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set validSource to (the length of flaws) = 0
+        free flaws
+        if validSource = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 1:
+            free faces
+            return no cad body
+        set edges to the cad edge keys of sourceBody
+        set hasBoundary to false
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in sourceBody
+            if edge != (0 as the type of edge):
+                if (the length of (edge's coedges's values)) = 1:
+                    set hasBoundary to true
+        free edges
+        if hasBoundary = false:
+            free faces
+            return no cad body
+        set faceKey to the item at 0 in faces
+        free faces
+        set region to the cad planar face profile of sourceBody at faceKey
+        if region's valid = false:
+            return no cad body
+        set example to a list containing (the cad curve2 of (a cad line2 from the cad zero vector2 to the cad zero vector2))
+        set profiles to an empty list of (the type of example)
+        free example
+        loop loopIndex from 0 to the length of (region's value's loops's values):
+            set sourceRing to the item at loopIndex in (region's value's loops's values)
+            set ring to an empty list of a cad curve2
+            loop curveIndex from 0 to the length of (sourceRing's values's values):
+                append (the cad clone of (the item at curveIndex in (sourceRing's values's values))) to ring
+            append ring to profiles
+        set direction to (region's value's outward) scaled by distance
+        set result to the cad extrusion region of profiles on (region's value's plane) along direction
+        free profiles
+        return result

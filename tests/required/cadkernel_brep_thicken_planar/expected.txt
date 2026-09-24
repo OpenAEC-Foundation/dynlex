@@ -1,0 +1,2 @@
+planar_thickening_keeps_holes_and_signed_distance
+zero_thickness_is_rejected

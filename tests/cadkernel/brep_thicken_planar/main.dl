@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_planar.dl
+import lib/cadkernel/brep_presspull.dl
+import lib/cadkernel/brep_bounds.dl
+
+function check planar thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function planar thickening square at {cad vector2:origin} with size {a 64 bit floating-point number:size}:
+    execute:
+        set corners to a list containing origin
+        append (a cad vector2 with x ((origin's x) + size) and y (origin's y)) to corners
+        append (a cad vector2 with x ((origin's x) + size) and y ((origin's y) + size)) to corners
+        append (a cad vector2 with x (origin's x) and y ((origin's y) + size)) to corners
+        set pieces to an empty list of a cad curve2
+        loop index from 0 to 4:
+            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at (the remainder of (index + 1) divided by 4) in corners))) to pieces
+        free corners
+        return pieces
+
+set outer to planar thickening square at (a cad vector2 with x 0.0 and y 0.0) with size 10.0
+set hole to planar thickening square at (a cad vector2 with x 3.0 and y 3.0) with size 2.0
+set firstLoop to a cad presspull curve loop from outer
+set secondLoop to a cad presspull curve loop from hole
+set loops to a list containing firstLoop
+append secondLoop to loops
+set sheet to the cad planar region on (the cad xy plane) with loops
+check planar thickening (sheet's valid)
+set originalFaces to the cad count of (sheet's value's faces)
+set positive to the cad planar thickening of sheet's value by 2.0
+check planar thickening (positive's valid)
+set negative to the cad planar thickening of sheet's value by (-2.0)
+check planar thickening (negative's valid)
+check planar thickening ((the cad count of (sheet's value's faces)) = originalFaces)
+set positiveFlaws to the cad flaws of positive's value
+set negativeFlaws to the cad flaws of negative's value
+check planar thickening ((the length of positiveFlaws) = 0)
+check planar thickening ((the length of negativeFlaws) = 0)
+free positiveFlaws
+free negativeFlaws
+set positiveBounds to the cad bounds of positive's value
+set negativeBounds to the cad bounds of negative's value
+check planar thickening (positiveBounds's valid)
+check planar thickening (negativeBounds's valid)
+check planar thickening (((positiveBounds's value's high's z) - (positiveBounds's value's low's z)) = 2.0)
+check planar thickening (((negativeBounds's value's high's z) - (negativeBounds's value's low's z)) = 2.0)
+print "planar_thickening_keeps_holes_and_signed_distance" as a line
+
+set zero to the cad planar thickening of sheet's value by 0.0
+check planar thickening (zero's valid = false)
+print "zero_thickness_is_rejected" as a line
