@@ -1,0 +1,4 @@
+pointed_square_pyramid_is_closed
+truncated_square_pyramid_has_top_face
+fewer_than_three_sides_is_invalid
+invalid_dimensions_precede_invalid_placement

@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: MPL-2.0
+# Pyramid creation path of pinned cadkernel src/acis/history.rs.
+# Dimensions and sides project SolidHistoryPyramid; matrix is borrowed.
+import lib/cadkernel/acis_history_frames.dl
+import lib/cadkernel/brep_make.dl
+
+class:
+    patterns:
+        [a|] cad history pyramid body result
+    members:
+        valid as a boolean
+        value as a cad body
+        failure as an integer
+
+# 1 = InvalidTransform, 2 = InvalidParameters. Read value only if valid.
+local function the cad history pyramid refusal for {an integer:reason}:
+    execute:
+        set empty to no cad body
+        return @intrinsic("construct", a cad history pyramid body result, false, empty's value, reason)
+
+function the cad history rebuilt pyramid with radius {a 64 bit floating-point number:radius}, top radius {a 64 bit floating-point number:topRadius}, height {a 64 bit floating-point number:height}, sides {integer:sides} and transform {a pointer to a list:matrix}:
+    execute:
+        if sides < 3:
+            return the cad history pyramid refusal for 2
+        set created to the cad polygonal frustum at (the cad zero vector3) with base radius radius, top radius topRadius, height height and sides sides
+        if created's valid = false:
+            return the cad history pyramid refusal for 2
+        set parsed to the cad history placement of matrix
+        if parsed's valid = false:
+            return the cad history pyramid refusal for 1
+        set moved to the cad transformed (created's value) by (parsed's value)
+        if moved's valid = false:
+            return the cad history pyramid refusal for 1
+        return @intrinsic("construct", a cad history pyramid body result, true, moved's value, 0)

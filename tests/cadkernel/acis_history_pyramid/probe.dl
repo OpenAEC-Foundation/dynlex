@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_pyramid.dl
+
+function check history pyramid {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+set matrix to an empty list of a 64 bit floating-point number
+set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+loop index from 0 to 16:
+    append (the item at index in entries) to matrix
+
+set pointed to the cad history rebuilt pyramid with radius 3.0, top radius 0.0, height 4.0, sides 4 and transform matrix
+check history pyramid pointed's valid
+check history pyramid (pointed's failure = 0)
+check history pyramid ((the cad count of (pointed's value's faces)) = 5)
+check history pyramid ((the cad euler characteristic of (pointed's value)) = 2)
+set flaws to the cad flaws of (pointed's value)
+check history pyramid ((the length of flaws) = 0)
+free flaws
+print "pointed_square_pyramid_is_closed" as a line
+
+set truncated to the cad history rebuilt pyramid with radius 3.0, top radius 1.5, height 4.0, sides 4 and transform matrix
+check history pyramid truncated's valid
+check history pyramid ((the cad count of (truncated's value's faces)) = 6)
+print "truncated_square_pyramid_has_top_face" as a line
+
+set rejected to the cad history rebuilt pyramid with radius 3.0, top radius 0.0, height 4.0, sides 2 and transform matrix
+check history pyramid ((rejected's valid = false) and (rejected's failure = 2))
+print "fewer_than_three_sides_is_invalid" as a line
+
+replace item at index 4 in matrix with 0.25
+set rejected to the cad history rebuilt pyramid with radius 3.0, top radius 0.0, height 4.0, sides 4 and transform matrix
+check history pyramid ((rejected's valid = false) and (rejected's failure = 1))
+set rejected to the cad history rebuilt pyramid with radius 0.0, top radius 0.0, height 4.0, sides 4 and transform matrix
+check history pyramid ((rejected's valid = false) and (rejected's failure = 2))
+print "invalid_dimensions_precede_invalid_placement" as a line
+free matrix
