@@ -1,0 +1,437 @@
+# SPDX-License-Identifier: MPL-2.0
+# Profile-only homogeneous patch preparation from pinned src/brep/loft_general.rs
+# at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_loft_general_align.dl
+
+class:
+    patterns:
+        [a|] cad loft general patch options
+    members:
+        cyclic as a boolean
+        periodic as a boolean
+        normalMode as an integer
+        startDraftAngle as a 64 bit floating-point number
+        endDraftAngle as a 64 bit floating-point number
+        startMagnitude as a 64 bit floating-point number
+        endMagnitude as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad loft general base patch
+    members:
+        start as a 64 bit floating-point number
+        end as a 64 bit floating-point number
+        rows as the type of (a cad topology list of the type of (a cad topology list of a cad loft general homogeneous point))
+
+# Codes: 1 invalid settings; 2 invalid aligned input; 3 invalid wire/band;
+# 4 adjacent cross sections coincide; 5 unsplit source interval.
+class:
+    patterns:
+        [a|] cad loft general base patch result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        lengths as the type of (a cad topology list of a 64 bit floating-point number)
+        patches as the type of (a cad topology list of a cad loft general base patch)
+
+class:
+    patterns:
+        [a|] cad loft general base patch split
+    members:
+        left as the type of (a cad topology list of a cad loft general homogeneous point)
+        right as the type of (a cad topology list of a cad loft general homogeneous point)
+
+class:
+    patterns:
+        [a|] cad loft general base patch interval
+    members:
+        valid as a boolean
+        controls as the type of (a cad topology list of a cad loft general homogeneous point)
+
+function the default cad loft general patch options:
+    execute:
+        return @intrinsic("construct", a cad loft general patch options, false, true, 1,
+            1.5707963267948966, 1.5707963267948966, 0.0, 0.0)
+
+local function cad loft general base failure {integer:code}:
+    execute:
+        return @intrinsic("construct", a cad loft general base patch result, false, code,
+            a cad topology list of a 64 bit floating-point number,
+            a cad topology list of a cad loft general base patch)
+
+local function cad loft general base finite {a 64 bit floating-point number:value}:
+    execute:
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function cad loft general base valid options {cad loft general patch options:options}:
+    execute:
+        if (options's normalMode < 0) or (options's normalMode > 6):
+            return false
+        if (cad loft general base finite options's startDraftAngle) = false:
+            return false
+        if (cad loft general base finite options's endDraftAngle) = false:
+            return false
+        if (cad loft general base finite options's startMagnitude) = false:
+            return false
+        if (cad loft general base finite options's endMagnitude) = false:
+            return false
+        if (options's startMagnitude < 0.0) or (options's endMagnitude < 0.0):
+            return false
+        return true
+
+local function cad loft general base point {cad loft general homogeneous point:value}:
+    execute:
+        return a cad vector3 with x (value's x / value's w), y (value's y / value's w) and z (value's z / value's w)
+
+local function cad loft general base mix {cad loft general homogeneous point:first} with {cad loft general homogeneous point:second} by {a 64 bit floating-point number:fraction}:
+    execute:
+        set remainder to 1.0 - fraction
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (first's x * remainder) + (second's x * fraction),
+            (first's y * remainder) + (second's y * fraction),
+            (first's z * remainder) + (second's z * fraction),
+            (first's w * remainder) + (second's w * fraction))
+
+local function cad loft general base point on {cad topology list:controls} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set current to the cad clone of controls
+        loop while (the length of current's values) > 1:
+            set next to a cad topology list of a cad loft general homogeneous point
+            loop index from 0 to ((the length of current's values) - 1):
+                append (cad loft general base mix (the item at index in current's values) with (the item at (index + 1) in current's values) by parameter) to next's values
+            set current to next
+        return cad loft general base point (the item at 0 in current's values)
+
+local function cad loft general base sample of {cad loft general wire:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set selected to (the length of shape's spans's values) - 1
+        set found to false
+        loop index from 0 to the length of shape's spans's values:
+            set span to the item at index in shape's spans's values
+            if (found = false) and (parameter <= (span's end + 1e-12)):
+                set selected to index
+                set found to true
+        set span to the item at selected in shape's spans's values
+        set localParameter to (parameter - span's start) / (span's end - span's start)
+        if localParameter < 0.0:
+            set localParameter to 0.0
+        if localParameter > 1.0:
+            set localParameter to 1.0
+        return cad loft general base point on span's controls at localParameter
+
+local function cad loft general base split {cad topology list:controls} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set work to the cad clone of controls
+        set left to a cad topology list of a cad loft general homogeneous point
+        set right to a cad topology list of a cad loft general homogeneous point
+        append (the item at 0 in work's values) to left's values
+        append (the last item of work's values) to right's values
+        loop while (the length of work's values) > 1:
+            set next to a cad topology list of a cad loft general homogeneous point
+            loop index from 0 to ((the length of work's values) - 1):
+                append (cad loft general base mix (the item at index in work's values) with (the item at (index + 1) in work's values) by parameter) to next's values
+            set work to next
+            append (the item at 0 in work's values) to left's values
+            append (the last item of work's values) to right's values
+        set reversed to a cad topology list of a cad loft general homogeneous point
+        set count to the length of right's values
+        loop index from 0 to count:
+            append (the item at ((count - 1) - index) in right's values) to reversed's values
+        return @intrinsic("construct", a cad loft general base patch split, left, reversed)
+
+local function cad loft general base part of {cad topology list:controls} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        if (first <= 1e-13) and (last >= (1.0 - 1e-13)):
+            return the cad clone of controls
+        set left to the cad clone of controls
+        if last < (1.0 - 1e-13):
+            set divided to cad loft general base split controls at last
+            set left to divided's left
+        if first > 1e-13:
+            set divided to cad loft general base split left at (first / last)
+            return divided's right
+        return left
+
+local function cad loft general base interval of {cad loft general wire:shape} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        loop index from 0 to the length of shape's spans's values:
+            set span to the item at index in shape's spans's values
+            if (first >= (span's start - 1e-10)) and (last <= (span's end + 1e-10)):
+                set width to span's end - span's start
+                set a to (first - span's start) / width
+                set b to (last - span's start) / width
+                if a < 0.0:
+                    set a to 0.0
+                if a > 1.0:
+                    set a to 1.0
+                if b < 0.0:
+                    set b to 0.0
+                if b > 1.0:
+                    set b to 1.0
+                return @intrinsic("construct", a cad loft general base patch interval, true, cad loft general base part of span's controls from a to b)
+        return @intrinsic("construct", a cad loft general base patch interval, false, a cad topology list of a cad loft general homogeneous point)
+
+local function cad loft general base unit ends {cad topology list:controls}:
+    execute:
+        set count to the length of controls's values
+        set first to (the item at 0 in controls's values)'s w
+        set last to (the last item of controls's values)'s w
+        set ratio to ((first / last) raised to the power of (1.0 / ((count - 1) as a 64 bit floating-point number)))
+        set normalized to a cad topology list of a cad loft general homogeneous point
+        loop index from 0 to count:
+            set point to the item at index in controls's values
+            set scale to ((ratio raised to the power of (index as a 64 bit floating-point number)) / first)
+            append (@intrinsic("construct", a cad loft general homogeneous point,
+                point's x * scale, point's y * scale, point's z * scale, point's w * scale)) to normalized's values
+        return normalized
+
+local function cad loft general base elevated {cad topology list:controls} to {integer:degree}:
+    execute:
+        set result to the cad clone of controls
+        loop while ((the length of result's values) - 1) < degree:
+            set count to the length of result's values
+            set next to a cad topology list of a cad loft general homogeneous point
+            append (the item at 0 in result's values) to next's values
+            loop index from 1 to count:
+                append (cad loft general base mix (the item at index in result's values) with (the item at (index - 1) in result's values) by ((index as a 64 bit floating-point number) / (count as a 64 bit floating-point number))) to next's values
+            append (the last item of result's values) to next's values
+            set result to next
+        return result
+
+local function cad loft general base difference of {cad loft general homogeneous point:first} and {cad loft general homogeneous point:second} divided by {a 64 bit floating-point number:width}:
+    execute:
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (first's x - second's x) / width,
+            (first's y - second's y) / width,
+            (first's z - second's z) / width,
+            (first's w - second's w) / width)
+
+local function cad loft general base derivative at {integer:index} of {cad topology list:values} using {cad topology list:lengths} closing {boolean:closed}:
+    execute:
+        set last to (the length of values's values) - 1
+        if (closed = false) and (index = 0):
+            return cad loft general base difference of (the item at 1 in values's values) and (the item at 0 in values's values) divided by (the item at 0 in lengths's values)
+        if (closed = false) and (index = last):
+            return cad loft general base difference of (the item at last in values's values) and (the item at (last - 1) in values's values) divided by (the item at (last - 1) in lengths's values)
+        set beforeIndex to index - 1
+        if index = 0:
+            set beforeIndex to last
+        set afterIndex to index + 1
+        if afterIndex >= (the length of values's values):
+            set afterIndex to 0
+        set before to the item at beforeIndex in values's values
+        set current to the item at index in values's values
+        set after to the item at afterIndex in values's values
+        set a to the item at beforeIndex in lengths's values
+        set b to the item at index in lengths's values
+        set x to ((((current's x - before's x) / a) * b) + (((after's x - current's x) / b) * a)) / (a + b)
+        set y to ((((current's y - before's y) / a) * b) + (((after's y - current's y) / b) * a)) / (a + b)
+        set z to ((((current's z - before's z) / a) * b) + (((after's z - current's z) / b) * a)) / (a + b)
+        set w to ((((current's w - before's w) / a) * b) + (((after's w - current's w) / b) * a)) / (a + b)
+        set left to (current's w - before's w) / a
+        set right to (after's w - current's w) / b
+        set weightDerivative to 0.0
+        if (left * right) > 0.0:
+            set first to (2.0 * b) + a
+            set second to b + (2.0 * a)
+            set weightDerivative to (first + second) / ((first / left) + (second / right))
+        set point to cad loft general base point current
+        set adjustment to weightDerivative - w
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            x + (point's x * adjustment), y + (point's y * adjustment),
+            z + (point's z * adjustment), weightDerivative)
+
+local function cad loft general computeprofilegradient {integer:index} onvalues {cad topology list:values} onstations {cad topology list:sections} onlengths {cad topology list:lengths} withsettings {cad loft general patch options:options} wrapping {boolean:closed}:
+    execute:
+        set tangent to cad loft general base derivative at index of values using lengths closing closed
+        set last to (the length of values's values) - 1
+        set useNormal to false
+        if options's normalMode = 2:
+            set useNormal to index = 0
+        else if options's normalMode = 3:
+            set useNormal to index = last
+        else if (options's normalMode = 4) or (options's normalMode = 6):
+            set useNormal to (index = 0) or (index = last)
+        else if options's normalMode = 5:
+            set useNormal to true
+        if useNormal = false:
+            return tangent
+        set section to the item at index in sections's values
+        set h to the item at index in values's values
+        set point to cad loft general base point h
+        set spatial to a cad vector3 with x ((tangent's x - (point's x * tangent's w)) / h's w), y ((tangent's y - (point's y * tangent's w)) / h's w) and z ((tangent's z - (point's z * tangent's w)) / h's w)
+        set normal to the cad normal of section's plane
+        set direction to normal's value
+        set beforeIndex to index - 1
+        if index = 0:
+            set beforeIndex to 0
+            if closed:
+                set beforeIndex to last
+        set afterIndex to index + 1
+        if index = last:
+            set afterIndex to last
+            if closed:
+                set afterIndex to 0
+        set before to the item at beforeIndex in sections's values
+        set after to the item at afterIndex in sections's values
+        if (the cad dot of direction and (the cad difference of after's centre and before's centre)) < 0.0:
+            set direction to the cad negative of direction
+        set magnitude to 0.0
+        if options's normalMode = 6:
+            if index = 0:
+                set magnitude to options's startMagnitude
+            else:
+                set magnitude to options's endMagnitude
+        set speed to the maximum of (the cad length of spatial) and 1e-9
+        if magnitude > 0.0:
+            set widthIndex to last - 1
+            if index = 0:
+                set widthIndex to 0
+            set speed to magnitude / (the item at widthIndex in lengths's values)
+        if options's normalMode = 6:
+            set angle to options's endDraftAngle
+            if index = 0:
+                set angle to options's startDraftAngle
+            set radial to the cad difference of point and section's centre
+            set radial to the cad difference of radial and (direction scaled by (the cad dot of radial and direction))
+            set normalized to the cad normalization of radial
+            set radial to the cad zero vector3
+            if normalized's valid:
+                set radial to normalized's value
+            set direction to the cad sum of (direction scaled by (the sine of angle)) and (radial scaled by (the cosine of angle))
+        set d to direction scaled by speed
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (d's x * h's w) + (point's x * tangent's w),
+            (d's y * h's w) + (point's y * tangent's w),
+            (d's z * h's w) + (point's z * tangent's w), tangent's w)
+
+local function cad loft general base Hermite first {cad loft general homogeneous point:value} with tangent {cad loft general homogeneous point:tangent} width {a 64 bit floating-point number:width}:
+    execute:
+        set fraction to width / 3.0
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            value's x + (tangent's x * fraction), value's y + (tangent's y * fraction),
+            value's z + (tangent's z * fraction), value's w + (tangent's w * fraction))
+
+local function cad loft general base Hermite last {cad loft general homogeneous point:value} with tangent {cad loft general homogeneous point:tangent} width {a 64 bit floating-point number:width}:
+    execute:
+        set fraction to width / 3.0
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            value's x - (tangent's x * fraction), value's y - (tangent's y * fraction),
+            value's z - (tangent's z * fraction), value's w - (tangent's w * fraction))
+
+function cad loft general construct base grid {cad loft general alignment result:aligned} boundary {integer:wireIndex} transition {integer:band} configured {cad loft general patch options:options}:
+    execute:
+        if (cad loft general base valid options options) = false:
+            return cad loft general base failure 1
+        if aligned's valid = false:
+            if (aligned's errorCode = 1) or (aligned's errorCode = 2):
+                return cad loft general base failure 1
+            return cad loft general base failure 2
+        set sections to aligned's sections
+        set count to the length of sections's values
+        if (count < 2) or (options's cyclic and (count < 3)):
+            return cad loft general base failure 1
+        set firstSection to the item at 0 in sections's values
+        if (wireIndex < 0) or (wireIndex >= (the length of firstSection's wires's values)):
+            return cad loft general base failure 3
+        set bands to count - 1
+        if options's cyclic:
+            set bands to count
+        if (band < 0) or (band >= bands):
+            return cad loft general base failure 3
+        set lengths to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to bands:
+            set nextIndex to index + 1
+            if nextIndex >= count:
+                set nextIndex to 0
+            set current to the item at index in sections's values
+            set next to the item at nextIndex in sections's values
+            set width to the cad distance from current's centre to next's centre
+            if width < 1e-9:
+                set oldWire to the item at 0 in current's wires's values
+                set newWire to the item at 0 in next's wires's values
+                set total to 0.0
+                loop sampleIndex from 0 to 16:
+                    set at to (sampleIndex as a 64 bit floating-point number) / 16.0
+                    set total to total + (the cad distance from (cad loft general base sample of oldWire at at) to (cad loft general base sample of newWire at at))
+                set width to total / 16.0
+            if width <= 1e-10:
+                return cad loft general base failure 4
+            append width to lengths's values
+        set rawBreakpoints to a cad topology list of a 64 bit floating-point number
+        append 0.0 to rawBreakpoints's values
+        append 1.0 to rawBreakpoints's values
+        loop sectionIndex from 0 to count:
+            set section to the item at sectionIndex in sections's values
+            set wire to the item at wireIndex in section's wires's values
+            loop spanIndex from 0 to the length of wire's spans's values:
+                append ((the item at spanIndex in wire's spans's values)'s start) to rawBreakpoints's values
+        set breakCount to the length of rawBreakpoints's values
+        loop index from 1 to breakCount:
+            set position to index
+            set searching to true
+            loop while (position > 0) and searching:
+                set before to the item at (position - 1) in rawBreakpoints's values
+                set after to the item at position in rawBreakpoints's values
+                if after < before:
+                    replace item at index (position - 1) in rawBreakpoints's values with after
+                    replace item at index position in rawBreakpoints's values with before
+                    set position to position - 1
+                else:
+                    set searching to false
+        set breakpoints to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of rawBreakpoints's values:
+            set value to the item at index in rawBreakpoints's values
+            set duplicate to false
+            if (the length of breakpoints's values) > 0:
+                set duplicate to (the absolute value of (value - (the last item of breakpoints's values))) <= 1e-10
+            if duplicate = false:
+                append value to breakpoints's values
+        set patches to a cad topology list of a cad loft general base patch
+        set width to the item at band in lengths's values
+        set nextBand to band + 1
+        if nextBand >= count:
+            set nextBand to 0
+        set derivativeSections to the cad clone of sections
+        set closedDerivative to options's cyclic and options's periodic
+        if options's cyclic and (options's periodic = false):
+            append firstSection to derivativeSections's values
+        loop column from 0 to ((the length of breakpoints's values) - 1):
+            set start to the item at column in breakpoints's values
+            set finish to the item at (column + 1) in breakpoints's values
+            set curves to a cad topology list of the type of (a cad topology list of a cad loft general homogeneous point)
+            set degree to 0
+            loop sectionIndex from 0 to count:
+                set section to the item at sectionIndex in sections's values
+                set wire to the item at wireIndex in section's wires's values
+                set interval to cad loft general base interval of wire from start to finish
+                if interval's valid = false:
+                    return cad loft general base failure 5
+                set controls to cad loft general base unit ends interval's controls
+                set degree to the maximum of degree and ((the length of controls's values) - 1)
+                append controls to curves's values
+            loop sectionIndex from 0 to count:
+                replace item at index sectionIndex in curves's values with (cad loft general base elevated (the item at sectionIndex in curves's values) to degree)
+            set rows to a cad topology list of the type of (a cad topology list of a cad loft general homogeneous point)
+            loop controlIndex from 0 to (degree + 1):
+                set values to a cad topology list of a cad loft general homogeneous point
+                loop sectionIndex from 0 to count:
+                    set controls to the item at sectionIndex in curves's values
+                    append (the item at controlIndex in controls's values) to values's values
+                set a to the item at band in values's values
+                set b to the item at nextBand in values's values
+                set row to a cad topology list of a cad loft general homogeneous point
+                append a to row's values
+                if options's normalMode != 0:
+                    set nextDerivative to nextBand
+                    if options's cyclic and (options's periodic = false):
+                        append (the item at 0 in values's values) to values's values
+                        set nextDerivative to band + 1
+                    set first to cad loft general computeprofilegradient band onvalues values onstations derivativeSections onlengths lengths withsettings options wrapping closedDerivative
+                    set last to cad loft general computeprofilegradient nextDerivative onvalues values onstations derivativeSections onlengths lengths withsettings options wrapping closedDerivative
+                    append (cad loft general base Hermite first a with tangent first width width) to row's values
+                    append (cad loft general base Hermite last b with tangent last width width) to row's values
+                append b to row's values
+                append row to rows's values
+            append (@intrinsic("construct", a cad loft general base patch, start, finish, rows)) to patches's values
+        return @intrinsic("construct", a cad loft general base patch result, true, 0, lengths, patches)

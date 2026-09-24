@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_base_patch.dl
+
+function check loft base patch {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function loft base section at {a number:height}:
+    execute:
+        set origin to a cad vector3 with x 0.0, y 0.0 and z (height as a 64 bit floating-point number)
+        set plane to a cad plane with origin origin, x axis (the cad x axis) and y axis (the cad y axis)
+        set start to a cad vector2 with x 0.0 and y 0.0
+        set finish to a cad vector2 with x 2.0 and y 0.0
+        set parts to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        append (the cad curve2 of (a cad line2 from start to finish)) to parts's values
+        set wires to a cad topology list of the type of parts
+        append parts to wires's values
+        set result to a cad loft general alignment input on plane with wires wires's values closing false
+        set wires to a new (the type of wires)
+        set parts to a new (the type of parts)
+        return result
+
+function loft base aligned pair:
+    execute:
+        set inputs to an empty list of a cad loft general alignment input
+        append (loft base section at 0) to inputs
+        append (loft base section at 4) to inputs
+        set result to the cad loft general alignment of inputs with cycle false and direction matching true
+        free inputs
+        return result
+
+function loft base retained:
+    execute:
+        set prepared to loft base aligned pair
+        set settings to the default cad loft general patch options
+        set result to cad loft general construct base grid prepared boundary 0 transition 0 configured settings
+        set prepared to a new (the type of prepared)
+        return result
+
+set aligned to loft base aligned pair
+check loft base patch aligned's valid
+set settings to the default cad loft general patch options
+set settings's normalMode to 0
+set ruled to cad loft general construct base grid aligned boundary 0 transition 0 configured settings
+check loft base patch ruled's valid
+check loft base patch ((the length of ruled's patches's values) = 1)
+check loft base patch (((the item at 0 in ruled's lengths's values) = 4.0) and ((the length of (the item at 0 in ruled's patches's values)'s rows's values) = 2))
+set firstPatch to the item at 0 in ruled's patches's values
+set firstRow to the item at 0 in firstPatch's rows's values
+set lastRow to the item at 1 in firstPatch's rows's values
+check loft base patch (((the length of firstRow's values) = 2) and ((the length of lastRow's values) = 2))
+check loft base patch (((the item at 0 in firstRow's values)'s z = 0.0) and ((the item at 1 in firstRow's values)'s z = 4.0))
+print "ruled_patch_preserves_homogeneous_endpoints" as a line
+
+set settings's normalMode to 1
+set smooth to cad loft general construct base grid aligned boundary 0 transition 0 configured settings
+check loft base patch smooth's valid
+set firstPatch to the item at 0 in smooth's patches's values
+set firstRow to the item at 0 in firstPatch's rows's values
+check loft base patch ((the length of firstRow's values) = 4)
+check loft base patch ((the absolute value of ((the item at 1 in firstRow's values)'s z - (4.0 / 3.0))) < 1e-12)
+check loft base patch ((the absolute value of ((the item at 2 in firstRow's values)'s z - (8.0 / 3.0))) < 1e-12)
+print "smooth_patch_has_source_section_derivatives" as a line
+
+set settings's normalMode to 6
+set settings's startDraftAngle to 0.3
+set settings's endDraftAngle to 1.1
+set settings's startMagnitude to 2.0
+set settings's endMagnitude to 1.0
+set drafted to cad loft general construct base grid aligned boundary 0 transition 0 configured settings
+check loft base patch drafted's valid
+set firstPatch to the item at 0 in drafted's patches's values
+check loft base patch ((the length of firstPatch's rows's values) = 2)
+print "endpoint_draft_constructs_cubic_rows" as a line
+
+set invalid to cad loft general construct base grid aligned boundary 1 transition 0 configured settings
+check loft base patch ((invalid's valid = false) and (invalid's errorCode = 3))
+set invalid to cad loft general construct base grid aligned boundary 0 transition 1 configured settings
+check loft base patch ((invalid's valid = false) and (invalid's errorCode = 3))
+set settings's normalMode to 7
+set invalid to cad loft general construct base grid aligned boundary 0 transition 0 configured settings
+check loft base patch ((invalid's valid = false) and (invalid's errorCode = 1))
+set settings's normalMode to 1
+set coincidentInputs to an empty list of a cad loft general alignment input
+append (loft base section at 0) to coincidentInputs
+append (loft base section at 0) to coincidentInputs
+set coincident to the cad loft general alignment of coincidentInputs with cycle false and direction matching true
+set invalid to cad loft general construct base grid coincident boundary 0 transition 0 configured settings
+check loft base patch ((invalid's valid = false) and (invalid's errorCode = 4))
+print "invalid_settings_indices_and_coincident_sections_refused" as a line
+
+loop iteration from 0 to 500:
+    set temporary to loft base retained
+    check loft base patch temporary's valid
+    set retained to temporary
+    set temporary to a new (the type of temporary)
+    set patch to the item at 0 in retained's patches's values
+    set row to the item at 1 in patch's rows's values
+    set point to the item at 2 in row's values
+    check loft base patch ((point's z > 2.0) and (point's z < 4.0))
+print "nested_patch_rows_survive_input_release_and_repetition" as a line

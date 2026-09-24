@@ -1,0 +1,3 @@
+bounded_torus_thickens_both_directions
+full_turn_and_long_minor_arc_thicken
+invalid_offsets_and_self_intersections_refused

@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_torus.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+import lib/cadkernel/brep_make.dl
+
+function check toroidal thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set centre to a cad vector2 with x 5.0 and y 0.0
+set profile to a list containing (the cad curve2 of (a cad arc2 at centre with radius 1.0 from -0.8 to 0.9))
+set sheet to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+set full to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check toroidal thickening (sheet's valid and full's valid)
+free profile
+set originalFaces to the cad count of sheet's value's faces
+set originalEdges to the cad count of sheet's value's edges
+set originalVertices to the cad count of sheet's value's vertices
+set originalSurfaces to the cad count of sheet's value's surfaces
+set outward to the cad toroidal thickening of sheet's value by 0.25
+set inward to the cad toroidal thickening of sheet's value by -0.25
+check toroidal thickening (outward's valid and inward's valid)
+check toroidal thickening ((the cad count of sheet's value's faces) = originalFaces)
+check toroidal thickening ((the cad count of sheet's value's edges) = originalEdges)
+check toroidal thickening ((the cad count of sheet's value's vertices) = originalVertices)
+check toroidal thickening ((the cad count of sheet's value's surfaces) = originalSurfaces)
+set outwardFlaws to the cad flaws of outward's value
+set inwardFlaws to the cad flaws of inward's value
+check toroidal thickening (((the length of outwardFlaws) = 0) and ((the length of inwardFlaws) = 0))
+free outwardFlaws
+free inwardFlaws
+print "bounded_torus_thickens_both_directions" as a line
+
+set fullSolid to the cad toroidal thickening of full's value by 0.25
+check toroidal thickening fullSolid's valid
+set longProfile to a list containing (the cad curve2 of (a cad arc2 at centre with radius 1.0 from -2.5 to 2.5))
+set longSheet to the cad revolved sheet of longProfile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check toroidal thickening longSheet's valid
+free longProfile
+set longSolid to the cad toroidal thickening of longSheet's value by -0.25
+check toroidal thickening longSolid's valid
+set longFlaws to the cad flaws of longSolid's value
+check toroidal thickening ((the length of longFlaws) = 0)
+free longFlaws
+print "full_turn_and_long_minor_arc_thicken" as a line
+
+set faceKeys to the cad face keys of sheet's value
+set face to the cad node pointer for (the item at 0 in faceKeys) in sheet's value
+set collapsingDistance to -2.0
+set intersectingDistance to 5.0
+if face's forward = false:
+    set collapsingDistance to 2.0
+    set intersectingDistance to -5.0
+free faceKeys
+set zero to the cad toroidal thickening of sheet's value by 0.0
+set collapse to the cad toroidal thickening of sheet's value by collapsingDistance
+set crossing to the cad toroidal thickening of sheet's value by intersectingDistance
+set infinite to the cad toroidal thickening of sheet's value by (1.0 / 0.0)
+check toroidal thickening ((zero's valid = false) and (collapse's valid = false))
+check toroidal thickening ((crossing's valid = false) and (infinite's valid = false))
+set alreadySolid to the cad toroidal thickening of outward's value by 0.25
+check toroidal thickening (alreadySolid's valid = false)
+set spindleCentre to a cad vector2 with x 1.0 and y 0.0
+set spindleProfile to a list containing (the cad curve2 of (a cad arc2 at spindleCentre with radius 2.0 from -0.8 to 0.9))
+set spindleSheet to the cad revolved sheet of spindleProfile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check toroidal thickening spindleSheet's valid
+free spindleProfile
+set spindleResult to the cad toroidal thickening of spindleSheet's value by 0.25
+check toroidal thickening (spindleResult's valid = false)
+set closed to the cad torus at (the cad zero vector3) with major radius 5.0 and minor radius 1.0
+check toroidal thickening closed's valid
+set closedResult to the cad toroidal thickening of closed's value by 0.25
+check toroidal thickening (closedResult's valid = false)
+print "invalid_offsets_and_self_intersections_refused" as a line

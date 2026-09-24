@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: MPL-2.0
+# Single bounded toroidal-face branch of cadkernel src/brep/thicken.rs,
+# revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The source body is borrowed; the revolved result owns its topology.
+import lib/cadkernel/brep_thicken_patch.dl
+import lib/cadkernel/brep_sweep.dl
+
+local function cad toroidal thickening scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
+
+function the cad toroidal thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if ((cad toroidal thickening scalar distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set validSource to (the length of flaws) = 0
+        free flaws
+        if validSource = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 1:
+            free faces
+            return no cad body
+        set edges to the cad edge keys of sourceBody
+        set hasBoundary to false
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in sourceBody
+            if edge != (0 as the type of edge):
+                if (the length of (edge's coedges's values)) = 1:
+                    set hasBoundary to true
+        free edges
+        if hasBoundary = false:
+            free faces
+            return no cad body
+        set faceKey to the item at 0 in faces
+        free faces
+        set face to the cad node pointer for faceKey in sourceBody
+        if face = (0 as the type of face):
+            return no cad body
+        set surface to the cad node pointer for face's surface in sourceBody
+        if surface = (0 as the type of surface):
+            return no cad body
+        if surface's kind != 4:
+            return no cad body
+        set patch to the cad thickening patch of faceKey in sourceBody
+        if patch's valid = false:
+            return no cad body
+        if patch's value's vSweep > (6.283185307179586 + 1e-8):
+            return no cad body
+        set oriented to distance
+        if face's forward = false:
+            set oriented to 0.0 - distance
+        set torus to surface's torus
+        set radius to torus's minorRadius
+        set second to radius + oriented
+        if (((cad toroidal thickening scalar radius is finite) and (cad toroidal thickening scalar second is finite)) and ((radius > 1e-9) and (second > 1e-9))) = false:
+            return no cad body
+        if (radius >= (torus's majorRadius - 1e-9)) or (second >= (torus's majorRadius - 1e-9)):
+            return no cad body
+        set frame to torus's frame
+        set axisResult to the cad normal of frame
+        if (axisResult's valid) = false:
+            return no cad body
+        set u to patch's value's uStart
+        set radial to the cad vector at (a cad vector2 with x (the cosine of u) and y (the sine of u)) on frame
+        set section to a cad plane with origin frame's origin, x axis radial and y axis axisResult's value
+        set v0 to patch's value's vStart
+        set v1 to v0 + patch's value's vSweep
+        set centre to a cad vector2 with x torus's majorRadius and y 0.0
+        set firstTop to a cad vector2 with x (centre's x + (radius * (the cosine of v1))) and y (radius * (the sine of v1))
+        set secondTop to a cad vector2 with x (centre's x + (second * (the cosine of v1))) and y (second * (the sine of v1))
+        set secondBottom to a cad vector2 with x (centre's x + (second * (the cosine of v0))) and y (second * (the sine of v0))
+        set firstBottom to a cad vector2 with x (centre's x + (radius * (the cosine of v0))) and y (radius * (the sine of v0))
+        set profile to a list containing (the cad curve2 of (a cad arc2 at centre with radius radius from v0 to v1))
+        append (the cad curve2 of (a cad line2 from firstTop to secondTop)) to profile
+        append (the cad curve2 of (a cad arc2 at centre with radius second from v0 to v1)) to profile
+        append (the cad curve2 of (a cad line2 from secondBottom to firstBottom)) to profile
+        set result to the cad revolution of profile on section about frame's origin along axisResult's value by patch's value's uSweep
+        free profile
+        return result
