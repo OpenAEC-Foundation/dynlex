@@ -1,0 +1,290 @@
+# SPDX-License-Identifier: MPL-2.0
+# Two open, single-wire sections without guides or path. The patch grid and
+# topology order follow pinned loft_general.rs::loft_with_options/assemble.
+import lib/cadkernel/brep_loft_general_surface.dl
+import lib/cadkernel/brep_result.dl
+
+class:
+    patterns:
+        [a|] cad loft general open surface entry
+    members:
+        patch as a cad loft general base patch
+        surface as a cad nurbs surface3
+
+class:
+    patterns:
+        [a|] cad loft general open edge result
+    members:
+        valid as a boolean
+        key as a cad edge key
+
+local function cad loft general open projected {cad loft general homogeneous point:h}:
+    execute:
+        return a cad vector3 with x (h's x / h's w), y (h's y / h's w) and z (h's z / h's w)
+
+local function cad loft general open mixed {cad loft general homogeneous point:a} with {cad loft general homogeneous point:b} at {a 64 bit floating-point number:t}:
+    execute:
+        set s to 1.0 - t
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            s * a's x + t * b's x, s * a's y + t * b's y,
+            s * a's z + t * b's z, s * a's w + t * b's w)
+
+local function cad loft general open point on {cad topology list:controls} at {a 64 bit floating-point number:t}:
+    execute:
+        set work to the cad clone of controls
+        set count to the length of work's values
+        loop level from 1 to count:
+            loop index from 0 to (count - level):
+                replace item at index index in work's values with (cad loft general open mixed (the item at index in work's values) with (the item at (index + 1) in work's values) at t)
+        return cad loft general open projected (the item at 0 in work's values)
+
+local function cad loft general open boundary of {cad loft general base patch:patch} across {boolean:across} ending {boolean:last}:
+    execute:
+        set controls to a cad topology list of a cad loft general homogeneous point
+        set rows to patch's rows's values
+        if across:
+            loop index from 0 to the length of rows:
+                set row to the item at index in rows
+                set at to 0
+                if last:
+                    set at to (the length of row's values) - 1
+                append (the item at at in row's values) to controls's values
+        else:
+            set at to 0
+            if last:
+                set at to (the length of rows) - 1
+            set row to the item at at in rows
+            loop index from 0 to the length of row's values:
+                append (the item at index in row's values) to controls's values
+        return controls
+
+local function cad loft general open edge on {cad topology list:controls} from {cad vertex key:start} to {cad vertex key:end} in {cad body:body}:
+    execute:
+        set points to an empty list of a cad vector3
+        set weights to an empty list of a 64 bit floating-point number
+        loop index from 0 to the length of controls's values:
+            set h to the item at index in controls's values
+            append (cad loft general open projected h) to points
+            append h's w to weights
+        set degree to (the length of points) - 1
+        set knots to an empty list of a 64 bit floating-point number
+        loop index from 0 to (degree + 1):
+            append 0.0 to knots
+        loop index from 0 to (degree + 1):
+            append 1.0 to knots
+        set made to the strict cad nurbs curve3 of degree degree with controls points, knots knots and weights weights
+        free points
+        free weights
+        free knots
+        if made's valid = false:
+            return @intrinsic("construct", a cad loft general open edge result, false, a new cad edge key)
+        set curveKey to the cad body key after inserting (the cad edge curve3 of made's value) into body
+        set edgeKey to the cad body key after inserting (a cad edge on curveKey from 0.0 to 1.0 between start and end with provenance (the synthesized cad provenance)) into body
+        return @intrinsic("construct", a cad loft general open edge result, true, edgeKey)
+
+local function cad loft general open agrees {cad edge key:key} with {cad topology list:controls} in {cad body:body} to {a 64 bit floating-point number:tolerance}:
+    execute:
+        set edge to the cad node pointer for key in body
+        set curve to the cad node pointer for edge's curve in body
+        set curveValue to @intrinsic("dereference", curve)
+        loop index from 0 to 5:
+            set at to (index as a 64 bit floating-point number) / 4.0
+            set source to the cad point on curveValue at at
+            set candidate to cad loft general open point on controls at at
+            if (the cad distance from source to candidate) > tolerance:
+                return false
+        return true
+
+local function cad loft general open pcurve from {a 64 bit floating-point number:x0} and {a 64 bit floating-point number:y0} to {a 64 bit floating-point number:x1} and {a 64 bit floating-point number:y1}:
+    execute:
+        set first to a cad vector2 with x x0 and y y0
+        set last to a cad vector2 with x x1 and y y1
+        return the cad pcurve of (the cad curve2 of (a cad line2 from first to last))
+
+local function cad loft general open add use {cad edge key:edgeKey} forward {boolean:forward} with {cad pcurve result:pcurve} in {cad loop key:loopKey} of {cad body:body}:
+    execute:
+        set useKey to the cad body key after inserting (a cad coedge on edgeKey forward forward with pcurve pcurve owned by loopKey with provenance (the synthesized cad provenance)) into body
+        set edge to the cad node pointer for edgeKey in body
+        append useKey to edge's coedges's values
+        set ring to the cad node pointer for loopKey in body
+        append useKey to ring's coedges's values
+
+local function cad loft general open tolerance of {cad topology list:entries}:
+    execute:
+        set lowX to (1.0 / 0.0)
+        set lowY to (1.0 / 0.0)
+        set lowZ to (1.0 / 0.0)
+        set highX to (-1.0 / 0.0)
+        set highY to (-1.0 / 0.0)
+        set highZ to (-1.0 / 0.0)
+        set coordinate to 1.0
+        loop index from 0 to the length of entries's values:
+            set patch to (the item at index in entries's values)'s patch
+            loop rowIndex from 0 to the length of patch's rows's values:
+                set row to the item at rowIndex in patch's rows's values
+                loop column from 0 to the length of row's values:
+                    set point to cad loft general open projected (the item at column in row's values)
+                    set lowX to the minimum of lowX and point's x
+                    set lowY to the minimum of lowY and point's y
+                    set lowZ to the minimum of lowZ and point's z
+                    set highX to the maximum of highX and point's x
+                    set highY to the maximum of highY and point's y
+                    set highZ to the maximum of highZ and point's z
+                    set coordinate to the maximum of coordinate and (the absolute value of point's x)
+                    set coordinate to the maximum of coordinate and (the absolute value of point's y)
+                    set coordinate to the maximum of coordinate and (the absolute value of point's z)
+        set extent to the maximum of 1.0 and (highX - lowX)
+        set extent to the maximum of extent and (highY - lowY)
+        set extent to the maximum of extent and (highZ - lowZ)
+        return the maximum of (extent * 1e-8) and (coordinate * 1.7763568394002505e-15)
+
+# The public bounded entry point returns the ordinary owned B-rep result.
+function the cad general open loft of {a pointer to a list:inputs} with direction matching {boolean:matchDirection} configured {cad loft general patch options:options}:
+    execute:
+        if (the length of inputs) != 2:
+            return no cad body
+        if options's cyclic:
+            return no cad body
+        loop sectionIndex from 0 to 2:
+            set input to the item at sectionIndex in inputs
+            if input's closed or ((the length of input's wires's values) != 1):
+                return no cad body
+        set aligned to the cad loft general alignment of inputs with cycle false and direction matching matchDirection
+        if aligned's valid = false:
+            return no cad body
+        set base to cad loft general construct base grid aligned boundary 0 transition 0 configured options
+        if base's valid = false:
+            return no cad body
+        set count to the length of base's patches's values
+        if count < 1:
+            return no cad body
+        set first to cad loft general construct strict nurbspatch base columnnumber 0 midpointregular true
+        if first's valid = false:
+            return no cad body
+        set firstPatch to the item at 0 in base's patches's values
+        set entry to @intrinsic("construct", a cad loft general open surface entry, firstPatch, first's surface)
+        set entries to a cad topology list of the type of entry
+        append entry to entries's values
+        loop index from 1 to count:
+            set made to cad loft general construct strict nurbspatch base columnnumber index midpointregular true
+            if made's valid = false:
+                return no cad body
+            set patch to the item at index in base's patches's values
+            append (@intrinsic("construct", a cad loft general open surface entry, patch, made's surface)) to entries's values
+
+        set tolerance to cad loft general open tolerance of entries
+        set body to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into body
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into body
+        set stations to a cad topology list of the type of (a cad topology list of a cad vertex key)
+        set collapsedStations to a cad topology list of a boolean
+        set rims to a cad topology list of the type of (a cad topology list of a cad edge key)
+        loop station from 0 to 2:
+            set corners to a cad topology list of a cad vertex key
+            set patch to (the item at 0 in entries's values)'s patch
+            set boundary to cad loft general open boundary of patch across true ending (station = 1)
+            set firstPoint to cad loft general open projected (the item at 0 in boundary's values)
+            set collapsed to true
+            loop column from 0 to count:
+                set patch to (the item at column in entries's values)'s patch
+                set boundary to cad loft general open boundary of patch across true ending (station = 1)
+                if (the cad distance from (cad loft general open projected (the item at 0 in boundary's values)) to firstPoint) > tolerance:
+                    set collapsed to false
+                if (the cad distance from (cad loft general open point on boundary at 0.5) to firstPoint) > tolerance:
+                    set collapsed to false
+            set patch to (the item at (count - 1) in entries's values)'s patch
+            set boundary to cad loft general open boundary of patch across true ending (station = 1)
+            if (the cad distance from (cad loft general open projected (the last item of boundary's values)) to firstPoint) > tolerance:
+                set collapsed to false
+            if collapsed:
+                set vertexKey to the cad body key after inserting (a cad vertex at firstPoint with provenance (the synthesized cad provenance)) into body
+                loop column from 0 to (count + 1):
+                    append vertexKey to corners's values
+            else:
+                loop column from 0 to (count + 1):
+                    set at to column
+                    set last to false
+                    if column = count:
+                        set at to count - 1
+                        set last to true
+                    set patch to (the item at at in entries's values)'s patch
+                    set boundary to cad loft general open boundary of patch across true ending (station = 1)
+                    set h to the item at 0 in boundary's values
+                    if last:
+                        set h to the last item of boundary's values
+                    set vertexKey to the cad body key after inserting (a cad vertex at (cad loft general open projected h) with provenance (the synthesized cad provenance)) into body
+                    append vertexKey to corners's values
+            append corners to stations's values
+            append collapsed to collapsedStations's values
+        loop station from 0 to 2:
+            set rowEdges to a cad topology list of a cad edge key
+            set corners to the item at station in stations's values
+            loop column from 0 to count:
+                if the item at station in collapsedStations's values:
+                    append (a new cad edge key) to rowEdges's values
+                else:
+                    set patch to (the item at column in entries's values)'s patch
+                    set boundary to cad loft general open boundary of patch across true ending (station = 1)
+                    set made to cad loft general open edge on boundary from (the item at column in corners's values) to (the item at (column + 1) in corners's values) in body
+                    if made's valid = false:
+                        return no cad body
+                    append made's key to rowEdges's values
+            append rowEdges to rims's values
+        set rails to a cad topology list of a cad edge key
+        set lower to the item at 0 in stations's values
+        set upper to the item at 1 in stations's values
+        loop column from 0 to (count + 1):
+            set at to column
+            set last to false
+            if column = count:
+                set at to count - 1
+                set last to true
+            set patch to (the item at at in entries's values)'s patch
+            set boundary to cad loft general open boundary of patch across false ending last
+            set made to cad loft general open edge on boundary from (the item at column in lower's values) to (the item at column in upper's values) in body
+            if made's valid = false:
+                return no cad body
+            append made's key to rails's values
+
+        set lowerRims to the item at 0 in rims's values
+        set upperRims to the item at 1 in rims's values
+        set lowerCollapsed to the item at 0 in collapsedStations's values
+        set upperCollapsed to the item at 1 in collapsedStations's values
+        loop column from 0 to count:
+            set entry to the item at column in entries's values
+            set patch to entry's patch
+            set left to cad loft general open boundary of patch across false ending false
+            set right to cad loft general open boundary of patch across false ending true
+            set bottom to cad loft general open boundary of patch across true ending false
+            set top to cad loft general open boundary of patch across true ending true
+            if (cad loft general open agrees (the item at column in (rails's values)) with left in body to tolerance) = false:
+                return no cad body
+            if (cad loft general open agrees (the item at (column + 1) in (rails's values)) with right in body to tolerance) = false:
+                return no cad body
+            if lowerCollapsed = false:
+                if (cad loft general open agrees (the item at column in (lowerRims's values)) with bottom in body to tolerance) = false:
+                    return no cad body
+            if upperCollapsed = false:
+                if (cad loft general open agrees (the item at column in (upperRims's values)) with top in body to tolerance) = false:
+                    return no cad body
+            set surfaceKey to the cad body key after inserting (the cad surface of entry's surface) into body
+            set faceKey to the cad body key after inserting (a cad face on surfaceKey forward true owned by shellKey with provenance (the synthesized cad provenance)) into body
+            set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+            if lowerCollapsed = false:
+                cad loft general open add use (the item at column in (lowerRims's values)) forward true with (cad loft general open pcurve from 0.0 and 0.0 to 1.0 and 0.0) in loopKey of body
+            cad loft general open add use (the item at (column + 1) in (rails's values)) forward true with (cad loft general open pcurve from 1.0 and 0.0 to 1.0 and 1.0) in loopKey of body
+            if upperCollapsed = false:
+                cad loft general open add use (the item at column in (upperRims's values)) forward false with (cad loft general open pcurve from 1.0 and 1.0 to 0.0 and 1.0) in loopKey of body
+            cad loft general open add use (the item at column in (rails's values)) forward false with (cad loft general open pcurve from 0.0 and 1.0 to 0.0 and 0.0) in loopKey of body
+            set face to the cad node pointer for faceKey in body
+            append loopKey to face's loops's values
+            set shell to the cad node pointer for shellKey in body
+            append faceKey to shell's faces's values
+        set lump to the cad node pointer for lumpKey in body
+        append shellKey to lump's shells's values
+        append lumpKey to body's roots
+        return the validated cad body result of body
+
+function the cad general open loft of {a pointer to a list:inputs}:
+    execute:
+        return the cad general open loft of inputs with direction matching true configured (the default cad loft general patch options)

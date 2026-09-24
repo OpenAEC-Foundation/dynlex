@@ -1,0 +1,109 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft_general_align/input.dl
+import lib/cadkernel/brep_loft_general_body_open.dl
+
+allocate one slot of (a new loft general align reader) and set reader to it
+set matching to (loft general align next reader) != 0.0
+set mode to (loft general align next reader) as an integer
+set firstAngle to loft general align next reader
+set lastAngle to loft general align next reader
+set firstMagnitude to loft general align next reader
+set lastMagnitude to loft general align next reader
+set count to (loft general align next reader) as an integer
+set inputs to an empty list of a cad loft general alignment input
+loop sectionIndex from 0 to count:
+    set origin to loft general align point3 from reader
+    set xAxis to loft general align point3 from reader
+    set yAxis to loft general align point3 from reader
+    set plane to a cad plane with origin origin, x axis xAxis and y axis yAxis
+    set closing to (loft general align next reader) != 0.0
+    set wireCount to (loft general align next reader) as an integer
+    set wires to a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+    loop wireIndex from 0 to wireCount:
+        set pieceCount to (loft general align next reader) as an integer
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop pieceIndex from 0 to pieceCount:
+            append (loft general align curve from reader) to pieces's values
+        append pieces to wires's values
+    append (a cad loft general alignment input on plane with wires wires's values closing closing) to inputs
+@intrinsic("call", "libc", "free", nothing, reader)
+set options to @intrinsic("construct", a cad loft general patch options,
+    false, true, mode, firstAngle, lastAngle, firstMagnitude, lastMagnitude)
+set made to the cad general open loft of inputs with direction matching matching configured options
+loft general align emit (made's valid as an integer)
+if made's valid:
+    set body to made's value
+    loft general align emit (the cad count of body's vertices)
+    loft general align emit (the cad count of body's edges)
+    loft general align emit (the cad count of body's coedges)
+    loft general align emit (the cad count of body's loops)
+    loft general align emit (the cad count of body's faces)
+    loft general align emit (the cad count of body's shells)
+    loft general align emit (the cad count of body's lumps)
+    loft general align emit (the cad count of body's surfaces)
+    loft general align emit (the cad count of body's curves)
+    loft general align emit (the length of body's roots)
+    set flaws to the cad flaws of body
+    loft general align emit (the length of flaws)
+    loop index from 0 to the length of body's roots:
+        loft general align emit (the cad slot of (the item at index in body's roots))
+    set vertexKeys to the cad vertex keys of body
+    loop index from 0 to the length of vertexKeys:
+        set vertex to the cad node pointer for (the item at index in vertexKeys) in body
+        loft general align emit point vertex's point
+    set edgeKeys to the cad edge keys of body
+    loop index from 0 to the length of edgeKeys:
+        set edge to the cad node pointer for (the item at index in edgeKeys) in body
+        loft general align emit (the cad slot of edge's start)
+        loft general align emit (the cad slot of edge's end)
+        loft general align emit (the length of edge's coedges's values)
+        loop usageIndex from 0 to the length of edge's coedges's values:
+            loft general align emit (the cad slot of (the item at usageIndex in edge's coedges's values))
+        set curve to the cad node pointer for edge's curve in body
+        set curveShape to @intrinsic("dereference", curve)
+        loft general align emit point (the cad point on curveShape at 0.25)
+        loft general align emit point (the cad point on curveShape at 0.5)
+        loft general align emit point (the cad point on curveShape at 0.75)
+    set usageKeys to the cad keys of body's coedges
+    loop index from 0 to the length of usageKeys:
+        set usage to the cad node pointer for (the item at index in usageKeys) in body's coedges
+        loft general align emit (the cad slot of usage's edge)
+        loft general align emit (usage's forward as an integer)
+        loft general align emit (the cad slot of usage's owner)
+        loft general align emit usage's pcurve's value's line's start's x
+        loft general align emit usage's pcurve's value's line's start's y
+        loft general align emit usage's pcurve's value's line's end's x
+        loft general align emit usage's pcurve's value's line's end's y
+    set ringKeys to the cad keys of body's loops
+    loop index from 0 to the length of ringKeys:
+        set ring to the cad node pointer for (the item at index in ringKeys) in body's loops
+        loft general align emit (the cad slot of ring's owner)
+        loft general align emit (the length of ring's coedges's values)
+        loop usageIndex from 0 to the length of ring's coedges's values:
+            loft general align emit (the cad slot of (the item at usageIndex in ring's coedges's values))
+    set faceKeys to the cad face keys of body
+    loop index from 0 to the length of faceKeys:
+        set face to the cad node pointer for (the item at index in faceKeys) in body
+        loft general align emit (face's forward as an integer)
+        loft general align emit (the cad slot of face's owner)
+        loft general align emit (the cad slot of face's surface)
+        loft general align emit (the length of face's loops's values)
+        loop ringIndex from 0 to the length of face's loops's values:
+            loft general align emit (the cad slot of (the item at ringIndex in face's loops's values))
+        set surface to the cad node pointer for face's surface in body
+        set surfaceShape to @intrinsic("dereference", surface)
+        loft general align emit point (the cad point on surfaceShape at parameters 0.25 and 0.5)
+        loft general align emit point (the cad point on surfaceShape at parameters 0.5 and 0.75)
+    set shellKeys to the cad keys of body's shells
+    loop index from 0 to the length of shellKeys:
+        set shell to the cad node pointer for (the item at index in shellKeys) in body's shells
+        loft general align emit (the cad slot of shell's owner)
+        loft general align emit (the length of shell's faces's values)
+        loop faceIndex from 0 to the length of shell's faces's values:
+            loft general align emit (the cad slot of (the item at faceIndex in shell's faces's values))
+    set lumpKeys to the cad keys of body's lumps
+    loop index from 0 to the length of lumpKeys:
+        set lump to the cad node pointer for (the item at index in lumpKeys) in body's lumps
+        loft general align emit (the length of lump's shells's values)
+        loop shellIndex from 0 to the length of lump's shells's values:
+            loft general align emit (the cad slot of (the item at shellIndex in lump's shells's values))

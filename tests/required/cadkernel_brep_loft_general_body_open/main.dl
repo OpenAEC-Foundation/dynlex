@@ -1,0 +1,84 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_body_open.dl
+
+function check general open loft {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 87)
+
+function a general open loft input at {a number:z}:
+    execute:
+        set plane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z z), x axis the cad x axis and y axis the cad y axis
+        set curves to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 1.0 and y 0.0))) to curves's values
+        append (the cad curve2 of (a cad line2 from (a cad vector2 with x 1.0 and y 0.0) to (a cad vector2 with x 2.0 and y 0.0))) to curves's values
+        set wires to a cad topology list of the type of curves
+        append curves to wires's values
+        return a cad loft general alignment input on plane with wires wires's values closing false
+
+function a collapsed general open loft input at {a number:z}:
+    execute:
+        set plane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z z), x axis the cad x axis and y axis the cad y axis
+        set curves to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop index from 0 to 2:
+            append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 0.0 and y 0.0))) to curves's values
+        set wires to a cad topology list of the type of curves
+        append curves to wires's values
+        return a cad loft general alignment input on plane with wires wires's values closing false
+
+set inputs to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0) to inputs
+append (a general open loft input at 3.0) to inputs
+set result to the cad general open loft of inputs
+check general open loft result's valid
+set body to result's value
+check general open loft ((the cad count of body's vertices) = 6)
+check general open loft ((the cad count of body's edges) = 7)
+check general open loft ((the cad count of body's coedges) = 8)
+check general open loft ((the cad count of body's faces) = 2)
+check general open loft ((the cad count of body's surfaces) = 2)
+check general open loft ((the cad count of body's curves) = 7)
+check general open loft ((the length of body's roots) = 1)
+set flaws to the cad flaws of body
+check general open loft ((the length of flaws) = 0)
+set edgeKeys to the cad edge keys of body
+set shared to 0
+loop index from 0 to the length of edgeKeys:
+    set edge to the cad node pointer for (the item at index in edgeKeys) in body
+    if (the length of edge's coedges's values) = 2:
+        set shared to shared + 1
+check general open loft (shared = 1)
+set surfaceKeys to the cad keys of body's surfaces
+set surface to the cad node pointer for (the item at 0 in surfaceKeys) in body's surfaces
+set sample to the cad point on (@intrinsic("dereference", surface)) at parameters 0.5 and 0.5
+check general open loft ((the cad distance from sample to (a cad vector3 with x 0.5, y 0.0 and z 1.5)) < 1e-8)
+set retained to the cad clone of body
+set body to an empty cad body
+set clonedFlaws to the cad flaws of retained
+check general open loft ((the length of clonedFlaws) = 0)
+loop iteration from 0 to 32:
+    set repeated to the cad general open loft of inputs
+    check general open loft repeated's valid
+    set copy to the cad clone of repeated's value
+    set repeated to no cad body
+    set copyFlaws to the cad flaws of copy
+    check general open loft ((the length of copyFlaws) = 0)
+    check general open loft ((the cad count of copy's faces) = 2)
+set coincident to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0) to coincident
+append (a general open loft input at 0.0) to coincident
+check general open loft (((the cad general open loft of coincident)'s valid) = false)
+set incomplete to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0) to incomplete
+check general open loft (((the cad general open loft of incomplete)'s valid) = false)
+set narrowing to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0) to narrowing
+append (a collapsed general open loft input at 3.0) to narrowing
+set tip to the cad general open loft of narrowing
+check general open loft tip's valid
+check general open loft ((the cad count of tip's value's vertices) = 4)
+check general open loft ((the cad count of tip's value's edges) = 5)
+check general open loft ((the cad count of tip's value's coedges) = 6)
+set tipFlaws to the cad flaws of tip's value
+check general open loft ((the length of tipFlaws) = 0)
+print "general open loft topology and ownership" as a line
