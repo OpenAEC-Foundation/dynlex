@@ -1,0 +1,5 @@
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/brep_topology.dl
+
+set surfaces to a cad topology list of a cad nurbs surface3
+print (the length of surfaces's values)

@@ -1,0 +1,41 @@
+import lib/cadkernel/nurbs3.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] layout surface entry
+    members:
+        surface as a cad nurbs surface3
+
+function layout check {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 91)
+
+function a layout surface collection:
+    execute:
+        set net to an empty list of the type of (an empty list of a cad vector3)
+        loop row from 0 to 2:
+            set across to an empty list of a cad vector3
+            loop column from 0 to 2:
+                append (a cad vector3 with x row, y column and z 0.0) to across
+            append across to net
+        set made to the cad nurbs surface3 of degrees 1 and 1 through control net net with periodicity false and false
+        layout check made's valid
+        set entry to @intrinsic("construct", a layout surface entry, made's value)
+        set surfaces to a cad topology list of the type of entry
+        append entry to surfaces's values
+        loop row from 0 to the length of net:
+            free (the item at row in net)
+        free net
+        return surfaces
+
+loop iteration from 0 to 100:
+    set surfaces to a layout surface collection
+    set retained to surfaces
+    set surfaces to a layout surface collection
+    layout check ((the length of retained's values) = 1)
+    set entry to the item at 0 in retained's values
+    set point to the cad point on entry's surface at parameters 0.5 and 0.5
+    layout check (((point's x = 0.5) and (point's y = 0.5)) and (point's z = 0.0))
+print "managed surface layout and lifetime" as a line
