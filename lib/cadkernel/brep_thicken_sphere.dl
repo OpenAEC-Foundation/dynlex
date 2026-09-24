@@ -1,19 +1,18 @@
 # SPDX-License-Identifier: MPL-2.0
-# Single bounded cylindrical-face branch of cadkernel src/brep/thicken.rs,
+# Single bounded spherical-face branch of cadkernel src/brep/thicken.rs,
 # revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-# The input body is borrowed. Only the resulting solid owns its new topology.
-import lib/cadkernel/brep_revolve_sheet.dl
-import lib/cadkernel/brep_sweep.dl
+# The source body is borrowed; the revolved result owns its topology.
 import lib/cadkernel/brep_thicken_patch.dl
+import lib/cadkernel/brep_sweep.dl
 
-local function cad cylindrical thickening scalar {a 64 bit floating-point number:value} is finite:
+local function cad spherical thickening scalar {a 64 bit floating-point number:value} is finite:
     execute:
         return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
 
-function the cad cylindrical thickening of {cad body:sourceBody} by {a number:givenDistance}:
+function the cad spherical thickening of {cad body:sourceBody} by {a number:givenDistance}:
     execute:
         set distance to givenDistance as a 64 bit floating-point number
-        if ((cad cylindrical thickening scalar distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+        if ((cad spherical thickening scalar distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
             return no cad body
         set flaws to the cad flaws of sourceBody
         set validSource to (the length of flaws) = 0
@@ -43,40 +42,37 @@ function the cad cylindrical thickening of {cad body:sourceBody} by {a number:gi
         set surface to the cad node pointer for face's surface in sourceBody
         if surface = (0 as the type of surface):
             return no cad body
-        if surface's kind != 1:
+        if surface's kind != 3:
             return no cad body
         set patch to the cad thickening patch of faceKey in sourceBody
-        if (patch's valid) = false:
+        if patch's valid = false:
             return no cad body
         set oriented to distance
         if face's forward = false:
             set oriented to 0.0 - distance
-        set radius to surface's cylinder's radius
+        set radius to surface's sphere's radius
         set second to radius + oriented
-        if (((cad cylindrical thickening scalar radius is finite) and (cad cylindrical thickening scalar second is finite)) and ((radius > 1e-9) and (second > 1e-9))) = false:
+        if (((cad spherical thickening scalar radius is finite) and (cad spherical thickening scalar second is finite)) and ((radius > 1e-9) and (second > 1e-9))) = false:
             return no cad body
-        set frame to surface's cylinder's base
+        set v0 to patch's value's vStart
+        set v1 to v0 + patch's value's vSweep
+        if (v0 < (-1.5707963267948966 - 1e-7)) or (v1 > (1.5707963267948966 + 1e-7)):
+            return no cad body
+        set frame to surface's sphere's frame
         set axisResult to the cad normal of frame
         if (axisResult's valid) = false:
             return no cad body
         set u to patch's value's uStart
         set radial to the cad vector at (a cad vector2 with x (the cosine of u) and y (the sine of u)) on frame
         set section to a cad plane with origin frame's origin, x axis radial and y axis axisResult's value
-        set v0 to patch's value's vStart
-        set v1 to v0 + patch's value's vSweep
-        set corners to a list containing (a cad vector2 with x radius and y v0)
-        append (a cad vector2 with x radius and y v1) to corners
-        append (a cad vector2 with x second and y v1) to corners
-        append (a cad vector2 with x second and y v0) to corners
-        set profile to an empty list of a cad curve2
-        loop index from 0 to 4:
-            set first to the item at index in corners
-            set last to the item at (the remainder of (index + 1) divided by 4) in corners
-            append (the cad curve2 of (a cad line2 from first to last)) to profile
-        set pivot to frame's origin
-        set axis to axisResult's value
-        set angle to patch's value's uSweep
-        set result to the cad revolution of profile on section about pivot along axis by angle
+        set firstTop to a cad vector2 with x (radius * (the cosine of v1)) and y (radius * (the sine of v1))
+        set secondTop to a cad vector2 with x (second * (the cosine of v1)) and y (second * (the sine of v1))
+        set secondBottom to a cad vector2 with x (second * (the cosine of v0)) and y (second * (the sine of v0))
+        set firstBottom to a cad vector2 with x (radius * (the cosine of v0)) and y (radius * (the sine of v0))
+        set profile to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius radius from v0 to v1))
+        append (the cad curve2 of (a cad line2 from firstTop to secondTop)) to profile
+        append (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius second from v0 to v1)) to profile
+        append (the cad curve2 of (a cad line2 from secondBottom to firstBottom)) to profile
+        set result to the cad revolution of profile on section about frame's origin along axisResult's value by patch's value's uSweep
         free profile
-        free corners
         return result

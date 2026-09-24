@@ -1,0 +1,3 @@
+bounded_sphere_thickens_both_directions
+full_turn_sphere_thickens
+invalid_offsets_and_unsupported_bounds_refused

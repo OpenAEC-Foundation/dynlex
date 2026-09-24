@@ -1,0 +1,213 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_body.dl
+
+# The imported generic fitter needs one concrete evaluator at compile time.
+class:
+    patterns:
+        [a|] cad path sweep body fixture evaluator
+
+function the cad path sweep fit sample of {cad path sweep body fixture evaluator:source} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set frame to a cad path sweep frame at (the cad zero vector3) with x (the cad x axis) and y (the cad y axis)
+        return @intrinsic("construct", a cad path sweep frame result, true, frame)
+
+function check path body {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function check path body pcurves of {cad body:body}:
+    execute:
+        set uses to the cad keys of (body's coedges)
+        loop index from 0 to the length of uses:
+            set usage to the cad node pointer for (the item at index in uses) in (body's coedges)
+            check path body usage's pcurve's valid
+            set edge to the cad node pointer for usage's edge in body
+            set curve to the cad node pointer for edge's curve in body
+            set ring to the cad node pointer for usage's owner in body
+            set face to the cad node pointer for ring's owner in body
+            set surface to the cad node pointer for face's surface in body
+            loop step from 0 to 5:
+                set parameter to (step as a 64 bit floating-point number) / 4.0
+                set uv to the cad point on usage's pcurve's value at parameter
+                set onSurface to the cad point on (@intrinsic("dereference", surface)) at parameters uv's x and uv's y
+                set edgeParameter to parameter
+                if usage's forward = false:
+                    set edgeParameter to 1.0 - parameter
+                set onEdge to the cad point on (@intrinsic("dereference", curve)) at edgeParameter
+                check path body ((the cad distance from onSurface to onEdge) < 1e-9)
+        free uses
+
+function path body test line from {cad vector2:start} to {cad vector2:end}:
+    execute:
+        set controls to a list containing start
+        append end to controls
+        set knots to a list containing (0.0 as a 64 bit floating-point number)
+        append 0.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing (1.0 as a 64 bit floating-point number)
+        append 1.0 to weights
+        set curve to the cad rational curve2 of degree 1 with controls controls, knots knots and weights weights
+        free controls
+        free knots
+        free weights
+        return curve
+
+set controls to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1.0 and y 0.0) to controls
+set knots to a list containing 0.0
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing 1.0
+append 1.0 to weights
+set curve to the cad rational curve2 of degree 1 with controls controls, knots knots and weights weights
+set curves to a list containing curve
+set wire to a cad path sweep prepared wire from curves closed false
+set wires to a list containing wire
+set first to a cad path sweep frame at (the cad zero vector3) with x (the cad x axis) and y (the cad y axis)
+set second to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 0.6666666666666666) with x (the cad x axis) and y (the cad y axis)
+set third to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 1.3333333333333333) with x (the cad x axis) and y (the cad y axis)
+set last to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 2.0) with x (the cad x axis) and y (the cad y axis)
+set patch to a cad path sweep cubic patch with frames first, second, third and last
+set patches to a list containing patch
+
+set built to the cad path sweep body from wires with patches patches sheet true closed path false outward true
+check path body built's valid
+set body to built's value
+set flaws to the cad flaws of body
+check path body ((the length of flaws) = 0)
+free flaws
+check path body ((the cad count of body's vertices) = 4)
+check path body ((the cad count of body's edges) = 4)
+check path body ((the cad count of body's coedges) = 4)
+check path body ((the cad count of body's loops) = 1)
+check path body ((the cad count of body's faces) = 1)
+check path body ((the cad count of body's surfaces) = 1)
+check path body ((the cad count of body's curves) = 4)
+check path body ((the length of body's roots) = 1)
+check path body pcurves of body
+set faceKeys to the cad face keys of body
+set face to the cad node pointer for (the item at 0 in faceKeys) in body
+check path body (face's provenance's kind = 0)
+check path body face's forward
+set surface to the cad node pointer for face's surface in body
+check path body (surface's kind = 5)
+set ring to the cad node pointer for (the item at 0 in (face's loops's values)) in body
+check path body ((the length of ring's coedges's values) = 4)
+loop index from 0 to 4:
+    set use to the cad node pointer for (the item at index in (ring's coedges's values)) in body
+    check path body use's pcurve's valid
+    check path body (use's provenance's kind = 0)
+free faceKeys
+print "single_open_sheet_topology_and_pcurves" as a line
+
+set nextSecond to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 2.6666666666666665) with x (the cad x axis) and y (the cad y axis)
+set nextThird to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 3.3333333333333335) with x (the cad x axis) and y (the cad y axis)
+set nextLast to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 4.0) with x (the cad x axis) and y (the cad y axis)
+append (a cad path sweep cubic patch with frames last, nextSecond, nextThird and nextLast) to patches
+set joined to the cad path sweep body from wires with patches patches sheet true closed path false outward true
+check path body joined's valid
+check path body ((the cad count of joined's value's vertices) = 6)
+check path body ((the cad count of joined's value's edges) = 7)
+check path body ((the cad count of joined's value's faces) = 2)
+check path body ((the cad count of joined's value's coedges) = 8)
+set edgeKeys to the cad edge keys of joined's value
+set shared to 0
+loop index from 0 to the length of edgeKeys:
+    set edge to the cad node pointer for (the item at index in edgeKeys) in joined's value
+    if (the length of edge's coedges's values) = 2:
+        increment shared
+check path body (shared = 1)
+check path body pcurves of (joined's value)
+free edgeKeys
+print "two_patch_shared_rim" as a line
+
+set backward to the cad path sweep body from wires with patches patches sheet true closed path false outward false
+check path body backward's valid
+set reverseFaces to the cad face keys of backward's value
+set reverseFace to the cad node pointer for (the item at 0 in reverseFaces) in backward's value
+check path body (reverseFace's forward = false)
+check path body pcurves of (backward's value)
+free reverseFaces
+print "reverse_orientation" as a line
+
+set corner0 to the cad zero vector2
+set corner1 to a cad vector2 with x 1.0 and y 0.0
+set corner2 to a cad vector2 with x 1.0 and y 1.0
+set corner3 to a cad vector2 with x 0.0 and y 1.0
+set squareCurves to a list containing (path body test line from corner0 to corner1)
+append (path body test line from corner1 to corner2) to squareCurves
+append (path body test line from corner2 to corner3) to squareCurves
+append (path body test line from corner3 to corner0) to squareCurves
+set squareWire to a cad path sweep prepared wire from squareCurves closed true
+set squareWires to a list containing squareWire
+set closedSheet to the cad path sweep body from squareWires with patches patches sheet true closed path false outward true
+check path body closedSheet's valid
+check path body ((the cad count of closedSheet's value's vertices) = 12)
+check path body ((the cad count of closedSheet's value's edges) = 20)
+check path body ((the cad count of closedSheet's value's faces) = 8)
+check path body pcurves of (closedSheet's value)
+free squareCurves
+free squareWires
+print "closed_profile_sheet" as a line
+
+set emptyPatches to an empty list of a cad path sweep cubic patch
+set missingPatch to the cad path sweep body from wires with patches emptyPatches sheet true closed path false outward true
+check path body (missingPatch's valid = false)
+set closedPath to the cad path sweep body from wires with patches patches sheet true closed path true outward true
+check path body (closedPath's valid = false)
+set solid to the cad path sweep body from wires with patches patches sheet false closed path false outward true
+check path body (solid's valid = false)
+set emptyWires to an empty list of the type of wire
+set noProfile to the cad path sweep body from emptyWires with patches patches sheet true closed path false outward true
+check path body (noProfile's valid = false)
+set shiftedFirst to a cad path sweep frame at (a cad vector3 with x 0.0, y 0.0 and z 2.1) with x (the cad x axis) and y (the cad y axis)
+set shiftedPatch to a cad path sweep cubic patch with frames shiftedFirst, nextSecond, nextThird and nextLast
+set brokenPatches to a list containing patch
+append shiftedPatch to brokenPatches
+set seamGap to the cad path sweep body from wires with patches brokenPatches sheet true closed path false outward true
+check path body (seamGap's valid = false)
+set badKnots to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to badKnots
+append 1.0 to badKnots
+set badCurve to the cad rational curve2 of degree 1 with controls controls, knots badKnots and weights weights
+set badCurves to a list containing badCurve
+set badWire to a cad path sweep prepared wire from badCurves closed false
+set badWires to a list containing badWire
+set invalidProfile to the cad path sweep body from badWires with patches patches sheet true closed path false outward true
+check path body (invalidProfile's valid = false)
+check path body ((the length of (the item at 0 in wire's curves's values)'s controls) = 2)
+loop repetition from 0 to 32:
+    set repeated to the cad path sweep body from wires with patches patches sheet true closed path false outward true
+    check path body repeated's valid
+    set repeated to no cad body
+set detached to the cad clone of joined's value
+set originalKeys to the cad vertex keys of (joined's value)
+set originalVertex to the cad node pointer for (the item at 0 in originalKeys) in (joined's value)
+set copiedVertex to the cad node pointer for (the item at 0 in originalKeys) in detached
+set originalVertex's point to a cad vector3 with x 12.0, y 0.0 and z 0.0
+check path body (copiedVertex's point's x = 0.0)
+free originalKeys
+free emptyPatches
+free emptyWires
+free brokenPatches
+free badKnots
+free badCurves
+free badWires
+free patches
+free wires
+free curves
+free controls
+free knots
+free weights
+print "explicit_refusals_and_source_unchanged" as a line
+set detachedFlaws to the cad flaws of detached
+check path body ((the length of detachedFlaws) = 0)
+free detachedFlaws
+set survivingFlaws to the cad flaws of body
+check path body ((the length of survivingFlaws) = 0)
+free survivingFlaws
+print "repeated_builds_and_detached_ownership" as a line

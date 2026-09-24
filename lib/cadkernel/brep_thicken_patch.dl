@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MPL-2.0
+# Rectangular parameter-space patch shared by bounded revolved thickening.
+import lib/cadkernel/brep_pcurve.dl
+
+class:
+    patterns:
+        [a|] cad thickening patch
+    members:
+        uStart as a 64 bit floating-point number
+        uSweep as a 64 bit floating-point number
+        vStart as a 64 bit floating-point number
+        vSweep as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad thickening patch result
+    members:
+        valid as a boolean
+        value as a cad thickening patch
+
+local function cad thickening patch scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
+
+local function no cad thickening patch:
+    execute:
+        return @intrinsic("construct", a cad thickening patch result, false, a new cad thickening patch)
+
+function the cad thickening patch of {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return no cad thickening patch
+        if (the length of (face's loops's values)) != 1:
+            return no cad thickening patch
+        set boundary to the cad boundary of faceKey in body within 1e-8
+        if (boundary's valid) = false:
+            return no cad thickening patch
+        set curves to boundary's curves's values
+        if (the length of curves) != 4:
+            return no cad thickening patch
+        set lowU to 1.7976931348623157e308 as a 64 bit floating-point number
+        set lowV to lowU
+        set highU to 0.0 - lowU
+        set highV to highU
+        loop index from 0 to 4:
+            set curve to the item at index in curves
+            set next to the item at (the remainder of (index + 1) divided by 4) in curves
+            if ((curve's kind) != 0) or ((next's kind) != 0):
+                return no cad thickening patch
+            set line to curve's line
+            set nextLine to next's line
+            if (the cad distance from line's end to nextLine's start) > 1e-8:
+                return no cad thickening patch
+            set delta to the cad difference of line's end and line's start
+            if ((the absolute value of delta's x) <= 1e-8) = ((the absolute value of delta's y) <= 1e-8):
+                return no cad thickening patch
+            if ((cad thickening patch scalar line's start's x is finite) and (cad thickening patch scalar line's start's y is finite)) = false:
+                return no cad thickening patch
+            set lowU to the minimum of lowU and line's start's x
+            set lowV to the minimum of lowV and line's start's y
+            set highU to the maximum of highU and line's start's x
+            set highV to the maximum of highV and line's start's y
+        loop first from 0 to 4:
+            set firstPoint to (the item at first in curves)'s line's start
+            loop second from (first + 1) to 4:
+                set secondPoint to (the item at second in curves)'s line's start
+                if (the cad distance from firstPoint to secondPoint) <= 1e-8:
+                    return no cad thickening patch
+        set uSweep to highU - lowU
+        if uSweep > (6.283185307179586 + 1e-8):
+            return no cad thickening patch
+        set value to @intrinsic("construct", a cad thickening patch, lowU, uSweep, lowV, highV - lowV)
+        return @intrinsic("construct", a cad thickening patch result, true, value)

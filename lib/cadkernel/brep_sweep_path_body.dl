@@ -1,0 +1,218 @@
+# SPDX-License-Identifier: MPL-2.0
+# Open sheet assembly from prepared rational wires and cubic frame patches.
+# Pinned src/brep/sweep_path.rs build_body at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_sweep_path_base.dl
+import lib/cadkernel/brep_sweep_path_transport.dl
+import lib/cadkernel/brep_sweep_path_patches.dl
+import lib/cadkernel/brep_sweep_path_fit.dl
+import lib/cadkernel/brep_result.dl
+import lib/cadkernel/nurbs_builder.dl
+
+class:
+    patterns:
+        [a|] cad path sweep prepared wire
+    members:
+        curves
+        closed as a boolean
+
+# Input curves are borrowed. The wire retains its own managed list and curve
+# references; ordinary copies share that storage, while list/curve lifetimes
+# are handled by DynLex's paired retain/release hooks.
+function a cad path sweep prepared wire from {a pointer to a list:curves} closed {boolean:closed}:
+    execute:
+        set owned to a cad topology list of the type of (the item at 0 in curves)
+        loop index from 0 to the length of curves:
+            append (the item at index in curves) to owned's values
+        return @intrinsic("construct", a cad path sweep prepared wire, owned, closed)
+
+local function cad path sweep body {cad vector2:left} meets {cad vector2:right}:
+    execute:
+        set scale to the maximum of (the maximum of (the maximum of (the absolute value of left's x) and (the absolute value of left's y)) and (the maximum of (the absolute value of right's x) and (the absolute value of right's y))) and 1.0
+        return (the cad distance from left to right) <= (1e-8 + (scale * 2.220446049250313e-16 * 64.0))
+
+local function the cad path sweep body cubic knots:
+    execute:
+        set resultKnots to a list containing (0.0 as a 64 bit floating-point number)
+        loop index from 0 to 3:
+            append 0.0 to resultKnots
+        loop index from 0 to 4:
+            append 1.0 to resultKnots
+        return resultKnots
+
+local function free cad path sweep body rows {a pointer to a list:rows}:
+    execute:
+        loop index from 0 to the length of rows:
+            free (the item at index in rows)
+        free rows
+
+local function the cad path sweep body rail at {cad vector2:coordinate} along {cad path sweep cubic patch:patch}:
+    execute:
+        set controls to a list containing (the cad path sweep patch point at coordinate on patch's first)
+        append (the cad path sweep patch point at coordinate on patch's second) to controls
+        append (the cad path sweep patch point at coordinate on patch's third) to controls
+        append (the cad path sweep patch point at coordinate on patch's last) to controls
+        set weights to a list containing (1.0 as a 64 bit floating-point number)
+        loop index from 0 to 3:
+            append 1.0 to weights
+        set knots to the cad path sweep body cubic knots
+        set result to the strict cad nurbs curve3 of degree 3 with controls controls, knots knots and weights weights
+        free controls
+        free weights
+        free knots
+        return result
+
+local function the cad path sweep body skin of {cad rational curve2:curve} along {cad path sweep cubic patch:patch}:
+    execute:
+        set controls to an empty list of the type of (an empty list of a cad vector3)
+        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+        loop index from 0 to the length of curve's controls:
+            set coordinate to the item at index in curve's controls
+            set row to a list containing (the cad path sweep patch point at coordinate on patch's first)
+            append (the cad path sweep patch point at coordinate on patch's second) to row
+            append (the cad path sweep patch point at coordinate on patch's third) to row
+            append (the cad path sweep patch point at coordinate on patch's last) to row
+            append row to controls
+            set weight to the item at index in curve's weights
+            set rowWeights to a list containing weight
+            loop column from 0 to 3:
+                append weight to rowWeights
+            append rowWeights to weights
+        set knots to the cad path sweep body cubic knots
+        set result to the strict cad nurbs surface3 of degrees curve's degree and 3 with controls controls, knots curve's knots and knots and weights weights
+        free cad path sweep body rows controls
+        free cad path sweep body rows weights
+        free knots
+        return result
+
+local function cad path sweep body face in {cad body:body} within {cad shell key:shellKey} on {cad surface key:surfaceKey} using near {cad edge key:near}, next rail {cad edge key:nextRail}, far {cad edge key:far} and first rail {cad edge key:firstRail} outward {boolean:outward}:
+    execute:
+        set faceKey to the cad body key after inserting (a cad face on surfaceKey forward outward owned by shellKey with provenance (the synthesized cad provenance)) into body
+        set ringKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
+        set edges to [near,nextRail,far,firstRail]
+        set directions to [true,true,false,false]
+        set corners to [[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,1.0]]
+        loop index from 0 to 4:
+            set slot to index
+            if outward = false:
+                set slot to 3 - index
+            set edgeKey to the item at slot in edges
+            set direction to the item at slot in directions
+            set fromIndex to slot
+            set toIndex to the remainder of (slot + 1) divided by 4
+            if outward = false:
+                set direction to direction = false
+                set fromIndex to the remainder of (slot + 1) divided by 4
+                set toIndex to slot
+            set startCorner to the item at fromIndex in corners
+            set endCorner to the item at toIndex in corners
+            set startUv to a cad vector2 with x (the item at 0 in startCorner) and y (the item at 1 in startCorner)
+            set endUv to a cad vector2 with x (the item at 0 in endCorner) and y (the item at 1 in endCorner)
+            set pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from startUv to endUv))
+            set useKey to the cad body key after inserting (a cad coedge on edgeKey forward direction with pcurve pcurve owned by ringKey with provenance (the synthesized cad provenance)) into body
+            set edgeNode to the cad node pointer for edgeKey in body
+            if edgeNode = (0 as the type of edgeNode):
+                return false
+            append useKey to edgeNode's coedges's values
+            set ringNode to the cad node pointer for ringKey in body
+            append useKey to ringNode's coedges's values
+        set faceNode to the cad node pointer for faceKey in body
+        append ringKey to faceNode's loops's values
+        set shellNode to the cad node pointer for shellKey in body
+        append faceKey to shellNode's faces's values
+        return true
+
+# This is only build_body's open-sheet branch. Prepared wires and patches are
+# borrowed. Unsupported solid/cap and closed-path inputs return an invalid body.
+function the cad path sweep body from {a pointer to a list:wires} with patches {a pointer to a list:patches} sheet {boolean:sheet} closed path {boolean:closedPath} outward {boolean:outward}:
+    execute:
+        if ((sheet = false) or closedPath) or (((the length of wires) = 0) or ((the length of patches) = 0)):
+            return no cad body
+        loop band from 1 to the length of patches:
+            set previous to the item at (band - 1) in patches
+            set next to the item at band in patches
+            if (the cad path sweep patch frame error between previous's last and next's first at radius 1.0) > 1e-8:
+                return no cad body
+        set assembled to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into assembled
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into assembled
+        loop wireIndex from 0 to the length of wires:
+            set wire to the item at wireIndex in wires
+            set curveCount to the length of wire's curves's values
+            if curveCount = 0:
+                return no cad body
+            set coordinates to a cad topology list of a cad vector2
+            set previousEnd to the cad zero vector2
+            loop curveIndex from 0 to curveCount:
+                set curve to the item at curveIndex in ((wire's curves)'s values)
+                set checked to the cad curve of curve
+                if checked's valid = false:
+                    return no cad body
+                set startPoint to the cad point on checked's value at 0.0
+                set endPoint to the cad point on checked's value at 1.0
+                if curveIndex > 0:
+                    if (cad path sweep body previousEnd meets startPoint) = false:
+                        return no cad body
+                append startPoint to coordinates's values
+                set previousEnd to endPoint
+            if wire's closed:
+                if (cad path sweep body previousEnd meets (the item at 0 in (coordinates's values))) = false:
+                    return no cad body
+            else:
+                append previousEnd to coordinates's values
+            set coordinateCount to the length of coordinates's values
+            set vertices to a cad topology list of a cad vertex key
+            set rims to a cad topology list of a cad edge key
+            loop station from 0 to ((the length of patches) + 1):
+                set frame to (the item at 0 in patches)'s first
+                if station > 0:
+                    set frame to (the item at (station - 1) in patches)'s last
+                set plane to a cad plane with origin frame's origin, x axis frame's xAxis and y axis frame's yAxis
+                set normal to the cad normal of plane
+                if normal's valid = false:
+                    return no cad body
+                loop index from 0 to coordinateCount:
+                    set point to the cad path sweep patch point at (the item at index in (coordinates's values)) on frame
+                    if (cad point is finite) = false:
+                        return no cad body
+                    append (the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into assembled) to vertices's values
+                loop index from 0 to curveCount:
+                    set curve to the item at index in ((wire's curves)'s values)
+                    set lifted to the cad lift of curve onto plane
+                    set generated to the cad curve of lifted
+                    if generated's valid = false:
+                        return no cad body
+                    set startKey to the item at ((station * coordinateCount) + index) in (vertices's values)
+                    set nextIndex to the remainder of (index + 1) divided by coordinateCount
+                    set endKey to the item at ((station * coordinateCount) + nextIndex) in (vertices's values)
+                    set curveKey to the cad body key after inserting (the cad edge curve3 of generated's value) into assembled
+                    set edgeKey to the cad body key after inserting (a cad edge on curveKey from 0.0 to 1.0 between startKey and endKey with provenance (the synthesized cad provenance)) into assembled
+                    append edgeKey to rims's values
+            loop band from 0 to the length of patches:
+                set patch to the item at band in patches
+                set rails to a cad topology list of a cad edge key
+                loop index from 0 to coordinateCount:
+                    set generated to the cad path sweep body rail at (the item at index in (coordinates's values)) along patch
+                    if generated's valid = false:
+                        return no cad body
+                    set startKey to the item at ((band * coordinateCount) + index) in (vertices's values)
+                    set endKey to the item at (((band + 1) * coordinateCount) + index) in (vertices's values)
+                    set curveKey to the cad body key after inserting (the cad edge curve3 of generated's value) into assembled
+                    set edgeKey to the cad body key after inserting (a cad edge on curveKey from 0.0 to 1.0 between startKey and endKey with provenance (the synthesized cad provenance)) into assembled
+                    append edgeKey to rails's values
+                loop index from 0 to curveCount:
+                    set curve to the item at index in ((wire's curves)'s values)
+                    set surfaceResult to the cad path sweep body skin of curve along patch
+                    if surfaceResult's valid = false:
+                        return no cad body
+                    set surfaceKey to the cad body key after inserting (the cad surface of surfaceResult's value) into assembled
+                    set nextIndex to the remainder of (index + 1) divided by coordinateCount
+                    set near to the item at ((band * curveCount) + index) in (rims's values)
+                    set far to the item at (((band + 1) * curveCount) + index) in (rims's values)
+                    set firstRail to the item at index in (rails's values)
+                    set nextRail to the item at nextIndex in (rails's values)
+                    if (cad path sweep body face in assembled within shellKey on surfaceKey using near near, next rail nextRail, far far and first rail firstRail outward outward) = false:
+                        return no cad body
+        set lumpNode to the cad node pointer for lumpKey in assembled
+        append shellKey to lumpNode's shells's values
+        append lumpKey to assembled's roots
+        return the validated cad body result of assembled

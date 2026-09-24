@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MPL-2.0
 # In-memory faceted SAT lift from the pinned src/acis/lift.rs.
-# This slice accepts planar faces, straight edges and closed coedge rings.
+# This slice accepts planar and ring-torus faces, straight and circular edges,
+# and closed coedge rings. Circular edges with distinct endpoints remain outside
+# this slice because periodic parameter reconciliation is not implemented here.
 # It refuses unsupported or malformed records instead of returning a partial body.
 import lib/cadkernel/acis_records.dl
 import lib/cadkernel/brep_topology.dl
@@ -161,12 +163,28 @@ local function the cad acis faceted curve at {cad sat pointer:reference} in {a p
             cad acis faceted lift failure 1 at id in state
             return absent
         set record to found's value
-        if record's entityType != "straight-curve":
-            cad acis faceted lift failure 3 at id in state
-            return absent
-        set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
-        set direction to the cad acis faceted lift vector at 4 in record or (the cad z axis)
-        set key to the cad body key after inserting (the cad edge curve3 of (a cad line3 with origin origin and direction direction)) into state's body
+        if record's entityType = "straight-curve":
+            set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+            set direction to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+            set curveValue to the cad edge curve3 of (a cad line3 with origin origin and direction direction)
+        else:
+            if record's entityType != "ellipse-curve":
+                cad acis faceted lift failure 3 at id in state
+                return absent
+            set ratio to the cad acis faceted lift float at 10 in record or 1.0
+            if (the absolute value of (ratio - 1.0)) >= 1e-12:
+                cad acis faceted lift failure 3 at id in state
+                return absent
+            set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+            set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+            set majorAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
+            set radius to the cad length of majorAxis
+            set frame to the cad orthonormal plane with origin origin, x axis majorAxis and normal normal
+            if frame's valid = false:
+                cad acis faceted lift failure 3 at id in state
+                return absent
+            set curveValue to the cad edge curve3 of (a cad circle3 with plane frame's value and radius radius)
+        set key to the cad body key after inserting curveValue into state's body
         append (@intrinsic("construct", a cad acis faceted seen curve, id, key)) to state's curves's values
         return @intrinsic("construct", a cad acis faceted curve result, true, key)
 
@@ -186,17 +204,30 @@ local function the cad acis faceted surface at {cad sat pointer:reference} in {a
             cad acis faceted lift failure 1 at id in state
             return absent
         set record to found's value
-        if record's entityType != "plane-surface":
-            cad acis faceted lift failure 4 at id in state
-            return absent
-        set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
-        set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
-        set uAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
-        set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
-        if frame's valid = false:
-            cad acis faceted lift failure 4 at id in state
-            return absent
-        set key to the cad body key after inserting (the cad surface of frame's value) into state's body
+        if record's entityType = "plane-surface":
+            set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+            set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+            set uAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
+            set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
+            if frame's valid = false:
+                cad acis faceted lift failure 4 at id in state
+                return absent
+            set surfaceValue to the cad surface of frame's value
+        else:
+            if record's entityType != "torus-surface":
+                cad acis faceted lift failure 4 at id in state
+                return absent
+            set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
+            set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
+            set majorRadius to the cad acis faceted lift float at 7 in record or 1.0
+            set minorRadius to the cad acis faceted lift float at 8 in record or 0.5
+            set uAxis to the cad acis faceted lift vector at 9 in record or (the cad x axis)
+            set frame to the cad orthonormal plane with origin origin, x axis uAxis and normal normal
+            if frame's valid = false:
+                cad acis faceted lift failure 4 at id in state
+                return absent
+            set surfaceValue to the cad surface of (a cad torus with frame frame's value, major radius majorRadius and minor radius minorRadius)
+        set key to the cad body key after inserting surfaceValue into state's body
         append (@intrinsic("construct", a cad acis faceted seen surface, id, key)) to state's surfaces's values
         return @intrinsic("construct", a cad acis faceted surface result, true, key)
 
@@ -245,8 +276,12 @@ local function the cad acis faceted edge at {cad sat pointer:reference} in {a po
             set high to saved
         set startNode to the cad node pointer for startKey in state's body
         set endNode to the cad node pointer for endKey in state's body
+        set shape to the cad node pointer for curveResult's value in state's body
+        if shape's kind != 0:
+            if startKey != endKey:
+                cad acis faceted lift failure 3 at id in state
+                return absent
         if (the cad distance from startNode's point to endNode's point) > 1e-9:
-            set shape to the cad node pointer for curveResult's value in state's body
             set low to the cad parameter on (@intrinsic("dereference", shape)) nearest startNode's point
             set high to the cad parameter on (@intrinsic("dereference", shape)) nearest endNode's point
         set curveKey to curveResult's value
@@ -354,7 +389,10 @@ local function cad acis faceted lift faces of {cad sat record:shellRecord} into 
             set surfaceResult to the cad acis faceted surface at surfacePointer in state
             if surfaceResult's valid = false:
                 return false
-            set reversedSurface to (the cad sat sense at 10 in surfaceRecord's value)'s reversed
+            set sensePosition to 10
+            if surfaceRecord's value's entityType = "torus-surface":
+                set sensePosition to 12
+            set reversedSurface to (the cad sat sense at sensePosition in surfaceRecord's value)'s reversed
             set forward to ((the cad sat sense at 6 in record)'s reversed = false) != reversedSurface
             set surfaceKey to surfaceResult's value
             set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by shellKey with provenance (the cad acis faceted lift provenance of record)) into state's body

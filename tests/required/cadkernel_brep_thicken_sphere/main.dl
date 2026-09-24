@@ -1,0 +1,68 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_sphere.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+import lib/cadkernel/brep_make.dl
+
+function check spherical thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set profile to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 4.0 from -0.6 to 0.7))
+set sheet to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check spherical thickening sheet's valid
+set originalFaces to the cad count of sheet's value's faces
+set originalEdges to the cad count of sheet's value's edges
+set originalVertices to the cad count of sheet's value's vertices
+set originalSurfaces to the cad count of sheet's value's surfaces
+set outward to the cad spherical thickening of sheet's value by 0.5
+set inward to the cad spherical thickening of sheet's value by -0.5
+check spherical thickening outward's valid
+check spherical thickening inward's valid
+check spherical thickening ((the cad count of sheet's value's faces) = originalFaces)
+check spherical thickening ((the cad count of sheet's value's edges) = originalEdges)
+check spherical thickening ((the cad count of sheet's value's vertices) = originalVertices)
+check spherical thickening ((the cad count of sheet's value's surfaces) = originalSurfaces)
+set outerFlaws to the cad flaws of outward's value
+set innerFlaws to the cad flaws of inward's value
+check spherical thickening ((the length of outerFlaws) = 0)
+check spherical thickening ((the length of innerFlaws) = 0)
+free outerFlaws
+free innerFlaws
+print "bounded_sphere_thickens_both_directions" as a line
+
+set full to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check spherical thickening full's valid
+free profile
+set shell to the cad spherical thickening of full's value by 0.5
+check spherical thickening shell's valid
+set flaws to the cad flaws of shell's value
+check spherical thickening ((the length of flaws) = 0)
+free flaws
+print "full_turn_sphere_thickens" as a line
+
+set zero to the cad spherical thickening of sheet's value by 0.0
+check spherical thickening (zero's valid = false)
+set faceKeys to the cad face keys of sheet's value
+set face to the cad node pointer for (the item at 0 in faceKeys) in sheet's value
+set collapsingDistance to -5.0
+if face's forward = false:
+    set collapsingDistance to 5.0
+free faceKeys
+set collapse to the cad spherical thickening of sheet's value by collapsingDistance
+check spherical thickening (collapse's valid = false)
+set alreadySolid to the cad spherical thickening of outward's value by 0.5
+check spherical thickening (alreadySolid's valid = false)
+set poleProfile to a list containing (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 4.0 from -1.5707963267948966 to 0.3))
+set poleSheet to the cad revolved sheet of poleProfile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check spherical thickening poleSheet's valid
+free poleProfile
+set pole to the cad spherical thickening of poleSheet's value by 0.5
+check spherical thickening (pole's valid = false)
+set closed to the cad sphere body at (the cad zero vector3) with radius 4.0
+check spherical thickening closed's valid
+set closedResult to the cad spherical thickening of closed's value by 0.5
+check spherical thickening (closedResult's valid = false)
+print "invalid_offsets_and_unsupported_bounds_refused" as a line
