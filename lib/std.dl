@@ -226,6 +226,10 @@ function this is a vertex shader:
     replacement:
         @intrinsic("shader stage is", "vertex")
 
+function this is a compute shader:
+    replacement:
+        @intrinsic("shader stage is", "compute")
+
 function the size of kind:
     replacement:
         @intrinsic("size of", kind)

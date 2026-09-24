@@ -130,6 +130,7 @@ dynlex options:
         class has no properties: "{type} is not a class and has no properties"
         class missing property: "{type} doesn't have property \"{property}\""
         shader operation unavailable: "Shader operation '{operation}' is only available when emitting SPIR-V"
+        shader operation unavailable for stage: "Shader operation '{operation}' is unavailable for this shader stage"
         shader input requires string literal: "shader input requires a string literal name"
         unknown shader input: "Unknown shader input: {name}"
         shader input unavailable: "Shader input '{name}' is unavailable for this shader stage"

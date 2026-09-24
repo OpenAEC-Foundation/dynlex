@@ -514,3 +514,252 @@ bool dynlex_graphics_rebuild_custom_pipelines(DynlexGraphics *graphics) {
 	}
 	return true;
 }
+
+static bool validate_compute_shader(const DynlexGraphics *graphics, const uint32_t *words, size_t word_count) {
+	bool compute_entry = false;
+	bool requires_float64 = false;
+	for (size_t offset = 5; offset < word_count;) {
+		uint32_t instruction = words[offset];
+		size_t length = instruction >> 16;
+		if (length == 0 || length > word_count - offset) {
+			dynlex_runtime_set_error("compute shader contains an incomplete SPIR-V instruction");
+			return false;
+		}
+		uint32_t opcode = instruction & 0xffffu;
+		if (opcode == 17 && length >= 2 && words[offset + 1] == 10) // OpCapability Float64
+			requires_float64 = true;
+		if (opcode == 15 && length >= 4 && words[offset + 1] == 5) // OpEntryPoint GLCompute
+			compute_entry = true;
+		offset += length;
+	}
+	if (!compute_entry) {
+		dynlex_runtime_set_error("shader has no Vulkan compute entry point");
+		return false;
+	}
+	if (requires_float64 && !graphics->compute_float64_enabled) {
+		dynlex_runtime_set_error("compute shader requires unavailable Vulkan 64-bit floating-point support");
+		return false;
+	}
+	return true;
+}
+
+static int32_t
+dispatch_compute(DynlexGraphics *graphics, const char *shader_path, void *buffer_data, size_t buffer_bytes, uint32_t groups_x) {
+	if (graphics == NULL || shader_path == NULL || graphics->frame_active || !graphics->compute_supported || groups_x == 0 ||
+		groups_x > graphics->physical_properties.limits.maxComputeWorkGroupCount[0] ||
+		(buffer_data == NULL && buffer_bytes != 0) ||
+		(buffer_data != NULL &&
+		 (buffer_bytes == 0 || buffer_bytes > graphics->physical_properties.limits.maxStorageBufferRange))) {
+		dynlex_runtime_set_error(
+			"compute dispatch requires an idle compute-capable graphics context, a shader path, and a valid workgroup count"
+		);
+		return 0;
+	}
+	bool has_buffer = buffer_data != NULL;
+	size_t word_count = 0;
+	uint32_t *words = read_spirv(shader_path, &word_count);
+	if (words == NULL)
+		return 0;
+	if (!validate_compute_shader(graphics, words, word_count)) {
+		free(words);
+		return 0;
+	}
+	VkShaderModule module = VK_NULL_HANDLE;
+	VkPipelineLayout layout = VK_NULL_HANDLE;
+	VkPipeline pipeline = VK_NULL_HANDLE;
+	VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
+	VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+	VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+	VkBuffer storage_buffer = VK_NULL_HANDLE;
+	VkDeviceMemory storage_memory = VK_NULL_HANDLE;
+	void *storage_map = NULL;
+	VkCommandBuffer commands = VK_NULL_HANDLE;
+	VkFence completed = VK_NULL_HANDLE;
+	VkResult result = VK_SUCCESS;
+	bool submitted = false;
+	bool success = false;
+	do {
+		if (!create_shader_module(graphics, words, word_count, &module))
+			break;
+		if (has_buffer) {
+			if (!dynlex_graphics_create_buffer(
+					graphics, buffer_bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+					VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &storage_buffer, &storage_memory
+				))
+				break;
+			result = vkMapMemory(graphics->device, storage_memory, 0, buffer_bytes, 0, &storage_map);
+			if (result != VK_SUCCESS) {
+				dynlex_graphics_set_vulkan_error("mapping a Vulkan compute storage buffer", result);
+				break;
+			}
+			memcpy(storage_map, buffer_data, buffer_bytes);
+			VkDescriptorSetLayoutBinding binding = {
+				.binding = 0,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			};
+			VkDescriptorSetLayoutCreateInfo descriptor_info = {
+				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+				.bindingCount = 1,
+				.pBindings = &binding,
+			};
+			result = vkCreateDescriptorSetLayout(graphics->device, &descriptor_info, NULL, &descriptor_layout);
+			if (result != VK_SUCCESS) {
+				dynlex_graphics_set_vulkan_error("creating a Vulkan compute descriptor layout", result);
+				break;
+			}
+			VkDescriptorPoolSize pool_size = {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1};
+			VkDescriptorPoolCreateInfo pool_info = {
+				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+				.maxSets = 1,
+				.poolSizeCount = 1,
+				.pPoolSizes = &pool_size,
+			};
+			result = vkCreateDescriptorPool(graphics->device, &pool_info, NULL, &descriptor_pool);
+			if (result != VK_SUCCESS) {
+				dynlex_graphics_set_vulkan_error("creating a Vulkan compute descriptor pool", result);
+				break;
+			}
+			VkDescriptorSetAllocateInfo allocation = {
+				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+				.descriptorPool = descriptor_pool,
+				.descriptorSetCount = 1,
+				.pSetLayouts = &descriptor_layout,
+			};
+			result = vkAllocateDescriptorSets(graphics->device, &allocation, &descriptor_set);
+			if (result != VK_SUCCESS) {
+				dynlex_graphics_set_vulkan_error("allocating a Vulkan compute descriptor", result);
+				break;
+			}
+			VkDescriptorBufferInfo buffer_info = {.buffer = storage_buffer, .offset = 0, .range = buffer_bytes};
+			VkWriteDescriptorSet update = {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = descriptor_set,
+				.dstBinding = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+				.pBufferInfo = &buffer_info,
+			};
+			vkUpdateDescriptorSets(graphics->device, 1, &update, 0, NULL);
+		}
+		VkPipelineLayoutCreateInfo layout_info = {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.setLayoutCount = has_buffer ? 1u : 0u,
+			.pSetLayouts = has_buffer ? &descriptor_layout : NULL,
+		};
+		result = vkCreatePipelineLayout(graphics->device, &layout_info, NULL, &layout);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("creating a Vulkan compute pipeline layout", result);
+			break;
+		}
+		VkComputePipelineCreateInfo pipeline_info = {
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage =
+				{
+					.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+					.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+					.module = module,
+					.pName = "main",
+				},
+			.layout = layout,
+		};
+		result = vkCreateComputePipelines(graphics->device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("creating a Vulkan compute pipeline", result);
+			break;
+		}
+		VkCommandBufferAllocateInfo command_info = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool = graphics->command_pool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+		result = vkAllocateCommandBuffers(graphics->device, &command_info, &commands);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("allocating a Vulkan compute command buffer", result);
+			break;
+		}
+		VkCommandBufferBeginInfo begin_info = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		};
+		result = vkBeginCommandBuffer(commands, &begin_info);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("beginning a Vulkan compute command buffer", result);
+			break;
+		}
+		vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		if (has_buffer)
+			vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &descriptor_set, 0, NULL);
+		vkCmdDispatch(commands, groups_x, 1, 1);
+		result = vkEndCommandBuffer(commands);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("ending a Vulkan compute command buffer", result);
+			break;
+		}
+		VkFenceCreateInfo fence_info = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+		result = vkCreateFence(graphics->device, &fence_info, NULL, &completed);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("creating a Vulkan compute fence", result);
+			break;
+		}
+		VkSubmitInfo submit_info = {
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &commands,
+		};
+		result = vkQueueSubmit(graphics->graphics_queue, 1, &submit_info, completed);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("submitting a Vulkan compute dispatch", result);
+			break;
+		}
+		submitted = true;
+		result = vkWaitForFences(graphics->device, 1, &completed, VK_TRUE, UINT64_MAX);
+		if (result != VK_SUCCESS) {
+			dynlex_graphics_set_vulkan_error("waiting for a Vulkan compute dispatch", result);
+			break;
+		}
+		success = true;
+	} while (false);
+	if (success && has_buffer)
+		memcpy(buffer_data, storage_map, buffer_bytes);
+	if (submitted && !success)
+		vkQueueWaitIdle(graphics->graphics_queue);
+	if (completed != VK_NULL_HANDLE)
+		vkDestroyFence(graphics->device, completed, NULL);
+	if (commands != VK_NULL_HANDLE)
+		vkFreeCommandBuffers(graphics->device, graphics->command_pool, 1, &commands);
+	if (pipeline != VK_NULL_HANDLE)
+		vkDestroyPipeline(graphics->device, pipeline, NULL);
+	if (layout != VK_NULL_HANDLE)
+		vkDestroyPipelineLayout(graphics->device, layout, NULL);
+	if (descriptor_pool != VK_NULL_HANDLE)
+		vkDestroyDescriptorPool(graphics->device, descriptor_pool, NULL);
+	if (descriptor_layout != VK_NULL_HANDLE)
+		vkDestroyDescriptorSetLayout(graphics->device, descriptor_layout, NULL);
+	if (storage_map != NULL)
+		vkUnmapMemory(graphics->device, storage_memory);
+	if (storage_buffer != VK_NULL_HANDLE)
+		vkDestroyBuffer(graphics->device, storage_buffer, NULL);
+	if (storage_memory != VK_NULL_HANDLE)
+		vkFreeMemory(graphics->device, storage_memory, NULL);
+	if (module != VK_NULL_HANDLE)
+		vkDestroyShaderModule(graphics->device, module, NULL);
+	free(words);
+	return success;
+}
+
+int32_t dynlex_graphics_dispatch_compute(DynlexGraphics *graphics, const char *shader_path, uint32_t groups_x) {
+	return dispatch_compute(graphics, shader_path, NULL, 0, groups_x);
+}
+
+int32_t dynlex_graphics_dispatch_compute_buffer(
+	DynlexGraphics *graphics, const char *shader_path, void *data, size_t byte_count, uint32_t groups_x
+) {
+	if (data == NULL || byte_count == 0) {
+		dynlex_runtime_set_error("compute storage dispatch requires a nonempty buffer");
+		return 0;
+	}
+	return dispatch_compute(graphics, shader_path, data, byte_count, groups_x);
+}

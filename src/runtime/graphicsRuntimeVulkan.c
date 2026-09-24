@@ -316,7 +316,8 @@ static bool create_device(DynlexGraphics *graphics) {
 	VkPhysicalDeviceFeatures supported_features;
 	vkGetPhysicalDeviceFeatures(graphics->physical_device, &supported_features);
 	VkPhysicalDeviceFeatures enabled_features = {0};
-	if (graphics_queue_supports_compute(graphics->physical_device, graphics->graphics_queue_family))
+	graphics->compute_supported = graphics_queue_supports_compute(graphics->physical_device, graphics->graphics_queue_family);
+	if (graphics->compute_supported)
 		enabled_features.shaderFloat64 = supported_features.shaderFloat64;
 	VkDeviceCreateInfo device_info = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,

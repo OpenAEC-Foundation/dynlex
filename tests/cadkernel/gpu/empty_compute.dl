@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/std.dl
+
+if this is a compute shader:
+    ignore 1
+else:
+    @intrinsic("call", "libc", "abort", nothing)

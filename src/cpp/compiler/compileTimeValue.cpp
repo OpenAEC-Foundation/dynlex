@@ -236,9 +236,12 @@ std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_vi
 }
 
 std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::string_view shaderStageName) {
-	if (shaderStageName != "vertex" && shaderStageName != "fragment")
+	if (shaderStageName != "vertex" && shaderStageName != "fragment" && shaderStageName != "compute")
 		return std::nullopt;
 	if (!context.options.emitSPIRV)
 		return false;
-	return (context.options.shaderStage == ParseContext::ShaderStage::Vertex ? "vertex" : "fragment") == shaderStageName;
+	std::string_view activeStage = context.options.shaderStage == ParseContext::ShaderStage::Vertex		? "vertex"
+								   : context.options.shaderStage == ParseContext::ShaderStage::Fragment ? "fragment"
+																										: "compute";
+	return activeStage == shaderStageName;
 }

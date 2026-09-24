@@ -116,6 +116,7 @@ struct DynlexGraphics {
 	bool swapchain_dirty;
 	bool portability_enabled;
 	bool compute_float64_enabled;
+	bool compute_supported;
 	bool depth_testing;
 	float projection[16];
 	float camera[16];

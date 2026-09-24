@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/shader.dl
+
+@intrinsic("shader interpolant output", "sample", 0.0, 0.0, 0.0, 1.0)

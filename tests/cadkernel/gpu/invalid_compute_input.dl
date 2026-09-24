@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/shader.dl
+
+set coordinate to @intrinsic("shader input", "FragCoord")
+ignore coordinate

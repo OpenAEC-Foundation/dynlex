@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/shader.dl
+
+set the output position with x 0.0, y 0.0, z 0.0 and w 1.0

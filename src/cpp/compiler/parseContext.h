@@ -67,7 +67,7 @@ struct ParseContext {
 		Section *ownerSection{};
 	};
 
-	enum class ShaderStage { Fragment, Vertex };
+	enum class ShaderStage { Fragment, Vertex, Compute };
 	enum class OptimizationSize { None, Size, Smallest };
 	enum class FloatingPointContract { Off, Fast };
 

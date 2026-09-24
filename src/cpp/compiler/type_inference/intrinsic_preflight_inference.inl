@@ -46,6 +46,7 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 			}
 			if (context.parseContext.options.emitSPIRV) {
 				bool stageProvidesInput =
+					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
 					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
 				if (!stageProvidesInput) {
 					failWithDetail(
