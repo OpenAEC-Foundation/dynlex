@@ -1,0 +1,159 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_multiface_planar.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_make.dl
+
+function planar pair probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function planar pair probe same point {cad vector3:first} as {cad vector3:second}:
+    execute:
+        return ((first's x = second's x) and (first's y = second's y)) and (first's z = second's z)
+
+function planar pair probe same plane {cad plane:first} as {cad plane:second}:
+    execute:
+        return ((planar pair probe same point first's origin as second's origin) and (planar pair probe same point first's xAxis as second's xAxis)) and (planar pair probe same point first's yAxis as second's yAxis)
+
+function planar pair probe body {cad body:body}:
+    execute:
+        planar pair probe number (the cad count of body's vertices)
+        planar pair probe number (the cad count of body's edges)
+        planar pair probe number (the cad count of body's coedges)
+        planar pair probe number (the cad count of body's loops)
+        planar pair probe number (the cad count of body's faces)
+        planar pair probe number (the cad count of body's shells)
+        planar pair probe number (the cad count of body's lumps)
+        planar pair probe number (the cad count of body's surfaces)
+        planar pair probe number (the cad count of body's curves)
+        planar pair probe number (the length of body's roots)
+        set flaws to the cad flaws of body
+        planar pair probe number (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set paired to 0
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of edge's coedges's values) = 2:
+                increment paired
+        planar pair probe number paired
+        free edgeKeys
+        set useKeys to the cad keys of body's coedges
+        set pcurves to 0
+        loop index from 0 to the length of useKeys:
+            set useNode to the cad node pointer for (the item at index in useKeys) in body's coedges
+            if useNode's pcurve's valid:
+                increment pcurves
+        planar pair probe number pcurves
+        free useKeys
+        set faceKeys to the cad face keys of body
+        set forwards to 0
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in body
+            if face's forward:
+                increment forwards
+        planar pair probe number forwards
+        free faceKeys
+        set vertexKeys to the cad keys of body's vertices
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in body's vertices
+            planar pair probe number vertex's point's x
+            planar pair probe number vertex's point's y
+            planar pair probe number vertex's point's z
+        free vertexKeys
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set first to a cad vector2 with x 0.0 and y 0.0
+set middle to a cad vector2 with x 2.0 and y 0.0
+set last to a cad vector2 with x 4.0 and y 0.0
+if (caseNumber = 2) or (caseNumber = 3):
+    set middle to a cad vector2 with x 1.0 and y 0.0
+else if (caseNumber = 4) or (caseNumber = 5):
+    set first to a cad vector2 with x 4.0 and y 0.0
+    set last to a cad vector2 with x 0.0 and y 0.0
+set profile to a list containing (the cad curve2 of (a cad line2 from first to middle))
+append (the cad curve2 of (a cad line2 from middle to last)) to profile
+set source to no cad body
+if caseNumber = 8:
+    set source to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 4.0, y 1.0 and z 3.0)
+else:
+    set source to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+free profile
+if source's valid = false:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+if (caseNumber != 8) and ((the cad count of source's value's faces) != 2):
+    @intrinsic("call", "libc", "exit", nothing, 4)
+set originalFaces to the cad count of source's value's faces
+set originalEdges to the cad count of source's value's edges
+set originalCoedges to the cad count of source's value's coedges
+set originalLoops to the cad count of source's value's loops
+set originalVertices to the cad count of source's value's vertices
+set originalSurfaces to the cad count of source's value's surfaces
+set originalCurves to the cad count of source's value's curves
+set originalRoots to the length of source's value's roots
+set originalPoints to an empty list of a cad vector3
+set vertexKeys to the cad keys of source's value's vertices
+loop index from 0 to the length of vertexKeys:
+    set vertex to the cad node pointer for (the item at index in vertexKeys) in source's value's vertices
+    append vertex's point to originalPoints
+free vertexKeys
+set originalPlanes to an empty list of a cad plane
+set surfaceKeys to the cad keys of source's value's surfaces
+loop index from 0 to the length of surfaceKeys:
+    set surface to the cad node pointer for (the item at index in surfaceKeys) in source's value's surfaces
+    if surface's kind = 0:
+        append surface's plane to originalPlanes
+free surfaceKeys
+set originalForwards to an empty list of a boolean
+set faceKeys to the cad face keys of source's value
+loop index from 0 to the length of faceKeys:
+    set face to the cad node pointer for (the item at index in faceKeys) in source's value
+    append face's forward to originalForwards
+free faceKeys
+set distance to 0.25 as a 64 bit floating-point number
+if ((caseNumber = 1) or (caseNumber = 3)) or (caseNumber = 5):
+    set distance to -0.25
+if caseNumber = 6:
+    set distance to 0.0
+if caseNumber = 7:
+    set distance to 1.0 / 0.0
+set result to the cad coplanar pair thickening of source's value by distance
+set unchanged to (((the cad count of source's value's faces) = originalFaces) and ((the cad count of source's value's edges) = originalEdges)) and (((the cad count of source's value's coedges) = originalCoedges) and ((the cad count of source's value's loops) = originalLoops))
+set unchanged to unchanged and ((((the cad count of source's value's vertices) = originalVertices) and ((the cad count of source's value's surfaces) = originalSurfaces)) and (((the cad count of source's value's curves) = originalCurves) and ((the length of source's value's roots) = originalRoots)))
+set vertexKeys to the cad keys of source's value's vertices
+set unchanged to unchanged and ((the length of vertexKeys) = (the length of originalPoints))
+if unchanged:
+    loop index from 0 to the length of vertexKeys:
+        set vertex to the cad node pointer for (the item at index in vertexKeys) in source's value's vertices
+        set point to the item at index in originalPoints
+        set unchanged to unchanged and (planar pair probe same point vertex's point as point)
+free vertexKeys
+free originalPoints
+set faceKeys to the cad face keys of source's value
+set unchanged to unchanged and ((the length of faceKeys) = (the length of originalForwards))
+if unchanged:
+    loop index from 0 to the length of faceKeys:
+        set face to the cad node pointer for (the item at index in faceKeys) in source's value
+        set unchanged to unchanged and (face's forward = (the item at index in originalForwards))
+free faceKeys
+free originalForwards
+set surfaceKeys to the cad keys of source's value's surfaces
+set planeIndex to 0
+loop index from 0 to the length of surfaceKeys:
+    set surface to the cad node pointer for (the item at index in surfaceKeys) in source's value's surfaces
+    if surface's kind = 0:
+        if planeIndex >= the length of originalPlanes:
+            set unchanged to false
+        else:
+            set old to the item at planeIndex in originalPlanes
+            set unchanged to unchanged and (planar pair probe same plane surface's plane as old)
+        increment planeIndex
+set unchanged to unchanged and (planeIndex = the length of originalPlanes)
+free surfaceKeys
+free originalPlanes
+planar pair probe number (result's valid as an integer)
+planar pair probe number (unchanged as an integer)
+set source to no cad body
+if result's valid:
+    planar pair probe body result's value

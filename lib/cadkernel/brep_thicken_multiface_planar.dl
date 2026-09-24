@@ -1,0 +1,188 @@
+# SPDX-License-Identifier: MPL-2.0
+# Two adjacent planar faces from cadkernel src/brep/thicken.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import lib/cadkernel/brep_thicken_planar.dl
+import lib/cadkernel/brep_boolean.dl
+import lib/cadkernel/brep_imprint.dl
+import lib/cadkernel/brep_bounds.dl
+
+local function cad planar pair distance {a 64 bit floating-point number:value} is valid:
+    execute:
+        if value != value:
+            return false
+        if (the absolute value of value) <= 2.220446049250313e-16:
+            return false
+        return (the absolute value of value) <= 1.7976931348623157e308
+
+local function the cad planar pair single face {cad face key:faceKey} from {cad body:sourceBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to resultBody's roots
+        if (copy cad boolean face faceKey from sourceBody into resultBody owned by shellKey flipped false within tolerance) = false:
+            return no cad body
+        set flaws to the cad flaws of resultBody
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if validBody = false:
+            return no cad body
+        return the cad body result of resultBody
+
+local function the cad planar pair join of {cad body:firstBody} and {cad body:secondBody} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set firstKeys to the cad face keys of firstBody
+        set secondKeys to the cad face keys of secondBody
+        set found to false
+        set sharedFirst to a new cad face key
+        set sharedSecond to a new cad face key
+        loop firstIndex from 0 to the length of firstKeys:
+            set firstKey to the item at firstIndex in firstKeys
+            set firstFace to the cad node pointer for firstKey in firstBody
+            set firstSurface to the cad node pointer for firstFace's surface in firstBody
+            if firstSurface's kind = 0:
+                loop secondIndex from 0 to the length of secondKeys:
+                    if found = false:
+                        set secondKey to the item at secondIndex in secondKeys
+                        set secondFace to the cad node pointer for secondKey in secondBody
+                        set secondSurface to the cad node pointer for secondFace's surface in secondBody
+                        if secondSurface's kind = 0:
+                            set meeting to the cad meeting of (@intrinsic("dereference", firstSurface)) and (@intrinsic("dereference", secondSurface)) within tolerance
+                            set coincident to meeting's kind = 3
+                            free cad meeting meeting
+                            if coincident and (cad face firstKey in firstBody and face secondKey in secondBody have the same ground within tolerance):
+                                set firstNormal to the cad normal of firstSurface's plane
+                                set secondNormal to the cad normal of secondSurface's plane
+                                if firstNormal's valid and secondNormal's valid:
+                                    set orientedFirst to firstNormal's value
+                                    set orientedSecond to secondNormal's value
+                                    if firstFace's forward = false:
+                                        set orientedFirst to orientedFirst scaled by -1.0
+                                    if secondFace's forward = false:
+                                        set orientedSecond to orientedSecond scaled by -1.0
+                                    if (the cad dot of orientedFirst and orientedSecond) < -0.9999999:
+                                        set found to true
+                                        set sharedFirst to firstKey
+                                        set sharedSecond to secondKey
+        if found = false:
+            free firstKeys
+            free secondKeys
+            return no cad body
+
+        set resultBody to an empty cad body
+        set lumpKey to the cad body key after inserting (a cad lump with provenance (the synthesized cad provenance)) into resultBody
+        set shellKey to the cad body key after inserting (a cad shell owned by lumpKey with provenance (the synthesized cad provenance)) into resultBody
+        set lumpNode to the cad node pointer for lumpKey in resultBody
+        append shellKey to (lumpNode's shells's values)
+        append lumpKey to resultBody's roots
+        loop firstIndex from 0 to the length of firstKeys:
+            set faceKey to the item at firstIndex in firstKeys
+            if faceKey != sharedFirst:
+                if (copy cad boolean face faceKey from firstBody into resultBody owned by shellKey flipped false within tolerance) = false:
+                    free firstKeys
+                    free secondKeys
+                    return no cad body
+        loop secondIndex from 0 to the length of secondKeys:
+            set faceKey to the item at secondIndex in secondKeys
+            if faceKey != sharedSecond:
+                if (copy cad boolean face faceKey from secondBody into resultBody owned by shellKey flipped false within tolerance) = false:
+                    free firstKeys
+                    free secondKeys
+                    return no cad body
+        free firstKeys
+        free secondKeys
+        if (orient cad boolean shell resultBody) = false:
+            return no cad body
+        set edges to the cad edge keys of resultBody
+        set closed to true
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in resultBody
+            if (the length of edge's coedges's values) != 2:
+                set closed to false
+        free edges
+        if closed = false:
+            return no cad body
+        set flaws to the cad flaws of resultBody
+        set validBody to (the length of flaws) = 0
+        free flaws
+        if validBody = false:
+            return no cad body
+        if (the cad worst vertex gap of resultBody) > tolerance:
+            return no cad body
+        return the cad body result of resultBody
+
+function the cad coplanar pair thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if (cad planar pair distance distance is valid) = false:
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set validSource to (the length of flaws) = 0
+        free flaws
+        if validSource = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 2:
+            free faces
+            return no cad body
+        set edges to the cad edge keys of sourceBody
+        set hasBoundary to false
+        set sharedEdge to false
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in sourceBody
+            if (the length of edge's coedges's values) = 1:
+                set hasBoundary to true
+            if (the length of edge's coedges's values) = 2:
+                set sharedEdge to true
+        free edges
+        if (hasBoundary and sharedEdge) = false:
+            free faces
+            return no cad body
+        set firstFace to the cad node pointer for (the item at 0 in faces) in sourceBody
+        set secondFace to the cad node pointer for (the item at 1 in faces) in sourceBody
+        set firstSurface to the cad node pointer for firstFace's surface in sourceBody
+        set secondSurface to the cad node pointer for secondFace's surface in sourceBody
+        if (firstSurface's kind != 0) or (secondSurface's kind != 0):
+            free faces
+            return no cad body
+        set toleranceBodies to a list containing sourceBody
+        set tolerance to the cad operation tolerance of toleranceBodies
+        free toleranceBodies
+        set sourceMeeting to the cad meeting of (@intrinsic("dereference", firstSurface)) and (@intrinsic("dereference", secondSurface)) within tolerance
+        set samePlane to sourceMeeting's kind = 3
+        free cad meeting sourceMeeting
+        if samePlane = false:
+            free faces
+            return no cad body
+        set firstNormal to the cad normal of firstSurface's plane
+        set secondNormal to the cad normal of secondSurface's plane
+        if (firstNormal's valid and secondNormal's valid) = false:
+            free faces
+            return no cad body
+        set orientedFirst to firstNormal's value
+        set orientedSecond to secondNormal's value
+        if firstFace's forward = false:
+            set orientedFirst to orientedFirst scaled by -1.0
+        if secondFace's forward = false:
+            set orientedSecond to orientedSecond scaled by -1.0
+        if (the cad dot of orientedFirst and orientedSecond) < 0.9999999:
+            free faces
+            return no cad body
+        set firstSheet to the cad planar pair single face (the item at 0 in faces) from sourceBody within tolerance
+        set secondSheet to the cad planar pair single face (the item at 1 in faces) from sourceBody within tolerance
+        free faces
+        if (firstSheet's valid and secondSheet's valid) = false:
+            return no cad body
+        set firstSolid to the cad planar thickening of firstSheet's value by distance
+        set secondSolid to the cad planar thickening of secondSheet's value by distance
+        if (firstSolid's valid and secondSolid's valid) = false:
+            return no cad body
+        set joined to the cad planar pair join of firstSolid's value and secondSolid's value within tolerance
+        if joined's valid:
+            return joined
+        set unionResult to the cad combination of firstSolid's value and secondSolid's value using cad union operation within tolerance
+        if unionResult's valid = false:
+            return no cad body
+        return the validated cad body result of unionResult's value

@@ -1,0 +1,3 @@
+connected_planar_faces_thicken_both_directions
+invalid_offsets_and_closed_body_refused
+angled_pair_requires_connector

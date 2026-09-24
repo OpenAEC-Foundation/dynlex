@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_multiface_planar.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_make.dl
+
+function check connected planar thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set start to a cad vector2 with x 0.0 and y 0.0
+set middle to a cad vector2 with x 2.0 and y 0.0
+set end to a cad vector2 with x 4.0 and y 0.0
+set profile to a list containing (the cad curve2 of (a cad line2 from start to middle))
+append (the cad curve2 of (a cad line2 from middle to end)) to profile
+set source to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+free profile
+check connected planar thickening source's valid
+check connected planar thickening ((the cad count of source's value's faces) = 2)
+set originalFaces to the cad count of source's value's faces
+set originalVertices to the cad count of source's value's vertices
+set positive to the cad coplanar pair thickening of source's value by 0.25
+set negative to the cad coplanar pair thickening of source's value by -0.25
+check connected planar thickening (positive's valid and negative's valid)
+check connected planar thickening ((the cad count of source's value's faces) = originalFaces)
+check connected planar thickening ((the cad count of source's value's vertices) = originalVertices)
+set positiveFlaws to the cad flaws of positive's value
+set negativeFlaws to the cad flaws of negative's value
+check connected planar thickening (((the length of positiveFlaws) = 0) and ((the length of negativeFlaws) = 0))
+free positiveFlaws
+free negativeFlaws
+check connected planar thickening (((the length of positive's value's roots) = 1) and ((the length of negative's value's roots) = 1))
+print "connected_planar_faces_thicken_both_directions" as a line
+
+set zero to the cad coplanar pair thickening of source's value by 0.0
+set infinite to the cad coplanar pair thickening of source's value by (1.0 / 0.0)
+set closed to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 4.0, y 1.0 and z 3.0)
+check connected planar thickening closed's valid
+set closedResult to the cad coplanar pair thickening of closed's value by 0.25
+check connected planar thickening (((zero's valid = false) and (infinite's valid = false)) and (closedResult's valid = false))
+print "invalid_offsets_and_closed_body_refused" as a line
+
+set corner to a cad vector2 with x 2.0 and y 2.0
+set angledProfile to a list containing (the cad curve2 of (a cad line2 from start to middle))
+append (the cad curve2 of (a cad line2 from middle to corner)) to angledProfile
+set angledSource to the cad extrusion sheet of angledProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+free angledProfile
+check connected planar thickening angledSource's valid
+check connected planar thickening ((the cad count of angledSource's value's faces) = 2)
+set angledResult to the cad coplanar pair thickening of angledSource's value by 0.25
+set angledNegative to the cad coplanar pair thickening of angledSource's value by -0.25
+check connected planar thickening ((angledResult's valid = false) and (angledNegative's valid = false))
+print "angled_pair_requires_connector" as a line
