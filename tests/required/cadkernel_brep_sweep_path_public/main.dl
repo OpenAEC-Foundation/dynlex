@@ -1,0 +1,215 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_public.dl
+
+function check public path {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a public path temporary sheet:
+    execute:
+        set sourceProfile to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+        set sourceControls to a list containing (the cad zero vector3)
+        append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to sourceControls
+        set sourceKnots to a list containing (0.0 as a 64 bit floating-point number)
+        append 0.0 to sourceKnots
+        append 1.0 to sourceKnots
+        append 1.0 to sourceKnots
+        set sourceWeights to a list containing (1.0 as a 64 bit floating-point number)
+        append 1.0 to sourceWeights
+        set sourceRoute to the strict cad nurbs curve3 of degree 1 with controls sourceControls, knots sourceKnots and weights sourceWeights
+        if sourceRoute's valid = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        set result to the cad path sweep sheet of sourceProfile on (the cad xy plane) along sourceRoute's value using (the default cad path sweep options)
+        free sourceProfile
+        free sourceControls
+        free sourceKnots
+        free sourceWeights
+        return result
+
+set profile to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+set controls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 0.0, y 0.0 and z 1.0) to controls
+append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to controls
+set knots to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing (1.0 as a 64 bit floating-point number)
+append 1.0 to weights
+append 1.0 to weights
+set spline to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check public path spline's valid
+set options to the default cad path sweep options
+set made to the cad path sweep sheet of profile on (the cad xy plane) along spline's value using options
+check public path made's valid
+set sheetBody to made's value
+check public path ((the cad count of sheetBody's vertices) = 4)
+check public path ((the cad count of sheetBody's edges) = 4)
+check public path ((the cad count of sheetBody's coedges) = 4)
+check public path ((the cad count of sheetBody's faces) = 1)
+set faces to the cad face keys of sheetBody
+set face to the cad node pointer for (the item at 0 in faces) in sheetBody
+set surface to the cad node pointer for face's surface in sheetBody
+set sample to the cad point on (@intrinsic("dereference", surface)) at parameters 0.25 and 0.75
+check public path ((the cad distance from sample to (a cad vector3 with x -0.25, y 0.0 and z 1.5)) < 1e-9)
+free faces
+print "default_anchor_open_sheet" as a line
+
+set raisedOptions to the default cad path sweep options
+set raisedOptions's hasBasePoint to true
+set raisedOptions's basePoint to a cad vector3 with x 0.0, y 0.0 and z 1.0
+set raisedSpline to the cad path sweep sheet of profile on (the cad xy plane) along spline's value using raisedOptions
+check public path raisedSpline's valid
+set raisedSplineKeys to the cad vertex keys of (raisedSpline's value)
+set raisedSplineVertex to the cad node pointer for (the item at 0 in raisedSplineKeys) in (raisedSpline's value)
+check public path (raisedSplineVertex's point's z = -1.0)
+free raisedSplineKeys
+set raisedLine to the cad path sweep sheet of profile on (the cad xy plane) from (the cad zero vector3) to (a cad vector3 with x 0.0, y 0.0 and z 2.0) using raisedOptions
+check public path raisedLine's valid
+set raisedLineKeys to the cad vertex keys of (raisedLine's value)
+set raisedLineVertex to the cad node pointer for (the item at 0 in raisedLineKeys) in (raisedLine's value)
+check public path (raisedLineVertex's point's z = -1.0)
+free raisedLineKeys
+print "off_plane_base_placement" as a line
+
+set lineMade to the cad path sweep sheet of profile on (the cad xy plane) from (the cad zero vector3) to (a cad vector3 with x 0.0, y 0.0 and z 2.0) using options
+check public path lineMade's valid
+check public path ((the cad count of lineMade's value's vertices) = 4)
+check public path ((the cad count of lineMade's value's faces) = 1)
+set lineFlaws to the cad flaws of lineMade's value
+check public path ((the length of lineFlaws) = 0)
+free lineFlaws
+print "analytic_line_dispatch" as a line
+
+set splitControls to a list containing (the cad zero vector3)
+loop station from 1 to 5:
+    append (a cad vector3 with x 0.0, y 0.0 and z (station as a 64 bit floating-point number)) to splitControls
+set splitKnots to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to splitKnots
+append 0.0 to splitKnots
+append 0.5 to splitKnots
+append 0.5 to splitKnots
+append 1.0 to splitKnots
+append 1.0 to splitKnots
+append 1.0 to splitKnots
+set splitWeights to a list containing (1.0 as a 64 bit floating-point number)
+loop station from 1 to 5:
+    append 1.0 to splitWeights
+set splitRoute to the strict cad nurbs curve3 of degree 2 with controls splitControls, knots splitKnots and weights splitWeights
+check public path splitRoute's valid
+set splitMade to the cad path sweep sheet of profile on (the cad xy plane) along splitRoute's value using options
+check public path splitMade's valid
+check public path ((the cad count of splitMade's value's vertices) = 6)
+check public path ((the cad count of splitMade's value's edges) = 7)
+check public path ((the cad count of splitMade's value's faces) = 2)
+free splitControls
+free splitKnots
+free splitWeights
+print "two_span_shared_topology" as a line
+
+set options's twist to 0.25
+set twisted to the cad path sweep sheet of profile on (the cad xy plane) along spline's value using options
+check public path (twisted's valid = false)
+set options's twist to 0.0
+set options's scale to 1.5
+set scaled to the cad path sweep sheet of profile on (the cad xy plane) along spline's value using options
+check public path (scaled's valid = false)
+set options's scale to 1.0
+set options's bank to true
+set banked to the cad path sweep sheet of profile on (the cad xy plane) along spline's value using options
+check public path (banked's valid = false)
+print "unsupported_deformations_refused" as a line
+
+set options's bank to false
+set emptyProfile to an empty list of the type of (the item at 0 in profile)
+set emptyMade to the cad path sweep sheet of emptyProfile on (the cad xy plane) along spline's value using options
+check public path (emptyMade's valid = false)
+set duplicatedProfile to a list containing (the item at 0 in profile)
+append (the item at 0 in profile) to duplicatedProfile
+set duplicateMade to the cad path sweep sheet of duplicatedProfile on (the cad xy plane) along spline's value using options
+check public path (duplicateMade's valid = false)
+set curvedControls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 1.0, y 0.0 and z 1.0) to curvedControls
+append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to curvedControls
+set curvedRoute to the strict cad nurbs curve3 of degree 2 with controls curvedControls, knots knots and weights weights
+check public path curvedRoute's valid
+set curvedMade to the cad path sweep sheet of profile on (the cad xy plane) along curvedRoute's value using options
+check public path (curvedMade's valid = false)
+set slightControls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 1e-11, y 0.0 and z 1.0) to slightControls
+append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to slightControls
+set slightRoute to the strict cad nurbs curve3 of degree 2 with controls slightControls, knots knots and weights weights
+check public path slightRoute's valid
+set slightMade to the cad path sweep sheet of profile on (the cad xy plane) along slightRoute's value using options
+check public path (slightMade's valid = false)
+set collapsedProfile to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2)))
+set collapsedMade to the cad path sweep sheet of collapsedProfile on (the cad xy plane) along spline's value using options
+check public path (collapsedMade's valid = false)
+set stationaryMade to the cad path sweep sheet of profile on (the cad xy plane) from (the cad zero vector3) to (the cad zero vector3) using options
+check public path (stationaryMade's valid = false)
+free emptyProfile
+free duplicatedProfile
+free curvedControls
+free slightControls
+free collapsedProfile
+print "explicit_profile_and_path_refusals" as a line
+
+set invalidControls2 to a list containing (the cad zero vector2)
+append (a cad vector2 with x 1.0 and y 0.0) to invalidControls2
+set invalidKnots2 to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to invalidKnots2
+append 1.0 to invalidKnots2
+append 0.0 to invalidKnots2
+set invalidWeights2 to a list containing (1.0 as a 64 bit floating-point number)
+append 1.0 to invalidWeights2
+set permissiveProfile to the cad nurbs curve2 of degree 1 with controls invalidControls2, knots invalidKnots2 and weights invalidWeights2
+check public path permissiveProfile's valid
+set invalidProfile to a list containing (the cad curve2 of permissiveProfile's value)
+set invalidProfileMade to the cad path sweep sheet of invalidProfile on (the cad xy plane) from (the cad zero vector3) to (a cad vector3 with x 0.0, y 0.0 and z 2.0) using options
+check public path (invalidProfileMade's valid = false)
+set invalidWeights3 to a list containing (1.0 as a 64 bit floating-point number)
+append 0.0 to invalidWeights3
+append 1.0 to invalidWeights3
+set permissivePath to the cad nurbs curve3 of degree 2 with controls controls, knots knots and weights invalidWeights3
+check public path permissivePath's valid
+set invalidPathMade to the cad path sweep sheet of profile on (the cad xy plane) along permissivePath's value using options
+check public path (invalidPathMade's valid = false)
+free invalidProfile
+free invalidControls2
+free invalidKnots2
+free invalidWeights2
+free invalidWeights3
+print "invalid_nurbs_inputs_refused" as a line
+
+check public path ((the length of profile) = 1)
+check public path ((the item at 0 in controls)'s z = 0.0)
+free profile
+free controls
+free knots
+free weights
+set flaws to the cad flaws of sheetBody
+check public path ((the length of flaws) = 0)
+free flaws
+print "source_and_body_ownership" as a line
+
+loop repetition from 0 to 16:
+    set repeated to a public path temporary sheet
+    check public path repeated's valid
+    set repeated to no cad body
+set temporary to a public path temporary sheet
+check public path temporary's valid
+set detached to the cad clone of (temporary's value)
+set vertexKeys to the cad vertex keys of (temporary's value)
+set originalVertex to the cad node pointer for (the item at 0 in vertexKeys) in (temporary's value)
+set copyVertex to the cad node pointer for (the item at 0 in vertexKeys) in detached
+set originalVertex's point to a cad vector3 with x 12.0, y 0.0 and z 0.0
+check public path (copyVertex's point's x = -0.5)
+free vertexKeys
+set detachedFlaws to the cad flaws of detached
+check public path ((the length of detachedFlaws) = 0)
+free detachedFlaws
+print "repeated_temporary_sources_and_clone" as a line

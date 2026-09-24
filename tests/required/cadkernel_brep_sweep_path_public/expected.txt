@@ -1,0 +1,9 @@
+default_anchor_open_sheet
+off_plane_base_placement
+analytic_line_dispatch
+two_span_shared_topology
+unsupported_deformations_refused
+explicit_profile_and_path_refusals
+invalid_nurbs_inputs_refused
+source_and_body_ownership
+repeated_temporary_sources_and_clone

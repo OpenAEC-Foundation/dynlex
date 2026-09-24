@@ -1,0 +1,183 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_public.dl
+
+function emit public path number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function emit public path point {cad vector3:point}:
+    execute:
+        emit public path number point's x
+        emit public path number point's y
+        emit public path number point's z
+
+function emit public path body {cad body:body}:
+    execute:
+        emit public path number (the cad count of (body's vertices))
+        emit public path number (the cad count of (body's edges))
+        emit public path number (the cad count of (body's coedges))
+        emit public path number (the cad count of (body's loops))
+        emit public path number (the cad count of (body's faces))
+        emit public path number (the cad count of (body's shells))
+        emit public path number (the cad count of (body's lumps))
+        emit public path number (the cad count of (body's surfaces))
+        emit public path number (the cad count of (body's curves))
+        emit public path number (the length of (body's roots))
+        set flaws to the cad flaws of body
+        emit public path number (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set shared to 0
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of (edge's coedges's values)) = 2:
+                increment shared
+        emit public path number shared
+        free edgeKeys
+        set useKeys to the cad keys of (body's coedges)
+        set pcurves to 0
+        set synthesized to (body's provenance's kind = 0)
+        loop index from 0 to the length of useKeys:
+            set usage to the cad node pointer for (the item at index in useKeys) in (body's coedges)
+            if usage's pcurve's valid:
+                increment pcurves
+            if usage's provenance's kind != 0:
+                set synthesized to false
+        emit public path number pcurves
+        free useKeys
+        set vertexKeys to the cad keys of (body's vertices)
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in (body's vertices)
+            if vertex's provenance's kind != 0:
+                set synthesized to false
+        set firstVertex to the cad node pointer for (the item at 0 in vertexKeys) in (body's vertices)
+        set lastVertex to the cad node pointer for (the last item of vertexKeys) in (body's vertices)
+        set firstPoint to firstVertex's point
+        set lastPoint to lastVertex's point
+        free vertexKeys
+        set edges to the cad keys of (body's edges)
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in (body's edges)
+            if edge's provenance's kind != 0:
+                set synthesized to false
+        free edges
+        set rings to the cad keys of (body's loops)
+        loop index from 0 to the length of rings:
+            set ring to the cad node pointer for (the item at index in rings) in (body's loops)
+            if ring's provenance's kind != 0:
+                set synthesized to false
+        free rings
+        set shells to the cad keys of (body's shells)
+        loop index from 0 to the length of shells:
+            set shell to the cad node pointer for (the item at index in shells) in (body's shells)
+            if shell's provenance's kind != 0:
+                set synthesized to false
+        free shells
+        set lumps to the cad keys of (body's lumps)
+        loop index from 0 to the length of lumps:
+            set lump to the cad node pointer for (the item at index in lumps) in (body's lumps)
+            if lump's provenance's kind != 0:
+                set synthesized to false
+        free lumps
+        set faceKeys to the cad face keys of body
+        set face to the cad node pointer for (the item at 0 in faceKeys) in body
+        if face's provenance's kind != 0:
+            set synthesized to false
+        emit public path number (face's forward as an integer)
+        emit public path number (synthesized as an integer)
+        set surface to the cad node pointer for face's surface in body
+        emit public path number (surface's kind)
+        emit public path point (the cad point on (@intrinsic("dereference", surface)) at parameters 0.25 and 0.75)
+        emit public path point (the cad point on (@intrinsic("dereference", surface)) at parameters 0.75 and 0.25)
+        emit public path point firstPoint
+        emit public path point lastPoint
+        free faceKeys
+
+function probe public path case {integer:case}:
+    execute:
+        set profileShape to the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0))
+        if case = 2:
+            set profileControls to a list containing (the cad zero vector2)
+            append (a cad vector2 with x 0.5 and y 1.0) to profileControls
+            append (a cad vector2 with x 1.0 and y 0.0) to profileControls
+            set profileKnots to a list containing (0.0 as a 64 bit floating-point number)
+            append 0.0 to profileKnots
+            append 0.0 to profileKnots
+            append 1.0 to profileKnots
+            append 1.0 to profileKnots
+            append 1.0 to profileKnots
+            set profileWeights to a list containing (1.0 as a 64 bit floating-point number)
+            append 2.0 to profileWeights
+            append 1.0 to profileWeights
+            set rational to the strict cad nurbs curve2 of degree 2 with controls profileControls, knots profileKnots and weights profileWeights
+            if rational's valid = false:
+                @intrinsic("call", "libc", "abort", nothing)
+            set profileShape to the cad curve2 of rational's value
+            free profileControls
+            free profileKnots
+            free profileWeights
+        set profile to a list containing profileShape
+        set shiftX to 0.0
+        set shiftY to 0.0
+        if case = 2:
+            set shiftX to 2.0
+            set shiftY to 1.0
+        set controls to a list containing (a cad vector3 with x shiftX, y shiftY and z 0.0)
+        append (a cad vector3 with x shiftX, y shiftY and z 1.0) to controls
+        append (a cad vector3 with x shiftX, y shiftY and z 2.0) to controls
+        if case = 6:
+            append (a cad vector3 with x shiftX, y shiftY and z 3.0) to controls
+            append (a cad vector3 with x shiftX, y shiftY and z 4.0) to controls
+        set knots to a list containing (0.0 as a 64 bit floating-point number)
+        append 0.0 to knots
+        append 0.0 to knots
+        if case = 6:
+            append 0.5 to knots
+            append 0.5 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        append 1.0 to knots
+        set weights to a list containing (1.0 as a 64 bit floating-point number)
+        if case = 7:
+            append 2.0 to weights
+        else:
+            append 1.0 to weights
+        append 1.0 to weights
+        if case = 6:
+            append 1.0 to weights
+            append 1.0 to weights
+        set routeSpline to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+        if routeSpline's valid = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        set plane to the cad xy plane
+        if case = 3:
+            set plane to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (a cad vector3 with x 0.0, y -1.0 and z 0.0)
+        set options to the default cad path sweep options
+        if case != 1:
+            set options's hasBasePoint to true
+            set options's basePoint to the cad zero vector3
+        if (case = 9) or (case = 10):
+            set options's basePoint to a cad vector3 with x 0.0, y 0.0 and z 1.0
+        if case = 3:
+            set options's align to false
+        if case = 4:
+            set options's rotation to 0.4
+        if case = 0:
+            set options's surface to true
+        set built to the cad path sweep sheet of profile on plane along routeSpline's value using options
+        if case = 5:
+            set built to the cad path sweep sheet of profile on plane from (the cad zero vector3) to (a cad vector3 with x 0.0, y 0.0 and z 2.0) using options
+        if case = 8:
+            set built to the cad path sweep sheet of profile on plane from (a cad vector3 with x 0.0, y 0.0 and z 2.0) to (the cad zero vector3) using options
+        if case = 10:
+            set built to the cad path sweep sheet of profile on plane from (the cad zero vector3) to (a cad vector3 with x 0.0, y 0.0 and z 2.0) using options
+        if built's valid = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        emit public path body built's value
+        free profile
+        free controls
+        free knots
+        free weights
+
+loop case from 0 to 11:
+    probe public path case case
