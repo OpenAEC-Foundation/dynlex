@@ -39,16 +39,14 @@ invalid and collapsing distances, rectangles, circles, ellipses and planar
 regions with holes. Random cases span scales from about `1e-4` to `1e5` and
 world coordinates around `1e9`.
 
-The general differential run passes 292 cases and 16,928 comparisons across
-O0 and O2, with 211 valid results in each mode. Native compilation took
-200.703 seconds at O0 and 198.985 seconds at O2; the linked Rust probes took
-0.484 and 0.828 seconds. The separate planar-Boolean matrix passes 69 cases
-and 16,370 comparisons with exact native O0/O2 parity. Its measured native
-compile times were 196.609 seconds at O0 and 204.750 seconds at O2, versus
-0.531 and 0.828 seconds for the linked Rust probes. The compiler SHA-256 was
-`38ebb889d576c9d9343f3a0cbbfa7025be611cef65a010e23662169b7457fc5a`.
-The manifests are `build/brep-presspull-complete/summary.json` and
-`build/brep-planar-hole/summary.json`.
+With the repaired compiler (`8bf3737efb24d218e2949c463f5ea102fe26202f5053fb79105104864bad3f61`),
+the general differential passes 292 cases and 16,928 comparisons across O0
+and O2, with 211 valid results in each mode. The separate planar-Boolean
+matrix passes 69 cases and 16,370 comparisons with exact native O0/O2 parity.
+Eleven additional winding and hole-refusal cases match the pinned source at
+both optimization levels. The Rust probes link prebuilt libraries, so their
+compile times are not a like-for-like build benchmark. Runtime speed remains
+to be measured after the full kernel port.
 
 Disjoint analytic circles and tangent classification are included. Solid
 Booleans for overlapping or contained analytic circles currently exceed the
