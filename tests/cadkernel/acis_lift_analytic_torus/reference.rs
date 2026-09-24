@@ -121,4 +121,10 @@ fn main() {
     assert_eq!(partial.faces.len(), 1);
     assert_eq!(partial.edges.len(), 1);
     assert_eq!(partial.coedges.len(), 2);
+
+    let mut elliptical = document.clone();
+    elliptical.record_mut(3).unwrap().tokens[4] = SatToken::Float(0.5);
+    let (lifted, loss) = acis::lift_body(&elliptical, written.body as usize).unwrap();
+    assert!(loss.is_empty());
+    assert!(lifted.curves.iter().any(|(_, curve)| matches!(curve, Curve3::Ellipse(_))));
 }

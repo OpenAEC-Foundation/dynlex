@@ -44,6 +44,9 @@ fn trace(label: &str, body: &Body) {
         match value {
             Curve3::Circle(value) => println!("curve;{};circle;{};{};{};{}", key.slot(),
                 vector(value.plane.origin), vector(value.plane.x_axis), vector(value.plane.y_axis), bits(value.radius)),
+            Curve3::Ellipse(value) => println!("curve;{};ellipse;{};{};{};{};{}", key.slot(),
+                vector(value.plane.origin), vector(value.plane.x_axis), vector(value.plane.y_axis),
+                bits(value.major_radius), bits(value.minor_radius)),
             Curve3::Line(value) => println!("curve;{};line;{};{}", key.slot(),
                 vector(value.origin), vector(value.direction)),
             _ => panic!("unexpected curve"),
@@ -143,6 +146,13 @@ fn main() {
     println!("cone-slope;{};{};{};{};{};{}", key.slot(), vector(cone.base.origin),
         vector(cone.base.x_axis), vector(cone.base.y_axis), bits(cone.radius),
         bits(cone.half_angle));
+
+    let mut elliptic = document.clone();
+    elliptic.record_mut(5).unwrap().tokens[4] = SatToken::Float(0.5);
+    elliptic.record_mut(6).unwrap().tokens[4] = SatToken::Float(0.5);
+    let (lifted, loss) = acis::lift_body(&elliptic, written.body as usize).unwrap();
+    assert!(loss.is_empty());
+    trace("elliptic-rims", &lifted);
 
     let mut nonfinite = document.clone();
     nonfinite.record_mut(10).unwrap().tokens[7] = SatToken::Float(f64::NAN);

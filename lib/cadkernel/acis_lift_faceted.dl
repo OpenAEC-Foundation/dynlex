@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # In-memory faceted SAT lift from the pinned src/acis/lift.rs.
 # This slice accepts planar, cylindrical, conical, spherical and ring-torus faces,
-# straight and circular edges, and closed coedge rings. Circular edges with
+# straight, circular and closed elliptical edges, and closed coedge rings. Circular edges with
 # separated endpoints reconcile projected and stored parameters.
 # It refuses unsupported or malformed records instead of returning a partial body.
 import lib/cadkernel/acis_records.dl
@@ -178,9 +178,6 @@ local function the cad acis faceted curve at {cad sat pointer:reference} in {a p
                 cad acis faceted lift failure 3 at id in state
                 return absent
             set ratio to the cad acis faceted lift float at 10 in record or 1.0
-            if (the absolute value of (ratio - 1.0)) >= 1e-12:
-                cad acis faceted lift failure 3 at id in state
-                return absent
             set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
             set normal to the cad acis faceted lift vector at 4 in record or (the cad z axis)
             set majorAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
@@ -189,7 +186,10 @@ local function the cad acis faceted curve at {cad sat pointer:reference} in {a p
             if frame's valid = false:
                 cad acis faceted lift failure 3 at id in state
                 return absent
-            set curveValue to the cad edge curve3 of (a cad circle3 with plane frame's value and radius radius)
+            if (the absolute value of (ratio - 1.0)) < 1e-12:
+                set curveValue to the cad edge curve3 of (a cad circle3 with plane frame's value and radius radius)
+            else:
+                set curveValue to the cad edge curve3 of (a cad ellipse3 with plane frame's value, major radius radius and minor radius (radius * ratio))
         set key to the cad body key after inserting curveValue into state's body
         append (@intrinsic("construct", a cad acis faceted seen curve, id, key)) to state's curves's values
         return @intrinsic("construct", a cad acis faceted curve result, true, key)

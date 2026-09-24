@@ -140,10 +140,18 @@ function trace acis lifted {cad body:body} as {a string:label}:
                 set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's circle's plane's yAxis)
                 set lineValue to the acis lift join lineValue with (the acis lift bits of curveNode's circle's radius)
             else:
-                check acis lift (curveNode's kind = 0)
-                set lineValue to the acis lift join lineValue with "line"
-                set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's origin)
-                set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's direction)
+                if curveNode's kind = 2:
+                    set lineValue to the acis lift join lineValue with "ellipse"
+                    set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's ellipse's plane's origin)
+                    set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's ellipse's plane's xAxis)
+                    set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's ellipse's plane's yAxis)
+                    set lineValue to the acis lift join lineValue with (the acis lift bits of curveNode's ellipse's majorRadius)
+                    set lineValue to the acis lift join lineValue with (the acis lift bits of curveNode's ellipse's minorRadius)
+                else:
+                    check acis lift (curveNode's kind = 0)
+                    set lineValue to the acis lift join lineValue with "line"
+                    set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's origin)
+                    set lineValue to the acis lift join lineValue with (the acis lift vector of curveNode's line's direction)
             print lineValue as a line
         free curveKeys
         set vertexKeys to the cad vertex keys of body
@@ -519,3 +527,10 @@ loop index from 0 to the length of coneKeys:
         print lineValue as a line
 check acis lift foundCone
 free coneKeys
+
+set elliptic to the cad sat clone of document
+replace acis cylinder token (a cad sat float token of 0.5) at 4 in physical slot 5 of (the address of elliptic)
+replace acis cylinder token (a cad sat float token of 0.5) at 4 in physical slot 6 of (the address of elliptic)
+set lifted to lift cad faceted body numbered 28 from elliptic
+check acis lift (lifted's valid)
+trace acis lifted lifted's body as "elliptic-rims"

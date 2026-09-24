@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_sphere.dl
+
+function check history sphere {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a history sphere identity matrix:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+        loop index from 0 to 16:
+            append (the item at index in entries) to values
+        return values
+
+set matrix to a history sphere identity matrix
+set made to the cad history rebuilt sphere with radius 3.0 and transform matrix
+check history sphere made's valid
+check history sphere (made's failure = 0)
+check history sphere ((the cad count of (made's value's vertices)) = 2)
+check history sphere ((the cad count of (made's value's edges)) = 1)
+check history sphere ((the cad count of (made's value's faces)) = 1)
+check history sphere ((the cad euler characteristic of (made's value)) = 2)
+set flaws to the cad flaws of made's value
+check history sphere ((the length of flaws) = 0)
+free flaws
+print "sphere_history_rebuild_has_closed_seam_topology" as a line
+
+set keys to the cad vertex keys of made's value
+set first to the cad node pointer for (the item at 0 in keys) in made's value
+check history sphere ((first's provenance's kind) = 0)
+check history sphere ((made's value's provenance's kind) = 0)
+free keys
+print "rebuilt_sphere_provenance_is_synthesized" as a line
+
+set refused to the cad history rebuilt sphere with radius 0.0 and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt sphere with radius -2.0 and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt sphere with radius (0.0 / 0.0) and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 2))
+print "nonpositive_and_nan_radii_are_refused" as a line
+
+replace item at index 3 in matrix with 2e-9
+set refused to the cad history rebuilt sphere with radius 3.0 and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 1))
+check history sphere ((the item at 3 in matrix) = 2e-9)
+set refused to the cad history rebuilt sphere with radius 0.0 and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 2))
+print "invalid_radius_precedes_invalid_placement" as a line
+
+replace item at index 3 in matrix with 0.0
+replace item at index 4 in matrix with 0.25
+set refused to the cad history rebuilt sphere with radius 3.0 and transform matrix
+check history sphere ((refused's valid = false) and (refused's failure = 1))
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+set refused to the cad history rebuilt sphere with radius 3.0 and transform shortMatrix
+check history sphere ((refused's valid = false) and (refused's failure = 1))
+free shortMatrix
+print "shear_and_short_transform_are_refused" as a line
+
+replace item at index 4 in matrix with 0.0
+replace item at index 12 in matrix with 5.0
+set moved to the cad history rebuilt sphere with radius 3.0 and transform matrix
+check history sphere moved's valid
+set retained to moved's value
+set moved to the cad history rebuilt sphere with radius 0.0 and transform matrix
+free matrix
+set keys to the cad vertex keys of retained
+set first to the cad node pointer for (the item at 0 in keys) in retained
+check history sphere ((first's point's x) = 5.0)
+free keys
+set copied to the cad clone of retained
+set retained to an empty cad body
+check history sphere ((the cad count of (copied's faces)) = 1)
+set copied to an empty cad body
+print "matrix_borrow_and_body_ownership_are_independent" as a line
+
+loop cycle from 0 to 40:
+    set temporary to a history sphere identity matrix
+    set current to the cad history rebuilt sphere with radius 3.0 and transform temporary
+    check history sphere current's valid
+    free temporary
+    set current to the cad history rebuilt sphere with radius 0.0 and transform (a history sphere identity matrix)
+print "repeated_rebuild_and_release" as a line

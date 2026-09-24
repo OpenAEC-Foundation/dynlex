@@ -425,10 +425,16 @@ check acis lift ((the cad count of rejected's body's faces) = 0)
 
 set ellipse to the cad sat clone of reordered
 replace acis torus token (a cad sat float token of 0.5) at 4 in physical slot 3 of (the address of ellipse)
-set rejected to lift cad faceted body numbered 16 from ellipse
-check acis lift (rejected's valid = false)
-check acis lift (rejected's failure = 3)
-check acis lift (rejected's source = 3)
+set lifted to lift cad faceted body numbered 16 from ellipse
+check acis lift (lifted's valid)
+set curveKeys to the cad keys of lifted's body's curves
+set foundEllipse to false
+loop index from 0 to the length of curveKeys:
+    set curveNode to the cad node pointer for (the item at index in curveKeys) in lifted's body's curves
+    if curveNode's kind = 2:
+        set foundEllipse to true
+check acis lift foundEllipse
+free curveKeys
 
 set invalidFrame to the cad sat clone of reordered
 replace acis torus token (a cad sat position token at 0.0, 0.0, 0.0) at 2 in physical slot 13 of (the address of invalidFrame)
