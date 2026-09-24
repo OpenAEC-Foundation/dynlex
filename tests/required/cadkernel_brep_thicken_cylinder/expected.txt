@@ -1,0 +1,3 @@
+quarter_cylinder_thickens_both_directions
+full_cylinder_closes_without_radial_seams
+zero_and_collapsing_offsets_are_refused

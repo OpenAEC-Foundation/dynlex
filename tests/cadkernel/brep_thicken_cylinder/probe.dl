@@ -1,0 +1,95 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_cylinder.dl
+import lib/cadkernel/brep_mass.dl
+
+function cylinder probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function cylinder probe body {cad body:body}:
+    execute:
+        cylinder probe number (the cad count of body's vertices)
+        cylinder probe number (the cad count of body's edges)
+        cylinder probe number (the cad count of body's coedges)
+        cylinder probe number (the cad count of body's loops)
+        cylinder probe number (the cad count of body's faces)
+        cylinder probe number (the cad count of body's shells)
+        cylinder probe number (the cad count of body's lumps)
+        cylinder probe number (the cad count of body's surfaces)
+        cylinder probe number (the cad count of body's curves)
+        cylinder probe number (the length of body's roots)
+        set flaws to the cad flaws of body
+        cylinder probe number (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set paired to 0
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of edge's coedges's values) = 2:
+                increment paired
+        cylinder probe number paired
+        free edgeKeys
+        set useKeys to the cad keys of body's coedges
+        set pcurves to 0
+        loop index from 0 to the length of useKeys:
+            set useNode to the cad node pointer for (the item at index in useKeys) in body's coedges
+            if useNode's pcurve's valid:
+                increment pcurves
+        cylinder probe number pcurves
+        free useKeys
+        set faceKeys to the cad face keys of body
+        set forwards to 0
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in body
+            if face's forward:
+                increment forwards
+        cylinder probe number forwards
+        free faceKeys
+        set mass to the cad analytic mass properties of body
+        if mass's valid = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        cylinder probe number mass's value's volume
+        cylinder probe number mass's value's centroid's x
+        cylinder probe number mass's value's centroid's y
+        cylinder probe number mass's value's centroid's z
+        set vertexKeys to the cad keys of body's vertices
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in body's vertices
+            cylinder probe number vertex's point's x
+            cylinder probe number vertex's point's y
+            cylinder probe number vertex's point's z
+        free vertexKeys
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set angle to 1.5707963267948966 as a 64 bit floating-point number
+if (caseNumber = 2) or (caseNumber = 3):
+    set angle to 4.71238898038469
+else if (caseNumber = 4) or (caseNumber = 5):
+    set angle to 6.2517693806436885
+else if (caseNumber = 6) or (caseNumber = 7):
+    set angle to 6.283185307179586
+else if (caseNumber = 8) or (caseNumber = 9):
+    set angle to -4.71238898038469
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set profile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 3.0)))
+set source to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by angle
+if source's valid = false:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+set distance to 0.5 as a 64 bit floating-point number
+if (caseNumber < 10) and ((the remainder of caseNumber divided by 2) = 1):
+    set distance to -0.5
+if caseNumber = 10:
+    set distance to 0.0
+if caseNumber = 11:
+    set faceKeys to the cad face keys of source's value
+    set face to the cad node pointer for (the item at 0 in faceKeys) in source's value
+    set distance to -5.0
+    if face's forward = false:
+        set distance to 5.0
+    free faceKeys
+set result to the cad cylindrical thickening of source's value by distance
+cylinder probe number (result's valid as an integer)
+if result's valid:
+    cylinder probe body result's value
+free profile

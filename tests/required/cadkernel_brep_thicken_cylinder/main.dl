@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_cylinder.dl
+import lib/cadkernel/brep_bounds.dl
+
+function check cylindrical thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set profile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x 4.0 and y 0.0) to (a cad vector2 with x 4.0 and y 3.0)))
+set sheet to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check cylindrical thickening sheet's valid
+set before to the cad count of sheet's value's faces
+set outward to the cad cylindrical thickening of sheet's value by 0.5
+set inward to the cad cylindrical thickening of sheet's value by -0.5
+check cylindrical thickening outward's valid
+check cylindrical thickening inward's valid
+check cylindrical thickening ((the cad count of sheet's value's faces) = before)
+set outerFlaws to the cad flaws of outward's value
+set innerFlaws to the cad flaws of inward's value
+check cylindrical thickening ((the length of outerFlaws) = 0)
+check cylindrical thickening ((the length of innerFlaws) = 0)
+free outerFlaws
+free innerFlaws
+print "quarter_cylinder_thickens_both_directions" as a line
+
+set complete to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check cylindrical thickening complete's valid
+set shell to the cad cylindrical thickening of complete's value by 0.5
+check cylindrical thickening shell's valid
+set flaws to the cad flaws of shell's value
+check cylindrical thickening ((the length of flaws) = 0)
+free flaws
+print "full_cylinder_closes_without_radial_seams" as a line
+
+set zero to the cad cylindrical thickening of sheet's value by 0.0
+check cylindrical thickening (zero's valid = false)
+set collapse to the cad cylindrical thickening of sheet's value by -5.0
+check cylindrical thickening (collapse's valid = false)
+print "zero_and_collapsing_offsets_are_refused" as a line
+
+free profile

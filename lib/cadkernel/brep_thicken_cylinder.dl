@@ -1,0 +1,149 @@
+# SPDX-License-Identifier: MPL-2.0
+# Single bounded cylindrical-face branch of cadkernel src/brep/thicken.rs,
+# revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The input body is borrowed. Only the resulting solid owns its new topology.
+import lib/cadkernel/brep_revolve_sheet.dl
+import lib/cadkernel/brep_sweep.dl
+import lib/cadkernel/brep_pcurve.dl
+
+class:
+    patterns:
+        [a|] cad cylindrical thickening patch
+    members:
+        uStart as a 64 bit floating-point number
+        uSweep as a 64 bit floating-point number
+        vStart as a 64 bit floating-point number
+        vSweep as a 64 bit floating-point number
+
+class:
+    patterns:
+        [a|] cad cylindrical thickening patch result
+    members:
+        valid as a boolean
+        value as a cad cylindrical thickening patch
+
+local function cad cylindrical thickening scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
+
+local function no cad cylindrical thickening patch:
+    execute:
+        return @intrinsic("construct", a cad cylindrical thickening patch result, false, a new cad cylindrical thickening patch)
+
+local function the cad cylindrical thickening patch of {cad face key:faceKey} in {cad body:body}:
+    execute:
+        set face to the cad node pointer for faceKey in body
+        if face = (0 as the type of face):
+            return no cad cylindrical thickening patch
+        if (the length of (face's loops's values)) != 1:
+            return no cad cylindrical thickening patch
+        set boundary to the cad boundary of faceKey in body within 1e-8
+        if (boundary's valid) = false:
+            return no cad cylindrical thickening patch
+        set curves to boundary's curves's values
+        if (the length of curves) != 4:
+            return no cad cylindrical thickening patch
+        set lowU to 1.7976931348623157e308 as a 64 bit floating-point number
+        set lowV to lowU
+        set highU to 0.0 - lowU
+        set highV to highU
+        loop index from 0 to 4:
+            set curve to the item at index in curves
+            set next to the item at (the remainder of (index + 1) divided by 4) in curves
+            if ((curve's kind) != 0) or ((next's kind) != 0):
+                return no cad cylindrical thickening patch
+            set line to curve's line
+            set nextLine to next's line
+            if (the cad distance from line's end to nextLine's start) > 1e-8:
+                return no cad cylindrical thickening patch
+            set delta to the cad difference of line's end and line's start
+            if ((the absolute value of delta's x) <= 1e-8) = ((the absolute value of delta's y) <= 1e-8):
+                return no cad cylindrical thickening patch
+            if ((cad cylindrical thickening scalar line's start's x is finite) and (cad cylindrical thickening scalar line's start's y is finite)) = false:
+                return no cad cylindrical thickening patch
+            set lowU to the minimum of lowU and line's start's x
+            set lowV to the minimum of lowV and line's start's y
+            set highU to the maximum of highU and line's start's x
+            set highV to the maximum of highV and line's start's y
+        loop first from 0 to 4:
+            set firstPoint to (the item at first in curves)'s line's start
+            loop second from (first + 1) to 4:
+                set secondPoint to (the item at second in curves)'s line's start
+                if (the cad distance from firstPoint to secondPoint) <= 1e-8:
+                    return no cad cylindrical thickening patch
+        set uSweep to highU - lowU
+        if uSweep > (6.283185307179586 + 1e-8):
+            return no cad cylindrical thickening patch
+        set value to @intrinsic("construct", a cad cylindrical thickening patch, lowU, uSweep, lowV, highV - lowV)
+        return @intrinsic("construct", a cad cylindrical thickening patch result, true, value)
+
+function the cad cylindrical thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if ((cad cylindrical thickening scalar distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set validSource to (the length of flaws) = 0
+        free flaws
+        if validSource = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 1:
+            free faces
+            return no cad body
+        set edges to the cad edge keys of sourceBody
+        set hasBoundary to false
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in sourceBody
+            if edge != (0 as the type of edge):
+                if (the length of (edge's coedges's values)) = 1:
+                    set hasBoundary to true
+        free edges
+        if hasBoundary = false:
+            free faces
+            return no cad body
+        set faceKey to the item at 0 in faces
+        free faces
+        set face to the cad node pointer for faceKey in sourceBody
+        if face = (0 as the type of face):
+            return no cad body
+        set surface to the cad node pointer for face's surface in sourceBody
+        if surface = (0 as the type of surface):
+            return no cad body
+        if surface's kind != 1:
+            return no cad body
+        set patch to the cad cylindrical thickening patch of faceKey in sourceBody
+        if (patch's valid) = false:
+            return no cad body
+        set oriented to distance
+        if face's forward = false:
+            set oriented to 0.0 - distance
+        set radius to surface's cylinder's radius
+        set second to radius + oriented
+        if (((cad cylindrical thickening scalar radius is finite) and (cad cylindrical thickening scalar second is finite)) and ((radius > 1e-9) and (second > 1e-9))) = false:
+            return no cad body
+        set frame to surface's cylinder's base
+        set axisResult to the cad normal of frame
+        if (axisResult's valid) = false:
+            return no cad body
+        set u to patch's value's uStart
+        set radial to the cad vector at (a cad vector2 with x (the cosine of u) and y (the sine of u)) on frame
+        set section to a cad plane with origin frame's origin, x axis radial and y axis axisResult's value
+        set v0 to patch's value's vStart
+        set v1 to v0 + patch's value's vSweep
+        set corners to a list containing (a cad vector2 with x radius and y v0)
+        append (a cad vector2 with x radius and y v1) to corners
+        append (a cad vector2 with x second and y v1) to corners
+        append (a cad vector2 with x second and y v0) to corners
+        set profile to an empty list of a cad curve2
+        loop index from 0 to 4:
+            set first to the item at index in corners
+            set last to the item at (the remainder of (index + 1) divided by 4) in corners
+            append (the cad curve2 of (a cad line2 from first to last)) to profile
+        set pivot to frame's origin
+        set axis to axisResult's value
+        set angle to patch's value's uSweep
+        set result to the cad revolution of profile on section about pivot along axis by angle
+        free profile
+        free corners
+        return result
