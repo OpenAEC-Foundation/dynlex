@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_cone.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+import lib/cadkernel/brep_make.dl
+
+function check conical thickening {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set first to a cad vector2 with x 4.0 and y 0.0
+set last to a cad vector2 with x 2.0 and y 5.0
+set profile to a list containing (the cad curve2 of (a cad line2 from first to last))
+set sheet to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+set full to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by 6.283185307179586
+check conical thickening (sheet's valid and full's valid)
+free profile
+set originalFaces to the cad count of sheet's value's faces
+set originalEdges to the cad count of sheet's value's edges
+set originalVertices to the cad count of sheet's value's vertices
+set originalSurfaces to the cad count of sheet's value's surfaces
+set outward to the cad conical thickening of sheet's value by 0.5
+set inward to the cad conical thickening of sheet's value by -0.5
+check conical thickening (outward's valid and inward's valid)
+check conical thickening ((the cad count of sheet's value's faces) = originalFaces)
+check conical thickening ((the cad count of sheet's value's edges) = originalEdges)
+check conical thickening ((the cad count of sheet's value's vertices) = originalVertices)
+check conical thickening ((the cad count of sheet's value's surfaces) = originalSurfaces)
+set outerFlaws to the cad flaws of outward's value
+set innerFlaws to the cad flaws of inward's value
+check conical thickening (((the length of outerFlaws) = 0) and ((the length of innerFlaws) = 0))
+free outerFlaws
+free innerFlaws
+print "bounded_cone_thickens_both_directions" as a line
+
+set fullSolid to the cad conical thickening of full's value by 0.5
+check conical thickening fullSolid's valid
+set fullFlaws to the cad flaws of fullSolid's value
+check conical thickening ((the length of fullFlaws) = 0)
+free fullFlaws
+set reversedProfile to a list containing (the cad curve2 of (a cad line2 from last to first))
+set reversedSheet to the cad revolved sheet of reversedProfile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check conical thickening reversedSheet's valid
+free reversedProfile
+set reversedFaces to the cad face keys of reversedSheet's value
+set reversedFace to the cad node pointer for (the item at 0 in reversedFaces) in reversedSheet's value
+check conical thickening (reversedFace's forward = false)
+free reversedFaces
+set reversedOutward to the cad conical thickening of reversedSheet's value by 0.5
+set reversedInward to the cad conical thickening of reversedSheet's value by -0.5
+check conical thickening (reversedOutward's valid and reversedInward's valid)
+print "full_turn_and_reversed_face_thicken" as a line
+
+set zero to the cad conical thickening of sheet's value by 0.0
+set collapsed to the cad conical thickening of sheet's value by -5.0
+set infinite to the cad conical thickening of sheet's value by (1.0 / 0.0)
+check conical thickening ((zero's valid = false) and (collapsed's valid = false))
+check conical thickening (infinite's valid = false)
+set alreadySolid to the cad conical thickening of outward's value by 0.5
+check conical thickening (alreadySolid's valid = false)
+set closed to the cad cone body at (the cad zero vector3) with radius 4.0 and height 5.0
+check conical thickening closed's valid
+set closedResult to the cad conical thickening of closed's value by 0.5
+check conical thickening (closedResult's valid = false)
+set apexProfile to a list containing (the cad curve2 of (a cad line2 from first to (a cad vector2 with x 0.0 and y 5.0)))
+set apexSheet to the cad revolved sheet of apexProfile on section about (the cad zero vector3) along (the cad z axis) by 1.5707963267948966
+check conical thickening apexSheet's valid
+free apexProfile
+set apexResult to the cad conical thickening of apexSheet's value by 0.5
+check conical thickening (apexResult's valid = false)
+print "invalid_offsets_and_closed_cone_refused" as a line

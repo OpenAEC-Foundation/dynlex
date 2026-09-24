@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: MPL-2.0
+# Single bounded conical-face branch of cadkernel src/brep/thicken.rs,
+# revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# The source body is borrowed; the revolved result owns its topology.
+import lib/cadkernel/brep_thicken_patch.dl
+import lib/cadkernel/brep_sweep.dl
+
+local function cad conical thickening scalar {a 64 bit floating-point number:value} is finite:
+    execute:
+        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
+
+function the cad conical thickening of {cad body:sourceBody} by {a number:givenDistance}:
+    execute:
+        set distance to givenDistance as a 64 bit floating-point number
+        if ((cad conical thickening scalar distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+            return no cad body
+        set flaws to the cad flaws of sourceBody
+        set validSource to (the length of flaws) = 0
+        free flaws
+        if validSource = false:
+            return no cad body
+        set faces to the cad face keys of sourceBody
+        if (the length of faces) != 1:
+            free faces
+            return no cad body
+        set edges to the cad edge keys of sourceBody
+        set hasBoundary to false
+        loop index from 0 to the length of edges:
+            set edge to the cad node pointer for (the item at index in edges) in sourceBody
+            if edge != (0 as the type of edge):
+                if (the length of (edge's coedges's values)) = 1:
+                    set hasBoundary to true
+        free edges
+        if hasBoundary = false:
+            free faces
+            return no cad body
+        set faceKey to the item at 0 in faces
+        free faces
+        set face to the cad node pointer for faceKey in sourceBody
+        if face = (0 as the type of face):
+            return no cad body
+        set surface to the cad node pointer for face's surface in sourceBody
+        if surface = (0 as the type of surface):
+            return no cad body
+        if surface's kind != 2:
+            return no cad body
+        set patch to the cad thickening patch of faceKey in sourceBody
+        if patch's valid = false:
+            return no cad body
+        set oriented to distance
+        if face's forward = false:
+            set oriented to 0.0 - distance
+        set cone to surface's cone
+        set sine to the sine of cone's halfAngle
+        set cosine to the cosine of cone's halfAngle
+        set tangent to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, cone's halfAngle)
+        set v0 to patch's value's vStart
+        set v1 to v0 + patch's value's vSweep
+        set source0 to cone's radius - (v0 * tangent)
+        set source1 to cone's radius - (v1 * tangent)
+        set offset0 to source0 + (oriented * cosine)
+        set offset1 to source1 + (oriented * cosine)
+        if (((cad conical thickening scalar source0 is finite) and (cad conical thickening scalar source1 is finite)) and ((cad conical thickening scalar offset0 is finite) and (cad conical thickening scalar offset1 is finite))) = false:
+            return no cad body
+        if (((source0 > 1e-9) and (source1 > 1e-9)) and ((offset0 > 1e-9) and (offset1 > 1e-9))) = false:
+            return no cad body
+        set frame to cone's base
+        set axisResult to the cad normal of frame
+        if (axisResult's valid) = false:
+            return no cad body
+        set u to patch's value's uStart
+        set radial to the cad vector at (a cad vector2 with x (the cosine of u) and y (the sine of u)) on frame
+        set section to a cad plane with origin frame's origin, x axis radial and y axis axisResult's value
+        set corners to a list containing (a cad vector2 with x source0 and y v0)
+        append (a cad vector2 with x source1 and y v1) to corners
+        append (a cad vector2 with x offset1 and y (v1 + (oriented * sine))) to corners
+        append (a cad vector2 with x offset0 and y (v0 + (oriented * sine))) to corners
+        set profile to an empty list of a cad curve2
+        loop index from 0 to 4:
+            set first to the item at index in corners
+            set last to the item at (the remainder of (index + 1) divided by 4) in corners
+            append (the cad curve2 of (a cad line2 from first to last)) to profile
+        set result to the cad revolution of profile on section about frame's origin along axisResult's value by patch's value's uSweep
+        free profile
+        free corners
+        return result

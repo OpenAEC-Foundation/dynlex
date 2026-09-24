@@ -1,0 +1,160 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_thicken_cone.dl
+import lib/cadkernel/brep_revolve_sheet.dl
+import lib/cadkernel/brep_make.dl
+
+function cone probe number {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function cone probe body {cad body:body}:
+    execute:
+        cone probe number (the cad count of body's vertices)
+        cone probe number (the cad count of body's edges)
+        cone probe number (the cad count of body's coedges)
+        cone probe number (the cad count of body's loops)
+        cone probe number (the cad count of body's faces)
+        cone probe number (the cad count of body's shells)
+        cone probe number (the cad count of body's lumps)
+        cone probe number (the cad count of body's surfaces)
+        cone probe number (the cad count of body's curves)
+        cone probe number (the length of body's roots)
+        set flaws to the cad flaws of body
+        cone probe number (the length of flaws)
+        free flaws
+        set edgeKeys to the cad edge keys of body
+        set paired to 0
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (the length of edge's coedges's values) = 2:
+                increment paired
+        cone probe number paired
+        free edgeKeys
+        set useKeys to the cad keys of body's coedges
+        set pcurves to 0
+        loop index from 0 to the length of useKeys:
+            set useNode to the cad node pointer for (the item at index in useKeys) in body's coedges
+            if useNode's pcurve's valid:
+                increment pcurves
+        cone probe number pcurves
+        free useKeys
+        set faceKeys to the cad face keys of body
+        set forwards to 0
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in body
+            if face's forward:
+                increment forwards
+        cone probe number forwards
+        free faceKeys
+        set vertexKeys to the cad keys of body's vertices
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in body's vertices
+            cone probe number vertex's point's x
+            cone probe number vertex's point's y
+            cone probe number vertex's point's z
+        free vertexKeys
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set angle to 1.5707963267948966 as a 64 bit floating-point number
+if (caseNumber = 2) or (caseNumber = 3):
+    set angle to -1.5707963267948966
+else if (caseNumber = 4) or (caseNumber = 5):
+    set angle to 4.71238898038469
+else if (caseNumber = 6) or (caseNumber = 7):
+    set angle to 6.283185307179586
+else if (caseNumber = 8) or (caseNumber = 9):
+    set angle to 6.2517693806436885
+set first to a cad vector2 with x 4.0 and y 0.0
+set last to a cad vector2 with x 2.0 and y 5.0
+if (caseNumber = 10) or (caseNumber = 11):
+    set first to a cad vector2 with x 2.0 and y 0.0
+    set last to a cad vector2 with x 4.0 and y 5.0
+else if caseNumber = 16:
+    set last to a cad vector2 with x 0.0 and y 5.0
+else if (caseNumber = 17) or (caseNumber = 18):
+    set first to a cad vector2 with x 2.0 and y 5.0
+    set last to a cad vector2 with x 4.0 and y 0.0
+set section to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (the cad z axis)
+set profile to a list containing (the cad curve2 of (a cad line2 from first to last))
+set source to no cad body
+if caseNumber = 15:
+    set source to the cad cone body at (the cad zero vector3) with radius 4.0 and height 5.0
+else:
+    set source to the cad revolved sheet of profile on section about (the cad zero vector3) along (the cad z axis) by angle
+if source's valid = false:
+    @intrinsic("call", "libc", "exit", nothing, 3)
+set originalFaces to the cad count of source's value's faces
+set originalEdges to the cad count of source's value's edges
+set originalCoedges to the cad count of source's value's coedges
+set originalLoops to the cad count of source's value's loops
+set originalVertices to the cad count of source's value's vertices
+set originalSurfaces to the cad count of source's value's surfaces
+set originalCurves to the cad count of source's value's curves
+set originalRoots to the length of source's value's roots
+set originalPoints to an empty list of a cad vector3
+set vertexKeys to the cad keys of source's value's vertices
+loop index from 0 to the length of vertexKeys:
+    set vertex to the cad node pointer for (the item at index in vertexKeys) in source's value's vertices
+    append vertex's point to originalPoints
+free vertexKeys
+set originalCones to an empty list of a cad vector2
+set surfaceKeys to the cad keys of source's value's surfaces
+loop index from 0 to the length of surfaceKeys:
+    set surface to the cad node pointer for (the item at index in surfaceKeys) in source's value's surfaces
+    if surface's kind = 2:
+        append (a cad vector2 with x surface's cone's radius and y surface's cone's halfAngle) to originalCones
+free surfaceKeys
+set faceKeys to the cad face keys of source's value
+set face to the cad node pointer for (the item at 0 in faceKeys) in source's value
+set originalForward to face's forward
+free faceKeys
+set distance to 0.5 as a 64 bit floating-point number
+if (caseNumber < 12) and ((the remainder of caseNumber divided by 2) = 1):
+    set distance to -0.5
+if caseNumber = 12:
+    set distance to 0.0
+if caseNumber = 13:
+    set distance to -5.0
+    if originalForward = false:
+        set distance to 5.0
+if caseNumber = 14:
+    set distance to 1.0 / 0.0
+if caseNumber = 18:
+    set distance to -0.5
+set result to the cad conical thickening of source's value by distance
+set unchanged to (((the cad count of source's value's faces) = originalFaces) and ((the cad count of source's value's edges) = originalEdges)) and (((the cad count of source's value's coedges) = originalCoedges) and ((the cad count of source's value's loops) = originalLoops))
+set unchanged to unchanged and ((((the cad count of source's value's vertices) = originalVertices) and ((the cad count of source's value's surfaces) = originalSurfaces)) and (((the cad count of source's value's curves) = originalCurves) and ((the length of source's value's roots) = originalRoots)))
+set faceKeys to the cad face keys of source's value
+set face to the cad node pointer for (the item at 0 in faceKeys) in source's value
+set unchanged to unchanged and (face's forward = originalForward)
+free faceKeys
+set vertexKeys to the cad keys of source's value's vertices
+set unchanged to unchanged and ((the length of vertexKeys) = (the length of originalPoints))
+if unchanged:
+    loop index from 0 to the length of vertexKeys:
+        set vertex to the cad node pointer for (the item at index in vertexKeys) in source's value's vertices
+        set point to the item at index in originalPoints
+        set unchanged to unchanged and (((vertex's point's x = point's x) and (vertex's point's y = point's y)) and (vertex's point's z = point's z))
+free vertexKeys
+free originalPoints
+set surfaceKeys to the cad keys of source's value's surfaces
+set coneIndex to 0
+loop index from 0 to the length of surfaceKeys:
+    set surface to the cad node pointer for (the item at index in surfaceKeys) in source's value's surfaces
+    if surface's kind = 2:
+        if coneIndex >= the length of originalCones:
+            set unchanged to false
+        else:
+            set old to the item at coneIndex in originalCones
+            set unchanged to unchanged and ((surface's cone's radius = old's x) and (surface's cone's halfAngle = old's y))
+        increment coneIndex
+set unchanged to unchanged and (coneIndex = the length of originalCones)
+free surfaceKeys
+free originalCones
+cone probe number (result's valid as an integer)
+cone probe number (unchanged as an integer)
+cone probe number (originalForward as an integer)
+if result's valid:
+    cone probe body result's value
+free profile
