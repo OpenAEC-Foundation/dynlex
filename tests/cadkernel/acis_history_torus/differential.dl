@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make/emit.dl
+import lib/cadkernel/acis_history_torus.dl
+
+set majorRadius to maker argument 1
+set minorRadius to maker argument 2
+set matrix to an empty list of a 64 bit floating-point number
+loop index from 0 to 16:
+    append (maker argument (index + 3)) to matrix
+set rebuilt to the cad history rebuilt torus with major radius majorRadius, minor radius minorRadius and transform matrix
+emit maker number (rebuilt's failure)
+if rebuilt's valid:
+    emit maker body (rebuilt's value)
+free matrix

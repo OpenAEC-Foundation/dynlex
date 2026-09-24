@@ -1,0 +1,100 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_torus.dl
+
+function check history torus {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a history torus identity matrix:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+        loop index from 0 to 16:
+            append (the item at index in entries) to values
+        return values
+
+function check history torus solid {cad body:body} with euler {integer:characteristic}:
+    execute:
+        set flaws to the cad flaws of body
+        check history torus ((the length of flaws) = 0)
+        free flaws
+        check history torus ((the cad euler characteristic of body) = characteristic)
+
+set matrix to a history torus identity matrix
+set ring to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform matrix
+check history torus ring's valid
+check history torus (ring's failure = 0)
+check history torus ((the cad count of (ring's value's faces)) = 1)
+check history torus solid ring's value with euler 0
+print "ring_torus_has_closed_genus_one_body" as a line
+
+set horn to the cad history rebuilt torus with major radius 2.0, minor radius 2.0 and transform matrix
+check history torus horn's valid
+check history torus solid horn's value with euler 1
+set spindle to the cad history rebuilt torus with major radius 1.0, minor radius 2.0 and transform matrix
+check history torus spindle's valid
+check history torus solid spindle's value with euler 2
+print "horn_and_spindle_are_trimmed_solid_bodies" as a line
+
+set keys to the cad vertex keys of ring's value
+set first to the cad node pointer for (the item at 0 in keys) in ring's value
+check history torus ((first's provenance's kind) = 0)
+check history torus ((ring's value's provenance's kind) = 0)
+free keys
+print "history_torus_provenance_is_synthesized" as a line
+
+set refused to the cad history rebuilt torus with major radius 0.0, minor radius 1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt torus with major radius 3.0, minor radius -1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 2))
+set refused to the cad history rebuilt torus with major radius (0.0 / 0.0), minor radius 1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 2))
+print "nonpositive_and_nan_radii_are_refused" as a line
+
+replace item at index 3 in matrix with 2e-9
+set refused to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 1))
+check history torus ((the item at 3 in matrix) = 2e-9)
+set refused to the cad history rebuilt torus with major radius 0.0, minor radius 1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 2))
+print "invalid_radius_precedes_invalid_placement" as a line
+
+replace item at index 3 in matrix with 0.0
+replace item at index 4 in matrix with 0.25
+set refused to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform matrix
+check history torus ((refused's valid = false) and (refused's failure = 1))
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+set refused to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform shortMatrix
+check history torus ((refused's valid = false) and (refused's failure = 1))
+free shortMatrix
+print "shear_and_short_transform_are_refused" as a line
+
+replace item at index 4 in matrix with 0.0
+replace item at index 12 in matrix with 5.0
+set moved to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform matrix
+check history torus moved's valid
+set retained to moved's value
+set moved to the cad history rebuilt torus with major radius 0.0, minor radius 1.0 and transform matrix
+free matrix
+set keys to the cad vertex keys of retained
+set first to the cad node pointer for (the item at 0 in keys) in retained
+check history torus ((first's point's x) = 9.0)
+free keys
+set copied to the cad clone of retained
+set retained to an empty cad body
+check history torus ((the cad count of (copied's faces)) = 1)
+set copied to an empty cad body
+print "matrix_borrow_and_body_ownership_are_independent" as a line
+
+loop cycle from 0 to 32:
+    set temporary to a history torus identity matrix
+    set current to the cad history rebuilt torus with major radius 3.0, minor radius 1.0 and transform temporary
+    check history torus current's valid
+    free temporary
+    set invalidMatrix to a history torus identity matrix
+    set current to the cad history rebuilt torus with major radius 0.0, minor radius 1.0 and transform invalidMatrix
+    check history torus ((current's valid = false) and (current's failure = 2))
+    free invalidMatrix
+print "repeated_rebuild_and_release" as a line
