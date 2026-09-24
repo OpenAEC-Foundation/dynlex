@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_append_faceted.dl
+import lib/cadkernel/brep_make.dl
+
+function check acis append {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function the acis append bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set raw to value
+        set rawBits to the value at ((the address of raw) as a pointer to a 64 bit unsigned integer)
+        set high to (rawBits shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to rawBits as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the acis append token trace of {cad sat token:token}:
+    execute:
+        if token's kind = 1:
+            return (the string form of "p") + (the string form of (token's reference's index))
+        if token's kind = 3:
+            return (the string form of "f") + (the acis append bits of (token's floatValue))
+        if token's kind = 5:
+            set result to (the string form of "v") + (the acis append bits of (token's x))
+            set result to (result + (the string form of ",")) + (the acis append bits of (token's y))
+            return (result + (the string form of ",")) + (the acis append bits of (token's z))
+        if token's kind = 0:
+            return (the string form of "i") + (the string form of (token's text))
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function trace acis append {cad sat document:document}:
+    execute:
+        loop index from 0 to the length of document's records's values:
+            set record to the item at index in document's records's values
+            set line to (the string form of record's recordId) + (the string form of ";")
+            set line to (line + (the string form of record's entityType)) + (the string form of ";")
+            set line to line + (the string form of (the length of record's tokens's values))
+            loop tokenIndex from 0 to the length of record's tokens's values:
+                set token to the item at tokenIndex in record's tokens's values
+                set line to (line + (the string form of ";")) + (the acis append token trace of token)
+            print line as a line
+
+set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 2.0 and z 4.0)
+check acis append (made's valid)
+set document to an empty cad sat document
+ignore add cad sat record (a cad sat record numbered -1 of type "seed") to (the address of document)
+set written to append cad faceted body (made's value) to (the address of document)
+check acis append (written's valid)
+check acis append (written's records = 85)
+check acis append (written's body = 85)
+check acis append ((the length of document's records's values) = 86)
+set pointThree to the cad sat record numbered 3 in document
+set pointPosition to the cad sat token at 1 in pointThree's value
+check acis append (pointPosition's value's x = 1.0)
+set firstEdge to the cad sat record numbered 35 in document
+set edgeParameter to the cad sat token at 4 in firstEdge's value
+check acis append (edgeParameter's value's floatValue = 1.0)
+
+set firstFace to the cad sat record numbered 77 in document
+set lastFace to the cad sat record numbered 82 in document
+set firstCoedge to the cad sat record numbered 47 in document
+set firstBody to the cad sat record numbered 85 in document
+check acis append (firstFace's valid)
+check acis append (lastFace's valid)
+check acis append (firstCoedge's valid)
+check acis append (firstBody's valid)
+check acis append (((the cad sat pointer token at 1 in firstFace's value)'s value's index) = 78)
+check acis append (((the cad sat pointer token at 1 in lastFace's value)'s value's index) = -1)
+check acis append (((the cad sat pointer token at 1 in firstCoedge's value)'s value's index) = 48)
+check acis append (((the cad sat pointer token at 2 in firstCoedge's value)'s value's index) = 50)
+check acis append (((the cad sat pointer token at 1 in firstBody's value)'s value's index) = 84)
+
+set second to the cad cuboid at (a cad vector3 with x 10.0, y -2.0 and z 0.5) with size (a cad vector3 with x 3.0, y 5.0 and z 7.0)
+check acis append (second's valid)
+set written to append cad faceted body (second's value) to (the address of document)
+check acis append (written's valid)
+check acis append (written's records = 85)
+check acis append (written's body = 170)
+check acis append ((the length of document's records's values) = 171)
+check acis append ((document's header's numberOfRecords) = 171)
+set curved to the cad cylinder body at (the cad zero vector3) with radius 1.0 and height 2.0
+check acis append (curved's valid)
+set rejected to append cad faceted body (curved's value) to (the address of document)
+check acis append (rejected's valid = false)
+check acis append (rejected's failure = 1)
+check acis append ((the length of document's records's values) = 171)
+check acis append ((document's header's numberOfRecords) = 171)
+trace acis append document

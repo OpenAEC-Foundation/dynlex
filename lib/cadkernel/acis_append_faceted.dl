@@ -1,0 +1,301 @@
+# SPDX-License-Identifier: MPL-2.0
+# First in-memory append slice from the pinned src/acis/append.rs.
+# Dense arena slots permit direct key-to-record offsets. Only line curves,
+# planar surfaces and coedges without pcurves are written here.
+import lib/cadkernel/acis_records.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad acis append result
+    members:
+        valid as a boolean
+        body as an integer
+        records as an integer
+        failure as an integer
+
+local function a cad acis append failure {an integer:reason}:
+    execute:
+        return @intrinsic("construct", a cad acis append result, false, -1, 0, reason)
+
+local function cad acis dense arena {a pointer to a cad arena:nodes}:
+    execute:
+        set keys to the cad keys of nodes
+        set isDense to true
+        loop index from 0 to the length of keys:
+            set key to the item at index in keys
+            if (key's index as an integer) != index:
+                set isDense to false
+        free keys
+        return isDense
+
+local function cad acis geometry is supported in {cad body:body}:
+    execute:
+        set curves to the cad keys of body's curves
+        loop index from 0 to the length of curves:
+            set curve to the cad node pointer for (the item at index in curves) in body's curves
+            if curve's kind != 0:
+                free curves
+                return 1
+        free curves
+        set surfaces to the cad keys of body's surfaces
+        loop index from 0 to the length of surfaces:
+            set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
+            if surface's kind != 0:
+                free surfaces
+                return 2
+            set normal to the cad normal of (surface's plane)
+            if normal's valid = false:
+                free surfaces
+                return 2
+        free surfaces
+        set coedges to the cad keys of body's coedges
+        loop index from 0 to the length of coedges:
+            set coedge to the cad node pointer for (the item at index in coedges) in body's coedges
+            if coedge's pcurve's valid:
+                free coedges
+                return 1
+        free coedges
+        return 0
+
+local function a cad acis initial record of {a string:kind}:
+    execute:
+        set candidateRecord to a cad sat record numbered -1 of type kind
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of candidateRecord)
+        return candidateRecord
+
+local function cad acis add {a string:kind} to {a pointer to a cad sat document:document}:
+    execute:
+        return add cad sat record (a cad acis initial record of kind) to document
+
+local function the cad acis position of {cad vector3:value}:
+    execute:
+        return a cad sat position token at value's x, value's y, value's z
+
+local function the cad acis pointer to {an integer:id}:
+    execute:
+        return a cad sat pointer token for (a cad sat pointer to id)
+
+local function the cad acis sense of {boolean:forward}:
+    execute:
+        if forward:
+            return a cad sat ident token of "forward"
+        return a cad sat ident token of "reversed"
+
+local function a cad acis fresh record of {a string:kind} at {an integer:id}:
+    execute:
+        set candidateRecord to a cad sat record numbered id of type kind
+        add cad sat token (the cad acis pointer to -1) to (the address of candidateRecord)
+        return candidateRecord
+
+local function cad acis store {cad sat record:record} at {an integer:id} in {a pointer to a cad sat document:document}:
+    execute:
+        replace item at index id in document's records's values with record
+
+local function the cad acis first in {a pointer to a list:items} from {an integer:base}:
+    execute:
+        if (the length of items) = 0:
+            return -1
+        set key to the item at 0 in items
+        return base + (key's index as an integer)
+
+local function the cad acis successor of slot {an integer:slot} in {a pointer to a list:items} from {an integer:base}:
+    execute:
+        loop index from 0 to the length of items:
+            set candidate to the item at index in items
+            if (candidate's index as an integer) = slot:
+                if (index + 1) < (the length of items):
+                    set next to the item at (index + 1) in items
+                    return base + (next's index as an integer)
+                return -1
+        return -1
+
+function append cad faceted body {cad body:body} to {a pointer to a cad sat document:document}:
+    execute:
+        set flaws to the cad flaws of body
+        set consistent to (the length of flaws) = 0
+        free flaws
+        if consistent = false:
+            return a cad acis append failure 3
+        if (((cad acis dense arena (body's vertices)) and (cad acis dense arena (body's curves))) and ((cad acis dense arena (body's surfaces)) and (cad acis dense arena (body's edges)))) = false:
+            return a cad acis append failure 3
+        if (((cad acis dense arena (body's coedges)) and (cad acis dense arena (body's loops))) and ((cad acis dense arena (body's faces)) and (cad acis dense arena (body's shells)))) = false:
+            return a cad acis append failure 3
+        if (cad acis dense arena (body's lumps)) = false:
+            return a cad acis append failure 3
+        set unsupported to cad acis geometry is supported in body
+        if unsupported != 0:
+            return a cad acis append failure unsupported
+
+        set before to the length of document's records's values
+        set vertexCount to the cad count of body's vertices
+        set curveCount to the cad count of body's curves
+        set surfaceCount to the cad count of body's surfaces
+        set edgeCount to the cad count of body's edges
+        set coedgeCount to the cad count of body's coedges
+        set loopCount to the cad count of body's loops
+        set faceCount to the cad count of body's faces
+        set shellCount to the cad count of body's shells
+        set lumpCount to the cad count of body's lumps
+        set curveBase to before + (2 * vertexCount)
+        set surfaceBase to curveBase + curveCount
+        set edgeBase to surfaceBase + surfaceCount
+        set coedgeBase to edgeBase + edgeCount
+        set loopBase to coedgeBase + coedgeCount
+        set faceBase to loopBase + loopCount
+        set shellBase to faceBase + faceCount
+        set lumpBase to shellBase + shellCount
+        set bodyId to lumpBase + lumpCount
+
+        set vertices to the cad keys of body's vertices
+        loop index from 0 to vertexCount:
+            set vertex to the cad node pointer for (the item at index in vertices) in body's vertices
+            set pointRecord to a cad acis initial record of "point"
+            add cad sat token (the cad acis position of (vertex's point)) to (the address of pointRecord)
+            ignore add cad sat record pointRecord to document
+            ignore cad acis add "vertex" to document
+
+        set curves to the cad keys of body's curves
+        loop index from 0 to curveCount:
+            set curve to the cad node pointer for (the item at index in curves) in body's curves
+            set curveRecord to a cad acis initial record of "straight-curve"
+            add cad sat token (the cad acis position of (curve's line's origin)) to (the address of curveRecord)
+            add cad sat token (the cad acis position of (curve's line's direction)) to (the address of curveRecord)
+            ignore add cad sat record curveRecord to document
+
+        set surfaces to the cad keys of body's surfaces
+        loop index from 0 to surfaceCount:
+            set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
+            set normal to the cad normal of (surface's plane)
+            set surfaceRecord to a cad acis initial record of "plane-surface"
+            add cad sat token (the cad acis position of (surface's plane's origin)) to (the address of surfaceRecord)
+            add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
+            add cad sat token (the cad acis position of (surface's plane's xAxis)) to (the address of surfaceRecord)
+            ignore add cad sat record surfaceRecord to document
+
+        loop index from 0 to edgeCount:
+            ignore cad acis add "edge" to document
+        loop index from 0 to coedgeCount:
+            ignore cad acis add "coedge" to document
+        loop index from 0 to loopCount:
+            ignore cad acis add "loop" to document
+        loop index from 0 to faceCount:
+            ignore cad acis add "face" to document
+        loop index from 0 to shellCount:
+            ignore cad acis add "shell" to document
+        loop index from 0 to lumpCount:
+            ignore cad acis add "lump" to document
+        ignore cad acis add "body" to document
+
+        set edges to the cad keys of body's edges
+        loop index from 0 to vertexCount:
+            set vertexId to before + ((2 * index) + 1)
+            set incident to -1
+            loop edgeIndex from 0 to edgeCount:
+                set edge to the cad node pointer for (the item at edgeIndex in edges) in body's edges
+                if ((edge's start's index as an integer) = index) or ((edge's end's index as an integer) = index):
+                    if incident = -1:
+                        set incident to edgeBase + edgeIndex
+            set record to a cad acis fresh record of "vertex" at vertexId
+            add cad sat token (the cad acis pointer to incident) to (the address of record)
+            add cad sat token (the cad acis pointer to (vertexId - 1)) to (the address of record)
+            cad acis store record at vertexId in document
+
+        loop index from 0 to edgeCount:
+            set edge to the cad node pointer for (the item at index in edges) in body's edges
+            set edgeId to edgeBase + index
+            set record to a cad acis fresh record of "edge" at edgeId
+            add cad sat token (the cad acis pointer to (before + ((2 * (edge's start's index as an integer)) + 1))) to (the address of record)
+            add cad sat token (a cad sat float token of (edge's startParameter)) to (the address of record)
+            add cad sat token (the cad acis pointer to (before + ((2 * (edge's end's index as an integer)) + 1))) to (the address of record)
+            add cad sat token (a cad sat float token of (edge's endParameter)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first in (edge's coedges's values) from coedgeBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (curveBase + (edge's curve's index as an integer))) to (the address of record)
+            add cad sat token (the cad acis sense of true) to (the address of record)
+            cad acis store record at edgeId in document
+
+        set rings to the cad keys of body's loops
+        loop index from 0 to loopCount:
+            set ring to the cad node pointer for (the item at index in rings) in body's loops
+            set uses to ring's coedges's values
+            set count to the length of uses
+            loop order from 0 to count:
+                set coedgeKey to the item at order in uses
+                set coedge to the cad node pointer for coedgeKey in body
+                set nextKey to the item at (the remainder of (order + 1) divided by count) in uses
+                set previousKey to the item at (the remainder of (order + count - 1) divided by count) in uses
+                set partner to the cad partner of coedgeKey in body
+                set partnerId to -1
+                if partner's valid:
+                    set partnerId to coedgeBase + (partner's value's index as an integer)
+                set coedgeId to coedgeBase + (coedgeKey's index as an integer)
+                set record to a cad acis fresh record of "coedge" at coedgeId
+                add cad sat token (the cad acis pointer to (coedgeBase + (nextKey's index as an integer))) to (the address of record)
+                add cad sat token (the cad acis pointer to (coedgeBase + (previousKey's index as an integer))) to (the address of record)
+                add cad sat token (the cad acis pointer to partnerId) to (the address of record)
+                add cad sat token (the cad acis pointer to (edgeBase + (coedge's edge's index as an integer))) to (the address of record)
+                add cad sat token (the cad acis sense of (coedge's forward)) to (the address of record)
+                add cad sat token (the cad acis pointer to (loopBase + index)) to (the address of record)
+                add cad sat token (the cad acis pointer to -1) to (the address of record)
+                cad acis store record at coedgeId in document
+            set faceOwner to the cad node pointer for ring's owner in body
+            set ringId to loopBase + index
+            set record to a cad acis fresh record of "loop" at ringId
+            add cad sat token (the cad acis pointer to (the cad acis successor of slot index in (faceOwner's loops's values) from loopBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first in uses from coedgeBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (faceBase + (ring's owner's index as an integer))) to (the address of record)
+            cad acis store record at ringId in document
+
+        set faces to the cad keys of body's faces
+        loop index from 0 to faceCount:
+            set face to the cad node pointer for (the item at index in faces) in body's faces
+            set shellOwner to the cad node pointer for face's owner in body
+            set faceId to faceBase + index
+            set record to a cad acis fresh record of "face" at faceId
+            add cad sat token (the cad acis pointer to (the cad acis successor of slot index in (shellOwner's faces's values) from faceBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first in (face's loops's values) from loopBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (shellBase + (face's owner's index as an integer))) to (the address of record)
+            add cad sat token (the cad acis pointer to -1) to (the address of record)
+            add cad sat token (the cad acis pointer to (surfaceBase + (face's surface's index as an integer))) to (the address of record)
+            add cad sat token (the cad acis sense of (face's forward)) to (the address of record)
+            add cad sat token (a cad sat ident token of "single") to (the address of record)
+            cad acis store record at faceId in document
+
+        set shells to the cad keys of body's shells
+        loop index from 0 to shellCount:
+            set shell to the cad node pointer for (the item at index in shells) in body's shells
+            set lumpOwner to the cad node pointer for shell's owner in body
+            set shellId to shellBase + index
+            set record to a cad acis fresh record of "shell" at shellId
+            add cad sat token (the cad acis pointer to (the cad acis successor of slot index in (lumpOwner's shells's values) from shellBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to -1) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first in (shell's faces's values) from faceBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to -1) to (the address of record)
+            add cad sat token (the cad acis pointer to (lumpBase + (shell's owner's index as an integer))) to (the address of record)
+            cad acis store record at shellId in document
+
+        set lumps to the cad keys of body's lumps
+        loop index from 0 to lumpCount:
+            set lump to the cad node pointer for (the item at index in lumps) in body's lumps
+            set lumpId to lumpBase + index
+            set record to a cad acis fresh record of "lump" at lumpId
+            add cad sat token (the cad acis pointer to (the cad acis successor of slot index in (body's roots) from lumpBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first in (lump's shells's values) from shellBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to bodyId) to (the address of record)
+            cad acis store record at lumpId in document
+
+        set record to a cad acis fresh record of "body" at bodyId
+        add cad sat token (the cad acis pointer to (the cad acis first in (body's roots) from lumpBase)) to (the address of record)
+        add cad sat token (the cad acis pointer to -1) to (the address of record)
+        add cad sat token (the cad acis pointer to -1) to (the address of record)
+        cad acis store record at bodyId in document
+
+        free vertices
+        free curves
+        free surfaces
+        free edges
+        free rings
+        free faces
+        free shells
+        free lumps
+        return @intrinsic("construct", a cad acis append result, true, bodyId, (the length of document's records's values) - before, 0)
