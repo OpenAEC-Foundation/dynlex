@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_append_faceted.dl
+import lib/cadkernel/brep_make.dl
+
+function check analytic append {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set made to the cad cylinder body at (a cad vector3 with x 1.0, y 2.0 and z 0.5) with radius 2.0 and height 3.0
+check analytic append made's valid
+set keys to the cad keys of made's value's coedges
+set useNode to the cad node pointer for (the item at 0 in keys) in made's value's coedges
+set useNode's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+free keys
+set documentValue to an empty cad sat document
+ignore add cad sat record (a cad sat record numbered -1 of type "seed") to (the address of documentValue)
+set written to append cad faceted body made's value to (the address of documentValue)
+check analytic append (written's valid and (written's records = 29))
+check analytic append ((the length of documentValue's records's values) = 30)
+set pcurveCount to 0
+loop index from 0 to the length of documentValue's records's values:
+    set record to the item at index in documentValue's records's values
+    if record's entityType = "pcurve":
+        increment pcurveCount
+check analytic append (pcurveCount = 1)
+print "line_pcurve_written" as a line

@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_append_faceted.dl
+import lib/cadkernel/brep_make.dl
+import lib/cadkernel/brep_presspull.dl
+
+function check analytic append {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function the analytic append bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set raw to value
+        set word to the value at ((the address of raw) as a pointer to a 64 bit unsigned integer)
+        set high to (word shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to word as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the analytic append token trace of {cad sat token:token}:
+    execute:
+        if token's kind = 1:
+            return (the string form of "p") + (the string form of token's reference's index)
+        if token's kind = 2:
+            return (the string form of "n") + (the string form of token's integerValue)
+        if token's kind = 3:
+            return (the string form of "f") + (the analytic append bits of token's floatValue)
+        if token's kind = 5:
+            set result to (the string form of "v") + (the analytic append bits of token's x)
+            set result to (result + (the string form of ",")) + (the analytic append bits of token's y)
+            return (result + (the string form of ",")) + (the analytic append bits of token's z)
+        if token's kind = 0:
+            return (the string form of "i") + (the string form of token's text)
+        if token's kind = 9:
+            return (the string form of "e") + (the string form of token's text)
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function trace analytic append {cad sat document:documentValue}:
+    execute:
+        loop index from 0 to the length of documentValue's records's values:
+            set record to the item at index in documentValue's records's values
+            set line to (the string form of record's recordId) + (the string form of ";")
+            set line to (line + (the string form of record's entityType)) + (the string form of ";")
+            set line to line + (the string form of the length of record's tokens's values)
+            loop tokenIndex from 0 to the length of record's tokens's values:
+                set token to the item at tokenIndex in record's tokens's values
+                set line to (line + (the string form of ";")) + (the analytic append token trace of token)
+            print line as a line
+
+set caseText to the argument at 0 in the command line arguments
+set caseNumber to @intrinsic("call", "libc", "atoi", integer, the data of caseText)
+set made to no cad body
+if ((caseNumber = 0) or (caseNumber = 4)) or (caseNumber = 5):
+    set made to the cad cylinder body at (a cad vector3 with x 1.0, y 2.0 and z 0.5) with radius 2.0 and height 3.0
+else if caseNumber = 1:
+    set made to the cad cone body at (a cad vector3 with x -2.0, y 1.0 and z 0.5) with radius 2.5 and height 4.0
+else if caseNumber = 2:
+    set made to the cad torus at (a cad vector3 with x 1.0, y -1.0 and z 2.0) with major radius 5.0 and minor radius 1.5
+else if caseNumber = 3:
+    set ellipse to a cad ellipse at (the cad zero vector2) with radii 3.0 and 1.25 along (a cad vector2 with x 1.0 and y 0.0)
+    set profile to a list containing (the cad curve2 of (the full cad ellipse arc2 on ellipse))
+    set loops to a list containing (a cad presspull curve loop from profile)
+    set plane to a cad plane with origin (a cad vector3 with x 2.0, y -1.0 and z 0.5), x axis (the cad x axis) and y axis (the cad y axis)
+    set made to the cad planar region on plane with loops
+    free profile
+    free loops
+check analytic append made's valid
+if (caseNumber = 4) or (caseNumber = 5):
+    set keys to the cad keys of made's value's coedges
+    set useNode to the cad node pointer for (the item at 0 in keys) in made's value's coedges
+    if caseNumber = 4:
+        set useNode's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+    else:
+        set useNode's pcurve to the cad pcurve of (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 1.0))
+    free keys
+set flaws to the cad flaws of made's value
+check analytic append ((the length of flaws) = 0)
+free flaws
+set sourceKeys to the cad keys of made's value's coedges
+set pcurveCount to 0
+loop index from 0 to the length of sourceKeys:
+    set useNode to the cad node pointer for (the item at index in sourceKeys) in made's value's coedges
+    if useNode's pcurve's valid:
+        increment pcurveCount
+free sourceKeys
+set documentValue to an empty cad sat document
+ignore add cad sat record (a cad sat record numbered -1 of type "seed") to (the address of documentValue)
+set written to append cad faceted body made's value to (the address of documentValue)
+check analytic append written's valid
+set summary to (the string form of "summary;") + (the string form of caseNumber)
+set summary to (summary + (the string form of ";")) + (the string form of written's body)
+set summary to (summary + (the string form of ";")) + (the string form of written's records)
+set summary to (summary + (the string form of ";")) + (the string form of the length of documentValue's records's values)
+set summary to (summary + (the string form of ";")) + (the string form of pcurveCount)
+print summary as a line
+trace analytic append documentValue

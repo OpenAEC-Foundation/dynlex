@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
-# First in-memory append slice from the pinned src/acis/append.rs.
-# Dense arena slots permit direct key-to-record offsets. Lines, circles,
-# planes and spheres are supported without pcurves.
+# In-memory append of analytic SAT records from pinned src/acis/append.rs.
+# Dense arena slots permit direct key-to-record offsets. NURBS surfaces and
+# 3D spline curves remain outside this writer's preflight boundary.
 import lib/cadkernel/acis_records.dl
 import lib/cadkernel/brep_topology.dl
 
@@ -34,7 +34,7 @@ local function cad acis geometry is supported in {cad body:body}:
         set curves to the cad keys of body's curves
         loop index from 0 to the length of curves:
             set curve to the cad node pointer for (the item at index in curves) in body's curves
-            if (curve's kind != 0) and (curve's kind != 1):
+            if ((curve's kind != 0) and (curve's kind != 1)) and (curve's kind != 2):
                 free curves
                 return 1
             if curve's kind = 1:
@@ -42,16 +42,27 @@ local function cad acis geometry is supported in {cad body:body}:
                 if circleNormal's valid = false:
                     free curves
                     return 1
+            if curve's kind = 2:
+                set ellipseNormal to the cad normal of (curve's ellipse's plane)
+                if ellipseNormal's valid = false:
+                    free curves
+                    return 1
         free curves
         set surfaces to the cad keys of body's surfaces
         loop index from 0 to the length of surfaces:
             set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
-            if (surface's kind != 0) and (surface's kind != 3):
+            if (surface's kind < 0) or (surface's kind > 4):
                 free surfaces
                 return 2
             set frame to surface's plane
-            if surface's kind = 3:
+            if surface's kind = 1:
+                set frame to surface's cylinder's base
+            else if surface's kind = 2:
+                set frame to surface's cone's base
+            else if surface's kind = 3:
                 set frame to surface's sphere's frame
+            else if surface's kind = 4:
+                set frame to surface's torus's frame
             set normal to the cad normal of frame
             if normal's valid = false:
                 free surfaces
@@ -61,8 +72,11 @@ local function cad acis geometry is supported in {cad body:body}:
         loop index from 0 to the length of coedges:
             set coedge to the cad node pointer for (the item at index in coedges) in body's coedges
             if coedge's pcurve's valid:
-                free coedges
-                return 1
+                # The pinned writer omits unsupported pcurves on analytic
+                # surfaces; line pcurves are serialized as explicit records.
+                if coedge's pcurve's value's kind = 5:
+                    free coedges
+                    return 1
         free coedges
         return 0
 
@@ -118,6 +132,48 @@ local function the cad acis successor of slot {an integer:slot} in {a pointer to
                 return -1
         return -1
 
+local function the cad acis first mapped in {a pointer to a list:items} using {a pointer to a list:ids}:
+    execute:
+        if (the length of items) = 0:
+            return -1
+        set key to the item at 0 in items
+        return the item at (key's index as an integer) in ids
+
+local function a cad acis line pcurve for {cad curve2:curve} on {cad sat record:support}:
+    execute:
+        set record to a cad acis initial record of "pcurve"
+        add cad sat token (a cad sat integer token of 0) to (the address of record)
+        add cad sat token (a cad sat ident token of "forward") to (the address of record)
+        add cad sat token (a cad sat ident token of "{") to (the address of record)
+        add cad sat token (a cad sat ident token of "exppc") to (the address of record)
+        add cad sat token (a cad sat ident token of "nubs") to (the address of record)
+        add cad sat token (a cad sat integer token of 1) to (the address of record)
+        add cad sat token (a cad sat enum token of "open") to (the address of record)
+        add cad sat token (a cad sat integer token of 2) to (the address of record)
+        add cad sat token (a cad sat float token of 0.0) to (the address of record)
+        add cad sat token (a cad sat integer token of 1) to (the address of record)
+        add cad sat token (a cad sat float token of 1.0) to (the address of record)
+        add cad sat token (a cad sat integer token of 1) to (the address of record)
+        add cad sat token (a cad sat float token of curve's line's start's x) to (the address of record)
+        add cad sat token (a cad sat float token of curve's line's start's y) to (the address of record)
+        add cad sat token (a cad sat float token of curve's line's end's x) to (the address of record)
+        add cad sat token (a cad sat float token of curve's line's end's y) to (the address of record)
+        add cad sat token (a cad sat float token of 0.0) to (the address of record)
+        set supportKind to the string form of "plane"
+        if support's entityType = "cone-surface":
+            set supportKind to the string form of "cone"
+        else if support's entityType = "sphere-surface":
+            set supportKind to the string form of "sphere"
+        else if support's entityType = "torus-surface":
+            set supportKind to the string form of "torus"
+        add cad sat token (a cad sat ident token of supportKind) to (the address of record)
+        loop index from 1 to the length of support's tokens's values:
+            add cad sat token (the cad sat clone of (the item at index in support's tokens's values)) to (the address of record)
+        add cad sat token (a cad sat ident token of "}") to (the address of record)
+        add cad sat token (a cad sat float token of 0.0) to (the address of record)
+        add cad sat token (a cad sat float token of 0.0) to (the address of record)
+        return record
+
 function append cad faceted body {cad body:body} to {a pointer to a cad sat document:document}:
     execute:
         set flaws to the cad flaws of body
@@ -149,7 +205,21 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
         set surfaceBase to curveBase + curveCount
         set edgeBase to surfaceBase + surfaceCount
         set coedgeBase to edgeBase + edgeCount
-        set loopBase to coedgeBase + coedgeCount
+        set coedges to the cad keys of body's coedges
+        set coedgeIds to an empty list of an integer
+        set pcurveIds to an empty list of an integer
+        set nextId to coedgeBase
+        loop index from 0 to coedgeCount:
+            set coedge to the cad node pointer for (the item at index in coedges) in body's coedges
+            set pcurveId to -1
+            if coedge's pcurve's valid:
+                if coedge's pcurve's value's kind = 0:
+                    set pcurveId to nextId
+                    increment nextId
+            append pcurveId to pcurveIds
+            append nextId to coedgeIds
+            increment nextId
+        set loopBase to nextId
         set faceBase to loopBase + loopCount
         set shellBase to faceBase + faceCount
         set lumpBase to shellBase + shellCount
@@ -170,7 +240,7 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
             if curve's kind = 0:
                 add cad sat token (the cad acis position of (curve's line's origin)) to (the address of curveRecord)
                 add cad sat token (the cad acis position of (curve's line's direction)) to (the address of curveRecord)
-            else:
+            else if curve's kind = 1:
                 set circle to curve's circle
                 set normal to the cad normal of circle's plane
                 set majorAxis to circle's plane's xAxis scaled by circle's radius
@@ -179,31 +249,79 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
                 add cad sat token (the cad acis position of (normal's value)) to (the address of curveRecord)
                 add cad sat token (the cad acis position of majorAxis) to (the address of curveRecord)
                 add cad sat token (a cad sat float token of 1.0) to (the address of curveRecord)
+            else:
+                set ellipse to curve's ellipse
+                set normal to the cad normal of ellipse's plane
+                set majorAxis to ellipse's plane's xAxis scaled by ellipse's majorRadius
+                set curveRecord to a cad acis initial record of "ellipse-curve"
+                add cad sat token (the cad acis position of ellipse's plane's origin) to (the address of curveRecord)
+                add cad sat token (the cad acis position of normal's value) to (the address of curveRecord)
+                add cad sat token (the cad acis position of majorAxis) to (the address of curveRecord)
+                add cad sat token (a cad sat float token of (ellipse's minorRadius / ellipse's majorRadius)) to (the address of curveRecord)
             ignore add cad sat record curveRecord to document
 
         set surfaces to the cad keys of body's surfaces
         loop index from 0 to surfaceCount:
             set surface to the cad node pointer for (the item at index in surfaces) in body's surfaces
             set frame to surface's plane
-            if surface's kind = 3:
+            if surface's kind = 1:
+                set frame to surface's cylinder's base
+            else if surface's kind = 2:
+                set frame to surface's cone's base
+            else if surface's kind = 3:
                 set frame to surface's sphere's frame
+            else if surface's kind = 4:
+                set frame to surface's torus's frame
             set normal to the cad normal of frame
             set surfaceRecord to a cad acis initial record of "plane-surface"
             if surface's kind = 0:
                 add cad sat token (the cad acis position of (frame's origin)) to (the address of surfaceRecord)
                 add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
                 add cad sat token (the cad acis position of (frame's xAxis)) to (the address of surfaceRecord)
-            else:
+            else if surface's kind = 3:
                 set surfaceRecord to a cad acis initial record of "sphere-surface"
                 add cad sat token (the cad acis position of (frame's origin)) to (the address of surfaceRecord)
                 add cad sat token (a cad sat float token of (surface's sphere's radius)) to (the address of surfaceRecord)
                 add cad sat token (the cad acis position of (frame's xAxis)) to (the address of surfaceRecord)
                 add cad sat token (the cad acis position of (normal's value)) to (the address of surfaceRecord)
+            else if (surface's kind = 1) or (surface's kind = 2):
+                set radius to surface's cylinder's radius
+                set halfAngle to 0.0 as a 64 bit floating-point number
+                if surface's kind = 2:
+                    set radius to surface's cone's radius
+                    set halfAngle to surface's cone's halfAngle
+                set sineValue to the sine of (the negative of halfAngle)
+                set cosineValue to the cosine of (the negative of halfAngle)
+                set surfaceRecord to a cad acis initial record of "cone-surface"
+                add cad sat token (the cad acis position of frame's origin) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of normal's value) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of (frame's xAxis scaled by radius)) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of 1.0) to (the address of surfaceRecord)
+                add cad sat token (a cad sat ident token of "I") to (the address of surfaceRecord)
+                add cad sat token (a cad sat ident token of "I") to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of sineValue) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of cosineValue) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of radius) to (the address of surfaceRecord)
+            else:
+                set surfaceRecord to a cad acis initial record of "torus-surface"
+                add cad sat token (the cad acis position of frame's origin) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of normal's value) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of surface's torus's majorRadius) to (the address of surfaceRecord)
+                add cad sat token (a cad sat float token of surface's torus's minorRadius) to (the address of surfaceRecord)
+                add cad sat token (the cad acis position of frame's xAxis) to (the address of surfaceRecord)
             ignore add cad sat record surfaceRecord to document
 
         loop index from 0 to edgeCount:
             ignore cad acis add "edge" to document
         loop index from 0 to coedgeCount:
+            if (the item at index in pcurveIds) >= 0:
+                set coedge to the cad node pointer for (the item at index in coedges) in body's coedges
+                set ring to the cad node pointer for (coedge's owner) in body
+                set face to the cad node pointer for (ring's owner) in body
+                set supportId to surfaceBase + (face's surface's index as an integer)
+                set supportLookup to the cad sat record numbered supportId in (@intrinsic("dereference", document))
+                set record to a cad acis line pcurve for coedge's pcurve's value on (supportLookup's value)
+                ignore add cad sat record record to document
             ignore cad acis add "coedge" to document
         loop index from 0 to loopCount:
             ignore cad acis add "loop" to document
@@ -237,7 +355,7 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
             add cad sat token (a cad sat float token of (edge's startParameter)) to (the address of record)
             add cad sat token (the cad acis pointer to (before + ((2 * (edge's end's index as an integer)) + 1))) to (the address of record)
             add cad sat token (a cad sat float token of (edge's endParameter)) to (the address of record)
-            add cad sat token (the cad acis pointer to (the cad acis first in (edge's coedges's values) from coedgeBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first mapped in (edge's coedges's values) using coedgeIds)) to (the address of record)
             add cad sat token (the cad acis pointer to (curveBase + (edge's curve's index as an integer))) to (the address of record)
             add cad sat token (the cad acis sense of true) to (the address of record)
             cad acis store record at edgeId in document
@@ -255,22 +373,22 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
                 set partner to the cad partner of coedgeKey in body
                 set partnerId to -1
                 if partner's valid:
-                    set partnerId to coedgeBase + (partner's value's index as an integer)
-                set coedgeId to coedgeBase + (coedgeKey's index as an integer)
+                    set partnerId to the item at (partner's value's index as an integer) in coedgeIds
+                set coedgeId to the item at (coedgeKey's index as an integer) in coedgeIds
                 set record to a cad acis fresh record of "coedge" at coedgeId
-                add cad sat token (the cad acis pointer to (coedgeBase + (nextKey's index as an integer))) to (the address of record)
-                add cad sat token (the cad acis pointer to (coedgeBase + (previousKey's index as an integer))) to (the address of record)
+                add cad sat token (the cad acis pointer to (the item at (nextKey's index as an integer) in coedgeIds)) to (the address of record)
+                add cad sat token (the cad acis pointer to (the item at (previousKey's index as an integer) in coedgeIds)) to (the address of record)
                 add cad sat token (the cad acis pointer to partnerId) to (the address of record)
                 add cad sat token (the cad acis pointer to (edgeBase + (coedge's edge's index as an integer))) to (the address of record)
                 add cad sat token (the cad acis sense of (coedge's forward)) to (the address of record)
                 add cad sat token (the cad acis pointer to (loopBase + index)) to (the address of record)
-                add cad sat token (the cad acis pointer to -1) to (the address of record)
+                add cad sat token (the cad acis pointer to (the item at (coedgeKey's index as an integer) in pcurveIds)) to (the address of record)
                 cad acis store record at coedgeId in document
             set faceOwner to the cad node pointer for ring's owner in body
             set ringId to loopBase + index
             set record to a cad acis fresh record of "loop" at ringId
             add cad sat token (the cad acis pointer to (the cad acis successor of slot index in (faceOwner's loops's values) from loopBase)) to (the address of record)
-            add cad sat token (the cad acis pointer to (the cad acis first in uses from coedgeBase)) to (the address of record)
+            add cad sat token (the cad acis pointer to (the cad acis first mapped in uses using coedgeIds)) to (the address of record)
             add cad sat token (the cad acis pointer to (faceBase + (ring's owner's index as an integer))) to (the address of record)
             cad acis store record at ringId in document
 
@@ -322,6 +440,9 @@ function append cad faceted body {cad body:body} to {a pointer to a cad sat docu
         free curves
         free surfaces
         free edges
+        free coedges
+        free coedgeIds
+        free pcurveIds
         free rings
         free faces
         free shells
