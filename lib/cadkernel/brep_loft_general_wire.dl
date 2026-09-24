@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: MPL-2.0
+# Section-wire ordering and span grouping from pinned src/brep/loft_general.rs
+# at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Inputs are borrowed; result lists retain independently owned Bezier controls.
+import lib/cadkernel/brep_loft_general_spans.dl
+
+class:
+    patterns:
+        [a|] cad loft general wire
+    members:
+        spans as the type of (a cad topology list of a cad loft general Bezier span)
+        closed as a boolean
+
+# Error codes: 1 invalid profile plane, missing outer wire, or open holes;
+# 2 empty wire; 3 unsupported curve; 4 disconnected wire;
+# 11-16 the six rational-span refusals in the imported spans module.
+class:
+    patterns:
+        [a|] cad loft general wire result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        value as a cad loft general wire
+
+class:
+    patterns:
+        [a|] cad loft general profile result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        wires as the type of (a cad topology list of a cad loft general wire)
+
+local function check cad loft general wire expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+
+local function cad loft general wire failure {integer:code}:
+    execute:
+        set empty to @intrinsic("construct", a cad loft general wire, a cad topology list of a cad loft general Bezier span, false)
+        return @intrinsic("construct", a cad loft general wire result, false, code, empty)
+
+local function cad loft general profile failure {integer:code}:
+    execute:
+        return @intrinsic("construct", a cad loft general profile result, false, code, a cad topology list of a cad loft general wire)
+
+local function cad loft general connection tolerance for {cad topology list:curves}:
+    execute:
+        set minimumX to (1.0 / 0.0)
+        set minimumY to (1.0 / 0.0)
+        set minimumZ to (1.0 / 0.0)
+        set maximumX to (-1.0 / 0.0)
+        set maximumY to (-1.0 / 0.0)
+        set maximumZ to (-1.0 / 0.0)
+        set coordinate to 1.0
+        loop curveIndex from 0 to the length of curves's values:
+            set shape to the item at curveIndex in curves's values
+            loop pointIndex from 0 to the length of shape's controls:
+                set point to the item at pointIndex in shape's controls
+                if point's x < minimumX:
+                    set minimumX to point's x
+                if point's y < minimumY:
+                    set minimumY to point's y
+                if point's z < minimumZ:
+                    set minimumZ to point's z
+                if point's x > maximumX:
+                    set maximumX to point's x
+                if point's y > maximumY:
+                    set maximumY to point's y
+                if point's z > maximumZ:
+                    set maximumZ to point's z
+                set coordinate to the maximum of coordinate and (the absolute value of point's x)
+                set coordinate to the maximum of coordinate and (the absolute value of point's y)
+                set coordinate to the maximum of coordinate and (the absolute value of point's z)
+        set extent to the maximum of 1.0 and (maximumX - minimumX)
+        set extent to the maximum of extent and (maximumY - minimumY)
+        set extent to the maximum of extent and (maximumZ - minimumZ)
+        return the maximum of (extent * 1e-9) and ((coordinate * 2.220446049250313e-16) * 8.0)
+
+function the cad loft general section chain on {cad plane:plane} through {a pointer to a list:pieces} closing {boolean:closing}:
+    execute:
+        check cad loft general wire (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in pieces))
+        set pieceCount to the length of pieces
+        if pieceCount = 0:
+            return cad loft general wire failure 2
+        set curves to a cad topology list of the type of (an empty cad rational curve3)
+        loop index from 0 to pieceCount:
+            set prepared to the cad rational builder of (the item at index in pieces)
+            if prepared's valid = false:
+                return cad loft general wire failure 3
+            append (the cad lift of prepared's value onto plane) to curves's values
+        set tolerance to cad loft general connection tolerance for curves
+
+        loop attempt from 0 to 2:
+            set aligned to a cad topology list of the type of (an empty cad rational curve3)
+            set first to the item at 0 in curves's values
+            if attempt = 0:
+                append (the cad clone of first) to aligned's values
+            else:
+                append (the cad reverse of first) to aligned's values
+            set connected to true
+            set index to 1
+            loop while connected and (index < pieceCount):
+                set previous to the cad curve of (the last item of aligned's values)
+                set candidate to the cad curve of (the item at index in curves's values)
+                if (previous's valid = false) or (candidate's valid = false):
+                    set connected to false
+                else:
+                    set tail to the cad point on previous's value at knot 1.0
+                    set start to the cad point on candidate's value at knot 0.0
+                    set finish to the cad point on candidate's value at knot 1.0
+                    if (the cad distance from tail to start) <= tolerance:
+                        append (the cad clone of (the item at index in curves's values)) to aligned's values
+                    else if (the cad distance from tail to finish) <= tolerance:
+                        append (the cad reverse of (the item at index in curves's values)) to aligned's values
+                    else:
+                        set connected to false
+                increment index
+            if connected and closing:
+                set firstCurve to the cad curve of (the item at 0 in aligned's values)
+                set lastCurve to the cad curve of (the last item of aligned's values)
+                if (firstCurve's valid = false) or (lastCurve's valid = false):
+                    set connected to false
+                else if (the cad distance from (the cad point on firstCurve's value at knot 0.0) to (the cad point on lastCurve's value at knot 1.0)) > tolerance:
+                    set connected to false
+            if connected:
+                set grouped to a cad topology list of a cad loft general Bezier span
+                set divisor to pieceCount as a 64 bit floating-point number
+                loop curveIndex from 0 to pieceCount:
+                    set refined to the cad loft general decomposition of (the item at curveIndex in aligned's values)
+                    if refined's valid = false:
+                        return cad loft general wire failure (10 + refined's errorCode)
+                    loop spanIndex from 0 to the length of refined's spans's values:
+                        set piece to the item at spanIndex in refined's spans's values
+                        set start to ((curveIndex as a 64 bit floating-point number) + piece's start) / divisor
+                        set finish to ((curveIndex as a 64 bit floating-point number) + piece's end) / divisor
+                        append (@intrinsic("construct", a cad loft general Bezier span, start, finish, piece's controls)) to grouped's values
+                set output to @intrinsic("construct", a cad loft general wire, grouped, closing)
+                return @intrinsic("construct", a cad loft general wire result, true, 0, output)
+        return cad loft general wire failure 4
+
+# This is the profile guard and per-wire map from prepared(Profile), without
+# section-to-section alignment, area testing, or body construction.
+function the cad loft general section set on {cad plane:plane} through {a pointer to a list:wireInputs} closing {boolean:closing}:
+    execute:
+        check cad loft general wire (0 as a pointer to a cad topology list) against (0 as a pointer to the type of (the item at 0 in wireInputs))
+        set normal to the cad normal of plane
+        if ((normal's valid = false) or ((the length of wireInputs) = 0)) or ((closing = false) and ((the length of wireInputs) != 1)):
+            return cad loft general profile failure 1
+        set assembled to a cad topology list of a cad loft general wire
+        loop index from 0 to the length of wireInputs:
+            set input to the item at index in wireInputs
+            set built to the cad loft general section chain on plane through input's values closing closing
+            if built's valid = false:
+                return cad loft general profile failure built's errorCode
+            append built's value to assembled's values
+        return @intrinsic("construct", a cad loft general profile result, true, 0, assembled)

@@ -1,0 +1,107 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_wire.dl
+
+class:
+    patterns:
+        [a|] loft general wire input
+    members:
+        position as an integer
+
+function loft general wire next {a pointer to a loft general wire input:reader}:
+    execute:
+        set raw to the argument at reader's position in the command line arguments
+        increment reader's position
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of raw, 0 as a pointer)
+
+function loft general wire point2 from {a pointer to a loft general wire input:reader}:
+    execute:
+        return a cad vector2 with x (loft general wire next reader) and y (loft general wire next reader)
+
+function loft general wire point3 from {a pointer to a loft general wire input:reader}:
+    execute:
+        return a cad vector3 with x (loft general wire next reader), y (loft general wire next reader) and z (loft general wire next reader)
+
+function loft general wire curve from {a pointer to a loft general wire input:reader}:
+    execute:
+        set kind to (loft general wire next reader) as an integer
+        if kind = 0:
+            return the cad curve2 of (a cad line2 from (loft general wire point2 from reader) to (loft general wire point2 from reader))
+        if kind = 1:
+            return the cad curve2 of (a cad circle2 at (loft general wire point2 from reader) with radius (loft general wire next reader))
+        if kind = 2:
+            return the cad curve2 of (a cad arc2 at (loft general wire point2 from reader) with radius (loft general wire next reader) from (loft general wire next reader) to (loft general wire next reader))
+        if kind = 3:
+            set centre to loft general wire point2 from reader
+            set major to loft general wire next reader
+            set minor to loft general wire next reader
+            set axis to loft general wire point2 from reader
+            set start to loft general wire next reader
+            set finish to loft general wire next reader
+            return the cad curve2 of (a cad ellipse arc2 on (a cad ellipse at centre with radii major and minor along axis) from start to finish)
+        if kind = 4:
+            set degree to (loft general wire next reader) as an integer
+            set count to (loft general wire next reader) as an integer
+            set points to an empty list of a cad vector2
+            loop index from 0 to count:
+                append (loft general wire point2 from reader) to points
+            set count to (loft general wire next reader) as an integer
+            set knots to an empty list of a 64 bit floating-point number
+            loop index from 0 to count:
+                append (loft general wire next reader) to knots
+            set count to (loft general wire next reader) as an integer
+            set weights to an empty list of a 64 bit floating-point number
+            loop index from 0 to count:
+                append (loft general wire next reader) to weights
+            set built to the cad nurbs curve2 of degree degree with controls points, knots knots and weights weights
+            free points
+            free knots
+            free weights
+            if built's valid = false:
+                @intrinsic("call", "libc", "exit", nothing, 3)
+            return the cad curve2 of built's value
+        if kind = 5:
+            return the cad curve2 of (a cad ray2 from (loft general wire point2 from reader) along (loft general wire point2 from reader))
+        if kind = 6:
+            return the cad curve2 of (a cad xline2 through (loft general wire point2 from reader) along (loft general wire point2 from reader))
+        @intrinsic("call", "libc", "exit", nothing, 3)
+        return the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+
+function loft general wire emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+allocate one slot of (a new loft general wire input) and set reader to it
+set origin to loft general wire point3 from reader
+set xAxis to loft general wire point3 from reader
+set yAxis to loft general wire point3 from reader
+set plane to a cad plane with origin origin, x axis xAxis and y axis yAxis
+set closing to (loft general wire next reader) != 0.0
+set count to (loft general wire next reader) as an integer
+set wires to a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+loop index from 0 to count:
+    set pieceCount to (loft general wire next reader) as an integer
+    set parts to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+    loop partIndex from 0 to pieceCount:
+        append (loft general wire curve from reader) to parts's values
+    append parts to wires's values
+@intrinsic("call", "libc", "free", nothing, reader)
+set prepared to the cad loft general section set on plane through wires's values closing closing
+loft general wire emit (prepared's valid as an integer)
+loft general wire emit prepared's errorCode
+loft general wire emit (the length of prepared's wires's values)
+if prepared's valid:
+    loop index from 0 to the length of prepared's wires's values:
+        set chain to the item at index in prepared's wires's values
+        loft general wire emit (chain's closed as an integer)
+        loft general wire emit (the length of chain's spans's values)
+        loop spanIndex from 0 to the length of chain's spans's values:
+            set span to the item at spanIndex in chain's spans's values
+            loft general wire emit span's start
+            loft general wire emit span's end
+            loft general wire emit (the length of span's controls's values)
+            loop controlIndex from 0 to the length of span's controls's values:
+                set point to the item at controlIndex in span's controls's values
+                loft general wire emit point's x
+                loft general wire emit point's y
+                loft general wire emit point's z
+                loft general wire emit point's w

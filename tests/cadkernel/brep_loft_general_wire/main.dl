@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_wire.dl
+
+function check loft general wire {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function loft general wire point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function loft general wire line from {cad vector2:start} to {cad vector2:finish}:
+    execute:
+        return the cad curve2 of (a cad line2 from start to finish)
+
+function loft general wire square from {a number:low} to {a number:high}:
+    execute:
+        set bottomLeft to loft general wire point low low
+        set bottomRight to loft general wire point high low
+        set topRight to loft general wire point high high
+        set topLeft to loft general wire point low high
+        set edges to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        append (loft general wire line from bottomLeft to bottomRight) to edges's values
+        append (loft general wire line from bottomRight to topRight) to edges's values
+        append (loft general wire line from topRight to topLeft) to edges's values
+        append (loft general wire line from topLeft to bottomLeft) to edges's values
+        return edges
+
+function loft general wire returned profile:
+    execute:
+        set outer to loft general wire square from 0 to 4
+        set inner to loft general wire square from 1 to 2
+        set inputs to a cad topology list of the type of outer
+        append outer to inputs's values
+        append inner to inputs's values
+        set prepared to the cad loft general section set on (the cad xy plane) through inputs's values closing true
+        set inputs to a new (the type of inputs)
+        set outer to a new (the type of outer)
+        set inner to a new (the type of inner)
+        return prepared
+
+set first to loft general wire line from (loft general wire point 1 0) to (loft general wire point 0 0)
+set second to loft general wire line from (loft general wire point 1 0) to (loft general wire point 1 1)
+set parts to a list containing first
+append second to parts
+set chain to the cad loft general section chain on (the cad xy plane) through parts closing false
+check loft general wire (chain's valid)
+check loft general wire ((the length of chain's value's spans's values) = 2)
+set leading to the item at 0 in chain's value's spans's values
+check loft general wire (((the item at 0 in leading's controls's values)'s x) = 0.0)
+check loft general wire ((leading's start = 0.0) and (leading's end = 0.5))
+replace item at index 0 in parts with (loft general wire line from (loft general wire point 90 90) to (loft general wire point 91 91))
+free parts
+check loft general wire (((the item at 0 in leading's controls's values)'s x) = 0.0)
+print "reverse_first_piece_and_group_two_spans" as a line
+
+set prepared to loft general wire returned profile
+check loft general wire (prepared's valid)
+check loft general wire ((the length of prepared's wires's values) = 2)
+set exterior to the item at 0 in prepared's wires's values
+set interior to the item at 1 in prepared's wires's values
+check loft general wire (exterior's closed and interior's closed)
+check loft general wire (((the length of exterior's spans's values) = 4) and ((the length of interior's spans's values) = 4))
+print "outer_and_hole_wires_survive_input_release" as a line
+
+set vacantParts to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+set outer to loft general wire square from 0 to 4
+set inner to loft general wire square from 1 to 2
+set inputs to a cad topology list of the type of outer
+append outer to inputs's values
+append inner to inputs's values
+set invalid to the cad loft general section set on (the cad xy plane) through inputs's values closing false
+check loft general wire ((invalid's valid = false) and (invalid's errorCode = 1))
+set inputs to a cad topology list of the type of outer
+append outer to inputs's values
+append vacantParts to inputs's values
+set invalid to the cad loft general section set on (the cad xy plane) through inputs's values closing true
+check loft general wire ((invalid's valid = false) and (invalid's errorCode = 2))
+set separated to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+append (loft general wire line from (loft general wire point 1 1) to (loft general wire point 2 1)) to separated's values
+append (loft general wire line from (loft general wire point 9 9) to (loft general wire point 10 9)) to separated's values
+set inputs to a cad topology list of the type of outer
+append outer to inputs's values
+append separated to inputs's values
+set invalid to the cad loft general section set on (the cad xy plane) through inputs's values closing true
+check loft general wire ((invalid's valid = false) and (invalid's errorCode = 4))
+print "open_holes_empty_holes_and_disconnected_holes_are_refused" as a line
+
+loop iteration from 0 to 2000:
+    set temporary to loft general wire returned profile
+    check loft general wire (temporary's valid)
+    set retained to temporary
+    set temporary to a new (the type of temporary)
+    check loft general wire ((the length of retained's wires's values) = 2)
+    set kept to the item at 1 in retained's wires's values
+    check loft general wire ((the length of kept's spans's values) = 4)
+print "repeated_result_retention_preserves_nested_span_storage" as a line
