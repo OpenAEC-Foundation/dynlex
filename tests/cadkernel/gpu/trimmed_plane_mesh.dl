@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/graphics.dl
+import lib/cadkernel/constrained2.dl
+import tests/cadkernel/gpu/plane_buffer.dl
+
+set outer to an empty list of a cad vector2
+append (a cad vector2 with x 0.0 and y 0.0) to outer
+append (a cad vector2 with x 4.0 and y 0.0) to outer
+append (a cad vector2 with x 4.0 and y 4.0) to outer
+append (a cad vector2 with x 0.0 and y 4.0) to outer
+set hole to an empty list of a cad vector2
+append (a cad vector2 with x 1.0 and y 1.0) to hole
+append (a cad vector2 with x 1.0 and y 3.0) to hole
+append (a cad vector2 with x 3.0 and y 3.0) to hole
+append (a cad vector2 with x 3.0 and y 1.0) to hole
+set rings to an empty list of the type of outer
+append outer to rings
+append hole to rings
+set built to the cad constrained mesh of rings rings
+if (the valid of built) = false:
+    return 1
+set meshValue to the value of built
+set triangles to the cad constrained triangles of meshValue
+set parameters to an empty list of a cad vector2
+set topologyValid to (the length of triangles) > 0
+set totalArea to 0.0 as a 64 bit floating-point number
+loop triangleIndex from 0 to the length of triangles:
+    set triangleValue to the item at triangleIndex in triangles
+    append triangleValue's first to parameters
+    append triangleValue's second to parameters
+    append triangleValue's third to parameters
+    set centreX to ((triangleValue's first's x + triangleValue's second's x) + triangleValue's third's x) / 3.0
+    set centreY to ((triangleValue's first's y + triangleValue's second's y) + triangleValue's third's y) / 3.0
+    set firstEdgeX to triangleValue's second's x - triangleValue's first's x
+    set firstEdgeY to triangleValue's second's y - triangleValue's first's y
+    set secondEdgeX to triangleValue's third's x - triangleValue's first's x
+    set secondEdgeY to triangleValue's third's y - triangleValue's first's y
+    set doubleArea to (firstEdgeX * secondEdgeY) - (firstEdgeY * secondEdgeX)
+    set totalArea to totalArea + ((the absolute value of doubleArea) * 0.5)
+    if ((centreX > 1.0) and (centreX < 3.0)) and ((centreY > 1.0) and (centreY < 3.0)):
+        set topologyValid to false
+if (the absolute value of (totalArea - 12.0)) > 1e-9:
+    set topologyValid to false
+if (the length of parameters) > 64:
+    set topologyValid to false
+if topologyValid = false:
+    return 1
+
+set plane to a cad plane with origin (a cad vector3 with x 10.0, y (0.0 - 20.0) and z 30.0), x axis (a cad vector3 with x 1.5, y 2.0 and z 0.25) and y axis (a cad vector3 with x (0.0 - 0.75), y 0.5 and z 3.0)
+set values to a cad GPU plane buffer for plane with parameters parameters
+set window to a new hidden window with width 64 and height 64
+if window = (0 as a pointer to a byte):
+    print (the current graphics error message) as a line
+    return 1
+
+set gpuAvailable to Vulkan 64 bit compute is available for window
+set dispatched to run compute shader at "build/plane-lift.spv" for window with storage ((the data of values) as a pointer to a byte) of (2632 as a word sized unsigned integer) bytes in 1 workgroups
+if gpuAvailable = false:
+    if dispatched:
+        return 1
+    print "64-bit GPU compute unavailable; trimmed mesh dispatch rejected" as a line
+else:
+    if dispatched = false:
+        print (the current graphics error message) as a line
+        return 1
+    set pointsMatch to true
+    loop index from 0 to the length of parameters:
+        set point to the cad point at (the item at index in parameters) on plane
+        if (the item at (137 + index * 3) in values) != (the x of point):
+            set pointsMatch to false
+        if (the item at (138 + index * 3) in values) != (the y of point):
+            set pointsMatch to false
+        if (the item at (139 + index * 3) in values) != (the z of point):
+            set pointsMatch to false
+    if pointsMatch = false:
+        return 1
+    print "trimmed planar GPU mesh matches the CPU kernel" as a line
+
+close window
+free values
+free parameters
+free triangles
+free cad constrained mesh meshValue
+free cad constrained mesh result built
+loop ringIndex from 0 to the length of rings:
+    free (the item at ringIndex in rings)
+free rings

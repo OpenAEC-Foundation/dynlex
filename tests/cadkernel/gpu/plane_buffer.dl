@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/plane.dl
+import lib/list.dl
+
+# One workgroup processes 64 UV pairs. The storage buffer contains the frame,
+# padded UV inputs, then 64 output positions as binary64 scalar values.
+function a cad GPU plane buffer for {cad plane:plane} with parameters {a pointer to a list:parameters}:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        append (the x of (the origin of plane)) to values
+        append (the y of (the origin of plane)) to values
+        append (the z of (the origin of plane)) to values
+        append (the x of (the xAxis of plane)) to values
+        append (the y of (the xAxis of plane)) to values
+        append (the z of (the xAxis of plane)) to values
+        append (the x of (the yAxis of plane)) to values
+        append (the y of (the yAxis of plane)) to values
+        append (the z of (the yAxis of plane)) to values
+        loop index from 0 to 64:
+            set parametersAtIndex to the cad zero vector2
+            if index < the length of parameters:
+                set parametersAtIndex to the item at index in parameters
+            append (the x of parametersAtIndex) to values
+            append (the y of parametersAtIndex) to values
+        loop index from 0 to 192:
+            append (0.0 - 99.0) to values
+        return values

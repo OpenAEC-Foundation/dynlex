@@ -95,19 +95,23 @@ def main() -> None:
     run(dispatch_program)
 
     observed = set()
-    for optimization in ("O0", "O2"):
-        output = BUILD / f"gpu-verify-plane-{optimization}{EXECUTABLE_SUFFIX}"
-        run(compiler, TESTS / "plane_lift.dl", f"-{optimization}", "-o", output)
-        result = run(output)
-        if "64 planar GPU points match the CPU kernel" in result.stdout:
-            observed.add("gpu")
-        elif "64-bit GPU compute unavailable; dispatch rejected" in result.stdout:
-            observed.add("fallback")
-        else:
-            raise AssertionError(f"missing plane result: {result.stdout}{result.stderr}")
+    for source, gpu_result, fallback_result in (
+        ("plane_lift.dl", "64 planar GPU points match the CPU kernel", "64-bit GPU compute unavailable; dispatch rejected"),
+        ("trimmed_plane_mesh.dl", "trimmed planar GPU mesh matches the CPU kernel", "64-bit GPU compute unavailable; trimmed mesh dispatch rejected"),
+    ):
+        for optimization in ("O0", "O2"):
+            output = BUILD / f"gpu-verify-{source.removesuffix('.dl')}-{optimization}{EXECUTABLE_SUFFIX}"
+            run(compiler, TESTS / source, f"-{optimization}", "-o", output)
+            result = run(output)
+            if gpu_result in result.stdout:
+                observed.add("gpu")
+            elif fallback_result in result.stdout:
+                observed.add("fallback")
+            else:
+                raise AssertionError(f"missing {source} result: {result.stdout}{result.stderr}")
     if len(observed) != 1 or (args.expect != "either" and args.expect not in observed):
         raise AssertionError(f"unexpected GPU capability path: {observed}")
-    print(f"compute shaders, diagnostics, dispatch, and CPU/GPU plane: {observed.pop()} (O0, O2)")
+    print(f"compute shaders, diagnostics, dispatch, and CPU/GPU planar meshes: {observed.pop()} (O0, O2)")
 
 
 if __name__ == "__main__":
