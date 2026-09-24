@@ -1,0 +1,202 @@
+# SPDX-License-Identifier: MPL-2.0
+# In-memory geometry lowering from the pinned src/acis/lower.rs.
+import lib/cadkernel/acis_records.dl
+import lib/cadkernel/brep_topology.dl
+
+class:
+    patterns:
+        [a|] cad acis lower result
+    members:
+        valid as a boolean
+        written as an integer
+        failure as an integer
+        source as a 32 bit unsigned integer
+        found as a string
+        expected as a string
+
+local function a cad acis lower success with {an integer:count}:
+    execute:
+        return @intrinsic("construct", a cad acis lower result, true, count, 0, 0 as a 32 bit unsigned integer, "" as a string, "" as a string)
+
+local function a cad acis lower missing {a 32 bit unsigned integer:sourceId}:
+    execute:
+        return @intrinsic("construct", a cad acis lower result, false, 0, 1, sourceId, "" as a string, "" as a string)
+
+local function a cad acis lower wrong record found {a string:actual} expected {a string:wanted}:
+    execute:
+        return @intrinsic("construct", a cad acis lower result, false, 0, 2, 0 as a 32 bit unsigned integer, actual, wanted)
+
+local function a cad acis lower unsupported surface:
+    execute:
+        return @intrinsic("construct", a cad acis lower result, false, 0, 3, 0 as a 32 bit unsigned integer, "" as a string, "" as a string)
+
+local function a cad acis lower unsupported curve:
+    execute:
+        return @intrinsic("construct", a cad acis lower result, false, 0, 4, 0 as a 32 bit unsigned integer, "" as a string, "" as a string)
+
+local function the cad acis lower slot for {an integer:id} in {cad sat document:document}:
+    execute:
+        loop position from 0 to the length of document's records's values:
+            set candidate to the item at position in document's records's values
+            if candidate's recordId = id:
+                return position
+        return -1
+
+local function the cad acis lower record at {an integer:slot} in {cad sat document:document}:
+    execute:
+        return the item at slot in document's records's values
+
+local function the cad acis lower geometry slot for {a 32 bit unsigned integer:sourceId} of type {a string:kind} at token {an integer:tokenIndex} ordinal {boolean:ordinal} in {cad sat document:document}:
+    execute:
+        set sourceSlot to the cad acis lower slot for (sourceId as an integer) in document
+        if sourceSlot < 0:
+            return -1
+        set sourceRecord to the cad acis lower record at sourceSlot in document
+        if (sourceRecord is cad sat type kind) = false:
+            return -1
+        if ordinal:
+            set pointerValue to the cad sat pointer token number tokenIndex in sourceRecord
+        else:
+            set pointerValue to the cad sat pointer token at tokenIndex in sourceRecord
+        if pointerValue's valid = false:
+            return -1
+        if pointerValue's value's index < 0:
+            return -1
+        return the cad acis lower slot for (pointerValue's value's index) in document
+
+local function the cad acis lower metadata of {cad sat record:original}:
+    execute:
+        set preserved to a cad sat record numbered original's recordId of type original's entityType
+        set preserved's hasSubType to original's hasSubType
+        set preserved's subType to original's subType
+        set preserved's attribute to original's attribute
+        set preserved's subtypeId to original's subtypeId
+        set preserved's hasRawText to original's hasRawText
+        set preserved's rawText to original's rawText
+        return preserved
+
+local function the cad acis lower position of {cad vector3:vector}:
+    execute:
+        return a cad sat position token at vector's x, vector's y, vector's z
+
+local function lower cad acis face {cad face key:key} from {cad body:body} into {a pointer to a cad sat document:document}:
+    execute:
+        set faceNode to the cad node pointer for key in body
+        if faceNode's provenance's kind != 2:
+            return a cad acis lower success with 0
+        set sourceId to faceNode's provenance's reference's index
+        set surfaceNode to the cad node pointer for (faceNode's surface) in body
+        if surfaceNode = (0 as a pointer to a cad surface):
+            return a cad acis lower unsupported surface
+        if surfaceNode's kind != 0:
+            return a cad acis lower unsupported surface
+        set normal to the cad normal of (surfaceNode's plane)
+        if normal's valid = false:
+            return a cad acis lower unsupported surface
+        set targetSlot to the cad acis lower geometry slot for sourceId of type "face" at token 5 ordinal false in (@intrinsic("dereference", document))
+        if targetSlot < 0:
+            return a cad acis lower missing sourceId
+        set destination to the cad acis lower record at targetSlot in (@intrinsic("dereference", document))
+        if destination's entityType != "plane-surface":
+            return a cad acis lower wrong record found (destination's entityType) expected "plane-surface"
+        set replacement to the cad acis lower metadata of destination
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (surfaceNode's plane's origin)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (normal's value)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (surfaceNode's plane's xAxis)) to (the address of replacement)
+        replace item at index targetSlot in document's records's values with replacement
+        return a cad acis lower success with 1
+
+local function lower cad acis edge {cad edge key:key} from {cad body:body} into {a pointer to a cad sat document:document}:
+    execute:
+        set edgeNode to the cad node pointer for key in body
+        if edgeNode's provenance's kind != 2:
+            return a cad acis lower success with 0
+        set sourceId to edgeNode's provenance's reference's index
+        set curveNode to the cad node pointer for (edgeNode's curve) in body
+        if curveNode = (0 as a pointer to a cad edge curve3):
+            return a cad acis lower unsupported curve
+        if curveNode's kind != 0:
+            return a cad acis lower unsupported curve
+        set targetSlot to the cad acis lower geometry slot for sourceId of type "edge" at token 6 ordinal false in (@intrinsic("dereference", document))
+        if targetSlot < 0:
+            return a cad acis lower missing sourceId
+        set destination to the cad acis lower record at targetSlot in (@intrinsic("dereference", document))
+        if destination's entityType != "straight-curve":
+            return a cad acis lower wrong record found (destination's entityType) expected "straight-curve"
+        set replacement to the cad acis lower metadata of destination
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (curveNode's line's origin)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (curveNode's line's direction)) to (the address of replacement)
+        replace item at index targetSlot in document's records's values with replacement
+        return a cad acis lower success with 1
+
+local function lower cad acis vertex {cad vertex key:key} from {cad body:body} into {a pointer to a cad sat document:document}:
+    execute:
+        set vertexNode to the cad node pointer for key in body
+        if vertexNode's provenance's kind != 2:
+            return a cad acis lower success with 0
+        set sourceId to vertexNode's provenance's reference's index
+        set targetSlot to the cad acis lower geometry slot for sourceId of type "vertex" at token 2 ordinal true in (@intrinsic("dereference", document))
+        if targetSlot < 0:
+            return a cad acis lower missing sourceId
+        set destination to the cad acis lower record at targetSlot in (@intrinsic("dereference", document))
+        if destination's entityType != "point":
+            return a cad acis lower wrong record found (destination's entityType) expected "point"
+        set replacement to the cad acis lower metadata of destination
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of replacement)
+        add cad sat token (the cad acis lower position of (vertexNode's point)) to (the address of replacement)
+        replace item at index targetSlot in document's records's values with replacement
+        return a cad acis lower success with 1
+
+function lower cad acis geometry of {cad body:body} into {a pointer to a cad sat document:document}:
+    execute:
+        set total to 0
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set outcome to lower cad acis face (the item at index in faceKeys) from body into document
+            if outcome's valid = false:
+                free faceKeys
+                return outcome
+            set total to total + outcome's written
+        free faceKeys
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set outcome to lower cad acis edge (the item at index in edgeKeys) from body into document
+            if outcome's valid = false:
+                free edgeKeys
+                return outcome
+            set total to total + outcome's written
+        free edgeKeys
+        set vertexKeys to the cad vertex keys of body
+        loop index from 0 to the length of vertexKeys:
+            set outcome to lower cad acis vertex (the item at index in vertexKeys) from body into document
+            if outcome's valid = false:
+                free vertexKeys
+                return outcome
+            set total to total + outcome's written
+        free vertexKeys
+        return a cad acis lower success with total
+
+function the pending cad acis geometry of {cad body:body}:
+    execute:
+        set total to 0
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set face to the cad node pointer for (the item at index in faceKeys) in body
+            if (face's provenance's kind) != 1:
+                increment total
+        free faceKeys
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set edge to the cad node pointer for (the item at index in edgeKeys) in body
+            if (edge's provenance's kind) != 1:
+                increment total
+        free edgeKeys
+        set vertexKeys to the cad vertex keys of body
+        loop index from 0 to the length of vertexKeys:
+            set vertex to the cad node pointer for (the item at index in vertexKeys) in body
+            if (vertex's provenance's kind) != 1:
+                increment total
+        free vertexKeys
+        return total

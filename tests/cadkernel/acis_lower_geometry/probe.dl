@@ -1,0 +1,235 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_lower_geometry.dl
+import lib/cadkernel/brep_make.dl
+
+function check acis lower {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a lower sample document:
+    execute:
+        set documentValue to an empty cad sat document
+        set entry to a cad sat record numbered -1 of type "point"
+        set entry's attribute to a cad sat pointer to 3
+        set entry's subtypeId to 12
+        set entry's hasRawText to true
+        set entry's rawText to "raw point"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "old-point") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "edge"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat float token of 0.0) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat float token of 1.0) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 6)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "forward") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "plane-surface"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "old-plane") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "marker"
+        add cad sat token (a cad sat ident token of "untouched") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "vertex"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 1)) to (the address of entry)
+        add cad sat token (a cad sat integer token of 7) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 0)) to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "face"
+        loop index from 0 to 5:
+            add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat pointer token for (a cad sat pointer to 2)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "forward") to (the address of entry)
+        add cad sat token (a cad sat ident token of "single") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set entry to a cad sat record numbered -1 of type "straight-curve"
+        add cad sat token (a cad sat pointer token for (the cad sat null pointer)) to (the address of entry)
+        add cad sat token (a cad sat ident token of "old-line") to (the address of entry)
+        ignore add cad sat record entry to (the address of documentValue)
+
+        set firstRecord to the item at 0 in documentValue's records's values
+        set secondRecord to the item at 5 in documentValue's records's values
+        replace item at index 0 in documentValue's records's values with secondRecord
+        replace item at index 5 in documentValue's records's values with firstRecord
+        set firstRecord to the item at 1 in documentValue's records's values
+        set secondRecord to the item at 6 in documentValue's records's values
+        replace item at index 1 in documentValue's records's values with secondRecord
+        replace item at index 6 in documentValue's records's values with firstRecord
+        set firstRecord to the item at 2 in documentValue's records's values
+        set secondRecord to the item at 4 in documentValue's records's values
+        replace item at index 2 in documentValue's records's values with secondRecord
+        replace item at index 4 in documentValue's records's values with firstRecord
+        return documentValue
+
+function clean lower nodes in {cad body:body}:
+    execute:
+        set cleanMark to the clean cad provenance of (a cad source reference for (99 as a 32 bit unsigned integer))
+        set faceKeys to the cad face keys of body
+        loop index from 0 to the length of faceKeys:
+            set node to the cad node pointer for (the item at index in faceKeys) in body
+            set node's provenance to cleanMark
+        free faceKeys
+        set edgeKeys to the cad edge keys of body
+        loop index from 0 to the length of edgeKeys:
+            set node to the cad node pointer for (the item at index in edgeKeys) in body
+            set node's provenance to cleanMark
+        free edgeKeys
+        set vertexKeys to the cad vertex keys of body
+        loop index from 0 to the length of vertexKeys:
+            set node to the cad node pointer for (the item at index in vertexKeys) in body
+            set node's provenance to cleanMark
+        free vertexKeys
+
+function dirty lower three in {cad body:body}:
+    execute:
+        set faceKeys to the cad face keys of body
+        set edgeKeys to the cad edge keys of body
+        set vertexKeys to the cad vertex keys of body
+        set faceNode to the cad node pointer for (the item at 0 in faceKeys) in body
+        set edgeNode to the cad node pointer for (the item at 0 in edgeKeys) in body
+        set vertexNode to the cad node pointer for (the item at 0 in vertexKeys) in body
+        set faceNode's provenance to the dirty cad provenance of (a cad source reference for (5 as a 32 bit unsigned integer))
+        set edgeNode's provenance to the dirty cad provenance of (a cad source reference for (1 as a 32 bit unsigned integer))
+        set vertexNode's provenance to the dirty cad provenance of (a cad source reference for (4 as a 32 bit unsigned integer))
+        set vertexNode's point to a cad vector3 with x 9.0, y 8.0 and z 7.0
+        set frame to a cad plane with origin (a cad vector3 with x 1.0, y 2.0 and z 3.0), x axis (a cad vector3 with x 0.0, y 1.0 and z 0.0) and y axis (a cad vector3 with x -1.0, y 0.0 and z 0.0)
+        replace cad node (faceNode's surface) in body with (the cad surface of frame)
+        set lineValue to a cad line3 with origin (a cad vector3 with x 2.0, y 3.0 and z 4.0) and direction (a cad vector3 with x 5.0, y 0.0 and z 0.0)
+        replace cad node (edgeNode's curve) in body with (the cad edge curve3 of lineValue)
+        free faceKeys
+        free edgeKeys
+        free vertexKeys
+
+function the lower probe bits of {a 64 bit floating-point number:value}:
+    execute:
+        if value = 0.0:
+            return the string form of "0:0"
+        set rawValue to value
+        set rawWord to the value at ((the address of rawValue) as a pointer to a 64 bit unsigned integer)
+        set high to (rawWord shifted right by (32 as a 64 bit unsigned integer)) as a 32 bit unsigned integer
+        set low to rawWord as a 32 bit unsigned integer
+        return ((the string form of high) + (the string form of ":")) + (the string form of low)
+
+function the lower probe token of {cad sat token:token}:
+    execute:
+        if token's kind = 1:
+            return (the string form of "p") + (the string form of (token's reference's index))
+        if token's kind = 3:
+            return (the string form of "f") + (the lower probe bits of (token's floatValue))
+        if token's kind = 5:
+            set result to (the string form of "v") + (the lower probe bits of (token's x))
+            set result to (result + (the string form of ",")) + (the lower probe bits of (token's y))
+            return (result + (the string form of ",")) + (the lower probe bits of (token's z))
+        if token's kind = 2:
+            return (the string form of "n") + (the string form of (token's integerValue as an integer))
+        if token's kind = 0:
+            return (the string form of "i") + (the string form of (token's text))
+        @intrinsic("call", "libc", "abort", nothing)
+        return the string form of ""
+
+function trace lower document {cad sat document:documentValue}:
+    execute:
+        loop slot from 0 to the length of documentValue's records's values:
+            set recordValue to the item at slot in documentValue's records's values
+            set lineValue to (the string form of slot) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's recordId))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's entityType))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's attribute's index))) + (the string form of ";")
+            set lineValue to (lineValue + (the string form of (recordValue's subtypeId))) + (the string form of ";")
+            if recordValue's hasRawText:
+                set lineValue to lineValue + (the string form of (recordValue's rawText))
+            else:
+                set lineValue to lineValue + (the string form of "-")
+            set lineValue to (lineValue + (the string form of ";")) + (the string form of (the length of recordValue's tokens's values))
+            loop tokenIndex from 0 to the length of recordValue's tokens's values:
+                set tokenValue to the item at tokenIndex in recordValue's tokens's values
+                set lineValue to (lineValue + (the string form of ";")) + (the lower probe token of tokenValue)
+            print lineValue as a line
+
+set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 2.0 and z 3.0)
+check acis lower (made's valid)
+set body to made's value
+check acis lower ((the pending cad acis geometry of body) = 26)
+print "pending_synth;26" as a line
+clean lower nodes in body
+check acis lower ((the pending cad acis geometry of body) = 0)
+set documentValue to a lower sample document
+set before to the cad sat clone of documentValue
+set outcome to lower cad acis geometry of body into (the address of documentValue)
+check acis lower (outcome's valid)
+check acis lower (outcome's written = 0)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 0 in documentValue)'s value))'s value's text) = "old-point")
+print "pending_clean;0" as a line
+
+dirty lower three in body
+check acis lower ((the pending cad acis geometry of body) = 3)
+print "pending_dirty;3" as a line
+set outcome to lower cad acis geometry of body into (the address of documentValue)
+check acis lower (outcome's valid)
+check acis lower (outcome's written = 3)
+set updatedPoint to the cad sat record numbered 0 in documentValue
+check acis lower (updatedPoint's value's attribute's index = 3)
+check acis lower (updatedPoint's value's subtypeId = 12)
+check acis lower (updatedPoint's value's hasRawText)
+check acis lower (updatedPoint's value's rawText = "raw point")
+print "lower_written;3" as a line
+trace lower document documentValue
+
+set faceKeys to the cad face keys of body
+set edgeKeys to the cad edge keys of body
+set vertexKeys to the cad vertex keys of body
+set faceNode to the cad node pointer for (the item at 0 in faceKeys) in body
+set edgeNode to the cad node pointer for (the item at 0 in edgeKeys) in body
+set vertexNode to the cad node pointer for (the item at 0 in vertexKeys) in body
+set faceNode's provenance to the clean cad provenance of (a cad source reference for (5 as a 32 bit unsigned integer))
+set edgeNode's provenance to the clean cad provenance of (a cad source reference for (1 as a 32 bit unsigned integer))
+check acis lower ((the pending cad acis geometry of body) = 1)
+print "pending_vertex;1" as a line
+
+set wrong to the cad sat clone of before
+set wrongPoint to the item at 5 in wrong's records's values
+set wrongPoint's entityType to "plane-surface"
+replace item at index 5 in wrong's records's values with wrongPoint
+set outcome to lower cad acis geometry of body into (the address of wrong)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 2)
+check acis lower (outcome's found = "plane-surface")
+check acis lower (outcome's expected = "point")
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 0 in wrong)'s value))'s value's text) = "old-point")
+print "wrong;plane-surface;point" as a line
+
+set vertexNode's provenance to the dirty cad provenance of (a cad source reference for (50 as a 32 bit unsigned integer))
+set missing to the cad sat clone of before
+set outcome to lower cad acis geometry of body into (the address of missing)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 50)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 0 in missing)'s value))'s value's text) = "old-point")
+print "missing_source;50" as a line
+
+set vertexNode's provenance to the dirty cad provenance of (a cad source reference for (4 as a 32 bit unsigned integer))
+set missingTarget to the cad sat clone of before
+set sourceRecord to the cad sat clone of (the item at 2 in missingTarget's records's values)
+replace item at index 3 in sourceRecord's tokens's values with (a cad sat pointer token for (a cad sat pointer to 99))
+replace item at index 2 in missingTarget's records's values with sourceRecord
+set outcome to lower cad acis geometry of body into (the address of missingTarget)
+check acis lower (outcome's valid = false)
+check acis lower (outcome's failure = 1)
+check acis lower ((outcome's source as an integer) = 4)
+check acis lower (((the cad sat token at 1 in ((the cad sat record numbered 0 in missingTarget)'s value))'s value's text) = "old-point")
+print "missing_target;4" as a line
+free faceKeys
+free edgeKeys
+free vertexKeys
