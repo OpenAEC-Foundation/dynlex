@@ -3,6 +3,8 @@ import tests/cadkernel/brep_loft_general_align/input.dl
 import lib/cadkernel/brep_loft_general_body_open.dl
 
 allocate one slot of (a new loft general align reader) and set reader to it
+set cyclic to (loft general align next reader) != 0.0
+set periodic to (loft general align next reader) != 0.0
 set matching to (loft general align next reader) != 0.0
 set mode to (loft general align next reader) as an integer
 set firstAngle to loft general align next reader
@@ -28,7 +30,7 @@ loop sectionIndex from 0 to count:
     append (a cad loft general alignment input on plane with wires wires's values closing closing) to inputs
 @intrinsic("call", "libc", "free", nothing, reader)
 set options to @intrinsic("construct", a cad loft general patch options,
-    false, true, mode, firstAngle, lastAngle, firstMagnitude, lastMagnitude)
+    cyclic, periodic, mode, firstAngle, lastAngle, firstMagnitude, lastMagnitude)
 set made to the cad general open loft of inputs with direction matching matching configured options
 loft general align emit (made's valid as an integer)
 if made's valid:

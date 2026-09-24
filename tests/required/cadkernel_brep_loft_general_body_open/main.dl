@@ -6,15 +6,19 @@ function check general open loft {boolean:condition}:
         if condition = false:
             @intrinsic("call", "libc", "exit", nothing, 87)
 
-function a general open loft input at {a number:z}:
+function a general open loft input at {a number:z} shifted {a number:x}:
     execute:
-        set plane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z z), x axis the cad x axis and y axis the cad y axis
+        set plane to a cad plane with origin (a cad vector3 with x x, y 0.0 and z z), x axis the cad x axis and y axis the cad y axis
         set curves to a cad topology list of the type of (the cad curve2 of (a new cad line2))
         append (the cad curve2 of (a cad line2 from (a cad vector2 with x 0.0 and y 0.0) to (a cad vector2 with x 1.0 and y 0.0))) to curves's values
         append (the cad curve2 of (a cad line2 from (a cad vector2 with x 1.0 and y 0.0) to (a cad vector2 with x 2.0 and y 0.0))) to curves's values
         set wires to a cad topology list of the type of curves
         append curves to wires's values
         return a cad loft general alignment input on plane with wires wires's values closing false
+
+function a general open loft input at {a number:z}:
+    execute:
+        return a general open loft input at z shifted 0.0
 
 function a collapsed general open loft input at {a number:z}:
     execute:
@@ -81,4 +85,39 @@ check general open loft ((the cad count of tip's value's edges) = 5)
 check general open loft ((the cad count of tip's value's coedges) = 6)
 set tipFlaws to the cad flaws of tip's value
 check general open loft ((the length of tipFlaws) = 0)
+set multi to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0) to multi
+append (a general open loft input at 1.5) to multi
+append (a general open loft input at 3.0) to multi
+set joined to the cad general open loft of multi
+check general open loft joined's valid
+check general open loft ((the cad count of joined's value's vertices) = 9)
+check general open loft ((the cad count of joined's value's edges) = 12)
+check general open loft ((the cad count of joined's value's faces) = 4)
+check general open loft ((the cad count of joined's value's coedges) = 16)
+check general open loft ((the length of (the cad flaws of joined's value)) = 0)
+set owned to the cad clone of joined's value
+set joined to no cad body
+check general open loft ((the length of (the cad flaws of owned)) = 0)
+append (a general open loft input at 4.5) to multi
+set longer to the cad general open loft of multi
+check general open loft longer's valid
+check general open loft ((the cad count of longer's value's vertices) = 12)
+check general open loft ((the cad count of longer's value's faces) = 6)
+check general open loft ((the length of (the cad flaws of longer's value)) = 0)
+set ringInputs to an empty list of a cad loft general alignment input
+append (a general open loft input at 0.0 shifted 0.0) to ringInputs
+append (a general open loft input at 1.0 shifted 2.0) to ringInputs
+append (a general open loft input at 2.0 shifted -2.0) to ringInputs
+set ringOptions to @intrinsic("construct", a cad loft general patch options,
+    true, true, 1, 1.5707963267948966, 1.5707963267948966, 0.0, 0.0)
+set ring to the cad general open loft of ringInputs with direction matching true configured ringOptions
+check general open loft ring's valid
+check general open loft ((the cad count of ring's value's vertices) = 9)
+check general open loft ((the cad count of ring's value's edges) = 15)
+check general open loft ((the cad count of ring's value's faces) = 6)
+check general open loft ((the length of (the cad flaws of ring's value)) = 0)
+set ringCopy to the cad clone of ring's value
+set ring to no cad body
+check general open loft ((the length of (the cad flaws of ringCopy)) = 0)
 print "general open loft topology and ownership" as a line

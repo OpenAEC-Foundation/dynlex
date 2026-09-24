@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/acis_history_box.dl
+
+function check history wedge {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+
+function a history wedge identity matrix:
+    execute:
+        set values to an empty list of a 64 bit floating-point number
+        set entries to [1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
+        loop index from 0 to 16:
+            append (the item at index in entries) to values
+        return values
+
+set matrix to a history wedge identity matrix
+set size to a cad vector3 with x 2.0, y 3.0 and z 4.0
+set made to the cad history rebuilt body for operation 2 with box size size and transform matrix
+check history wedge made's valid
+check history wedge (made's failure = 0)
+check history wedge ((the cad count of (made's value's vertices)) = 6)
+check history wedge ((the cad count of (made's value's faces)) = 5)
+check history wedge ((the cad euler characteristic of (made's value)) = 2)
+set flaws to the cad flaws of made's value
+check history wedge ((the length of flaws) = 0)
+free flaws
+print "wedge_rebuild_has_valid_solid_topology" as a line
+
+set unknown to the cad history rebuilt body for operation 0 with box size size and transform matrix
+check history wedge ((unknown's valid = false) and (unknown's failure = 3))
+set box to the cad history rebuilt body for operation 1 with box size size and transform matrix
+check history wedge box's valid
+check history wedge ((the cad count of (box's value's faces)) = 6)
+
+replace item at index 3 in matrix with 2e-9
+set bad to the cad history rebuilt body for operation 2 with box size size and transform matrix
+check history wedge ((bad's valid = false) and (bad's failure = 1))
+set zeroSize to a cad vector3 with x 0.0, y 3.0 and z 4.0
+set bad to the cad history rebuilt body for operation 2 with box size zeroSize and transform matrix
+check history wedge ((bad's valid = false) and (bad's failure = 2))
+check history wedge ((the item at 3 in matrix) = 2e-9)
+print "invalid_dimensions_precede_invalid_transform" as a line
+
+set shortMatrix to an empty list of a 64 bit floating-point number
+append 1.0 to shortMatrix
+set bad to the cad history rebuilt body for operation 2 with box size size and transform shortMatrix
+check history wedge ((bad's valid = false) and (bad's failure = 1))
+free shortMatrix
+
+replace item at index 3 in matrix with 0.0
+replace item at index 12 in matrix with 5.0
+set moved to the cad history rebuilt body for operation 2 with box size size and transform matrix
+check history wedge moved's valid
+set retained to moved's value
+set moved to the cad history rebuilt body for operation 0 with box size size and transform matrix
+free matrix
+set keys to the cad vertex keys of retained
+set first to the cad node pointer for (the item at 0 in keys) in retained
+check history wedge ((first's point's x) = 5.0)
+free keys
+set copied to the cad clone of retained
+set retained to an empty cad body
+check history wedge ((the cad count of (copied's vertices)) = 6)
+set copied to an empty cad body
+print "borrowed_matrix_and_returned_body_have_independent_lifetimes" as a line
+
+loop cycle from 0 to 20:
+    set temporary to a history wedge identity matrix
+    set current to the cad history rebuilt body for operation 2 with box size size and transform temporary
+    check history wedge current's valid
+    free temporary
+    set current to the cad history rebuilt body for operation 0 with box size size and transform (a history wedge identity matrix)
+print "repeated_rebuild_and_release" as a line

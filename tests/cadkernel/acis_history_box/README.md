@@ -7,10 +7,11 @@ public `rebuild_body` route in pinned cadkernel revision
 `de4c1e74bdf560cd44503ac9aa0a0c28b67cf8fa3f46e1330f4697e5c32147bc`;
 the codec revision is `70ac6da7cf149cea6398a3d8829dd5e48b485b96`.
 
-Native operation kind `1` means Box; `0` and all other kinds return
-`Unsupported` (`failure=3`). The size's x/y/z values are the codec's
-length/width/height, and the borrowed list is its base transform in the
-codec's column-major layout. A list of anything other than 16 values is
+Native operation kind `1` means Box and `2` means Wedge; `0` and other
+unported kinds return `Unsupported` (`failure=3`). Wedge has its own pinned
+differential in `tests/cadkernel/acis_history_wedge/`. The size's x/y/z
+values are the codec's length/width/height. The borrowed list is its base
+transform in the codec's column-major layout. A list of anything other than 16 values is
 rejected at the native boundary. The result owns its body. Failure `1` is
 `InvalidTransform`; failure `2` is `InvalidParameters`. The source creates
 the cuboid before checking the placement, so invalid dimensions win when
@@ -24,7 +25,7 @@ use the repository's established tight numeric comparator. The required
 fixture checks malformed input, non-similarity refusal, error priority,
 borrowed input and owned result lifetimes, and repeated release.
 
-This does not implement the other history creation variants or subsequent
+This does not implement the remaining history creation variants or subsequent
 fillet/chamfer dispatch, nor does it parse codec records or ACIS data itself.
 
 Run from this repository root with the pinned source and codec checkouts:

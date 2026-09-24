@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// Public pinned B-rep loft reference for two open profile sections.
+// Public pinned B-rep loft reference for open profile sections.
 use cadkernel::brep::{loft_with_options, LoftOptions, LoftSection};
 use cadkernel::geom2d::{Arc, Curve, Line, Ray};
 use cadkernel::space::Plane;
@@ -20,6 +20,8 @@ fn point(value: [f64; 3]) { for component in value { emit(component); } }
 fn main() {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let mut at = 0;
+    let cyclic = next(&args, &mut at) != 0.0;
+    let periodic = next(&args, &mut at) != 0.0;
     let matching = next(&args, &mut at) != 0.0;
     let mode = next(&args, &mut at) as i32;
     let start_angle = next(&args, &mut at);
@@ -53,6 +55,8 @@ fn main() {
     }
     assert_eq!(at, args.len());
     let mut options = LoftOptions::default();
+    options.closed = cyclic;
+    options.periodic = periodic;
     options.align_direction = matching;
     options.normals = mode;
     options.start_draft_angle = start_angle;

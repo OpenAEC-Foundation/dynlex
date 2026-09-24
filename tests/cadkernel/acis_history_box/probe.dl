@@ -28,8 +28,11 @@ print "box_rebuild_has_valid_solid_topology" as a line
 
 set unknown to the cad history rebuilt body for operation 0 with box size size and transform matrix
 check history box ((unknown's valid = false) and (unknown's failure = 3))
+set unknown to the cad history rebuilt body for operation 99 with box size size and transform matrix
+check history box ((unknown's valid = false) and (unknown's failure = 3))
 set wedge to the cad history rebuilt body for operation 2 with box size size and transform matrix
-check history box ((wedge's valid = false) and (wedge's failure = 3))
+check history box wedge's valid
+check history box ((the cad count of (wedge's value's faces)) = 5)
 print "unported_variants_are_explicitly_refused" as a line
 
 replace item at index 3 in matrix with 2e-9

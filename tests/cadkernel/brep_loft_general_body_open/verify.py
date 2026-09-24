@@ -53,6 +53,8 @@ class Section:
 class Case:
     name: str
     sections: tuple[Section, ...]
+    cyclic: bool = False
+    periodic: bool = True
     matching: bool = True
     mode: int = 1
     start_angle: float = math.pi / 2
@@ -62,7 +64,7 @@ class Case:
     expected_valid: bool = True
 
     def arguments(self) -> list[str]:
-        values: list[float | int] = [int(self.matching), self.mode, self.start_angle,
+        values: list[float | int] = [int(self.cyclic), int(self.periodic), int(self.matching), self.mode, self.start_angle,
                                      self.end_angle, self.start_magnitude, self.end_magnitude,
                                      len(self.sections)]
         for section in self.sections:
@@ -110,6 +112,19 @@ def cases() -> list[Case]:
         Case("collapse-first", (profile(0., collapsed), profile(3., one))),
         Case("two-collapse-last", (profile(0., two), profile(3., collapsed_two))),
         Case("two-collapse-first", (profile(0., collapsed_two), profile(3., two))),
+        Case("multi-three-ruled", (origin, profile(1.5, one, x=.4), profile(3., one, x=1.)), mode=0),
+        Case("multi-three-smooth", (origin, profile(1.5, one, x=.4), profile(3., one, x=1.))),
+        Case("multi-three-bent", (profile(0., two), profile(1.5, bent), profile(3., two, x=.5))),
+        Case("multi-four-mixed", (origin, profile(1., two), profile(2., one, x=.5), profile(3., two, x=1.))),
+        Case("multi-five-smooth", tuple(profile(float(i), one, x=.1 * i * i) for i in range(5))),
+        Case("multi-eight-ruled", tuple(profile(float(i), two, x=.2 * i) for i in range(8)), mode=0),
+        Case("cyclic-three-periodic", (origin, profile(1., one, x=2.), profile(2., one, x=-2.)), cyclic=True),
+        Case("cyclic-four-ruled", (origin, profile(1., two, x=2.), profile(2., two), profile(1., two, x=-2.)), cyclic=True, mode=0),
+        Case("cyclic-four-open-seam", (origin, profile(1., one, x=2.), profile(2., one), profile(1., one, x=-2.)), cyclic=True, periodic=False),
+        Case("cyclic-four-all-normal", (origin, profile(1., one, x=2.), profile(2., one), profile(1., one, x=-2.)), cyclic=True, mode=5),
+        Case("cyclic-four-draft", (origin, profile(1., one, x=2.), profile(2., one), profile(1., one, x=-2.)), cyclic=True, mode=6,
+             start_angle=.9, end_angle=1.2, start_magnitude=.75, end_magnitude=.5),
+        Case("cyclic-two-refused", (origin, profile(3., one)), cyclic=True, expected_valid=False),
         Case("disconnected", (profile(0., broken), profile(3., broken)), expected_valid=False),
         Case("empty-wire", (profile(0., ()), profile(3., one)), expected_valid=False),
         Case("coincident", (origin, profile(0., one)), expected_valid=False),
