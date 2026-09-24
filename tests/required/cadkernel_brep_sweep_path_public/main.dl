@@ -138,7 +138,10 @@ append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to curvedControls
 set curvedRoute to the strict cad nurbs curve3 of degree 2 with controls curvedControls, knots knots and weights weights
 check public path curvedRoute's valid
 set curvedMade to the cad path sweep sheet of profile on (the cad xy plane) along curvedRoute's value using options
-check public path (curvedMade's valid = false)
+check public path curvedMade's valid
+set curvedFlaws to the cad flaws of curvedMade's value
+check public path ((the length of curvedFlaws) = 0)
+free curvedFlaws
 set slightControls to a list containing (the cad zero vector3)
 append (a cad vector3 with x 1e-11, y 0.0 and z 1.0) to slightControls
 append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to slightControls
@@ -156,7 +159,7 @@ free duplicatedProfile
 free curvedControls
 free slightControls
 free collapsedProfile
-print "explicit_profile_and_path_refusals" as a line
+print "profile_and_path_boundaries" as a line
 
 set invalidControls2 to a list containing (the cad zero vector2)
 append (a cad vector2 with x 1.0 and y 0.0) to invalidControls2

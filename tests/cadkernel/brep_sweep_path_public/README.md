@@ -1,4 +1,4 @@
-# Public straight-path sheet sweep
+# Public open-sheet path sweep
 
 `brep_sweep_path_public.dl` connects the existing profile placement, path-frame
 walk, adaptive cubic fitting and open-sheet body assembly into a bounded public
@@ -23,6 +23,7 @@ python -B tests/cadkernel/brep_sweep_path_public/verify.py --source <pinned-sour
 python -B tests/cadkernel/verify.py --filter cadkernel_brep_sweep_path_public
 ```
 
-Curved or closed paths, multiple profile curves, twist, scale, bank and solid
-caps remain outside this route. These cases are refused without returning a
-partial body.
+One open, genuinely curved quadratic NURBS span is dispatched to the separate
+curved-path module and differential fixture. Other curved or closed paths,
+multiple profile curves, twist, scale, bank and solid caps remain outside the
+bounded route and are refused without returning a partial body.

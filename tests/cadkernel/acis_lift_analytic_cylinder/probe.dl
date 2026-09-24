@@ -479,11 +479,17 @@ set nonfinite to the cad sat clone of reordered
 set nanBits to 9221120237041090560 as a 64 bit unsigned integer
 set nanSine to the value at ((the address of nanBits) as a pointer to a 64 bit floating-point number)
 replace acis cylinder token (a cad sat float token of nanSine) at 7 in physical slot 25 of (the address of nonfinite)
-set rejected to lift cad faceted body numbered 28 from nonfinite
-check acis lift (rejected's valid = false)
-check acis lift (rejected's failure = 4)
-check acis lift (rejected's source = 10)
-check acis lift ((the cad count of rejected's body's faces) = 0)
+set lifted to lift cad faceted body numbered 28 from nonfinite
+check acis lift (lifted's valid)
+set coneKeys to the cad keys of lifted's body's surfaces
+set foundCone to false
+loop index from 0 to the length of coneKeys:
+    set key to the item at index in coneKeys
+    set surfaceNode to the cad node pointer for key in lifted's body's surfaces
+    if surfaceNode's kind = 2:
+        set foundCone to true
+check acis lift foundCone
+free coneKeys
 
 set malformed to the cad sat clone of reordered
 replace acis cylinder token (a cad sat pointer token for (a cad sat pointer to 999)) at 6 in physical slot 13 of (the address of malformed)
@@ -495,7 +501,21 @@ check acis lift ((the cad count of rejected's body's faces) = 0)
 
 set sloped to the cad sat clone of reordered
 replace acis cylinder token (a cad sat float token of 0.25) at 7 in physical slot 25 of (the address of sloped)
-set rejected to lift cad faceted body numbered 28 from sloped
-check acis lift (rejected's valid = false)
-check acis lift (rejected's failure = 4)
-check acis lift (rejected's source = 10)
+set lifted to lift cad faceted body numbered 28 from sloped
+check acis lift (lifted's valid)
+set coneKeys to the cad keys of lifted's body's surfaces
+set foundCone to false
+loop index from 0 to the length of coneKeys:
+    set key to the item at index in coneKeys
+    set surfaceNode to the cad node pointer for key in lifted's body's surfaces
+    if surfaceNode's kind = 2:
+        set foundCone to true
+        set lineValue to the acis lift join "cone-slope" with (the string form of (key's index))
+        set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's cone's base's origin)
+        set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's cone's base's xAxis)
+        set lineValue to the acis lift join lineValue with (the acis lift vector of surfaceNode's cone's base's yAxis)
+        set lineValue to the acis lift join lineValue with (the acis lift bits of surfaceNode's cone's radius)
+        set lineValue to the acis lift join lineValue with (the acis lift bits of surfaceNode's cone's halfAngle)
+        print lineValue as a line
+check acis lift foundCone
+free coneKeys

@@ -137,7 +137,12 @@ fn main() {
     sloped.record_mut(10).unwrap().tokens[7] = SatToken::Float(0.25);
     let (partial, loss) = acis::lift_body(&sloped, written.body as usize).unwrap();
     assert!(loss.is_empty());
-    assert!(partial.surfaces.iter().any(|(_, surface)| matches!(surface, Surface::Cone(_))));
+    let (key, cone) = partial.surfaces.iter().find_map(|(key, surface)| {
+        if let Surface::Cone(cone) = surface { Some((key, cone)) } else { None }
+    }).expect("sloped SAT surface must lift as a cone");
+    println!("cone-slope;{};{};{};{};{};{}", key.slot(), vector(cone.base.origin),
+        vector(cone.base.x_axis), vector(cone.base.y_axis), bits(cone.radius),
+        bits(cone.half_angle));
 
     let mut nonfinite = document.clone();
     nonfinite.record_mut(10).unwrap().tokens[7] = SatToken::Float(f64::NAN);

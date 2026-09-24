@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 # In-memory faceted SAT lift from the pinned src/acis/lift.rs.
-# This slice accepts planar, cylindrical, spherical and ring-torus faces,
+# This slice accepts planar, cylindrical, conical, spherical and ring-torus faces,
 # straight and circular edges, and closed coedge rings. Circular edges with
 # separated endpoints reconcile projected and stored parameters.
 # It refuses unsupported or malformed records instead of returning a partial body.
@@ -250,9 +250,6 @@ local function the cad acis faceted surface at {cad sat pointer:reference} in {a
                     return absent
                 set sine to the cad acis faceted lift float at 13 in record or 0.0
                 set isCylinder to (the absolute value of sine) < 1e-12
-                if isCylinder = false:
-                    cad acis faceted lift failure 4 at id in state
-                    return absent
                 set origin to the cad acis faceted lift vector at 1 in record or (the cad zero vector3)
                 set axis to the cad acis faceted lift vector at 4 in record or (the cad z axis)
                 set majorAxis to the cad acis faceted lift vector at 7 in record or (the cad x axis)
@@ -261,7 +258,12 @@ local function the cad acis faceted surface at {cad sat pointer:reference} in {a
                 if base's valid = false:
                     cad acis faceted lift failure 4 at id in state
                     return absent
-                set surfaceValue to the cad surface of (a cad cylinder with base base's value and radius radius)
+                if isCylinder:
+                    set surfaceValue to the cad surface of (a cad cylinder with base base's value and radius radius)
+                else:
+                    set cosine to the cad acis faceted lift float at 14 in record or 1.0
+                    set angle to the negative of (@intrinsic("call", "libc", "atan2", a 64 bit floating-point number, sine, cosine))
+                    set surfaceValue to the cad surface of (a cad cone with base base's value, radius radius and half angle angle)
         set key to the cad body key after inserting surfaceValue into state's body
         append (@intrinsic("construct", a cad acis faceted seen surface, id, key)) to state's surfaces's values
         return @intrinsic("construct", a cad acis faceted surface result, true, key)

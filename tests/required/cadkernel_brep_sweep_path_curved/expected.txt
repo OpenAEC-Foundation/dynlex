@@ -1,0 +1,5 @@
+curved_open_sheet
+unsupported_profile_and_options_refused
+unsupported_path_shapes_refused
+repeated_calls_preserve_sources
+source_and_body_ownership

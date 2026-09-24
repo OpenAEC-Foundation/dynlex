@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_sweep_path_curved.dl
+import lib/cadkernel/brep_sweep_path_public.dl
+
+function check curved path {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+set profile to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (a cad vector2 with x 1.0 and y 0.0)))
+set controls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 0.0, y 0.6 and z 1.0) to controls
+append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to controls
+set knots to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to knots
+append 0.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+append 1.0 to knots
+set weights to a list containing (1.0 as a 64 bit floating-point number)
+append 1.0 to weights
+append 1.0 to weights
+set path to the strict cad nurbs curve3 of degree 2 with controls controls, knots knots and weights weights
+check curved path path's valid
+set options to the default cad path sweep options
+set built to the cad curved path sweep sheet of profile on (the cad xy plane) along path's value using options
+check curved path built's valid
+set viaPublic to the cad path sweep sheet of profile on (the cad xy plane) along path's value using options
+check curved path viaPublic's valid
+set flaws to the cad flaws of built's value
+check curved path ((the length of flaws) = 0)
+free flaws
+set vertices to the cad vertex keys of built's value
+set faces to the cad face keys of built's value
+check curved path ((the length of vertices) > 4)
+check curved path ((the length of faces) > 1)
+free vertices
+free faces
+print "curved_open_sheet" as a line
+
+set options's twist to 0.25
+check curved path ((the cad curved path sweep sheet of profile on (the cad xy plane) along path's value using options)'s valid = false)
+set options's twist to 0.0
+set options's scale to 1.2
+check curved path ((the cad curved path sweep sheet of profile on (the cad xy plane) along path's value using options)'s valid = false)
+set options's scale to 1.0
+set options's bank to true
+check curved path ((the cad curved path sweep sheet of profile on (the cad xy plane) along path's value using options)'s valid = false)
+set options's bank to false
+set duplicate to a list containing (the item at 0 in profile)
+append (the item at 0 in profile) to duplicate
+check curved path ((the cad curved path sweep sheet of duplicate on (the cad xy plane) along path's value using options)'s valid = false)
+set collapsed to a list containing (the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2)))
+check curved path ((the cad curved path sweep sheet of collapsed on (the cad xy plane) along path's value using options)'s valid = false)
+free duplicate
+free collapsed
+print "unsupported_profile_and_options_refused" as a line
+
+set straightControls to a list containing (the cad zero vector3)
+append (a cad vector3 with x 0.0, y 0.0 and z 1.0) to straightControls
+append (a cad vector3 with x 0.0, y 0.0 and z 2.0) to straightControls
+set straightPath to the strict cad nurbs curve3 of degree 2 with controls straightControls, knots knots and weights weights
+check curved path straightPath's valid
+check curved path ((the cad curved path sweep sheet of profile on (the cad xy plane) along straightPath's value using options)'s valid = false)
+set splitControls to a list containing (the cad zero vector3)
+loop index from 1 to 5:
+    append (a cad vector3 with x 0.0, y 0.6 and z (index as a 64 bit floating-point number)) to splitControls
+set splitKnots to a list containing (0.0 as a 64 bit floating-point number)
+append 0.0 to splitKnots
+append 0.0 to splitKnots
+append 0.5 to splitKnots
+append 0.5 to splitKnots
+append 1.0 to splitKnots
+append 1.0 to splitKnots
+append 1.0 to splitKnots
+set splitWeights to a list containing (1.0 as a 64 bit floating-point number)
+loop index from 1 to 5:
+    append 1.0 to splitWeights
+set splitPath to the strict cad nurbs curve3 of degree 2 with controls splitControls, knots splitKnots and weights splitWeights
+check curved path splitPath's valid
+check curved path ((the cad curved path sweep sheet of profile on (the cad xy plane) along splitPath's value using options)'s valid = false)
+free straightControls
+free splitControls
+free splitKnots
+free splitWeights
+print "unsupported_path_shapes_refused" as a line
+
+check curved path ((the item at 1 in controls)'s y = 0.6)
+loop repetition from 0 to 8:
+    set repeated to the cad curved path sweep sheet of profile on (the cad xy plane) along path's value using options
+    check curved path repeated's valid
+    set repeated to no cad body
+print "repeated_calls_preserve_sources" as a line
+
+free profile
+free controls
+free knots
+free weights
+set bodyFlaws to the cad flaws of built's value
+check curved path ((the length of bodyFlaws) = 0)
+free bodyFlaws
+set clone to the cad clone of built's value
+set originalKeys to the cad vertex keys of built's value
+set originalVertex to the cad node pointer for (the item at 0 in originalKeys) in built's value
+set clonedVertex to the cad node pointer for (the item at 0 in originalKeys) in clone
+set initialPoint to clonedVertex's point
+set originalVertex's point to a cad vector3 with x 50.0, y 0.0 and z 0.0
+check curved path ((the cad distance from clonedVertex's point to initialPoint) < 1e-12)
+free originalKeys
+set cloneFlaws to the cad flaws of clone
+check curved path ((the length of cloneFlaws) = 0)
+free cloneFlaws
+print "source_and_body_ownership" as a line
