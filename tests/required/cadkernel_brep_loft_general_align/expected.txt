@@ -1,0 +1,4 @@
+reverse_winding_and_both_start_anchors
+disabled_direction_matching_preserves_anchor
+cyclic_count_and_hole_count_refusals
+repeated_nested_result_retention

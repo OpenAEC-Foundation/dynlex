@@ -1,0 +1,128 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_align.dl
+
+function check loft general alignment {boolean:condition}:
+    execute:
+        if condition = false:
+            ignore @intrinsic("call", "libc", "fflush", an integer, (0 as a pointer))
+            @intrinsic("call", "libc", "abort", nothing)
+
+function loft align point {a number:x} {a number:y}:
+    execute:
+        return a cad vector2 with x (x as a 64 bit floating-point number) and y (y as a 64 bit floating-point number)
+
+function loft align line from {cad vector2:first} to {cad vector2:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from first to last)
+
+function loft align square {integer:variant}:
+    execute:
+        set a to loft align point 0 0
+        set b to loft align point 4 0
+        set c to loft align point 4 4
+        set d to loft align point 0 4
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        if variant = 0:
+            append (loft align line from a to b) to pieces's values
+            append (loft align line from b to c) to pieces's values
+            append (loft align line from c to d) to pieces's values
+            append (loft align line from d to a) to pieces's values
+        else if variant = 1:
+            append (loft align line from c to b) to pieces's values
+            append (loft align line from b to a) to pieces's values
+            append (loft align line from a to d) to pieces's values
+            append (loft align line from d to c) to pieces's values
+        else:
+            append (loft align line from c to d) to pieces's values
+            append (loft align line from d to a) to pieces's values
+            append (loft align line from a to b) to pieces's values
+            append (loft align line from b to c) to pieces's values
+        return pieces
+
+function loft align hole {boolean:shifted}:
+    execute:
+        set a to loft align point 1 1
+        set b to loft align point 1 2
+        set c to loft align point 2 2
+        set d to loft align point 2 1
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        if shifted:
+            append (loft align line from c to d) to pieces's values
+            append (loft align line from d to a) to pieces's values
+            append (loft align line from a to b) to pieces's values
+            append (loft align line from b to c) to pieces's values
+        else:
+            append (loft align line from a to b) to pieces's values
+            append (loft align line from b to c) to pieces's values
+            append (loft align line from c to d) to pieces's values
+            append (loft align line from d to a) to pieces's values
+        return pieces
+
+function loft align section at {a number:height} variant {integer:variant} with hole {boolean:includeHole}:
+    execute:
+        set plane to a cad plane with origin (a cad vector3 with x 0.0, y 0.0 and z (height as a 64 bit floating-point number)), x axis (the cad x axis) and y axis (the cad y axis)
+        set wires to a cad topology list of the type of (loft align square 0)
+        append (loft align square variant) to wires's values
+        if includeHole:
+            append (loft align hole (variant != 0)) to wires's values
+        set profile to a cad loft general alignment input on plane with wires wires's values closing true
+        set wires to a new (the type of wires)
+        return profile
+
+function loft align retained result:
+    execute:
+        set inputs to an empty list of a cad loft general alignment input
+        append (loft align section at 0 variant 0 with hole true) to inputs
+        append (loft align section at 4 variant 1 with hole true) to inputs
+        set output to the cad loft general alignment of inputs with cycle false and direction matching true
+        free inputs
+        return output
+
+function loft align leading point of {cad loft general wire:shape}:
+    execute:
+        set span to the item at 0 in shape's spans's values
+        return the item at 0 in span's controls's values
+
+set result to loft align retained result
+check loft general alignment result's valid
+check loft general alignment ((the length of result's sections's values) = 2)
+set second to the item at 1 in result's sections's values
+check loft general alignment ((the length of second's wires's values) = 2)
+set outer to the item at 0 in second's wires's values
+set inner to the item at 1 in second's wires's values
+check loft general alignment (outer's closed and inner's closed)
+check loft general alignment (((the length of outer's spans's values) = 4) and ((the length of inner's spans's values) = 4))
+set firstPoint to loft align leading point of outer
+set holePoint to loft align leading point of inner
+check loft general alignment ((firstPoint's x = 0.0) and (firstPoint's y = 0.0))
+check loft general alignment ((firstPoint's z = 4.0) and (firstPoint's w = 1.0))
+check loft general alignment ((holePoint's x = 1.0) and (holePoint's y = 1.0))
+print "reverse_winding_and_both_start_anchors" as a line
+
+set inputs to an empty list of a cad loft general alignment input
+append (loft align section at 0 variant 0 with hole false) to inputs
+append (loft align section at 4 variant 2 with hole false) to inputs
+set unchanged to the cad loft general alignment of inputs with cycle false and direction matching false
+check loft general alignment unchanged's valid
+set preserved to the item at 0 in (the item at 1 in unchanged's sections's values)'s wires's values
+set firstPoint to loft align leading point of preserved
+check loft general alignment ((firstPoint's x = 4.0) and (firstPoint's y = 4.0))
+print "disabled_direction_matching_preserves_anchor" as a line
+
+set invalid to the cad loft general alignment of inputs with cycle true and direction matching true
+check loft general alignment ((invalid's valid = false) and (invalid's errorCode = 2))
+append (loft align section at 8 variant 1 with hole true) to inputs
+set invalid to the cad loft general alignment of inputs with cycle false and direction matching true
+check loft general alignment ((invalid's valid = false) and (invalid's errorCode = 7))
+print "cyclic_count_and_hole_count_refusals" as a line
+
+loop iteration from 0 to 200:
+    set temporary to loft align retained result
+    check loft general alignment temporary's valid
+    set retained to temporary
+    set temporary to a new (the type of temporary)
+    set section to the item at 1 in retained's sections's values
+    set wire to the item at 1 in section's wires's values
+    set point to loft align leading point of wire
+    check loft general alignment ((point's x = 1.0) and (point's z = 4.0))
+print "repeated_nested_result_retention" as a line

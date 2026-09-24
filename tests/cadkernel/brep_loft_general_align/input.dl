@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: MPL-2.0
+import lib/cadkernel/brep_loft_general_align.dl
+
+class:
+    patterns:
+        [a|] loft general align reader
+    members:
+        position as an integer
+
+function loft general align next {a pointer to a loft general align reader:reader}:
+    execute:
+        set raw to the argument at reader's position in the command line arguments
+        increment reader's position
+        return @intrinsic("call", "libc", "strtod", a 64 bit floating-point number, the data of raw, 0 as a pointer)
+
+function loft general align point2 from {a pointer to a loft general align reader:reader}:
+    execute:
+        return a cad vector2 with x (loft general align next reader) and y (loft general align next reader)
+
+function loft general align point3 from {a pointer to a loft general align reader:reader}:
+    execute:
+        return a cad vector3 with x (loft general align next reader), y (loft general align next reader) and z (loft general align next reader)
+
+function loft general align curve from {a pointer to a loft general align reader:reader}:
+    execute:
+        set kind to (loft general align next reader) as an integer
+        if kind = 0:
+            return the cad curve2 of (a cad line2 from (loft general align point2 from reader) to (loft general align point2 from reader))
+        if kind = 1:
+            return the cad curve2 of (a cad circle2 at (loft general align point2 from reader) with radius (loft general align next reader))
+        if kind = 2:
+            return the cad curve2 of (a cad arc2 at (loft general align point2 from reader) with radius (loft general align next reader) from (loft general align next reader) to (loft general align next reader))
+        if kind = 3:
+            set centre to loft general align point2 from reader
+            set major to loft general align next reader
+            set minor to loft general align next reader
+            set axis to loft general align point2 from reader
+            set start to loft general align next reader
+            set finish to loft general align next reader
+            return the cad curve2 of (a cad ellipse arc2 on (a cad ellipse at centre with radii major and minor along axis) from start to finish)
+        if kind = 4:
+            set degree to (loft general align next reader) as an integer
+            set count to (loft general align next reader) as an integer
+            set points to an empty list of a cad vector2
+            loop index from 0 to count:
+                append (loft general align point2 from reader) to points
+            set count to (loft general align next reader) as an integer
+            set knots to an empty list of a 64 bit floating-point number
+            loop index from 0 to count:
+                append (loft general align next reader) to knots
+            set count to (loft general align next reader) as an integer
+            set weights to an empty list of a 64 bit floating-point number
+            loop index from 0 to count:
+                append (loft general align next reader) to weights
+            set made to the cad nurbs curve2 of degree degree with controls points, knots knots and weights weights
+            free points
+            free knots
+            free weights
+            if made's valid = false:
+                @intrinsic("call", "libc", "exit", nothing, 3)
+            return the cad curve2 of made's value
+        if kind = 5:
+            return the cad curve2 of (a cad ray2 from (loft general align point2 from reader) along (loft general align point2 from reader))
+        if kind = 6:
+            return the cad curve2 of (a cad xline2 through (loft general align point2 from reader) along (loft general align point2 from reader))
+        @intrinsic("call", "libc", "exit", nothing, 3)
+        return the cad curve2 of (a cad line2 from (the cad zero vector2) to (the cad zero vector2))
+
+function loft general align emit {a number:value}:
+    execute:
+        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.17g\n", value as a 64 bit floating-point number)
+
+function loft general align emit point {cad vector3:point}:
+    execute:
+        loft general align emit point's x
+        loft general align emit point's y
+        loft general align emit point's z

@@ -1,0 +1,358 @@
+# SPDX-License-Identifier: MPL-2.0
+# Profile-only cross-section alignment from pinned src/brep/loft_general.rs
+# at 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Input profiles are copied; returned span controls retain independent storage.
+import lib/cadkernel/brep_loft_general_wire.dl
+
+class:
+    patterns:
+        [a|] cad loft general alignment input
+    members:
+        plane as a cad plane
+        wires as the type of (a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2))))
+        closed as a boolean
+
+class:
+    patterns:
+        [a|] cad loft general aligned section
+    members:
+        plane as a cad plane
+        wires as the type of (a cad topology list of a cad loft general wire)
+        centre as a cad vector3
+
+# Codes: 1 too few sections; 2 closed loft needs three; 3 invalid plane/outer
+# wire/open holes; 4 empty wire; 5 unsupported curve; 6 disconnected wire;
+# 7 mismatched wire counts or open/closed state; 8 unsplit rotation interval;
+# 11-16 the inherited rational-span refusals.
+class:
+    patterns:
+        [a|] cad loft general alignment result
+    members:
+        valid as a boolean
+        errorCode as an integer
+        sections as the type of (a cad topology list of a cad loft general aligned section)
+
+class:
+    patterns:
+        [a|] cad loft general alignment split
+    members:
+        left as the type of (a cad topology list of a cad loft general homogeneous point)
+        right as the type of (a cad topology list of a cad loft general homogeneous point)
+
+class:
+    patterns:
+        [a|] cad loft general alignment interval result
+    members:
+        valid as a boolean
+        controls as the type of (a cad topology list of a cad loft general homogeneous point)
+
+local function check cad loft general alignment expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+
+function a cad loft general alignment input on {cad plane:plane} with wires {a pointer to a list:wireInputs} closing {boolean:closing}:
+    execute:
+        check cad loft general alignment (0 as a pointer to a cad topology list) against (0 as a pointer to the type of (the item at 0 in wireInputs))
+        set copied to a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+        loop index from 0 to the length of wireInputs:
+            append (the cad clone of (the item at index in wireInputs)) to copied's values
+        return @intrinsic("construct", a cad loft general alignment input, plane, copied, closing)
+
+local function cad loft general alignment failure {integer:code}:
+    execute:
+        return @intrinsic("construct", a cad loft general alignment result, false, code, a cad topology list of a cad loft general aligned section)
+
+local function cad loft general alignment mapped refusal {integer:code}:
+    execute:
+        if code <= 4:
+            return code + 2
+        return code
+
+local function cad loft general alignment mix {cad loft general homogeneous point:first} and {cad loft general homogeneous point:second} by {a 64 bit floating-point number:fraction}:
+    execute:
+        set remaining to 1.0 - fraction
+        return @intrinsic("construct", a cad loft general homogeneous point,
+            (first's x * remaining) + (second's x * fraction),
+            (first's y * remaining) + (second's y * fraction),
+            (first's z * remaining) + (second's z * fraction),
+            (first's w * remaining) + (second's w * fraction))
+
+local function cad loft general alignment projected {cad loft general homogeneous point:value}:
+    execute:
+        return a cad vector3 with x (value's x / value's w), y (value's y / value's w) and z (value's z / value's w)
+
+local function cad loft general alignment point on {cad loft general Bezier span:piece} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set current to the cad clone of piece's controls
+        loop while (the length of current's values) > 1:
+            set next to a cad topology list of a cad loft general homogeneous point
+            loop index from 0 to ((the length of current's values) - 1):
+                append (cad loft general alignment mix (the item at index in current's values) and (the item at (index + 1) in current's values) by parameter) to next's values
+            set current to next
+        return cad loft general alignment projected (the item at 0 in current's values)
+
+local function cad loft general alignment sample of {cad loft general wire:shape} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set count to the length of shape's spans's values
+        set selected to count - 1
+        set found to false
+        loop index from 0 to count:
+            set piece to the item at index in shape's spans's values
+            if (found = false) and (parameter <= (piece's end + 1e-12)):
+                set selected to index
+                set found to true
+        set piece to the item at selected in shape's spans's values
+        set localParameter to (parameter - piece's start) / (piece's end - piece's start)
+        if localParameter < 0.0:
+            set localParameter to 0.0
+        if localParameter > 1.0:
+            set localParameter to 1.0
+        return cad loft general alignment point on piece at localParameter
+
+local function cad loft general alignment centre of {cad loft general wire:shape}:
+    execute:
+        set sum to the cad zero vector3
+        loop index from 0 to 32:
+            set parameter to ((index as a 64 bit floating-point number) + 0.5) / 32.0
+            set sum to the cad sum of sum and (cad loft general alignment sample of shape at parameter)
+        return sum cad divided by 32.0
+
+local function cad loft general alignment reversed {cad loft general wire:shape}:
+    execute:
+        set reversedSpans to a cad topology list of a cad loft general Bezier span
+        set count to the length of shape's spans's values
+        loop index from 0 to count:
+            set piece to the item at ((count - 1) - index) in shape's spans's values
+            set reversedControls to a cad topology list of a cad loft general homogeneous point
+            set controlCount to the length of piece's controls's values
+            loop controlIndex from 0 to controlCount:
+                append (the item at ((controlCount - 1) - controlIndex) in piece's controls's values) to reversedControls's values
+            append (@intrinsic("construct", a cad loft general Bezier span, 1.0 - piece's end, 1.0 - piece's start, reversedControls)) to reversedSpans's values
+        return @intrinsic("construct", a cad loft general wire, reversedSpans, shape's closed)
+
+local function cad loft general alignment split {cad topology list:controls} at {a 64 bit floating-point number:parameter}:
+    execute:
+        set work to the cad clone of controls
+        set leftControls to a cad topology list of a cad loft general homogeneous point
+        set rightControls to a cad topology list of a cad loft general homogeneous point
+        append (the item at 0 in work's values) to leftControls's values
+        append (the last item of work's values) to rightControls's values
+        loop while (the length of work's values) > 1:
+            set next to a cad topology list of a cad loft general homogeneous point
+            loop index from 0 to ((the length of work's values) - 1):
+                append (cad loft general alignment mix (the item at index in work's values) and (the item at (index + 1) in work's values) by parameter) to next's values
+            set work to next
+            append (the item at 0 in work's values) to leftControls's values
+            append (the last item of work's values) to rightControls's values
+        set reordered to a cad topology list of a cad loft general homogeneous point
+        set count to the length of rightControls's values
+        loop index from 0 to count:
+            append (the item at ((count - 1) - index) in rightControls's values) to reordered's values
+        return @intrinsic("construct", a cad loft general alignment split, leftControls, reordered)
+
+local function cad loft general alignment part of {cad topology list:controls} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        if (first <= 1e-13) and (last >= (1.0 - 1e-13)):
+            return the cad clone of controls
+        set leftControls to the cad clone of controls
+        if last < (1.0 - 1e-13):
+            set divided to cad loft general alignment split controls at last
+            set leftControls to divided's left
+        if first > 1e-13:
+            set divided to cad loft general alignment split leftControls at (first / last)
+            return divided's right
+        return leftControls
+
+local function cad loft general alignment interval of {cad loft general wire:shape} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
+    execute:
+        loop index from 0 to the length of shape's spans's values:
+            set piece to the item at index in shape's spans's values
+            if (first >= (piece's start - 1e-10)) and (last <= (piece's end + 1e-10)):
+                set width to piece's end - piece's start
+                set a to (first - piece's start) / width
+                set b to (last - piece's start) / width
+                if a < 0.0:
+                    set a to 0.0
+                if a > 1.0:
+                    set a to 1.0
+                if b < 0.0:
+                    set b to 0.0
+                if b > 1.0:
+                    set b to 1.0
+                return @intrinsic("construct", a cad loft general alignment interval result, true, cad loft general alignment part of piece's controls from a to b)
+        return @intrinsic("construct", a cad loft general alignment interval result, false, a cad topology list of a cad loft general homogeneous point)
+
+local function cad loft general alignment rotated {cad loft general wire:shape} at {a 64 bit floating-point number:anchor}:
+    execute:
+        if ((shape's closed = false) or (anchor <= 1e-12)) or (anchor >= (1.0 - 1e-12)):
+            return @intrinsic("construct", a cad loft general wire result, true, 0, shape)
+        set breaks to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of shape's spans's values:
+            append ((the item at index in shape's spans's values)'s start) to breaks's values
+        append anchor to breaks's values
+        append 1.0 to breaks's values
+        set count to the length of breaks's values
+        loop index from 1 to count:
+            set position to index
+            set searching to true
+            loop while (position > 0) and searching:
+                set before to the item at (position - 1) in breaks's values
+                set after to the item at position in breaks's values
+                if after < before:
+                    replace item at index (position - 1) in breaks's values with after
+                    replace item at index position in breaks's values with before
+                    set position to position - 1
+                else:
+                    set searching to false
+        set uniqueBreaks to a cad topology list of a 64 bit floating-point number
+        loop index from 0 to the length of breaks's values:
+            set value to the item at index in breaks's values
+            set duplicate to false
+            if (the length of uniqueBreaks's values) > 0:
+                set duplicate to (the absolute value of (value - (the last item of uniqueBreaks's values))) <= 1e-10
+            if duplicate = false:
+                append value to uniqueBreaks's values
+        set shiftedSpans to a cad topology list of a cad loft general Bezier span
+        loop index from 0 to ((the length of uniqueBreaks's values) - 1):
+            set first to the item at index in uniqueBreaks's values
+            set last to the item at (index + 1) in uniqueBreaks's values
+            set localStart to first - anchor
+            if localStart < 0.0:
+                set localStart to localStart + 1.0
+            set segment to cad loft general alignment interval of shape from first to last
+            if segment's valid = false:
+                return @intrinsic("construct", a cad loft general wire result, false, 8, shape)
+            append (@intrinsic("construct", a cad loft general Bezier span, localStart, (localStart + last) - first, segment's controls)) to shiftedSpans's values
+        set count to the length of shiftedSpans's values
+        loop index from 1 to count:
+            set position to index
+            set searching to true
+            loop while (position > 0) and searching:
+                set before to the item at (position - 1) in shiftedSpans's values
+                set after to the item at position in shiftedSpans's values
+                if after's start < before's start:
+                    replace item at index (position - 1) in shiftedSpans's values with after
+                    replace item at index position in shiftedSpans's values with before
+                    set position to position - 1
+                else:
+                    set searching to false
+        set output to @intrinsic("construct", a cad loft general wire, shiftedSpans, true)
+        return @intrinsic("construct", a cad loft general wire result, true, 0, output)
+
+local function cad loft general alignment transport {cad vector3:value} from {cad vector3:fromNormal} to {cad vector3:toNormal} using {cad vector3:fallback}:
+    execute:
+        set cosine to the cad dot of fromNormal and toNormal
+        if cosine < -1.0:
+            set cosine to -1.0
+        if cosine > 1.0:
+            set cosine to 1.0
+        set cross to the cad cross of fromNormal and toNormal
+        set sine to the cad length of cross
+        if sine <= 1e-12:
+            if cosine >= 0.0:
+                return value
+            set projected to the cad difference of fallback and (fromNormal scaled by (the cad dot of fallback and fromNormal))
+            set normalized to the cad normalization of projected
+            set axis to the cad x axis
+            if normalized's valid:
+                set axis to normalized's value
+            return the cad difference of (axis scaled by (2.0 * (the cad dot of axis and value))) and value
+        set axis to cross cad divided by sine
+        set along to value scaled by cosine
+        set around to (the cad cross of axis and value) scaled by sine
+        set normal to axis scaled by ((the cad dot of axis and value) * (1.0 - cosine))
+        return the cad sum of (the cad sum of along and around) and normal
+
+local function cad loft general alignment cost of {cad loft general wire:candidate} against {cad loft general wire:previous} with current centre {cad vector3:currentCentre} and previous centre {cad vector3:oldCentre} from {cad vector3:currentNormal} to {cad vector3:oldNormal} using {cad vector3:fallback}:
+    execute:
+        set totalCost to 0.0
+        loop sampleIndex from 0 to 24:
+            set at to (sampleIndex as a 64 bit floating-point number) / 24.0
+            set local to the cad difference of (cad loft general alignment sample of candidate at at) and currentCentre
+            set transported to the cad sum of (cad loft general alignment transport local from currentNormal to oldNormal using fallback) and oldCentre
+            set distance to the cad distance from (cad loft general alignment sample of previous at at) to transported
+            set totalCost to totalCost + (distance * distance)
+        return totalCost
+
+function the cad loft general alignment of {a pointer to a list:inputs} with cycle {boolean:cyclic} and direction matching {boolean:matchDirection}:
+    execute:
+        check cad loft general alignment (0 as a pointer to a cad loft general alignment input) against (0 as a pointer to the type of (the item at 0 in inputs))
+        set count to the length of inputs
+        if count < 2:
+            return cad loft general alignment failure 1
+        if cyclic and (count < 3):
+            return cad loft general alignment failure 2
+        set sections to a cad topology list of a cad loft general aligned section
+        loop index from 0 to count:
+            set source to the item at index in inputs
+            set built to the cad loft general section set on (source's plane) through (source's wires's values) closing (source's closed)
+            if built's valid = false:
+                return cad loft general alignment failure (cad loft general alignment mapped refusal built's errorCode)
+            set first to the item at 0 in built's wires's values
+            set centre to cad loft general alignment centre of first
+            append (@intrinsic("construct", a cad loft general aligned section, source's plane, built's wires, centre)) to sections's values
+        set reference to the item at 0 in sections's values
+        set referenceCount to the length of reference's wires's values
+        set closedProfile to (the item at 0 in reference's wires's values)'s closed
+        loop index from 0 to count:
+            set current to the item at index in sections's values
+            if ((the length of current's wires's values) != referenceCount) or (((the item at 0 in current's wires's values)'s closed) != closedProfile):
+                return cad loft general alignment failure 7
+        if matchDirection:
+            set normals to a cad topology list of a cad vector3
+            loop index from 0 to count:
+                set current to the item at index in sections's values
+                set normalResult to the cad normal of current's plane
+                set beforeIndex to 0
+                if index > 0:
+                    set beforeIndex to index - 1
+                else if cyclic:
+                    set beforeIndex to count - 1
+                set afterIndex to count - 1
+                if index < (count - 1):
+                    set afterIndex to index + 1
+                else if cyclic:
+                    set afterIndex to 0
+                set before to the item at beforeIndex in sections's values
+                set after to the item at afterIndex in sections's values
+                set travel to the cad difference of after's centre and before's centre
+                if (the cad length of travel) <= 1e-12:
+                    set travel to the cad difference of after's centre and current's centre
+                set normal to normalResult's value
+                if (the cad dot of normal and travel) < 0.0:
+                    set normal to the cad negative of normal
+                append normal to normals's values
+            loop index from 1 to count:
+                set current to the item at index in sections's values
+                set preceding to the item at (index - 1) in sections's values
+                set currentNormal to the item at index in normals's values
+                set oldNormal to the item at (index - 1) in normals's values
+                set selectedWires to a cad topology list of a cad loft general wire
+                loop wireIndex from 0 to referenceCount:
+                    set shape to the item at wireIndex in current's wires's values
+                    set old to the item at wireIndex in preceding's wires's values
+                    set best to shape
+                    set bestCost to (1.0 / 0.0)
+                    loop reverse from 0 to 2:
+                        set candidate to shape
+                        if reverse = 1:
+                            set candidate to cad loft general alignment reversed shape
+                        set shiftCount to 1
+                        if closedProfile:
+                            set shiftCount to the length of candidate's spans's values
+                        loop shiftIndex from 0 to shiftCount:
+                            set shift to 0.0
+                            if closedProfile:
+                                set shift to (the item at shiftIndex in candidate's spans's values)'s start
+                            set shifted to cad loft general alignment rotated candidate at shift
+                            if shifted's valid = false:
+                                return cad loft general alignment failure 8
+                            set cost to cad loft general alignment cost of (shifted's value) against old with current centre (current's centre) and previous centre (preceding's centre) from currentNormal to oldNormal using (preceding's plane's xAxis)
+                            if cost < (bestCost - 1e-12):
+                                set bestCost to cost
+                                set best to shifted's value
+                    append best to selectedWires's values
+                set current's wires to selectedWires
+                replace item at index index in sections's values with current
+        return @intrinsic("construct", a cad loft general alignment result, true, 0, sections)

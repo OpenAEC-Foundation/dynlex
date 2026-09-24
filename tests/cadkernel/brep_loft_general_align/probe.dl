@@ -1,0 +1,51 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_loft_general_align/input.dl
+
+allocate one slot of (a new loft general align reader) and set reader to it
+set cyclic to (loft general align next reader) != 0.0
+set matching to (loft general align next reader) != 0.0
+set sectionCount to (loft general align next reader) as an integer
+set inputs to an empty list of a cad loft general alignment input
+loop sectionIndex from 0 to sectionCount:
+    set origin to loft general align point3 from reader
+    set xAxis to loft general align point3 from reader
+    set yAxis to loft general align point3 from reader
+    set plane to a cad plane with origin origin, x axis xAxis and y axis yAxis
+    set closing to (loft general align next reader) != 0.0
+    set wireCount to (loft general align next reader) as an integer
+    set wires to a cad topology list of the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
+    loop wireIndex from 0 to wireCount:
+        set pieceCount to (loft general align next reader) as an integer
+        set pieces to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+        loop pieceIndex from 0 to pieceCount:
+            append (loft general align curve from reader) to pieces's values
+        append pieces to wires's values
+    append (a cad loft general alignment input on plane with wires wires's values closing closing) to inputs
+@intrinsic("call", "libc", "free", nothing, reader)
+set result to the cad loft general alignment of inputs with cycle cyclic and direction matching matching
+loft general align emit (result's valid as an integer)
+loft general align emit result's errorCode
+loft general align emit (the length of result's sections's values)
+if result's valid:
+    loop sectionIndex from 0 to the length of result's sections's values:
+        set section to the item at sectionIndex in result's sections's values
+        loft general align emit point (section's plane's origin)
+        loft general align emit point (section's plane's xAxis)
+        loft general align emit point (section's plane's yAxis)
+        loft general align emit point (section's centre)
+        loft general align emit (the length of section's wires's values)
+        loop wireIndex from 0 to the length of section's wires's values:
+            set chain to the item at wireIndex in section's wires's values
+            loft general align emit (chain's closed as an integer)
+            loft general align emit (the length of chain's spans's values)
+            loop spanIndex from 0 to the length of chain's spans's values:
+                set span to the item at spanIndex in chain's spans's values
+                loft general align emit span's start
+                loft general align emit span's end
+                loft general align emit (the length of span's controls's values)
+                loop controlIndex from 0 to the length of span's controls's values:
+                    set point to the item at controlIndex in span's controls's values
+                    loft general align emit point's x
+                    loft general align emit point's y
+                    loft general align emit point's z
+                    loft general align emit point's w
