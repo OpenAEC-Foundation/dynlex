@@ -79,6 +79,9 @@ def markdown(report):
         "Euler characteristic and arena sizes enter an integer checksum, and its "
         "worst vertex gap and spatial bounds enter a floating-point checksum.",
         "",
+        "This is an interim constructor workload. It does not cover unfinished "
+        "kernel operations or measure GPU rendering speed.",
+        "",
         "| Mode | Implementation | Compile time | Runtime median | Runtime p95 | Solids/s |",
         "| --- | --- | ---: | ---: | ---: | ---: |",
     ]
@@ -124,6 +127,8 @@ def markdown(report):
         "",
         "The full sample arrays and compile phase timings are recorded in "
         "`docs/cadkernel-performance.json`.",
+        "Dynedra rendering integration is documented separately in "
+        "[the GPU integration note](cadkernel-gpu-integration.md).",
         "",
     ]
     return "\n".join(lines)
