@@ -1,0 +1,8 @@
+import lib/std.dl
+
+function [require condition] {boolean:condition} [reporting] {C string:message}:
+    execute:
+        if condition = false:
+            print message as a line
+            ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
+            @intrinsic("call", "libc", "abort", nothing)

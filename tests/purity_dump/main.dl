@@ -14,6 +14,10 @@ function left + right:
     replacement:
         @intrinsic("add", left, right)
 
+function the address of value:
+    replacement:
+        @intrinsic("address of", value)
+
 function print a runtime marker:
     replacement:
         @intrinsic("discard", @intrinsic("call", "libc", "puts", an integer, "side effect"))
@@ -47,6 +51,18 @@ function input after printing a runtime marker:
         print a runtime marker
         return input
 
+function atomically load target:
+    execute:
+        return @intrinsic("atomic load", the address of target, "relaxed")
+
+function atomically store value in target:
+    execute:
+        @intrinsic("atomic store", the address of target, value, "release")
+
+function atomically add value to target:
+    execute:
+        return @intrinsic("atomic fetch add", the address of target, value, "acq_rel")
+
 set total to 0
 set local to 0
 set sum to the sum of 1 and 2
@@ -55,3 +71,7 @@ store 3 globally
 set retrieved to the global value
 set local to 9 through its address
 set affected to 5 after printing a runtime marker
+set slot to 0
+set loaded to atomically load slot
+atomically store 1 in slot
+set old to atomically add 1 to slot

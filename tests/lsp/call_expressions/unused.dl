@@ -1,0 +1,3 @@
+f {@intrinsic("type", "int"):x} means: @intrinsic("add", x, 0)
+f {@intrinsic("type", "float"):x} means: @intrinsic("add", x, 0.0)
+g x means: f x

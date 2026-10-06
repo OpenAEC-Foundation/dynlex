@@ -98,11 +98,19 @@ enum class IntrinsicPurityKind {
 	X(AddPointerDepth, "add pointer depth", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                   \
 	X(Fix, "fix", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)
 
+#define DYNLEX_ATOMIC_INTRINSIC_FIXED_TABLE(X)                                                                                 \
+	X(AtomicLoad, "atomic load", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Impure)                            \
+	X(AtomicStore, "atomic store", 4, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)                          \
+	X(AtomicExchange, "atomic exchange", 4, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)                    \
+	X(AtomicFetchAdd, "atomic fetch add", 4, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)                   \
+	X(AtomicFetchSub, "atomic fetch sub", 4, IntrinsicReturnKind::Custom, 3, 3, IntrinsicPurityKind::Impure)
+
 #define DYNLEX_INTRINSIC_RANGED_TABLE(X)                                                                                       \
 	X(Construct, "construct", 2, -1, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                             \
 	X(Return, "return", 1, 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                      \
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                                     \
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)                    \
+	X(CallPointer, "call pointer", 3, -1, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Impure)                      \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
 	X(Array, "array", 1, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
 	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
@@ -117,7 +125,8 @@ enum class IntrinsicKind {
 )                                                                                                                              \
 	kind,
 	DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_KIND_ENUM_FIXED)
-		DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_KIND_ENUM_RANGED)
+		DYNLEX_ATOMIC_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_KIND_ENUM_FIXED)
+			DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_KIND_ENUM_RANGED)
 #undef DYNLEX_INTRINSIC_KIND_ENUM_FIXED
 #undef DYNLEX_INTRINSIC_KIND_ENUM_RANGED
 };
@@ -162,7 +171,8 @@ inline const std::unordered_map<std::string, IntrinsicInfo> &intrinsicRegistry()
 )                                                                                                                              \
 	{name, {minArgCount, maxArgCount, returnKind, IntrinsicKind::kind, compileTimeArgMin, compileTimeArgMax, purity}},
 		DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_FIXED)
-			DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_RANGED)
+			DYNLEX_ATOMIC_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_FIXED)
+				DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_REG_ENTRY_RANGED)
 #undef DYNLEX_INTRINSIC_REG_ENTRY_FIXED
 #undef DYNLEX_INTRINSIC_REG_ENTRY_RANGED
 	};
@@ -202,6 +212,10 @@ inline bool isPointerArithmeticIntrinsic(ArithmeticIntrinsicKind kind) {
 	return kind == ArithmeticIntrinsicKind::Add || kind == ArithmeticIntrinsicKind::Subtract;
 }
 
+constexpr bool isRoundingIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::Floor || kind == IntrinsicKind::Ceil || kind == IntrinsicKind::Round;
+}
+
 inline bool isLogicalIntrinsicKind(IntrinsicKind kind) {
 	return kind == IntrinsicKind::And || kind == IntrinsicKind::Or || kind == IntrinsicKind::Not;
 }
@@ -221,10 +235,14 @@ inline bool isComparisonIntrinsicKind(IntrinsicKind kind) {
 }
 
 constexpr bool isExternalCallIntrinsicKind(IntrinsicKind kind) {
-	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall;
+	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall || kind == IntrinsicKind::CallPointer;
 }
 
-constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) { return kind == IntrinsicKind::VariadicCall ? 5 : 4; }
+constexpr size_t externalCallReturnTypeArgumentIndex(IntrinsicKind kind) { return kind == IntrinsicKind::CallPointer ? 2 : 3; }
+
+constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) {
+	return kind == IntrinsicKind::VariadicCall ? 5 : kind == IntrinsicKind::CallPointer ? 3 : 4;
+}
 
 inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {
 	const IntrinsicInfo *info = findIntrinsic(name);
@@ -244,6 +262,7 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 	case IntrinsicKind::kind:                                                                                                  \
 		return purity;
 		DYNLEX_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_PURE_SWITCH_FIXED)
+		DYNLEX_ATOMIC_INTRINSIC_FIXED_TABLE(DYNLEX_INTRINSIC_PURE_SWITCH_FIXED)
 		DYNLEX_INTRINSIC_RANGED_TABLE(DYNLEX_INTRINSIC_PURE_SWITCH_RANGED)
 #undef DYNLEX_INTRINSIC_PURE_SWITCH_FIXED
 #undef DYNLEX_INTRINSIC_PURE_SWITCH_RANGED
@@ -267,4 +286,5 @@ static_assert(intrinsicPurityKind(IntrinsicKind::Property) == IntrinsicPurityKin
 static_assert(intrinsicPurityKind(IntrinsicKind::Call) == IntrinsicPurityKind::Impure);
 
 #undef DYNLEX_INTRINSIC_FIXED_TABLE
+#undef DYNLEX_ATOMIC_INTRINSIC_FIXED_TABLE
 #undef DYNLEX_INTRINSIC_RANGED_TABLE

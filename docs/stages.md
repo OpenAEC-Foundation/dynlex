@@ -20,20 +20,24 @@ Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
 - What patterns does each section have?
 - We parse inline sections and multiline statements (f.e. statements with multi line arrays) too, here.
 
+Every array element is parsed as a complete expression. A single-element array uses its entire interior text and nested
+bracket hierarchy, just as comma-separated elements do; a nested string or parenthesis is not the element by itself.
+
+String boundaries use backslash parity: a quote preceded by an odd run of backslashes is escaped; an even run leaves
+the quote unescaped. Bracket parsing, comment scanning, and source-character validation share this rule.
+
 Function declaration shorthands are normalized before section analysis. An action declaration using `to` and a value
 declaration using `to get` become ordinary function and `execute` sections. A one-line declaration using `means:` becomes
 an ordinary flex function and `replacement` section. Logical indentation and source slices preserve the authored nesting
 and diagnostic locations; later stages do not have a separate shorthand execution path.
 
 Integer literals are parsed exactly rather than through floating-point storage.
-Magnitudes through `2^63` are retained so unary negation can form the signed
-64-bit minimum; larger magnitudes are rejected here. The boundary magnitude is
-rejected after inference unless ordinary intrinsic evaluation records that
-unary negation consumed it without another value operation using it. Those
-effects are committed with the inferred expression, so rejected overload and
-operand-grouping trials cannot affect the selected expression. Unreachable
-bodies remain semantically uninferred and therefore do not create boundary-use
-effects. Explicit floating-point literals remain 64-bit floating-point values.
+Signed values use 32 or 64 bits, and positive values through `2^64 - 1` use
+unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
+direct unary negation produces signed 64-bit minimum. Stored unsigned values,
+including that boundary, use ordinary wrapping negation. Larger magnitudes are
+rejected during parsing. Explicit floating-point literals remain 64-bit
+floating-point values.
 
 # Pattern Matching Stage
 
@@ -111,6 +115,14 @@ Before type resolution starts, the compiler initializes the selected target's LL
 reorder code. It supplies the target ABI facts needed by compile-time operations such as `size of`; later code generation uses
 the same module and layout.
 
+`size of` requires a concrete runtime type with a complete layout. A class with uninferred members remains generic even
+after constructing instances of it; requesting its size reports a source diagnostic. Use the type of a particular instance
+to measure that instantiation. Pointers to generic classes are sized independently of their pointee layout.
+
+Class property access follows every pointer level to the owning object. Reading, writing, and taking a property's
+address use that same owner, and pointer provenance follows the same chain. The owner expression is evaluated once.
+Synthetic properties of other types, such as a C string's `data`, retain their existing representation.
+
 Declaration return contracts are checked on the inferred result of the ordinary function body: `to` requires `nothing`,
 while `to get` and `means:` require a value. The check participates in operand-grouping trials so the declaration error wins
 over a secondary error at the call site.
@@ -130,14 +142,27 @@ value. The `constraint` meta-type carries `TypeConstraint` values just as the `t
 requirement enabled. Type and constraint shaping uses the same surface patterns; shaping a constraint preserves the constraint
 category. A compile-time-known requirement is not an overload axis, so definitions which differ only by `fix` are duplicates.
 Type values retain both meanings when used in a signature: their constraint view controls overload matching, while their exact type
-view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` accepts every integer
-width as a constraint but denotes the default integer width as a standalone type value. Code generation consumes that recorded exact
+view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` and `unsigned integer`
+accept every corresponding signed or unsigned integer width as constraints but denote their default widths as standalone type values. Code generation consumes that recorded exact
 view; it does not reinterpret the constraint.
 
-An integer literal uses a 32-bit integer type when its exact value fits and a
-64-bit integer type otherwise. Its compile-time value remains an exact signed
-integer through inference and pure evaluation; it is never routed through a
-floating-point representation.
+An integer literal uses a 32-bit signed integer type when its value fits, a
+64-bit signed integer type through the signed range, and an unsigned 64-bit
+integer type above that range. The exact magnitude of signed 64-bit minimum is
+also accepted so unary negation can form that signed value; it can be explicitly
+cast to an unsigned 64-bit integer. Explicit `8`, `16`, `32`, and `64` bit unsigned
+integer type values preserve wrapping arithmetic, logical right shifts, and
+unsigned comparison, division, and remainder at compile time and runtime.
+Integer casts retain the target-width bits. Floating-point to integer casts
+truncate toward zero and are compile-time-known only when the truncated value
+fits the target signed or unsigned width, matching the native LLVM conversion.
+The positive `2^63` literal participates in floating-point conversion, Boolean
+conversion and mixed numeric comparison like other unsigned values.
+
+Floor, ceiling, and round preserve an integer operand exactly, without converting it to floating point.
+For floating-point operands they preserve the operand width; round chooses the nearest integer value,
+with half-way values rounded away from zero. Constant evaluation uses the same operand precision and
+rounding rules as native code generation.
 
 After all constraints are concrete, we validate overlapping overload domains. Only then can normal call inference select
 overloads. Declaration order never selects an overload.
@@ -209,6 +234,8 @@ We know this because we instantiate `print value` and walk over the code just li
 All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
+
+Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
 ## Operand Reordering
 
@@ -293,7 +320,7 @@ layout to the same expression nodes.
 
 To detect ambiguity, we have to keep incrementing until we find another fully passing tree or finish. When encountering the first valid state, we save this state by saving the expression pointers.
 
-A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate with the same local ordering replaces the retained transaction, so the final accepted subgroupings are promoted together.
+A successful candidate keeps its complete inference transaction alive while the pull enumerator checks whether another candidate exists. If the enumerator finishes, that final successful transaction is promoted directly, including all nested subgrouping transactions; the one-candidate case follows the same path. If another candidate exists, the retained transaction is rolled back before that candidate is inferred. A later successful candidate replaces the retained transaction only if its complete grouping snapshot is identical, including argument subtrees and explicit-group flags. A different valid grouping inside an enclosed argument is an ambiguity even when the surrounding call is unchanged; the first valid complete grouping is retained.
 
 We do not clone the expression tree for reordering; we reorder it. Even when storing the correct state and continuing to search for the next valid state so we can give ambiguity warnings, we store our choices instead of cloning the expression tree.
 
@@ -352,6 +379,10 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
 
+Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
+the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward
+order and release them in reverse order; pointer copies, arguments, returns, and fields do not retain or release their pointees.
+
 External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
 library function names. `@intrinsic("call", library, function, return type, arguments...)` emits a fixed signature.
 `@intrinsic("variadic call", library, function, return type, fixed argument count, arguments...)` emits the first
@@ -359,6 +390,37 @@ library function names. `@intrinsic("call", library, function, return type, argu
 receives C's default argument promotions: booleans and integers narrower than 32 bits become 32-bit integers, 32-bit floats become
 64-bit floats, and pointers remain pointers. Platform-sized C types are expressed by standard-library type patterns built from
 compile-time build information.
+
+`target is` accepts execution backends (`cpu`, `wasm`, `gpu`) and native operating systems (`windows`, `macos`, `linux`).
+Operating-system predicates use the same native host target as code generation and are false for WebAssembly and SPIR-V.
+These are compile-time predicates, so platform-specific native calls in unselected branches are not inferred or linked.
+`lib/platform.dl` exposes the operating-system checks as natural-language patterns.
+
+Runtime-loaded native symbols use `@intrinsic("call pointer", callee pointer, return type, arguments...)`. The callee is an
+opaque runtime pointer and the return type is a concrete compile-time type; the remaining operands define its fixed, nonvariadic C
+ABI signature. This is CPU-only, because WebAssembly and SPIR-V have no corresponding opaque native-call ABI. Library authors
+must ensure the runtime pointer and stated signature match, and should keep this intrinsic inside a natural-language wrapper pattern
+that obtains the symbol from the relevant loader, so application code calls the wrapper rather than spelling ABI metadata at each use
+site.
+
+Atomic scalar access uses `@intrinsic("atomic load", pointer, order)`, `atomic store`, `atomic exchange`, `atomic fetch add`,
+and `atomic fetch sub`. Orders are literal `relaxed`, `acquire`, `release`, `acq_rel`, or `seq_cst`; loads cannot use release or
+acq_rel, and stores cannot use acquire or acq_rel. Operations are CPU-only. The pointee must be a concrete naturally aligned scalar:
+Boolean, 8/16/32/64-bit signed or unsigned integer, 32/64-bit float, or pointer; fetch add/sub only accept integers. Boolean storage
+is one byte. The caller owns correct scalar storage alignment and must not mix atomic and non-atomic concurrent accesses. `lib/atomic.dl`
+keeps ordering metadata in natural-language wrappers, including default sequentially consistent and relaxed/release/acquire forms.
+
+JSON number nodes retain their original validated decimal lexeme for serialization. `the signed 64 bit JSON integer read from value`
+and `the unsigned 64 bit JSON integer read from value` return typed result values with a success status; they parse that lexeme
+without a floating-point conversion and reject wrong JSON kinds, fractional or exponent syntax, negative unsigned syntax,
+and out-of-range magnitudes. Signed `-0` reads as zero, while unsigned `-0` is rejected. `a new JSON number from` signed or unsigned 64-bit integers writes the exact
+decimal lexeme. The existing `number` member and JSON-number getters remain approximate floating-point views for compatibility;
+they are not an integer interchange API.
+
+Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
+Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
+unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
+A Boolean's LLVM `i1` type alone does not guarantee a canonical C Boolean.
 
 SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
 stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching

@@ -1,0 +1,154 @@
+import lib/path_operations.dl
+import lib/uri_bytes.dl
+
+function [a file URI result containing] {string:text}:
+    execute:
+        return @intrinsic("construct", a file URI result, true, true, text, the string form of "")
+
+function [a file URI failure with] {a value:message} [supported] {boolean:supported}:
+    execute:
+        return @intrinsic("construct", a file URI result, false, supported, the string form of "", the string form of message)
+
+function [the decoded file URI component] {string:text} [as authority] {boolean:authority} [using] {integer:style}:
+    execute:
+        if authority and text's length > 0:
+            if (the character at 0 in text) = (91 as a byte):
+                if text is a bracketed IP literal:
+                    return a path result containing text
+                return a path result failing with "A file URI contains an invalid IP-literal authority"
+        set buffer to a new string buffer containing text's length bytes
+        set data to the data of buffer
+        set length to 0
+        set index to 0
+        loop while index < text's length:
+            set code to ((the character at index in text) as an integer) bitwise and 255
+            set encoded to code = 37
+            if encoded:
+                set invalid to "A file URI authority contains an invalid percent escape" if authority, else "A file URI path contains an invalid percent escape"
+                if index + 2 >= text's length:
+                    return a path result failing with invalid
+                set high to the URI hexadecimal value of ((the character at (index + 1) in text) as an integer)
+                set low to the URI hexadecimal value of ((the character at (index + 2) in text) as an integer)
+                if high < 0 or low < 0:
+                    return a path result failing with invalid
+                set code to high * 16 + low
+                set index to index + 2
+            if authority:
+                if encoded:
+                    if (code = 0 or code = 47) or code = 92:
+                        return a path result failing with "A file URI authority contains an invalid encoded byte"
+                else if ((URI byte code is unreserved) = false) and ((URI byte code is a subdelimiter) = false):
+                    return a path result failing with "A file URI contains an invalid authority"
+            else:
+                if encoded = false:
+                    if code = 63 or code = 35:
+                        return a path result failing with "A file URI must not contain a query or fragment"
+                    if (((URI byte code is unreserved) = false) and ((URI byte code is a subdelimiter) = false)) and ((code != 47 and code != 58) and code != 64):
+                        return a path result failing with "A file URI path contains an invalid character"
+                if code = 0:
+                    return a path result failing with "A file URI decodes to a null byte"
+                if encoded and code = 47:
+                    return a path result failing with "A file URI path must not encode a path separator"
+                if style = 2 and code = 92:
+                    return a path result failing with "A Windows file URI path must use forward slashes"
+            store (code as a byte) into data at length
+            increment length
+            increment index
+        set result to the substring of buffer from 0 spanning length bytes
+        if result is invalid UTF-8:
+            return a path result failing with ("A file URI authority does not contain valid UTF-8" if authority, else "A file URI path does not contain valid UTF-8")
+        return a path result containing result
+
+function [the file URI representing] {a value:input} [using] {path style:style}:
+    execute:
+        set parsed to path input parsed for style style's value normalizing dots false
+        if parsed's success = false:
+            return a file URI failure with parsed's error supported true
+        if (path root kind parsed's rootKind is fully absolute) = false:
+            return a file URI failure with "A file URI requires an absolute path" supported true
+        if parsed's text is invalid UTF-8:
+            return a file URI failure with "A file URI path must be valid UTF-8" supported true
+        if style's value = 2 and parsed's rootKind = 7:
+            set end to the next component end in parsed's text starting at 2
+            set server to the substring of parsed's text from 2 spanning (end - 2) bytes
+            set path to the substring of parsed's text from end spanning (parsed's text's length - end) bytes
+            return a file URI result containing (("file://" + (the percent encoded URI text of server as authority true)) + (the percent encoded URI text of path as authority false))
+        set prefix to "file:///" if style's value = 2, else "file://"
+        return a file URI result containing (prefix + (the percent encoded URI text of parsed's text as authority false))
+
+function [the path from] {string:input} [interpreted as a file URI using] {path style:style}:
+    execute:
+        if input is invalid:
+            return a file URI failure with "Invalid file URI text" supported true
+        if style's value != 1 and style's value != 2:
+            return a file URI failure with "Unknown path style" supported true
+        set index to 0
+        loop while index < input's length:
+            set code to ((the character at index in input) as an integer) bitwise and 255
+            if code = 0:
+                return a file URI failure with "Path text contains a null byte" supported true
+            if code > 127:
+                return a file URI failure with "A file URI must percent-encode non-ASCII bytes" supported true
+            increment index
+        if input's length < 6:
+            return a file URI failure with "Expected an absolute file URI" supported true
+        if ((path text (the substring of input from 0 spanning 5 bytes) matches (the string form of "file:") for style 2) = false) or (the character at 5 in input) != (47 as a byte):
+            return a file URI failure with "Expected an absolute file URI" supported true
+        set pathStart to 5
+        set authority to the string form of ""
+        if input's length >= 7 and (the character at 6 in input) = (47 as a byte):
+            set pathStart to the next component end in input starting at 7
+            if pathStart = input's length:
+                return a file URI failure with "A file URI requires an absolute path" supported true
+            set encodedAuthority to the substring of input from 7 spanning (pathStart - 7) bytes
+            set decodedAuthority to the decoded file URI component encodedAuthority as authority true using style's value
+            if decodedAuthority failed:
+                return a file URI failure with decodedAuthority's error message supported true
+            set authority to decodedAuthority's value
+        set local to authority's length = 0 or (path text authority matches (the string form of "localhost") for style 2)
+        set encodedPath to the substring of input from pathStart spanning (input's length - pathStart) bytes
+        set decodedPath to the decoded file URI component encodedPath as authority false using style's value
+        if decodedPath failed:
+            return a file URI failure with decodedPath's error message supported true
+        set text to decodedPath's value
+        if local = false:
+            if style's value = 1:
+                return a file URI failure with "A non-local file URI cannot be mapped to a POSIX path" supported false
+            set text to ("//" + authority) + text
+        else if style's value = 2:
+            set unc to false
+            set drive to false
+            if text's length >= 3:
+                set unc to ((the character at 0 in text) = (47 as a byte) and (the character at 1 in text) = (47 as a byte)) and (the character at 2 in text) != (47 as a byte)
+            if text's length >= 4:
+                set drive to (((the character at 0 in text) = (47 as a byte)) and (path byte ((the character at 1 in text) as an integer) is alphabetic)) and (((the character at 2 in text) = (58 as a byte)) and ((the character at 3 in text) = (47 as a byte)))
+            if unc = false and drive = false:
+                return a file URI failure with "A local Windows file URI requires an absolute drive or UNC path" supported true
+            if drive:
+                set text to the substring of text from 1 spanning (text's length - 1) bytes
+        set parsed to path text parsed for style style's value normalizing dots false
+        if parsed's success = false:
+            return a file URI failure with parsed's error supported true
+        if (path root kind parsed's rootKind is fully absolute) = false:
+            return a file URI failure with "A file URI did not contain an absolute path" supported true
+        return a file URI result containing parsed's text
+
+function [the path from] {C string:input} [interpreted as a file URI using] {path style:style}:
+    execute:
+        if input = (0 as a pointer):
+            return a file URI failure with "Invalid file URI text" supported true
+        return the path from (the string form of input) interpreted as a file URI using style
+
+function [the path from] {string:input} [interpreted as a file URI]:
+    execute:
+        set native to the native path style
+        if native failed:
+            return a file URI failure with native's error message supported native's support
+        return the path from input interpreted as a file URI using native's value
+
+function [the file URI for] {string:input} [interpreted as a native path]:
+    execute:
+        set native to the native path style
+        if native failed:
+            return a file URI failure with native's error message supported native's support
+        return the file URI representing input using native's value

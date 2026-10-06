@@ -1,0 +1,102 @@
+# Windows CRT quoting and command-line assembly are library policy.
+# https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
+# https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
+import lib/unicode.dl
+
+class:
+    patterns:
+        [a|] native process string
+    members:
+        data as a pointer to a byte
+        length as a word sized integer
+
+function [the Windows write position after] {integer:code} [into] {a pointer to a 16 bit unsigned integer:output} [at] {integer:position}:
+    execute:
+        if output != (0 as a pointer to a 16 bit unsigned integer):
+            store (code as a 16 bit unsigned integer) into output at position
+        return position + 1
+
+function [the Windows argument end for] {a pointer to a 16 bit unsigned integer:input} [of length] {integer:length} [written to] {a pointer to a 16 bit unsigned integer:output} [from] {integer:start}:
+    execute:
+        set quoted to length = 0
+        set index to 0
+        loop while index < length:
+            set code to (the item at index in input) as an integer
+            if (code = 32 or code = 9) or code = 34:
+                set quoted to true
+            increment index
+        set cursor to start
+        set index to 0
+        if quoted = false:
+            loop while index < length:
+                set cursor to the Windows write position after ((the item at index in input) as an integer) into output at cursor
+                increment index
+            return cursor
+        set cursor to the Windows write position after 34 into output at cursor
+        set slashes to 0
+        loop while index <= length:
+            set code to 0
+            if index < length:
+                set code to (the item at index in input) as an integer
+            if code = 92:
+                increment slashes
+            else:
+                set copies to (slashes * 2) if (code = 34 or index = length), else slashes
+                set copy to 0
+                loop while copy < copies:
+                    set cursor to the Windows write position after 92 into output at cursor
+                    increment copy
+                if index < length:
+                    if code = 34:
+                        set cursor to the Windows write position after 92 into output at cursor
+                    set cursor to the Windows write position after code into output at cursor
+                set slashes to 0
+            increment index
+        return the Windows write position after 34 into output at cursor
+
+function [a failed Windows command line reporting] {C string:message} [releasing] {a pointer to a 16 bit unsigned integer:output}:
+    execute:
+        @intrinsic("call", "libc", "free", nothing, output)
+        @intrinsic("call", "dynlex_runtime", "dynlex_runtime_set_error", nothing, message)
+        return 0 as a pointer to a 16 bit unsigned integer
+
+# Called by the native process launcher after it resolves the executable path.
+# The returned allocation is owned and freed by that launcher.
+function [build the Windows command line for] {a pointer to a 16 bit unsigned integer:executable} [with] {a pointer to a native process string:arguments} [counting] {word sized integer:count}:
+    execute:
+        set output to 0 as a pointer to a 16 bit unsigned integer
+        set executableLength to 0
+        loop while (the item at executableLength in executable) != (0 as a 16 bit unsigned integer):
+            increment executableLength
+            if executableLength >= 32767:
+                return a failed Windows command line reporting "Windows command line exceeds 32767 UTF-16 code units" releasing output
+        set pass to 0
+        loop while pass < 2:
+            set cursor to the Windows argument end for executable of length executableLength written to output from 0
+            if cursor >= 32767:
+                return a failed Windows command line reporting "Windows command line exceeds 32767 UTF-16 code units" releasing output
+            set index to 0 as a word sized integer
+            loop while index < count:
+                set argument to arguments + index
+                # A valid UTF-8 input uses at most three bytes per UTF-16 unit.
+                # Reject an impossible size before copying or allocating its conversion.
+                if argument's length > (98298 as a word sized integer):
+                    return a failed Windows command line reporting "Windows command line exceeds 32767 UTF-16 code units" releasing output
+                set text to a new string from argument's data containing (argument's length as an integer) bytes
+                set encoded to the UTF-16 encoding of text
+                if encoded's success = false:
+                    return a failed Windows command line reporting "Invalid UTF-8 in Windows process argument" releasing output
+                set cursor to the Windows write position after 32 into output at cursor
+                set input to (the data of encoded's storage) as a pointer to a 16 bit unsigned integer
+                set cursor to the Windows argument end for input of length encoded's length written to output from cursor
+                if cursor >= 32767:
+                    return a failed Windows command line reporting "Windows command line exceeds 32767 UTF-16 code units" releasing output
+                increment index
+            if pass = 0:
+                set output to @intrinsic("call", "libc", "calloc", a pointer to a 16 bit unsigned integer, (cursor + 1) as a word sized integer, 2 as a word sized integer)
+                if output = (0 as a pointer to a 16 bit unsigned integer):
+                    return a failed Windows command line reporting "Could not allocate Windows command line" releasing output
+            else:
+                store (0 as a 16 bit unsigned integer) into output at cursor
+            increment pass
+        return output

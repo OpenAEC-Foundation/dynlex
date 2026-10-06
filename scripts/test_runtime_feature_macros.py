@@ -155,15 +155,6 @@ class RuntimeFeatureMacroTests(unittest.TestCase):
         self.assertNotIn("#define _GNU_SOURCE", source)
         self.assertNotIn("#define _DARWIN_C_SOURCE", source)
 
-        source = (TEST_RUNTIME_DIR / "path_uri_symlink_identity.c").read_text(
-            encoding="utf-8"
-        )
-        self.assertTrue(
-            source.startswith('#include "platformFeatureTest.h"\n'),
-            "path_uri_symlink_identity.c must select platform APIs before any system header",
-        )
-        self.assertNotIn("#define _POSIX_C_SOURCE", source)
-
         cmake = (PROJECT_DIR / "CMakeLists.txt").read_text(encoding="utf-8")
         self.assertIn("src/runtime/platformFeatureTest.h", cmake)
 

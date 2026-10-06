@@ -1,0 +1,24 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function show value:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%lld\n", value))
+
+class:
+    patterns:
+        box
+    members:
+        value
+
+show @intrinsic("size of", @intrinsic("add pointer depth", box))
+set narrow to @intrinsic("construct", box, 1)
+set wide to @intrinsic("construct", box, 1.0)
+show @intrinsic("size of", @intrinsic("type of", narrow))
+show @intrinsic("size of", @intrinsic("type of", wide))
+show @intrinsic("size of", @intrinsic("array", 3, @intrinsic("type of", narrow)))
+show @intrinsic("size of", @intrinsic("array", 3, @intrinsic("type of", wide)))
+show @intrinsic("size of", @intrinsic("add pointer depth", box))
+show @intrinsic("size of", @intrinsic("add pointer depth", @intrinsic("add pointer depth", box)))
+show @intrinsic("size of", @intrinsic("array", 3, @intrinsic("add pointer depth", box)))

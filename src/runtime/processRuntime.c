@@ -345,7 +345,7 @@ static void capture_runtime_error(char *destination, size_t capacity, const char
 		memcpy(destination, fallback, strlen(fallback) + 1);
 }
 
-void *dynlex_process_launch(DynlexProcessCommand *command) {
+void *dynlex_process_launch(DynlexProcessCommand *command, DynlexWindowsCommandLineBuilder build_command_line) {
 	dynlex_runtime_clear_error();
 	DynlexProcess *process = calloc(1, sizeof(*process));
 	if (process == NULL) {
@@ -362,7 +362,7 @@ void *dynlex_process_launch(DynlexProcessCommand *command) {
 		capture_runtime_error(process->launch_error, sizeof(process->launch_error), "Invalid process command");
 		return process;
 	}
-	if (dynlex_platform_process_launch(process, command) != 0) {
+	if (dynlex_platform_process_launch(process, command, build_command_line) != 0) {
 		capture_runtime_error(process->launch_error, sizeof(process->launch_error), "Could not launch process");
 		return process;
 	}

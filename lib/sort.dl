@@ -2,6 +2,15 @@
 
 import lib/list.dl
 
+# Sorts caller-owned contiguous native records in place with libc qsort.
+# Values must contain only trivially movable data, and comparator must return
+# a negative, zero, or positive 32-bit integer for its two record pointers.
+function sort native array at {pointer:values} with {a word sized unsigned integer:count} items of {a word sized unsigned integer:stride} bytes using {pointer:comparator}:
+    execute:
+        if count < 2:
+            @intrinsic("return")
+        @intrinsic("call", "libc", "qsort", nothing, values, count, stride, comparator)
+
 to get the unsigned byte value of octet:
     return (octet as a 32 bit integer) bitwise and 255
 

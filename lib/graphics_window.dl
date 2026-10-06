@@ -1,0 +1,154 @@
+import lib/check.dl
+import lib/time.dl
+import lib/host.dl
+import lib/atomic.dl
+import lib/graphics_native_types.dl
+
+local class:
+    patterns:
+        [a|] graphics library state
+    members:
+        users as a 32 bit unsigned integer
+        locked as a boolean
+
+local class:
+    patterns:
+        GLFWvidmode
+    members:
+        width as an integer
+        height as an integer
+        redBits as an integer
+        greenBits as an integer
+        blueBits as an integer
+        refreshRate as an integer
+
+set graphicsLibrary to a new graphics library state
+
+local function [lock the graphics library]:
+    globals: graphicsLibrary
+    execute:
+        loop while @intrinsic("atomic exchange", the address of (graphicsLibrary's locked), true, "acquire"):
+            ignore 0
+
+local function [unlock the graphics library]:
+    globals: graphicsLibrary
+    execute:
+        atomically store release false at (the address of (graphicsLibrary's locked))
+
+local function [report GLFW failure during] {C string:operation}:
+    execute:
+        set description to 0 as a C string
+        set code to @intrinsic("call", "glfw", "glfwGetError", an integer, the address of description)
+        print operation
+        print " failed with GLFW error "
+        print code as a line
+        if description != (0 as a C string):
+            print description as a line
+        require condition false reporting "The graphics window operation failed"
+
+local function [configure the bundled Vulkan driver]:
+    execute:
+        if the build target is macOS:
+            set explicitDriver to @intrinsic("call", "libc", "getenv", a pointer, "VK_ADD_DRIVER_FILES")
+            set driverFiles to @intrinsic("call", "libc", "getenv", a pointer, "VK_DRIVER_FILES")
+            set oldDriverFiles to @intrinsic("call", "libc", "getenv", a pointer, "VK_ICD_FILENAMES")
+            if ((explicitDriver != (0 as a pointer)) or (driverFiles != (0 as a pointer))) or (oldDriverFiles != (0 as a pointer)):
+                return nothing
+            set directory to the running executable directory
+            require condition directory's success reporting "Could not determine the executable directory for MoltenVK discovery"
+            set manifest to directory's value + "/MoltenVK_icd.json"
+            if @intrinsic("call", "libc", "access", an integer, the data of manifest, 4) != 0:
+                require condition ((the native C error number) = 2) reporting "The bundled MoltenVK manifest is not readable"
+                return nothing
+            require condition (@intrinsic("call", "libc", "setenv", an integer, "VK_ADD_DRIVER_FILES", the data of manifest, 0) = 0) reporting "Could not configure the bundled MoltenVK driver"
+
+exposed function [look up the graphics Vulkan procedure in] {pointer:instance} [named] {C string:name}:
+    execute:
+        return @intrinsic("call", "vulkan", "vkGetInstanceProcAddr", a pointer, instance, name)
+
+local function [configure the GLFW Vulkan loader]:
+    execute:
+        set major to 0
+        set minor to 0
+        set revision to 0
+        @intrinsic("call", "glfw", "glfwGetVersion", nothing, the address of major, the address of minor, the address of revision)
+        # GLFW added explicit loader selection in 3.4. Resolve this entry
+        # point only when the installed library provides that interface.
+        if (major > 3) or (major = 3 and minor >= 4):
+            set initialize to 0 as a pointer
+            if the build target is Windows:
+                set module to @intrinsic("call", "kernel32", "GetModuleHandleA", a pointer, "glfw3.dll")
+                require condition (module != (0 as a pointer)) reporting "Could not locate the loaded GLFW library"
+                set initialize to @intrinsic("call", "kernel32", "GetProcAddress", a pointer, module, "glfwInitVulkanLoader")
+            else:
+                if the build target is macOS:
+                    set initialize to @intrinsic("call", "libc", "dlsym", a pointer, ((0 - 2) as a word sized integer) as a pointer, "glfwInitVulkanLoader")
+                else:
+                    set initialize to @intrinsic("call", "dl", "dlsym", a pointer, 0 as a pointer, "glfwInitVulkanLoader")
+            require condition (initialize != (0 as a pointer)) reporting "The GLFW library is missing its declared Vulkan loader interface"
+            @intrinsic("call pointer", initialize, nothing, the function named "look up the graphics Vulkan procedure in $ named $")
+
+local function [retain the graphics library]:
+    globals: graphicsLibrary
+    execute:
+        lock the graphics library
+        if graphicsLibrary's users = 0:
+            configure the bundled Vulkan driver
+            configure the GLFW Vulkan loader
+            if @intrinsic("call", "glfw", "glfwInit", an integer) != 1:
+                report GLFW failure during "Initializing the graphics window system"
+        set graphicsLibrary's users to graphicsLibrary's users + 1
+        unlock the graphics library
+
+local function [release the graphics library]:
+    globals: graphicsLibrary
+    execute:
+        lock the graphics library
+        set graphicsLibrary's users to graphicsLibrary's users - 1
+        if graphicsLibrary's users = 0:
+            @intrinsic("call", "glfw", "glfwTerminate", nothing)
+        unlock the graphics library
+
+exposed function [handle the graphics framebuffer resize of] {pointer:window} [to width] {integer:width} [height] {integer:height}:
+    execute:
+        set state to @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to DynlexGraphics, window)
+        set state's swapchain_dirty to true
+
+exposed function [handle the graphics scroll of] {pointer:window} [by x] {floating-point number:x} [y] {floating-point number:y}:
+    execute:
+        set state to @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to DynlexGraphics, window)
+        if state's scroll_callback != (0 as a pointer):
+            @intrinsic("call pointer", state's scroll_callback, nothing, state as a pointer, x, y)
+
+function [a graphics window resource with width] {integer:width} [height] {integer:height} [visible] {boolean:visible} [fullscreen] {boolean:fullscreen}:
+    execute:
+        require condition ((fullscreen and (width = 0 and height = 0)) or (fullscreen = false and (width > 0 and height > 0))) reporting "Graphics windows require positive dimensions; fullscreen windows use monitor dimensions"
+        retain the graphics library
+        @intrinsic("call", "glfw", "glfwDefaultWindowHints", nothing)
+        @intrinsic("call", "glfw", "glfwWindowHint", nothing, 139265, 0)
+        @intrinsic("call", "glfw", "glfwWindowHint", nothing, 131076, visible as an integer)
+        set monitor to 0 as a pointer
+        if fullscreen:
+            set monitor to @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer)
+            if monitor = (0 as a pointer):
+                report GLFW failure during "Querying the primary monitor"
+            set mode to @intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to GLFWvidmode, monitor)
+            if mode = (0 as a pointer to GLFWvidmode):
+                report GLFW failure during "Querying the primary monitor video mode"
+            set width to mode's width
+            set height to mode's height
+        set state to @intrinsic("call", "libc", "calloc", a pointer to DynlexGraphics, 1 as a word sized integer, the size of DynlexGraphics)
+        require condition (state != (0 as a pointer to DynlexGraphics)) reporting "Could not allocate the graphics context"
+        set state's window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer, width, height, "DynLex", monitor, 0 as a pointer)
+        if state's window = (0 as a pointer):
+            report GLFW failure during "Creating the graphics window"
+        @intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, state's window, state)
+        ignore @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer, state's window, the function named "handle the graphics framebuffer resize of $ to width $ height $")
+        ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, the function named "handle the graphics scroll of $ by x $ y $")
+        return state
+
+function [destroy graphics window resource] {a pointer to DynlexGraphics:state}:
+    execute:
+        @intrinsic("call", "glfw", "glfwDestroyWindow", nothing, state's window)
+        @intrinsic("call", "libc", "free", nothing, state)
+        release the graphics library

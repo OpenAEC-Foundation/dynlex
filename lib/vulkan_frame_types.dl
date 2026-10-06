@@ -1,0 +1,74 @@
+import lib/vulkan_types.dl
+
+class:
+    patterns:
+        VkOffset2D
+    members:
+        x as a 32 bit integer
+        y as a 32 bit integer
+
+class:
+    patterns:
+        VkRect2D
+    members:
+        offset as VkOffset2D
+        extent as VkExtent2D
+
+class:
+    patterns:
+        VkCommandBufferBeginInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        flags as a 32 bit unsigned integer
+        pInheritanceInfo as a pointer
+
+class:
+    patterns:
+        VkRenderPassBeginInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        renderPass as a pointer
+        framebuffer as a pointer
+        renderArea as VkRect2D
+        clearValueCount as a 32 bit unsigned integer
+        pClearValues as a pointer
+
+class:
+    patterns:
+        VkViewport
+    members:
+        x as a 32 bit floating-point number
+        y as a 32 bit floating-point number
+        width as a 32 bit floating-point number
+        height as a 32 bit floating-point number
+        minDepth as a 32 bit floating-point number
+        maxDepth as a 32 bit floating-point number
+
+class:
+    patterns:
+        VkSubmitInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        waitSemaphoreCount as a 32 bit unsigned integer
+        pWaitSemaphores as a pointer
+        pWaitDstStageMask as a pointer
+        commandBufferCount as a 32 bit unsigned integer
+        pCommandBuffers as a pointer
+        signalSemaphoreCount as a 32 bit unsigned integer
+        pSignalSemaphores as a pointer
+
+class:
+    patterns:
+        VkPresentInfoKHR
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer
+        waitSemaphoreCount as a 32 bit unsigned integer
+        pWaitSemaphores as a pointer
+        swapchainCount as a 32 bit unsigned integer
+        pSwapchains as a pointer
+        pImageIndices as a pointer
+        pResults as a pointer

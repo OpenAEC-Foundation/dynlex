@@ -1,0 +1,27 @@
+# Expand FreeType's monochrome and grayscale bitmap formats into alpha bytes.
+# https://freetype.org/freetype2/docs/reference/ft2-basic_types.html#ft_bitmap
+import lib/check.dl
+
+function [the font coverage bytes from] {pointer:buffer} [width] {integer:width} [height] {integer:height} [pitch] {integer:pitch} [mode] {integer:mode} [gray levels] {integer:levels}:
+    execute:
+        require condition (mode >= 1 and mode <= 4) reporting "Unexpected FreeType bitmap format for normal rendering"
+        set widths to [0, 1, 8, 2, 4]
+        set bits to the item at mode in widths
+        set perByte to 8 / bits
+        set mask to (1 << bits) - 1
+        set maximum to (levels - 1) if mode = 2, else mask
+        set pixels to a new string buffer containing (width * height) bytes
+        set firstRow to buffer
+        if pitch < 0:
+            set firstRow to firstRow - (height - 1) * pitch
+        set row to 0
+        loop while row < height:
+            set column to 0
+            loop while column < width:
+                set octet to ((the item at (row * pitch + column / perByte) in firstRow) as an integer) bitwise and 255
+                set shift to (8 - bits) - (the remainder of column divided by perByte) * bits
+                set sample to (octet >> shift) bitwise and mask
+                store (((sample * 255) / maximum) as a byte) into (the data of pixels) at (row * width + column)
+                increment column
+            increment row
+        return pixels

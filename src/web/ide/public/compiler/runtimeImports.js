@@ -2,9 +2,9 @@ function runtimeDependencyUrl(path) {
   return new URL(path, import.meta.url).href;
 }
 
-const [filesystemModule, pathHostModule, layoutModule] = await Promise.all([
+const [filesystemModule, hostModule, layoutModule] = await Promise.all([
   import(runtimeDependencyUrl("./runtimeFilesystem.js")),
-  import(runtimeDependencyUrl("./runtimePathHost.js")),
+  import(runtimeDependencyUrl("./runtimeHost.js")),
   import(runtimeDependencyUrl("./runtimeLayout.js"))
 ]);
 const {
@@ -13,7 +13,7 @@ const {
   readCString,
   writeCString
 } = filesystemModule;
-const { createHostImports, createPathImports } = pathHostModule;
+const { createHostImports } = hostModule;
 const { inspectRuntimeWasmLayout } = layoutModule;
 
 const supportedEnvImports = new Set([
@@ -72,12 +72,6 @@ const supportedEnvImports = new Set([
   "dynlex_host_read_standard_input",
   "dynlex_host_user_cache_directory",
   "dynlex_host_write_standard_error",
-  "dynlex_path_binary",
-  "dynlex_path_error_message",
-  "dynlex_path_file_uri",
-  "dynlex_path_is_absolute",
-  "dynlex_path_native_style",
-  "dynlex_path_unary",
   "dynlex_print_i64",
   "dynlex_print_string",
   "fclose",
@@ -645,8 +639,7 @@ export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layou
       return BigInt(Math.floor(Date.now() / 1000));
     },
     ...createFileImports(memory, filesystem),
-    ...createHostImports(memory),
-    ...createPathImports(memory, allocateBytes)
+    ...createHostImports(memory)
   };
 
   for (const importSpec of importSpecs) {

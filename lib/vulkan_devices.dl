@@ -1,0 +1,175 @@
+import lib/platform.dl
+import lib/vulkan_memory.dl
+import lib/vulkan_device_types.dl
+
+function [allocated Vulkan storage for] {word sized unsigned integer:count} [instances of] {type:kind}:
+    execute:
+        set result to @intrinsic("call", "libc", "calloc", a pointer to kind, count, the size of kind)
+        require condition (result != (0 as a pointer to kind)) reporting "Could not allocate Vulkan resource information"
+        return result
+
+function [Vulkan extension] {C string:name} [exists in] {a pointer to VkExtensionProperties:extensions} [count] {32 bit unsigned integer:count}:
+    execute:
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < count:
+            set extension to extensions + index
+            if ((extension's extensionName + 0) as a C string) = name:
+                return true
+            increment index
+        return false
+
+function [Vulkan version] {32 bit unsigned integer:version} [supports graphics]:
+    execute:
+        set major to (version shifted right by 22) bitwise and 127
+        set minor to (version shifted right by 12) bitwise and 1023
+        return (major > 1) or (major = 1 and minor >= 3)
+
+function [create the Vulkan instance in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (@intrinsic("call", "glfw", "glfwVulkanSupported", an integer) = 1) reporting "The window system cannot load Vulkan"
+        set enumerateVersion to @intrinsic("call", "glfw", "glfwGetInstanceProcAddress", a pointer, 0 as a pointer, "vkEnumerateInstanceVersion")
+        require condition (enumerateVersion != (0 as a pointer)) reporting "DynLex graphics requires a Vulkan 1.3 or newer loader"
+        set version to 0 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call pointer", enumerateVersion, an integer, the address of version) for "Querying the Vulkan loader version"
+        require condition (Vulkan version version supports graphics) reporting "DynLex graphics requires a Vulkan 1.3 or newer loader"
+        set count to 0 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateInstanceExtensionProperties", an integer, 0 as a pointer, the address of count, 0 as a pointer) for "Counting Vulkan instance extensions"
+        require condition (count > 0) reporting "The Vulkan loader provides no surface extensions"
+        set available to allocated Vulkan storage for (count as a word sized unsigned integer) instances of VkExtensionProperties
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateInstanceExtensionProperties", an integer, 0 as a pointer, the address of count, available) for "Enumerating Vulkan instance extensions"
+        set requiredCount to 0 as a 32 bit unsigned integer
+        set required to @intrinsic("call", "glfw", "glfwGetRequiredInstanceExtensions", a pointer to a C string, the address of requiredCount)
+        require condition (requiredCount > 0) reporting "The window system did not provide required Vulkan surface extensions"
+        set enabled to allocated Vulkan storage for ((requiredCount + 1) as a word sized unsigned integer) instances of a C string
+        set portabilityEnabled to false
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < requiredCount:
+            set name to @intrinsic("dereference", required + index)
+            require condition (Vulkan extension name exists in available count count) reporting "A required Vulkan surface extension is unavailable"
+            @intrinsic("store at", enabled + index, name)
+            if name = "VK_KHR_portability_enumeration":
+                set portabilityEnabled to true
+            increment index
+        set portable to Vulkan extension "VK_KHR_portability_enumeration" exists in available count count
+        if the build target is macOS:
+            require condition portable reporting "MoltenVK requires the Vulkan portability enumeration extension"
+        set creation to a new VkInstanceCreateInfo
+        set creation's sType to 1
+        if portable:
+            set creation's flags to 1 as a 32 bit unsigned integer
+            if portabilityEnabled = false:
+                @intrinsic("store at", enabled + requiredCount, "VK_KHR_portability_enumeration")
+                increment requiredCount
+        set application to a new VkApplicationInfo
+        set application's pApplicationName to "DynLex program"
+        set application's applicationVersion to 4194304 as a 32 bit unsigned integer
+        set application's pEngineName to "DynLex"
+        set application's engineVersion to 4194304 as a 32 bit unsigned integer
+        set application's apiVersion to 4206592 as a 32 bit unsigned integer
+        set creation's pApplicationInfo to the address of application
+        set creation's enabledExtensionCount to requiredCount
+        set creation's ppEnabledExtensionNames to enabled
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateInstance", an integer, the address of creation, 0 as a pointer, the address of (state's instance)) for "Creating the Vulkan instance"
+        @intrinsic("call", "libc", "free", nothing, enabled)
+        @intrinsic("call", "libc", "free", nothing, available)
+        require Vulkan status @intrinsic("call", "glfw", "glfwCreateWindowSurface", an integer, state's instance, state's window, 0 as a pointer, the address of (state's surface)) for "Creating the Vulkan window surface"
+
+class:
+    patterns:
+        [a|] graphics device candidate
+    members:
+        graphics as an integer
+        present as an integer
+        score as an integer
+        portable as a boolean
+
+function [a graphics candidate for Vulkan device] {pointer:device} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set candidate to @intrinsic("construct", a graphics device candidate, -1, -1, 0, false)
+        set count to 0 as a 32 bit unsigned integer
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceQueueFamilyProperties", nothing, device, the address of count, 0 as a pointer)
+        if count = 0:
+            return candidate
+        set families to allocated Vulkan storage for (count as a word sized unsigned integer) instances of VkQueueFamilyProperties
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceQueueFamilyProperties", nothing, device, the address of count, families)
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < count:
+            set family to families + index
+            if (candidate's graphics = -1) and ((family's queueFlags bitwise and 1) != 0):
+                set candidate's graphics to index as an integer
+            set present to 0 as a 32 bit unsigned integer
+            require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceSupportKHR", an integer, device, index, state's surface, the address of present) for "Querying Vulkan presentation support"
+            if (candidate's present = -1) and (present = 1):
+                set candidate's present to index as an integer
+            increment index
+        @intrinsic("call", "libc", "free", nothing, families)
+        if candidate's graphics = -1 or candidate's present = -1:
+            return candidate
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateDeviceExtensionProperties", an integer, device, 0 as a pointer, the address of count, 0 as a pointer) for "Counting Vulkan device extensions"
+        if count = 0:
+            return candidate
+        set extensions to allocated Vulkan storage for (count as a word sized unsigned integer) instances of VkExtensionProperties
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateDeviceExtensionProperties", an integer, device, 0 as a pointer, the address of count, extensions) for "Enumerating Vulkan device extensions"
+        set swapchain to Vulkan extension "VK_KHR_swapchain" exists in extensions count count
+        set candidate's portable to Vulkan extension "VK_KHR_portability_subset" exists in extensions count count
+        @intrinsic("call", "libc", "free", nothing, extensions)
+        if swapchain = false:
+            return candidate
+        set formats to 0 as a 32 bit unsigned integer
+        set modes to 0 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceFormatsKHR", an integer, device, state's surface, the address of formats, 0 as a pointer) for "Counting Vulkan surface formats"
+        require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfacePresentModesKHR", an integer, device, state's surface, the address of modes, 0 as a pointer) for "Counting Vulkan presentation modes"
+        if formats = 0 or modes = 0:
+            return candidate
+        set properties to a new VkPhysicalDeviceProperties
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceProperties", nothing, device, the address of properties)
+        if (Vulkan version properties' apiVersion supports graphics) = false:
+            return candidate
+        set candidate's score to 1
+        if properties' deviceType = 1:
+            set candidate's score to 2
+        if properties' deviceType = 2:
+            set candidate's score to 3
+        return candidate
+
+function [create the Vulkan device in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set count to 0 as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumeratePhysicalDevices", an integer, state's instance, the address of count, 0 as a pointer) for "Counting Vulkan physical devices"
+        require condition (count > 0) reporting "No Vulkan physical device is available"
+        set devices to allocated Vulkan storage for (count as a word sized unsigned integer) instances of a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkEnumeratePhysicalDevices", an integer, state's instance, the address of count, devices) for "Enumerating Vulkan physical devices"
+        set best to 0
+        set index to 0 as a 32 bit unsigned integer
+        loop while index < count:
+            set device to @intrinsic("dereference", devices + index)
+            set candidate to a graphics candidate for Vulkan device device in state
+            if candidate's score > best:
+                set state's physical_device to device
+                set state's graphics_queue_family to candidate's graphics as a 32 bit unsigned integer
+                set state's present_queue_family to candidate's present as a 32 bit unsigned integer
+                set state's portability_enabled to candidate's portable
+                set best to candidate's score
+            increment index
+        @intrinsic("call", "libc", "free", nothing, devices)
+        require condition (best > 0) reporting "No Vulkan 1.3 device supports graphics, presentation, and swapchains for this window"
+        set priority to 1.0 as a 32 bit floating-point number
+        set graphicsQueue to a new VkDeviceQueueCreateInfo
+        set graphicsQueue's sType to 2
+        set graphicsQueue's queueFamilyIndex to state's graphics_queue_family
+        set graphicsQueue's queueCount to 1 as a 32 bit unsigned integer
+        set graphicsQueue's pQueuePriorities to the address of priority
+        set presentQueue to graphicsQueue
+        set presentQueue's queueFamilyIndex to state's present_queue_family
+        set queues to [graphicsQueue, presentQueue]
+        set extensions to ["VK_KHR_swapchain", "VK_KHR_portability_subset"]
+        set creation to a new VkDeviceCreateInfo
+        set creation's sType to 3
+        set creation's queueCreateInfoCount to (1 if state's graphics_queue_family = state's present_queue_family, else 2) as a 32 bit unsigned integer
+        set creation's pQueueCreateInfos to queues + 0
+        set creation's enabledExtensionCount to (2 if state's portability_enabled, else 1) as a 32 bit unsigned integer
+        set creation's ppEnabledExtensionNames to extensions + 0
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateDevice", an integer, state's physical_device, the address of creation, 0 as a pointer, the address of (state's device)) for "Creating the logical Vulkan device"
+        @intrinsic("call", "vulkan", "vkGetPhysicalDeviceProperties", nothing, state's physical_device, the address of (state's physical_properties))
+        @intrinsic("call", "vulkan", "vkGetDeviceQueue", nothing, state's device, state's graphics_queue_family, 0, the address of (state's graphics_queue))
+        @intrinsic("call", "vulkan", "vkGetDeviceQueue", nothing, state's device, state's present_queue_family, 0, the address of (state's present_queue))

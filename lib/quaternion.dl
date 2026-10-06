@@ -7,12 +7,19 @@ class:
     members:
         w, x, y, z
 
-a new quaternion with w {a value:scalar}, x {a value:horizontal}, y {a value:vertical} and z {a value:depth} means: @intrinsic("construct", a quaternion, scalar, horizontal, vertical, depth)
-to get {quaternion:left} + right:
-    return a new quaternion with w the w of left + right, x the x of left + right, y the y of left + right and z the z of left + right
+a new quaternion with w {a number:scalar}, x {a number:horizontal}, y {a number:vertical} and z {a number:depth} means: @intrinsic("construct", a quaternion, scalar, horizontal, vertical, depth)
 
-to get {quaternion:left} * factor:
-    return a new quaternion with w the w of left * factor, x the x of left * factor, y the y of left * factor and z the z of left * factor
+function {quaternion:left} + {a number:right}:
+    execute:
+        return a new quaternion with w the w of left + right, x the x of left + right, y the y of left + right and z the z of left + right
+
+function {quaternion:left} * {a number:factor}:
+    execute:
+        set scalar to (the w of left) * factor
+        set horizontal to (the x of left) * factor
+        set vertical to (the y of left) * factor
+        set depth to (the z of left) * factor
+        return a new quaternion with w scalar, x horizontal, y vertical and z depth
 
 to get the string form of {quaternion:value}:
     set result to the string form of "["
@@ -27,26 +34,23 @@ to get the string form of {quaternion:value}:
     add the string form of "]" to result
     return result
 
-to get the dot product of {vector:left} and {vector:right}:
-    return the x of left * the x of right + the y of left * the y of right + the z of left * the z of right
-
-to get the cross product of {vector:left} and {vector:right}:
-    return a new vector with x the y of left * the z of right - the z of left * the y of right, y the z of left * the x of right - the x of left * the z of right and z the x of left * the y of right - the y of left * the x of right
-
-to get the length of {vector:value}:
-    return the square root of the dot product of value and value
-
-to get {vector:value} normalized:
-    set magnitude to the length of value
-    if magnitude = 0.0:
-        return a new vector with x 0.0, y 0.0 and z 0.0
-    return a new vector with x the x of value / magnitude, y the y of value / magnitude and z the z of value / magnitude
-
 to get the identity quaternion:
     return a new quaternion with w 1.0, x 0.0, y 0.0 and z 0.0
 
 to get the quaternion product of {quaternion:left} and {quaternion:right}:
-    return a new quaternion with w the w of left * the w of right - the x of left * the x of right - the y of left * the y of right - the z of left * the z of right, x the w of left * the x of right + the x of left * the w of right + the y of left * the z of right - the z of left * the y of right, y the w of left * the y of right - the x of left * the z of right + the y of left * the w of right + the z of left * the x of right and z the w of left * the z of right + the x of left * the y of right - the y of left * the x of right + the z of left * the w of right
+    set leftScalar to the w of left
+    set leftHorizontal to the x of left
+    set leftVertical to the y of left
+    set leftDepth to the z of left
+    set rightScalar to the w of right
+    set rightHorizontal to the x of right
+    set rightVertical to the y of right
+    set rightDepth to the z of right
+    set scalar to (((leftScalar * rightScalar) - (leftHorizontal * rightHorizontal)) - (leftVertical * rightVertical)) - (leftDepth * rightDepth)
+    set horizontal to (((leftScalar * rightHorizontal) + (leftHorizontal * rightScalar)) + (leftVertical * rightDepth)) - (leftDepth * rightVertical)
+    set vertical to (((leftScalar * rightVertical) - (leftHorizontal * rightDepth)) + (leftVertical * rightScalar)) + (leftDepth * rightHorizontal)
+    set depth to (((leftScalar * rightDepth) + (leftHorizontal * rightVertical)) - (leftVertical * rightHorizontal)) + (leftDepth * rightScalar)
+    return a new quaternion with w scalar, x horizontal, y vertical and z depth
 
 function {quaternion:left} * {quaternion:right}:
     before: $ + $, $ - $
@@ -54,16 +58,37 @@ function {quaternion:left} * {quaternion:right}:
         return the quaternion product of left and right
 
 to get the dot product of {quaternion:left} and {quaternion:right}:
-    return the w of left * the w of right + the x of left * the x of right + the y of left * the y of right + the z of left * the z of right
+    set leftScalar to the w of left
+    set leftHorizontal to the x of left
+    set leftVertical to the y of left
+    set leftDepth to the z of left
+    set rightScalar to the w of right
+    set rightHorizontal to the x of right
+    set rightVertical to the y of right
+    set rightDepth to the z of right
+    set scalar to leftScalar * rightScalar
+    set horizontal to leftHorizontal * rightHorizontal
+    set vertical to leftVertical * rightVertical
+    set depth to leftDepth * rightDepth
+    return ((scalar + horizontal) + vertical) + depth
 
 to get the length of {quaternion:value}:
-    return the square root of the dot product of value and value
+    set squared to the dot product of value and value
+    return the square root of squared
 
 to get {quaternion:value} normalized:
     set magnitude to the length of value
     if magnitude = 0.0:
-        return the identity quaternion
-    return a new quaternion with w the w of value / magnitude, x the x of value / magnitude, y the y of value / magnitude and z the z of value / magnitude
+        set scalar to 1.0 as (the type of ((the w of value) / magnitude))
+        set horizontal to 0.0 as (the type of ((the x of value) / magnitude))
+        set vertical to 0.0 as (the type of ((the y of value) / magnitude))
+        set depth to 0.0 as (the type of ((the z of value) / magnitude))
+        return a new quaternion with w scalar, x horizontal, y vertical and z depth
+    set scalar to (the w of value) / magnitude
+    set horizontal to (the x of value) / magnitude
+    set vertical to (the y of value) / magnitude
+    set depth to (the z of value) / magnitude
+    return a new quaternion with w scalar, x horizontal, y vertical and z depth
 
 to get the conjugate of {quaternion:value}:
     return a new quaternion with w the w of value, x the negative of the x of value, y the negative of the y of value and z the negative of the z of value
@@ -71,23 +96,59 @@ to get the conjugate of {quaternion:value}:
 to get the inverse of {quaternion:value}:
     set squared to the dot product of value and value
     if squared = 0.0:
-        return the identity quaternion
+        set scalar to 1.0 as (the type of ((the w of value) / squared))
+        set horizontal to 0.0 as (the type of ((the x of value) / squared))
+        set vertical to 0.0 as (the type of ((the y of value) / squared))
+        set depth to 0.0 as (the type of ((the z of value) / squared))
+        return a new quaternion with w scalar, x horizontal, y vertical and z depth
     set conjugate to the conjugate of value
     return a new quaternion with w the w of conjugate / squared, x the x of conjugate / squared, y the y of conjugate / squared and z the z of conjugate / squared
 
-to get a quaternion for rotation around {vector:axis} by {a value:angle} degrees:
+local function the half angle for {a 32 bit floating-point number:angle}:
+    execute:
+        return angle * (0.008726646259971648 as a 32 bit floating-point number)
+
+local function the half angle for {a 64 bit floating-point number:angle}:
+    execute:
+        return angle * 0.008726646259971648
+
+local function the half angle for {a number:angle}:
+    execute:
+        return (angle as a floating-point number) * 0.008726646259971648
+
+to get a quaternion for rotation around {vector:axis} by {a number:angle} degrees:
     set unit to axis normalized
-    set half to angle * 0.008726646259971648
+    set half to the half angle for angle
     set sine to the sine of half
     set cosine to the cosine of half
-    return (a new quaternion with w cosine, x the x of unit * sine, y the y of unit * sine and z the z of unit * sine) normalized
+    set horizontal to (the x of unit) * sine
+    set vertical to (the y of unit) * sine
+    set depth to (the z of unit) * sine
+    return (a new quaternion with w cosine, x horizontal, y vertical and z depth) normalized
 
-to get {vector:value} rotated around {vector:axis} by {a value:angle} degrees:
+local function a quaternion from {vector:value}:
+    execute:
+        set zero to 0.0 as (the type of the x of value)
+        return a new quaternion with w zero, x the x of value, y the y of value and z the z of value
+
+local function a vector from {quaternion:value}:
+    execute:
+        return a new vector with x the x of value, y the y of value and z the z of value
+
+to get {vector:value} rotated around {vector:axis} by {a number:angle} degrees:
     set rotation to a quaternion for rotation around axis by angle degrees
-    set point to a new quaternion with w 0.0, x the x of value, y the y of value and z the z of value
-    set result to (rotation * point) * the conjugate of rotation
-    return a new vector with x the x of result, y the y of result and z the z of result
+    set point to a quaternion from value
+    set inverse to the inverse of rotation
+    set result to (rotation * point) * inverse
+    return a vector from result
 
-to get {quaternion:value} rotated around {vector:axis} by {a value:angle} degrees:
+function {vector:value} rotated by {quaternion:rotation}:
+    execute:
+        set point to a quaternion from value
+        set inverse to the inverse of rotation
+        set result to (rotation * point) * inverse
+        return a vector from result
+
+to get {quaternion:value} rotated around {vector:axis} by {a number:angle} degrees:
     set rotation to a quaternion for rotation around axis by angle degrees
     return rotation * value

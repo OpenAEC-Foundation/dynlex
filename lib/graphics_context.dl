@@ -1,0 +1,78 @@
+import lib/vulkan_swapchain.dl
+
+function [create Vulkan frame resources in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set pool to a new VkCommandPoolCreateInfo
+        set pool's sType to 39
+        set pool's flags to 2 as a 32 bit unsigned integer
+        set pool's queueFamilyIndex to state's graphics_queue_family
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateCommandPool", an integer, state's device, the address of pool, 0 as a pointer, the address of (state's command_pool)) for "Creating the Vulkan command pool"
+        set commands to a new (pointer array of 2 items)
+        set allocation to a new VkCommandBufferAllocateInfo
+        set allocation's sType to 40
+        set allocation's commandPool to state's command_pool
+        set allocation's commandBufferCount to (the length of commands) as a 32 bit unsigned integer
+        require Vulkan status @intrinsic("call", "vulkan", "vkAllocateCommandBuffers", an integer, state's device, the address of allocation, commands + 0) for "Allocating Vulkan frame commands"
+        set semaphore to a new VkSemaphoreCreateInfo
+        set semaphore's sType to 9
+        set fence to a new VkFenceCreateInfo
+        set fence's sType to 8
+        set fence's flags to 1 as a 32 bit unsigned integer
+        set index to 0
+        loop while index < (the length of state's frames):
+            set frame to the address of (the item at index in (state's frames))
+            set frame's commands to the item at index in commands
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateSemaphore", an integer, state's device, the address of semaphore, 0 as a pointer, the address of (frame's image_available)) for "Creating frame synchronization"
+            require Vulkan status @intrinsic("call", "vulkan", "vkCreateFence", an integer, state's device, the address of fence, 0 as a pointer, the address of (frame's completed)) for "Creating frame completion synchronization"
+            set size to 33554432 as a 64 bit unsigned integer
+            set buffer to a Vulkan buffer of size bytes with usage (128 as a 32 bit unsigned integer) and memory flags (6 as a 32 bit unsigned integer) in state
+            set frame's upload_buffer to buffer's handle
+            set frame's upload_memory to buffer's memory
+            set frame's upload to (Vulkan memory buffer's memory mapped for size bytes in state) as a pointer to a byte
+            increment index
+        set uniforms to a new VkDescriptorPoolSize
+        set uniforms' type to 6
+        set uniforms' descriptorCount to 2048 as a 32 bit unsigned integer
+        set textures to a new VkDescriptorPoolSize
+        set textures' type to 1
+        set textures' descriptorCount to 1024 as a 32 bit unsigned integer
+        set sizes to [uniforms, textures]
+        set descriptors to a new VkDescriptorPoolCreateInfo
+        set descriptors' sType to 33
+        set descriptors' flags to 1 as a 32 bit unsigned integer
+        set descriptors' maxSets to 2048 as a 32 bit unsigned integer
+        set descriptors' poolSizeCount to (the length of sizes) as a 32 bit unsigned integer
+        set descriptors' pPoolSizes to sizes + 0
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateDescriptorPool", an integer, state's device, the address of descriptors, 0 as a pointer, the address of (state's descriptor_pool)) for "Creating the Vulkan descriptor pool"
+
+function [create the Vulkan graphics context in] {a pointer to DynlexGraphics:state}:
+    execute:
+        create the Vulkan instance in state
+        create the Vulkan device in state
+        set state's depth_format to choose the Vulkan depth format in state
+        create the Vulkan swapchain replacing (0 as a pointer) in state
+        create the Vulkan render pass in state
+        create Vulkan swapchain attachments in state
+        create Vulkan frame resources in state
+
+# The caller releases meshes, textures and pipelines before the device.
+function [destroy the Vulkan graphics context in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to close the graphics context"
+        destroy Vulkan swapchain attachments in state
+        @intrinsic("call", "vulkan", "vkDestroyRenderPass", nothing, state's device, state's render_pass, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroySwapchainKHR", nothing, state's device, state's swapchain, 0 as a pointer)
+        set index to 0
+        loop while index < (the length of state's frames):
+            set frame to the address of (the item at index in (state's frames))
+            @intrinsic("call", "vulkan", "vkUnmapMemory", nothing, state's device, frame's upload_memory)
+            @intrinsic("call", "vulkan", "vkDestroyBuffer", nothing, state's device, frame's upload_buffer, 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, frame's upload_memory, 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroySemaphore", nothing, state's device, frame's image_available, 0 as a pointer)
+            @intrinsic("call", "vulkan", "vkDestroyFence", nothing, state's device, frame's completed, 0 as a pointer)
+            increment index
+        @intrinsic("call", "vulkan", "vkDestroyDescriptorPool", nothing, state's device, state's descriptor_pool, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyCommandPool", nothing, state's device, state's command_pool, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyDevice", nothing, state's device, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroySurfaceKHR", nothing, state's instance, state's surface, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyInstance", nothing, state's instance, 0 as a pointer)

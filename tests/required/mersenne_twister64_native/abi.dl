@@ -1,0 +1,21 @@
+import lib/mersenne_twister64.dl
+
+exposed function abi seed Mersenne Twister 64 at {pointer:statePointer} with {64 bit unsigned integer:seedValue}:
+    execute:
+        set enginePointer to statePointer as a pointer to a Mersenne Twister 64 engine
+        seed enginePointer with seedValue
+
+exposed function abi next 64 bit unsigned integer from Mersenne Twister 64 at {pointer:statePointer}:
+    execute:
+        set enginePointer to statePointer as a pointer to a Mersenne Twister 64 engine
+        return the next 64 bit unsigned integer from enginePointer
+
+exposed function abi next 64 bit unit fraction from Mersenne Twister 64 at {pointer:statePointer}:
+    execute:
+        set enginePointer to statePointer as a pointer to a Mersenne Twister 64 engine
+        return the next 64 bit unit fraction from enginePointer
+
+exposed function abi next 32 bit unit fraction from Mersenne Twister 64 at {pointer:statePointer}:
+    execute:
+        set enginePointer to statePointer as a pointer to a Mersenne Twister 64 engine
+        return the next 32 bit unit fraction from enginePointer

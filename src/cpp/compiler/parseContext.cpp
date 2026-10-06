@@ -173,8 +173,6 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->selectedInstantiation = preserveInferenceMetadata ? expression->selectedInstantiation : nullptr;
 	clone->subjectSetter = nullptr;
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
-	clone->minimumIntegerEffects =
-		preserveInferenceMetadata ? expression->minimumIntegerEffects : MinimumSignedIntegerMagnitudeEffects{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
 		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata));

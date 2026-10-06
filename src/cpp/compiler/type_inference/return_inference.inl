@@ -45,6 +45,10 @@ static std::optional<std::string> returnTypeReferenceSource(const DataType &type
 		if (baseType.numericSize > 0)
 			source = "@intrinsic(\"type\", \"int\", " + std::to_string(baseType.numericSize * 8) + ")";
 		break;
+	case DataType::Kind::UInt:
+		if (baseType.numericSize > 0)
+			source = "@intrinsic(\"type\", \"uint\", " + std::to_string(baseType.numericSize * 8) + ")";
+		break;
 	case DataType::Kind::Float:
 		if (baseType.numericSize > 0)
 			source = "@intrinsic(\"type\", \"float\", " + std::to_string(baseType.numericSize * 8) + ")";

@@ -641,6 +641,7 @@ if [[ "$is_windows" != "true" ]]; then
 fi
 run_auxiliary_test "macos_signature_verifier" 10 python3 -B "$SCRIPT_DIR/test_verify_macos_signature.py"
 run_auxiliary_test "release_executable_architecture" 10 python3 -B "$PROJECT_DIR/tests/release/test_executable_architecture.py"
+run_auxiliary_test "release_ref" 10 python3 -B "$PROJECT_DIR/tests/release/test_release_ref.py"
 run_auxiliary_test "windows_runtime_dependencies" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_runtime_dependencies.py"
 run_auxiliary_test "windows_upgrade_metadata_cmake" 10 cmake -P "$PROJECT_DIR/tests/release/windows_upgrade_metadata.cmake"
 run_auxiliary_test "windows_upgrade_metadata" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_upgrade_metadata.py"
@@ -659,7 +660,8 @@ run_auxiliary_test \
     "$TESTS_DIR/inequality_uses_overloaded_equality/main.dl"
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
-run_auxiliary_test "web_runtime_path_host" 10 node "$PROJECT_DIR/tests/web/runtime_path_host.mjs"
+run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
+run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"
@@ -668,7 +670,18 @@ run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/te
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
+run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"
+run_auxiliary_test "nested_operand_grouping" 30 python3 -B "$SCRIPT_DIR/test_nested_operand_grouping.py" "$PROJECT_DIR" "$COMPILER"
+run_auxiliary_test "string_literal_boundaries" 10 python3 -B "$SCRIPT_DIR/test_string_literal_boundaries.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_options.py" "$COMPILER"
+run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
+run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native_pointer_calls.py" "$COMPILER"
+run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
+run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
+run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"
+run_auxiliary_test "unary_arithmetic_types" 20 python3 -B "$SCRIPT_DIR/test_unary_arithmetic_types.py" "$COMPILER"
+run_auxiliary_test "mersenne_twister64_native_abi" 30 python3 -B "$SCRIPT_DIR/test_mersenne_twister64.py" "$COMPILER"
+run_auxiliary_test "normal_distribution_native_abi" 30 python3 -B "$SCRIPT_DIR/test_normal_distribution.py" "$COMPILER"
 
 echo "Testing timeout_process_tree..."
 timeout_test_start_ms=$(now_ms)

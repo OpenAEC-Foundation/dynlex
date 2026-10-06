@@ -1,0 +1,17 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+class:
+    patterns:
+        token
+    members:
+        value as integer
+    retain:
+        @intrinsic("return")
+    release:
+        @intrinsic("return")
+
+@intrinsic("store", item, @intrinsic("construct", token, 1))
+@intrinsic("store", values, [item])
+@intrinsic("store", address, @intrinsic("address of", values))

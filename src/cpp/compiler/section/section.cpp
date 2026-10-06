@@ -6,6 +6,7 @@
 #include "intrinsicInfo.h"
 #include "numericLiteral.h"
 #include "parseContext.h"
+#include "parseUtils.h"
 #include "patternTreeNode.h"
 #include "sectionSection.h"
 #include "stringHierarchy.h"
@@ -77,23 +78,6 @@ InstantiatedSectionBody::compileTimeValueForReference(const VariableReference *r
 			return result;
 	}
 	return std::nullopt;
-}
-
-// Process escape sequences in a string literal
-static std::string processEscapeSequences(std::string_view input) {
-	static const std::unordered_map<char, char> escapes = {{'n', '\n'}, {'t', '\t'}, {'r', '\r'},  {'a', '\a'}, {'b', '\b'},
-														   {'f', '\f'}, {'v', '\v'}, {'\\', '\\'}, {'"', '"'},	{'0', '\0'}};
-	std::string result;
-	result.reserve(input.size());
-	for (size_t i = 0; i < input.size(); ++i) {
-		if (input[i] == '\\' && i + 1 < input.size()) {
-			auto it = escapes.find(input[++i]);
-			result += (it != escapes.end()) ? it->second : input[i];
-		} else {
-			result += input[i];
-		}
-	}
-	return result;
 }
 
 void Section::collectPatternReferencesAndSections(
@@ -286,7 +270,7 @@ StringHierarchy *parseBracketHierarchy(ParseContext &context, Range range) {
 					delete base;
 					return nullptr;
 				}
-				if (*(stringIt - 1) != '\\') {
+				if (!isEscapedCharacter(range.subString, stringIt - range.subString.begin())) {
 					index = stringIt - range.subString.begin();
 					break;
 				}
@@ -381,17 +365,12 @@ static Expression *createArrayLiteral(
 	arrayExpr->kind = Expression::Kind::ArrayLiteral;
 
 	auto processElement = [&](StringHierarchy *elementNode) -> bool {
-		Expression *elementExpr = nullptr;
-		if (elementNode->character == '"') {
-			elementExpr = createStringLiteral(range, elementNode);
-		} else {
-			StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
-			elementExpr = section->detectPatternsRecursively(
-				context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function,
-				registerPatternReferences
-			);
-			delete clonedNode;
-		}
+		StringHierarchy *clonedNode = elementNode->cloneWithOffset(-elementNode->start);
+		Expression *elementExpr = section->detectPatternsRecursively(
+			context, range.subRange(elementNode->start, elementNode->end), clonedNode, SectionType::Function,
+			registerPatternReferences
+		);
+		delete clonedNode;
 		if (!elementExpr)
 			return false;
 		elementExpr->isExplicitGroup = true;
@@ -399,29 +378,18 @@ static Expression *createArrayLiteral(
 		return true;
 	};
 
-	if (!arrayNode->children.empty()) {
-		if (arrayNode->children[0]->character == ',') {
-			for (StringHierarchy *child : arrayNode->children) {
-				if (!processElement(child))
-					return nullptr;
-			}
-		} else {
-			if (!processElement(arrayNode->children[0]))
+	if (!arrayNode->children.empty() && arrayNode->children[0]->character == ',') {
+		for (StringHierarchy *child : arrayNode->children) {
+			if (!processElement(child))
 				return nullptr;
 		}
 	} else {
-		size_t elementStart = arrayNode->start;
-		size_t elementEnd = arrayNode->end;
-		while (elementStart < elementEnd && std::isspace(static_cast<unsigned char>(range.subString[elementStart])))
-			elementStart++;
-		while (elementEnd > elementStart && std::isspace(static_cast<unsigned char>(range.subString[elementEnd - 1])))
-			elementEnd--;
-		if (elementStart < elementEnd) {
-			StringHierarchy elementNode(0, elementStart);
-			elementNode.end = elementEnd;
-			if (!processElement(&elementNode))
-				return nullptr;
-		}
+		std::string_view contents = range.subString.substr(arrayNode->start, arrayNode->end - arrayNode->start);
+		bool hasElement = std::any_of(contents.begin(), contents.end(), [](unsigned char character) {
+			return !std::isspace(character);
+		});
+		if (hasElement && !processElement(arrayNode))
+			return nullptr;
 	}
 	return arrayExpr;
 }
@@ -640,6 +608,17 @@ Expression *Section::detectPatternsRecursively(
 			if (fracStart == pos)
 				pos = dotPos; // keep integer-only match if '.' isn't followed by digits
 		}
+		if (pos < patternSnapshot.size() && (patternSnapshot[pos] == 'e' || patternSnapshot[pos] == 'E')) {
+			size_t exponentStart = pos;
+			pos++;
+			if (pos < patternSnapshot.size() && (patternSnapshot[pos] == '+' || patternSnapshot[pos] == '-'))
+				pos++;
+			size_t exponentDigitsStart = pos;
+			while (pos < patternSnapshot.size() && std::isdigit(static_cast<unsigned char>(patternSnapshot[pos])))
+				pos++;
+			if (exponentDigitsStart == pos)
+				pos = exponentStart;
+		}
 
 		// Word boundary on the right to avoid partial matches in identifiers.
 		if (pos < patternSnapshot.size() && std::isalnum(static_cast<unsigned char>(patternSnapshot[pos]))) {
@@ -659,8 +638,8 @@ Expression *Section::detectPatternsRecursively(
 				relativeRange.subRange(reference->pattern.getLinePos(pos), reference->pattern.getLinePos(endPos));
 			std::string_view diagnosticKey;
 			switch (parsed.error) {
-			case NumericLiteralParseError::IntegerOutOfRange:
-				diagnosticKey = "integer literal out of range";
+			case NumericLiteralParseError::UnsignedIntegerOutOfRange:
+				diagnosticKey = "unsigned integer literal out of range";
 				break;
 			case NumericLiteralParseError::FloatingPointOutOfRange:
 				diagnosticKey = "floating point literal out of range";

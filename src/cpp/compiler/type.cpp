@@ -21,9 +21,11 @@ uint64_t fixedAllocationSize(const llvm::DataLayout &dataLayout, llvm::Type *typ
 using ClassInstanceKey = std::pair<const ClassDefinition *, int>;
 
 bool typeHasManagedLifecycle(const DataType &type, std::set<ClassInstanceKey> &visited) {
+	if (type.isPointer())
+		return false;
 	if (type.kind == DataType::Kind::Array)
 		return type.arrayElementType && typeHasManagedLifecycle(*type.arrayElementType, visited);
-	if (type.kind != DataType::Kind::Class || type.isPointer())
+	if (type.kind != DataType::Kind::Class)
 		return false;
 	requireCompilerInvariant(
 		type.classDefinition && type.classInstIndex >= 0, "managed lifecycle requires a concrete class type"
@@ -125,13 +127,20 @@ std::string withIndefiniteArticle(std::string phrase) {
 }
 
 std::string scalarTypeName(DataType::Kind kind, int numericSize) {
-	if (numericSize <= 0)
-		return kind == DataType::Kind::Int ? "an integer" : "a floating-point number";
+	if (numericSize <= 0) {
+		if (kind == DataType::Kind::Int)
+			return "an integer";
+		if (kind == DataType::Kind::UInt)
+			return "an unsigned integer";
+		return "a floating-point number";
+	}
 	int bitCount = numericSize * 8;
 	if (kind == DataType::Kind::Int && bitCount == 8)
 		return "a byte";
 	std::string article = bitCount == 8 ? "an " : "a ";
-	std::string category = kind == DataType::Kind::Int ? "integer" : "floating-point number";
+	std::string category = kind == DataType::Kind::Int	  ? "integer"
+						   : kind == DataType::Kind::UInt ? "unsigned integer"
+														  : "floating-point number";
 	return article + std::to_string(bitCount) + "-bit " + category;
 }
 
@@ -180,6 +189,7 @@ std::string typeToUserName(const DataType &type) {
 		result = "a boolean";
 		break;
 	case DataType::Kind::Int:
+	case DataType::Kind::UInt:
 	case DataType::Kind::Float:
 		result = scalarTypeName(valueType.kind, valueType.numericSize);
 		break;
@@ -244,6 +254,7 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 			result = "a boolean";
 			break;
 		case DataType::Kind::Int:
+		case DataType::Kind::UInt:
 		case DataType::Kind::Float:
 			result = scalarTypeName(*constraint.kind, constraint.numericSize.value_or(0));
 			break;
@@ -302,6 +313,9 @@ std::string DataType::toString() const {
 	case Kind::Int:
 		result += "i" + std::to_string(numericSize * 8);
 		break;
+	case Kind::UInt:
+		result += "u" + std::to_string(numericSize * 8);
+		break;
 	case Kind::Float:
 		result += "f" + std::to_string(numericSize * 8);
 		break;
@@ -339,7 +353,7 @@ std::string DataType::toString() const {
 }
 
 uint64_t DataType::getByteSize(const llvm::DataLayout &dataLayout, llvm::LLVMContext &llvmContext) const {
-	requireCompilerInvariant(isRuntimeValueType(), "byte size requires a concrete runtime value type");
+	requireCompilerInvariant(isConcrete() && isRuntimeValueType(), "byte size requires a concrete runtime value type");
 	llvm::Type *llvmType = toLLVM(llvmContext, dataLayout);
 	requireCompilerInvariant(llvmType->isSized(), "byte size requires a sized LLVM type");
 	return fixedAllocationSize(dataLayout, llvmType);
@@ -383,6 +397,7 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 			crashCompilerBug("Float type must have a valid numericSize (4/8) before codegen");
 		}
 	case Kind::Int:
+	case Kind::UInt:
 		switch (numericSize) {
 		case 1:
 			return llvm::Type::getInt8Ty(ctx);

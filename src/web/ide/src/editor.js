@@ -146,7 +146,7 @@ export function createDynLexEditor(host, { value = "", uri, embedded = false, on
         catch (error) { console.error("Editor shutdown failed", error); }
         finally { editor.dispose(); model.dispose(); }
       };
-      void cleanup();
+      return cleanup();
     }
   };
 }

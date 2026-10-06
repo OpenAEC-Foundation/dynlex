@@ -1,0 +1,14 @@
+# Compile-time platform selection for native library implementations.
+import lib/std.dl
+
+function the build target is Windows:
+    replacement:
+        @intrinsic("target is", "windows")
+
+function the build target is macOS:
+    replacement:
+        @intrinsic("target is", "macos")
+
+function the build target is Linux:
+    replacement:
+        @intrinsic("target is", "linux")

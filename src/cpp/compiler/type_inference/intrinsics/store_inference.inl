@@ -410,9 +410,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 	AddressProvenance assignedProvenance;
 	auto updateOwnerAddressProvenance = [&]() {
 		assignedProvenance = inferAddressProvenance(valueExpr, context, valueBindingFrameStack);
-		AddressProvenance ownerStorage = instanceType.isPointer()
-											 ? inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack)
-											 : *ownerLValueProvenance;
+		AddressProvenance ownerStorage =
+			instanceType.isPointer()
+				? dereferenceAddressProvenance(
+					  inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack), instanceType.pointerDepth - 1, context
+				  )
+				: *ownerLValueProvenance;
 		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerStorage);
 		if (ownerStorage.unknown)
 			noteUnknownAddressWrite(context);

@@ -109,8 +109,10 @@ struct ParseContext {
 		std::string inputPath;
 		std::string outputPath;
 		bool emitLLVM = false;
+		bool emitObject = false;
 		bool emitWASM = false;
 		bool emitSPIRV = false;
+		bool noMain = false;
 		ShaderStage shaderStage = ShaderStage::Fragment;
 		int optimizationLevel = 0; // 0-3, corresponds to -O0 through -O3
 		OptimizationSize optimizationSize = OptimizationSize::None;

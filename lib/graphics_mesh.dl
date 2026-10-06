@@ -1,0 +1,62 @@
+import lib/graphics_drawing.dl
+import lib/vulkan_memory.dl
+
+function [an uploaded graphics mesh containing] {integer:count} [vertices at] {a pointer to DynlexGraphicsVertex:vertices} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active = false) reporting "Mesh creation requires an idle graphics frame"
+        require condition ((count > 0) and ((the remainder of count divided by 3) = 0)) reporting "A graphics mesh requires a positive multiple of three vertices"
+        set components to vertices as a pointer to a 32 bit floating-point number
+        set index to 0 as a word sized integer
+        loop while index < (count as a word sized integer) * 9:
+            set value to @intrinsic("dereference", components + index)
+            require condition (value is finite) reporting "Graphics mesh vertex components must be finite"
+            increment index
+        set mesh to @intrinsic("call", "libc", "calloc", a pointer to DynlexGraphicsMesh, 1 as a word sized integer, the size of DynlexGraphicsMesh)
+        require condition (mesh != (0 as a pointer to DynlexGraphicsMesh)) reporting "Could not allocate a graphics mesh"
+        set mesh's owner to state
+        set mesh's count to count as a 32 bit unsigned integer
+        set size to (count as a 64 bit unsigned integer) * (the size of DynlexGraphicsVertex)
+        set allocation to a Vulkan buffer of size bytes with usage (128 as a 32 bit unsigned integer) and memory flags (6 as a 32 bit unsigned integer) in state
+        set mesh's buffer to allocation's handle
+        set mesh's memory to allocation's memory
+        set mapped to Vulkan memory mesh's memory mapped for size bytes in state
+        ignore @intrinsic("call", "libc", "memcpy", a pointer, mapped, vertices, size as a word sized unsigned integer)
+        @intrinsic("call", "vulkan", "vkUnmapMemory", nothing, state's device, mesh's memory)
+        set mesh's next to state's meshes
+        set state's meshes to mesh
+        return mesh
+
+function [destroy the graphics mesh resources in] {a pointer to DynlexGraphicsMesh:mesh}:
+    execute:
+        @intrinsic("call", "vulkan", "vkDestroyBuffer", nothing, mesh's owner's device, mesh's buffer, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkFreeMemory", nothing, mesh's owner's device, mesh's memory, 0 as a pointer)
+        @intrinsic("call", "libc", "free", nothing, mesh)
+
+function [release the uploaded graphics mesh] {a pointer to DynlexGraphicsMesh:mesh}:
+    execute:
+        set state to mesh's owner
+        require condition (state's frame_active = false) reporting "Releasing a mesh requires an idle graphics frame"
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to release a graphics mesh"
+        set link to the address of (state's meshes)
+        loop while @intrinsic("dereference", link) != mesh:
+            set link to the address of (link's next)
+        @intrinsic("store at", link, mesh's next)
+        destroy the graphics mesh resources in mesh
+
+function [release all graphics meshes in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition (state's frame_active = false) reporting "Closing a window requires an idle graphics frame"
+        require Vulkan status @intrinsic("call", "vulkan", "vkDeviceWaitIdle", an integer, state's device) for "Waiting to release graphics meshes"
+        loop while state's meshes != (0 as a pointer to DynlexGraphicsMesh):
+            set mesh to state's meshes
+            set state's meshes to mesh's next
+            destroy the graphics mesh resources in mesh
+
+function [draw the uploaded graphics mesh] {a pointer to DynlexGraphicsMesh:mesh} [from vertex] {integer:first} [for] {integer:count} [vertices tinted red] {integer:red} [green] {integer:green} [blue] {integer:blue} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        require condition ((state's frame_active and state's triangles_active = false) and (mesh's owner = state)) reporting "Drawing a mesh requires its active graphics frame with no unfinished triangles"
+        require condition ((first >= 0 and count > 0) and (((the remainder of first divided by 3) = 0) and ((the remainder of count divided by 3) = 0))) reporting "A mesh draw range must contain complete triangles within the uploaded vertex array"
+        require condition (((first as a 64 bit unsigned integer) + (count as a 64 bit unsigned integer)) <= mesh's count) reporting "A mesh draw range must contain complete triangles within the uploaded vertex array"
+        set offset to (first as a 64 bit unsigned integer) * (the size of DynlexGraphicsVertex)
+        set constants to graphics draw constants tinted red red green green blue blue alpha 255 for state
+        record graphics triangles from mesh's buffer at byte offset offset count (count as a 32 bit unsigned integer) with texture (0 as a pointer to DynlexGraphicsTexture) and tint constants in state

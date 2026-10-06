@@ -146,21 +146,6 @@ std::filesystem::path runtimeLibraryPath() {
 	return path;
 }
 
-std::filesystem::path graphicsLibraryPath() {
-	static const std::filesystem::path path = [] {
-		const NativeInstallation installation = nativeInstallation();
-		const std::filesystem::path installedPath =
-			installation.prefix / DYNLEX_GRAPHICS_LIBRARY_INSTALL_DIR / DYNLEX_GRAPHICS_LIBRARY_FILENAME;
-		if (installation.installed)
-			return installedPath;
-		const std::filesystem::path buildPath(DYNLEX_GRAPHICS_LIBRARY_BUILD_PATH);
-		if (std::filesystem::exists(buildPath))
-			return buildPath;
-		return installedPath;
-	}();
-	return path;
-}
-
 #ifdef _WIN32
 struct WindowsToolchain {
 	std::filesystem::path linker;
@@ -241,7 +226,7 @@ executeProgramAndCapture(llvm::StringRef program, llvm::ArrayRef<llvm::StringRef
 }
 
 bool requiresExternalRuntimeLibraries(const std::unordered_set<std::string> &libraries) {
-	return libraries.contains("dynlex_graphics") || libraries.contains("glfw") || libraries.contains("freetype");
+	return libraries.contains("vulkan") || libraries.contains("glfw") || libraries.contains("freetype");
 }
 
 bool filesEqual(const std::filesystem::path &left, const std::filesystem::path &right) {
@@ -365,62 +350,37 @@ std::unique_ptr<llvm::TargetMachine> createNativeTargetMachine(ParseContext &con
 	return targetMachine;
 }
 
-bool emitNativeExecutable(ParseContext &context) {
-	auto pushPlainError = [&](std::string message) {
-		Diagnostic diagnostic;
-		diagnostic.level = Diagnostic::Level::Error;
-		diagnostic.range = Range();
-		diagnostic.message = std::move(message);
-		context.diagnostics.push_back(std::move(diagnostic));
-	};
+namespace {
 
+void addNativeEmissionError(ParseContext &context, std::string message) {
+	Diagnostic diagnostic;
+	diagnostic.level = Diagnostic::Level::Error;
+	diagnostic.range = Range();
+	diagnostic.message = std::move(message);
+	context.diagnostics.push_back(std::move(diagnostic));
+}
+
+std::string defaultNativeObjectPath(const ParseContext &context) {
+	std::string outputPath = context.options.inputPath;
+	if (outputPath.ends_with(".dl"))
+		outputPath.resize(outputPath.size() - 3);
+	return outputPath + ".o";
+}
+
+bool emitNativeObjectFile(ParseContext &context, const std::string &objectPath) {
 	requireCompilerInvariant(context.targetMachine != nullptr, "native emission requires an initialized target machine");
 	llvm::TargetMachine &targetMachine = *context.targetMachine;
 	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
-
-#ifdef _WIN32
-	const WindowsToolchain toolchain = windowsToolchain();
-	const std::string linkerProgram = toolchain.linker.string();
-#elif defined(__APPLE__)
-	const std::string linkerProgram = "/usr/bin/xcrun";
-#else
-	const llvm::StringRef linkerName = "cc";
-	const std::optional<std::string> linkerProgramFromPath = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
-	if (!linkerProgramFromPath) {
-		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
-		return false;
-	}
-	const std::string linkerProgram = *linkerProgramFromPath;
-#endif
-	if (!std::filesystem::is_regular_file(linkerProgram)) {
-		pushPlainError("configured native linker does not exist: " + linkerProgram);
-		return false;
-	}
-
 	const bool requiresNonMergeableDwarfStrings = context.options.emitDebugInfo && parsedTargetTriple.isOSBinFormatELF();
 	std::optional<std::string> objectCopyProgram;
 	if (requiresNonMergeableDwarfStrings) {
 		objectCopyProgram = llvm::sys::Process::FindInEnvPath("PATH", "objcopy");
 		if (!objectCopyProgram) {
-			pushPlainError("failed to find required ELF object utility 'objcopy' on PATH");
+			addNativeEmissionError(context, "failed to find required ELF object utility 'objcopy' on PATH");
 			return false;
 		}
 	}
 
-	// Determine output path
-	std::string outputPath = context.options.outputPath;
-	if (outputPath.empty()) {
-		// Remove .dl extension if present
-		outputPath = context.options.inputPath;
-		if (outputPath.ends_with(".dl")) {
-			outputPath = outputPath.substr(0, outputPath.size() - 3);
-		}
-	}
-
-	// Create object file path
-	std::string objectPath = outputPath + ".o";
-
-	// Emit object file
 	{
 		std::error_code ec;
 		llvm::raw_fd_ostream dest(objectPath, ec, llvm::sys::fs::OF_None);
@@ -442,41 +402,95 @@ bool emitNativeExecutable(ParseContext &context) {
 		passManager.run(*context.llvmModule);
 	}
 
-	if (objectCopyProgram) {
-		// GNU BFD suffix-merges SHF_MERGE debug strings without preserving the
-		// string-boundary offsets required by DWARF 5. Keep the strings intact.
-		std::vector<std::string> objectCopyStorage = {
-			*objectCopyProgram,
-			"--set-section-flags",
-			".debug_str=readonly,debug",
-			"--set-section-flags",
-			".debug_line_str=readonly,debug",
-			objectPath,
-		};
-		std::vector<llvm::StringRef> objectCopyArguments;
-		objectCopyArguments.reserve(objectCopyStorage.size());
-		for (const std::string &argument : objectCopyStorage)
-			objectCopyArguments.push_back(argument);
+	if (!objectCopyProgram)
+		return true;
 
-		std::string setupError;
-		std::optional<ProgramExecutionResult> result =
-			executeProgramAndCapture(*objectCopyProgram, objectCopyArguments, setupError);
-		if (!result) {
-			pushPlainError(setupError);
-			return false;
-		}
-		if (!result->executeError.empty()) {
-			pushPlainError("failed to execute ELF object utility: " + result->executeError);
-			return false;
-		}
-		if (result->executionFailed || result->exitCode != 0) {
-			std::string message = "preparing ELF debug information failed with exit code " + std::to_string(result->exitCode);
-			if (!result->output.empty())
-				message += "\nObject utility output:\n" + result->output;
-			pushPlainError(std::move(message));
-			return false;
+	// GNU BFD suffix-merges SHF_MERGE debug strings without preserving the
+	// string-boundary offsets required by DWARF 5. Keep the strings intact.
+	std::vector<std::string> objectCopyStorage = {
+		*objectCopyProgram,
+		"--set-section-flags",
+		".debug_str=readonly,debug",
+		"--set-section-flags",
+		".debug_line_str=readonly,debug",
+		objectPath,
+	};
+	std::vector<llvm::StringRef> objectCopyArguments;
+	objectCopyArguments.reserve(objectCopyStorage.size());
+	for (const std::string &argument : objectCopyStorage)
+		objectCopyArguments.push_back(argument);
+
+	std::string setupError;
+	std::optional<ProgramExecutionResult> result =
+		executeProgramAndCapture(*objectCopyProgram, objectCopyArguments, setupError);
+	if (!result) {
+		addNativeEmissionError(context, setupError);
+		return false;
+	}
+	if (!result->executeError.empty()) {
+		addNativeEmissionError(context, "failed to execute ELF object utility: " + result->executeError);
+		return false;
+	}
+	if (result->executionFailed || result->exitCode != 0) {
+		std::string message = "preparing ELF debug information failed with exit code " + std::to_string(result->exitCode);
+		if (!result->output.empty())
+			message += "\nObject utility output:\n" + result->output;
+		addNativeEmissionError(context, std::move(message));
+		return false;
+	}
+	return true;
+}
+
+} // namespace
+
+bool emitNativeObject(ParseContext &context) {
+	const std::string objectPath =
+		context.options.outputPath.empty() ? defaultNativeObjectPath(context) : context.options.outputPath;
+	return emitNativeObjectFile(context, objectPath);
+}
+
+bool emitNativeExecutable(ParseContext &context) {
+	auto pushPlainError = [&](std::string message) {
+		addNativeEmissionError(context, std::move(message));
+	};
+
+	requireCompilerInvariant(context.targetMachine != nullptr, "native emission requires an initialized target machine");
+	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
+
+#ifdef _WIN32
+	const WindowsToolchain toolchain = windowsToolchain();
+	const std::string linkerProgram = toolchain.linker.string();
+#elif defined(__APPLE__)
+	const std::string linkerProgram = "/usr/bin/xcrun";
+#else
+	const llvm::StringRef linkerName = "cc";
+	const std::optional<std::string> linkerProgramFromPath = llvm::sys::Process::FindInEnvPath("PATH", linkerName);
+	if (!linkerProgramFromPath) {
+		pushPlainError("failed to find linker '" + linkerName.str() + "' on PATH");
+		return false;
+	}
+	const std::string linkerProgram = *linkerProgramFromPath;
+#endif
+	if (!std::filesystem::is_regular_file(linkerProgram)) {
+		pushPlainError("configured native linker does not exist: " + linkerProgram);
+		return false;
+	}
+
+	// Determine output path
+	std::string outputPath = context.options.outputPath;
+	if (outputPath.empty()) {
+		// Remove .dl extension if present
+		outputPath = context.options.inputPath;
+		if (outputPath.ends_with(".dl")) {
+			outputPath = outputPath.substr(0, outputPath.size() - 3);
 		}
 	}
+
+	// Create object file path
+	std::string objectPath = outputPath + ".o";
+
+	if (!emitNativeObjectFile(context, objectPath))
+		return false;
 
 	std::vector<std::string> commandStorage;
 	commandStorage.reserve(12 + context.requiredLibraries.size() * 2);
@@ -500,8 +514,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandStorage.push_back("-g");
 
 	for (const std::string &lib : context.requiredLibraries) {
-		std::vector<std::string> arguments =
-			nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string(), graphicsLibraryPath().string());
+		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string());
 		commandStorage.insert(
 			commandStorage.end(), std::make_move_iterator(arguments.begin()), std::make_move_iterator(arguments.end())
 		);
@@ -533,10 +546,7 @@ bool emitNativeExecutable(ParseContext &context) {
 		std::vector<std::string> missingLibs;
 		for (const std::string &lib : context.requiredLibraries) {
 			if (linkerReportsMissingLibrary(
-					linkExecution->output,
-					nativeLibraryArguments(
-						parsedTargetTriple, lib, runtimeLibraryPath().string(), graphicsLibraryPath().string()
-					)
+					linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string())
 				)) {
 				missingLibs.push_back(lib);
 			}

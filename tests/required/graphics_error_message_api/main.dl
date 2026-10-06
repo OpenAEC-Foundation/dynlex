@@ -1,3 +1,0 @@
-import lib/graphics.dl
-
-print whether (the current graphics error message) is empty as a line

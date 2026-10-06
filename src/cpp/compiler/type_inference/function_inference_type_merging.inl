@@ -55,7 +55,7 @@ static bool mergeVariableAssignmentType(const DataType &targetType, const DataTy
 	}
 	if (refineUnspecifiedClassInstantiation(targetType, valueType, mergedType))
 		return true;
-	if (targetType.kind == DataType::Kind::Int && valueType.kind == DataType::Kind::Int && targetType.pointerDepth == 0 &&
+	if (targetType.isInteger() && valueType.isInteger() && targetType.kind == valueType.kind && targetType.pointerDepth == 0 &&
 		valueType.pointerDepth == 0) {
 		mergedType = targetType;
 		return true;

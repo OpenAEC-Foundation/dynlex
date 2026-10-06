@@ -137,7 +137,7 @@ fn left1_4331_43right_f32_f32_(left_5: ptr<function, f32>, right_5: ptr<function
     return (_e152 + _e153);
 }
 
-fn the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point: ptr<function, class_>, phase: ptr<function, f32>) -> f32 {
+fn the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point: ptr<function, class_>, phase: ptr<function, f32>) -> f32 {
     var tmp81_: f32;
     var tmp80_: f32;
     var tmp79_: f32;
@@ -350,13 +350,13 @@ fn the_square_root_of_value_f32_(value_3: ptr<function, f32>) -> f32 {
     return sqrt(_e151);
 }
 
-fn the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point_1: ptr<function, class_>, phase_1: ptr<function, f32>) -> f32 {
+fn the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_1: ptr<function, class_>, phase_1: ptr<function, f32>) -> f32 {
     var tmp3_2: f32;
     var tmp2_2: f32;
     var tmp1_3: f32;
     var tmp_4: f32;
 
-    let _e156 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point_1, phase_1);
+    let _e156 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_1, phase_1);
     tmp_4 = _e156;
     tmp1_3 = 0.5f;
     let _e157 = left1_4321_43right_f32_f32_((&tmp_4), (&tmp1_3));
@@ -366,7 +366,7 @@ fn the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32
     return _e158;
 }
 
-fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point_2: ptr<function, class_>, phase_2: ptr<function, f32>) -> f32 {
+fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_2: ptr<function, class_>, phase_2: ptr<function, f32>) -> f32 {
     var tmp76_1: f32;
     var tmp75_1: f32;
     var tmp74_1: f32;
@@ -444,7 +444,7 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(
     class_tmp.member = vec2<f32>(_e222.x, _e226);
     let _e231 = class_tmp;
     sample_2 = _e231;
-    let _e232 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&sample_2), phase_2);
+    let _e232 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&sample_2), phase_2);
     warp = _e232;
     let _e234 = (*point_2).member;
     tmp13_ = _e234.x;
@@ -476,7 +476,7 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(
     tmp38_1 = 1.7f;
     let _e259 = left1_4331_43right_f32_f32_(phase_2, (&tmp38_1));
     tmp39_1 = _e259;
-    let _e260 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&shifted), (&tmp39_1));
+    let _e260 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&shifted), (&tmp39_1));
     tmp40_1 = _e260;
     tmp41_1 = 1.7f;
     let _e261 = left1_4321_43right_f32_f32_((&tmp40_1), (&tmp41_1));
@@ -489,9 +489,9 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(
     tmp45_1 = 0.31f;
     let _e264 = left1_4321_43right_f32_f32_((&latitude_1), (&tmp45_1));
     tmp46_1 = _e264;
-    let _e265 = left1_4331_43right_f32_f32_((&tmp46_1), phase_2);
+    let _e265 = left1_4331_43right_f32_f32_((&tmp44_1), (&tmp46_1));
     tmp47_1 = _e265;
-    let _e266 = left1_4331_43right_f32_f32_((&tmp44_1), (&tmp47_1));
+    let _e266 = left1_4331_43right_f32_f32_((&tmp47_1), phase_2);
     tmp48_1 = _e266;
     let _e267 = the_sine_of_value_f32_((&tmp48_1));
     tmp49_1 = _e267;
@@ -505,12 +505,12 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(
     tmp53_1 = 1.91f;
     let _e271 = left1_4321_43right_f32_f32_((&latitude_1), (&tmp53_1));
     tmp54_1 = _e271;
-    tmp55_1 = 0.83f;
-    let _e272 = left1_4321_43right_f32_f32_(phase_2, (&tmp55_1));
-    tmp56_1 = _e272;
-    let _e273 = left1_4351_43right_f32_f32_((&tmp54_1), (&tmp56_1));
+    let _e272 = left1_4331_43right_f32_f32_((&tmp52_1), (&tmp54_1));
+    tmp55_1 = _e272;
+    tmp56_1 = 0.83f;
+    let _e273 = left1_4321_43right_f32_f32_(phase_2, (&tmp56_1));
     tmp57_1 = _e273;
-    let _e274 = left1_4331_43right_f32_f32_((&tmp52_1), (&tmp57_1));
+    let _e274 = left1_4351_43right_f32_f32_((&tmp55_1), (&tmp57_1));
     tmp58_1 = _e274;
     let _e275 = the_sine_of_value_f32_((&tmp58_1));
     tmp59_1 = _e275;
@@ -539,7 +539,7 @@ fn the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(
     tmp72_1 = 4f;
     let _e292 = left1_4331_43right_f32_f32_(phase_2, (&tmp72_1));
     tmp73_1 = _e292;
-    let _e293 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&location), (&tmp73_1));
+    let _e293 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&location), (&tmp73_1));
     rarity = _e293;
     tmp74_1 = 0.48f;
     tmp75_1 = 0.82f;
@@ -563,7 +563,7 @@ fn the_fractional_part_of_number_f32_(number_1: ptr<function, f32>) -> f32 {
     return _e153;
 }
 
-fn a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_u0020_point_f32_f32_f32_(position: ptr<function, class_>, scale: ptr<function, f32>, phase_3: ptr<function, f32>, time: ptr<function, f32>) -> f32 {
+fn a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_(position: ptr<function, class_>, scale: ptr<function, f32>, phase_3: ptr<function, f32>, time: ptr<function, f32>) -> f32 {
     var tmp107_: f32;
     var tmp106_: f32;
     var tmp105_: f32;
@@ -674,7 +674,7 @@ fn a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point
     tmp28_ = 13.7f;
     let _e263 = left1_4321_43right_f32_f32_(phase_3, (&tmp28_));
     tmp29_ = _e263;
-    let _e264 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp27_), (&tmp29_));
+    let _e264 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp27_), (&tmp29_));
     points = _e264;
     let _e266 = sample_3.member;
     tmp34_ = _e266.x;
@@ -691,7 +691,7 @@ fn a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point
     tmp46_2 = 0.09f;
     let _e281 = left1_4331_43right_f32_f32_((&tmp45_2), (&tmp46_2));
     tmp47_2 = _e281;
-    let _e282 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp43_2), (&tmp47_2));
+    let _e282 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp43_2), (&tmp47_2));
     horizontal = _e282;
     let _e284 = sample_3.member;
     let _e288 = vec2<f32>(_e284.x, vec2<f32>().y);
@@ -708,7 +708,7 @@ fn a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point
     tmp64_2 = 0.11f;
     let _e299 = left1_4351_43right_f32_f32_((&tmp63_2), (&tmp64_2));
     tmp65_1 = _e299;
-    let _e300 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp61_2), (&tmp65_1));
+    let _e300 = the_spark_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp61_2), (&tmp65_1));
     vertical = _e300;
     let _e302 = (*position).member;
     tmp69_1 = _e302.x;
@@ -776,7 +776,7 @@ fn the_minimum_of_left_and_right_f32_f32_(left_6: ptr<function, f32>, right_6: p
     return min(_e152, _e153);
 }
 
-fn the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point_3: ptr<function, class_>, phase_4: ptr<function, f32>) -> f32 {
+fn the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_3: ptr<function, class_>, phase_4: ptr<function, f32>) -> f32 {
     var tmp3_4: f32;
     var tmp2_4: f32;
     var tmp1_6: f32;
@@ -784,7 +784,7 @@ fn the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_
     var ridge: f32;
     var wave: f32;
 
-    let _e158 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_(point_3, phase_4);
+    let _e158 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_(point_3, phase_4);
     tmp_8 = _e158;
     let _e159 = the_absolute_value_of_magnitude_f32_((&tmp_8));
     wave = _e159;
@@ -1536,7 +1536,7 @@ fn main_1() {
     let _e860 = class_tmp153_;
     tmp173_ = _e860;
     tmp174_ = 1.7f;
-    let _e861 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp173_), (&tmp174_));
+    let _e861 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp173_), (&tmp174_));
     primary_1 = _e861;
     let _e863 = universe.member;
     tmp179_ = _e863.x;
@@ -1559,7 +1559,7 @@ fn main_1() {
     let _e880 = class_tmp175_;
     tmp195_ = _e880;
     tmp196_ = 5.3f;
-    let _e881 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp195_), (&tmp196_));
+    let _e881 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp195_), (&tmp196_));
     secondary_1 = _e881;
     let _e883 = universe.member;
     tmp201_ = _e883.x;
@@ -1582,7 +1582,7 @@ fn main_1() {
     tmp217_ = 0.045f;
     let _e900 = left1_4321_43right_f32_f32_((&time_1), (&tmp217_));
     tmp218_ = _e900;
-    let _e901 = the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp216_), (&tmp218_));
+    let _e901 = the_ridged_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp216_), (&tmp218_));
     ridge_1 = _e901;
     let _e903 = universe.member;
     tmp222_ = _e903.x;
@@ -1663,15 +1663,15 @@ fn main_1() {
     color = _e947;
     tmp271_ = 13f;
     tmp272_ = 0.09f;
-    let _e948 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_u0020_point_f32_f32_f32_((&universe), (&tmp271_), (&tmp272_), (&time_1));
+    let _e948 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_((&universe), (&tmp271_), (&tmp272_), (&time_1));
     faraway = _e948;
     tmp273_ = 21f;
     tmp274_ = 0.41f;
-    let _e949 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_u0020_point_f32_f32_f32_((&universe), (&tmp273_), (&tmp274_), (&time_1));
+    let _e949 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_((&universe), (&tmp273_), (&tmp274_), (&time_1));
     middle = _e949;
     tmp275_ = 31f;
     tmp276_ = 0.77f;
-    let _e950 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_u0020_point_f32_f32_f32_((&universe), (&tmp275_), (&tmp276_), (&time_1));
+    let _e950 = a_moving_star_field_at_3planar_coordinate8position5_scaled_by_3floating5point_number8scale5_during_3floating5point_number8phase5_at_3floating5point_number8time5_a_20_point_f32_f32_f32_((&universe), (&tmp275_), (&tmp276_), (&time_1));
     nearby = _e950;
     tmp277_ = 0.46f;
     let _e951 = left1_4321_43right_f32_f32_((&faraway), (&tmp277_));
@@ -1699,7 +1699,7 @@ fn main_1() {
     let _e971 = class_tmp284_;
     tmp299_ = _e971;
     tmp300_ = 8.2f;
-    let _e972 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp299_), (&tmp300_));
+    let _e972 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp299_), (&tmp300_));
     temperature = _e972;
     let _e974 = color.member;
     let _e976 = color.member;
@@ -1823,7 +1823,7 @@ fn main_1() {
     let _e1079 = class_tmp391_;
     tmp405_ = _e1079;
     tmp406_ = 3.1f;
-    let _e1080 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp405_), (&tmp406_));
+    let _e1080 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp405_), (&tmp406_));
     turbulence = _e1080;
     let _e1082 = disk.member;
     tmp411_ = _e1082.x;
@@ -1841,7 +1841,7 @@ fn main_1() {
     let _e1095 = class_tmp407_;
     tmp421_ = _e1095;
     tmp422_ = 7.9f;
-    let _e1096 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp421_), (&tmp422_));
+    let _e1096 = the_signed_flow_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp421_), (&tmp422_));
     detail_1 = _e1096;
     tmp423_ = 39f;
     let _e1097 = left1_4321_43right_f32_f32_((&orbit), (&tmp423_));
@@ -2010,7 +2010,7 @@ fn main_1() {
     let _e1203 = class_tmp529_;
     tmp547_ = _e1203;
     tmp548_ = 10f;
-    let _e1204 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_u0020_point_f32_((&tmp547_), (&tmp548_));
+    let _e1204 = the_flowing_field_at_3a_point8point5_during_3a_value8phase5_a_20_point_f32_((&tmp547_), (&tmp548_));
     flicker = _e1204;
     tmp549_ = 0.52f;
     let _e1205 = left1_4321_43right_f32_f32_((&core), (&tmp549_));

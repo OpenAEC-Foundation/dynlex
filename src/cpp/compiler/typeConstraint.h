@@ -42,7 +42,7 @@ struct TypeConstraint {
 		TypeConstraint result = any();
 		result.kind = type.kind;
 		result.pointerDepth = type.pointerDepth;
-		if (type.kind == DataType::Kind::Int || type.kind == DataType::Kind::Float)
+		if (type.kind == DataType::Kind::Int || type.kind == DataType::Kind::UInt || type.kind == DataType::Kind::Float)
 			result.numericSize = type.numericSize;
 		if (type.kind == DataType::Kind::Array || type.kind == DataType::Kind::Vector) {
 			result.arraySize = type.arraySize;
@@ -178,7 +178,8 @@ struct TypeConstraint {
 			return false;
 		auto excludesNumericValues = [](const TypeConstraint &constraint) {
 			const bool hasNonNumericKind =
-				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::Float;
+				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::UInt &&
+				*constraint.kind != DataType::Kind::Float;
 			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
 			return hasNonNumericKind || requiresPointer;
 		};
@@ -219,7 +220,8 @@ struct TypeConstraint {
 			return false;
 		const bool otherHasNumericDomain =
 			other.requiresNumeric ||
-			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::Float) && other.pointerDepth &&
+			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt ||
+							*other.kind == DataType::Kind::Float) && other.pointerDepth &&
 			 *other.pointerDepth == 0) ||
 			(other.numericSize && other.pointerDepth && *other.pointerDepth == 0);
 		if (requiresNumeric && !otherHasNumericDomain)
@@ -267,7 +269,7 @@ struct TypeConstraint {
 			return std::nullopt;
 		DataType result{*kind};
 		result.pointerDepth = *pointerDepth;
-		if (*kind == DataType::Kind::Int || *kind == DataType::Kind::Float) {
+		if (*kind == DataType::Kind::Int || *kind == DataType::Kind::UInt || *kind == DataType::Kind::Float) {
 			if (!numericSize)
 				return std::nullopt;
 			result.numericSize = *numericSize;

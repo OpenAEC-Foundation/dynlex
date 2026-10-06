@@ -85,7 +85,8 @@ export async function waitFor(expression, description, timeoutMilliseconds = 120
     status: document.querySelector('#status-text')?.textContent ?? '',
     diagnostics: document.querySelector('#diagnostics-list')?.textContent ?? '',
     activity: document.querySelector('#compiler-log')?.textContent ?? '',
-    source: document.querySelector('.monaco-editor')?.textContent ?? ''
+    source: document.querySelector('.monaco-editor')?.textContent ?? '',
+    notRestoredReasons: performance.getEntriesByType('navigation')[0]?.notRestoredReasons?.toJSON()
   }))()`);
   throw new Error(
     `Timed out waiting for ${description}\n`

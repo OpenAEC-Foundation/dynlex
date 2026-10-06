@@ -156,6 +156,19 @@ Compile a source file:
 ./build/dynlex program.dl -o program.out && ./program.out
 ```
 
+Emit a native object for a definition-only library. `--no-main` omits the
+entry point and rejects executable top-level statements; `exposed function`
+declarations provide the callable C ABI. With no `-o`, object output is written
+as `program.o`.
+
+```bash
+./build/dynlex library.dl --emit-object --no-main
+```
+
+`--no-main` can also be combined with `--emit-llvm` for definition-only LLVM
+IR. Definition-only libraries cannot use command-line argument intrinsics,
+because those values are initialized by DynLex's generated entry point.
+
 Or execute DynLex source directly. Command-line source automatically imports
 `lib/commands.dl`, which provides the standard library and command-oriented
 libraries such as file operations:

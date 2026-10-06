@@ -167,8 +167,8 @@ to get the count of decimal digits in {integer:value}:
     set remaining to value as a word sized integer
     set total to 1
     loop while (remaining <= -10) or (remaining >= 10):
-        set remaining to remaining / 10
-        increment total
+        set remaining to (remaining / (10 as (the type of remaining)))
+        set total to (total + 1)
     return total
 
 to get {integer:value} padded to {integer:width} digits:
@@ -214,6 +214,28 @@ to get the string form of {integer:value}:
             decrement index
     if negative:
         store 45 as a byte into data at 0
+    return result
+
+to get the string form of {unsigned integer:value}:
+    set remaining to value
+    set digits to 1
+    loop while remaining >= (10 as (the type of remaining)):
+        set remaining to (remaining / (10 as (the type of remaining)))
+        set digits to (digits + 1)
+    set result to a new string buffer containing digits bytes
+    set data to the data of result
+    set remaining to value
+    set index to (digits - 1)
+    set writing to true
+    loop while writing:
+        set digit to the remainder of remaining divided by (10 as (the type of remaining))
+        set character to ((digit + 48) as a byte)
+        store character into data at index
+        set remaining to (remaining / (10 as (the type of remaining)))
+        if index = 0:
+            set writing to false
+        else:
+            set index to (index - 1)
     return result
 
 to get the string form of {floating-point number:value}:
@@ -300,17 +322,36 @@ to print whether condition as a line:
 
 function {string:left} + {string:right}:
     before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {string:left} + {C string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {C string:left} + {string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+function {C string:left} + {C string:right}:
+    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    replacement:
+        the concatenation of left and right
+
+local function [the concatenation of] {a value:left} [and] {a value:right}:
     execute:
-        set total to left's length + right's length
+        set total to ((the length of left) + (the length of right))
         set result to a new string buffer containing total bytes
         set data to the data of result
-        set boundary to left's length
+        set boundary to the length of left
         set index to 0
         loop while index < boundary:
             store the character at index in left into data at index
             increment index
         set cursor to 0
-        loop while cursor < right's length:
+        loop while cursor < (the length of right):
             store the character at cursor in right into data at boundary + cursor
             increment cursor
         return result

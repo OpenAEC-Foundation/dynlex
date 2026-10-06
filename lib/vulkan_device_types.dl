@@ -1,0 +1,293 @@
+# Vulkan pipeline ABI declarations from the Khronos registry.
+import lib/vulkan_image_types.dl
+
+class:
+    patterns:
+        VkApplicationInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        pApplicationName as a pointer to (a byte)
+        applicationVersion as a 32 bit unsigned integer
+        pEngineName as a pointer to (a byte)
+        engineVersion as a 32 bit unsigned integer
+        apiVersion as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkAttachmentDescription
+    members:
+        flags as a 32 bit unsigned integer
+        format as a 32 bit integer
+        samples as a 32 bit integer
+        loadOp as a 32 bit integer
+        storeOp as a 32 bit integer
+        stencilLoadOp as a 32 bit integer
+        stencilStoreOp as a 32 bit integer
+        initialLayout as a 32 bit integer
+        finalLayout as a 32 bit integer
+
+class:
+    patterns:
+        VkAttachmentReference
+    members:
+        attachment as a 32 bit unsigned integer
+        layout as a 32 bit integer
+
+class:
+    patterns:
+        VkCommandPoolCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        queueFamilyIndex as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkDescriptorPoolCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        maxSets as a 32 bit unsigned integer
+        poolSizeCount as a 32 bit unsigned integer
+        pPoolSizes as a pointer to (VkDescriptorPoolSize)
+
+class:
+    patterns:
+        VkDescriptorPoolSize
+    members:
+        type as a 32 bit integer
+        descriptorCount as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkDeviceCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        queueCreateInfoCount as a 32 bit unsigned integer
+        pQueueCreateInfos as a pointer to (VkDeviceQueueCreateInfo)
+        enabledLayerCount as a 32 bit unsigned integer
+        ppEnabledLayerNames as a pointer to (a pointer to (a byte))
+        enabledExtensionCount as a 32 bit unsigned integer
+        ppEnabledExtensionNames as a pointer to (a pointer to (a byte))
+        pEnabledFeatures as a pointer to (VkPhysicalDeviceFeatures)
+
+class:
+    patterns:
+        VkDeviceQueueCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        queueFamilyIndex as a 32 bit unsigned integer
+        queueCount as a 32 bit unsigned integer
+        pQueuePriorities as a pointer to (a 32 bit floating-point number)
+
+class:
+    patterns:
+        VkExtensionProperties
+    members:
+        extensionName as (a byte) array of 256 items
+        specVersion as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkFenceCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkFramebufferCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        renderPass as a pointer
+        attachmentCount as a 32 bit unsigned integer
+        pAttachments as a pointer to (a pointer)
+        width as a 32 bit unsigned integer
+        height as a 32 bit unsigned integer
+        layers as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkInstanceCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        pApplicationInfo as a pointer to (VkApplicationInfo)
+        enabledLayerCount as a 32 bit unsigned integer
+        ppEnabledLayerNames as a pointer to (a pointer to (a byte))
+        enabledExtensionCount as a 32 bit unsigned integer
+        ppEnabledExtensionNames as a pointer to (a pointer to (a byte))
+
+class:
+    patterns:
+        VkPhysicalDeviceFeatures
+    members:
+        robustBufferAccess as a 32 bit unsigned integer
+        fullDrawIndexUint32 as a 32 bit unsigned integer
+        imageCubeArray as a 32 bit unsigned integer
+        independentBlend as a 32 bit unsigned integer
+        geometryShader as a 32 bit unsigned integer
+        tessellationShader as a 32 bit unsigned integer
+        sampleRateShading as a 32 bit unsigned integer
+        dualSrcBlend as a 32 bit unsigned integer
+        logicOp as a 32 bit unsigned integer
+        multiDrawIndirect as a 32 bit unsigned integer
+        drawIndirectFirstInstance as a 32 bit unsigned integer
+        depthClamp as a 32 bit unsigned integer
+        depthBiasClamp as a 32 bit unsigned integer
+        fillModeNonSolid as a 32 bit unsigned integer
+        depthBounds as a 32 bit unsigned integer
+        wideLines as a 32 bit unsigned integer
+        largePoints as a 32 bit unsigned integer
+        alphaToOne as a 32 bit unsigned integer
+        multiViewport as a 32 bit unsigned integer
+        samplerAnisotropy as a 32 bit unsigned integer
+        textureCompressionETC2 as a 32 bit unsigned integer
+        textureCompressionASTC_LDR as a 32 bit unsigned integer
+        textureCompressionBC as a 32 bit unsigned integer
+        occlusionQueryPrecise as a 32 bit unsigned integer
+        pipelineStatisticsQuery as a 32 bit unsigned integer
+        vertexPipelineStoresAndAtomics as a 32 bit unsigned integer
+        fragmentStoresAndAtomics as a 32 bit unsigned integer
+        shaderTessellationAndGeometryPointSize as a 32 bit unsigned integer
+        shaderImageGatherExtended as a 32 bit unsigned integer
+        shaderStorageImageExtendedFormats as a 32 bit unsigned integer
+        shaderStorageImageMultisample as a 32 bit unsigned integer
+        shaderStorageImageReadWithoutFormat as a 32 bit unsigned integer
+        shaderStorageImageWriteWithoutFormat as a 32 bit unsigned integer
+        shaderUniformBufferArrayDynamicIndexing as a 32 bit unsigned integer
+        shaderSampledImageArrayDynamicIndexing as a 32 bit unsigned integer
+        shaderStorageBufferArrayDynamicIndexing as a 32 bit unsigned integer
+        shaderStorageImageArrayDynamicIndexing as a 32 bit unsigned integer
+        shaderClipDistance as a 32 bit unsigned integer
+        shaderCullDistance as a 32 bit unsigned integer
+        shaderFloat64 as a 32 bit unsigned integer
+        shaderInt64 as a 32 bit unsigned integer
+        shaderInt16 as a 32 bit unsigned integer
+        shaderResourceResidency as a 32 bit unsigned integer
+        shaderResourceMinLod as a 32 bit unsigned integer
+        sparseBinding as a 32 bit unsigned integer
+        sparseResidencyBuffer as a 32 bit unsigned integer
+        sparseResidencyImage2D as a 32 bit unsigned integer
+        sparseResidencyImage3D as a 32 bit unsigned integer
+        sparseResidency2Samples as a 32 bit unsigned integer
+        sparseResidency4Samples as a 32 bit unsigned integer
+        sparseResidency8Samples as a 32 bit unsigned integer
+        sparseResidency16Samples as a 32 bit unsigned integer
+        sparseResidencyAliased as a 32 bit unsigned integer
+        variableMultisampleRate as a 32 bit unsigned integer
+        inheritedQueries as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkQueueFamilyProperties
+    members:
+        queueFlags as a 32 bit unsigned integer
+        queueCount as a 32 bit unsigned integer
+        timestampValidBits as a 32 bit unsigned integer
+        minImageTransferGranularity as VkExtent3D
+
+class:
+    patterns:
+        VkRenderPassCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        attachmentCount as a 32 bit unsigned integer
+        pAttachments as a pointer to (VkAttachmentDescription)
+        subpassCount as a 32 bit unsigned integer
+        pSubpasses as a pointer to (VkSubpassDescription)
+        dependencyCount as a 32 bit unsigned integer
+        pDependencies as a pointer to (VkSubpassDependency)
+
+class:
+    patterns:
+        VkSemaphoreCreateInfo
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkSubpassDependency
+    members:
+        srcSubpass as a 32 bit unsigned integer
+        dstSubpass as a 32 bit unsigned integer
+        srcStageMask as a 32 bit unsigned integer
+        dstStageMask as a 32 bit unsigned integer
+        srcAccessMask as a 32 bit unsigned integer
+        dstAccessMask as a 32 bit unsigned integer
+        dependencyFlags as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkSubpassDescription
+    members:
+        flags as a 32 bit unsigned integer
+        pipelineBindPoint as a 32 bit integer
+        inputAttachmentCount as a 32 bit unsigned integer
+        pInputAttachments as a pointer to (VkAttachmentReference)
+        colorAttachmentCount as a 32 bit unsigned integer
+        pColorAttachments as a pointer to (VkAttachmentReference)
+        pResolveAttachments as a pointer to (VkAttachmentReference)
+        pDepthStencilAttachment as a pointer to (VkAttachmentReference)
+        preserveAttachmentCount as a 32 bit unsigned integer
+        pPreserveAttachments as a pointer to (a 32 bit unsigned integer)
+
+class:
+    patterns:
+        VkSurfaceCapabilitiesKHR
+    members:
+        minImageCount as a 32 bit unsigned integer
+        maxImageCount as a 32 bit unsigned integer
+        currentExtent as VkExtent2D
+        minImageExtent as VkExtent2D
+        maxImageExtent as VkExtent2D
+        maxImageArrayLayers as a 32 bit unsigned integer
+        supportedTransforms as a 32 bit unsigned integer
+        currentTransform as a 32 bit integer
+        supportedCompositeAlpha as a 32 bit unsigned integer
+        supportedUsageFlags as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkSurfaceFormatKHR
+    members:
+        format as a 32 bit integer
+        colorSpace as a 32 bit integer
+
+class:
+    patterns:
+        VkSwapchainCreateInfoKHR
+    members:
+        sType as a 32 bit integer
+        pNext as a pointer to (a byte)
+        flags as a 32 bit unsigned integer
+        surface as a pointer
+        minImageCount as a 32 bit unsigned integer
+        imageFormat as a 32 bit integer
+        imageColorSpace as a 32 bit integer
+        imageExtent as VkExtent2D
+        imageArrayLayers as a 32 bit unsigned integer
+        imageUsage as a 32 bit unsigned integer
+        imageSharingMode as a 32 bit integer
+        queueFamilyIndexCount as a 32 bit unsigned integer
+        pQueueFamilyIndices as a pointer to (a 32 bit unsigned integer)
+        preTransform as a 32 bit integer
+        compositeAlpha as a 32 bit integer
+        presentMode as a 32 bit integer
+        clipped as a 32 bit unsigned integer
+        oldSwapchain as a pointer

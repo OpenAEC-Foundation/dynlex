@@ -10,6 +10,7 @@
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "native.h"
+#include "nativeScalarABI.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionFlexBody.h"
@@ -30,6 +31,7 @@
 #include "llvm/TargetParser/Host.h"
 #include <algorithm>
 #include <bit>
+#include <cctype>
 #include <limits>
 #include <unordered_map>
 #include <unordered_set>
@@ -50,24 +52,42 @@ static std::vector<size_t> collectRuntimeParameterIndices(
 	return runtimeIndices;
 }
 
+static std::string encodeLLVMNameComponent(std::string_view value) {
+	static constexpr char hexadecimalDigits[] = "0123456789abcdef";
+	std::string encoded;
+	for (unsigned char character : value) {
+		if (std::isalnum(character)) {
+			encoded += static_cast<char>(character);
+			continue;
+		}
+		encoded += '_';
+		encoded += hexadecimalDigits[character >> 4];
+		encoded += hexadecimalDigits[character & 0x0f];
+		encoded += '_';
+	}
+	return encoded;
+}
+
 static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey &instantiationKey) {
 	std::string suffix;
 	for (const auto &[name, value] : instantiationKey.compileTimeParameters) {
-		suffix += "_ct_" + name + "_";
+		suffix += "_ct_" + encodeLLVMNameComponent(name) + "_";
 		if (const auto *integer = std::get_if<std::int64_t>(&value))
-			suffix += "i" + std::to_string(*integer);
+			suffix += "i" + encodeLLVMNameComponent(std::to_string(*integer));
+		else if (const auto *integer = std::get_if<std::uint64_t>(&value))
+			suffix += "u" + encodeLLVMNameComponent(std::to_string(*integer));
 		else if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 			suffix += "i_minimum_magnitude";
 		else if (const auto *number = std::get_if<double>(&value))
 			suffix += std::to_string(std::bit_cast<uint64_t>(*number));
 		else if (const auto *text = std::get_if<std::string>(&value))
-			suffix += std::to_string(text->size()) + "_" + *text;
+			suffix += std::to_string(text->size()) + "_" + encodeLLVMNameComponent(*text);
 		else if (const auto *boolean = std::get_if<bool>(&value))
 			suffix += *boolean ? "true" : "false";
 		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-			suffix += typeRef->type.toString();
+			suffix += encodeLLVMNameComponent(typeRef->type.toString());
 		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
-			suffix += constraint->toInternalString();
+			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else
 			suffix += "unknown";
 	}
@@ -200,7 +220,7 @@ bool generateSpecializedFunction(
 	// Name includes type signature for uniqueness
 	std::string funcName = getPatternFunctionName(section);
 	for (const DataType &t : argTypes) {
-		funcName += "_" + t.toString();
+		funcName += "_" + encodeLLVMNameComponent(t.toString());
 	}
 	funcName += encodeInstantiationKeyForFunctionName(instantiationKey);
 
@@ -460,7 +480,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 	case Expression::Kind::Literal: {
 		if (auto *integer = std::get_if<std::int64_t>(&expr->literalValue)) {
 			DataType numType = finalizedExpressionType(context, expr);
-			requireCompilerInvariant(numType.kind == DataType::Kind::Int, "integer literal has a non-integer finalized type");
+			requireCompilerInvariant(numType.isInteger(), "integer literal has a non-integer finalized type");
 			unsigned bitWidth = static_cast<unsigned>(numType.numericSize * 8);
 			requireCompilerInvariant(bitWidth > 0 && bitWidth <= 64, "integer literal has an unsupported finalized width");
 			if (bitWidth < 64) {
@@ -472,15 +492,20 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 			return llvm::ConstantInt::get(getLLVMType(context, numType), *integer, true);
 		}
+		if (auto *integer = std::get_if<std::uint64_t>(&expr->literalValue)) {
+			DataType numType = finalizedExpressionType(context, expr);
+			requireCompilerInvariant(numType.isInteger(), "unsigned integer literal has a non-integer finalized type");
+			return llvm::ConstantInt::get(getLLVMType(context, numType), *integer, false);
+		}
 		if (auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
 			requireCompilerInvariant(
 				minimumMagnitude->identity != nullptr, "minimum integer magnitude reached literal codegen without an identity"
 			);
 			DataType numType = finalizedExpressionType(context, expr);
 			requireCompilerInvariant(
-				numType.kind == DataType::Kind::Int && numType.numericSize == 8, "minimum integer magnitude is not i64"
+				numType.isInteger() && numType.numericSize == 8, "minimum integer magnitude is not a 64-bit integer"
 			);
-			return llvm::ConstantInt::get(getLLVMType(context, numType), std::numeric_limits<std::int64_t>::min(), true);
+			return llvm::ConstantInt::get(getLLVMType(context, numType), std::uint64_t{1} << 63, false);
 		}
 		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
 			DataType numType = finalizedExpressionType(context, expr);

@@ -5,11 +5,11 @@
 #include <string_view>
 #include <variant>
 
-using NumericLiteralValue = std::variant<std::int64_t, MinimumSignedIntegerMagnitude, double>;
+using NumericLiteralValue = std::variant<std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double>;
 
 enum class NumericLiteralParseError {
 	None,
-	IntegerOutOfRange,
+	UnsignedIntegerOutOfRange,
 	FloatingPointOutOfRange,
 	Invalid,
 };
@@ -24,7 +24,3 @@ struct NumericLiteralParseResult {
 NumericLiteralParseResult parseNumericLiteral(std::string_view text);
 DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV);
 CompileTimeValue numericLiteralCompileTimeValue(const NumericLiteralValue &value);
-void recordConsumedMinimumSignedIntegerMagnitude(MinimumSignedIntegerMagnitudeEffects &effects, const CompileTimeValue &value);
-void recordRejectedMinimumSignedIntegerMagnitudeUse(
-	MinimumSignedIntegerMagnitudeEffects &effects, const CompileTimeValue &value
-);

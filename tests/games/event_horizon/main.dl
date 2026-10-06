@@ -21,7 +21,8 @@ to read the cursor from {pointer:window} into {spatial position:position}:
 to get mouse button {integer:number} is down in {pointer:window}:
     return a mouse button numbered number is pressed in window
 
-release {horizon resource set:resources} means: release resources's program
+to release {horizon resource set:resources}:
+    release resources's program
 set window to a new window with width 1280 and height 720
 set the title of window to "EVENT HORIZON  |  WASD/arrows: move  |  mouse: bend  |  click: pulse  |  R: center"
 preserve mouse clicks in window

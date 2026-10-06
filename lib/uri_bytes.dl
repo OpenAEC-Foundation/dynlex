@@ -1,0 +1,164 @@
+# URI byte and IP-literal grammar from RFC 3986 section 3.2.2.
+import lib/std.dl
+
+function [URI byte] {integer:code} [is unreserved]:
+    execute:
+        return (((code >= 65 and code <= 90) or (code >= 97 and code <= 122)) or (code >= 48 and code <= 57)) or ((code = 45 or code = 46) or (code = 95 or code = 126))
+
+function [URI byte] {integer:code} [is a subdelimiter]:
+    execute:
+        set delimiters to "!$&'()*+,;="
+        set index to 0
+        loop while index < (the length of delimiters):
+            if code = ((the character at index in delimiters) as an integer):
+                return true
+            increment index
+        return false
+
+function [the URI hexadecimal value of] {integer:code}:
+    execute:
+        if code >= 48 and code <= 57:
+            return code - 48
+        if code >= 65 and code <= 70:
+            return code - 55
+        if code >= 97 and code <= 102:
+            return code - 87
+        return -1
+
+function {string:text} [is an IPv4 address]:
+    execute:
+        set cursor to 0
+        set part to 0
+        loop while part < 4:
+            set start to cursor
+            set value to 0
+            set reading to true
+            loop while cursor < text's length and reading:
+                set code to (the character at cursor in text) as an integer
+                if code >= 48 and code <= 57:
+                    set value to (value * 10) + (code - 48)
+                    increment cursor
+                else:
+                    set reading to false
+            set digits to cursor - start
+            if (digits = 0 or digits > 3) or value > 255:
+                return false
+            if digits > 1 and (the character at start in text) = (48 as a byte):
+                return false
+            if part = 3:
+                return cursor = text's length
+            if cursor = text's length or (the character at cursor in text) != (46 as a byte):
+                return false
+            increment cursor
+            increment part
+        return false
+
+function [the IPv6 group count in] {string:text} [allowing IPv4] {boolean:allowIPv4}:
+    execute:
+        if text's length = 0:
+            return 0
+        if (the character at (text's length - 1) in text) = (58 as a byte):
+            return -1
+        set count to 0
+        set cursor to 0
+        loop while cursor < text's length:
+            set start to cursor
+            set dotted to false
+            loop while cursor < text's length and (the character at cursor in text) != (58 as a byte):
+                if (the character at cursor in text) = (46 as a byte):
+                    set dotted to true
+                increment cursor
+            set size to cursor - start
+            if size = 0:
+                return -1
+            if dotted:
+                if (allowIPv4 = false or cursor != text's length) or ((the substring of text from start spanning size bytes) is an IPv4 address = false):
+                    return -1
+                set count to count + 2
+            else:
+                if size > 4:
+                    return -1
+                set index to start
+                loop while index < cursor:
+                    if (the URI hexadecimal value of ((the character at index in text) as an integer)) < 0:
+                        return -1
+                    increment index
+                increment count
+            increment cursor
+        return count
+
+function {string:text} [is an IPv6 address]:
+    execute:
+        set doubleColon to -1
+        set index to 0
+        loop while index + 1 < text's length:
+            if ((the character at index in text) = (58 as a byte)) and ((the character at (index + 1) in text) = (58 as a byte)):
+                if doubleColon >= 0:
+                    return false
+                set doubleColon to index
+                increment index
+            increment index
+        if doubleColon < 0:
+            return (the IPv6 group count in text allowing IPv4 true) = 8
+        set left to the substring of text from 0 spanning doubleColon bytes
+        set right to the substring of text from (doubleColon + 2) spanning ((text's length - doubleColon) - 2) bytes
+        set a to the IPv6 group count in left allowing IPv4 false
+        set b to the IPv6 group count in right allowing IPv4 true
+        return (a >= 0 and b >= 0) and a + b < 8
+
+function {string:text} [is an IPvFuture address]:
+    execute:
+        if text's length < 4:
+            return false
+        set first to (the character at 0 in text) as an integer
+        if first != 118 and first != 86:
+            return false
+        set cursor to 1
+        loop while cursor < text's length and (the URI hexadecimal value of ((the character at cursor in text) as an integer)) >= 0:
+            increment cursor
+        if (cursor = 1 or cursor = text's length) or (the character at cursor in text) != (46 as a byte):
+            return false
+        increment cursor
+        set start to cursor
+        loop while cursor < text's length:
+            set code to (the character at cursor in text) as an integer
+            if ((URI byte code is unreserved) = false and (URI byte code is a subdelimiter) = false) and code != 58:
+                return false
+            increment cursor
+        return cursor > start
+
+function {string:text} [is a bracketed IP literal]:
+    execute:
+        if text's length < 4:
+            return false
+        if (the character at 0 in text) != (91 as a byte) or (the character at (text's length - 1) in text) != (93 as a byte):
+            return false
+        set address to the substring of text from 1 spanning (text's length - 2) bytes
+        return (address is an IPv6 address) or (address is an IPvFuture address)
+
+function [the percent encoded URI text of] {string:text} [as authority] {boolean:authority}:
+    execute:
+        if authority and (text is a bracketed IP literal):
+            return text
+        set buffer to a new string buffer containing (text's length * 3) bytes
+        set data to the data of buffer
+        set digits to "0123456789ABCDEF"
+        set length to 0
+        set index to 0
+        loop while index < text's length:
+            set code to ((the character at index in text) as an integer) bitwise and 255
+            set safe to URI byte code is unreserved
+            if authority:
+                set safe to safe or (URI byte code is a subdelimiter)
+            else:
+                set safe to safe or (code = 47 or code = 58)
+            if safe:
+                store (code as a byte) into data at length
+                increment length
+            else:
+                store (37 as a byte) into data at length
+                store (the character at (code / 16) in digits) into data at (length + 1)
+                store (the character at (the remainder of code divided by 16) in digits) into data at (length + 2)
+                set length to length + 3
+            increment index
+        return the substring of buffer from 0 spanning length bytes

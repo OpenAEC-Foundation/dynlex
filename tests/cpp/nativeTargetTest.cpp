@@ -31,33 +31,31 @@ int main() {
 
 	const llvm::Triple windows = normalizedNativeTargetTriple("x86_64-w64-mingw32");
 	expect(
-		nativeLibraryArguments(windows, "dynlex_runtime", "runtime.a", "graphics.a") ==
+		nativeLibraryArguments(windows, "dynlex_runtime", "runtime.a") ==
 			std::vector<std::string>({"runtime.a", "-lshell32", "-lole32", "-luuid"}),
 		"Windows runtime system libraries were not linked after the runtime archive"
 	);
-	expect(
-		nativeLibraryArguments(windows, "dynlex_graphics", "runtime.a", "graphics.a") ==
-			std::vector<std::string>({
-				"graphics.a", "runtime.a", "-lglfw3dll", "-lvulkan-1", "-lshell32", "-lole32", "-luuid"
-			}),
-		"Windows graphics dependencies were not linked in static dependency order"
-	);
+
 	const llvm::Triple linuxTarget("x86_64-unknown-linux-gnu");
 	expect(
-		nativeLibraryArguments(linuxTarget, "dynlex_runtime", "runtime.a", "graphics.a") ==
+		nativeLibraryArguments(linuxTarget, "dynlex_runtime", "runtime.a") ==
 			std::vector<std::string>({"runtime.a", "-pthread"}),
 		"POSIX runtime thread support was not linked"
 	);
-	expect(
-		nativeLibraryArguments(linuxTarget, "dynlex_graphics", "runtime.a", "graphics.a") ==
-			std::vector<std::string>({"graphics.a", "runtime.a", "-lglfw", "-lvulkan", "-lm", "-pthread"}),
-		"Linux graphics dependencies were not linked in static dependency order"
-	);
+
 	const llvm::Triple macosTarget("arm64-apple-darwin");
-	expect(
-		nativeLibraryArguments(macosTarget, "dynlex_graphics", "runtime.a", "graphics.a") ==
-			std::vector<std::string>({"graphics.a", "runtime.a", "-lglfw", "-lvulkan", "-pthread"}),
-		"macOS graphics dependencies were not linked in static dependency order"
-	);
+	for (const llvm::Triple &target : {windows, linuxTarget, macosTarget}) {
+		expect(
+			nativeLibraryArguments(target, "glfw", "runtime.a") ==
+				std::vector<std::string>({target.isOSWindows() ? "-lglfw3dll" : "-lglfw"}),
+			"Direct GLFW calls must use the target platform's library name"
+		);
+		expect(
+			nativeLibraryArguments(target, "vulkan", "runtime.a") ==
+				std::vector<std::string>({target.isOSWindows() ? "-lvulkan-1" : "-lvulkan"}),
+			"Direct Vulkan calls must use the target platform's library name"
+		);
+	}
+
 	return 0;
 }

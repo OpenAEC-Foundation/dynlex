@@ -533,11 +533,17 @@ resizeCanvas();
 syncFieldMotion();
 
 window.addEventListener("pagehide", (event) => {
+  // A cached page resumes with the same compiler worker and animation state.
+  if (event.persisted) return;
   cancelAnimationFrame(frameHandle);
-  if (!event.persisted) farmChallengeInstance?.destroy();
-  if (!event.persisted && languageConnection) {
-    for (const editor of snippetEditors.values()) editor.dispose();
-    riverChallengeInstance?.destroy();
+  const editorCleanup = [...snippetEditors.values()].map(editor => editor.dispose());
+  editorCleanup.push(farmChallengeInstance?.destroy(), riverChallengeInstance?.destroy());
+  if (languageConnection) {
+    void Promise.all(editorCleanup).then(async () => {
+      await languageConnection.stop();
+      snippetWorker.terminate();
+    }).catch((error) => {
+      console.error("Homepage DynLex language server shutdown failed", error);
+    });
   }
-
-}, { once: true });
+});

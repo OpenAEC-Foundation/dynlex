@@ -1,0 +1,27 @@
+import lib/check.dl
+import lib/platform.dl
+
+local class:
+    patterns:
+        [a|] native timespec
+    members:
+        seconds as a word sized integer
+        nanoseconds as a C long integer
+
+function [the native C error number]:
+    execute:
+        if the build target is Windows:
+            return @intrinsic("dereference", @intrinsic("call", "libc", "_errno", a pointer to an integer))
+        if the build target is macOS:
+            return @intrinsic("dereference", @intrinsic("call", "libc", "__error", a pointer to an integer))
+        return @intrinsic("dereference", @intrinsic("call", "libc", "__errno_location", a pointer to an integer))
+
+function [sleep for] {integer:duration} [milliseconds]:
+    execute:
+        require condition (duration >= 0) reporting "A sleep duration cannot be negative"
+        if the build target is Windows:
+            @intrinsic("call", "kernel32", "Sleep", nothing, duration as a 32 bit unsigned integer)
+        else:
+            set remaining to @intrinsic("construct", a native timespec, (duration / 1000) as a word sized integer, ((the remainder of duration divided by 1000) * 1000000) as a C long integer)
+            loop while @intrinsic("call", "libc", "nanosleep", an integer, the address of remaining, the address of remaining) != 0:
+                require condition ((the native C error number) = 4) reporting "Waiting for the sleep duration failed"

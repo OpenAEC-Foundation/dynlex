@@ -15,4 +15,6 @@ class:
 @intrinsic("store", value, @intrinsic("construct", a box, 1))
 @intrinsic("store", pointer, @intrinsic("address of", value))
 @intrinsic("store", indirect, @intrinsic("address of", pointer))
-ignore @intrinsic("address of", @intrinsic("property", indirect, "value"))
+@intrinsic("store", field, @intrinsic("address of", @intrinsic("property", indirect, "value")))
+@intrinsic("store at", field, 42)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", @intrinsic("property", value, "value"))

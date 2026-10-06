@@ -1,0 +1,9 @@
+class:
+    patterns:
+        box
+    members:
+        value
+
+@intrinsic("discard", @intrinsic("construct", box, 1))
+@intrinsic("discard", @intrinsic("construct", box, 1.0))
+@intrinsic("discard", @intrinsic("size of", box))

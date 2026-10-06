@@ -656,6 +656,15 @@ function an aligned layout sample with marker {byte:marker}, count {a 32 bit int
     replacement:
         @intrinsic("construct", an aligned layout sample, marker, count, tail)
 
+class:
+    patterns:
+        [a|] generic layout sample
+    members:
+        value
+
+print the size of a pointer to a generic layout sample as a line
+print the size of a pointer to a pointer to a generic layout sample as a line
+print @intrinsic("size of", @intrinsic("array", 3, a pointer to a generic layout sample)) as a line
 print the size of a string as a line
 print the size of a layout sample as a line
 print the size of a C long integer as a line
@@ -664,7 +673,7 @@ set sample to an aligned layout sample with marker 1 as a byte, count 42 and tai
 print sample's count as a line
 print sample's tail as a line
 `);
-if (targetLayoutOutput !== "12\n20\n4\n16\n42\n2\n") {
+if (targetLayoutOutput !== "4\n4\n12\n12\n20\n4\n16\n42\n2\n") {
   throw new Error(`Unexpected wasm target layout output: ${JSON.stringify(targetLayoutOutput)}`);
 }
 

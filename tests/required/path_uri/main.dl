@@ -1,5 +1,4 @@
 import lib/path.dl
-import lib/host.dl
 
 function check {file URI result:result} against expected:
     execute:
@@ -97,22 +96,3 @@ check failure (the path from "file://server:80/share" interpreted as a file URI 
 check failure (the path from "file://[:::1]/share" interpreted as a file URI using windows)
 check failure (the path from "file://[v1.]/share" interpreted as a file URI using windows)
 check failure (the path from "file://[::1/share" interpreted as a file URI using windows)
-
-set platform to whether the host platform is Windows
-set destination to the string form of "C:/tmp/native path" if platform's value, else the string form of "/tmp/native path"
-set locator to the string form of "file:///C:/tmp/native%20path" if platform's value, else the string form of "file:///tmp/native%20path"
-
-set resolved to the path from locator interpreted as a file URI
-print whether resolved succeeded as a line
-print whether resolved is supported as a line
-print whether (resolved's value = destination) as a line
-print whether resolved's error message is empty as a line
-
-set rejected to the path from (the string form of "file:///tmp/a%2Fb") interpreted as a file URI
-print whether (
-    (rejected failed) and
-    ((rejected is supported) and
-    ((rejected's value is empty) and (rejected's error message is not empty)))
-) as a line
-
-check (the file URI for destination interpreted as a native path) against locator

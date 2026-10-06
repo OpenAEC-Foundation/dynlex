@@ -1,0 +1,55 @@
+import lib/std.dl
+
+class:
+    patterns:
+        [a|] singleton record
+    members:
+        value as an integer
+
+class:
+    patterns:
+        [a|] pair record
+    members:
+        name as a string
+        value as an integer
+
+class:
+    patterns:
+        [a|] nested record
+    members:
+        single as a singleton record
+        pair as a pair record
+
+function the increment of {integer:value}:
+    execute:
+        return value + 1
+
+set nestedSingleton to [@intrinsic(
+    "construct",
+    a nested record,
+    @intrinsic("construct", a singleton record, (1 + 2)),
+    @intrinsic("construct", a pair record, the string form of "three", the increment of 3)
+)]
+set firstNested to the item at 0 in nestedSingleton
+print the value of the single of firstNested as a line
+print (the length of the name of the pair of firstNested) as a line
+print the value of the pair of firstNested as a line
+
+set nestedArrays to [[@intrinsic("construct", a singleton record, 9)]]
+set firstRow to the item at 0 in nestedArrays
+set nestedValue to the item at 0 in firstRow
+print the value of nestedValue as a line
+
+set grouped to [(1 + 2) * 3]
+print the item at 0 in grouped as a line
+
+set singletonString to [the string form of "hello"]
+set word to the item at 0 in singletonString
+print (the length of word) as a line
+
+set multiple to [
+    @intrinsic("construct", a singleton record, 11),
+    @intrinsic("construct", a singleton record, 12)
+]
+print the value of the item at 0 in multiple as a line
+print the value of the item at 1 in multiple as a line

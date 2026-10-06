@@ -457,9 +457,10 @@ export async function initializeRiverChallenge(section, {
     destroyed = true;
     programGeneration += 1;
     controller.stop();
-    editor.dispose();
+    const cleanup = editor.dispose();
     challengeAudio.destroy();
     signal.removeEventListener("abort", destroy);
+    return cleanup;
   }
 
   function syncControls({ paused, speed }) {

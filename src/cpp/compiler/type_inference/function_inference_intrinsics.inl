@@ -4,62 +4,8 @@ case Expression::Kind::IntrinsicCall: {
 		break;
 	if (info) {
 		switch (info->returnKind) {
-		case IntrinsicReturnKind::SameAsArgs:
-			if (expr->arguments.size() == 2) {
-				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (kind == IntrinsicKind::Negate && !valueType.isNumeric()) {
-					failIntrinsicArgumentRequirement(1, "a number");
-					break;
-				}
-				expr->type = valueType;
-			} else {
-				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				DataType result;
-				ArithmeticIntrinsicKind arithmeticOperation = arithmeticIntrinsicKind(expr->intrinsicName);
-				if (!promoteIntrinsicArithmetic(arithmeticOperation, leftType, rightType, result)) {
-					setConfiguredTypeFailure(
-						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
-					);
-					break;
-				}
-				int arrayOperandIndex = decayingArrayOperandIndex(arithmeticOperation, leftType, rightType);
-				if (arrayOperandIndex != 0 &&
-					!inferLValueAddressProvenance(expr->arguments[arrayOperandIndex], context, flexBindingFrameStack)) {
-					setConfiguredTypeFailure(expr->range, "fixed array pointer arithmetic requires an addressable array");
-					break;
-				}
-				expr->type = result;
-			}
-			break;
-		case IntrinsicReturnKind::SameAsInts:
-			if (expr->arguments.size() == 2) {
-				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!isBitwiseOperandType(valueType)) {
-					setConfiguredTypeFailure(
-						expr->range, "bitwise operator operand invalid", "message",
-						{{"operator", expr->intrinsicName}, {"value_type", typeToUserName(valueType)}}
-					);
-					break;
-				}
-				expr->type = valueType;
-			} else {
-				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				DataType result;
-				if (!DataType::promoteBitwise(leftType, rightType, result)) {
-					setConfiguredTypeFailure(
-						expr->range, "bitwise operator operands invalid", "message",
-						{{"operator", expr->intrinsicName},
-						 {"left_type", typeToUserName(leftType)},
-						 {"right_type", typeToUserName(rightType)}}
-					);
-					break;
-				}
-				expr->type = result;
-			}
-			break;
+#include "intrinsics/arithmetic_inference.inl"
+#include "intrinsics/bitwise_inference.inl"
 		case IntrinsicReturnKind::Bool: {
 			if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
@@ -290,12 +236,8 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		case IntrinsicReturnKind::Custom:
 #include "intrinsics/aggregate_inference.inl"
-			if (kind == IntrinsicKind::ShaderInterpolantInput) {
-				expr->type = {DataType::Kind::Vector};
-				expr->type.arraySize = 4;
-				expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-				break;
-			}
+#include "intrinsics/atomic_inference.inl"
+#include "intrinsics/shader_custom_inference.inl"
 			if (handledAggregateIntrinsic)
 				break;
 			if (kind == IntrinsicKind::LifecycleValue) {
@@ -327,6 +269,10 @@ case Expression::Kind::IntrinsicCall: {
 					crashCompilerBug("subject assignment is missing its value expression");
 				expr->type = ensureExpressionType(expr->subjectSetter->arguments[1], context, flexBindingFrameStack);
 			} else if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
+				if (context.parseContext.options.noMain) {
+					failWithDetail(expr->range, "Command-line arguments require a generated main function", 0);
+					break;
+				}
 				if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
 					failWithDetail(expr->range, "Command-line arguments are unavailable for this target", 0);
 					break;
@@ -346,22 +292,38 @@ case Expression::Kind::IntrinsicCall: {
 				if (ptrType.isDeduced() && ptrType.isPointer())
 					expr->type = ptrType.dereferenced();
 			} else if (isExternalCallIntrinsicKind(kind)) {
-				for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
-					Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
-					if (!metadataExpression || !std::holds_alternative<std::string>(metadataExpression->literalValue)) {
-						failIntrinsicArgumentRequirement(metadataIndex, "a string literal");
+				if (kind == IntrinsicKind::CallPointer) {
+					if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
+						failWithDetail(
+							expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0
+						);
 						break;
+					}
+					DataType calleeType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+					if (calleeType.isDeduced() && !calleeType.isPointer()) {
+						setConfiguredTypeFailure(expr->range, "call pointer callee must be a native pointer");
+						break;
+					}
+				} else {
+					for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
+						Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
+						if (!metadataExpression || !std::holds_alternative<std::string>(metadataExpression->literalValue)) {
+							failIntrinsicArgumentRequirement(metadataIndex, "a string literal");
+							break;
+						}
 					}
 				}
 				if (!context.typesValid)
 					break;
-				DataType retTypeRef = ensureExpressionType(expr->arguments[3], context, flexBindingFrameStack);
+				size_t returnTypeArgumentIndex = externalCallReturnTypeArgumentIndex(kind);
+				DataType retTypeRef =
+					ensureExpressionType(expr->arguments[returnTypeArgumentIndex], context, flexBindingFrameStack);
 				if (retTypeRef.kind != DataType::Kind::Type) {
 					setConfiguredTypeFailure(expr->range, "call return type must be type reference");
 					break;
 				}
-				if (retTypeRef.kind == DataType::Kind::Type && (retTypeRef.referencedKind == DataType::Kind::Type ||
-																retTypeRef.referencedKind == DataType::Kind::Unresolved)) {
+				if (retTypeRef.kind == DataType::Kind::Type &&
+					(!retTypeRef.toReferencedType().isDeduced() || retTypeRef.toReferencedType().isMetaType())) {
 					setConfiguredTypeFailure(expr->range, "call return type must be concrete runtime type");
 					break;
 				}
@@ -425,13 +387,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!tryResolveCastResultType(valueType, typeArgType, castResultType)) {
 					if (tryApplyUserConversion(expr->arguments[1], requestedType, false, context, flexBindingFrameStack)) {
 						expr->type = requestedType;
-						context.setExpressionEvaluation(
-							expr,
-							{
-								.value = context.lookupExpressionValue(expr->arguments[1]),
-								.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(expr->arguments[1]),
-							}
-						);
+						context.setExpressionValue(expr, context.lookupExpressionValue(expr->arguments[1]));
 						break;
 					}
 					if (!context.typesValid)
@@ -569,24 +525,23 @@ case Expression::Kind::IntrinsicCall: {
 					failCompileTimeOnlyIntrinsicArgument(1, "a compile-time type reference");
 					break;
 				}
-				if (typeArgType.referencedKind == DataType::Kind::Type ||
-					typeArgType.referencedKind == DataType::Kind::Unresolved) {
+				DataType valueType = typeArgType.toReferencedType();
+				if (!valueType.isConcrete() || !valueType.isRuntimeValueType()) {
+					if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0) {
+						auto unknownMember =
+							std::ranges::find_if(valueType.classDefinition->fields, [](const FieldDefinition &field) {
+							return field.declaredType.kind == DataType::Kind::Any;
+						});
+						if (unknownMember != valueType.classDefinition->fields.end()) {
+							setConfiguredTypeFailure(
+								typeExpression->range, "class size unknown member type", "message",
+								{{"type", typeToUserName(valueType)}, {"member", unknownMember->name}}
+							);
+							break;
+						}
+					}
 					setConfiguredTypeFailure(expr->range, "size of type invalid");
 					break;
-				}
-				if (typeArgType.referencedKind == DataType::Kind::Class && typeArgType.classDefinition &&
-					typeArgType.classInstIndex < 0) {
-					auto unknownMember =
-						std::ranges::find_if(typeArgType.classDefinition->fields, [](const FieldDefinition &field) {
-						return field.declaredType.kind == DataType::Kind::Any;
-					});
-					if (unknownMember != typeArgType.classDefinition->fields.end()) {
-						setConfiguredTypeFailure(
-							typeExpression->range, "class size unknown member type", "message",
-							{{"type", typeToUserName(typeArgType.toReferencedType())}, {"member", unknownMember->name}}
-						);
-						break;
-					}
 				}
 				expr->type = {DataType::Kind::Int, 8};
 			} else if (kind == IntrinsicKind::BuildInfo) {
@@ -967,13 +922,12 @@ case Expression::Kind::IntrinsicCall: {
 						expr->type = targetType;
 				}
 			} else if (kind == IntrinsicKind::Property) {
-				DataType instType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+				DataType instType =
+					ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack).propertyOwnerType();
 				if (!instType.isDeduced()) {
 					context.typesValid = false;
 					break;
 				}
-				if (instType.isPointer() && instType.kind == DataType::Kind::Class)
-					instType = instType.dereferenced();
 				std::string fieldName;
 				CompileTimeValue propertyValue =
 					resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context);
@@ -1020,7 +974,7 @@ case Expression::Kind::IntrinsicCall: {
 	}
 	if (context.typesValid) {
 		markIntrinsicImpurityIfNeeded(expr, context, flexBindingFrameStack);
-		context.setExpressionEvaluation(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
+		context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 	}
 	break;
 }

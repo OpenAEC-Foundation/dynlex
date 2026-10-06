@@ -1,0 +1,15 @@
+import lib/std.dl
+set left to the string form of "hello"
+set right to the string form of " world"
+print (left + right) as a line
+print (left + " world") as a line
+print ("hello" + right) as a line
+print ("hello" + " world") as a line
+set bytes to a new string buffer containing 3 bytes
+store (65 as a byte) into (the data of bytes) at 0
+store (0 as a byte) into (the data of bytes) at 1
+store (66 as a byte) into (the data of bytes) at 2
+set joined to bytes + "C"
+print (the length of joined) as a line
+print ((the character at 1 in joined) as an integer) as a line
+print ((the character at 3 in joined) as an integer) as a line

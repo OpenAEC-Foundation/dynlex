@@ -3,6 +3,8 @@
 #include "numericLiteral.h"
 #include "parseContext.h"
 #include "pattern/pattern_tree/patternElement.h"
+#include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -12,9 +14,7 @@ bool isCompileTimeKnown(const CompileTimeValue &value) { return !std::holds_alte
 std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 	if (auto *boolean = std::get_if<bool>(&value))
 		return *boolean;
-	if (auto *integer = std::get_if<std::int64_t>(&value))
-		return *integer != 0;
-	if (auto *number = std::get_if<double>(&value))
+	if (std::optional<double> number = getCompileTimeNumericValue(value))
 		return *number != 0.0;
 	if (auto *text = std::get_if<std::string>(&value))
 		return !text->empty();
@@ -24,6 +24,11 @@ std::optional<bool> compileTimeTruthiness(const CompileTimeValue &value) {
 std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &value) {
 	if (auto *integer = std::get_if<std::int64_t>(&value))
 		return *integer;
+	if (auto *integer = std::get_if<std::uint64_t>(&value)) {
+		if (*integer <= static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()))
+			return static_cast<std::int64_t>(*integer);
+		return std::nullopt;
+	}
 	auto *number = std::get_if<double>(&value);
 	if (!number || !std::isfinite(*number))
 		return std::nullopt;
@@ -40,9 +45,31 @@ std::optional<std::int64_t> getCompileTimeIntegerValue(const CompileTimeValue &v
 	return static_cast<std::int64_t>(truncated);
 }
 
+std::optional<std::uint64_t> getCompileTimeUnsignedIntegerValue(const CompileTimeValue &value) {
+	if (auto *integer = std::get_if<std::uint64_t>(&value))
+		return *integer;
+	if (auto *integer = std::get_if<std::int64_t>(&value))
+		return static_cast<std::uint64_t>(*integer);
+	if (auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&value)) {
+		requireCompilerInvariant(minimumMagnitude->identity != nullptr, "minimum integer magnitude has no identity");
+		return std::uint64_t{1} << 63;
+	}
+	if (auto *number = std::get_if<double>(&value)) {
+		if (!std::isfinite(*number) || *number < 0.0)
+			return std::nullopt;
+		double truncated = std::trunc(*number);
+		if (truncated >= 18446744073709551616.0)
+			return std::nullopt;
+		return static_cast<std::uint64_t>(truncated);
+	}
+	return std::nullopt;
+}
+
 std::optional<double> getCompileTimeNumericValue(const CompileTimeValue &value) {
 	if (const auto *integer = std::get_if<std::int64_t>(&value))
 		return static_cast<double>(*integer);
+	if (std::holds_alternative<std::uint64_t>(value) || std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
+		return static_cast<double>(*getCompileTimeUnsignedIntegerValue(value));
 	if (const auto *floatingPoint = std::get_if<double>(&value))
 		return *floatingPoint;
 	return std::nullopt;
@@ -111,6 +138,8 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 	switch (expr->kind) {
 	case Expression::Kind::Literal:
 		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue))
+			return *integer;
+		if (const auto *integer = std::get_if<std::uint64_t>(&expr->literalValue))
 			return *integer;
 		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue))
 			return *minimumMagnitude;
@@ -203,9 +232,15 @@ CompileTimeValue currentBuildInfoValue(const ParseContext &context, std::string_
 }
 
 std::optional<bool> evaluateTargetIs(const ParseContext &context, std::string_view targetName) {
-	if (targetName != "cpu" && targetName != "wasm" && targetName != "gpu")
-		return std::nullopt;
-	return currentBuildTargetName(context) == targetName;
+	if (targetName == "cpu" || targetName == "wasm" || targetName == "gpu")
+		return currentBuildTargetName(context) == targetName;
+	if (targetName == "windows" || targetName == "macos" || targetName == "linux") {
+		if (currentBuildTargetName(context) != "cpu")
+			return false;
+		llvm::Triple target(llvm::sys::getDefaultTargetTriple());
+		return targetName == "windows" ? target.isOSWindows() : targetName == "macos" ? target.isMacOSX() : target.isOSLinux();
+	}
+	return std::nullopt;
 }
 
 std::optional<bool> evaluateShaderStageIs(const ParseContext &context, std::string_view shaderStageName) {

@@ -10,6 +10,10 @@ typedef struct {
 	size_t length;
 } DynlexProcessString;
 
+typedef uint16_t *(*DynlexWindowsCommandLineBuilder)(
+	const uint16_t *executable, const DynlexProcessString *arguments, size_t count
+);
+
 typedef struct {
 	DynlexProcessString name;
 	DynlexProcessString value;
@@ -65,7 +69,9 @@ int dynlex_process_append_output(DynlexProcess *process, DynlexProcessStream str
 void dynlex_process_mark_stream_closed(DynlexProcess *process, DynlexProcessStream stream);
 void dynlex_process_mark_finished(DynlexProcess *process, int64_t exit_code, int32_t termination_signal);
 
-int dynlex_platform_process_launch(DynlexProcess *process, const DynlexProcessCommand *command);
+int dynlex_platform_process_launch(
+	DynlexProcess *process, const DynlexProcessCommand *command, DynlexWindowsCommandLineBuilder build_command_line
+);
 int dynlex_platform_process_pump(DynlexProcess *process, int64_t timeout_milliseconds, DynlexProcessStream requested_stream);
 int dynlex_platform_process_write(DynlexProcess *process, const char *data, size_t length, size_t *written);
 int dynlex_platform_process_close_input(DynlexProcess *process);

@@ -98,6 +98,10 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 		int bits = type.numericSize * 8;
 		return context.diBuilder->createBasicType("i" + std::to_string(bits), bits, llvm::dwarf::DW_ATE_signed);
 	}
+	case DataType::Kind::UInt: {
+		int bits = type.numericSize * 8;
+		return context.diBuilder->createBasicType("u" + std::to_string(bits), bits, llvm::dwarf::DW_ATE_unsigned);
+	}
 	case DataType::Kind::Array: {
 		if (!type.arrayElementType)
 			return nullptr;
@@ -457,8 +461,8 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 	requireCompilerInvariant(expr->arguments.size() > 2, "property lvalue is missing an owner or field name");
 	Expression *ownerExpression = expr->arguments[1];
 	DataType ownerType = finalizedExpressionType(context, ownerExpression);
-	bool ownerIsDirectClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.pointerDepth == 1;
-	DataType classType = ownerIsDirectClassPointer ? ownerType.dereferenced() : ownerType;
+	bool ownerIsClassPointer = ownerType.kind == DataType::Kind::Class && ownerType.isPointer();
+	DataType classType = ownerType.propertyOwnerType();
 	if (classType.kind != DataType::Kind::Class || classType.isPointer() || !classType.classDefinition ||
 		classType.classInstIndex < 0)
 		return {};
@@ -488,12 +492,20 @@ LValueAddressResult generateLValueAddress(ParseContext &context, Expression *exp
 		return {};
 
 	llvm::Value *ownerAddress = nullptr;
-	if (ownerIsDirectClassPointer) {
+	if (ownerIsClassPointer) {
 		CodegenResult owner = generateExpressionCode(context, ownerExpression);
 		if (!owner)
 			return {nullptr, LValueAddressStatus::Failed};
 		requireCompilerInvariant(owner.value != nullptr, "class pointer lvalue owner produced no pointer value");
 		ownerAddress = owner.value;
+		auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
+		DataType pointerType = ownerType;
+		while (pointerType.pointerDepth > 1) {
+			pointerType = pointerType.dereferenced();
+			ownerAddress = builder.CreateAlignedLoad(
+				getLLVMType(context, pointerType), ownerAddress, getLLVMABIAlignment(context, pointerType), "property_owner"
+			);
+		}
 	} else {
 		LValueAddressResult owner = generateLValueAddress(context, ownerExpression);
 		if (owner.status != LValueAddressStatus::Addressable)
@@ -621,9 +633,9 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
 	if (fromType.isPointer() && toType.isPointer())
 		return builder.CreateBitCast(val, targetLLVM, "ptop");
-	if (fromType.isPointer() && toType.kind == DataType::Kind::Int)
+	if (fromType.isPointer() && toType.isInteger())
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
-	if (fromType.kind == DataType::Kind::Int && toType.isPointer())
+	if (fromType.isInteger() && toType.isPointer())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
 
 	if (fromType.kind == DataType::Kind::Class && toType.kind == DataType::Kind::Class && !fromType.isPointer() &&
@@ -639,9 +651,10 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 
 	// Numeric conversions
 	if (fromType.isNumeric() && toType.isNumeric()) {
-		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Int) {
+		if (fromType.isInteger() && toType.isInteger()) {
 			if (fromType.numericSize < toType.numericSize)
-				return builder.CreateSExt(val, targetLLVM, "sext");
+				return fromType.isUnsignedInteger() ? builder.CreateZExt(val, targetLLVM, "zext")
+													: builder.CreateSExt(val, targetLLVM, "sext");
 			return builder.CreateTrunc(val, targetLLVM, "trunc");
 		}
 		if (fromType.kind == DataType::Kind::Float && toType.kind == DataType::Kind::Float) {
@@ -649,9 +662,11 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 				return builder.CreateFPExt(val, targetLLVM, "fpext");
 			return builder.CreateFPTrunc(val, targetLLVM, "fptrunc");
 		}
-		if (fromType.kind == DataType::Kind::Int && toType.kind == DataType::Kind::Float)
-			return builder.CreateSIToFP(val, targetLLVM, "itof");
-		return builder.CreateFPToSI(val, targetLLVM, "ftoi");
+		if (fromType.isInteger() && toType.kind == DataType::Kind::Float)
+			return fromType.isUnsignedInteger() ? builder.CreateUIToFP(val, targetLLVM, "utof")
+												: builder.CreateSIToFP(val, targetLLVM, "itof");
+		return toType.isUnsignedInteger() ? builder.CreateFPToUI(val, targetLLVM, "ftou")
+										  : builder.CreateFPToSI(val, targetLLVM, "ftoi");
 	}
 
 	// Numeric -> Bool

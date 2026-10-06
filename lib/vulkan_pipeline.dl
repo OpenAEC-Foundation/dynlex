@@ -1,0 +1,92 @@
+import lib/vulkan_memory.dl
+import lib/vulkan_pipeline_types.dl
+import lib/graphics_spirv.dl
+
+function [a Vulkan shader module for] {a graphics SPIR-V module:code} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set creation to a new VkShaderModuleCreateInfo
+        set creation's sType to 16
+        set creation's codeSize to code's count * 4
+        set creation's pCode to code's words
+        set result to 0 as a pointer
+        require Vulkan status @intrinsic("call", "vulkan", "vkCreateShaderModule", an integer, state's device, the address of creation, 0 as a pointer, the address of result) for "Creating a SPIR-V shader module"
+        return result
+
+# Input stride, attributes, primitive topology, layout and depth are data.
+# The same builder is used by retained meshes and custom fullscreen shaders.
+function [a Vulkan pipeline for vertex] {a graphics SPIR-V module:vertex} [fragment] {a graphics SPIR-V module:fragment} [layout] {pointer:layout} [topology] {integer:topology} [stride] {32 bit unsigned integer:stride} [attributes] {a pointer to VkVertexInputAttributeDescription:attributes} [count] {32 bit unsigned integer:count} [depth] {boolean:depth} [in] {a pointer to DynlexGraphics:state}:
+    execute:
+        set vertexModule to a Vulkan shader module for vertex in state
+        set fragmentModule to a Vulkan shader module for fragment in state
+        set vertexStage to a new VkPipelineShaderStageCreateInfo
+        set vertexStage's sType to 18
+        set vertexStage's stage to 1
+        set vertexStage's module to vertexModule
+        set vertexStage's pName to "main"
+        set fragmentStage to vertexStage
+        set fragmentStage's stage to 16
+        set fragmentStage's module to fragmentModule
+        set stages to [vertexStage, fragmentStage]
+        set binding to a new VkVertexInputBindingDescription
+        set binding's stride to stride
+        set input to a new VkPipelineVertexInputStateCreateInfo
+        set input's sType to 19
+        set input's vertexBindingDescriptionCount to 1 as a 32 bit unsigned integer
+        set input's pVertexBindingDescriptions to the address of binding
+        set input's vertexAttributeDescriptionCount to count
+        set input's pVertexAttributeDescriptions to attributes
+        set assembly to a new VkPipelineInputAssemblyStateCreateInfo
+        set assembly's sType to 20
+        set assembly's topology to topology
+        set viewport to a new VkPipelineViewportStateCreateInfo
+        set viewport's sType to 22
+        set viewport's viewportCount to 1 as a 32 bit unsigned integer
+        set viewport's scissorCount to 1 as a 32 bit unsigned integer
+        set raster to a new VkPipelineRasterizationStateCreateInfo
+        set raster's sType to 23
+        set raster's frontFace to 1
+        set raster's lineWidth to 1.0 as a 32 bit floating-point number
+        set samples to a new VkPipelineMultisampleStateCreateInfo
+        set samples' sType to 24
+        set samples' rasterizationSamples to 1
+        set depthState to a new VkPipelineDepthStencilStateCreateInfo
+        set depthState's sType to 25
+        set depthState's depthTestEnable to depth as a 32 bit unsigned integer
+        set depthState's depthWriteEnable to depth as a 32 bit unsigned integer
+        set depthState's depthCompareOp to 1
+        set blend to a new VkPipelineColorBlendAttachmentState
+        set blend's blendEnable to 1 as a 32 bit unsigned integer
+        set blend's srcColorBlendFactor to 6
+        set blend's dstColorBlendFactor to 7
+        set blend's srcAlphaBlendFactor to 1
+        set blend's dstAlphaBlendFactor to 7
+        set blend's colorWriteMask to 15 as a 32 bit unsigned integer
+        set blending to a new VkPipelineColorBlendStateCreateInfo
+        set blending's sType to 26
+        set blending's attachmentCount to 1 as a 32 bit unsigned integer
+        set blending's pAttachments to the address of blend
+        set dynamicValues to [0, 1]
+        set dynamicState to a new VkPipelineDynamicStateCreateInfo
+        set dynamicState's sType to 27
+        set dynamicState's dynamicStateCount to 2 as a 32 bit unsigned integer
+        set dynamicState's pDynamicStates to dynamicValues + 0
+        set creation to a new VkGraphicsPipelineCreateInfo
+        set creation's sType to 28
+        set creation's stageCount to 2 as a 32 bit unsigned integer
+        set creation's pStages to stages + 0
+        set creation's pVertexInputState to the address of input
+        set creation's pInputAssemblyState to the address of assembly
+        set creation's pViewportState to the address of viewport
+        set creation's pRasterizationState to the address of raster
+        set creation's pMultisampleState to the address of samples
+        set creation's pDepthStencilState to the address of depthState
+        set creation's pColorBlendState to the address of blending
+        set creation's pDynamicState to the address of dynamicState
+        set creation's layout to layout
+        set creation's renderPass to state's render_pass
+        set result to 0 as a pointer
+        set status to @intrinsic("call", "vulkan", "vkCreateGraphicsPipelines", an integer, state's device, 0 as a pointer, 1, the address of creation, 0 as a pointer, the address of result)
+        @intrinsic("call", "vulkan", "vkDestroyShaderModule", nothing, state's device, fragmentModule, 0 as a pointer)
+        @intrinsic("call", "vulkan", "vkDestroyShaderModule", nothing, state's device, vertexModule, 0 as a pointer)
+        require Vulkan status status for "Creating a graphics pipeline"
+        return result

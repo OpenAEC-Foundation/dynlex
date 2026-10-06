@@ -13,9 +13,7 @@ if false:
 	set version to the Vulkan API version of visible window
 	set portability to Vulkan portability is enabled for visible window
 	set device to the graphics device name of visible window
-	set {graphics error} to the current graphics error message
 	ignore version
 	ignore portability
 	ignore device
-	ignore graphics error
 	set {fullscreen window} to a new fullscreen window

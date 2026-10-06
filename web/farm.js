@@ -396,5 +396,5 @@ export async function initializeFarm(section, { compileDynLex, createEditor, sav
   }, events);
   get("worker-name").value = actorById(world, selected).name;
   sync(); startClock(); mount.dataset.challengeLoaded = "farm";
-  return { destroy() { disposed = true; preparation?.abort(); stopManualWalk(); for (const role of roles) role.generation++; clearInterval(interval); abort.abort(); editor.dispose(); view.dispose(); } };
+  return { destroy() { disposed = true; preparation?.abort(); stopManualWalk(); for (const role of roles) role.generation++; clearInterval(interval); abort.abort(); const cleanup = editor.dispose(); view.dispose(); return cleanup; } };
 }

@@ -1,7 +1,7 @@
 static std::string buildCallableFunctionName(PatternDefinition *definition, const std::vector<DataType> &argumentTypes) {
 	std::string name = getPatternFunctionName(definition->section) + "_callable";
 	for (const DataType &type : argumentTypes)
-		name += "_" + type.toString();
+		name += "_" + encodeLLVMNameComponent(type.toString());
 	return name;
 }
 
@@ -62,6 +62,9 @@ bool ensureCallableFunctionGenerated(
 												  : llvm::GlobalValue::InternalLinkage;
 	llvm::Function *callableFunction = llvm::Function::Create(callableType, linkage, callableName, context.llvmModule);
 	instantiationPointer->llvmCallableFunction = callableFunction;
+	applyNativeScalarABI(
+		*callableFunction, context.llvmModule->getTargetTriple(), instantiationPointer->returnType, argumentTypes
+	);
 
 	size_t argumentIndex = 0;
 	for (llvm::Argument &argument : callableFunction->args())

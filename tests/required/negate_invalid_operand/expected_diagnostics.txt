@@ -1,3 +1,3 @@
-tests/required/negate_invalid_operand/main.dl:44-51: Error: Intrinsic 'negate' argument 1 must be a number
+tests/required/negate_invalid_operand/main.dl:23-52: Error: Arithmetic operator 'negate' requires a numeric scalar or vector operand, got 'a pointer to a byte'
   note: while inferring intrinsic 'negate' in '@intrinsic("negate", "hello")' with arguments [a pointer to a byte] -> an unresolved value tests/required/negate_invalid_operand/main.dl:23-52
   note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("negate", "hello"))' with arguments [an unresolved value] -> an unresolved value tests/required/negate_invalid_operand/main.dl:1-53

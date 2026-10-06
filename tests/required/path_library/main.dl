@@ -81,3 +81,9 @@ check falsehood (whether "C:relative" is an absolute path using windows)
 check falsehood (whether "relative" is an absolute path using windows)
 check path failure ("\\\\?\\C:\\device" lexically normalized using windows)
 check path failure ("\\\\server" lexically normalized using windows)
+
+check ("C:" joined with "file.txt" using windows) against "C:file.txt"
+check ("C:" joined with "C:file.txt" using windows) against "C:file.txt"
+check ("C:" joined with "" using windows) against "C:"
+check ("C:folder" joined with "../file.txt" using windows) against "C:file.txt"
+check ("C:folder" joined with "D:file.txt" using windows) against "D:file.txt"

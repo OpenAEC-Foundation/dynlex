@@ -1,3 +1,4 @@
+#include "direct_minimum_literal.inl"
 struct PatternCallResolution {
 	PatternDefinition *definition;
 	size_t pathIndex;
@@ -74,13 +75,7 @@ createConversionCall(InferenceContext &context, Expression *source, PatternDefin
 	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, true);
 	if (!source->reusableTemplateExpression)
 		sourceClone->reusableTemplateExpression = nullptr;
-	context.setExpressionEvaluation(
-		sourceClone,
-		{
-			.value = context.lookupExpressionValue(source),
-			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(source),
-		}
-	);
+	context.setExpressionValue(sourceClone, context.lookupExpressionValue(source));
 	call->arguments.push_back(sourceClone);
 	return call;
 }
@@ -229,13 +224,7 @@ static bool tryApplyUserConversion(
 	requireCompilerInvariant(call->type == targetType, "committed conversion outcome differs from its successful probe");
 	source->inferredConversion = call;
 	context.parseContext.expressionsWithInferredConversions.push_back(source);
-	context.setExpressionEvaluation(
-		source,
-		{
-			.value = context.lookupExpressionValue(call),
-			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(call),
-		}
-	);
+	context.setExpressionValue(source, context.lookupExpressionValue(call));
 	return true;
 }
 
@@ -836,11 +825,11 @@ static bool inferNonFlexPatternCall(
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
-						return trialIt->second.value;
+						return trialIt->second;
 					if (context.inheritedTrialExpressionValues) {
 						auto inheritedIt = context.inheritedTrialExpressionValues->find(argumentExpression);
 						if (inheritedIt != context.inheritedTrialExpressionValues->end())
-							return inheritedIt->second.value;
+							return inheritedIt->second;
 					}
 				}
 				return getExpressionCompileTimeValue(argumentExpression);
@@ -950,12 +939,13 @@ static bool inferNonFlexPatternCall(
 	}
 	if (!validateDefinitionReturnContract(matchedSection, def, inst.returnType, context))
 		return true;
-	CompileTimeEvaluation inferredReturnValue{};
+	CompileTimeValue inferredReturnValue;
 	if (inst.returnType.isDeduced()) {
 		expr->type = inst.returnType;
 		inferredReturnValue =
 			evaluatePureFunctionCallReturnValue(expr, def, matchedSection, inst, context, flexBindingFrameStack);
-		context.setExpressionEvaluation(expr, std::move(inferredReturnValue));
+		refineDirectMinimumSignedLiteralType(expr, inferredReturnValue);
+		context.setExpressionValue(expr, inferredReturnValue);
 	}
 	if (refinedInstantiationKey && *refinedInstantiationKey != instantiationKey) {
 		retargetTrialSectionInstantiationWriteOrCrash(
@@ -968,13 +958,7 @@ static bool inferNonFlexPatternCall(
 		auto insertResult = matchedSection->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
-	context.setExpressionEvaluation(
-		expr,
-		{
-			.value = context.lookupExpressionValue(expr),
-			.minimumIntegerEffects = context.lookupExpressionMinimumIntegerEffects(expr),
-		}
-	);
+	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
 	return true;
 }
 

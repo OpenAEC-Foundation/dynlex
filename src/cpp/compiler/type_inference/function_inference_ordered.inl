@@ -178,6 +178,10 @@ static void inferOrderedExpression(
 			NumericLiteralValue numericValue{*integer};
 			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
 			literalValue = numericLiteralCompileTimeValue(numericValue);
+		} else if (const auto *integer = std::get_if<std::uint64_t>(&expr->literalValue)) {
+			NumericLiteralValue numericValue{*integer};
+			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
+			literalValue = numericLiteralCompileTimeValue(numericValue);
 		} else if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
 			NumericLiteralValue numericValue{*minimumMagnitude};
 			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);

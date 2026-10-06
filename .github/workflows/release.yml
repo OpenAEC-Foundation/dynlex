@@ -15,28 +15,20 @@ permissions:
   contents: read
 
 jobs:
-  verify-version-tag:
+  verify-release-ref:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Verify tag matches metadata/VERSION
+        with:
+          fetch-depth: 0
+      - name: Verify release ref is accepted and matches metadata/VERSION
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-            echo "Validating release builds without publication."
-            exit 0
-          fi
-          TAG="${GITHUB_REF#refs/tags/}"
-          TAG_VERSION="${TAG#v}"
-          FILE_VERSION="$(tr -d '[:space:]' < metadata/VERSION)"
-          if [[ "$TAG_VERSION" != "$FILE_VERSION" ]]; then
-            echo "Tag version ($TAG_VERSION) does not match metadata/VERSION ($FILE_VERSION)." >&2
-            exit 1
-          fi
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: bash ./scripts/verify-release-ref.sh
 
   build-linux:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:
@@ -110,7 +102,7 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:
@@ -311,7 +303,7 @@ jobs:
           if-no-files-found: error
 
   build-macos:
-    needs: [verify-version-tag]
+    needs: [verify-release-ref]
     strategy:
       fail-fast: false
       matrix:
@@ -352,7 +344,6 @@ jobs:
           ./scripts/stage-macos-dependencies.sh "$PWD/build/macos-stage"
           test -x build/macos-stage/usr/local/bin/dynlex
           test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_runtime.a
-          test -f build/macos-stage/usr/local/lib/dynlex/libdynlex_graphics.a
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libglfw.dylib
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libfreetype.dylib
           test -f build/macos-stage/usr/local/lib/dynlex/dependencies/libvulkan.dylib
@@ -467,7 +458,6 @@ jobs:
             case "$relative_path" in
               usr/local/bin/dynlex|\
               usr/local/lib/dynlex/libdynlex_runtime.a|\
-              usr/local/lib/dynlex/libdynlex_graphics.a|\
               usr/local/lib/dynlex/dependencies/*.dylib)
                 continue
                 ;;
@@ -484,10 +474,6 @@ jobs:
             "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             "$X64_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a" \
             -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
-          lipo -create \
-            "$ARM64_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a" \
-            "$X64_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a" \
-            -output "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a"
           while IFS= read -r arm64_library; do
             library_name="$(basename "$arm64_library")"
             x64_library="$X64_ROOT/usr/local/lib/dynlex/dependencies/$library_name"
@@ -500,8 +486,7 @@ jobs:
           lipo -verify_arch arm64 x86_64 "$UNIVERSAL_ROOT/usr/local/bin/dynlex"
           lipo -verify_arch arm64 x86_64 \
             "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_runtime.a"
-          lipo -verify_arch arm64 x86_64 \
-            "$UNIVERSAL_ROOT/usr/local/lib/dynlex/libdynlex_graphics.a"
+
 
           while IFS= read -r library; do
             codesign \

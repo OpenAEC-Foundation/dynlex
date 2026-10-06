@@ -1,0 +1,145 @@
+# Vulkan ABI structures used by the native graphics library.
+# Field order and scalar widths follow the Khronos Vulkan registry.
+import lib/std.dl
+
+class:
+    patterns:
+        VkExtent2D
+    members:
+        width as a 32 bit unsigned integer
+        height as a 32 bit unsigned integer
+
+class:
+    patterns:
+        VkPhysicalDeviceLimits
+    members:
+        maxImageDimension1D as a 32 bit unsigned integer
+        maxImageDimension2D as a 32 bit unsigned integer
+        maxImageDimension3D as a 32 bit unsigned integer
+        maxImageDimensionCube as a 32 bit unsigned integer
+        maxImageArrayLayers as a 32 bit unsigned integer
+        maxTexelBufferElements as a 32 bit unsigned integer
+        maxUniformBufferRange as a 32 bit unsigned integer
+        maxStorageBufferRange as a 32 bit unsigned integer
+        maxPushConstantsSize as a 32 bit unsigned integer
+        maxMemoryAllocationCount as a 32 bit unsigned integer
+        maxSamplerAllocationCount as a 32 bit unsigned integer
+        bufferImageGranularity as a 64 bit unsigned integer
+        sparseAddressSpaceSize as a 64 bit unsigned integer
+        maxBoundDescriptorSets as a 32 bit unsigned integer
+        maxPerStageDescriptorSamplers as a 32 bit unsigned integer
+        maxPerStageDescriptorUniformBuffers as a 32 bit unsigned integer
+        maxPerStageDescriptorStorageBuffers as a 32 bit unsigned integer
+        maxPerStageDescriptorSampledImages as a 32 bit unsigned integer
+        maxPerStageDescriptorStorageImages as a 32 bit unsigned integer
+        maxPerStageDescriptorInputAttachments as a 32 bit unsigned integer
+        maxPerStageResources as a 32 bit unsigned integer
+        maxDescriptorSetSamplers as a 32 bit unsigned integer
+        maxDescriptorSetUniformBuffers as a 32 bit unsigned integer
+        maxDescriptorSetUniformBuffersDynamic as a 32 bit unsigned integer
+        maxDescriptorSetStorageBuffers as a 32 bit unsigned integer
+        maxDescriptorSetStorageBuffersDynamic as a 32 bit unsigned integer
+        maxDescriptorSetSampledImages as a 32 bit unsigned integer
+        maxDescriptorSetStorageImages as a 32 bit unsigned integer
+        maxDescriptorSetInputAttachments as a 32 bit unsigned integer
+        maxVertexInputAttributes as a 32 bit unsigned integer
+        maxVertexInputBindings as a 32 bit unsigned integer
+        maxVertexInputAttributeOffset as a 32 bit unsigned integer
+        maxVertexInputBindingStride as a 32 bit unsigned integer
+        maxVertexOutputComponents as a 32 bit unsigned integer
+        maxTessellationGenerationLevel as a 32 bit unsigned integer
+        maxTessellationPatchSize as a 32 bit unsigned integer
+        maxTessellationControlPerVertexInputComponents as a 32 bit unsigned integer
+        maxTessellationControlPerVertexOutputComponents as a 32 bit unsigned integer
+        maxTessellationControlPerPatchOutputComponents as a 32 bit unsigned integer
+        maxTessellationControlTotalOutputComponents as a 32 bit unsigned integer
+        maxTessellationEvaluationInputComponents as a 32 bit unsigned integer
+        maxTessellationEvaluationOutputComponents as a 32 bit unsigned integer
+        maxGeometryShaderInvocations as a 32 bit unsigned integer
+        maxGeometryInputComponents as a 32 bit unsigned integer
+        maxGeometryOutputComponents as a 32 bit unsigned integer
+        maxGeometryOutputVertices as a 32 bit unsigned integer
+        maxGeometryTotalOutputComponents as a 32 bit unsigned integer
+        maxFragmentInputComponents as a 32 bit unsigned integer
+        maxFragmentOutputAttachments as a 32 bit unsigned integer
+        maxFragmentDualSrcAttachments as a 32 bit unsigned integer
+        maxFragmentCombinedOutputResources as a 32 bit unsigned integer
+        maxComputeSharedMemorySize as a 32 bit unsigned integer
+        maxComputeWorkGroupCount as (a 32 bit unsigned integer) array of 3 items
+        maxComputeWorkGroupInvocations as a 32 bit unsigned integer
+        maxComputeWorkGroupSize as (a 32 bit unsigned integer) array of 3 items
+        subPixelPrecisionBits as a 32 bit unsigned integer
+        subTexelPrecisionBits as a 32 bit unsigned integer
+        mipmapPrecisionBits as a 32 bit unsigned integer
+        maxDrawIndexedIndexValue as a 32 bit unsigned integer
+        maxDrawIndirectCount as a 32 bit unsigned integer
+        maxSamplerLodBias as a 32 bit floating-point number
+        maxSamplerAnisotropy as a 32 bit floating-point number
+        maxViewports as a 32 bit unsigned integer
+        maxViewportDimensions as (a 32 bit unsigned integer) array of 2 items
+        viewportBoundsRange as (a 32 bit floating-point number) array of 2 items
+        viewportSubPixelBits as a 32 bit unsigned integer
+        minMemoryMapAlignment as a word sized unsigned integer
+        minTexelBufferOffsetAlignment as a 64 bit unsigned integer
+        minUniformBufferOffsetAlignment as a 64 bit unsigned integer
+        minStorageBufferOffsetAlignment as a 64 bit unsigned integer
+        minTexelOffset as a 32 bit integer
+        maxTexelOffset as a 32 bit unsigned integer
+        minTexelGatherOffset as a 32 bit integer
+        maxTexelGatherOffset as a 32 bit unsigned integer
+        minInterpolationOffset as a 32 bit floating-point number
+        maxInterpolationOffset as a 32 bit floating-point number
+        subPixelInterpolationOffsetBits as a 32 bit unsigned integer
+        maxFramebufferWidth as a 32 bit unsigned integer
+        maxFramebufferHeight as a 32 bit unsigned integer
+        maxFramebufferLayers as a 32 bit unsigned integer
+        framebufferColorSampleCounts as a 32 bit unsigned integer
+        framebufferDepthSampleCounts as a 32 bit unsigned integer
+        framebufferStencilSampleCounts as a 32 bit unsigned integer
+        framebufferNoAttachmentsSampleCounts as a 32 bit unsigned integer
+        maxColorAttachments as a 32 bit unsigned integer
+        sampledImageColorSampleCounts as a 32 bit unsigned integer
+        sampledImageIntegerSampleCounts as a 32 bit unsigned integer
+        sampledImageDepthSampleCounts as a 32 bit unsigned integer
+        sampledImageStencilSampleCounts as a 32 bit unsigned integer
+        storageImageSampleCounts as a 32 bit unsigned integer
+        maxSampleMaskWords as a 32 bit unsigned integer
+        timestampComputeAndGraphics as a 32 bit unsigned integer
+        timestampPeriod as a 32 bit floating-point number
+        maxClipDistances as a 32 bit unsigned integer
+        maxCullDistances as a 32 bit unsigned integer
+        maxCombinedClipAndCullDistances as a 32 bit unsigned integer
+        discreteQueuePriorities as a 32 bit unsigned integer
+        pointSizeRange as (a 32 bit floating-point number) array of 2 items
+        lineWidthRange as (a 32 bit floating-point number) array of 2 items
+        pointSizeGranularity as a 32 bit floating-point number
+        lineWidthGranularity as a 32 bit floating-point number
+        strictLines as a 32 bit unsigned integer
+        standardSampleLocations as a 32 bit unsigned integer
+        optimalBufferCopyOffsetAlignment as a 64 bit unsigned integer
+        optimalBufferCopyRowPitchAlignment as a 64 bit unsigned integer
+        nonCoherentAtomSize as a 64 bit unsigned integer
+
+class:
+    patterns:
+        VkPhysicalDeviceProperties
+    members:
+        apiVersion as a 32 bit unsigned integer
+        driverVersion as a 32 bit unsigned integer
+        vendorID as a 32 bit unsigned integer
+        deviceID as a 32 bit unsigned integer
+        deviceType as a 32 bit integer
+        deviceName as (a byte) array of 256 items
+        pipelineCacheUUID as (a byte) array of 16 items
+        limits as VkPhysicalDeviceLimits
+        sparseProperties as VkPhysicalDeviceSparseProperties
+
+class:
+    patterns:
+        VkPhysicalDeviceSparseProperties
+    members:
+        residencyStandard2DBlockShape as a 32 bit unsigned integer
+        residencyStandard2DMultisampleBlockShape as a 32 bit unsigned integer
+        residencyStandard3DBlockShape as a 32 bit unsigned integer
+        residencyAlignedMipSize as a 32 bit unsigned integer
+        residencyNonResidentStrict as a 32 bit unsigned integer

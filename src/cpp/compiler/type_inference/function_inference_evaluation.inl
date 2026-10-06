@@ -1,29 +1,19 @@
 #include "llvm/IR/Module.h"
 
+#include "compile_time_numeric_token.inl"
 #include "function_inference_integer_evaluation.inl"
 #include "function_inference_type_merging.inl"
 #include "numericLiteral.h"
 
-static std::optional<CompileTimeValue> parseCompileTimeNumericToken(std::string_view token) {
-	NumericLiteralParseResult parsed = parseNumericLiteral(token);
-	if (!parsed)
-		return std::nullopt;
-	return numericLiteralCompileTimeValue(parsed.value);
-}
-
 template <typename ReadArgumentValueFn, typename ReadStoredValueFn>
 static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
-	Expression *expr, ParseContext &parseContext, ReadArgumentValueFn &&readArgumentValueFn,
-	ReadStoredValueFn &&readStoredValue, MinimumSignedIntegerMagnitudeEffects &minimumIntegerEffects
+	Expression *expr, ParseContext &parseContext, ReadArgumentValueFn &&readArgumentValueFn, ReadStoredValueFn &&readStoredValue
 ) {
 	if (!expr)
 		return {};
 	IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 	auto readArgumentValue = [&](Expression *argument) {
-		CompileTimeValue value = readArgumentValueFn(argument);
-		if (kind != IntrinsicKind::Negate)
-			recordRejectedMinimumSignedIntegerMagnitudeUse(minimumIntegerEffects, value);
-		return value;
+		return readArgumentValueFn(argument);
 	};
 	auto requireArgument = [&](size_t index, std::string_view intrinsicName) -> Expression * {
 		if (expr->arguments.size() <= index || !expr->arguments[index]) {
@@ -60,10 +50,6 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
 		DataType valueType = typeRef->type.toReferencedType();
-		if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0 &&
-			!valueType.classDefinition->instantiations.empty()) {
-			valueType.classInstIndex = 0;
-		}
 		requireCompilerInvariant(
 			parseContext.llvmModule && parseContext.llvmContext, "size inference requires an initialized target layout"
 		);
@@ -97,15 +83,23 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		}
 		if (!targetType.isNumeric())
 			return {};
-		if (targetType.kind == DataType::Kind::Int) {
-			std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
+		if (const auto *number = std::get_if<double>(&value); number && targetType.isInteger()) {
+			double truncated = std::trunc(*number);
+			bool unsignedTarget = targetType.isUnsignedInteger();
+			double upperBound = std::ldexp(1.0, targetType.numericSize * 8 - (unsignedTarget ? 0 : 1));
+			double lowerBound = unsignedTarget ? 0.0 : -upperBound;
+			if (!std::isfinite(truncated) || truncated < lowerBound || truncated >= upperBound)
+				return {};
+			return unsignedTarget ? CompileTimeValue(static_cast<std::uint64_t>(truncated))
+								  : CompileTimeValue(static_cast<std::int64_t>(truncated));
+		}
+		if (targetType.isInteger()) {
+			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
 			if (!integerValue) {
 				if (const auto *boolean = std::get_if<bool>(&value))
 					integerValue = *boolean ? 1 : 0;
 			}
-			if (!integerValue)
-				return {};
-			return normalizeSignedIntegerToType(*integerValue, targetType);
+			return integerValue ? compileTimeIntegerFromBits(*integerValue, targetType) : CompileTimeValue{};
 		}
 		if (const auto *boolean = std::get_if<bool>(&value))
 			return *boolean ? 1.0 : 0.0;
@@ -124,22 +118,51 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		auto *boolean = std::get_if<bool>(&value);
 		return boolean ? CompileTimeValue(!*boolean) : CompileTimeValue{};
 	}
+	if (kind == IntrinsicKind::Abs || isRoundingIntrinsicKind(kind)) {
+		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
+		DataType elementType = expr->type.numericElementType();
+		if (elementType.isUnsignedInteger() || (elementType.isInteger() && isRoundingIntrinsicKind(kind)))
+			return value;
+		const auto *number = std::get_if<double>(&value);
+		if (!number)
+			return {};
+		double operand = elementType.numericSize == 4 ? static_cast<float>(*number) : *number;
+		switch (kind) {
+		case IntrinsicKind::Abs:
+			return std::fabs(operand);
+		case IntrinsicKind::Floor:
+			return std::floor(operand);
+		case IntrinsicKind::Ceil:
+			return std::ceil(operand);
+		case IntrinsicKind::Round:
+			return std::round(operand);
+		default:
+			crashCompilerBug("unexpected rounding intrinsic during constant evaluation");
+		}
+	}
 	if (kind == IntrinsicKind::BitwiseNot) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
+		if (expr->type.isUnsignedInteger()) {
+			std::optional<std::uint64_t> integerValue = getCompileTimeUnsignedIntegerValue(value);
+			return integerValue ? compileTimeIntegerFromBits(~*integerValue, expr->type) : CompileTimeValue{};
+		}
 		std::optional<std::int64_t> integerValue = getCompileTimeIntegerValue(value);
 		return integerValue.has_value() ? CompileTimeValue(compileTimeBitwiseNot(*integerValue)) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::Negate) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value)) {
-			recordConsumedMinimumSignedIntegerMagnitude(minimumIntegerEffects, value);
+		if (std::holds_alternative<MinimumSignedIntegerMagnitude>(value))
 			return std::numeric_limits<std::int64_t>::min();
-		}
 		if (const auto *integer = std::get_if<std::int64_t>(&value)) {
 			std::int64_t negated = static_cast<std::int64_t>(std::uint64_t{0} - static_cast<std::uint64_t>(*integer));
 			if (expr->type.isInteger())
 				negated = normalizeSignedIntegerToType(negated, expr->type);
 			return negated;
+		}
+		if (const auto *integer = std::get_if<std::uint64_t>(&value)) {
+			if (!expr->type.isUnsignedInteger())
+				return {};
+			return compileTimeIntegerFromBits(std::uint64_t{0} - *integer, expr->type);
 		}
 		if (const auto *number = std::get_if<double>(&value))
 			return -*number;
@@ -152,7 +175,7 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract || kind == IntrinsicKind::Multiply ||
 		kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo || kind == IntrinsicKind::LessThan ||
 		kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
-		kind == IntrinsicKind::GreaterThanOrEqual) {
+		kind == IntrinsicKind::GreaterThanOrEqual || kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
 		CompileTimeValue leftValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		CompileTimeValue rightValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
 		if (!isCompileTimeKnown(leftValue) || !isCompileTimeKnown(rightValue))
@@ -167,7 +190,27 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 											  : CompileTimeValue(*leftBool || *rightBool);
 		}
 
+		DataType leftType = expr->arguments[1]->type;
+		DataType rightType = expr->arguments[2]->type;
+		DataType integerType;
+		bool integerOperation =
+			leftType.isInteger() && rightType.isInteger() &&
+			((kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
+			  kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight)
+				 ? DataType::promoteBitwise(leftType, rightType, integerType)
+				 : DataType::promoteArithmetic(leftType, rightType, integerType));
+		if (integerOperation)
+			return evaluateIntegerBinaryIntrinsic(kind, leftValue, rightValue, integerType);
+
 		if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) {
+			if (leftType.isNumeric() && rightType.isNumeric()) {
+				std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
+				std::optional<double> rightNumber = getCompileTimeNumericValue(rightValue);
+				if (!leftNumber || !rightNumber)
+					return {};
+				bool equal = *leftNumber == *rightNumber;
+				return kind == IntrinsicKind::Equal ? CompileTimeValue(equal) : CompileTimeValue(!equal);
+			}
 			bool result = false;
 			if (auto *leftText = std::get_if<std::string>(&leftValue)) {
 				if (auto *rightText = std::get_if<std::string>(&rightValue))
@@ -179,82 +222,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 					result = *leftBool == *rightBool;
 				else
 					return {};
-			} else if (auto *leftInteger = std::get_if<std::int64_t>(&leftValue)) {
-				if (auto *rightInteger = std::get_if<std::int64_t>(&rightValue))
-					result = *leftInteger == *rightInteger;
-				else if (auto *rightNumber = std::get_if<double>(&rightValue))
-					result = static_cast<double>(*leftInteger) == *rightNumber;
-				else
-					return {};
 			} else {
-				auto *leftNumber = std::get_if<double>(&leftValue);
-				if (!leftNumber)
-					return {};
-				if (auto *rightNumber = std::get_if<double>(&rightValue))
-					result = *leftNumber == *rightNumber;
-				else if (auto *rightInteger = std::get_if<std::int64_t>(&rightValue))
-					result = *leftNumber == static_cast<double>(*rightInteger);
-				else
-					return {};
+				return {};
 			}
 			return kind == IntrinsicKind::Equal ? CompileTimeValue(result) : CompileTimeValue(!result);
-		}
-
-		if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
-			kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-			std::optional<std::int64_t> leftInteger = getCompileTimeIntegerValue(leftValue);
-			std::optional<std::int64_t> rightInteger = getCompileTimeIntegerValue(rightValue);
-			if (!leftInteger.has_value() || !rightInteger.has_value())
-				return {};
-			if (kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-				if (*rightInteger < 0 || *rightInteger >= 64)
-					return {};
-				unsigned shiftAmount = static_cast<unsigned>(*rightInteger);
-				std::int64_t result = kind == IntrinsicKind::ShiftLeft ? compileTimeShiftLeft(*leftInteger, shiftAmount)
-																	   : compileTimeShiftRight(*leftInteger, shiftAmount);
-				return expr->type.isInteger() ? normalizeSignedIntegerToType(result, expr->type) : result;
-			}
-			std::uint64_t leftBits = static_cast<std::uint64_t>(*leftInteger);
-			std::uint64_t rightBits = static_cast<std::uint64_t>(*rightInteger);
-			std::uint64_t result = kind == IntrinsicKind::BitwiseAnd  ? (leftBits & rightBits)
-								   : kind == IntrinsicKind::BitwiseOr ? (leftBits | rightBits)
-																	  : (leftBits ^ rightBits);
-			std::int64_t signedResult = static_cast<std::int64_t>(result);
-			return expr->type.isInteger() ? normalizeSignedIntegerToType(signedResult, expr->type) : signedResult;
-		}
-
-		auto *leftInteger = std::get_if<std::int64_t>(&leftValue);
-		auto *rightInteger = std::get_if<std::int64_t>(&rightValue);
-		if (leftInteger && rightInteger) {
-			auto normalizeResult = [&](std::uint64_t bits) -> CompileTimeValue {
-				std::int64_t result = static_cast<std::int64_t>(bits);
-				return expr->type.isInteger() ? CompileTimeValue(normalizeSignedIntegerToType(result, expr->type))
-											  : CompileTimeValue(result);
-			};
-			if (kind == IntrinsicKind::Add)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) + static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Subtract)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) - static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Multiply)
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger) * static_cast<std::uint64_t>(*rightInteger));
-			if (kind == IntrinsicKind::Divide) {
-				if (*rightInteger == 0 || (*leftInteger == std::numeric_limits<std::int64_t>::min() && *rightInteger == -1))
-					return {};
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger / *rightInteger));
-			}
-			if (kind == IntrinsicKind::Modulo) {
-				if (*rightInteger == 0 || (*leftInteger == std::numeric_limits<std::int64_t>::min() && *rightInteger == -1))
-					return {};
-				return normalizeResult(static_cast<std::uint64_t>(*leftInteger % *rightInteger));
-			}
-			if (kind == IntrinsicKind::LessThan)
-				return *leftInteger < *rightInteger;
-			if (kind == IntrinsicKind::GreaterThan)
-				return *leftInteger > *rightInteger;
-			if (kind == IntrinsicKind::LessThanOrEqual)
-				return *leftInteger <= *rightInteger;
-			if (kind == IntrinsicKind::GreaterThanOrEqual)
-				return *leftInteger >= *rightInteger;
 		}
 
 		std::optional<double> leftNumber = getCompileTimeNumericValue(leftValue);
@@ -279,6 +250,10 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			return *leftNumber <= *rightNumber;
 		if (kind == IntrinsicKind::GreaterThanOrEqual)
 			return *leftNumber >= *rightNumber;
+		if (kind == IntrinsicKind::Min)
+			return std::min(*leftNumber, *rightNumber);
+		if (kind == IntrinsicKind::Max)
+			return std::max(*leftNumber, *rightNumber);
 	}
 
 	for (size_t index = 1; index < expr->arguments.size(); index++)
@@ -286,23 +261,21 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	return {};
 }
 
-static CompileTimeEvaluation
+static CompileTimeValue
 inferIntrinsicCompileTimeValue(Expression *expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	(void)bindingFrameStack;
 	if (!expr)
 		return {};
 	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Return && expr->arguments.size() > 1)
-		return {.value = context.lookupExpressionValue(expr->arguments[1]), .minimumIntegerEffects = {}};
+		return context.lookupExpressionValue(expr->arguments[1]);
 	if (intrinsicKind(expr->intrinsicName) == IntrinsicKind::Subject && expr->subjectSetter &&
 		expr->subjectSetter->arguments.size() > 1)
-		return {.value = context.lookupExpressionValue(expr->subjectSetter->arguments[1]), .minimumIntegerEffects = {}};
-	CompileTimeEvaluation evaluation;
-	evaluation.value = evaluatePureIntrinsicCompileTimeValue(expr, context.parseContext, [&](Expression *argumentExpression) {
+		return context.lookupExpressionValue(expr->subjectSetter->arguments[1]);
+	return evaluatePureIntrinsicCompileTimeValue(expr, context.parseContext, [&](Expression *argumentExpression) {
 		return context.lookupExpressionValue(argumentExpression);
 	}, [&](Expression *expression) {
 		return context.lookupExpressionValue(expression);
-	}, evaluation.minimumIntegerEffects);
-	return evaluation;
+	});
 }
 
 static Variable *findExecutionSectionVariable(Section *section, const std::string &name) {
@@ -371,7 +344,6 @@ struct PureSectionFlexBodyExecutionFrame {
 struct PureExecutionState {
 	ParseContext &parseContext;
 	InferenceContext *inferenceContext{};
-	MinimumSignedIntegerMagnitudeEffects minimumIntegerEffects;
 	std::vector<std::pair<Section *, std::vector<CompileTimeValue>>> activeCalls;
 	std::vector<InstantiatedSectionBody *> activeBodies;
 	std::vector<PureSectionFlexBodyExecutionFrame> sectionFlexBodyFrames;
@@ -512,17 +484,13 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		return {};
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);
-	if (cachedIt != instantiation.pureReturnValuesByArguments.end()) {
-		mergeMinimumSignedIntegerMagnitudeEffects(state.minimumIntegerEffects, cachedIt->second.minimumIntegerEffects);
-		return cachedIt->second.value;
-	}
+	if (cachedIt != instantiation.pureReturnValuesByArguments.end())
+		return cachedIt->second;
 	for (const auto &[activeSection, activeArguments] : state.activeCalls) {
 		if (activeSection == section && activeArguments == argumentValueKey)
 			return {};
 	}
 	state.activeCalls.push_back({section, argumentValueKey});
-	MinimumSignedIntegerMagnitudeEffects callerEffects = std::move(state.minimumIntegerEffects);
-	state.minimumIntegerEffects = {};
 	PureExecutionFrame frame;
 	frame.instantiation = &instantiation;
 	requireCompilerInvariant(
@@ -550,17 +518,11 @@ static CompileTimeValue executePureInstantiationReturnValue(
 		return !executionResult.returned;
 	});
 	state.activeCalls.pop_back();
-	MinimumSignedIntegerMagnitudeEffects functionEffects = std::move(state.minimumIntegerEffects);
-	state.minimumIntegerEffects = std::move(callerEffects);
-	mergeMinimumSignedIntegerMagnitudeEffects(state.minimumIntegerEffects, functionEffects);
 	if ((!executionResult.returned && !hasImplicitDefinitionValue) || !isCompileTimeKnown(executionResult.value))
 		return {};
 	if (state.inferenceContext && state.inferenceContext->trial && state.inferenceContext->trialJournal)
 		state.inferenceContext->trialJournal->recordInstantiationWrite(&instantiation);
-	instantiation.pureReturnValuesByArguments.emplace(
-		std::move(argumentValueKey),
-		CompileTimeEvaluation{.value = executionResult.value, .minimumIntegerEffects = std::move(functionEffects)}
-	);
+	instantiation.pureReturnValuesByArguments.emplace(std::move(argumentValueKey), executionResult.value);
 	return executionResult.value;
 }
 
@@ -641,7 +603,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 		},
 				[&](Expression *expression) {
 			return pureExecutionStoredValue(expression, state);
-		}, state.minimumIntegerEffects
+		}
 			),
 			false,
 			{},
@@ -841,7 +803,7 @@ static PureExpressionExecutionResult executePureSection(
 	return {};
 }
 
-static CompileTimeEvaluation evaluatePureFunctionCallReturnValue(
+static CompileTimeValue evaluatePureFunctionCallReturnValue(
 	Expression *expr, PatternDefinition *definition, Section *section, Instantiation &instantiation, InferenceContext &context,
 	const BindingFrameStack &bindingFrameStack
 ) {
@@ -856,10 +818,7 @@ static CompileTimeEvaluation evaluatePureFunctionCallReturnValue(
 		return {};
 	}
 	PureExecutionState executionState{context.parseContext, &context};
-	return {
-		.value = executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues),
-		.minimumIntegerEffects = std::move(executionState.minimumIntegerEffects),
-	};
+	return executePureInstantiationReturnValue(executionState, section, instantiation, argumentValues);
 }
 
 static Instantiation *ensureCallableFunctionInstantiationInferred(

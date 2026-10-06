@@ -7,6 +7,18 @@ const colors = JSON.parse(await readFile(new URL("../../shared/call-colors.json"
 const rgb = hex => `rgb(${hex.match(/../g).map(part => parseInt(part, 16)).join(", ")})`;
 await navigate("/");
 await waitFor("document.querySelectorAll('[data-snippet-source][data-language-ready=true]').length===5", "shared editors connected");
+await clickElement("[data-river-challenge-load]");
+await waitFor("document.querySelector('[data-river-editor-shell]')?.dataset.languageReady==='true'", "river editor connected");
+await evaluate("document.querySelector('[data-river-editor-shell]').scrollIntoView({block:'center',behavior:'instant'})");
+const hayColors = `(() => {
+  const line = [...document.querySelectorAll('[data-river-editor-shell] .view-line')].find(line => line.textContent.replaceAll('\\u00a0', ' ').trim() === 'get the hay in the boat');
+  return line ? [...line.querySelectorAll('span')].filter(span => !span.children.length && span.textContent.trim()).map(span => ({text: span.textContent.replaceAll('\\u00a0', ' ').trim(), color: getComputedStyle(span).color})) : [];
+})()`;
+await waitFor(`${hayColors}.some(span => span.text === 'the hay' && span.color === ${JSON.stringify(rgb(colors[1].dark))})`, "river cargo has its own nesting color");
+assert.deepEqual(await evaluate(hayColors), [
+  {text: 'get', color: rgb(colors[0].dark)}, {text: 'the hay', color: rgb(colors[1].dark)}, {text: 'in the boat', color: rgb(colors[0].dark)}
+]);
+await captureScreenshot("river-hay-call-colors");
 await clickElement("[data-farm-challenge-load]");
 await waitFor("document.querySelector('[data-farm-editor]')?.dataset.languageReady==='true'", "farm editor connected");
 await evaluate("document.querySelector('[data-farm-editor]').scrollIntoView({block:'center',behavior:'instant'})");

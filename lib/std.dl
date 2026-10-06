@@ -31,6 +31,10 @@ fixed means: @intrinsic("fix", a value)
 fixed value means: @intrinsic("fix", value)
 [an|] integer means: @intrinsic("type", "int")
 [a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
+
+[an|] unsigned integer means: @intrinsic("type", "uint")
+[a|] {fixed integer:bits} bit unsigned integer means: @intrinsic("type", "uint", bits)
+
 [a|] floating-point number means: @intrinsic("type", "float")
 [a|] {fixed integer:bits} bit floating-point number means: @intrinsic("type", "float", bits)
 [a|] byte means: @intrinsic("type", "int", 8)
@@ -66,6 +70,9 @@ truth if {boolean:condition}, else falsehood means: @intrinsic("select", conditi
 the build info {fixed C string:key} means: @intrinsic("build info", key)
 the build word size means: @intrinsic("build info", "word size")
 [a|] word sized integer means: @intrinsic("type", "int", @intrinsic("build info", "word size"))
+
+[a|] word sized unsigned integer means: @intrinsic("type", "uint", @intrinsic("build info", "word size"))
+
 [a|] C long integer means: @intrinsic("type", "int", @intrinsic("build info", "c long size"))
 the build optimization level means: @intrinsic("build info", "optimization level")
 the build target is CPU means: @intrinsic("target is", "cpu")
@@ -362,6 +369,11 @@ function the ceiling of value:
     after: default
     execute:
         return @intrinsic("ceil", value)
+
+function the rounded value of number:
+    after: default
+    execute:
+        return @intrinsic("round", number)
 
 function value [raised to the power of|to the power of] exponent:
     after: default

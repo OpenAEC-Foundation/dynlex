@@ -1,0 +1,1 @@
+@intrinsic("discard", @intrinsic("size of", @intrinsic("type", "nothing")))

@@ -18,7 +18,7 @@ def compiler() -> str:
     raise RuntimeError("A Clang C compiler is required for path/host runtime tests")
 
 
-def compile_and_run(project: Path, sources: list[Path], include_runtime: bool = True) -> None:
+def compile_and_run(project: Path, sources: list[Path]) -> None:
     with tempfile.TemporaryDirectory(prefix="dynlex-path-host-test-") as temporary:
         executable = Path(temporary) / "test"
         command = [
@@ -31,19 +31,24 @@ def compile_and_run(project: Path, sources: list[Path], include_runtime: bool = 
             f"-I{project / 'src/runtime'}",
             *(str(source) for source in sources),
         ]
-        if include_runtime:
-            command.extend(
-                str(project / relative)
-                for relative in (
-                    "src/runtime/pathRuntime.c",
-                    "src/runtime/pathUriRuntime.c",
-                    "src/runtime/runtimeError.c",
-                    "src/runtime/runtimeText.c",
-                )
-            )
         command.extend(("-o", str(executable)))
         subprocess.run(command, cwd=project, check=True)
         subprocess.run([executable], cwd=project, check=True)
+
+
+def verify_uri_symlink_identity(project: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="dynlex-uri-identity-") as directory:
+        temporary = Path(directory)
+        (temporary / "real/deep").mkdir(parents=True)
+        (temporary / "target").write_text("L")
+        (temporary / "real/target").write_text("R")
+        (temporary / "link").symlink_to("real/deep", target_is_directory=True)
+        executable = temporary / "test.out"
+        subprocess.run([
+            str(project / "build/dynlex"), str(project / "tests/runtime/path_uri_symlink_identity.dl"),
+            "-o", str(executable),
+        ], cwd=project, check=True)
+        subprocess.run([str(executable), str(temporary / "link/../target")], cwd=project, check=True)
 
 
 def verify_windows_binary_stdin(project: Path) -> None:
@@ -84,7 +89,6 @@ def main() -> int:
             project / "tests/runtime/host_runtime_windows_path.c",
             project / "src/runtime/hostRuntimeWindowsPath.c",
         ],
-        include_runtime=False,
     )
     verify_windows_binary_stdin(project)
     verify_windows_cache_directory(project)
@@ -95,9 +99,8 @@ def main() -> int:
                 project / "tests/runtime/runtime_error.c",
                 project / "src/runtime/runtimeError.c",
             ],
-            include_runtime=False,
-        )
-        compile_and_run(project, [project / "tests/runtime/path_uri_symlink_identity.c"])
+            )
+        verify_uri_symlink_identity(project)
         compile_and_run(
             project,
             [
@@ -106,8 +109,7 @@ def main() -> int:
                 project / "src/runtime/runtimeError.c",
                 project / "src/runtime/runtimeText.c",
             ],
-            include_runtime=False,
-        )
+            )
     return 0
 
 

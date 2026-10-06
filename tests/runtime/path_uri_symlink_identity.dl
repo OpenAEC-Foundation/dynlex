@@ -1,0 +1,14 @@
+import lib/path.dl
+import lib/filesystem.dl
+import lib/check.dl
+
+set arguments to the command line arguments
+set identity to the string form of (the argument at 0 in arguments)
+set uri to the file URI representing identity using the POSIX path style
+require condition (uri succeeded) reporting "Encoding the symlink path failed"
+set decoded to the path from uri's value interpreted as a file URI using the POSIX path style
+require condition (decoded succeeded) reporting "Decoding the symlink URI failed"
+require condition (decoded's value = identity) reporting "URI conversion changed dot segments"
+read the file at decoded's value and set reading to it
+require condition (reading succeeded) reporting "Opening the symlink path failed"
+require condition ((the contents of reading) = "R") reporting "URI conversion changed filesystem identity"
