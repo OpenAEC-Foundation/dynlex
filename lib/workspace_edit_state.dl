@@ -430,20 +430,20 @@ function free {a pointer to a workspace edit context:context}:
         loop while position < the length of documents:
             set document to the workspace open document at index position in documents
             @intrinsic("destroy at", document)
-            @intrinsic("call", "libc", "free", nothing, document)
+            deallocate document
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of documents)
+        deallocate the items of documents
         @intrinsic("destroy at", documents)
-        @intrinsic("call", "libc", "free", nothing, documents)
+        deallocate documents
         set decisions to the annotation decisions of context
         set position to 0
         loop while position < the length of decisions:
             set decision to the workspace annotation decision at position in decisions
             @intrinsic("destroy at", decision)
-            @intrinsic("call", "libc", "free", nothing, decision)
+            deallocate decision
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of decisions)
+        deallocate the items of decisions
         @intrinsic("destroy at", decisions)
-        @intrinsic("call", "libc", "free", nothing, decisions)
+        deallocate decisions
         @intrinsic("destroy at", context)
-        @intrinsic("call", "libc", "free", nothing, context)
+        deallocate context

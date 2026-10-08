@@ -56,7 +56,7 @@ function [the Windows argument end for] {a pointer to a 16 bit unsigned integer:
 
 function [a failed Windows command line reporting] {C string:message} [releasing] {a pointer to a 16 bit unsigned integer:output}:
     execute:
-        @intrinsic("call", "libc", "free", nothing, output)
+        deallocate output
         @intrinsic("call", "dynlex_runtime", "dynlex_runtime_set_error", nothing, message)
         return 0 as a pointer to a 16 bit unsigned integer
 

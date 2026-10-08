@@ -12,6 +12,6 @@ set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb
 ignore @intrinsic("call", "libc", "fgets", a pointer to a byte, contents, 11, stream)
 ignore @intrinsic("call", "libc", "fclose", an integer, stream)
 ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", contents)
-@intrinsic("call", "libc", "free", nothing, contents)
+deallocate contents
 
 delete the filesystem entry at path

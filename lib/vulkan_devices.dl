@@ -70,8 +70,8 @@ function [create the Vulkan instance in] {a pointer to DynlexGraphics:state}:
         set creation's enabledExtensionCount to requiredCount
         set creation's ppEnabledExtensionNames to enabled
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateInstance", an integer, the address of creation, 0 as a pointer, the address of (state's instance)) for "Creating the Vulkan instance"
-        @intrinsic("call", "libc", "free", nothing, enabled)
-        @intrinsic("call", "libc", "free", nothing, available)
+        deallocate enabled
+        deallocate available
         require Vulkan status @intrinsic("call", "glfw", "glfwCreateWindowSurface", an integer, state's instance, state's window, 0 as a pointer, the address of (state's surface)) for "Creating the Vulkan window surface"
 
 class:
@@ -102,7 +102,7 @@ function [a graphics candidate for Vulkan device] {pointer:device} [in] {a point
             if (candidate's present = -1) and (present = 1):
                 set candidate's present to index as an integer
             increment index
-        @intrinsic("call", "libc", "free", nothing, families)
+        deallocate families
         if candidate's graphics = -1 or candidate's present = -1:
             return candidate
         require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateDeviceExtensionProperties", an integer, device, 0 as a pointer, the address of count, 0 as a pointer) for "Counting Vulkan device extensions"
@@ -112,7 +112,7 @@ function [a graphics candidate for Vulkan device] {pointer:device} [in] {a point
         require Vulkan status @intrinsic("call", "vulkan", "vkEnumerateDeviceExtensionProperties", an integer, device, 0 as a pointer, the address of count, extensions) for "Enumerating Vulkan device extensions"
         set swapchain to Vulkan extension "VK_KHR_swapchain" exists in extensions count count
         set candidate's portable to Vulkan extension "VK_KHR_portability_subset" exists in extensions count count
-        @intrinsic("call", "libc", "free", nothing, extensions)
+        deallocate extensions
         if swapchain = false:
             return candidate
         set formats to 0 as a 32 bit unsigned integer
@@ -151,7 +151,7 @@ function [create the Vulkan device in] {a pointer to DynlexGraphics:state}:
                 set state's portability_enabled to candidate's portable
                 set best to candidate's score
             increment index
-        @intrinsic("call", "libc", "free", nothing, devices)
+        deallocate devices
         require condition (best > 0) reporting "No Vulkan 1.3 device supports graphics, presentation, and swapchains for this window"
         set priority to 1.0 as a 32 bit floating-point number
         set graphicsQueue to a new VkDeviceQueueCreateInfo

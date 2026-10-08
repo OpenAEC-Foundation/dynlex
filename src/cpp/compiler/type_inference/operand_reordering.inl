@@ -86,6 +86,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
 	expr->compileTimeValue = {};
+	expr->memoryFacts = {};
 	expr->selectedPatternDefinition = nullptr;
 	expr->selectedPatternPathIndex = std::nullopt;
 	expr->selectedCallableDefinition = nullptr;

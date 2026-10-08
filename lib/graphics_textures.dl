@@ -15,7 +15,7 @@ function [destroy retired graphics textures from] {a pointer to DynlexGraphicsFr
             set retired to frame's retired_textures
             set frame's retired_textures to retired's next
             destroy graphics texture handles in retired owned by state
-            @intrinsic("call", "libc", "free", nothing, retired)
+            deallocate retired
 
 function [retire the graphics texture resources in] {a pointer to DynlexGraphicsTexture:texture}:
     execute:
@@ -143,7 +143,7 @@ function [release graphics texture resource] {a pointer to DynlexGraphicsTexture
         loop while @intrinsic("dereference", link) != texture:
             set link to the address of (link's next)
         @intrinsic("store at", link, texture's next)
-        @intrinsic("call", "libc", "free", nothing, texture)
+        deallocate texture
 
 function [release all graphics textures in] {a pointer to DynlexGraphics:state}:
     execute:
@@ -153,7 +153,7 @@ function [release all graphics textures in] {a pointer to DynlexGraphics:state}:
             set texture to state's textures
             set state's textures to texture's next
             destroy graphics texture handles in texture owned by state
-            @intrinsic("call", "libc", "free", nothing, texture)
+            deallocate texture
         set index to 0
         loop while index < (the length of state's frames):
             destroy retired graphics textures from (the address of (the item at index in (state's frames))) in state

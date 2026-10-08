@@ -98,11 +98,13 @@ flex function:
     patterns:
         deallocate {a pointer to a value:address}
     replacement:
+        @intrinsic("check deallocation", address)
         @intrinsic("call", "libc", "free", nothing, address)
 flex function:
     patterns:
         deallocate {a pointer to a pointer to a value:address}
     replacement:
+        @intrinsic("check deallocation", address)
         @intrinsic("call", "libc", "free", nothing, address)
 function store value at address:
     replacement:

@@ -162,9 +162,9 @@ local function free prepared workspace text edits {a pointer to a prepared works
         loop while position < the length of collection:
             @intrinsic("destroy at", (the items of collection) + position)
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of collection)
+        deallocate the items of collection
         @intrinsic("destroy at", collection)
-        @intrinsic("call", "libc", "free", nothing, collection)
+        deallocate collection
 
 local function a new workspace edit index collection:
     execute:
@@ -203,9 +203,9 @@ local function replace workspace edit index at {integer:position} in {a pointer 
 
 local function free workspace edit index collection {a pointer to a workspace edit index collection:sequence}:
     execute:
-        @intrinsic("call", "libc", "free", nothing, the items of sequence)
+        deallocate the items of sequence
         @intrinsic("destroy at", sequence)
-        @intrinsic("call", "libc", "free", nothing, sequence)
+        deallocate sequence
 
 local function the stable prepared workspace edit indexes for {a pointer to a prepared workspace text edit collection:collection}:
     execute:

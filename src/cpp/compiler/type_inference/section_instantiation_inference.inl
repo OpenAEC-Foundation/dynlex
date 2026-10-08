@@ -75,6 +75,7 @@ bool ensureSectionInstantiationInferred(
 		inst.addressTakenGlobalReferences.clear();
 		inst.externallyEscapedGlobalProvenance = {};
 		inst.returnAddressProvenance = {};
+		inst.memoryViolation.reset();
 		inst.hasReturnAddressProvenance = false;
 		inst.writesThroughUnknownAddress = false;
 		inst.externallyEscapesUnknownAddress = false;

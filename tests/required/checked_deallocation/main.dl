@@ -1,0 +1,12 @@
+import lib/std.dl
+
+set counter to 0
+function a counted allocation:
+    globals: counter
+    execute:
+        increment counter
+        return @intrinsic("call", "libc", "malloc", a pointer to integer, 4)
+
+deallocate a counted allocation
+deallocate 0 as a pointer to integer
+print counter as a line

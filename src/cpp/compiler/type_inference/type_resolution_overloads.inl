@@ -320,6 +320,9 @@ struct InferenceContext {
 	// Flow-sensitive provenance for pointer variables whose runtime value may
 	// address local or global variables tracked by constant inference.
 	AddressInferenceState currentAddressState;
+	// Flex invocations below this depth belong to the caller of a non-flex
+	// instantiation. Its statements summarize their effects on that callee.
+	size_t memoryFlexBase = 0;
 	SubjectState currentSubject;
 	bool typesValid = true;
 	bool trial = false;
@@ -351,6 +354,7 @@ struct InferenceContext {
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
 
 	void inheritSectionExecutionState(const InferenceContext &other) {
+		memoryFlexBase = other.memoryFlexBase;
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;
 		sectionFlexBodyFrames = other.sectionFlexBodyFrames;
 		activeFlexDefinitionStack = other.activeFlexDefinitionStack;

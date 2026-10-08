@@ -625,6 +625,10 @@ SyntaxConfig::Messages::Messages() {
 	set("replacement shorthand returns nothing", "message", "Replacement '{function}' must return a value");
 	set("ambiguous conversion", "message", "More than one conversion from {from_type} to {to_type} is equally specific");
 	set("address of requires addressable value", "message", "address of requires an addressable value");
+	set("cannot dereference a null pointer", "message", "cannot dereference a null pointer");
+	set("cannot deallocate stack storage", "message", "cannot deallocate stack storage");
+	set("cannot deallocate static or variable storage", "message", "cannot deallocate static or variable storage");
+	set("cannot write to static literal storage", "message", "cannot write to static literal storage");
 	set("store at value incompatible", "message", "store at cannot store {value_type} through a pointer to {element_type}");
 	set("class size unknown member type", "message",
 		"Cannot determine the size of {type} because the type of member '{member}' is unknown; it is 'a value'");

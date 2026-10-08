@@ -474,6 +474,8 @@ CodegenResult generateIntrinsicCode(
 			return CodegenResult::failure();
 		return nullptr;
 	}
+	if (kind == IntrinsicKind::CheckDeallocation)
+		return nullptr;
 
 	if (kind == IntrinsicKind::Store) {
 		DataType valType = finalizedExpressionType(context, args[2]);

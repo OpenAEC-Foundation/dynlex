@@ -101,6 +101,9 @@ static bool inferSectionLineRange(
 			return false;
 		}
 		commitCodeLineGrouping(line, lineExpression, context, ambiguityChecked);
+		bool finalReplacementValue = section->type == SectionType::Replacement && line == section->codeLines.back();
+		if (!finalReplacementValue && !consumeStatementMemoryFacts(lineExpression, context))
+			return false;
 		lineExpression->executionFallsThrough = true;
 		return true;
 	};
@@ -829,8 +832,8 @@ bool inferTypes(ParseContext &parseContext) {
 			if (!line || !line->expression)
 				continue;
 			parseContext.diagnostics.push_back(Diagnostic(
-				parseContext, Diagnostic::Level::Error,
-				"definition-only output cannot contain executable top-level statements", Range(line, line->patternText)
+				parseContext, Diagnostic::Level::Error, "definition-only output cannot contain executable top-level statements",
+				Range(line, line->patternText)
 			));
 			return false;
 		}

@@ -325,6 +325,7 @@ markIntrinsicImpurityIfNeeded(Expression *expr, InferenceContext &context, const
 }
 
 #include "address_provenance_inference.inl"
+#include "memory_diagnostics.inl"
 
 static void setRecursiveInferenceFailure(
 	InferenceContext &context, PatternDefinition *definition, const Range &fallbackRange, std::string functionName

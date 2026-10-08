@@ -14,7 +14,7 @@ class:
         @intrinsic("store at", the references of @intrinsic("lifecycle value"), count)
         if count = 0:
             ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", the number of @intrinsic("lifecycle value"))
-            @intrinsic("call", "libc", "free", nothing, the references of @intrinsic("lifecycle value"))
+            deallocate the references of @intrinsic("lifecycle value")
 
 class:
     patterns:

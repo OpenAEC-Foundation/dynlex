@@ -110,9 +110,9 @@ function [destroy the custom graphics pipeline resources in] {a pointer to Dynle
                 @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, the item at frame in (pipeline's uniform_memory), 0 as a pointer)
                 increment frame
             @intrinsic("call", "vulkan", "vkDestroyDescriptorSetLayout", nothing, state's device, pipeline's descriptor_layout, 0 as a pointer)
-        @intrinsic("call", "libc", "free", nothing, pipeline's vertex_code)
-        @intrinsic("call", "libc", "free", nothing, pipeline's fragment_code)
-        @intrinsic("call", "libc", "free", nothing, pipeline)
+        deallocate pipeline's vertex_code
+        deallocate pipeline's fragment_code
+        deallocate pipeline
 
 function [release the custom graphics pipeline] {a pointer to DynlexGraphicsPipeline:pipeline}:
     execute:

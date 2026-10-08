@@ -796,6 +796,7 @@ static bool inferNonFlexPatternCall(
 		if (context.trial)
 			inst.body = context.parseContext.cloneSectionBody(matchedSection);
 		Instantiation *savedInst = context.currentInstantiation;
+		size_t callerMemoryFlexBase = context.memoryFlexBase;
 		auto callerKnownConstants = context.currentVariableValues;
 		auto callerAddressState = context.currentAddressState;
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
@@ -811,6 +812,7 @@ static bool inferNonFlexPatternCall(
 			inst.addressTakenGlobalReferences.clear();
 			inst.externallyEscapedGlobalProvenance = {};
 			inst.returnAddressProvenance = {};
+			inst.memoryViolation.reset();
 			inst.hasReturnAddressProvenance = false;
 			inst.returnPointerStorageParameterName.reset();
 			inst.returnPointerStorageAmbiguous = false;
@@ -838,6 +840,7 @@ static bool inferNonFlexPatternCall(
 			inst.needsReinfer = false;
 			inst.inferring = true;
 			context.currentInstantiation = &inst;
+			context.memoryFlexBase = context.activeFlexCallStack.size();
 			// A cached instantiation serves every future call site, so its
 			// inference must not consume the calling context's tracked
 			// constants: the only entries visible inside the callee are
@@ -883,6 +886,7 @@ static bool inferNonFlexPatternCall(
 		context.currentAddressState = std::move(callerAddressState);
 		context.currentSubject = callerSubject;
 		context.currentInstantiation = savedInst;
+		context.memoryFlexBase = callerMemoryFlexBase;
 		inst.valid = inferenceSucceeded;
 		if (inferenceSucceeded && inst.needsReinfer)
 			propagateUnresolvedRecursiveDependencyToCaller(context, savedInst);

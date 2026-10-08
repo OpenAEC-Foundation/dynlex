@@ -150,6 +150,7 @@ Expression *cloneExpressionTreeImpl(ParseContext &context, Expression *expressio
 	clone->inferredFlexExpansion = nullptr;
 	clone->inferredConversion = nullptr;
 	clone->inferredPointerStorage = nullptr;
+	clone->memoryFacts = {};
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
 	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : Expression::SectionOutcome{};
 	clone->executionFallsThrough = preserveInferenceMetadata ? expression->executionFallsThrough : std::nullopt;

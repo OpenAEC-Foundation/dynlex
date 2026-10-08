@@ -1,0 +1,1 @@
+tests/required/null_dereference/main.dl:23-57: Error: cannot dereference a null pointer

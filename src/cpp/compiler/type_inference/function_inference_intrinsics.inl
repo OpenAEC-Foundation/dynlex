@@ -1,5 +1,6 @@
 case Expression::Kind::IntrinsicCall: {
 #include "intrinsic_preflight_inference.inl"
+	recordIntrinsicMemoryViolation(expr, context, flexBindingFrameStack);
 	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
 		break;
 	if (info) {
@@ -51,6 +52,11 @@ case Expression::Kind::IntrinsicCall: {
 			break;
 		}
 		case IntrinsicReturnKind::Void: {
+			if (kind == IntrinsicKind::CheckDeallocation &&
+				!ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack).isPointer()) {
+				failIntrinsicArgumentRequirement(1, "a pointer");
+				break;
+			}
 			CompileTimeValue conditionValue;
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {

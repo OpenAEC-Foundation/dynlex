@@ -8,7 +8,12 @@ struct VariableReference;
 
 struct AddressProvenance {
 	std::unordered_set<VariableReference *> mayTargets;
+	// A known null alternative is distinct from having no tracked addresses.
+	bool mayBeNull = false;
+	// Unknown origins can include null as well as untracked non-null addresses.
 	bool unknown = false;
+	// Pointer literals refer to static storage outside the tracked variables.
+	bool mayBeStatic = false;
 
 	bool operator==(const AddressProvenance &) const = default;
 };

@@ -1,0 +1,9 @@
+integer means: @intrinsic("type", "int")
+pointer type means: @intrinsic("add pointer depth", integer)
+null pointer means: @intrinsic("cast", 0, pointer type)
+the value at address means: @intrinsic("dereference", address)
+the type of value means: @intrinsic("type of", value)
+the address of value means: @intrinsic("address of", value)
+
+@intrinsic("discard", the type of the value at null pointer)
+@intrinsic("discard", the address of the value at null pointer)

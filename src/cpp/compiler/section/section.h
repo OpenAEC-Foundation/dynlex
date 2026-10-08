@@ -25,6 +25,7 @@ class Function;
 } // namespace llvm
 
 struct ParseContext;
+struct Diagnostic;
 struct Section;
 struct Variable;
 struct Expression;
@@ -102,6 +103,7 @@ inline InstantiationKey buildInstantiationKey(
 // Per-instantiation state for monomorphized functions.
 // Each unique combination of argument types produces a separate instantiation.
 struct Instantiation {
+	std::shared_ptr<const Diagnostic> memoryViolation;
 	DataType returnType{DataType::Kind::Any};
 	Range returnTypeOriginRange;
 	std::vector<DataType> argumentTypes;

@@ -30,7 +30,7 @@ function [destroy the graphics mesh resources in] {a pointer to DynlexGraphicsMe
     execute:
         @intrinsic("call", "vulkan", "vkDestroyBuffer", nothing, mesh's owner's device, mesh's buffer, 0 as a pointer)
         @intrinsic("call", "vulkan", "vkFreeMemory", nothing, mesh's owner's device, mesh's memory, 0 as a pointer)
-        @intrinsic("call", "libc", "free", nothing, mesh)
+        deallocate mesh
 
 function [release the uploaded graphics mesh] {a pointer to DynlexGraphicsMesh:mesh}:
     execute:

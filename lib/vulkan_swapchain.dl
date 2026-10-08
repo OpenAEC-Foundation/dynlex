@@ -39,7 +39,7 @@ function [create the Vulkan swapchain replacing] {pointer:previous} [in] {a poin
         set formats to allocated Vulkan storage for (count as a word sized unsigned integer) instances of VkSurfaceFormatKHR
         require Vulkan status @intrinsic("call", "vulkan", "vkGetPhysicalDeviceSurfaceFormatsKHR", an integer, state's physical_device, state's surface, the address of count, formats) for "Querying Vulkan surface formats"
         set chosen to the preferred Vulkan surface format in formats count count
-        @intrinsic("call", "libc", "free", nothing, formats)
+        deallocate formats
         set extent to capabilities' currentExtent
         if extent's width = (4294967295 as a 32 bit unsigned integer):
             set width to 0
@@ -182,13 +182,13 @@ function [destroy Vulkan swapchain attachments in] {a pointer to DynlexGraphics:
             @intrinsic("call", "vulkan", "vkFreeMemory", nothing, state's device, @intrinsic("dereference", state's depth_memories + index), 0 as a pointer)
             @intrinsic("call", "vulkan", "vkDestroyImageView", nothing, state's device, @intrinsic("dereference", state's swapchain_views + index), 0 as a pointer)
             increment index
-        @intrinsic("call", "libc", "free", nothing, state's framebuffers)
-        @intrinsic("call", "libc", "free", nothing, state's depth_views)
-        @intrinsic("call", "libc", "free", nothing, state's depth_images)
-        @intrinsic("call", "libc", "free", nothing, state's depth_memories)
-        @intrinsic("call", "libc", "free", nothing, state's swapchain_views)
-        @intrinsic("call", "libc", "free", nothing, state's swapchain_images)
-        @intrinsic("call", "libc", "free", nothing, state's presentation_ready)
+        deallocate state's framebuffers
+        deallocate state's depth_views
+        deallocate state's depth_images
+        deallocate state's depth_memories
+        deallocate state's swapchain_views
+        deallocate state's swapchain_images
+        deallocate state's presentation_ready
 
 function [recreate the Vulkan swapchain resources in] {a pointer to DynlexGraphics:state}:
     execute:

@@ -26,5 +26,5 @@ set selected to the item at 0 in backends
 set count to the argument count of selected
 free backends
 free arguments
-@intrinsic("call", "libc", "free", nothing, selected backend)
+deallocate selected backend
 @intrinsic("call", "libc", "exit", nothing, count - 1)

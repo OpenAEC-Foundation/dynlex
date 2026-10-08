@@ -61,6 +61,7 @@ enum class IntrinsicPurityKind {
 	X(StoreAt, "store at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                    \
 	X(InitializeAt, "initialize at", 3, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                          \
 	X(DestroyAt, "destroy at", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                                \
+	X(CheckDeallocation, "check deallocation", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                  \
 	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                  \
 	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
 	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                                 \

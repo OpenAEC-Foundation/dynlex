@@ -1,6 +1,7 @@
 #pragma once
 #include "bindingMap.h"
 #include "compileTimeInfo.h"
+#include "memoryFacts.h"
 #include "range.h"
 #include "type.h"
 #include <algorithm>
@@ -56,6 +57,7 @@ struct Expression {
 	Kind kind = Kind::Pending;
 	DataType type;
 	CompileTimeValue compileTimeValue{};
+	MemoryFacts memoryFacts;
 	Range range;
 
 	// For Literal: the actual value

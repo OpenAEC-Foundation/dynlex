@@ -481,6 +481,23 @@ if(NOT EMSCRIPTEN)
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
 
+    set(DYNLEX_COMPILER_TEST_SOURCES ${DYNLEX_NATIVE_SOURCES})
+    list(FILTER DYNLEX_COMPILER_TEST_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
+    add_executable(
+        dynlex_address_provenance_test EXCLUDE_FROM_ALL
+        tests/cpp/addressProvenanceTest.cpp
+        ${DYNLEX_COMPILER_TEST_SOURCES}
+    )
+    target_compile_definitions(dynlex_address_provenance_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_address_provenance_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_address_provenance_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
+
     add_executable(
         dynlex_class_layout_test EXCLUDE_FROM_ALL
         tests/cpp/classLayoutTest.cpp

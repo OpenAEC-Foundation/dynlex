@@ -59,6 +59,6 @@ function [the graphics uniform bindings of] {a graphics SPIR-V module:module}:
                 require condition (binding < (the length of result)) reporting "A SPIR-V uniform binding exceeds the DynLex graphics limit"
                 store true into result at binding
             increment identifier
-        @intrinsic("call", "libc", "free", nothing, sets)
-        @intrinsic("call", "libc", "free", nothing, bindings)
+        deallocate sets
+        deallocate bindings
         return result

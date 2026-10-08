@@ -2,7 +2,9 @@
 
 static void joinAddressProvenance(AddressProvenance &destination, const AddressProvenance &source) {
 	destination.mayTargets.insert(source.mayTargets.begin(), source.mayTargets.end());
+	destination.mayBeNull = destination.mayBeNull || source.mayBeNull;
 	destination.unknown = destination.unknown || source.unknown;
+	destination.mayBeStatic = destination.mayBeStatic || source.mayBeStatic;
 }
 
 static AddressInferenceState mergeAddressInferenceStates(const std::vector<AddressInferenceState> &states) {
@@ -37,9 +39,11 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
 
+static bool typeMayContainAddresses(const DataType &type);
+
 static AddressProvenance dereferenceAddressProvenance(AddressProvenance address, int depth, InferenceContext &context) {
 	for (int level = 0; level < depth; level++) {
-		AddressProvenance value{.mayTargets = {}, .unknown = address.unknown};
+		AddressProvenance value{.mayTargets = {}, .unknown = address.unknown || address.mayBeNull || address.mayBeStatic};
 		for (VariableReference *target : address.mayTargets)
 			joinAddressProvenance(value, context.lookupAddressProvenance(target));
 		address = std::move(value);
@@ -63,7 +67,9 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 			return std::nullopt;
 		if (recordAddressTaken)
 			context.currentAddressState.write().addressTakenVariables.insert(target);
-		return AddressProvenance{.mayTargets = {target}};
+		return AddressProvenance{
+			.mayTargets = {target}, .unknown = variableReferenceIsCurrentInstantiationParameter(context, target)
+		};
 	}
 
 	if (resolvedExpression->kind != Expression::Kind::IntrinsicCall)
@@ -124,10 +130,12 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 		crashCompilerBug("address provenance inference lost its expression while resolving bindings");
 	if (resolvedExpression->inferredConversion)
 		return inferAddressProvenance(resolvedExpression->inferredConversion, context, resolvedBindingFrameStack);
+	if (resolvedExpression->type.isMetaType())
+		return {};
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable)
 		return context.lookupAddressProvenance(resolvedExpression->variable);
 	if (resolvedExpression->kind == Expression::Kind::Literal)
-		return {};
+		return {.mayTargets = {}, .mayBeStatic = resolvedExpression->type.isPointer()};
 	if (resolvedExpression->kind == Expression::Kind::ArrayLiteral) {
 		AddressProvenance provenance;
 		for (Expression *element : resolvedExpression->arguments)
@@ -158,13 +166,22 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 		return provenance.value_or(AddressProvenance{.mayTargets = {}, .unknown = true});
 	}
 	if (kind == IntrinsicKind::Cast && resolvedExpression->arguments.size() > 2) {
+		if (resolvedExpression->type.isPointer()) {
+			CompileTimeValue sourceValue =
+				resolveStoredCompileTimeValue(resolvedExpression->arguments[1], resolvedBindingFrameStack, &context);
+			if (std::optional<std::uint64_t> integer = getCompileTimeUnsignedIntegerValue(sourceValue);
+				integer && *integer == 0)
+				return {.mayTargets = {}, .mayBeNull = true};
+		}
 		AddressProvenance source = inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
-		if (resolvedExpression->arguments[1]->type.isPointer() || !source.mayTargets.empty() || source.unknown)
+		if (resolvedExpression->arguments[1]->type.isPointer() || !source.mayTargets.empty() || source.mayBeNull ||
+			source.mayBeStatic || source.unknown) {
+			// Pointer casts preserve addresses. Numeric conversions can lose
+			// address bits, so their possible origins do not prove storage.
+			if (!resolvedExpression->type.isPointer() || !resolvedExpression->arguments[1]->type.isPointer())
+				source.unknown = true;
 			return source;
-		CompileTimeValue sourceValue =
-			resolveStoredCompileTimeValue(resolvedExpression->arguments[1], resolvedBindingFrameStack, &context);
-		if (std::optional<std::int64_t> integer = getCompileTimeIntegerValue(sourceValue); integer && *integer == 0)
-			return {};
+		}
 		return resolvedExpression->type.isPointer() ? AddressProvenance{.mayTargets = {}, .unknown = true}
 													: AddressProvenance{};
 	}
@@ -182,6 +199,10 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 		return provenance;
 	}
 	if (kind == IntrinsicKind::Property && resolvedExpression->arguments.size() > 2) {
+		// Aggregate provenance describes its contained pointers, not numeric
+		// fields. A numeric field cast back to a pointer has an unknown origin.
+		if (!typeMayContainAddresses(resolvedExpression->type))
+			return {};
 		AddressProvenance owner = inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
 		const DataType &ownerType = resolvedExpression->arguments[1]->type;
 		if (!ownerType.isPointer() || ownerType.kind != DataType::Kind::Class)
@@ -193,7 +214,11 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 			inferAddressProvenance(resolvedExpression->arguments[1], context, resolvedBindingFrameStack);
 		return dereferenceAddressProvenance(std::move(pointerStorage), 1, context);
 	}
-	if ((kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract) && resolvedExpression->arguments.size() > 2) {
+	if (kind == IntrinsicKind::Construct && resolvedExpression->arguments.size() == 2 &&
+		typeMayContainAddresses(resolvedExpression->type))
+		return {.mayTargets = {}, .mayBeNull = true};
+	if ((kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract) && resolvedExpression->type.isPointer() &&
+		resolvedExpression->arguments.size() > 2) {
 		int arrayOperandIndex = decayingArrayOperandIndex(
 			arithmeticIntrinsicKind(resolvedExpression->intrinsicName), resolvedExpression->arguments[1]->type,
 			resolvedExpression->arguments[2]->type
@@ -211,21 +236,41 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 			AddressProvenance argument =
 				inferAddressProvenance(resolvedExpression->arguments[argumentIndex], context, resolvedBindingFrameStack);
 			if (resolvedExpression->arguments[argumentIndex]->type.isPointer() || !argument.mayTargets.empty() ||
-				argument.unknown)
+				argument.mayBeNull || argument.mayBeStatic || argument.unknown)
 				joinAddressProvenance(provenance, argument);
 		}
-		if (!provenance.mayTargets.empty() || provenance.unknown)
+		if (provenance.mayBeNull) {
+			size_t pointerOperandIndex = resolvedExpression->arguments[1]->type.isPointer() ? 1 : 2;
+			size_t offsetOperandIndex = 3 - pointerOperandIndex;
+			CompileTimeValue offsetValue = resolveStoredCompileTimeValue(
+				resolvedExpression->arguments[offsetOperandIndex], resolvedBindingFrameStack, &context
+			);
+			std::optional<std::uint64_t> offset = getCompileTimeUnsignedIntegerValue(offsetValue);
+			if (!offset || *offset != 0) {
+				provenance.unknown = true;
+				if (offset)
+					provenance.mayBeNull = false;
+			}
+		}
+		if (!provenance.mayTargets.empty() || provenance.mayBeNull || provenance.mayBeStatic || provenance.unknown)
 			return provenance;
 	}
 	AddressProvenance provenance;
-	for (size_t argumentIndex = 1; argumentIndex < resolvedExpression->arguments.size(); argumentIndex++) {
+	size_t runtimeArgumentStart = isExternalCallIntrinsicKind(kind) ? externalCallRuntimeArgumentStart(kind) : 1;
+	for (size_t argumentIndex = runtimeArgumentStart; argumentIndex < resolvedExpression->arguments.size(); argumentIndex++) {
 		Expression *argument = resolvedExpression->arguments[argumentIndex];
 		if (argument)
 			joinAddressProvenance(provenance, inferAddressProvenance(argument, context, resolvedBindingFrameStack));
 	}
 	if (isExternalCallIntrinsicKind(kind))
 		provenance.unknown = true;
-	else if (resolvedExpression->type.isPointer() && provenance.mayTargets.empty())
+	else if (!typeMayContainAddresses(resolvedExpression->type) &&
+			 (!provenance.mayTargets.empty() || provenance.mayBeNull || provenance.mayBeStatic))
+		// Scalar operations can change an encoded address's representation.
+		// Retain possible origins for aliasing, but do not prove its storage.
+		provenance.unknown = true;
+	else if (resolvedExpression->type.isPointer() && provenance.mayTargets.empty() && !provenance.mayBeNull &&
+			 !provenance.mayBeStatic)
 		provenance.unknown = true;
 	return provenance;
 }
@@ -351,7 +396,7 @@ static void applyStoreThroughAddress(
 		noteUnknownAddressWrite(context);
 	if (targets.empty())
 		return;
-	bool definiteTarget = !destination.unknown && targets.size() == 1;
+	bool definiteTarget = !destination.unknown && !destination.mayBeNull && !destination.mayBeStatic && targets.size() == 1;
 	CompileTimeValue assignedValue =
 		assignedExpression ? context.lookupExpressionValue(assignedExpression) : CompileTimeValue{};
 	AddressProvenance assignedProvenance = assignedExpression

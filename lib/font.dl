@@ -219,7 +219,7 @@ local function [clear cached glyphs in] {a pointer to a font cache:cache}:
             set glyph to cache's first
             set cache's first to glyph's next
             release glyph's texture
-            @intrinsic("call", "libc", "free", nothing, glyph)
+            deallocate glyph
 
 local function the result of rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     execute:
@@ -330,7 +330,7 @@ to get the result of releasing {a pointer to a font:typeface}:
         else:
             if typeface's cache != (0 as a pointer to a font cache):
                 clear cached glyphs in typeface's cache
-                @intrinsic("call", "libc", "free", nothing, typeface's cache)
+                deallocate typeface's cache
                 set typeface's cache to 0 as a pointer to a font cache
             set the library of typeface to 0 as a pointer to a byte
             set the face of typeface to 0 as a pointer to a byte

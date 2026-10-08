@@ -123,6 +123,7 @@ static void inferOrderedExpression(
 	if (!expr)
 		return;
 	context.setExpressionValue(expr, {});
+	expr->memoryFacts = {};
 	struct ExpressionTraceGuard {
 		InferenceContext &context;
 		explicit ExpressionTraceGuard(InferenceContext &context, Expression *expression) : context(context) {

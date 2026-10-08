@@ -1,0 +1,1 @@
+tests/required/stack_deallocation/main.dl:9-27: Error: cannot deallocate stack storage

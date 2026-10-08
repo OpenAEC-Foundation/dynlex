@@ -63,9 +63,9 @@ local function free {a pointer to an ordered name collection:collection}:
         loop while position < the length of collection:
             @intrinsic("destroy at", (the items of collection) + position)
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of collection)
+        deallocate the items of collection
         @intrinsic("destroy at", collection)
-        @intrinsic("call", "libc", "free", nothing, collection)
+        deallocate collection
 
 local function stable sort ordered names {a pointer to an ordered name collection:collection}:
     execute:
@@ -102,7 +102,7 @@ local function a new workspace edit parser state:
 local function free {a pointer to a workspace edit parser state:target}:
     execute:
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
+        deallocate target
 
 local function record workspace edit parse failure {string:reason} using {a pointer to a workspace edit parser state:state}:
     execute:

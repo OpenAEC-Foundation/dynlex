@@ -164,7 +164,7 @@ to get a graphics texture loaded from PPM file at path for {pointer:window}:
         return an empty graphics texture
 
     set resource to a graphics texture resource from pixels with width width height height channels (3 as a 32 bit unsigned integer) in (window as a pointer to DynlexGraphics)
-    @intrinsic("call", "libc", "free", nothing, pixels)
+    deallocate pixels
     return a new graphics texture with resource (resource as a pointer), width width and height height
 
 to get {graphics texture:texture} is loaded:

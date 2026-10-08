@@ -53,14 +53,14 @@ print the value at (values + 1) as a line
 print the value at (values + 2) as a line
 print the value at (values + 3) as a line
 print the value at (values + 4) as a line
-@intrinsic("call", "libc", "free", nothing, values)
+deallocate values
 
 allocate one slot of a 32 bit unsigned integer and set singleton to it
 @intrinsic("store at", singleton, 17 as a 32 bit unsigned integer)
 set noCallComparator to the function named "the comparator that must not be called $ and $"
 sort native array at (singleton as a pointer) with (1 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using noCallComparator
 print the value at singleton as a line
-@intrinsic("call", "libc", "free", nothing, singleton)
+deallocate singleton
 
 sort native array at (0 as a pointer) with (0 as a word sized unsigned integer) items of (4 as a word sized unsigned integer) bytes using noCallComparator
 print 29 as a line
@@ -88,4 +88,4 @@ print (@intrinsic("property", record, "index")) as a line
 set record to @intrinsic("dereference", records + 4)
 print (@intrinsic("property", record, "weight")) as a line
 print (@intrinsic("property", record, "index")) as a line
-@intrinsic("call", "libc", "free", nothing, records)
+deallocate records

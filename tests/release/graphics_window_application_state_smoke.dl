@@ -27,16 +27,16 @@ inspect the application state during graphics scroll for window with horizontal 
 set retrieved to the application state of window
 if retrieved != application pointer:
     set the application state of window to 0 as a pointer to a byte
-    @intrinsic("call", "libc", "free", nothing, marker)
+    deallocate marker
     close the window
     return 1
 
 set the application state of window to 0 as a pointer to a byte
 if the application state of window != 0 as a pointer to a byte:
-    @intrinsic("call", "libc", "free", nothing, marker)
+    deallocate marker
     close the window
     return 1
 
-@intrinsic("call", "libc", "free", nothing, marker)
+deallocate marker
 close the window
 return 0

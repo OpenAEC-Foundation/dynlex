@@ -150,5 +150,5 @@ function [a graphics window resource with width] {integer:width} [height] {integ
 function [destroy graphics window resource] {a pointer to DynlexGraphics:state}:
     execute:
         @intrinsic("call", "glfw", "glfwDestroyWindow", nothing, state's window)
-        @intrinsic("call", "libc", "free", nothing, state)
+        deallocate state
         release the graphics library

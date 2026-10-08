@@ -233,30 +233,30 @@ function free {a pointer to a workspace edit plan:plan}:
         loop while position < the length of resources:
             set resource to the workspace resource snapshot at position in resources
             @intrinsic("destroy at", resource)
-            @intrinsic("call", "libc", "free", nothing, resource)
+            deallocate resource
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of resources)
+        deallocate the items of resources
         @intrinsic("destroy at", resources)
-        @intrinsic("call", "libc", "free", nothing, resources)
+        deallocate resources
         set changes to the normalized changes of plan
         set position to 0
         loop while position < the length of changes:
             set change to the normalized workspace change at position in changes
             @intrinsic("destroy at", change)
-            @intrinsic("call", "libc", "free", nothing, change)
+            deallocate change
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of changes)
+        deallocate the items of changes
         @intrinsic("destroy at", changes)
-        @intrinsic("call", "libc", "free", nothing, changes)
+        deallocate changes
         set operations to the operations of plan
         set position to 0
         loop while position < the length of operations:
             set operation to the planned workspace operation at position in operations
             @intrinsic("destroy at", operation)
-            @intrinsic("call", "libc", "free", nothing, operation)
+            deallocate operation
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of operations)
+        deallocate the items of operations
         @intrinsic("destroy at", operations)
-        @intrinsic("call", "libc", "free", nothing, operations)
+        deallocate operations
         @intrinsic("destroy at", plan)
-        @intrinsic("call", "libc", "free", nothing, plan)
+        deallocate plan

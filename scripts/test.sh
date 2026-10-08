@@ -633,6 +633,7 @@ else
 fi
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
+run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
 run_auxiliary_test "path_utils" 30 python3 -B "$SCRIPT_DIR/test_path_utils.py" "$PROJECT_DIR"
 run_auxiliary_test "native_target" 30 python3 -B "$SCRIPT_DIR/test_native_target.py" "$PROJECT_DIR"
 if [[ "$is_windows" != "true" ]]; then

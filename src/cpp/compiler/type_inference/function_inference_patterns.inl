@@ -10,6 +10,8 @@ break;
 CompileTimeValue inferredValue = context.lookupExpressionValue(expr);
 if (!isCompileTimeKnown(inferredValue) && expr->type.kind == DataType::Kind::Type && !expr->inferredFlexExpansion)
 	context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
+if (context.typesValid)
+	recordExpressionMemoryFacts(expr, context, flexBindingFrameStack);
 }
 
 static bool

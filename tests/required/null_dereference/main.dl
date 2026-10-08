@@ -1,0 +1,2 @@
+@intrinsic("store", pointer, @intrinsic("cast", 0, @intrinsic("add pointer depth", @intrinsic("type", "int"))))
+@intrinsic("discard", @intrinsic("dereference", pointer))

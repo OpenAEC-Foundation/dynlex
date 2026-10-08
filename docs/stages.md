@@ -180,6 +180,24 @@ A section flex replacement is executed line by line in source order during infer
 
 We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later. Execution-state maps retain an explicit unknown entry after a write or control-flow merge invalidates a previously known value, so an older expression value cannot reappear as the current variable value.
 
+The same execution walk records pointer facts. Address provenance retains a set of possible variable-storage targets,
+an explicit null alternative, static literal storage, and whether other origins are unknown. A null pointer and a value
+containing no pointers are different facts. Assignments replace the destination's facts; alternatives and loop joins combine the possibilities.
+Opaque writes discard certainty about affected pointer storage. Numeric operations and conversions on encoded addresses
+retain their possible origins for alias tracking but make their storage uncertain. These facts are opportunistic: DynLex does not guarantee
+memory safety, require ownership annotations, or run an additional safety-analysis pass. Memory diagnostics may report
+only proven violations; a possible violation or unknown origin is insufficient. Deallocation remains implemented in DynLex.
+The normal intrinsic walk records proven null memory accesses and writes to literal storage, including pointer calls,
+atomic operations, and class property accesses. Expressions carry those proofs separately for value use and address use;
+the section walker reports them when an executed statement consumes the corresponding operation. Flex replacements
+forward their result's proofs and any preceding statement effects. Normal function instantiations summarize their body
+violations for runtime calls. Type-only queries consume neither runtime form, and taking the address of a dereference
+does not load the pointee. Asking for a function result's type does not suppress a violation at a later runtime call.
+`check deallocation` consumes the recorded pointer facts and emits no runtime code. The standard-library deallocation
+patterns perform that check before calling their allocator's release function; the compiler does not recognize external
+function names. Known variable or literal storage cannot be deallocated, while null and unknown alternatives remain
+accepted. Parameter storage can alias heap storage and is therefore unknown. Library deallocations use these patterns rather than bypassing the check with raw external calls.
+
 Writing a concrete value through storage whose nested class subtype is still unspecified refines that storage type. Function instantiations record refinements to parameter storage and apply them to the caller, so a generic container can bind its element subtype on its first write without losing it at the function boundary. This only completes unspecified structure; it never changes an already concrete member type.
 
 We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.

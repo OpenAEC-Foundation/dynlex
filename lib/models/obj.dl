@@ -211,7 +211,7 @@ function a loaded OBJ material set from path for {pointer:window}:
                         set identifier to a graphics texture loaded from PPM file at reference for window
 
                         if existing's texture path != 0 as a pointer to a byte:
-                            @intrinsic("call", "libc", "free", nothing, existing's texture path)
+                            deallocate existing's texture path
                         release existing's texture
 
                         set updated to a new OBJ material named existing's name with existing's color, texture path reference and texture identifier
@@ -220,12 +220,12 @@ function a loaded OBJ material set from path for {pointer:window}:
             set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
 
         ignore @intrinsic("call", "libc", "fclose", an integer, file)
-        @intrinsic("call", "libc", "free", nothing, line)
-        @intrinsic("call", "libc", "free", nothing, name)
-        @intrinsic("call", "libc", "free", nothing, texture)
+        deallocate line
+        deallocate name
+        deallocate texture
 
         if count = 0:
-            @intrinsic("call", "libc", "free", nothing, materials)
+            deallocate materials
             set materials to (0 as a pointer to an OBJ material)
         else:
             set materials to the checked allocation from (materials as a pointer) resized to count items of an OBJ material
@@ -256,17 +256,17 @@ function a loaded OBJ mesh from path for {pointer:window}:
         while status != 0 as a pointer to a byte:
             if @intrinsic("variadic call", "libc", "sscanf", an integer, 2, line, "mtllib %2047s", library) = 1:
                 if reference != 0 as a pointer to a byte:
-                    @intrinsic("call", "libc", "free", nothing, reference)
+                    deallocate reference
                 set reference to a duplicated OBJ C string from library
             set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, scanner)
 
         ignore @intrinsic("call", "libc", "fclose", an integer, scanner)
-        @intrinsic("call", "libc", "free", nothing, line)
-        @intrinsic("call", "libc", "free", nothing, library)
+        deallocate line
+        deallocate library
 
         set catalogue to a loaded OBJ material set from reference for window
         if reference != 0 as a pointer to a byte:
-            @intrinsic("call", "libc", "free", nothing, reference)
+            deallocate reference
 
         set materials to catalogue's materials
         set total to catalogue's count
@@ -274,7 +274,7 @@ function a loaded OBJ mesh from path for {pointer:window}:
         set file to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")
         if file = 0 as a pointer to a byte:
             if materials != 0 as a pointer to an OBJ material:
-                @intrinsic("call", "libc", "free", nothing, materials)
+                deallocate materials
             return an empty OBJ mesh
 
         set capacity to a new OBJ mesh quantities with vertices 1024, texture coordinates 1024, triangles 2048 and materials 0
@@ -364,23 +364,23 @@ function a loaded OBJ mesh from path for {pointer:window}:
             set status to @intrinsic("call", "libc", "fgets", a pointer to a byte, line, 4096, file)
 
         ignore @intrinsic("call", "libc", "fclose", an integer, file)
-        @intrinsic("call", "libc", "free", nothing, line)
-        @intrinsic("call", "libc", "free", nothing, name)
+        deallocate line
+        deallocate name
 
         if count's vertices = 0:
-            @intrinsic("call", "libc", "free", nothing, vertices)
+            deallocate vertices
             set vertices to 0 as a pointer to an OBJ vertex
         else:
             set vertices to the checked allocation from (vertices as a pointer) resized to count's vertices items of an OBJ vertex
 
         if count's texture coordinates = 0:
-            @intrinsic("call", "libc", "free", nothing, coordinates)
+            deallocate coordinates
             set coordinates to 0 as a pointer to an OBJ texture coordinate
         else:
             set coordinates to the checked allocation from (coordinates as a pointer) resized to count's texture coordinates items of an OBJ texture coordinate
 
         if count's triangles = 0:
-            @intrinsic("call", "libc", "free", nothing, triangles)
+            deallocate triangles
             set triangles to 0 as a pointer to an OBJ triangle
         else:
             set triangles to the checked allocation from (triangles as a pointer) resized to count's triangles items of an OBJ triangle
@@ -588,13 +588,13 @@ function draw {OBJ mesh:mesh} at x {a value:horizontal}, y {a value:vertical} an
 function free {OBJ mesh:mesh}:
     execute:
         if mesh's vertices != 0 as a pointer to an OBJ vertex:
-            @intrinsic("call", "libc", "free", nothing, mesh's vertices)
+            deallocate mesh's vertices
 
         if mesh's texture coordinates != 0 as a pointer to an OBJ texture coordinate:
-            @intrinsic("call", "libc", "free", nothing, mesh's texture coordinates)
+            deallocate mesh's texture coordinates
 
         if mesh's triangles != 0 as a pointer to an OBJ triangle:
-            @intrinsic("call", "libc", "free", nothing, mesh's triangles)
+            deallocate mesh's triangles
 
         if mesh's materials != 0 as a pointer to an OBJ material:
             set cursor to 0
@@ -602,13 +602,13 @@ function free {OBJ mesh:mesh}:
                 set entry to the item at cursor in mesh's materials
 
                 if entry's name != 0 as a pointer to a byte:
-                    @intrinsic("call", "libc", "free", nothing, entry's name)
+                    deallocate entry's name
 
                 if entry's texture path != 0 as a pointer to a byte:
-                    @intrinsic("call", "libc", "free", nothing, entry's texture path)
+                    deallocate entry's texture path
 
                 release entry's texture
 
                 increment cursor
 
-            @intrinsic("call", "libc", "free", nothing, mesh's materials)
+            deallocate mesh's materials

@@ -26,7 +26,7 @@ function [check command line limits for] {string:executable} [with] {string:argu
             loop while (the item at actual in output) != (0 as a 16 bit unsigned integer):
                 increment actual
             require condition (actual = length) reporting "Unexpected command-line length"
-        @intrinsic("call", "libc", "free", nothing, output)
+        deallocate output
 
 set empty to the string form of ""
 set x to the string form of "x"

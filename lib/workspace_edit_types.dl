@@ -325,7 +325,7 @@ function free {a pointer to a workspace text edit:target}:
         if target = (0 as a pointer to a workspace text edit):
             @intrinsic("return")
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
+        deallocate target
 
 function free {a pointer to a workspace text edit collection:target}:
     execute:
@@ -335,9 +335,9 @@ function free {a pointer to a workspace text edit collection:target}:
         loop while (position < the length of target):
             free (the workspace text edit at index position in target)
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of target)
+        deallocate the items of target
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
+        deallocate target
 
 function free {a pointer to a workspace edit change:target}:
     execute:
@@ -347,7 +347,7 @@ function free {a pointer to a workspace edit change:target}:
         if edits != (0 as a pointer to a workspace text edit collection):
             free edits
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
+        deallocate target
 
 function free {a pointer to a parsed workspace edit:target}:
     execute:
@@ -358,21 +358,21 @@ function free {a pointer to a parsed workspace edit:target}:
         loop while (position < the length of changes):
             free (the workspace change at index position in changes)
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of changes)
+        deallocate the items of changes
         @intrinsic("destroy at", changes)
-        @intrinsic("call", "libc", "free", nothing, changes)
+        deallocate changes
         set annotations to the annotations of target
         set position to 0
         loop while (position < the length of annotations):
             set annotation to the workspace change annotation at index position in annotations
             @intrinsic("destroy at", annotation)
-            @intrinsic("call", "libc", "free", nothing, annotation)
+            deallocate annotation
             set position to (position + 1)
-        @intrinsic("call", "libc", "free", nothing, the items of annotations)
+        deallocate the items of annotations
         @intrinsic("destroy at", annotations)
-        @intrinsic("call", "libc", "free", nothing, annotations)
+        deallocate annotations
         @intrinsic("destroy at", target)
-        @intrinsic("call", "libc", "free", nothing, target)
+        deallocate target
 
 function free {workspace edit parse result:outcome}:
     execute:
