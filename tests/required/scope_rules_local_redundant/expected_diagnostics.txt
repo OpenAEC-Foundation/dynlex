@@ -1,0 +1,2 @@
+tests/required/scope_rules_local_redundant/main.dl:1-6: Error: 'local' is redundant: a scope rule already makes this definition local
+  note: The rule is stated here tests/required/scope_rules_local_redundant/main.dl:5-24

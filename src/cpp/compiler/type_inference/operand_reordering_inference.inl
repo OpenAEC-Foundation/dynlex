@@ -66,15 +66,18 @@ static bool inferExpression(
 	auto emitTypeFailureDiagnostic = [&]() {
 		if (context.trial)
 			return;
+		Diagnostic diagnostic;
 		if (context.hasTypeFailureDiagnostic) {
-			context.addDiagnostic(context.typeFailureDiagnostic);
-			return;
+			diagnostic = context.typeFailureDiagnostic;
+		} else {
+			DiagnosticExpressionSnapshot failureSnapshot =
+				context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot : originalDiagnostic;
+			diagnostic = buildTypeFailureDiagnostic(
+				context.parseContext, failureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
+			);
 		}
-		DiagnosticExpressionSnapshot failureSnapshot =
-			context.typeFailureSnapshot.range.line ? context.typeFailureSnapshot : originalDiagnostic;
-		context.addDiagnostic(buildTypeFailureDiagnostic(
-			context.parseContext, failureSnapshot, context.typeFailureDetail, context.typeFailureRelatedInfo
-		));
+		appendNumberRuleOrigins(context.parseContext, expr, diagnostic.relatedInfo);
+		context.addDiagnostic(std::move(diagnostic));
 	};
 	auto tryInfer = [&](bool collectGroupingAmbiguity = true) -> bool {
 		ScopedRecursiveInferenceObservation expressionObservation(context, context.currentInstantiation);

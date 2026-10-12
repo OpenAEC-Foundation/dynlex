@@ -5,6 +5,7 @@
 #include "patternsSection.h"
 #include "precedenceSection.h"
 #include "replacementSection.h"
+#include "scopeRulesSection.h"
 #include "syntaxConfig.h"
 
 bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
@@ -15,6 +16,8 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 }
 
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
+	if (std::optional<Section *> scopeRulesSection = createScopeRulesSection(context, line, this))
+		return *scopeRulesSection;
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	// replacement: implies flex semantics for this definition.
 	if (matchesConfiguredKeyword(line->patternText, syntax.replacementSectionName)) {

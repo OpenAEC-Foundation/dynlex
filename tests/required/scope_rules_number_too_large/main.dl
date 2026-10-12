@@ -1,0 +1,6 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are 64 bit floating-point
+
+print 9007199254740993 as a line

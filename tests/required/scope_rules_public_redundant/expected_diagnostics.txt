@@ -1,0 +1,1 @@
+tests/required/scope_rules_public_redundant/main.dl:1-7: Error: 'public' is redundant: no scope rule makes this definition local

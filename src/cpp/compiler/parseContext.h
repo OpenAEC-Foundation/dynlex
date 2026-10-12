@@ -231,6 +231,17 @@ struct ParseContext {
 	std::vector<Diagnostic> diagnostics;
 	CompilationStage compilationStage = CompilationStage::NotStarted;
 	Section *mainSection{};
+	// Rules stated by `in this file` blocks, per source file.
+	std::unordered_map<const lsp::SourceFile *, ScopeRules> fileScopeRules;
+	// Warnings about code that a number rule widened or that contradicts an absolute rule. They are reported once
+	// inference has settled, keeping only the outermost of nested phrases.
+	struct ScopeRuleWarning {
+		std::string key;
+		Range range;
+		Range ruleRange;
+		std::vector<std::pair<std::string, std::string>> placeholders;
+	};
+	std::vector<ScopeRuleWarning> scopeRuleWarnings;
 	// for each section type, we store a tree with patterns, leading to sections.
 	// we use global pattern trees which can store multiple end nodes (exclusion based).
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.

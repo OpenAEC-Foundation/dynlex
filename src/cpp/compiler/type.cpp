@@ -232,7 +232,9 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 	if (!constraint.kind) {
 		if (constraint.requiresNumeric)
 			result = "a number";
-		else if (constraint.numericSize) {
+		else if (constraint.requiresInteger) {
+			result = constraint.numericSize ? scalarTypeName(DataType::Kind::Int, *constraint.numericSize) : "an integer";
+		} else if (constraint.numericSize) {
 			int bitCount = *constraint.numericSize * 8;
 			result = std::string(bitCount == 8 ? "an " : "a ") + std::to_string(bitCount) + "-bit value";
 		} else if (constraint.constrainsClassDefinition)
@@ -254,6 +256,11 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 			result = "a boolean";
 			break;
 		case DataType::Kind::Int:
+			// A signed integer constraint is narrower than `integer`, which accepts either sign.
+			result = constraint.numericSize ? std::string(*constraint.numericSize == 1 ? "an " : "a ") +
+												  std::to_string(*constraint.numericSize * 8) + "-bit signed integer"
+											: "a signed integer";
+			break;
 		case DataType::Kind::UInt:
 		case DataType::Kind::Float:
 			result = scalarTypeName(*constraint.kind, constraint.numericSize.value_or(0));

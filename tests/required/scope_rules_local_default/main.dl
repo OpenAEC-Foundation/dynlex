@@ -1,0 +1,18 @@
+import lib/std.dl
+import tests/required/scope_rules_local_default/helper.dl
+
+in this file, by default:
+    everything is local
+
+function secret value:
+    execute:
+        return 1
+
+class:
+    patterns:
+        [a|] secret record
+    members:
+        amount as an integer
+
+print the shared value as a line
+print secret value as a line

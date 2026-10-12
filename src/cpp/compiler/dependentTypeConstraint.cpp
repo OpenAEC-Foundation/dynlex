@@ -63,6 +63,7 @@ void overlayConstraint(TypeConstraint &destination, const TypeConstraint &source
 	if (source.matrixColumns)
 		destination.matrixColumns = source.matrixColumns;
 	destination.requiresNumeric = destination.requiresNumeric || source.requiresNumeric;
+	destination.requiresInteger = destination.requiresInteger || source.requiresInteger;
 	if (source.constrainsClassDefinition) {
 		destination.constrainsClassDefinition = true;
 		destination.classDefinition = source.classDefinition;

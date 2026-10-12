@@ -7,6 +7,9 @@ struct DeclaredTypeConstraintWorkItem {
 	std::string typeConstraintName;
 	Expression *expression{};
 	std::optional<Diagnostic> failureDiagnostic;
+	// A `numbers are ...` line of a scope rule block. Its expression is owned by the line.
+	CodeLine *numberRuleLine{};
+	TypeConstraint numberRuleConstraint;
 };
 
 enum class PatternTypeConstraintProbe { Ready, Deferred, Invalid, Impure };
