@@ -50,6 +50,8 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
 		DataType valueType = typeRef->type.toReferencedType();
+		if (!valueType.isConcrete())
+			return {};
 		requireCompilerInvariant(
 			parseContext.llvmModule && parseContext.llvmContext, "size inference requires an initialized target layout"
 		);
