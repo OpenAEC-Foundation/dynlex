@@ -12,6 +12,11 @@ Later stages of the compiler are very dependent on earlier stages. Every line of
 
 The compiler combines all files into one large file.
 
+Each source file fixes its URI and internal-library classification when created.
+Content edits preserve that identity. Syntax lookup selects the current compilation's
+builtin or project configuration from that classification without repeating filesystem
+canonicalization for each source range.
+
 # Parse Stage
 
 Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.

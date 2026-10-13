@@ -1,8 +1,12 @@
 #include "sourceFile.h"
+#include "compiler.h"
 
 namespace lsp {
 
-SourceFile::SourceFile(std::string uri, std::string content) : uri(std::move(uri)) { setContent(std::move(content)); }
+SourceFile::SourceFile(std::string uri, std::string content)
+	: uri(std::move(uri)), isInternal(isInternalSourcePath(this->uri)) {
+	setContent(std::move(content));
+}
 
 void SourceFile::setContent(std::string text) {
 	content = std::move(text);

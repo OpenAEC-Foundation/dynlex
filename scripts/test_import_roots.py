@@ -21,6 +21,38 @@ COMPILER = Path(sys.argv.pop()).resolve()
 
 
 class ImportRootConsistencyTests(unittest.TestCase):
+    def test_project_syntax_and_symlinked_builtin_syntax(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-source-syntax-") as directory:
+            root = Path(directory)
+            (root / "config.dl").write_text(
+                'dynlex options:\n    import: "importeer"\n    function: "functie"\n'
+                '    child sections:\n        execute: "doe"\n', encoding="utf-8"
+            )
+            (root / "lib").mkdir()
+            # A project directory called lib is still project code. A symlink
+            # into the compiler library must retain the builtin syntax instead.
+            (root / "lib" / "helper.dl").write_text(
+                'functie say hello:\n    doe:\n        print "ok" as a line\n', encoding="utf-8"
+            )
+            try:
+                library = Path(__file__).resolve().parent.parent / "lib"
+                (root / "builtin.dl").symlink_to(library / "std.dl")
+            except OSError as error:
+                self.skipTest(f"source symlinks unavailable: {error}")
+            main = root / "main.dl"
+            main.write_text(
+                'importeer builtin.dl\nimporteer lib/helper.dl\nsay hello\n', encoding="utf-8"
+            )
+            output = root / "main.out"
+            result = subprocess.run(
+                [str(COMPILER), str(main), "-o", str(output)], cwd=root,
+                capture_output=True, text=True, timeout=120
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            run = subprocess.run([str(output)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "ok\n")
+
     def test_nested_library_imports_ignore_working_directory(self) -> None:
         self.assertTrue(COMPILER.exists(), f"compiler not built at {COMPILER}")
         with tempfile.TemporaryDirectory(prefix="dynlex-import-roots-") as temporary_directory:

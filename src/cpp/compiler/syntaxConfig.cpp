@@ -542,7 +542,7 @@ const SyntaxConfig &syntaxConfigForSourcePath(const ParseContext &context, std::
 const SyntaxConfig &syntaxConfigForSourceFile(const ParseContext &context, const lsp::SourceFile *sourceFile) {
 	if (!sourceFile)
 		return context.projectSyntax;
-	return syntaxConfigForSourcePath(context, sourceFile->uri);
+	return sourceFile->isInternal ? context.builtinSyntax : context.projectSyntax;
 }
 
 const SyntaxConfig &syntaxConfigForRange(const ParseContext &context, Range range) {

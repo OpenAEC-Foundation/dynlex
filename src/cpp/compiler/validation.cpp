@@ -11,10 +11,9 @@ using Bindings = BindingMap;
 static bool isInternalSection(Section *section) {
 	for (CodeLine *line : section->codeLines) {
 		if (line && line->sourceFile && !line->sourceFile->uri.empty())
-			return isInternalSourcePath(line->sourceFile->uri);
+			return line->sourceFile->isInternal;
 	}
-	return section->openingLine && section->openingLine->sourceFile &&
-		   isInternalSourcePath(section->openingLine->sourceFile->uri);
+	return section->openingLine && section->openingLine->sourceFile && section->openingLine->sourceFile->isInternal;
 }
 
 static Expression *resolveVar(Expression *expr, const Bindings &bindings) {
