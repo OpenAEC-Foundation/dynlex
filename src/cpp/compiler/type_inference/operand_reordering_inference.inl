@@ -187,11 +187,10 @@ static bool inferExpression(
 			return !detectAmbiguity && !candidateDeferred ? GroupingEnumerationProgress::Stop
 														  : GroupingEnumerationProgress::EmittedContinue;
 		}
-		if (candidateDeferred == selectedGroupingDeferred &&
-			snapshotsHaveSameLocalOrdering(candidateGrouping, selectedGrouping)) {
-			// Internal groupings at an opaque boundary are locally equivalent.
-			// Preserve the first, prioritized choice instead of replacing it
-			// with a later candidate that may evaluate to a different value.
+		if (candidateDeferred == selectedGroupingDeferred && candidateGrouping == selectedGrouping) {
+			// Preserve master's complete-snapshot equality: different nested
+			// groupings must still be checked for ambiguity. Keep the first
+			// identical accepted snapshot and its prioritized evaluation.
 			candidateTransaction->rollback(expr);
 			candidateTransaction.reset();
 			return GroupingEnumerationProgress::EmittedContinue;
