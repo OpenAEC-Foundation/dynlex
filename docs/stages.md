@@ -31,6 +31,13 @@ declaration using `to get` become ordinary function and `execute` sections. A on
 an ordinary flex function and `replacement` section. Logical indentation and source slices preserve the authored nesting
 and diagnostic locations; later stages do not have a separate shorthand execution path.
 
+Scope rule blocks (`in this file`, `in this class` and `in this function`, optionally followed by `, by default`) are
+parsed here, because locality must be known before pattern matching. A block must precede every other line of its
+scope; the header phrase is checked against the block's position. Locality rules (`functions are local`, ...) are
+configured syntax and decide `local` for later definitions in the scope, validating the `local` and `public`
+modifiers. Every other rule line is an ordinary pattern reference resolved like code, but never executed. See
+`docs/scope_rules.md`.
+
 Integer literals are parsed exactly rather than through floating-point storage.
 Signed values use 32 or 64 bits, and positive values through `2^64 - 1` use
 unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
@@ -151,11 +158,23 @@ value. The `constraint` meta-type carries `TypeConstraint` values just as the `t
 requirement enabled. Type and constraint shaping uses the same surface patterns; shaping a constraint preserves the constraint
 category. A compile-time-known requirement is not an overload axis, so definitions which differ only by `fix` are duplicates.
 Type values retain both meanings when used in a signature: their constraint view controls overload matching, while their exact type
-view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` and `unsigned integer`
-accept every corresponding signed or unsigned integer width as constraints but denote their default widths as standalone type values. Code generation consumes that recorded exact
+view declares a concrete runtime representation when one is required for a callable ABI. For example, `integer` accepts every signed and
+unsigned integer width as a constraint but denotes a signed 32-bit integer as a standalone type value. Code generation consumes that recorded exact
 view; it does not reinterpret the constraint.
 
-An integer literal uses a 32-bit signed integer type when its value fits, a
+Number types are composed from properties with `@intrinsic("and", left, right)`, which accepts exactly the values both
+type or constraint operands accept. `integer` leaves the sign unspecified and accepts signed and unsigned integers;
+`signed` and `unsigned` restrict the sign. The result keeps an exact type view whenever its properties determine a
+number kind, completing an unspecified sign and width with the built-in defaults.
+
+Number rules (`numbers are ...`) are inferred in the declared type-constraint worklist. Constraints written in a scope
+whose number rule is still pending wait for it. Number type phrases and numeric literals written in a scope with a
+number rule receive the rule's properties where they leave them unspecified; flex replacements keep the rules of the
+file that defines them. A literal whose type came from a rule yields to an explicitly typed parameter that rejects it,
+as an implicit conversion candidate. Rule warnings are collected during inference and reported once it settles,
+keeping the outermost of nested phrases.
+
+Without number rules, an integer literal uses a 32-bit signed integer type when its value fits, a
 64-bit signed integer type through the signed range, and an unsigned 64-bit
 integer type above that range. The exact magnitude of signed 64-bit minimum is
 also accepted so unary negation can form that signed value; it can be explicitly

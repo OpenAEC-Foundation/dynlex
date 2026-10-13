@@ -1,0 +1,8 @@
+import lib/std.dl
+
+in this file, by default:
+    functions are local
+
+function hidden helper:
+    execute:
+        return 7

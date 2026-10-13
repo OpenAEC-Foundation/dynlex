@@ -1,0 +1,8 @@
+import lib/std.dl
+
+in this file:
+    functions are local
+
+public function the answer:
+    execute:
+        return 42

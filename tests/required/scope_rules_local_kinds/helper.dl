@@ -1,0 +1,14 @@
+import lib/std.dl
+
+in this file, by default:
+    classes are local
+
+class:
+    patterns:
+        [a|] hidden record
+    members:
+        amount as an integer
+
+function the visible value:
+    execute:
+        return 3

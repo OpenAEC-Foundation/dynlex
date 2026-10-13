@@ -1,0 +1,6 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are a number
+
+print 7 / 2 as a line

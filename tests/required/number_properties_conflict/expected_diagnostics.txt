@@ -1,0 +1,3 @@
+lib/std.dl:37-67: Error: No value is both a signed integer and a floating-point number
+  note: while inferring intrinsic 'and' in '@intrinsic("and", left, right)' with arguments [a type, a type] -> an unresolved value lib/std.dl:37-67
+  note: while inferring call 'signed and floating-point' with arguments [a type, a type] -> an unresolved value tests/required/number_properties_conflict/main.dl:29-54

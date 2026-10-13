@@ -335,7 +335,7 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 		const ConfigNode &node = *child;
 		if (node.entry.key == "import" || node.entry.key == "comment" || node.entry.key == "open section" ||
 			node.entry.key == "section" || node.entry.key == "function" || node.entry.key == "flex" ||
-			node.entry.key == "local") {
+			node.entry.key == "local" || node.entry.key == "public") {
 			if (!validateNameNode(node, diagnostics))
 				return false;
 			const ConfigNode *nameChild = findChild(node, "name");
@@ -349,6 +349,41 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 				syntax.flexName = configuredName;
 			else if (node.entry.key == "local")
 				syntax.localName = configuredName;
+			else if (node.entry.key == "public")
+				syntax.publicName = configuredName;
+			continue;
+		}
+		if (node.entry.key == "scope rules") {
+			static const std::unordered_set<std::string> scopeKeys = {"file", "class", "function", "by default"};
+			static const std::unordered_set<std::string> localKeys = {
+				"everything", "functions", "classes", "sections", "conversions"
+			};
+			for (const auto &grandChild : node.children) {
+				const bool localNode = grandChild->entry.key == "local";
+				if (!localNode && !scopeKeys.contains(grandChild->entry.key)) {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"unknown config key '" + grandChild->entry.key + "' under 'scope rules'"
+					);
+					return false;
+				}
+				if (!localNode) {
+					if (!validateNameNode(*grandChild, diagnostics, false, true, true))
+						return false;
+					continue;
+				}
+				for (const auto &localChild : grandChild->children) {
+					if (!localKeys.contains(localChild->entry.key)) {
+						addDiagnostic(
+							diagnostics, localChild->entry.line, localChild->entry.keyStart, localChild->entry.keyEnd,
+							"unknown config key '" + localChild->entry.key + "' under 'scope rules.local'"
+						);
+						return false;
+					}
+					if (!validateNameNode(*localChild, diagnostics, false, true, true))
+						return false;
+				}
+			}
 			continue;
 		}
 		if (node.entry.key == "class") {

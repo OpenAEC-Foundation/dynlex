@@ -66,6 +66,8 @@ std::string sectionTypeToString(SectionType type) {
 		return "before";
 	case SectionType::After:
 		return "after";
+	case SectionType::ScopeRules:
+		return "scope rules";
 	default:
 		return "custom";
 	}

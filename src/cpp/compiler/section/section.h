@@ -6,6 +6,7 @@
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "range.h"
+#include "scopeRules.h"
 #include "sectionType.h"
 #include "stringHierarchy.h"
 #include "type.h"
@@ -199,6 +200,8 @@ struct Section {
 	std::vector<std::string> globalVariables;
 	// precedence declarations: patterns that this definition evaluates before/after
 	std::vector<std::string> beforePatterns, afterPatterns;
+	// Rules stated by `in this class` or `in this function` blocks directly inside this definition.
+	ScopeRules scopeRules;
 	void collectPatternReferencesAndSections(
 		std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
 		std::list<Section *> &sections, bool insideDefinition = false
@@ -206,6 +209,9 @@ struct Section {
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
 	virtual bool finalize(ParseContext &context);
+	// Whether the enclosing body executes this section's lines when it reaches the opening line. Definitions and
+	// scope rule blocks only declare.
+	virtual bool runsInEnclosingBody() const { return true; }
 	Expression *
 	detectPatterns(ParseContext &context, Range range, SectionType patternType, bool registerPatternReferences = true);
 	Expression *detectPatternsRecursively(

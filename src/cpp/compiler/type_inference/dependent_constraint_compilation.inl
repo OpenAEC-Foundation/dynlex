@@ -64,17 +64,13 @@ struct SymbolicConstraintCompiler {
 
 	SymbolicSignatureValue evaluateLiteral(Expression *expression) {
 		SymbolicSignatureValue result;
-		std::optional<NumericLiteralValue> number;
-		if (const auto *integer = std::get_if<std::int64_t>(&expression->literalValue))
-			number = *integer;
-		else if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expression->literalValue))
-			number = *minimumMagnitude;
-		else if (const auto *floatingPoint = std::get_if<double>(&expression->literalValue))
-			number = *floatingPoint;
-		if (number) {
-			result.type = numericLiteralType(*number, parseContext.options.emitSPIRV);
+		if (std::optional<NumericLiteralValue> number = numericLiteralValueOf(*expression)) {
+			NumericLiteralTyping typing = typeNumericLiteral(parseContext, expression->range.line, *number);
+			if (typing.unrepresentableBy)
+				return fail("a literal cannot be represented by the numbers of its scope rule");
+			result.type = typing.type;
 			result.domain = TypeConstraint::fromValueType(result.type);
-			result.constantValue = numericLiteralCompileTimeValue(*number);
+			result.constantValue = typing.value;
 			if (std::optional<std::int64_t> integer = getCompileTimeIntegerValue(result.constantValue))
 				result.integerTerm = ConstraintIntegerTerm::constantValue(*integer);
 			return result;
@@ -148,6 +144,39 @@ struct SymbolicConstraintCompiler {
 			return fail("type construction names an unsupported kind");
 		TypeReferenceValue reference = TypeReferenceValue::builtin(*kind, parseContext.options.emitSPIRV, byteSize);
 		return constraintValue(TypeConstraintTemplate::constant(std::move(reference.constraint)));
+	}
+
+	SymbolicSignatureValue
+	evaluateConstraintConjunction(const TypeConstraintTemplate &left, const TypeConstraintTemplate &right) {
+		if (left.rootProjection || right.rootProjection || (left.elementConstraint && right.elementConstraint))
+			return fail("combined constraints cannot both depend on argument types");
+		std::optional<TypeConstraint> constantPart = TypeConstraint::conjunction(left.constantPart, right.constantPart);
+		if (!constantPart)
+			return fail("combined constraints have no value in common");
+		TypeConstraintTemplate result = left;
+		result.constantPart = std::move(*constantPart);
+		auto mergeTerm = [&](std::optional<ConstraintIntegerTerm> &destination,
+							 const std::optional<ConstraintIntegerTerm> &source, const std::optional<int> &leftConstant,
+							 const std::optional<int> &rightConstant) {
+			if ((destination && (source || rightConstant)) || (source && leftConstant))
+				return false;
+			if (source)
+				destination = source;
+			return true;
+		};
+		if (!mergeTerm(result.numericSize, right.numericSize, left.constantPart.numericSize, right.constantPart.numericSize) ||
+			!mergeTerm(
+				result.pointerDepth, right.pointerDepth, left.constantPart.pointerDepth, right.constantPart.pointerDepth
+			) ||
+			!mergeTerm(result.arraySize, right.arraySize, left.constantPart.arraySize, right.constantPart.arraySize) ||
+			!mergeTerm(result.matrixRows, right.matrixRows, left.constantPart.matrixRows, right.constantPart.matrixRows) ||
+			!mergeTerm(
+				result.matrixColumns, right.matrixColumns, left.constantPart.matrixColumns, right.constantPart.matrixColumns
+			))
+			return fail("combined constraints both determine the same dependent property");
+		if (right.elementConstraint)
+			result.elementConstraint = right.elementConstraint;
+		return constraintValue(std::move(result));
 	}
 
 	SymbolicSignatureValue evaluateArrayIntrinsic(const std::vector<SymbolicSignatureValue> &arguments) {
@@ -317,6 +346,8 @@ struct SymbolicConstraintCompiler {
 			constraint.requiresNumeric = true;
 			return constraintValue(TypeConstraintTemplate::constant(std::move(constraint)));
 		}
+		if (kind == IntrinsicKind::And && arguments.size() == 2 && arguments[0].constraint && arguments[1].constraint)
+			return evaluateConstraintConjunction(*arguments[0].constraint, *arguments[1].constraint);
 		if (kind == IntrinsicKind::Fix) {
 			if (arguments.size() != 1 || !arguments[0].constraint)
 				return fail("fixed constraint requires a type or constraint");
@@ -701,7 +732,8 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 			for (size_t pathIndex = 0; pathIndex < definition->indexedPaths.size(); pathIndex++) {
 				size_t parameterIndex = 0;
 				forEachPatternParameterName(
-					definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+					definition, pathIndex,
+					[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 					const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, parameterIndex++);
 					if (!element) {
 						valid = false;
@@ -713,7 +745,8 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 					VariableReference *resolvedFixedReference = nullptr;
 					if (parameterVariable) {
 						auto resolved = std::ranges::find_if(
-							parameterVariable->declaredTypeConstraintReferences, [](VariableReference *reference) {
+							parameterVariable->declaredTypeConstraintReferences,
+							[](VariableReference *reference) {
 							return reference && !reference->hasDependentTypeConstraint &&
 								   reference->declaredTypeConstraint.isResolved();
 						}

@@ -1,0 +1,9 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are 64 bit floating-point
+
+print 1 / 4 as a line
+set total to 0
+set total to total + 0.5
+print total as a line

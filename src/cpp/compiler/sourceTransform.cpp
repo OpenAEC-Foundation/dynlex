@@ -116,7 +116,7 @@ static bool startsExplicitDefinition(std::string_view text, const SyntaxConfig &
 	std::string_view firstToken = text.substr(0, tokenEnd);
 	return firstToken == syntax.functionName || firstToken == syntax.conversionName || firstToken == syntax.sectionName ||
 		   firstToken == syntax.className || firstToken == syntax.flexName || firstToken == syntax.localName ||
-		   firstToken == syntax.exposedName || firstToken == syntax.implicitName;
+		   firstToken == syntax.exposedName || firstToken == syntax.implicitName || firstToken == syntax.publicName;
 }
 
 class LogicalLineBuilder {

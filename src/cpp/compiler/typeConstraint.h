@@ -23,6 +23,8 @@ struct TypeConstraint {
 	std::optional<int> matrixRows;
 	std::optional<int> matrixColumns;
 	bool requiresNumeric = false;
+	// Accepts signed and unsigned integers; `kind` stays unset because the sign is unspecified.
+	bool requiresInteger = false;
 	bool constrainsClassDefinition = false;
 	ClassDefinition *classDefinition = nullptr;
 	std::optional<int> classInstantiationIndex;
@@ -105,8 +107,8 @@ struct TypeConstraint {
 		if (resolved != other.resolved || kind != other.kind || numericSize != other.numericSize ||
 			pointerDepth != other.pointerDepth || arraySize != other.arraySize || matrixRows != other.matrixRows ||
 			matrixColumns != other.matrixColumns || requiresNumeric != other.requiresNumeric ||
-			constrainsClassDefinition != other.constrainsClassDefinition || classDefinition != other.classDefinition ||
-			classInstantiationIndex != other.classInstantiationIndex ||
+			requiresInteger != other.requiresInteger || constrainsClassDefinition != other.constrainsClassDefinition ||
+			classDefinition != other.classDefinition || classInstantiationIndex != other.classInstantiationIndex ||
 			requiresCompileTimeValue != other.requiresCompileTimeValue ||
 			static_cast<bool>(elementConstraint) != static_cast<bool>(other.elementConstraint))
 			return false;
@@ -115,7 +117,7 @@ struct TypeConstraint {
 
 	bool isStructurallyUnconstrained() const {
 		return !kind && !numericSize && !pointerDepth && !arraySize && !matrixRows && !matrixColumns && !requiresNumeric &&
-			   !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
+			   !requiresInteger && !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
 	}
 
 	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
@@ -136,6 +138,8 @@ struct TypeConstraint {
 		if (matrixColumns && argumentType.arraySize != *matrixColumns)
 			return false;
 		if (requiresNumeric && !argumentType.isNumeric())
+			return false;
+		if (requiresInteger && !argumentType.isInteger())
 			return false;
 		if (constrainsClassDefinition && argumentType.classDefinition != classDefinition)
 			return false;
@@ -177,13 +181,21 @@ struct TypeConstraint {
 			incompatible(matrixRows, other.matrixRows) || incompatible(matrixColumns, other.matrixColumns))
 			return false;
 		auto excludesNumericValues = [](const TypeConstraint &constraint) {
-			const bool hasNonNumericKind =
-				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::UInt &&
-				*constraint.kind != DataType::Kind::Float;
+			const bool hasNonNumericKind = constraint.kind && *constraint.kind != DataType::Kind::Int &&
+										   *constraint.kind != DataType::Kind::UInt &&
+										   *constraint.kind != DataType::Kind::Float;
 			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
 			return hasNonNumericKind || requiresPointer;
 		};
 		if ((requiresNumeric && excludesNumericValues(other)) || (other.requiresNumeric && excludesNumericValues(*this)))
+			return false;
+		auto excludesIntegerValues = [](const TypeConstraint &constraint) {
+			const bool hasNonIntegerKind =
+				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::UInt;
+			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
+			return hasNonIntegerKind || requiresPointer;
+		};
+		if ((requiresInteger && excludesIntegerValues(other)) || (other.requiresInteger && excludesIntegerValues(*this)))
 			return false;
 		if (constrainsClassDefinition && other.constrainsClassDefinition && classDefinition != other.classDefinition)
 			return false;
@@ -218,13 +230,19 @@ struct TypeConstraint {
 			!containsField(matrixRows, other.matrixRows) || !containsField(matrixColumns, other.matrixColumns) ||
 			(requiresCompileTimeValue && !other.requiresCompileTimeValue))
 			return false;
-		const bool otherHasNumericDomain =
-			other.requiresNumeric ||
-			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt ||
-							*other.kind == DataType::Kind::Float) && other.pointerDepth &&
-			 *other.pointerDepth == 0) ||
-			(other.numericSize && other.pointerDepth && *other.pointerDepth == 0);
+		const bool otherHasNumericDomain = other.requiresNumeric || other.requiresInteger ||
+										   (other.kind &&
+											(*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt ||
+											 *other.kind == DataType::Kind::Float) &&
+											other.pointerDepth && *other.pointerDepth == 0) ||
+										   (other.numericSize && other.pointerDepth && *other.pointerDepth == 0);
 		if (requiresNumeric && !otherHasNumericDomain)
+			return false;
+		const bool otherHasIntegerDomain =
+			other.requiresInteger ||
+			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt) && other.pointerDepth &&
+			 *other.pointerDepth == 0);
+		if (requiresInteger && !otherHasIntegerDomain)
 			return false;
 		if (constrainsClassDefinition && (!other.constrainsClassDefinition || classDefinition != other.classDefinition))
 			return false;
@@ -262,6 +280,65 @@ struct TypeConstraint {
 		if (leftContainsRight)
 			return ConstraintSpecificity::RightMoreSpecific;
 		return ConstraintSpecificity::Incomparable;
+	}
+
+	// The constraint accepting exactly the values that both constraints accept, or nothing when no value is accepted by
+	// both.
+	static std::optional<TypeConstraint> conjunction(const TypeConstraint &left, const TypeConstraint &right) {
+		requireCompilerInvariant(left.resolved && right.resolved, "constraint conjunction requires resolved operands");
+		TypeConstraint result = left;
+		auto merge = [](auto &destination, const auto &source) {
+			if (!source)
+				return true;
+			if (destination && *destination != *source)
+				return false;
+			destination = source;
+			return true;
+		};
+		if (!merge(result.kind, right.kind) || !merge(result.numericSize, right.numericSize) ||
+			!merge(result.pointerDepth, right.pointerDepth) || !merge(result.arraySize, right.arraySize) ||
+			!merge(result.matrixRows, right.matrixRows) || !merge(result.matrixColumns, right.matrixColumns) ||
+			!merge(result.classInstantiationIndex, right.classInstantiationIndex))
+			return std::nullopt;
+		if (right.constrainsClassDefinition) {
+			if (result.constrainsClassDefinition && result.classDefinition != right.classDefinition)
+				return std::nullopt;
+			result.constrainsClassDefinition = true;
+			result.classDefinition = right.classDefinition;
+		}
+		if (right.elementConstraint) {
+			if (result.elementConstraint) {
+				std::optional<TypeConstraint> element = conjunction(*result.elementConstraint, *right.elementConstraint);
+				if (!element)
+					return std::nullopt;
+				result.elementConstraint = std::make_shared<TypeConstraint>(std::move(*element));
+			} else {
+				result.elementConstraint = right.elementConstraint;
+			}
+		}
+		result.requiresNumeric = result.requiresNumeric || right.requiresNumeric;
+		result.requiresInteger = result.requiresInteger || right.requiresInteger;
+		result.requiresCompileTimeValue = result.requiresCompileTimeValue || right.requiresCompileTimeValue;
+
+		const bool integerKind = result.kind && (*result.kind == DataType::Kind::Int || *result.kind == DataType::Kind::UInt);
+		const bool numericKind = integerKind || (result.kind && *result.kind == DataType::Kind::Float);
+		const bool requiresPointer = result.pointerDepth && *result.pointerDepth != 0;
+		if (result.requiresInteger) {
+			if ((result.kind && !integerKind) || requiresPointer)
+				return std::nullopt;
+			if (integerKind)
+				result.requiresInteger = false;
+		}
+		if (result.requiresNumeric) {
+			if ((result.kind && !numericKind) || requiresPointer)
+				return std::nullopt;
+			if (numericKind || result.requiresInteger)
+				result.requiresNumeric = false;
+		}
+		if (result.kind && *result.kind == DataType::Kind::Float && result.numericSize && *result.numericSize != 4 &&
+			*result.numericSize != 8)
+			return std::nullopt;
+		return result;
 	}
 
 	std::optional<DataType> exactValueType() const {
@@ -316,6 +393,7 @@ struct TypeConstraint {
 		appendOptional("mc", matrixColumns);
 		appendOptional("ci", classInstantiationIndex);
 		result += "|num" + std::to_string(requiresNumeric);
+		result += "|int" + std::to_string(requiresInteger);
 		result += "|dc" + std::to_string(constrainsClassDefinition);
 		result += "|cd" + std::to_string(reinterpret_cast<uintptr_t>(classDefinition));
 		result += "|ct" + std::to_string(requiresCompileTimeValue);
@@ -331,22 +409,22 @@ struct TypeConstraint {
 		return resolved == other.resolved && kind == other.kind && numericSize == other.numericSize &&
 			   pointerDepth == other.pointerDepth && arraySize == other.arraySize && matrixRows == other.matrixRows &&
 			   matrixColumns == other.matrixColumns && requiresNumeric == other.requiresNumeric &&
-			   constrainsClassDefinition == other.constrainsClassDefinition && classDefinition == other.classDefinition &&
-			   classInstantiationIndex == other.classInstantiationIndex && sameElement &&
-			   (!includeCompileTimeRequirement || requiresCompileTimeValue == other.requiresCompileTimeValue);
+			   requiresInteger == other.requiresInteger && constrainsClassDefinition == other.constrainsClassDefinition &&
+			   classDefinition == other.classDefinition && classInstantiationIndex == other.classInstantiationIndex &&
+			   sameElement && (!includeCompileTimeRequirement || requiresCompileTimeValue == other.requiresCompileTimeValue);
 	}
 
 	bool operator==(const TypeConstraint &other) const { return samePayload(other, true); }
 	bool operator!=(const TypeConstraint &other) const { return !(*this == other); }
 	bool operator<(const TypeConstraint &other) const {
 		auto leftScalars = std::tie(
-			resolved, kind, numericSize, pointerDepth, arraySize, matrixRows, matrixColumns, requiresNumeric,
+			resolved, kind, numericSize, pointerDepth, arraySize, matrixRows, matrixColumns, requiresNumeric, requiresInteger,
 			constrainsClassDefinition, classInstantiationIndex, requiresCompileTimeValue
 		);
 		auto rightScalars = std::tie(
 			other.resolved, other.kind, other.numericSize, other.pointerDepth, other.arraySize, other.matrixRows,
-			other.matrixColumns, other.requiresNumeric, other.constrainsClassDefinition, other.classInstantiationIndex,
-			other.requiresCompileTimeValue
+			other.matrixColumns, other.requiresNumeric, other.requiresInteger, other.constrainsClassDefinition,
+			other.classInstantiationIndex, other.requiresCompileTimeValue
 		);
 		if (leftScalars != rightScalars)
 			return leftScalars < rightScalars;

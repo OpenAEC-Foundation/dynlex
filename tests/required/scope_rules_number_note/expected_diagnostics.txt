@@ -1,0 +1,3 @@
+tests/required/scope_rules_number_note/main.dl:1-11: Error: No overload matches call 'show count' for argument types [a 64-bit floating-point number]. Available overloads: 'show {integer:value}'
+  note: while inferring call 'show count' with arguments [a 64-bit floating-point number] -> an unresolved value tests/required/scope_rules_number_note/main.dl:1-11
+  note: 'numbers are floating-point' gives these numbers their type tests/required/scope_rules_number_note/main.dl:5-31
