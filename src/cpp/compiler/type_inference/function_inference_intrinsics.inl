@@ -128,9 +128,8 @@ case Expression::Kind::IntrinsicCall: {
 						} else if (!context.currentInstantiation->returnPointerStorageParameterName) {
 							context.currentInstantiation->returnPointerStorageParameterName =
 								std::move(pointerStorageParameter);
-						} else if (
-							*context.currentInstantiation->returnPointerStorageParameterName != *pointerStorageParameter
-						) {
+						} else if (*context.currentInstantiation->returnPointerStorageParameterName !=
+								   *pointerStorageParameter) {
 							context.currentInstantiation->returnPointerStorageParameterName.reset();
 							context.currentInstantiation->returnPointerStorageAmbiguous = true;
 						}
@@ -220,8 +219,7 @@ case Expression::Kind::IntrinsicCall: {
 				DataType elementType = pointerType.dereferenced();
 				if (!elementType.isConcrete()) {
 					setConfiguredTypeFailure(
-						expr->range, "destroy at requires concrete pointee", "message",
-						{{"type", typeToUserName(elementType)}}
+						expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
 					);
 					break;
 				}
@@ -547,6 +545,14 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				DataType valueType = typeArgType.toReferencedType();
+				if (!typeArgType.toReferencedType().isConcrete() && context.currentInstantiation) {
+					// A later write in the same inference chain can refine an
+					// unspecified class layout. Preserve the known result type and
+					// revisit this body after that refinement reaches the caller.
+					observeUnresolvedRecursiveDependency(context);
+					expr->type = {DataType::Kind::Int, 8};
+					break;
+				}
 				if (!valueType.isConcrete() || !valueType.isRuntimeValueType()) {
 					if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0) {
 						auto unknownMember =
@@ -562,21 +568,6 @@ case Expression::Kind::IntrinsicCall: {
 						}
 					}
 					setConfiguredTypeFailure(expr->range, "size of type invalid");
-					break;
-				}
-				if (!typeArgType.toReferencedType().isConcrete() && context.currentInstantiation) {
-					// A later write in the same inference chain can refine an
-					// unspecified class layout. Preserve the known result type and
-					// revisit this body after that refinement reaches the caller.
-					observeUnresolvedRecursiveDependency(context);
-					expr->type = {DataType::Kind::Int, 8};
-					break;
-				}
-				if (!typeArgType.toReferencedType().isConcrete()) {
-					setConfiguredTypeFailure(
-						expr->range, "size of incomplete type", "message",
-						{{"type", typeToUserName(typeArgType.toReferencedType())}}
-					);
 					break;
 				}
 				expr->type = {DataType::Kind::Int, 8};
