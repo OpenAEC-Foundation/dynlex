@@ -6,7 +6,7 @@
 
 template <typename Storage> class CopyOnWrite {
   public:
-	CopyOnWrite() : storage(std::make_shared<Storage>()) {}
+	CopyOnWrite() : storage(emptyStorage()) {}
 	explicit CopyOnWrite(Storage initialStorage) : storage(std::make_shared<Storage>(std::move(initialStorage))) {}
 
 	const Storage &read() const {
@@ -23,7 +23,7 @@ template <typename Storage> class CopyOnWrite {
 
 	void reset() {
 		requireCompilerInvariant(storage != nullptr, "reset moved-from copy-on-write state");
-		storage = std::make_shared<Storage>();
+		storage = emptyStorage();
 	}
 
 	bool operator==(const CopyOnWrite &other) const {
@@ -33,5 +33,10 @@ template <typename Storage> class CopyOnWrite {
 	}
 
   private:
+	static const std::shared_ptr<Storage> &emptyStorage() {
+		static const auto empty = std::make_shared<Storage>();
+		return empty;
+	}
+
 	std::shared_ptr<Storage> storage;
 };

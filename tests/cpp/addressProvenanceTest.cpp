@@ -15,6 +15,28 @@ void expect(bool condition, std::string_view message) {
 	std::exit(1);
 }
 
+void checkSectionOutcomeIsolation() {
+	ParseContext context;
+	Expression source;
+	source.sectionOutcome.write().kind = Expression::SectionOutcome::Kind::Loop;
+	source.sectionOutcome.write().conditionValue = true;
+	source.sectionOutcome.write().conditionType = DataType{DataType::Kind::Bool};
+	auto snapshot = source.sectionOutcome;
+	Expression *clone = context.cloneExpressionTree(&source, true);
+	clone->sectionOutcome.write().conditionValue = false;
+	expect(std::get<bool>(source.sectionOutcome.read().conditionValue), "clone changed its source loop condition");
+	expect(!std::get<bool>(clone->sectionOutcome.read().conditionValue), "clone did not retain its own loop condition");
+	expect(clone->sectionOutcome.read().conditionType.kind == DataType::Kind::Bool, "clone lost its condition type");
+	source.sectionOutcome.reset();
+	expect(std::get<bool>(snapshot.read().conditionValue), "reset changed a retained control-flow snapshot");
+	expect(source.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "reset retained a loop outcome");
+	Expression ordinary;
+	ordinary.sectionOutcome.write().kind = Expression::SectionOutcome::Kind::FunctionReturn;
+	Expression fresh;
+	expect(fresh.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "write changed another default outcome");
+	expect(source.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "write changed a reset outcome");
+}
+
 void checkCompilation(std::string_view body, std::string_view diagnostic = {}) {
 	std::string source = R"(
 integer means: @intrinsic("type", "int")
@@ -114,6 +136,7 @@ function probe condition:
 } // namespace
 
 int main() {
+	checkSectionOutcomeIsolation();
 	constexpr std::string_view nullDiagnostic = "cannot dereference a null pointer";
 	checkCompilation("@intrinsic(\"discard\", @intrinsic(\"dereference\", null pointer))\n", nullDiagnostic);
 	checkCompilation(

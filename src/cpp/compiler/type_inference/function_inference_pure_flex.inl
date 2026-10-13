@@ -100,7 +100,7 @@ static PureExpressionExecutionResult executePureFlexCall(
 		return !result.returned;
 	});
 
-	if (bodyFrameIndex && !result.returned && result.sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
+	if (bodyFrameIndex && !result.returned && result.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None) {
 		PureSectionFlexBodyExecutionFrame &bodyFrame = state.sectionFlexBodyFrames[*bodyFrameIndex];
 		if (!bodyFrame.bodyExecuted) {
 			requireCompilerInvariant(bodyFrame.instantiatedBody != nullptr, "pure section flex fallback body was not inferred");
@@ -115,14 +115,14 @@ static PureExpressionExecutionResult executePureFlexCall(
 				executePureSection(state, frame, bodyFrame.bodySection, bodyFrame.instantiatedBody, nullptr, callerBindings);
 		}
 	}
-	if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+	if (expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::FunctionReturn) {
 		requireCompilerInvariant(result.returned, "pure return expansion did not return");
-		result.sectionOutcome = {};
-	} else if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
-		result.sectionOutcome = {};
+		result.sectionOutcome.reset();
+	} else if (expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None) {
+		result.sectionOutcome.reset();
 	} else {
 		requireCompilerInvariant(
-			result.sectionOutcome.kind == expr->sectionOutcome.kind,
+			result.sectionOutcome.read().kind == expr->sectionOutcome.read().kind,
 			"pure flex execution produced a different section outcome than inference"
 		);
 	}

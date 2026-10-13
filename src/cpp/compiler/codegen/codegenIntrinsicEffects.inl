@@ -56,9 +56,10 @@ if (kind == IntrinsicKind::LoopWhile) {
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("loop while condition must be boolean after type inference");
 	emitExecutionTrace(context, bodyFrame.openingExpression->range, condValue);
-	const bool *knownCondition = bodyFrame.openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop
-									 ? std::get_if<bool>(&bodyFrame.openingExpression->sectionOutcome.conditionValue)
-									 : nullptr;
+	const bool *knownCondition =
+		bodyFrame.openingExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop
+			? std::get_if<bool>(&bodyFrame.openingExpression->sectionOutcome.read().conditionValue)
+			: nullptr;
 	if (knownCondition) {
 		builder.CreateBr(*knownCondition ? bodyBlock : exitBlock);
 	} else {

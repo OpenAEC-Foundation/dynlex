@@ -77,7 +77,7 @@ static bool inferSectionFlexCallerBodyFrame(
 	);
 	context.sectionFlexBodyFrames[targetFrameIndex].bodyFallsThrough = callerBodyFallsThrough;
 	if (inferred && executeBodyCallSite)
-		executeBodyCallSite->sectionOutcome.kind =
+		executeBodyCallSite->sectionOutcome.write().kind =
 			callerBodyFallsThrough ? Expression::SectionOutcome::Kind::None : Expression::SectionOutcome::Kind::FunctionReturn;
 	requireCompilerInvariant(
 		context.activeFlexDefinitionStack.size() == activeExpansionKeyCount &&

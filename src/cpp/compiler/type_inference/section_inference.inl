@@ -108,7 +108,7 @@ static bool inferSectionLineRange(
 		return true;
 	};
 
-	if (openingExpression && openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
+	if (openingExpression && openingExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch) {
 		struct SwitchBranch {
 			size_t lineIndex;
 			std::optional<std::int64_t> value;
@@ -120,7 +120,7 @@ static bool inferSectionLineRange(
 		std::vector<SwitchBranch> branches;
 		std::optional<size_t> defaultBranch;
 		std::unordered_set<std::int64_t> caseValues;
-		DataType selectorType = openingExpression->sectionOutcome.conditionType;
+		DataType selectorType = openingExpression->sectionOutcome.read().conditionType;
 		requireCompilerInvariant(selectorType.isInteger(), "inferred switch outcome has no integer selector type");
 		for (size_t index = 0; index < section->codeLines.size(); index++) {
 			CodeLine *line = section->codeLines[index];
@@ -128,7 +128,7 @@ static bool inferSectionLineRange(
 			if (!inferLineExpression(line, lineExpression))
 				return false;
 			Expression::SectionOutcome::Kind kind =
-				lineExpression ? lineExpression->sectionOutcome.kind : Expression::SectionOutcome::Kind::None;
+				lineExpression ? lineExpression->sectionOutcome.read().kind : Expression::SectionOutcome::Kind::None;
 			if (kind != Expression::SectionOutcome::Kind::Case && kind != Expression::SectionOutcome::Kind::DefaultCase) {
 				context.fail(Diagnostic(
 					context.parseContext, Diagnostic::Level::Error, "switch body requires case",
@@ -139,7 +139,7 @@ static bool inferSectionLineRange(
 			bool isDefault = kind == Expression::SectionOutcome::Kind::DefaultCase;
 			std::optional<std::int64_t> caseValue;
 			if (!isDefault) {
-				caseValue = getCompileTimeIntegerValue(lineExpression->sectionOutcome.conditionValue);
+				caseValue = getCompileTimeIntegerValue(lineExpression->sectionOutcome.read().conditionValue);
 				if (!caseValue) {
 					context.fail(Diagnostic(
 						context.parseContext, Diagnostic::Level::Error, "case value must be constant integer",
@@ -165,7 +165,8 @@ static bool inferSectionLineRange(
 			branches.push_back({index, caseValue, isDefault});
 		}
 
-		std::optional<std::int64_t> selector = getCompileTimeIntegerValue(openingExpression->sectionOutcome.conditionValue);
+		std::optional<std::int64_t> selector =
+			getCompileTimeIntegerValue(openingExpression->sectionOutcome.read().conditionValue);
 		if (selector)
 			selector = normalizeSignedIntegerToType(*selector, selectorType);
 		bool selectionKnown = selector.has_value();
@@ -235,12 +236,12 @@ static bool inferSectionLineRange(
 		auto subjectBeforeLine = context.currentSubject;
 		if (!inferLineExpression(line, lineExpression))
 			return false;
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::FunctionReturn) {
 			lineExpression->executionFallsThrough = false;
 			sectionFallsThrough = false;
 			break;
 		}
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Conditional) {
 			auto constantsBeforeChain = std::move(constantsBeforeLine);
 			auto addressesBeforeChain = std::move(addressesBeforeLine);
 			auto subjectBeforeChain = subjectBeforeLine;
@@ -264,7 +265,7 @@ static bool inferSectionLineRange(
 					if (!inferLineExpression(branchLine, branchExpression))
 						return false;
 				}
-				Expression::SectionOutcome outcome = branchExpression->sectionOutcome;
+				Expression::SectionOutcome outcome = branchExpression->sectionOutcome.read();
 				requireCompilerInvariant(
 					(k == i && outcome.kind == Expression::SectionOutcome::Kind::Conditional) ||
 						(k > i && (outcome.kind == Expression::SectionOutcome::Kind::AlternativeConditional ||
@@ -355,8 +356,8 @@ static bool inferSectionLineRange(
 			i = chainEnd;
 			continue;
 		}
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop) {
-			const bool *condition = std::get_if<bool>(&lineExpression->sectionOutcome.conditionValue);
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop) {
+			const bool *condition = std::get_if<bool>(&lineExpression->sectionOutcome.read().conditionValue);
 			if (!line->sectionOpening) {
 				sectionFallsThrough = true;
 				if ((!condition || *condition) && i + 1 < section->codeLines.size() &&
@@ -387,15 +388,15 @@ static bool inferSectionLineRange(
 			return false;
 		if (lineExpression)
 			lineExpression->executionFallsThrough = openedSectionFallsThrough;
-		if ((!lineExpression || lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::None ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) &&
+		if ((!lineExpression || lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch) &&
 			!openedSectionFallsThrough) {
 			sectionFallsThrough = false;
 			break;
 		}
 	}
 	if (loopSection) {
-		const bool *entryCondition = std::get_if<bool>(&openingExpression->sectionOutcome.conditionValue);
+		const bool *entryCondition = std::get_if<bool>(&openingExpression->sectionOutcome.read().conditionValue);
 		bool firstIterationGuaranteed = entryCondition && *entryCondition;
 		if (!sectionFallsThrough) {
 			if (!firstIterationGuaranteed) {
@@ -460,7 +461,7 @@ static bool inferSectionLineRange(
 				}
 			}
 			if (firstIterationGuaranteed && sectionFallsThrough)
-				openingExpression->sectionOutcome.conditionValue = {};
+				openingExpression->sectionOutcome.write().conditionValue = {};
 		}
 	}
 	if (fallsThrough)
