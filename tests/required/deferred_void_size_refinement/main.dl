@@ -1,0 +1,13 @@
+import lib/std.dl
+import lib/list.dl
+
+class:
+    patterns:
+        box
+    members:
+        payload
+
+set values to an empty list of box
+append (@intrinsic("construct", box, 7)) to values
+print (the length of values) as a line
+free values

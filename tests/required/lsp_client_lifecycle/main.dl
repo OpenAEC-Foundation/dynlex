@@ -37,7 +37,10 @@ print whether (document's text = "final") as a line
 set published to the result of pumping one LSP message using client waiting up to 2000 milliseconds
 print whether published succeeded as a line
 set {first error} to take the LSP standard error from client
-print whether (first error = "first-server-stderr\n") as a line
+# Stdout and stderr readers are independent. A received message need not mean
+# the stderr reader has published its preceding bytes yet. Shutdown joins both;
+# the combined capture below must still contain every byte exactly once.
+print whether ((first error = "first-server-stderr\n") or (first error = "")) as a line
 print whether (the LSP standard error from client = "") as a line
 set report to the LSP diagnostics for uri "file:///workspace/main.dl" in client
 print whether report was found as a line
@@ -63,7 +66,7 @@ print whether closed succeeded as a line
 set stopped to the result of shutting down client waiting up to 2000 milliseconds
 print whether stopped succeeded as a line
 print whether (client's lifecycle = the LSP stopped lifecycle) as a line
-print whether (the LSP standard error from client = "final-server-stderr\n") as a line
+print whether ((first error + (the LSP standard error from client)) = "first-server-stderr\nfinal-server-stderr\n") as a line
 
 free capabilities
 free client

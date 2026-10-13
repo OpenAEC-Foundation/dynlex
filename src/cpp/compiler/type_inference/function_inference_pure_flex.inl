@@ -12,6 +12,45 @@ struct ScopedPureActiveBody {
 	}
 };
 
+struct ScopedPureFlexLocalValues {
+	struct Entry {
+		VariableStorageKey storage;
+		std::optional<CompileTimeValue> previousValue;
+	};
+
+	PureExecutionFrame &frame;
+	std::vector<Entry> entries;
+
+	void enterBody(InstantiatedSectionBody *body) {
+		requireCompilerInvariant(body && body->sourceSection, "pure local scope has no source section");
+		for (const auto &[name, definition] : body->sourceSection->variableDefinitions) {
+			(void)name;
+			VariableStorageKey storage = variableStorageKey(definition, body);
+			auto previous = frame.localValues.find(storage);
+			entries.push_back(
+				{storage,
+				 previous == frame.localValues.end() ? std::nullopt : std::optional<CompileTimeValue>(previous->second)}
+			);
+			frame.localValues[storage] = CompileTimeValue{};
+		}
+		for (const auto &child : body->childBodies)
+			enterBody(child.get());
+	}
+
+	ScopedPureFlexLocalValues(PureExecutionFrame &executionFrame, InstantiatedSectionBody *body) : frame(executionFrame) {
+		enterBody(body);
+	}
+
+	~ScopedPureFlexLocalValues() {
+		for (Entry &entry : entries) {
+			if (entry.previousValue)
+				frame.localValues[entry.storage] = std::move(*entry.previousValue);
+			else
+				frame.localValues.erase(entry.storage);
+		}
+	}
+};
+
 struct ScopedPureFlexExecution {
 	PureExecutionState &state;
 	size_t definitionCount;
@@ -45,12 +84,16 @@ executePureSectionFlexCallerBody(Expression *executeBodyExpression, PureExecutio
 		&executionSection
 	);
 	requireCompilerInvariant(targetFrame != nullptr, "pure execute body has no matching section flex body");
-	requireCompilerInvariant(!targetFrame->bodyExecuted, "pure execute body ran twice for one section flex call");
+	// Inference validates one static transfer site. Re-entering that site in a
+	// loop is valid, just as native execution revisits the once-emitted body.
+	requireCompilerInvariant(
+		targetFrame->bodyExecution == Expression::SectionBodyExecution::Explicit,
+		"pure execute body does not own an inferred explicit transfer"
+	);
 	requireCompilerInvariant(
 		targetFrame->bodySection && targetFrame->instantiatedBody,
 		"pure execute body found a section flex frame without an inferred caller body"
 	);
-	targetFrame->bodyExecuted = true;
 	Section *bodySection = targetFrame->bodySection;
 	InstantiatedSectionBody *instantiatedBody = targetFrame->instantiatedBody;
 	BindingFrameStack callerBindings = targetFrame->callerBindings;
@@ -77,6 +120,7 @@ static PureExpressionExecutionResult executePureFlexCall(
 
 	Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 	ScopedPureFlexExecution flexScope(state, matchedSection, callSiteSection);
+	ScopedPureFlexLocalValues localScope(frame, expr->inferredFlexBody.get());
 	std::optional<size_t> bodyFrameIndex;
 	if (matchedSection->type == SectionType::Section) {
 		Section *bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
@@ -85,7 +129,8 @@ static PureExpressionExecutionResult executePureFlexCall(
 			InstantiatedSectionBody *instantiatedBody = state.activeBodies.back()->bodyForChild(bodySection);
 			bodyFrameIndex = state.sectionFlexBodyFrames.size();
 			state.sectionFlexBodyFrames.push_back(
-				{matchedSection, expr->inferredFlexBody.get(), bodySection, instantiatedBody, bindingFrameStack, false}
+				{matchedSection, expr->inferredFlexBody.get(), bodySection, instantiatedBody, bindingFrameStack,
+				 expr->sectionBodyExecution}
 			);
 		}
 	}
@@ -100,23 +145,26 @@ static PureExpressionExecutionResult executePureFlexCall(
 		return !result.returned;
 	});
 
-	if (bodyFrameIndex && !result.returned && result.sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
+	if (bodyFrameIndex && !result.returned && expr->sectionBodyExecution == Expression::SectionBodyExecution::Implicit) {
 		PureSectionFlexBodyExecutionFrame &bodyFrame = state.sectionFlexBodyFrames[*bodyFrameIndex];
-		if (!bodyFrame.bodyExecuted) {
-			requireCompilerInvariant(bodyFrame.instantiatedBody != nullptr, "pure section flex fallback body was not inferred");
-			bodyFrame.bodyExecuted = true;
-			BindingFrameStack callerBindings = bodyFrame.callerBindings;
-			Section *executionSection =
-				expr->inferredFlexExpansion->range.line ? expr->inferredFlexExpansion->range.line->section : matchedSection;
-			pushSectionFlexCallerVariableBindings(
-				callerBindings, bodyFrame.definitionSection, bodyFrame.definitionBody, executionSection, bodyFrame.bodySection
-			);
-			result =
-				executePureSection(state, frame, bodyFrame.bodySection, bodyFrame.instantiatedBody, nullptr, callerBindings);
-		}
+		requireCompilerInvariant(
+			result.sectionOutcome.kind == Expression::SectionOutcome::Kind::None,
+			"pure implicit caller body follows an unexpected control-flow outcome"
+		);
+		requireCompilerInvariant(bodyFrame.instantiatedBody != nullptr, "pure implicit caller body was not inferred");
+		BindingFrameStack callerBindings = bodyFrame.callerBindings;
+		Section *executionSection =
+			expr->inferredFlexExpansion->range.line ? expr->inferredFlexExpansion->range.line->section : matchedSection;
+		pushSectionFlexCallerVariableBindings(
+			callerBindings, bodyFrame.definitionSection, bodyFrame.definitionBody, executionSection, bodyFrame.bodySection
+		);
+		result = executePureSection(state, frame, bodyFrame.bodySection, bodyFrame.instantiatedBody, nullptr, callerBindings);
 	}
-	if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+	if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn)
 		requireCompilerInvariant(result.returned, "pure return expansion did not return");
+	// A caller-body return exits a loop or conditional before its normal header
+	// outcome is produced. Preserve that transfer independently of the header.
+	if (result.returned) {
 		result.sectionOutcome = {};
 	} else if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
 		result.sectionOutcome = {};

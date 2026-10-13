@@ -1,0 +1,4 @@
+arc_fit2: borrowed inputs, returned copies, deep clone, list retention and reset
+arc_fit2: seven refusal paths retain no partial output and survive copying
+arc_fit2: retained fit survives regeneration; a reset result can be cloned
+

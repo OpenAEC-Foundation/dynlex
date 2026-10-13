@@ -1,0 +1,3 @@
+tests/required/sizeof_incomplete_class_after_construct/main.dl:79-110: Error: size of requires a concrete type; 'an envelope' has no complete layout
+  note: while inferring intrinsic 'size of' in '@intrinsic("size of", envelope)' with arguments [a type] -> an unresolved value tests/required/sizeof_incomplete_class_after_construct/main.dl:79-110
+  note: while inferring intrinsic 'call' in '@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", @intrinsic("size of", envelope))' with arguments [a pointer to a byte, a pointer to a byte, a type, a pointer to a byte, an unresolved value] -> an unresolved value tests/required/sizeof_incomplete_class_after_construct/main.dl:1-111

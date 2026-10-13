@@ -1,0 +1,4 @@
+two_points_remain_one_straight_span
+curved_chain_keeps_endpoints_and_returns_finite_arcs
+invalid_direction_rejects_the_entire_fit
+

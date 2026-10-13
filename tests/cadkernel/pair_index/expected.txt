@@ -1,0 +1,4 @@
+wide ordered keys retain all entries
+shared index handles retain owned slots
+signed key extremes and local lifetime
+collision chains and full-table misses terminate

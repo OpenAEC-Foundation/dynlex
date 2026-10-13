@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set storage to the checked allocation from (0 as a pointer) resized to 2147483647 items of (a 64 bit floating-point number array of 1073741824 items)
+@intrinsic("call", "libc", "free", nothing, storage)

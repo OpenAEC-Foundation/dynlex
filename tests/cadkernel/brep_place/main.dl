@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_place/checks.dl
+import tests/cadkernel/brep_place/oracles.dl
+
+set turn to a cad placement with axes (placement point [0.0,1.0,0.0]), (placement point [-1.0,0.0,0.0]) and (the cad z axis) at (the cad zero vector3)
+set made to the cad cuboid at (the cad zero vector3) with size (placement point [10.0,4.0,6.0])
+set moved to the cad transformed (made's value) by turn
+check placement (moved's valid)
+check placement solid (moved's value)
+set bounds to the cad bounds of (moved's value)
+check placement (bounds's valid)
+check placement scalar (bounds's value's high's y) near 10.0
+check placement scalar (bounds's value's low's x) near -4.0
+set size to the cad size of (bounds's value)
+check placement scalar (size's x * size's y * size's z) near 240.0
+check placement scalar (placement boundary volume of (moved's value)) near 240.0
+print "a_turn_moves_a_body_without_changing_its_size" as a line
+
+set doubled to a cad placement with axes (placement point [2.0,0.0,0.0]), (placement point [0.0,2.0,0.0]) and (placement point [0.0,0.0,2.0]) at (the cad zero vector3)
+set round to the cad cylinder body at (the cad zero vector3) with radius 3.0 and height 6.0
+set grown to the cad transformed (round's value) by doubled
+check placement (grown's valid)
+check placement solid (grown's value)
+check placement ((the cad worst vertex gap of (grown's value)) < 1e-9)
+set surfaces to the cad keys of (grown's value's surfaces)
+loop index from 0 to the length of surfaces:
+    set surface to the cad node pointer for (the item at index in surfaces) in (grown's value's surfaces)
+    if surface's kind = 1:
+        check placement scalar (surface's cylinder's radius) near 6.0
+free surfaces
+set bounds to the cad bounds of (grown's value)
+check placement scalar (bounds's value's high's z - bounds's value's low's z) near 12.0
+set volume to placement boundary volume of (grown's value)
+set expected to (3.141592653589793 * 36.0) * 12.0
+check placement ((volume > (0.98 * expected)) and (volume <= expected))
+print "a_scale_takes_the_radii_with_it" as a line
+
+set mirror to a cad placement with axes (placement point [-1.0,0.0,0.0]), (the cad y axis) and (the cad z axis) at (the cad zero vector3)
+check placement (mirror reflects cad orientation)
+set ball to the cad sphere body at (placement point [2.0,0.0,0.0]) with radius 3.0
+set mirrored to the cad transformed (ball's value) by mirror
+check placement (mirrored's valid)
+check placement solid (mirrored's value)
+set faces to the cad face keys of (mirrored's value)
+set face to the cad node pointer for (the item at 0 in faces) in (mirrored's value)
+set sphere to the cad node pointer for (face's surface) in (mirrored's value)
+set point to the cad point on (@intrinsic("dereference", sphere)) at parameters 0.0 and 0.0
+set normal to the cad normal of (@intrinsic("dereference", sphere)) at parameters 0.0 and 0.0
+check placement (normal's valid)
+check placement ((the cad dot of (normal's value) and (the cad difference of point and (sphere's sphere's frame's origin))) > 0.0)
+check placement (face's forward)
+free faces
+set bounds to the cad bounds of (mirrored's value)
+check placement scalar (bounds's value's high's x) near 1.0
+set volume to placement boundary volume of (mirrored's value)
+set expected to ((4.0 / 3.0) * 3.141592653589793) * 27.0
+check placement (volume > (0.98 * expected))
+print "a_mirror_comes_back_the_right_way_out" as a line
+
+set squash to a cad placement with axes (placement point [2.0,0.0,0.0]), (the cad y axis) and (the cad z axis) at (the cad zero vector3)
+check placement (((the cad transformed (round's value) by squash)'s valid) = false)
+set shear to a cad placement with axes (the cad x axis), (the cad x axis) and (the cad z axis) at (the cad zero vector3)
+check placement (((the cad transformed (round's value) by shear)'s valid) = false)
+print "a_squash_is_refused_rather_than_rounded_off" as a line
+
+set little to the cad cuboid at (the cad zero vector3) with size (placement point [0.5,0.5,0.5])
+set survey to the cad transformed (little's value) by (a cad placement at (placement point [512345.678,4512345.678,91.5]))
+check placement (survey's valid)
+check placement solid (survey's value)
+check placement ((the cad worst vertex gap of (survey's value)) < 1e-6)
+set bounds to the cad bounds of (survey's value)
+set size to the cad size of (bounds's value)
+check placement scalar (size's x * size's y * size's z) near 0.125
+check placement ((the absolute value of ((placement boundary volume of (survey's value)) - 0.125)) < 1e-6)
+print "a_body_moved_to_survey_coordinates_is_the_same_solid" as a line
+
+set edges to the cad edge keys of (made's value)
+loop index from 0 to the length of edges:
+    set points to the cad edge points of (the item at index in edges) in (made's value) within 0.05
+    check placement (points's valid)
+    check placement ((the length of points's value's values) = 2)
+free edges
+set round to the cad cylinder body at (the cad zero vector3) with radius 5.0 and height 10.0
+check placement ((placement maximum samples of (round's value) with sag 0.05) > 20)
+set polylines to the cad edge polylines of (round's value) within 0.05
+loop index from 0 to the length of (polylines's values):
+    set points to the item at index in (polylines's values)
+    loop cursor from 0 to the length of (points's values):
+        set point to the item at cursor in (points's values)
+        check placement scalar (the cad length of (a cad vector2 with x (point's x) and y (point's y))) near 5.0
+print "a_straight_edge_needs_only_its_ends_and_a_round_one_does_not" as a line
+check placement ((placement maximum samples of (round's value) with sag 0.001) > (placement maximum samples of (round's value) with sag 0.1))
+print "a_finer_tolerance_asks_for_more_points" as a line

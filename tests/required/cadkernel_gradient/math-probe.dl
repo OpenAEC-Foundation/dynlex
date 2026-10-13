@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native libm characterization for the gradient differential's angle input.
+import lib/std.dl
+
+set arguments to the command line arguments
+set value to @intrinsic("call", "libc", "atof", a 64 bit floating-point number, the item at 0 in arguments' data)
+set standardCosine to the cosine of value
+set externalCosine to @intrinsic("call", "libc", "cos", a 64 bit floating-point number, value)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 3, "%.17e\n%.17e\n%.17e\n", value, standardCosine, externalCosine)

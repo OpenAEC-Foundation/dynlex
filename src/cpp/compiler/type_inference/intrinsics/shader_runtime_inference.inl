@@ -32,6 +32,7 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			}
 			if (context.parseContext.options.emitSPIRV) {
 				bool stageProvidesInput =
+					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
 					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
 				if (!stageProvidesInput) {
 					failWithDetail("shader input unavailable");
@@ -55,7 +56,8 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 		if (context.parseContext.options.emitSPIRV &&
 			(kind == IntrinsicKind::ShaderInterpolantInput || kind == IntrinsicKind::ShaderInterpolantOutput)) {
 			const bool isVertex = context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex;
-			const bool available = (kind == IntrinsicKind::ShaderInterpolantOutput) == isVertex;
+			const bool available = context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
+								   (kind == IntrinsicKind::ShaderInterpolantOutput) == isVertex;
 			if (!available) {
 				failWithDetail(
 					kind == IntrinsicKind::ShaderInterpolantInput ? "shader interpolant input unavailable"
@@ -64,6 +66,17 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 				return false;
 			}
 		}
+	}
+	if (context.parseContext.options.emitSPIRV &&
+		context.parseContext.options.shaderStage == ParseContext::ShaderStage::Compute &&
+		(kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderUniform)) {
+		std::string detail = renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable for stage", "message",
+			{{"operation", expr->intrinsicName}}
+		);
+		context.setTypeFailure(detail);
+		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
+		return false;
 	}
 	if (!context.parseContext.options.emitSPIRV) {
 		std::string detail = renderConfiguredMessage(

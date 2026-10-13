@@ -8,19 +8,24 @@
 #include "patternTreeNode.h"
 #include "section.h"
 #include "syntaxConfig.h"
+#include "variableStorage.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <list>
+#include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stack>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace llvm {
+class AllocaInst;
 class LLVMContext;
 class Module;
 class IRBuilderBase;
@@ -62,7 +67,7 @@ struct ParseContext {
 		Section *ownerSection{};
 	};
 
-	enum class ShaderStage { Fragment, Vertex };
+	enum class ShaderStage { Fragment, Vertex, Compute };
 	enum class OptimizationSize { None, Size, Smallest };
 	enum class FloatingPointContract { Off, Fast };
 
@@ -70,6 +75,9 @@ struct ParseContext {
 	// definition-to-reference index. Indexed pattern elements may be changed
 	// only through this transaction.
 	std::function<void(PatternDefinition &, const std::function<void()> &)> indexedPatternDefinitionMutation;
+	// On-demand signature probes are scoped to this compilation and never committed.
+	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
+	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;
 	// Highest compilation phase that completed successfully.
 	// Guarantees by stage:
 	// - NotStarted: no compiler-owned artifacts are guaranteed to exist.
@@ -185,7 +193,8 @@ struct ParseContext {
 	// Current monomorphized function instantiation during codegen (for compile-time constants in conditions).
 	const Instantiation *currentCodegenInstantiation{};
 	// Most-refined type of each variable in the active monomorphized function or flex expansion.
-	std::unordered_map<VariableReference *, DataType> finalizedVariableTypes;
+	std::map<VariableStorageKey, DataType> finalizedVariableTypes;
+	std::map<VariableStorageKey, llvm::Value *> variableStorage;
 	// Current switch statement being built (set by "switch" intrinsic, used by "case" intrinsic)
 	llvm::SwitchInst *currentSwitchInst{};
 	llvm::BasicBlock *currentSwitchExitBlock{};
@@ -272,7 +281,8 @@ struct ParseContext {
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	Expression *cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata = false);
-	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, bool preserveInferenceMetadata = false);
+	std::shared_ptr<InstantiatedSectionBody>
+	cloneSectionBody(Section *section, bool preserveInferenceMetadata = false, InstantiatedSectionBody *parentBody = nullptr);
 };
 
 // Extract the body expression and parameter bindings from a flex PatternCall.
@@ -372,8 +382,7 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex,
-		[&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -462,8 +471,7 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
-		[](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
 		return false;
 	}
 	);

@@ -8,7 +8,9 @@ set failed to hidden is visible
 set version to the Vulkan API version of hidden
 set device to the graphics device name of hidden
 set portability to Vulkan portability is enabled for hidden
+set compute64 to Vulkan 64 bit compute is available for hidden
 ignore portability
+ignore compute64
 if version <= 0:
 	set failed to true
 if the length of device <= 0:

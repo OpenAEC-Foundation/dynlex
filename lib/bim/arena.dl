@@ -1,0 +1,345 @@
+# SPDX-License-Identifier: MPL-2.0
+# Port of cadkernel src/brep/arena.rs, revision 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Upstream: https://github.com/HakanSeven12/cadkernel
+# Arena and snapshot-list pointers have one explicit owner. Node pointers borrow.
+# Removal results own managed payload boxes; empty slots never contain a live T.
+# Clone calls the typed pattern: the cad payload clone of value.
+import lib/list.dl
+
+class:
+    patterns:
+        [a|] cad key
+    members:
+        index as a 32 bit unsigned integer
+        generation as a 32 bit unsigned integer
+        witness
+
+class:
+    patterns:
+        [a|] cad arena payload
+    members:
+        storage
+        references as a pointer to an integer
+    retain:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 2147483647:
+                @intrinsic("call", "libc", "abort", nothing)
+            @intrinsic("store at", owner, count + 1)
+    release:
+        set owner to the references of @intrinsic("lifecycle value")
+        if owner != (0 as a pointer to an integer):
+            set count to @intrinsic("dereference", owner)
+            if count = 1:
+                set data to the storage of @intrinsic("lifecycle value")
+                @intrinsic("destroy at", data)
+                @intrinsic("call", "libc", "free", nothing, data)
+                @intrinsic("call", "libc", "free", nothing, owner)
+            else:
+                @intrinsic("store at", owner, count - 1)
+
+class:
+    patterns:
+        [a|] cad slot
+    members:
+        payload
+        generation as a 32 bit unsigned integer
+
+class:
+    patterns:
+        [a|] cad arena
+    members:
+        slots
+        vacant
+        count as an integer
+
+class:
+    patterns:
+        [a|] cad lookup result
+    members:
+        valid as a boolean
+        value
+
+class:
+    patterns:
+        [a|] cad removal result
+    members:
+        valid as a boolean
+        payload
+
+class:
+    patterns:
+        [a|] cad arena entry
+    members:
+        key
+        value
+
+local function an empty cad payload of {type:kind}:
+    execute:
+        return @intrinsic("construct", a cad arena payload, 0 as a pointer to kind, 0 as a pointer to an integer)
+
+local function an owned cad payload containing value:
+    execute:
+        # The allocator accepts a null byte pointer and returns ptr T; no payload is erased.
+        set data to the checked allocation from (0 as a pointer) resized to 1 items of the type of value
+        @intrinsic("initialize at", data, value)
+        set references to the checked allocation from (0 as a pointer) resized to 1 items of an integer
+        @intrinsic("initialize at", references, 0)
+        return @intrinsic("construct", a cad arena payload, data, references)
+
+function a cad arena of {type:kind}:
+    execute:
+        set empty to @intrinsic("construct", a cad slot, an empty cad payload of kind, 0 as a 32 bit unsigned integer)
+        set slots to an empty list of the type of empty
+        set vacant to an empty list of a 32 bit unsigned integer
+        set initial to @intrinsic("construct", a cad arena, slots, vacant, 0)
+        set result to the checked allocation from (0 as a pointer) resized to 1 items of the type of initial
+        @intrinsic("initialize at", result, initial)
+        return result
+
+function the cad count of {a pointer to a cad arena:nodes}:
+    execute:
+        return the count of nodes
+
+function {a pointer to a cad arena:nodes} is cad empty:
+    execute:
+        return (the count of nodes) = 0
+
+local function check cad witness expected against {the type of expected:actual}:
+    execute:
+        ignore expected
+        ignore actual
+
+local function the cad payload type of {a pointer to a cad arena:nodes}:
+    replacement:
+        the type of @intrinsic("dereference", the storage of the payload of the item at 0 in the slots of nodes)
+
+function the cad key after inserting value into {a pointer to a cad arena:nodes}:
+    execute:
+        check cad witness (0 as a pointer to the cad payload type of nodes) against (0 as a pointer to the type of value)
+        set generation to 0 as a 32 bit unsigned integer
+        set index to (the length of the slots of nodes) as a 32 bit unsigned integer
+        set owned to an owned cad payload containing value
+        if (the length of the vacant of nodes) > 0:
+            remove the last item from the vacant of nodes and set index to it
+            set previous to the item at (index as an integer) in the slots of nodes
+            if (the storage of the payload of previous) != (0 as a pointer to the type of value):
+                @intrinsic("call", "libc", "abort", nothing)
+            set generation to the generation of previous
+            set next to @intrinsic("construct", a cad slot, owned, generation)
+            replace item at index (index as an integer) in the slots of nodes with next
+        else:
+            set next to @intrinsic("construct", a cad slot, owned, generation)
+            append next to the slots of nodes
+        set the count of nodes to ((the count of nodes) + 1)
+        return @intrinsic("construct", a cad key, index, generation, 0 as a pointer to the type of value)
+
+function the cad node pointer for {cad key:key} in {a pointer to a cad arena:nodes}:
+    execute:
+        set absent to 0 as a pointer to the cad payload type of nodes
+        check cad witness (the witness of key) against absent
+        if (the index of key) >= ((the length of the slots of nodes) as a 32 bit unsigned integer):
+            return absent
+        set slot to the item at ((the index of key) as an integer) in the slots of nodes
+        if (the generation of slot) != (the generation of key):
+            return absent
+        return the storage of the payload of slot
+
+function {a pointer to a cad arena:nodes} contains cad key {cad key:key}:
+    execute:
+        return (the cad node pointer for key in nodes) != (0 as a pointer to the cad payload type of nodes)
+
+function the cad lookup of {cad key:key} in {a pointer to a cad arena:nodes}:
+    execute:
+        set data to the cad node pointer for key in nodes
+        return @intrinsic("construct", a cad lookup result, data != (0 as a pointer to the cad payload type of nodes), data)
+
+function the cad value of {cad lookup result:result}:
+    execute:
+        if (the valid of result) = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        return @intrinsic("dereference", the value of result)
+
+function the cad value of {cad removal result:result}:
+    execute:
+        if (the valid of result) = false:
+            @intrinsic("call", "libc", "abort", nothing)
+        return @intrinsic("dereference", the storage of the payload of result)
+
+function the cad removal of {cad key:key} from {a pointer to a cad arena:nodes}:
+    execute:
+        set empty to an empty cad payload of the cad payload type of nodes
+        if (nodes contains cad key key) = false:
+            return @intrinsic("construct", a cad removal result, false, empty)
+        set index to (the index of key) as an integer
+        set slot to the item at index in the slots of nodes
+        set result to @intrinsic("construct", a cad removal result, true, the payload of slot)
+        set next to @intrinsic("construct", a cad slot, empty, (the generation of key) + (1 as a 32 bit unsigned integer))
+        replace item at index index in the slots of nodes with next
+        append the index of key to the vacant of nodes
+        set the count of nodes to ((the count of nodes) - 1)
+        return result
+
+function replace cad node {cad key:key} in {a pointer to a cad arena:nodes} with value:
+    execute:
+        set data to the cad node pointer for key in nodes
+        if data = (0 as a pointer to the type of value):
+            @intrinsic("call", "libc", "abort", nothing)
+        @intrinsic("store at", data, value)
+
+function the cad keys of {a pointer to a cad arena:nodes}:
+    execute:
+        set witness to 0 as a pointer to the cad payload type of nodes
+        set sample to @intrinsic("construct", a cad key, 0 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer, witness)
+        set result to an empty list of the type of sample
+        set index to 0
+        loop while index < (the length of the slots of nodes):
+            set slot to the item at index in the slots of nodes
+            if (the storage of the payload of slot) != witness:
+                append @intrinsic("construct", a cad key, index as a 32 bit unsigned integer, the generation of slot, witness) to result
+            increment index
+        return result
+
+function the cad entries of {a pointer to a cad arena:nodes}:
+    execute:
+        set keys to the cad keys of nodes
+        set sampleKey to @intrinsic("construct", a cad key, 0 as a 32 bit unsigned integer, 0 as a 32 bit unsigned integer, 0 as a pointer to the cad payload type of nodes)
+        set sample to @intrinsic("construct", a cad arena entry, sampleKey, the witness of sampleKey)
+        set result to an empty list of the type of sample
+        set index to 0
+        loop while index < (the length of keys):
+            set key to the item at index in keys
+            append @intrinsic("construct", a cad arena entry, key, the cad node pointer for key in nodes) to result
+            increment index
+        free keys
+        return result
+
+function the cad mutable values of {a pointer to a cad arena:nodes}:
+    execute:
+        set keys to the cad keys of nodes
+        set result to an empty list of a pointer to the cad payload type of nodes
+        set index to 0
+        loop while index < (the length of keys):
+            append (the cad node pointer for (the item at index in keys) in nodes) to result
+            increment index
+        free keys
+        return result
+
+function the cad clone of {a pointer to a cad arena:nodes}:
+    execute:
+        set result to a cad arena of the cad payload type of nodes
+        set cursor to 0
+        loop while cursor < (the length of the slots of nodes):
+            set slot to the item at cursor in the slots of nodes
+            set copied to an empty cad payload of the cad payload type of nodes
+            set data to the storage of the payload of slot
+            if data != (0 as a pointer to the cad payload type of nodes):
+                set cloned to the cad payload clone of @intrinsic("dereference", data)
+                check cad witness (0 as a pointer to the cad payload type of nodes) against (0 as a pointer to the type of cloned)
+                set copied to an owned cad payload containing cloned
+            append @intrinsic("construct", a cad slot, copied, the generation of slot) to the slots of result
+            increment cursor
+        set cursor to 0
+        loop while cursor < (the length of the vacant of nodes):
+            append the item at cursor in the vacant of nodes to the vacant of result
+            increment cursor
+        set the count of result to the count of nodes
+        return result
+
+function free cad arena {a pointer to a cad arena:nodes}:
+    execute:
+        free (the slots of nodes)
+        free (the vacant of nodes)
+        @intrinsic("call", "libc", "free", nothing, nodes)
+
+function the cad slot of {cad key:key}:
+    execute:
+        return the index of key
+
+function the cad clone of {cad key:key}:
+    execute:
+        return key
+
+function the cad payload clone of {cad key:key}:
+    execute:
+        return the cad clone of key
+
+function the cad payload debug text of {cad key:key}:
+    execute:
+        return the cad debug text of key
+
+function {cad key:left} equals cad key {cad key:right}:
+    execute:
+        check cad witness (the witness of left) against (the witness of right)
+        return ((the index of left) = (the index of right)) and ((the generation of left) = (the generation of right))
+
+function {cad key:left} = {cad key:right}:
+    execute:
+        return left equals cad key right
+
+function {cad key:left} != {cad key:right}:
+    execute:
+        return (left equals cad key right) = false
+
+function hash cad key {cad key:key} into state:
+    execute:
+        hash cad unsigned integer (the index of key) into state
+        hash cad unsigned integer (the generation of key) into state
+
+# A typed word sink exposes the Hash input stream without choosing a hash algorithm.
+function hash cad unsigned integer {a 32 bit unsigned integer:number} into {a pointer to a list:state}:
+    execute:
+        check cad witness (0 as a pointer to a 32 bit unsigned integer) against (0 as a pointer to the type of the item at 0 in state)
+        append number to state
+
+function the cad debug text of {cad key:key}:
+    execute:
+        return (((the string form of "#") + (the string form of the index of key)) + (the string form of "v")) + (the string form of the generation of key)
+
+function the cad debug text of {a pointer to a cad arena:nodes}:
+    execute:
+        set result to the string form of "{"
+        set entries to the cad entries of nodes
+        set index to 0
+        loop while index < (the length of entries):
+            if index > 0:
+                set result to result + (the string form of ", ")
+            set entry to the item at index in entries
+            set result to ((result + (the cad debug text of the key of entry)) + (the string form of ": ")) + (the cad payload debug text of @intrinsic("dereference", the value of entry))
+            increment index
+        free entries
+        return result + (the string form of "}")
+
+# Typed scalar implementations; composite payloads supply their own protocols.
+function the cad payload clone of {integer:value}:
+    execute:
+        return value
+
+function the cad payload clone of {unsigned integer:value}:
+    execute:
+        return value
+
+function the cad payload clone of {floating-point number:value}:
+    execute:
+        return value
+
+function the cad payload clone of {boolean:value}:
+    execute:
+        return value
+
+function the cad payload clone of {string:value}:
+    execute:
+        return the substring of value from 0 spanning (the length of value) bytes
+
+function the cad payload debug text of {integer:value}:
+    execute:
+        return the string form of value
+
+function the cad payload debug text of {unsigned integer:value}:
+    execute:
+        return the string form of value
+
+function the cad payload debug text of {boolean:value}:
+    execute:
+        return the string form of value

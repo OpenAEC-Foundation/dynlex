@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make_cuboid/main.dl
+
+set counts to [3,4,5,8]
+loop index from 0 to 4:
+    set sides to the item at index in counts
+    set pyramid to the cad pyramid body at (the cad zero vector3) with radius 4.0, height 9.0 and sides sides
+    check solid maker (pyramid's valid)
+    check solid maker ((the cad count of (pyramid's value's faces)) = (sides + 1))
+    check solid maker ((the cad count of (pyramid's value's edges)) = (2 * sides))
+    check solid maker ((the cad count of (pyramid's value's vertices)) = (sides + 1))
+    check solid maker ((the cad euler characteristic of (pyramid's value)) = 2)
+    check consistent solid (pyramid's value)
+set refused to the cad pyramid body at (the cad zero vector3) with radius 4.0, height 9.0 and sides 2
+check solid maker ((refused's valid) = false)
+set refused to the cad pyramid body at (the cad zero vector3) with radius 0.0, height 9.0 and sides 4
+check solid maker ((refused's valid) = false)
+set refused to the cad pyramid body at (the cad zero vector3) with radius 4.0, height -1.0 and sides 4
+check solid maker ((refused's valid) = false)
+print "a_pyramid_is_a_base_and_a_triangle_per_side" as a line
+
+loop index from 0 to 4:
+    set sides to the item at index in counts
+    set frustum to the cad polygonal frustum at (a maker point [1.0,2.0,3.0]) with base radius 4.0, top radius 2.0, height 9.0 and sides sides
+    check solid maker (frustum's valid)
+    check solid maker ((the cad count of (frustum's value's faces)) = (sides + 2))
+    check solid maker ((the cad count of (frustum's value's edges)) = (3 * sides))
+    check solid maker ((the cad count of (frustum's value's vertices)) = (2 * sides))
+    check solid maker ((the cad euler characteristic of (frustum's value)) = 2)
+    check consistent solid (frustum's value)
+print "polygonal_frusta_share_caps_rails_and_rims" as a line
+
+set pointed to the cad polygonal frustum at (the cad zero vector3) with base radius 4.0, top radius 1e-12, height 9.0 and sides 4
+check solid maker (pointed's valid)
+check solid maker ((the cad count of (pointed's value's vertices)) = 5)
+set truncated to the cad polygonal frustum at (the cad zero vector3) with base radius 4.0, top radius 1.0001e-12, height 9.0 and sides 4
+check solid maker (truncated's valid)
+check solid maker ((the cad count of (truncated's value's vertices)) = 8)
+print "top_radius_threshold_preserves_pointed_topology" as a line

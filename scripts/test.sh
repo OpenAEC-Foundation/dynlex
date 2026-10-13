@@ -4,6 +4,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$PROJECT_DIR/tests/required"
+source "$SCRIPT_DIR/test_fixture_options.sh"
 if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX")"; then
     echo "Failed to create the required-test output directory." >&2
     exit 1
@@ -264,7 +265,10 @@ if os.name == "nt":
 else:
     popen_options["start_new_session"] = True
 
-process = subprocess.Popen(cmd, **popen_options)
+sys.path.insert(0, str(project_directory / "scripts"))
+from process_error_mode import unattended_child_processes
+with unattended_child_processes():
+    process = subprocess.Popen(cmd, **popen_options)
 
 try:
     stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
@@ -388,6 +392,13 @@ for test_dir in "$TESTS_DIR"/*/; do
     compile_timeout=10
     if [[ "$is_windows" == "true" ]]; then
         compile_timeout=20
+    fi
+    if ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        append_test_result "FAIL" "$RED" "$test_name" "invalid compile_timeout_seconds.txt" "$test_elapsed_ms"
+        ((failed++))
+        failures+=("$test_name")
+        continue
     fi
     rm -f "$output_binary"
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
@@ -617,7 +628,9 @@ run_auxiliary_test() {
 }
 
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
+run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
+run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_error_mode.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "runtime_feature_macros" 10 python3 -B "$SCRIPT_DIR/test_runtime_feature_macros.py"
 run_auxiliary_test "vulkan_test_environment" 10 python3 -B "$SCRIPT_DIR/test_vulkan_test_environment.py"

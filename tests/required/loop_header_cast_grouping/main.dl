@@ -1,0 +1,29 @@
+function word:
+    replacement:
+        @intrinsic("type", "uint", 64)
+function type:
+    replacement:
+        @intrinsic("type", "type")
+function set target to value:
+    replacement:
+        @intrinsic("store", target, value)
+function value as {type:kind}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", value, kind))
+function left < right:
+    execute:
+        @intrinsic("return", @intrinsic("less than", left, right))
+flex function loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+flex section [loop |]while condition:
+    replacement:
+        loop while condition
+function count:
+    execute:
+        set position to 0 as word
+        loop while position < 3 as word:
+            set position to @intrinsic("add", position, (1 as word))
+        @intrinsic("return", position)
+set result to count
+@intrinsic("discard", @intrinsic("call", "libc", "putchar", @intrinsic("type", "int"), @intrinsic("cast", @intrinsic("add", result, (48 as word)), @intrinsic("type", "int"))))
