@@ -67,6 +67,10 @@ that order. Operand grouping consumes the family order during type inference.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
+Matcher lookup tables deduplicate complete control and continuation states. Search priority
+comes from the ordered work queue and parent/completion vectors, independently of hash-table
+layout. Inline storage grows when needed and never limits the number of matching alternatives.
+
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
 
 We discover what is a variable based on these principles:

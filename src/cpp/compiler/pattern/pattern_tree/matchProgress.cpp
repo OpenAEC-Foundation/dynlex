@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <unordered_set>
 
 namespace {
 static void combineMatchStateHash(size_t &seed, size_t value) {
@@ -322,7 +323,7 @@ MatchContinuationState MatchProgress::continuationState() const { return {contro
 
 MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) {
 	MatchStep result;
-	std::vector<MatchProgress> &nextMatches = result.nextMatches;
+	auto &nextMatches = result.nextMatches;
 
 	RemainingPatternElement element = remainingPatternElement(patternReference, sourceElementIndex, sourceCharIndex);
 	bool hasSourceElement = element.exists;

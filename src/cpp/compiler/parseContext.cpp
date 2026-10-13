@@ -52,7 +52,8 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
-	std::unordered_map<MatchControlState, MatchParentAlternatives *, MatchControlStateHash> memoizedStates;
+	llvm::DenseMap<MatchControlState, MatchParentAlternatives *, MatchStateInfo<MatchControlState, MatchControlStateHash>>
+		memoizedStates;
 	auto recordDependencies = [&]() {
 		if (!dependencies)
 			return;
