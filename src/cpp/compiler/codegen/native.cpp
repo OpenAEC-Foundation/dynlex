@@ -367,10 +367,12 @@ std::string defaultNativeObjectPath(const ParseContext &context) {
 	return outputPath + ".o";
 }
 
-bool emitNativeObjectFile(ParseContext &context, const std::string &objectPath) {
+} // namespace
+
+bool emitNativeObjectModule(ParseContext &context, llvm::Module &module, const std::string &objectPath) {
 	requireCompilerInvariant(context.targetMachine != nullptr, "native emission requires an initialized target machine");
 	llvm::TargetMachine &targetMachine = *context.targetMachine;
-	const llvm::Triple parsedTargetTriple(context.llvmModule->getTargetTriple());
+	const llvm::Triple parsedTargetTriple(module.getTargetTriple());
 	const bool requiresNonMergeableDwarfStrings = context.options.emitDebugInfo && parsedTargetTriple.isOSBinFormatELF();
 	std::optional<std::string> objectCopyProgram;
 	if (requiresNonMergeableDwarfStrings) {
@@ -399,7 +401,7 @@ bool emitNativeObjectFile(ParseContext &context, const std::string &objectPath) 
 			return false;
 		}
 
-		passManager.run(*context.llvmModule);
+		passManager.run(module);
 	}
 
 	if (!objectCopyProgram)
@@ -441,15 +443,19 @@ bool emitNativeObjectFile(ParseContext &context, const std::string &objectPath) 
 	return true;
 }
 
-} // namespace
-
 bool emitNativeObject(ParseContext &context) {
 	const std::string objectPath =
 		context.options.outputPath.empty() ? defaultNativeObjectPath(context) : context.options.outputPath;
-	return emitNativeObjectFile(context, objectPath);
+	return emitNativeObjectModule(context, *context.llvmModule, objectPath);
 }
 
 bool emitNativeExecutable(ParseContext &context) {
+	return emitNativeExecutableWithObjects(context, {}, {context.requiredLibraries.begin(), context.requiredLibraries.end()});
+}
+
+bool emitNativeExecutableWithObjects(
+	ParseContext &context, const std::vector<std::string> &objectPaths, const std::vector<std::string> &libraries
+) {
 	auto pushPlainError = [&](std::string message) {
 		addNativeEmissionError(context, std::move(message));
 	};
@@ -489,7 +495,7 @@ bool emitNativeExecutable(ParseContext &context) {
 	// Create object file path
 	std::string objectPath = outputPath + ".o";
 
-	if (!emitNativeObjectFile(context, objectPath))
+	if (objectPaths.empty() && !emitNativeObjectModule(context, *context.llvmModule, objectPath))
 		return false;
 
 	std::vector<std::string> commandStorage;
@@ -506,14 +512,17 @@ bool emitNativeExecutable(ParseContext &context) {
 		commandStorage.push_back("-Wl,-rpath,@executable_path");
 	}
 #endif
-	commandStorage.push_back(objectPath);
+	if (objectPaths.empty())
+		commandStorage.push_back(objectPath);
+	else
+		commandStorage.insert(commandStorage.end(), objectPaths.begin(), objectPaths.end());
 	commandStorage.push_back("-o");
 	commandStorage.push_back(outputPath);
 
 	if (context.options.emitDebugInfo)
 		commandStorage.push_back("-g");
 
-	for (const std::string &lib : context.requiredLibraries) {
+	for (const std::string &lib : libraries) {
 		std::vector<std::string> arguments = nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string());
 		commandStorage.insert(
 			commandStorage.end(), std::make_move_iterator(arguments.begin()), std::make_move_iterator(arguments.end())
@@ -544,7 +553,7 @@ bool emitNativeExecutable(ParseContext &context) {
 
 		// Check which libraries are actually missing
 		std::vector<std::string> missingLibs;
-		for (const std::string &lib : context.requiredLibraries) {
+		for (const std::string &lib : libraries) {
 			if (linkerReportsMissingLibrary(
 					linkExecution->output, nativeLibraryArguments(parsedTargetTriple, lib, runtimeLibraryPath().string())
 				)) {
@@ -590,7 +599,8 @@ bool emitNativeExecutable(ParseContext &context) {
 	}
 
 	// Clean up object file
-	std::filesystem::remove(objectPath);
+	if (objectPaths.empty())
+		std::filesystem::remove(objectPath);
 
 	return true;
 }

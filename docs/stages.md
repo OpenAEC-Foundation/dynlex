@@ -463,6 +463,30 @@ stage encodes those names into valid interface identifiers and assigns locations
 vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
 the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
 
+# Incremental Native Builds
+
+The CLI accepts `--incremental <cache-directory>` for native executables and
+`--incremental-stats` to report reuse. A complete verified, optimized LLVM IR result
+is reusable only while every filesystem observation remains identical. Observations
+include source/config contents, canonical source identities and failed lookup candidates;
+a newly created higher-priority import or configuration therefore invalidates the result.
+The compiler linker build ID (or executable content digest when the format has no
+build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
+
+After source changes the frontend runs again. Native emission divides the finalized IR
+into deterministic, independently linkable partitions. Local symbols receive a stable
+program namespace before LLVM externalizes them. Each partition's complete IR and target
+configuration identify its object cache entry; code changes, changed declarations,
+inlined callees, globals and debug metadata are reflected in that identity. Unchanged
+objects are reused and the executable is always linked again, including current runtime
+libraries. This is native partition reuse, not per-function frontend query reuse.
+
+Cache entries carry SHA-256 integrity checks and are published with atomic rename.
+Invalid entries and I/O failures are explicit errors. Linking uses private temporary
+copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
+the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain
+their ordinary compilation pipeline.
+
 # LSP Interaction
 
 When hovering over an expression, the already-evaluated compile-time value and type are shown.

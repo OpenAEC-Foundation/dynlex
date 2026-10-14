@@ -72,7 +72,10 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 	crashCompilerBug("invalid IR optimization level");
 }
 
-bool generateCode(ParseContext &context) {
+bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
+#ifdef DYNLEX_WEB
+	(void)nativeEmitter;
+#endif
 	requireCompilerInvariant(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
@@ -103,8 +106,7 @@ bool generateCode(ParseContext &context) {
 
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
 	const bool generatesMain = !context.options.noMain;
-	const bool supportsCommandLineArguments =
-		generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
+	const bool supportsCommandLineArguments = generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
 	if (supportsCommandLineArguments) {
 		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
 			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
@@ -322,7 +324,7 @@ bool generateCode(ParseContext &context) {
 		if (!emitNativeObject(context))
 			return false;
 	} else {
-		if (!emitNativeExecutable(context))
+		if (!(nativeEmitter ? nativeEmitter(context) : emitNativeExecutable(context)))
 			return false;
 	}
 #endif
