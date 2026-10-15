@@ -230,7 +230,7 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 
 	std::string result;
 	if (!constraint.kind) {
-		if (constraint.requiresNumeric)
+		if (constraint.requiresNumeric && !constraint.numericSize)
 			result = "a number";
 		else if (constraint.requiresInteger) {
 			result = constraint.numericSize ? scalarTypeName(DataType::Kind::Int, *constraint.numericSize) : "an integer";

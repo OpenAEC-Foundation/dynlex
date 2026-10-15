@@ -64,6 +64,7 @@ numbers are {properties} means: @intrinsic("number rule", properties)
 
 [a|] pointer means: a pointer to a byte
 [a|] pointer to {type:kind} means: @intrinsic("add pointer depth", kind)
+[a|] pointer to {constraint:kind} means: @intrinsic("add pointer depth", kind)
 an array means: @intrinsic("array")
 [an|] array of {fixed integer:count} [item|items] means: @intrinsic("array", count)
 {type:kind} array of {fixed integer:count} [item|items] means: @intrinsic("array", count, kind)
