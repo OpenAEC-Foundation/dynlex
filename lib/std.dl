@@ -55,7 +55,7 @@ true means: 1 as a boolean
 false means: 0 as a boolean
 [a|] type means: @intrinsic("type", "type")
 [a|] constraint means: @intrinsic("type", "constraint")
-[a|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
+[a|an|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
 nothing means: @intrinsic("type", "nothing")
 the type [nothing] means: @intrinsic("type", "nothing")
 a number means: @intrinsic("number")
