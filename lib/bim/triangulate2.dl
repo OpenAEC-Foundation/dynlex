@@ -507,7 +507,7 @@ local function cad triangulation triangle from {cad vector2:a} through {cad vect
 local function cad triangulation corner {integer:at} in {a pointer to a list:indices} of {a pointer to a list:vertices} is an ear:
     execute:
         set count to the length of indices
-        set previous to the remainder of (at + count - 1) divided by count
+        set previous to the remainder of ((at + count) - 1) divided by count
         set next to the remainder of (at + 1) divided by count
         set a to the item at (the item at previous in indices) in vertices
         set b to the item at (the item at at in indices) in vertices
@@ -525,7 +525,7 @@ local function cad triangulation corner {integer:at} in {a pointer to a list:ind
 local function the cad triangulation ear [score] at {integer:at} in {a pointer to a list:indices} of {a pointer to a list:vertices} scaled by {cad vector2:scale}:
     execute:
         set count to the length of indices
-        set a to the item at (the item at (the remainder of (at + count - 1) divided by count) in indices) in vertices
+        set a to the item at (the item at (the remainder of ((at + count) - 1) divided by count) in indices) in vertices
         set b to the item at (the item at at in indices) in vertices
         set c to the item at (the item at (the remainder of (at + 1) divided by count) in indices) in vertices
         set corners to [a, b, c]

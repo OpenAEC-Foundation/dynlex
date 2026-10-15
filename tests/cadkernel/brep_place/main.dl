@@ -12,7 +12,7 @@ check placement (bounds's valid)
 check placement scalar (bounds's value's high's y) near 10.0
 check placement scalar (bounds's value's low's x) near -4.0
 set size to the cad size of (bounds's value)
-check placement scalar (size's x * size's y * size's z) near 240.0
+check placement scalar ((size's x * size's y) * size's z) near 240.0
 check placement scalar (placement boundary volume of (moved's value)) near 240.0
 print "a_turn_moves_a_body_without_changing_its_size" as a line
 
@@ -70,7 +70,7 @@ check placement solid (survey's value)
 check placement ((the cad worst vertex gap of (survey's value)) < 1e-6)
 set bounds to the cad bounds of (survey's value)
 set size to the cad size of (bounds's value)
-check placement scalar (size's x * size's y * size's z) near 0.125
+check placement scalar ((size's x * size's y) * size's z) near 0.125
 check placement ((the absolute value of ((placement boundary volume of (survey's value)) - 0.125)) < 1e-6)
 print "a_body_moved_to_survey_coordinates_is_the_same_solid" as a line
 

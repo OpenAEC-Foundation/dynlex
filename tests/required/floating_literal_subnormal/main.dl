@@ -1,0 +1,1 @@
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d %d %d\n", @intrinsic("greater than", 5e-324, 0.0), @intrinsic("equal", 5e-324, 4.9406564584124654e-324), @intrinsic("greater than", 2.225073858507201e-308, 5e-324))

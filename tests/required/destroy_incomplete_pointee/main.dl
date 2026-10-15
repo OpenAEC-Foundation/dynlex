@@ -1,0 +1,7 @@
+class:
+    patterns:
+        box
+    members:
+        payload
+
+@intrinsic("destroy at", @intrinsic("cast", 0, @intrinsic("add pointer depth", box)))
