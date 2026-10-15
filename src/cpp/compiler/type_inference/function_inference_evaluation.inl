@@ -288,7 +288,7 @@ static Variable *findExecutionSectionVariable(Section *section, const std::strin
 	return it != section->variables.end() ? it->second : nullptr;
 }
 
-static Expression::SectionOutcome sectionOutcomeForIntrinsic(
+static CopyOnWrite<Expression::SectionOutcome> sectionOutcomeForIntrinsic(
 	IntrinsicKind kind, const CompileTimeValue &conditionValue = {}, const DataType &conditionType = {}
 ) {
 	Expression::SectionOutcome outcome;
@@ -324,15 +324,15 @@ static Expression::SectionOutcome sectionOutcomeForIntrinsic(
 		outcome.kind = Expression::SectionOutcome::Kind::FunctionReturn;
 		break;
 	default:
-		break;
+		return {};
 	}
-	return outcome;
+	return CopyOnWrite<Expression::SectionOutcome>(std::move(outcome));
 }
 
 struct PureExpressionExecutionResult {
 	CompileTimeValue value;
 	bool returned = false;
-	Expression::SectionOutcome sectionOutcome;
+	CopyOnWrite<Expression::SectionOutcome> sectionOutcome;
 };
 
 struct PureSectionFlexBodyExecutionFrame {
@@ -687,7 +687,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 		CodeLine *line = section->codeLines[i];
 		Expression *lineExpression = body->lineExpression(i);
 		if (lineExpression && line->sectionOpening && line->sectionOpening->runsInEnclosingBody() &&
-			lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
+			lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Conditional) {
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
@@ -696,7 +696,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 				Expression *nextExpression = body->lineExpression(chainEnd + 1);
 				if (!nextExpression)
 					break;
-				Expression::SectionOutcome::Kind nextKind = nextExpression->sectionOutcome.kind;
+				Expression::SectionOutcome::Kind nextKind = nextExpression->sectionOutcome.read().kind;
 				if (nextKind != Expression::SectionOutcome::Kind::AlternativeConditional &&
 					nextKind != Expression::SectionOutcome::Kind::Alternative) {
 					break;
@@ -711,7 +711,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 					evaluatePureExpression(branchExpression, state, frame, bindingFrameStack);
 				if (headerResult.returned)
 					crashCompilerBug("branch header returned unexpectedly during pure execution");
-				Expression::SectionOutcome::Kind branchKind = headerResult.sectionOutcome.kind;
+				Expression::SectionOutcome::Kind branchKind = headerResult.sectionOutcome.read().kind;
 				if (branchKind == Expression::SectionOutcome::Kind::Alternative) {
 					selectedBranch = k;
 					break;
@@ -721,7 +721,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 										  : Expression::SectionOutcome::Kind::AlternativeConditional),
 					"pure branch execution encountered invalid section-outcome metadata"
 				);
-				auto *condition = std::get_if<bool>(&headerResult.sectionOutcome.conditionValue);
+				auto *condition = std::get_if<bool>(&headerResult.sectionOutcome.read().conditionValue);
 				if (!condition)
 					return {};
 				if (*condition) {
@@ -761,14 +761,14 @@ static PureExpressionExecutionResult executePureSection(
 		return {};
 	requireCompilerInvariant(body && body->sourceSection == section, "pure execution received the wrong inferred section body");
 	ScopedPureExecution execution(state);
-	if (openingExpression && openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
+	if (openingExpression && openingExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
 			crashCompilerBug("switch selector evaluation returned unexpectedly during pure execution");
-		std::optional<std::int64_t> selector = getCompileTimeIntegerValue(headerResult.sectionOutcome.conditionValue);
+		std::optional<std::int64_t> selector = getCompileTimeIntegerValue(headerResult.sectionOutcome.read().conditionValue);
 		if (!selector)
 			return {};
-		DataType selectorType = headerResult.sectionOutcome.conditionType;
+		DataType selectorType = headerResult.sectionOutcome.read().conditionType;
 		requireCompilerInvariant(selectorType.isInteger(), "pure switch selector has no integer type");
 		selector = normalizeSignedIntegerToType(*selector, selectorType);
 		ScopedPureActiveBody activeBody(state, body);
@@ -778,15 +778,15 @@ static PureExpressionExecutionResult executePureSection(
 			PureExpressionExecutionResult caseResult = evaluatePureExpression(caseExpression, state, frame, bindingFrameStack);
 			if (caseResult.returned)
 				crashCompilerBug("switch case evaluation returned unexpectedly during pure execution");
-			if (caseResult.sectionOutcome.kind == Expression::SectionOutcome::Kind::DefaultCase) {
+			if (caseResult.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::DefaultCase) {
 				defaultLineIndex = index;
 				continue;
 			}
 			requireCompilerInvariant(
-				caseResult.sectionOutcome.kind == Expression::SectionOutcome::Kind::Case,
+				caseResult.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Case,
 				"pure switch execution encountered invalid case metadata"
 			);
-			std::optional<std::int64_t> caseValue = getCompileTimeIntegerValue(caseResult.sectionOutcome.conditionValue);
+			std::optional<std::int64_t> caseValue = getCompileTimeIntegerValue(caseResult.sectionOutcome.read().conditionValue);
 			if (!caseValue || normalizeSignedIntegerToType(*caseValue, selectorType) != selector)
 				continue;
 			CodeLine *caseLine = section->codeLines[index];
@@ -801,17 +801,17 @@ static PureExpressionExecutionResult executePureSection(
 			state, frame, defaultLine->sectionOpening, defaultBody, body->lineExpression(*defaultLineIndex), bindingFrameStack
 		);
 	}
-	if (!openingExpression || openingExpression->sectionOutcome.kind != Expression::SectionOutcome::Kind::Loop)
+	if (!openingExpression || openingExpression->sectionOutcome.read().kind != Expression::SectionOutcome::Kind::Loop)
 		return executePureSectionBodyOnce(state, frame, section, body, bindingFrameStack);
 	while (true) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
 			crashCompilerBug("loop condition evaluation returned unexpectedly during pure execution");
 		requireCompilerInvariant(
-			headerResult.sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop,
+			headerResult.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop,
 			"pure loop execution encountered invalid section-outcome metadata"
 		);
-		auto *condition = std::get_if<bool>(&headerResult.sectionOutcome.conditionValue);
+		auto *condition = std::get_if<bool>(&headerResult.sectionOutcome.read().conditionValue);
 		if (!condition)
 			return {};
 		if (!*condition)

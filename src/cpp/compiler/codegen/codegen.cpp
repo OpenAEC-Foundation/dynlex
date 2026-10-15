@@ -763,7 +763,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 		if (lineExpression && !lineExpression->executionFallsThrough.has_value())
 			break;
 		if (lineExpression && line->sectionOpening &&
-			lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch) {
+			lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch) {
 			requireCompilerInvariant(
 				lineExpression->branchSelection.has_value(),
 				"switch reached codegen without finalized branch-selection metadata"
@@ -791,14 +791,14 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 				continue;
 			}
 		}
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Conditional) {
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
 				Expression *nextExpression = body ? body->lineExpression(chainEnd + 1) : next->expression;
 				if (!nextExpression)
 					break;
-				Expression::SectionOutcome::Kind nextKind = nextExpression->sectionOutcome.kind;
+				Expression::SectionOutcome::Kind nextKind = nextExpression->sectionOutcome.read().kind;
 				if (nextKind != Expression::SectionOutcome::Kind::AlternativeConditional &&
 					nextKind != Expression::SectionOutcome::Kind::Alternative) {
 					break;
@@ -818,7 +818,7 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 					const size_t lastTest = selection.selectedBranchIndex < 0 ? chainEnd : selection.selectedBranchIndex;
 					for (size_t branch = i; branch <= lastTest; ++branch) {
 						Expression *header = body ? body->lineExpression(branch) : section->codeLines[branch]->expression;
-						if (header->sectionOutcome.kind != Expression::SectionOutcome::Kind::Alternative)
+						if (header->sectionOutcome.read().kind != Expression::SectionOutcome::Kind::Alternative)
 							emitExecutionTrace(
 								context, header->range,
 								builder.getInt1(static_cast<int>(branch) == selection.selectedBranchIndex)
@@ -847,12 +847,12 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 				terminatingRuntimeChainEnd = chainEnd;
 		}
 		if (lineExpression && !lineExpression->sectionBodyReachable && !lineExpression->inferredFlexBody &&
-			(lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::AlternativeConditional ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Alternative ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Case ||
-			 lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::DefaultCase)) {
+			(lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Conditional ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::AlternativeConditional ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Alternative ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Case ||
+			 lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::DefaultCase)) {
 			continue;
 		}
 
@@ -874,10 +874,10 @@ bool generateSectionCode(ParseContext &context, Section *section, InstantiatedSe
 				return false;
 			lastGeneratedValue = generatedLine.value;
 		}
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn) {
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::FunctionReturn) {
 			break;
 		}
-		if (lineExpression && lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Switch &&
+		if (lineExpression && lineExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Switch &&
 			lineExpression->branchSelection && !*lineExpression->executionFallsThrough)
 			break;
 		if (terminatingRuntimeChainEnd && i == *terminatingRuntimeChainEnd)

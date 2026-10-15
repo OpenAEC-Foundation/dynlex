@@ -649,7 +649,8 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 
 	// Iterate over lines, preserving line terminators for exact source mapping.
 	std::string_view fileView{sourceFile->content};
-	const SyntaxConfig &syntax = syntaxConfigForSourcePath(context, sourceFile->uri.empty() ? path : sourceFile->uri);
+	const SyntaxConfig &syntax =
+		sourceFile->uri.empty() ? syntaxConfigForSourcePath(context, path) : syntaxConfigForSourceFile(context, sourceFile);
 
 	int sourceFileLineIndex = 0;
 	size_t lineStart = 0;

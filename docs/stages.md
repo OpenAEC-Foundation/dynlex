@@ -12,6 +12,11 @@ Later stages of the compiler are very dependent on earlier stages. Every line of
 
 The compiler combines all files into one large file.
 
+Each source file fixes its URI and internal-library classification when created.
+Content edits preserve that identity. Syntax lookup selects the current compilation's
+builtin or project configuration from that classification without repeating filesystem
+canonicalization for each source range.
+
 # Parse Stage
 
 Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
@@ -70,6 +75,10 @@ membership and successor reachability are computed once; typed overloads share
 that order. Operand grouping consumes the family order during type inference.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
+
+Matcher lookup tables deduplicate complete control and continuation states. Search priority
+comes from the ordered work queue and parent/completion vectors, independently of hash-table
+layout. Inline storage grows when needed and never limits the number of matching alternatives.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
 
@@ -217,9 +226,18 @@ belongs to each argument, so an unrelated unresolved argument remains a failure.
 Flex overloads explicitly accepting unresolved arguments still participate in
 selection, including return wrappers that must record the return observation.
 
+Binding scopes are immutable frames linked to their caller scope. Copying a scope or resolving a binding retains
+that existing chain without copying its maps. Pushing and popping change only the active stack; snapshots and returned
+caller scopes retain their original frames. Lookup still searches from the innermost frame outward, and frame visitation
+runs from the outermost frame inward so shadowing and cache-key construction preserve their original order.
+
 Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. When replacement inference transfers caller-body control, the outcome is recorded on the exact replacement expression that performed the transfer and enclosing flex calls forward it normally. A direct outcome already recorded on an active flex call takes precedence over the replacement expression's forwarded outcome. Transfer identity is the complete active flex-invocation path plus the transfer expression, with reusable clones normalized to their template nodes. This lets retries of one logical invocation share the inferred caller body while distinct direct, helper, and nested-helper call sites produce the required duplicate-transfer diagnostic. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Flex sections cannot be overloaded, so selecting an overload cannot create a control-flow classification dependency.
 
 The section walker records finalized fallthrough metadata on every top-level expression it reaches. An expression without that metadata is outside the inferred execution paths and remains intentionally uninferred. Code generation consumes this metadata before inspecting an expression, so it emits only paths whose overloads, types, and control flow were finalized by inference.
+
+Section outcomes are value state stored through copy-on-write ownership. Ordinary expressions
+share the empty outcome; a mutation detaches the complete outcome before writing. Clones and
+retained inference snapshots therefore preserve independent conditions and condition types.
 
 A section flex replacement is executed line by line in source order during inference, compile-time execution, and code generation. `execute body` transfers execution to the caller body at that exact point; if neither an outcome nor an executed `execute body` consumes it, the caller body executes after the replacement. Variables introduced by the active replacement scopes are bound structurally while the caller body runs, then those bindings end when control returns to the replacement. These rules use the already-selected flex definition, inferred replacement body, and section ownership stacks. They do not rediscover behavior from pattern text.
 
@@ -537,6 +555,30 @@ SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty sem
 stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
 vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
 the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
+
+# Incremental Native Builds
+
+The CLI accepts `--incremental <cache-directory>` for native executables and
+`--incremental-stats` to report reuse. A complete verified, optimized LLVM IR result
+is reusable only while every filesystem observation remains identical. Observations
+include source/config contents, canonical source identities and failed lookup candidates;
+a newly created higher-priority import or configuration therefore invalidates the result.
+The compiler linker build ID (or executable content digest when the format has no
+build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
+
+After source changes the frontend runs again. Native emission divides the finalized IR
+into deterministic, independently linkable partitions. Local symbols receive a stable
+program namespace before LLVM externalizes them. Each partition's complete IR and target
+configuration identify its object cache entry; code changes, changed declarations,
+inlined callees, globals and debug metadata are reflected in that identity. Unchanged
+objects are reused and the executable is always linked again, including current runtime
+libraries. This is native partition reuse, not per-function frontend query reuse.
+
+Cache entries carry SHA-256 integrity checks and are published with atomic rename.
+Invalid entries and I/O failures are explicit errors. Linking uses private temporary
+copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
+the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain
+their ordinary compilation pipeline.
 
 # LSP Interaction
 

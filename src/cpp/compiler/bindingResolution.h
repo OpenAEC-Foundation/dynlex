@@ -3,9 +3,10 @@
 #include "compilerUtils.h"
 #include "expression.h"
 #include "variableReference.h"
+#include "llvm/ADT/SmallVector.h"
+#include <memory>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 inline VariableReference *normalizeBindingReference(VariableReference *reference) {
 	return reference && reference->definition ? reference->definition : reference;
@@ -38,42 +39,46 @@ struct BindingFrame {
 
 struct BindingFrameStack {
   private:
-	std::vector<BindingFrame> frames;
+	struct FrameNode {
+		BindingFrame frame;
+		std::shared_ptr<const FrameNode> caller;
+		size_t depth;
+
+		FrameNode(BindingFrame frame, std::shared_ptr<const FrameNode> caller)
+			: frame(std::move(frame)), caller(std::move(caller)), depth(this->caller ? this->caller->depth + 1 : 1) {}
+	};
+
+	std::shared_ptr<const FrameNode> top;
 
 	template <typename FindBindingFn>
 	Expression *lookupWithCallerScopeImpl(
 		const Expression *ignoredExpression, BindingFrameStack &callerScope, FindBindingFn findBinding
 	) const {
-		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
-			Expression *boundExpression = findBinding(frames[frameIndex - 1]);
+		for (const FrameNode *node = top.get(); node; node = node->caller.get()) {
+			Expression *boundExpression = findBinding(node->frame);
 			if (!boundExpression || boundExpression == ignoredExpression)
 				continue;
-			callerScope.frames.assign(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(frameIndex - 1));
+			callerScope.top = node->caller;
 			return boundExpression;
 		}
 		return nullptr;
 	}
 
   public:
-	void pushFrame(BindingMap frameBindings) { frames.emplace_back(std::move(frameBindings)); }
-	void pushFrame(BindingFrame frame) { frames.push_back(std::move(frame)); }
+	void pushFrame(BindingMap frameBindings) { pushFrame(BindingFrame(std::move(frameBindings))); }
+	void pushFrame(BindingFrame frame) { top = std::make_shared<FrameNode>(std::move(frame), top); }
 
 	void popFrame() {
-		requireCompilerInvariant(!frames.empty(), "Cannot pop an empty binding frame stack");
-		frames.pop_back();
+		requireCompilerInvariant(top != nullptr, "Cannot pop an empty binding frame stack");
+		top = top->caller;
 	}
 
-	bool empty() const { return frames.empty(); }
-	size_t depth() const { return frames.size(); }
-
-	BindingFrame &topFrame() {
-		requireCompilerInvariant(!frames.empty(), "Cannot access top frame of empty binding frame stack");
-		return frames.back();
-	}
+	bool empty() const { return top == nullptr; }
+	size_t depth() const { return top ? top->depth : 0; }
 
 	const BindingFrame &topFrame() const {
-		requireCompilerInvariant(!frames.empty(), "Cannot access top frame of empty binding frame stack");
-		return frames.back();
+		requireCompilerInvariant(top != nullptr, "Cannot access top frame of empty binding frame stack");
+		return top->frame;
 	}
 
 	Expression *lookupWithCallerScope(
@@ -92,9 +97,9 @@ struct BindingFrameStack {
 		VariableReference *bindingKey = normalizeBindingReference(bindingReference);
 		if (!bindingKey)
 			return nullptr;
-		for (size_t frameIndex = frames.size(); frameIndex > 0; frameIndex--) {
-			auto constraint = frames[frameIndex - 1].parameterConstraints.find(bindingKey);
-			if (constraint != frames[frameIndex - 1].parameterConstraints.end())
+		for (const FrameNode *node = top.get(); node; node = node->caller.get()) {
+			auto constraint = node->frame.parameterConstraints.find(bindingKey);
+			if (constraint != node->frame.parameterConstraints.end())
 				return &constraint->second;
 		}
 		return nullptr;
@@ -110,13 +115,16 @@ struct BindingFrameStack {
 	}
 
 	template <typename Visitor> void forEachFrame(Visitor &&visitor) const {
-		for (const BindingFrame &frame : frames)
-			visitor(frame);
+		llvm::SmallVector<const BindingFrame *, 8> orderedFrames;
+		for (const FrameNode *node = top.get(); node; node = node->caller.get())
+			orderedFrames.push_back(&node->frame);
+		for (auto frame = orderedFrames.rbegin(); frame != orderedFrames.rend(); ++frame)
+			visitor(**frame);
 	}
 
 	bool hasBindings() const {
-		for (const auto &frame : frames) {
-			if (!frame.empty())
+		for (const FrameNode *node = top.get(); node; node = node->caller.get()) {
+			if (!node->frame.empty())
 				return true;
 		}
 		return false;

@@ -72,7 +72,10 @@ static llvm::OptimizationLevel optimizationLevel(const ParseContext::Options &op
 	crashCompilerBug("invalid IR optimization level");
 }
 
-bool generateCode(ParseContext &context) {
+bool generateCode(ParseContext &context, const std::function<bool(ParseContext &)> &nativeEmitter) {
+#ifdef DYNLEX_WEB
+	(void)nativeEmitter;
+#endif
 	requireCompilerInvariant(
 		context.llvmContext && context.llvmModule && !context.llvmBuilder,
 		"code generation requires one initialized target layout"
@@ -320,7 +323,7 @@ bool generateCode(ParseContext &context) {
 		if (!emitNativeObject(context))
 			return false;
 	} else {
-		if (!emitNativeExecutable(context))
+		if (!(nativeEmitter ? nativeEmitter(context) : emitNativeExecutable(context)))
 			return false;
 	}
 #endif

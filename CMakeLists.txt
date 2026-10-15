@@ -588,6 +588,7 @@ if(DYNLEX_WEB)
     FetchContent_MakeAvailable(spirv_cross)
 
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/dap/.*\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/tcpTransport\\.cpp$")

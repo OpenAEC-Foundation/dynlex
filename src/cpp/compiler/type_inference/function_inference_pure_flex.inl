@@ -148,7 +148,7 @@ static PureExpressionExecutionResult executePureFlexCall(
 	if (bodyFrameIndex && !result.returned && expr->sectionBodyExecution == Expression::SectionBodyExecution::Implicit) {
 		PureSectionFlexBodyExecutionFrame &bodyFrame = state.sectionFlexBodyFrames[*bodyFrameIndex];
 		requireCompilerInvariant(
-			result.sectionOutcome.kind == Expression::SectionOutcome::Kind::None,
+			result.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None,
 			"pure implicit caller body follows an unexpected control-flow outcome"
 		);
 		requireCompilerInvariant(bodyFrame.instantiatedBody != nullptr, "pure implicit caller body was not inferred");
@@ -160,17 +160,17 @@ static PureExpressionExecutionResult executePureFlexCall(
 		);
 		result = executePureSection(state, frame, bodyFrame.bodySection, bodyFrame.instantiatedBody, nullptr, callerBindings);
 	}
-	if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::FunctionReturn)
+	if (expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::FunctionReturn)
 		requireCompilerInvariant(result.returned, "pure return expansion did not return");
 	// A caller-body return exits a loop or conditional before its normal header
 	// outcome is produced. Preserve that transfer independently of the header.
 	if (result.returned) {
-		result.sectionOutcome = {};
-	} else if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
-		result.sectionOutcome = {};
+		result.sectionOutcome.reset();
+	} else if (expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None) {
+		result.sectionOutcome.reset();
 	} else {
 		requireCompilerInvariant(
-			result.sectionOutcome.kind == expr->sectionOutcome.kind,
+			result.sectionOutcome.read().kind == expr->sectionOutcome.read().kind,
 			"pure flex execution produced a different section outcome than inference"
 		);
 	}

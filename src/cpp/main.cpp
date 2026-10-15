@@ -1,5 +1,6 @@
 #include "codegen/codegen.h"
 #include "compiler/compiler.h"
+#include "compiler/incrementalCompilation.h"
 #include "dap/dapServer.h"
 #include "lsp/completion.h"
 #include "lsp/dynlexServer.h"
@@ -45,6 +46,7 @@ void printUsage(std::ostream &output) {
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
 		   << "  -funroll-loops|-fno-unroll-loops\n"
 		   << "  -o <output>  -g|--debug  --trace-execution\n"
+		   << "  --incremental <cache-directory>  --incremental-stats (native executables)\n"
 		   << "  --lsp [--port PORT]  --stdio  --dap  --lsp-trace[=PATH]\n"
 		   << "  --version  --help\n";
 }
@@ -173,6 +175,8 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool waitDebugger = false;
 	bool emitCompletions = false;
 	bool dumpPurity = false;
+	bool incrementalStatistics = false;
+	std::string incrementalDirectory;
 	bool enableLspTrace = false;
 	bool showHelp = false;
 	bool explicitShaderStage = false;
@@ -195,6 +199,14 @@ int main(int argumentCount, char *argumentValues[]) {
 			break;
 		} else if (arg == "--help" || arg == "-h") {
 			showHelp = true;
+		} else if (arg == "--incremental") {
+			if (++argumentIndex >= args.size() || args[argumentIndex].empty() || args[argumentIndex].starts_with("-")) {
+				std::cerr << "Missing cache directory for --incremental" << std::endl;
+				return 1;
+			}
+			incrementalDirectory = args[argumentIndex];
+		} else if (arg == "--incremental-stats") {
+			incrementalStatistics = true;
 		} else if (arg == "--wait-debugger") {
 			waitDebugger = true;
 		} else if (arg == "--dap") {
@@ -422,6 +434,17 @@ int main(int argumentCount, char *argumentValues[]) {
 		}
 	}
 
+	if (incrementalStatistics && incrementalDirectory.empty()) {
+		std::cerr << "--incremental-stats requires --incremental" << std::endl;
+		return 1;
+	}
+	if (!incrementalDirectory.empty() && (inputFile.empty() || runLSP || runDAP || useStdio || commandSourceStart ||
+										  context.options.emitLLVM || context.options.emitObject || context.options.emitWASM ||
+										  context.options.emitSPIRV || emitCompletions || dumpPurity)) {
+		std::cerr << "Incremental compilation requires a .dl file and native executable output" << std::endl;
+		return 1;
+	}
+
 	if (waitDebugger) {
 		std::cerr << "Waiting for debugger to attach (PID: " << llvm::sys::Process::getProcessId() << ")..." << std::endl;
 		std::this_thread::sleep_for(std::chrono::seconds(10));
@@ -467,8 +490,13 @@ int main(int argumentCount, char *argumentValues[]) {
 	}
 
 	if (!inputFile.empty()) {
-		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		context.options.inputPath = inputFile;
+		if (!incrementalDirectory.empty()) {
+			bool succeeded = compileIncrementally(context, incrementalDirectory, argumentValues[0], incrementalStatistics);
+			context.printDiagnostics();
+			return succeeded && !hasErrors(context) ? 0 : 1;
+		}
+		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
 		bool compileSucceeded = compile(inputFile, context);
 		if (emitCompletions) {
 			std::cout << lsp::renderCompletionDebugReport(

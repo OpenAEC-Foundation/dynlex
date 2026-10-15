@@ -1,6 +1,7 @@
 #pragma once
 #include "bindingMap.h"
 #include "compileTimeInfo.h"
+#include "copyOnWrite.h"
 #include "memoryFacts.h"
 #include "range.h"
 #include "type.h"
@@ -102,7 +103,7 @@ struct Expression {
 	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
 	// Control-flow intrinsics produce section outcomes during ordinary inference.
 	// Flex calls forward the outcome of their inferred replacement expression.
-	SectionOutcome sectionOutcome;
+	CopyOnWrite<SectionOutcome> sectionOutcome;
 	// Set by the section walker only when execution reaches this top-level
 	// expression. The value records whether execution can continue beyond the
 	// complete construct, including its attached section. An empty value marks

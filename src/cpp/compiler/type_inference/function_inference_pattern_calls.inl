@@ -826,14 +826,15 @@ static void inferFlexPatternCall(
 	// A nested flex may transfer control through this active call while
 	// its replacement is being inferred. That direct outcome takes
 	// precedence over the replacement expression's forwarded outcome.
-	if (expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None)
-		expr->sectionOutcome = outcomeExpression ? outcomeExpression->sectionOutcome : Expression::SectionOutcome{};
-	if (!flexFallsThrough && expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None)
-		expr->sectionOutcome.kind = Expression::SectionOutcome::Kind::FunctionReturn;
+	if (expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None)
+		expr->sectionOutcome =
+			outcomeExpression ? outcomeExpression->sectionOutcome : CopyOnWrite<Expression::SectionOutcome>{};
+	if (!flexFallsThrough && expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None)
+		expr->sectionOutcome.write().kind = Expression::SectionOutcome::Kind::FunctionReturn;
 	if (sectionBodyFrameIndex) {
 		size_t frameIndex = *sectionBodyFrameIndex;
 		if (!context.sectionFlexBodyFrames[frameIndex].bodyInferred &&
-			expr->sectionOutcome.kind == Expression::SectionOutcome::Kind::None) {
+			expr->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None) {
 			Section *executionSection = bodyExpr->range.line ? bodyExpr->range.line->section : matchedSection;
 			if (!inferSectionFlexCallerBodyFrame(frameIndex, executionSection, expr, context)) {
 				return;

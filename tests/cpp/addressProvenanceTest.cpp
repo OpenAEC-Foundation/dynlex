@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 namespace {
 
@@ -13,6 +14,89 @@ void expect(bool condition, std::string_view message) {
 		return;
 	std::cerr << message << '\n';
 	std::exit(1);
+}
+
+void checkBindingScopeSnapshots() {
+	Expression outerValue, innerValue;
+	VariableReference parameter({}, "value");
+	VariableReference use({}, "value");
+	use.definition = &parameter;
+	BindingFrame outer;
+	outer.bindings["value"] = &outerValue;
+	outer.parameterBindings[&parameter] = &outerValue;
+	outer.parameterConstraints[&parameter].parameterName = "outer";
+	BindingFrameStack original;
+	original.pushFrame(std::move(outer));
+	BindingFrameStack snapshot = original;
+	BindingFrame inner;
+	inner.bindings["value"] = &innerValue;
+	inner.parameterBindings[&parameter] = &innerValue;
+	inner.parameterConstraints[&parameter].parameterName = "inner";
+	original.pushFrame(std::move(inner));
+	BindingFrameStack caller;
+	expect(original.lookupWithCallerScope(&use, nullptr, caller) == &innerValue, "parameter binding lost shadowing");
+	expect(caller.depth() == 1 && caller.topFrame().bindings.at("value") == &outerValue, "lookup lost caller scope");
+	expect(original.lookupParameterConstraint(&use)->parameterName == "inner", "constraint lost shadowing");
+	expect(
+		snapshot.depth() == 1 && snapshot.lookupParameterConstraint(&use)->parameterName == "outer", "push changed snapshot"
+	);
+	expect(
+		original.lookupWithCallerScope("value", &innerValue, caller) == &outerValue,
+		"ignored binding did not expose outer binding"
+	);
+	expect(caller.empty(), "outer binding returned a nonempty caller scope");
+	std::vector<Expression *> order;
+	original.forEachFrame([&](const BindingFrame &frame) {
+		order.push_back(frame.bindings.at("value"));
+	});
+	expect(order == std::vector<Expression *>{&outerValue, &innerValue}, "frame visitation changed source order");
+	BindingFrameStack retained = original;
+	original.popFrame();
+	original.popFrame();
+	expect(original.empty() && retained.depth() == 2, "pop changed retained scope");
+	expect(retained.lookupWithCallerScope("value", nullptr, caller) == &innerValue, "retained scope lost its bindings");
+	retained = {};
+	expect(caller.topFrame().bindings.at("value") == &outerValue, "caller scope expired with callee scope");
+	BindingFrameStack emptyFrame;
+	emptyFrame.pushFrame(BindingFrame{});
+	expect(!emptyFrame.empty() && !emptyFrame.hasBindings(), "empty binding frame lost structural scope");
+	expect(snapshot.hasBindings(), "snapshot lost binding presence");
+	VariableReference unrelated({}, "value");
+	expect(!snapshot.lookupWithCallerScope(&unrelated, nullptr, caller), "lookup confused distinct parameter identities");
+	expect(caller.depth() == 1, "failed lookup changed caller scope");
+	BindingFrameStack deep = snapshot;
+	for (int index = 0; index < 20; ++index)
+		deep.pushFrame(BindingFrame{});
+	size_t visited = 0;
+	deep.forEachFrame([&](const BindingFrame &) {
+		++visited;
+	});
+	expect(visited == 21 && deep.hasBindings(), "deep scope traversal lost frames or outer bindings");
+	expect(
+		deep.lookupWithCallerScope("value", nullptr, caller) == &outerValue && caller.empty(), "deep lookup lost outer scope"
+	);
+}
+
+void checkSectionOutcomeIsolation() {
+	ParseContext context;
+	Expression source;
+	source.sectionOutcome.write().kind = Expression::SectionOutcome::Kind::Loop;
+	source.sectionOutcome.write().conditionValue = true;
+	source.sectionOutcome.write().conditionType = DataType{DataType::Kind::Bool};
+	auto snapshot = source.sectionOutcome;
+	Expression *clone = context.cloneExpressionTree(&source, true);
+	clone->sectionOutcome.write().conditionValue = false;
+	expect(std::get<bool>(source.sectionOutcome.read().conditionValue), "clone changed its source loop condition");
+	expect(!std::get<bool>(clone->sectionOutcome.read().conditionValue), "clone did not retain its own loop condition");
+	expect(clone->sectionOutcome.read().conditionType.kind == DataType::Kind::Bool, "clone lost its condition type");
+	source.sectionOutcome.reset();
+	expect(std::get<bool>(snapshot.read().conditionValue), "reset changed a retained control-flow snapshot");
+	expect(source.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "reset retained a loop outcome");
+	Expression ordinary;
+	ordinary.sectionOutcome.write().kind = Expression::SectionOutcome::Kind::FunctionReturn;
+	Expression fresh;
+	expect(fresh.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "write changed another default outcome");
+	expect(source.sectionOutcome.read().kind == Expression::SectionOutcome::Kind::None, "write changed a reset outcome");
 }
 
 void checkCompilation(std::string_view body, std::string_view diagnostic = {}) {
@@ -114,6 +198,8 @@ function probe condition:
 } // namespace
 
 int main() {
+	checkBindingScopeSnapshots();
+	checkSectionOutcomeIsolation();
 	constexpr std::string_view nullDiagnostic = "cannot dereference a null pointer";
 	checkCompilation("@intrinsic(\"discard\", @intrinsic(\"dereference\", null pointer))\n", nullDiagnostic);
 	checkCompilation(

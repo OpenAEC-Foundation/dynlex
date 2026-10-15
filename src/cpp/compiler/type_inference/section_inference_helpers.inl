@@ -28,13 +28,13 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 }
 
 static bool sectionOutcomeIsLoop(Expression *openingExpression) {
-	return openingExpression && openingExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop;
+	return openingExpression && openingExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop;
 }
 
 static std::optional<Expression::SectionOutcome::Kind> finalizedBranchOutcome(Expression *expression) {
 	if (!expression)
 		return std::nullopt;
-	Expression::SectionOutcome::Kind kind = expression->sectionOutcome.kind;
+	Expression::SectionOutcome::Kind kind = expression->sectionOutcome.read().kind;
 	if (kind != Expression::SectionOutcome::Kind::Conditional &&
 		kind != Expression::SectionOutcome::Kind::AlternativeConditional &&
 		kind != Expression::SectionOutcome::Kind::Alternative) {
@@ -152,10 +152,10 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	bool inferred = inferExpression(trialExpression, trialContext, true, bindingFrameStack, false) && trialContext.typesValid;
 	if (inferred) {
 		requireCompilerInvariant(
-			trialExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Loop,
+			trialExpression->sectionOutcome.read().kind == Expression::SectionOutcome::Kind::Loop,
 			"loop header reinference produced a different control-flow outcome"
 		);
-		outcome = trialExpression->sectionOutcome;
+		outcome = trialExpression->sectionOutcome.read();
 	} else {
 		context.inheritTypeFailureFrom(trialContext);
 		context.typesValid = false;

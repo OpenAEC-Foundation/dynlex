@@ -10,7 +10,9 @@ struct SourceFile {
 	SourceFile(std::string uri, std::string content);
 	virtual ~SourceFile() = default;
 
-	std::string uri;
+	const std::string uri;
+	// Source identity and library classification stay fixed across content edits.
+	const bool isInternal;
 	std::string content;
 	void setContent(std::string text);
 	std::string_view getLine(int lineIndex) const;

@@ -93,7 +93,7 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedCallablePathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
-	expr->sectionOutcome = {};
+	expr->sectionOutcome.reset();
 	expr->executionFallsThrough.reset();
 	expr->sectionBodyReachable = true;
 	expr->sectionBodyExecution = Expression::SectionBodyExecution::None;

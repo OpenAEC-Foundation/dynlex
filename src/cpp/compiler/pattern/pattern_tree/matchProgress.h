@@ -3,10 +3,12 @@
 #include "patternMatch.h"
 #include "patternTreeNode.h"
 #include "sectionType.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include <deque>
 #include <limits>
 #include <string>
-#include <unordered_set>
 struct ParseContext;
 struct PatternReference;
 struct MatchProgress;
@@ -15,6 +17,11 @@ struct MatchStorage;
 struct MatchStep;
 
 inline constexpr size_t noMatchSequenceNode = std::numeric_limits<size_t>::max();
+
+template <typename State, typename Hash> struct MatchStateInfo {
+	static unsigned getHashValue(const State &state) { return static_cast<unsigned>(Hash{}(state)); }
+	static bool isEqual(const State &left, const State &right) { return left == right; }
+};
 
 template <typename T> struct MatchSequenceNode {
 	T value;
@@ -98,9 +105,11 @@ struct CompletedMatchProgress {
 
 struct MatchParentAlternatives {
 	std::vector<const MatchProgress *> values;
-	std::unordered_set<MatchContinuationState, MatchContinuationStateHash> valueStates;
+	llvm::SmallDenseSet<MatchContinuationState, 4, MatchStateInfo<MatchContinuationState, MatchContinuationStateHash>>
+		valueStates;
 	std::vector<CompletedMatchProgress> completedSubmatches;
-	std::unordered_set<CompletedMatchState, CompletedMatchStateHash> completedSubmatchStates;
+	llvm::SmallDenseSet<CompletedMatchState, 4, MatchStateInfo<CompletedMatchState, CompletedMatchStateHash>>
+		completedSubmatchStates;
 
 	bool addParent(const MatchProgress *parent);
 	bool addCompletion(CompletedMatchProgress completion);
@@ -148,7 +157,7 @@ struct MatchProgress {
 };
 
 struct MatchStep {
-	std::vector<MatchProgress> nextMatches;
+	llvm::SmallVector<MatchProgress, 4> nextMatches;
 	CompletedMatchProgress completedSubmatch;
 	bool hasCompletedSubmatch = false;
 };
