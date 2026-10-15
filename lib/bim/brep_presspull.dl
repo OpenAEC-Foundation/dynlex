@@ -305,7 +305,7 @@ local function the cad presspull lift of {cad curve2:piece} on {cad plane:basePl
             set firstParameter to piece's ellipse's startParameter
             return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, firstParameter, firstParameter + (the cad sweep of piece's ellipse))
         if piece's kind = cad nurbs curve2 kind:
-            set curveValue to the cad edge curve3 of (a cad planar spline3 with plane basePlane and curve (the cad clone of piece's nurbs))
+            set curveValue to the cad edge curve3 of (a cad planar spline3 with plane basePlane and curve (the cad clone of (piece's nurbs)))
             return @intrinsic("construct", a cad presspull lifted curve, true, curveValue, 0.0 as a 64 bit floating-point number, 1.0 as a 64 bit floating-point number)
         return absent
 
