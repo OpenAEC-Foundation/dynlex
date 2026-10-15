@@ -922,7 +922,7 @@ local function cad split face in place {cad face key:faceKey} in {cad body:body}
             set endAlong to lowAlong + closedPeriod's amount
         else if closedPeriod's valid:
             set directStatus to the cad split containment of cutter at (0.5 * (lowAlong + highAlong)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
-            set wrappedStatus to the cad split containment of cutter at (0.5 * (highAlong + lowAlong + closedPeriod's amount)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
+            set wrappedStatus to the cad split containment of cutter at (0.5 * ((highAlong + lowAlong) + closedPeriod's amount)) on (@intrinsic("dereference", surfaceNode)) bounded by boundaryCurves with periods periods within tolerance requiring clearance false
             if (directStatus's valid and wrappedStatus's valid) = false:
                 return no cad split face
             if directStatus's contained and (wrappedStatus's contained = false):

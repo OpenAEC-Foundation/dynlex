@@ -305,7 +305,7 @@ local function cad triangulation ring {a pointer to a list:vertices} is simple w
                 if (the cad distance from (the item at firstIndex in vertices) to (the item at secondIndex in vertices)) <= limit:
                     return false
         loop index from 0 to count:
-            set before to the item at (the remainder of (index + count - 1) divided by count) in vertices
+            set before to the item at (the remainder of ((index + count) - 1) divided by count) in vertices
             set here to the item at index in vertices
             set after to the item at (the remainder of (index + 1) divided by count) in vertices
             set incoming to the cad difference of before and here
@@ -569,7 +569,7 @@ local function the cad triangulation ears of {a pointer to a list:vertices} arou
                         set cut to at
                         set bestKey to key
             if cut >= 0:
-                set firstIndex to the item at (the remainder of (cut + count - 1) divided by count) in indices
+                set firstIndex to the item at (the remainder of ((cut + count) - 1) divided by count) in indices
                 set secondIndex to the item at cut in indices
                 set thirdIndex to the item at (the remainder of (cut + 1) divided by count) in indices
                 append (@intrinsic("construct", a cad triangle indices, firstIndex, secondIndex, thirdIndex)) to faces

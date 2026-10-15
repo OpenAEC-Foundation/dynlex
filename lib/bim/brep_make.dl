@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # Port of https://github.com/HakanSeven12/cadkernel at
 # 953d546b68aef4b6692566a1a9b077fc5bd9fb4f, src/brep/make.rs.
-# Source coverage is tracked in docs/cadkernel-coverage.md.
+# Supported constructors are exercised by the retained BIM required fixtures.
 # Builders allocate independent bodies and synthesized topology. Body copies
 # share their owned arenas; use the cad clone pattern for independent editing.
 import lib/bim/brep_result.dl
