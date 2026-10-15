@@ -28,4 +28,3 @@ function placement maximum samples of {cad body:solid} with sag {a 64 bit floati
                 set longest to the maximum of longest and (the length of points's value's values)
         free edges
         return longest
-

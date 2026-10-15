@@ -59,4 +59,3 @@ construct2 check (refused's valid = false)
 set refusedSweep to the cad arc2 sweep for radius 1.0 and signed chord 2.00001
 construct2 check (refusedSweep's valid = false)
 print "construct2: full-turn, coincidence, collinearity and impossible chord refusals" as a line
-

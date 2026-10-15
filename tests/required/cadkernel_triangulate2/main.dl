@@ -158,7 +158,7 @@ free survey
 set circle to a triangulation fixture circle at (the cad zero vector2) with radius 10.0 and 64 vertices
 set mesh to the cad triangulation of circle with holes holes
 check triangulation ((the length of the triangles of mesh) = 62) named "64 vertices produce 62 triangles"
-check triangulation area of mesh against ((0.5 * 64.0 * 100.0) * (the sine of (6.283185307179586 / 64.0))) within 1e-6
+check triangulation area of mesh against (((0.5 * 64.0) * 100.0) * (the sine of (6.283185307179586 / 64.0))) within 1e-6
 free cad triangulation mesh
 free circle
 

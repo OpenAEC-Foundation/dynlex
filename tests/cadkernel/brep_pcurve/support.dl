@@ -43,4 +43,3 @@ function pc one edge on {cad surface:surface} with {cad edge curve3:curve} from 
         set loopNode to the cad node pointer for lk in body
         append uk to (loopNode's coedges's values)
         return body
-

@@ -1102,7 +1102,7 @@ local function the cad presspull trigonometric parameters where {cad plane:moved
         loop turn from -2 to 3:
             set fullTurn to (turn as a 64 bit floating-point number) * (cad presspull tau)
             append (phase - angle + fullTurn) to roots's values
-            append (phase + angle + fullTurn) to roots's values
+            append ((phase + angle) + fullTurn) to roots's values
         return the cad presspull parameters roots
 
 function the cad presspull parameters where {cad plane:movedPlane} meets {cad edge curve3:curveValue}:

@@ -243,4 +243,3 @@ function the cad clone of {cad arc fit result2:fitted}:
             loop index from 0 to the length of fitted's vertices:
                 append (the item at index in fitted's vertices) to vertices
         return @intrinsic("construct", a cad arc fit result2, fitted's valid, vertices, the cad arc fit2 storage owning vertices)
-

@@ -719,7 +719,7 @@ function regroup cad boolean shells in {cad body:body} replacing {cad shell key:
         loop componentCursor from 0 to the length of (components's values):
             set component to the item at componentCursor in (components's values)
             set measured to the cad boolean component volume of component's faces in body
-            if (measured's valid = false) or (((the absolute value of measured's value) <= (tolerance * tolerance * tolerance))):
+            if (measured's valid = false) or (((the absolute value of measured's value) <= ((tolerance * tolerance) * tolerance))):
                 return false
             append (@intrinsic("construct", a cad boolean component record, component's faces, measured's value, componentCursor)) to (records's values)
 
