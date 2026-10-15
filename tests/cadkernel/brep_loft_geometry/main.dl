@@ -76,7 +76,7 @@ loop index from 0 to the length of faces:
         loop iu from 0 to 5:
             loop iv from 0 to 5:
                 set point to the cad point on (@intrinsic("dereference", surface)) at parameters ((iu as a 64 bit floating-point number) / 4.0) and ((iv as a 64 bit floating-point number) / 4.0)
-                check loft ((the absolute value of ((((point's x) * (point's x)) / 4.0) + ((point's y) * (point's y)) - 1.0)) < 1e-12)
+                check loft ((the absolute value of (((((point's x) * (point's x)) / 4.0) + ((point's y) * (point's y))) - 1.0)) < 1e-12)
                 check loft ((the absolute value of ((point's z) - ((iv as a 64 bit floating-point number) * 0.75))) < 1e-12)
         set normal to the cad normal of (@intrinsic("dereference", surface)) at parameters 0.5 and 0.5
         check loft (normal's valid)

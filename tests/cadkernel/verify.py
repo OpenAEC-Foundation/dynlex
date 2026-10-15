@@ -316,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     build_directory.mkdir(parents=True, exist_ok=True)
     output_directory = Path(tempfile.mkdtemp(prefix="run-", dir=build_directory))
     print(f"Compiler: {compiler}\nArtifacts: {output_directory}", flush=True)
-    print(f"Selected {len(fixtures)} fixtures at {', '.join(optimizations)}; full main-crate scope remains 83 source files / 672 upstream tests.", flush=True)
+    print(f"Selected {len(fixtures)} fixtures at {', '.join(optimizations)}; selected reusable BIM geometry.", flush=True)
     passed = failed = 0
     started = time.monotonic()
     for fixture in fixtures:
