@@ -499,6 +499,17 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_numeric_literal_test EXCLUDE_FROM_ALL
+        tests/cpp/numericLiteralTest.cpp
+        src/cpp/compiler/numericLiteral.cpp
+    )
+    target_include_directories(dynlex_numeric_literal_test PRIVATE src/cpp)
+    dynlex_link_llvm(dynlex_numeric_literal_test support)
+    set_target_properties(dynlex_numeric_literal_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+
+    add_executable(
         dynlex_class_layout_test EXCLUDE_FROM_ALL
         tests/cpp/classLayoutTest.cpp
         src/cpp/compiler/classLayout.cpp

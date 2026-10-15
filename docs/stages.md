@@ -44,7 +44,9 @@ unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
 direct unary negation produces signed 64-bit minimum. Stored unsigned values,
 including that boundary, use ordinary wrapping negation. Larger magnitudes are
 rejected during parsing. Explicit floating-point literals remain 64-bit
-floating-point values.
+floating-point values, rounded to nearest with ties to even independently of the
+host floating-point environment. Representable subnormal values are accepted;
+overflow and nonzero magnitudes that round to zero are rejected.
 
 # Pattern Matching Stage
 
