@@ -14,5 +14,5 @@ function the accumulated private values for seed:
 
 @intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the accumulated private values for 5, @intrinsic("type", "int", 32))))
 @intrinsic("store", runtime, the accumulated private values for @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 5))
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
 @intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), runtime))

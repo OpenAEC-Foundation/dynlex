@@ -19,5 +19,5 @@ function the repeated count for limit:
 
 @intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the repeated count for 0, @intrinsic("type", "int", 32))))
 @intrinsic("store", runtime, the repeated count for @intrinsic("command line argument count"))
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
 @intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), runtime))

@@ -27,6 +27,6 @@ function the [width] after refining {storage:values} with item:
 set data to @intrinsic("call", "libc", "calloc", @intrinsic("add pointer depth", box), 1, 8)
 set values to @intrinsic("construct", storage, data)
 set item to @intrinsic("construct", box, 7)
-@intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", the width after refining values with item)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%lld\n", the width after refining values with item))
 @intrinsic("destroy at", the data of values)
 @intrinsic("call", "libc", "free", @intrinsic("type", "nothing"), the data of values)

@@ -20,5 +20,5 @@ function the nested count for limit:
 
 @intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the nested count for 4, @intrinsic("type", "int", 32))))
 @intrinsic("store", runtime, the nested count for @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 4))
-@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
 @intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), runtime))
