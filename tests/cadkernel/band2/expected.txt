@@ -1,0 +1,6 @@
+straight band boundary and source stations
+linear width variation follows the original segment
+invalid widths and width counts return the empty default
+equal-width corner joins use the rail intersection
+curved bands retain analytic source distances between chord stations
+collapsed source geometry has no usable rails

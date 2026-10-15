@@ -1,5 +1,7 @@
 case Expression::Kind::PatternCall:
-if (!inferPatternCall(expr, context, flexBindingFrameStack, preserveCurrentGrouping))
+if (!inferPatternCall(
+		expr, context, flexBindingFrameStack, preserveCurrentGrouping, argumentEffects ? &*argumentEffects : nullptr
+	))
 	return;
 break;
 

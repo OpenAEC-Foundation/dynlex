@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/band2/main.dl
+
+function band2 local [result]:
+    execute:
+        set source to band2 open line
+        set widths to a list containing [2.0,4.0]
+        set result to the cad band boundary of source with widths widths within angle 0.1
+        free widths
+        free cad polyline source
+        return result
+
+loop repetition from 0 to 24:
+    set original to band2 local result
+    set retained to original
+    set copied to the cad clone of original
+    check band2 (copied = original)
+    check band2 (copied's edges != original's edges)
+    check band2 (copied's stationPieces != original's stationPieces)
+    set original to a new (the type of original)
+    check band2 ((the length of retained's edges) = 4)
+    set firstEdge to the item at 0 in retained's edges
+    check band2 (firstEdge = (the cad clone of firstEdge))
+    set firstStation to the item at 0 in retained's stationPieces
+    check band2 (firstStation = (the cad clone of firstStation))
+    set changed to the item at 0 in copied's edges
+    set the sourceSegment of changed to 99
+    replace item at index 0 in copied's edges with changed
+    check band2 ((the item at 0 in retained's edges)'s sourceSegment = 0)
+    set changedStation to the item at 0 in copied's stationPieces
+    set the sourceSegment of changedStation to 99
+    replace item at index 0 in copied's stationPieces with changedStation
+    check band2 ((the item at 0 in retained's stationPieces)'s sourceSegment = 0)
+    set retained to a new (the type of retained)
+    check band2 (firstEdge's sourceSegment = 0)
+    check band2 (firstStation's sourceSegment = 0)
+print "band lists retain across returns and resets and clones own independent storage" as a line
+set empty to an empty cad band boundary2
+set emptyCopy to the cad clone of empty
+check band2 (empty = emptyCopy)
+print "default band results own cloneable empty lists" as a line

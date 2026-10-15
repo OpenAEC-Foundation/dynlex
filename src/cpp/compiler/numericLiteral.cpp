@@ -2,7 +2,6 @@
 #include <charconv>
 #include <cmath>
 #include <limits>
-#include <string>
 #include <system_error>
 
 NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
@@ -28,19 +27,13 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 		return {{magnitude}, NumericLiteralParseError::None};
 	}
 
-	try {
-		size_t parsedLength = 0;
-		double value = std::stod(std::string(text), &parsedLength);
-		if (parsedLength != text.size())
-			return {{0.0}, NumericLiteralParseError::Invalid};
-		if (!std::isfinite(value))
-			return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-		return {{value}, NumericLiteralParseError::None};
-	} catch (const std::out_of_range &) {
+	double value = 0.0;
+	auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+	if (error == std::errc::result_out_of_range || !std::isfinite(value))
 		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-	} catch (const std::invalid_argument &) {
+	if (error != std::errc{} || end != text.data() + text.size())
 		return {{0.0}, NumericLiteralParseError::Invalid};
-	}
+	return {{value}, NumericLiteralParseError::None};
 }
 
 DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {

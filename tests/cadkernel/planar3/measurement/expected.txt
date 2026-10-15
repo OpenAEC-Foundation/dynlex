@@ -1,0 +1,3 @@
+distance_along_a_tilted_curve_is_measured_in_world_units
+a_tolerance_scales_the_point_count_with_the_size
+a_tolerance_sampling_lands_on_the_plane_too

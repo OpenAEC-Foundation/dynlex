@@ -1,0 +1,20 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section repeat count:
+    replacement:
+        @intrinsic("store", iteration, 0)
+        while @intrinsic("less than", iteration, count):
+            @intrinsic("execute body")
+            @intrinsic("store", iteration, @intrinsic("add", iteration, 1))
+
+function the repeated count for limit:
+    execute:
+        @intrinsic("store", total, 0)
+        repeat limit:
+            @intrinsic("store", total, @intrinsic("add", total, 1))
+        @intrinsic("return", total)
+
+@intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the repeated count for 2, @intrinsic("type", "int", 32))))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), 2))

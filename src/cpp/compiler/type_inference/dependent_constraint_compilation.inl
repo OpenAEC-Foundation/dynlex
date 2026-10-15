@@ -546,11 +546,89 @@ static std::optional<TypeConstraintTemplate> compileDependentParameterConstraint
 	return std::move(*result.constraint);
 }
 
+static TypeConstraint independentConstraintDomain(const TypeConstraint &constraint) {
+	TypeConstraint result = constraint;
+	// Layout indices belong to speculative class transactions. Nominal class
+	// identity remains a necessary condition independently of those layouts.
+	result.classInstantiationIndex.reset();
+	if (constraint.elementConstraint)
+		result.elementConstraint = std::make_shared<TypeConstraint>(independentConstraintDomain(*constraint.elementConstraint));
+	return result;
+}
+
+static std::optional<ResolvedPatternConstraint> probeInitialPatternConstraint(
+	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex
+) {
+	std::optional<ResolvedPatternConstraint> initial = resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+	if (initial)
+		return initial;
+	auto key = std::make_tuple(definition, pathIndex, argumentIndex);
+	auto &domains = context.parseContext.provisionalConstraintDomains;
+	auto known = domains.find(key);
+	if (known != domains.end())
+		return ResolvedPatternConstraint{
+			known->second, known->second.requiresCompileTimeValue, false, known->second.explicitlyAcceptsNothing(), false
+		};
+	auto &active = context.parseContext.activePatternConstraintProbes;
+	if (!active.insert(key).second)
+		return std::nullopt;
+	struct ProbeScope {
+		decltype(active) probes;
+		decltype(key) key;
+		~ProbeScope() { probes.erase(key); }
+	} scope{active, key};
+
+	std::optional<TypeConstraint> selectedConstraint;
+	bool requiresCompileTimeValue = false;
+	auto includeFixedConstraint = [&](const TypeConstraint &declared, const Range &range) {
+		TypeConstraint constraint = declared;
+		if (!constraint.isResolved()) {
+			ScopedClassInstantiationSavepoint classSavepoint;
+			DeclaredTypeConstraintWorkItem item;
+			item.expression = createTypeConstraintExpression(context.parseContext, definition->section, range);
+			if (!item.expression) {
+				return;
+			}
+			ResolvedPatternConstraint result;
+			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, context.parseContext, &result);
+			destroyTypeConstraintExpression(item.expression);
+			if (probe != PatternTypeConstraintProbe::Ready) {
+				return;
+			}
+			constraint = independentConstraintDomain(result.constraint);
+		}
+		requiresCompileTimeValue = requiresCompileTimeValue || constraint.requiresCompileTimeValue;
+		// Every declared constraint is necessary. Retain the narrowest known
+		// domain for exclusion; incomplete information never selects a callee.
+		if (!selectedConstraint || selectedConstraint->contains(constraint))
+			selectedConstraint = std::move(constraint);
+	};
+	const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, argumentIndex);
+	if (!element->hasDependentTypeConstraint &&
+		(!element->typeConstraintName.empty() || element->resolvedTypeConstraint.isResolved())) {
+		includeFixedConstraint(element->resolvedTypeConstraint, patternElementTypeConstraintRange(*definition, *element));
+	}
+	Variable *parameterVariable = definition->section->findVariable(element->text);
+	if (parameterVariable) {
+		for (VariableReference *reference : parameterVariable->declaredTypeConstraintReferences) {
+			if (!reference->hasDependentTypeConstraint)
+				includeFixedConstraint(reference->declaredTypeConstraint, reference->declaredTypeConstraintRange);
+		}
+	}
+	bool acceptsNothing = !selectedConstraint || selectedConstraint->explicitlyAcceptsNothing();
+	TypeConstraint domain = independentConstraintDomain(selectedConstraint.value_or(TypeConstraint::any()));
+	domain.requiresCompileTimeValue = domain.requiresCompileTimeValue || requiresCompileTimeValue;
+	if (!domain.isStructurallyUnconstrained())
+		domains.emplace(key, domain);
+	return ResolvedPatternConstraint{std::move(domain), requiresCompileTimeValue, false, acceptsNothing, false};
+}
+
 static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstraint(
 	InferenceContext &context, PatternDefinition *definition, size_t pathIndex, size_t argumentIndex,
 	const std::vector<DataType> &argumentTypes, const std::vector<CompileTimeValue> &argumentValues
 ) {
-	std::optional<ResolvedPatternConstraint> initial = resolveInitialPatternConstraint(definition, pathIndex, argumentIndex);
+	std::optional<ResolvedPatternConstraint> initial =
+		probeInitialPatternConstraint(context, definition, pathIndex, argumentIndex);
 	if (!initial)
 		return std::nullopt;
 	requireCompilerInvariant(
@@ -560,14 +638,10 @@ static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstra
 	requireCompilerInvariant(
 		parameters.size() == argumentTypes.size(), "provisional constraint parameters and arguments diverged"
 	);
-	for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
-		if (!resolveInitialPatternConstraint(definition, pathIndex, parameterIndex))
-			return std::nullopt;
-	}
-
 	const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, argumentIndex);
 	Variable *parameterVariable = definition->section->findVariable(element->text);
-	bool selectedConstraint = !element->typeConstraintName.empty() && !element->hasDependentTypeConstraint;
+	bool selectedConstraint = (!element->typeConstraintName.empty() || element->resolvedTypeConstraint.isResolved()) &&
+							  !element->hasDependentTypeConstraint;
 	if (parameterVariable) {
 		selectedConstraint =
 			selectedConstraint ||
@@ -578,6 +652,11 @@ static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstra
 	TypeConstraint constraint = initial->constraint;
 	bool requiresCompileTimeValue = initial->requiresCompileTimeValue;
 	auto includeDependentConstraint = [&](const Range &range, const std::string &name) {
+		// Only a dependent expression needs the earlier parameter domains.
+		for (size_t earlierIndex = 0; earlierIndex < argumentIndex; earlierIndex++) {
+			if (!resolveInitialPatternConstraint(definition, pathIndex, earlierIndex))
+				return false;
+		}
 		std::optional<TypeConstraintTemplate> compiled = compileDependentParameterConstraint(
 			context.parseContext, *definition, pathIndex, argumentIndex, parameters, range, name, false
 		);
@@ -608,7 +687,9 @@ static std::optional<ResolvedPatternConstraint> resolveProvisionalPatternConstra
 		}
 	}
 	bool acceptsNothing = selectedConstraint && constraint.explicitlyAcceptsNothing();
-	return ResolvedPatternConstraint{std::move(constraint), requiresCompileTimeValue, !selectedConstraint, acceptsNothing};
+	return ResolvedPatternConstraint{
+		std::move(constraint), requiresCompileTimeValue, !selectedConstraint, acceptsNothing, initial->complete
+	};
 }
 
 static bool initializePatternPathSignatures(ParseContext &parseContext) {
@@ -620,8 +701,7 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 			for (size_t pathIndex = 0; pathIndex < definition->indexedPaths.size(); pathIndex++) {
 				size_t parameterIndex = 0;
 				forEachPatternParameterName(
-					definition, pathIndex,
-					[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+					definition, pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
 					const DefinitionPatternElement *element = signatureElement(*definition, pathIndex, parameterIndex++);
 					if (!element) {
 						valid = false;
@@ -633,8 +713,7 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 					VariableReference *resolvedFixedReference = nullptr;
 					if (parameterVariable) {
 						auto resolved = std::ranges::find_if(
-							parameterVariable->declaredTypeConstraintReferences,
-							[](VariableReference *reference) {
+							parameterVariable->declaredTypeConstraintReferences, [](VariableReference *reference) {
 							return reference && !reference->hasDependentTypeConstraint &&
 								   reference->declaredTypeConstraint.isResolved();
 						}
@@ -661,7 +740,7 @@ static bool initializePatternPathSignatures(ParseContext &parseContext) {
 																					   : resolvedFixedReference->declaredType)
 																				: DataType{});
 					signature.requiresCompileTimeValue = signature.constraint.constantPart.requiresCompileTimeValue;
-					bool hasAuthoredConstraint = !element->typeConstraintName.empty() ||
+					bool hasAuthoredConstraint = !element->typeConstraintName.empty() || elementHasFixedConstraint ||
 												 (parameterVariable && parameterVariable->hasDeclaredTypeConstraint());
 					signature.acceptsUnresolvedType = !hasAuthoredConstraint;
 					signature.hasExplicitTypeConstraint = hasAuthoredConstraint;

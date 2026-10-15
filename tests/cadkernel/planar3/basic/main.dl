@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: MPL-2.0
+# Thirteen source tests independent of geom2d arclength/linear-deviation modules.
+import tests/cadkernel/planar3/support.dl
+
+function verify planar basic assertions:
+    execute:
+        set flat to a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 1.0 2.0) to (planar v2 4.0 6.0)))
+        planar point (the cad point on flat at 0.0) equals (planar v3 1.0 2.0 0.0)
+        planar point (the cad point on flat at 1.0) equals (planar v3 4.0 6.0 0.0)
+        set points to the cad samples of flat with density 20.0
+        planar check ((the length of points) = 2) named "flat line tessellation count"
+        planar point (the item at 0 in points) equals (planar v3 1.0 2.0 0.0)
+        planar point (the item at 1 in points) equals (planar v3 4.0 6.0 0.0)
+        free points
+        print "a_flat_curve_keeps_its_coordinates_and_gains_a_zero" as a line
+
+        set flat to a flat cad planar curve3 of (the planar unit arc)
+        set raised to a cad planar curve3 of (the planar unit arc) on (the planar upright frame)
+        loop index from 0 through 10:
+            set parameter to (index as a 64 bit floating-point number) / 10.0
+            set a to the cad point on flat at parameter
+            set b to the cad point on raised at parameter
+            planar point b is near (planar v3 (the x of a) 0.0 (the y of a)) within 1e-12
+        print "a_frame_moves_the_curve_without_reparameterising_it" as a line
+
+        set fastFrame to a cad plane with origin (planar v3 7.0 -3.0 2.5), x axis (the cad x axis) and y axis (the cad y axis)
+        set slowResult to the cad orthonormal plane with origin (planar v3 7.0 -3.0 2.5), x axis (planar v3 1.0 1e-17 0.0) and normal (the cad z axis)
+        planar check (the valid of slowResult) named "general frame valid"
+        set slowFrame to the value of slowResult
+        planar check ((cad fastFrame is xy aligned) and ((cad slowFrame is xy aligned) = false)) named "general and xy branches"
+        set fast to a cad planar curve3 of (the planar unit arc) on fastFrame
+        set slow to a cad planar curve3 of (the planar unit arc) on slowFrame
+        set fastPoints to the cad samples of fast with density 20.0
+        set slowPoints to the cad samples of slow with density 20.0
+        planar check ((the length of fastPoints) = (the length of slowPoints)) named "same sample count"
+        loop index from 0 to the length of fastPoints:
+            planar point (the item at index in fastPoints) is near (the item at index in slowPoints) within 1e-12
+        free fastPoints
+        free slowPoints
+        print "the_general_arm_agrees_with_the_xy_shortcut" as a line
+
+        set elevated to a cad plane with origin (planar v3 0.0 0.0 12.0), x axis (the cad x axis) and y axis (the cad y axis)
+        planar check ((cad elevated is xy aligned) and ((cad elevated is xy) = false)) named "elevated aligned frame"
+        set raised to a cad planar curve3 of (the planar unit arc) on elevated
+        planar point (the cad point on raised at 0.0) equals (planar v3 1.0 0.0 12.0)
+        set back to the cad parameter on raised nearest (planar v3 1.0 0.0 12.0)
+        planar check ((the valid of back) and ((the absolute value of (the value of back)) < 1e-12)) named "elevated inverse"
+        print "an_elevated_xy_plane_still_takes_the_shortcut" as a line
+
+        set raised to a cad planar curve3 of (the planar unit arc) on (the planar upright frame)
+        loop index from 0 through 10:
+            set parameter to (index as a 64 bit floating-point number) / 10.0
+            set back to the cad parameter on raised nearest (the cad point on raised at parameter)
+            planar check ((the valid of back) and ((the absolute value of ((the value of back) - parameter)) < 1e-9)) named "frame inverse"
+        print "parameter_at_inverts_point_at_through_the_frame" as a line
+
+        set back to the cad parameter on raised nearest (planar v3 1.0 -1.0 0.0)
+        planar check ((the valid of back) and ((the absolute value of (the value of back)) < 1e-9)) named "off plane projection"
+        print "a_point_off_the_plane_is_projected_onto_it_first" as a line
+
+        set degenerate to a cad plane with origin (the cad zero vector3), x axis (the cad x axis) and y axis (planar v3 2.0 0.0 0.0)
+        set collapsed to a cad planar curve3 of (the planar unit arc) on degenerate
+        set back to the cad parameter on collapsed nearest (the cad zero vector3)
+        set normal to the cad normal of collapsed
+        planar check (((the valid of back) = false) and ((the valid of normal) = false)) named "degenerate frame refusal"
+        print "a_degenerate_plane_refuses_rather_than_guessing" as a line
+
+        planar check ((raised is cad closed) = false) named "open arc"
+        planar check ((the cad extent of raised) = (the cad bounded extent2)) named "arc extent"
+        set circle to a cad planar curve3 of (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 1.0 from 0.0 to 6.283185307179586)) on (the planar upright frame)
+        planar check (circle is cad closed) named "full sweep closed"
+        print "the_shape_answers_for_closure_and_extent_not_the_frame" as a line
+
+        set normal to the cad normal of flat
+        planar check (the valid of normal) named "flat normal valid"
+        planar point (the value of normal) equals (planar v3 0.0 0.0 1.0)
+        set normal to the cad normal of raised
+        planar check (the valid of normal) named "upright normal valid"
+        planar point (the value of normal) equals (planar v3 0.0 -1.0 0.0)
+        print "the_normal_comes_from_the_plane" as a line
+
+        set tangent to the cad tangent of raised at 0.0
+        planar check ((the absolute value of (((the z of tangent) / (the cad length of tangent)) - 1.0)) < 1e-9) named "tangent direction"
+        print "the_tangent_comes_out_in_world_coordinates" as a line
+
+        set tilted to a cad planar curve3 of (the planar unit arc) on (the planar tilted frame)
+        set points to the cad samples of tilted with density 20.0
+        loop index from 0 to the length of points:
+            planar check (cad (the plane of tilted) contains (the item at index in points) within 1e-9) named "density samples on plane"
+        free points
+        print "tessellating_stays_on_the_plane" as a line
+
+        set first to a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 0.0) to (planar v2 2.0 0.0)))
+        set second to a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 1.0) to (planar v2 0.0 3.0)))
+        set curves to a list containing first
+        append second to curves
+        set shared to the cad common plane of curves within 1e-9
+        planar check (the valid of shared) named "disconnected support valid"
+        loop index from 0 to the length of curves:
+            set curve to the item at index in curves
+            planar check (cad (the value of shared) contains (the cad point on curve at 0.0) within 1e-9) named "first endpoint common plane"
+            planar check (cad (the value of shared) contains (the cad point on curve at 1.0) within 1e-9) named "second endpoint common plane"
+        print "disconnected_lines_in_one_plane_share_that_plane" as a line
+
+        clear curves
+        append first to curves
+        append (a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 0.0) to (planar v2 0.0 2.0)))) to curves
+        set raisedFrame to a cad plane with origin (planar v3 0.0 0.0 1.0), x axis (the cad x axis) and y axis (the cad y axis)
+        append (a cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 0.0) to (planar v2 1.0 1.0))) on raisedFrame) to curves
+        set refused to the cad common plane of curves within 1e-9
+        planar check ((the valid of refused) = false) named "noncoplanar support refusal"
+        free curves
+        print "noncoplanar_curve_support_is_rejected" as a line
+
+verify planar basic assertions

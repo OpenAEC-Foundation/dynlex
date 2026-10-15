@@ -1,0 +1,164 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_intersect/helpers.dl
+
+set one to intersect plane at [0.0,0.0,0.0] normal [0.0,0.0,1.0]
+set other to intersect plane at [0.0,0.0,0.0] normal [1.0,0.0,0.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+print "two_planes_share_a_line" as a line
+
+set one to intersect plane at [0.0,0.0,3.0] normal [0.0,1.0,1.0]
+set other to intersect plane at [0.0,0.0,3.0] normal [0.0,1.0,-1.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+print "two_planes_meeting_along_an_axis_still_find_the_line" as a line
+
+set one to intersect plane at [0.0,0.0,0.0] normal [0.0,0.0,1.0]
+set other to intersect plane at [0.0,0.0,5.0] normal [0.0,0.0,1.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
+set other to intersect plane at [9.0,9.0,0.0] normal [0.0,0.0,1.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (a coincident cad surface meeting))
+print "parallel_planes_are_apart_or_the_same" as a line
+
+set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+set other to intersect plane at [0.0,0.0,3.0] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 1)
+intersect near curve's circle's radius to 4.0
+print "a_plane_cuts_a_sphere_in_a_circle" as a line
+
+set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+set other to intersect plane at [0.0,0.0,5.0] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-6
+check intersect (meeting's kind = 2)
+check intersect ((the length of meeting's points) = 1)
+intersect near ((the item at 0 in meeting's points)'s z) to 5.0
+set other to intersect plane at [0.0,0.0,6.0] normal [0.0,0.0,1.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
+print "a_plane_that_grazes_a_sphere_touches_at_a_point" as a line
+
+set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+set other to intersect sphere at [6.0,0.0,0.0] radius 5.0
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 1)
+intersect near curve's circle's radius to 4.0
+intersect near curve's circle's plane's origin's x to 3.0
+print "two_spheres_share_a_circle" as a line
+
+set one to intersect sphere at [0.0,0.0,0.0] radius 1.0
+set other to intersect sphere at [10.0,0.0,0.0] radius 1.0
+check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
+check intersect ((the cad meeting of one and one within 1e-9) = (a coincident cad surface meeting))
+set other to intersect sphere at [0.0,0.0,0.0] radius 5.0
+check intersect ((the cad meeting of other and one within 1e-9) = (no cad surface meeting))
+set other to intersect sphere at [2.0,0.0,0.0] radius 1.0
+set meeting to the cad meeting of one and other within 1e-6
+check intersect (meeting's kind = 2)
+check intersect ((the length of meeting's points) = 1)
+intersect near ((the item at 0 in meeting's points)'s x) to 1.0
+print "spheres_apart_touching_and_identical" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 3.0
+set other to intersect plane at [0.0,0.0,7.0] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 1)
+intersect near curve's circle's radius to 3.0
+intersect near curve's circle's plane's origin's z to 7.0
+print "a_plane_square_to_a_cylinder_cuts_a_circle" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 3.0
+set other to intersect plane at [0.0,0.0,0.0] normal [0.0,1.0,1.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 2)
+intersect near curve's ellipse's minorRadius to 3.0
+intersect near curve's ellipse's majorRadius to (3.0 * (the square root of 2.0))
+print "a_slanted_plane_cuts_a_cylinder_in_an_ellipse" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 5.0
+set other to intersect plane at [3.0,0.0,0.0] normal [1.0,0.0,0.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+check intersect ((the length of meeting's curves) = 2)
+loop index from 0 to 2:
+    set curve to the item at index in meeting's curves
+    check intersect (curve's kind = 0)
+    intersect near curve's line's origin's x to 3.0
+    intersect near (the absolute value of curve's line's origin's y) to 4.0
+print "a_plane_along_a_cylinder_cuts_two_generators" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 5.0
+set other to intersect plane at [5.0,0.0,0.0] normal [1.0,0.0,0.0]
+set meeting to the cad meeting of one and other within 1e-6
+check intersect curves meeting on one and other
+check intersect ((the length of meeting's curves) = 1)
+set other to intersect plane at [6.0,0.0,0.0] normal [1.0,0.0,0.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
+print "a_plane_that_grazes_a_cylinder_gives_one_generator" as a line
+
+set one to intersect cone
+set other to intersect plane at [0.0,0.0,4.0] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 1)
+intersect near curve's circle's radius to 6.0
+print "a_plane_square_to_a_cone_cuts_the_circle_at_that_height" as a line
+
+set one to intersect cone
+set other to intersect plane at [0.0,0.0,10.0] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-6
+check intersect (meeting's kind = 2)
+check intersect ((the length of meeting's points) = 1)
+intersect near ((the item at 0 in meeting's points)'s z) to 10.0
+print "a_plane_through_a_cone_apex_touches_at_a_point" as a line
+
+set one to intersect cone
+set other to intersect plane at [0.0,0.0,0.0] normal [0.0,1.0,1.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
+print "a_slanted_plane_on_a_cone_says_it_does_not_know" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 5.0
+set other to intersect cylinder at [6.0,0.0,0.0] normal [0.0,0.0,1.0] radius 5.0
+set meeting to the cad meeting of one and other within 1e-9
+check intersect curves meeting on one and other
+check intersect ((the length of meeting's curves) = 2)
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 1.0
+set other to intersect cylinder at [10.0,0.0,0.0] normal [0.0,0.0,1.0] radius 1.0
+check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
+set other to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 3.0
+check intersect ((the cad meeting of other and other within 1e-9) = (a coincident cad surface meeting))
+check intersect ((the cad meeting of other and one within 1e-9) = (no cad surface meeting))
+print "parallel_cylinders_share_their_generators" as a line
+
+set one to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 2.0
+set other to intersect cylinder at [0.0,0.0,0.0] normal [1.0,0.0,0.0] radius 2.0
+check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
+print "crossing_cylinders_say_they_are_not_known_rather_than_apart" as a line
+
+set one to the cad surface of (a cad torus with frame (the cad xy plane), major radius 10.0 and minor radius 2.0)
+set other to the cad surface of (the cad xy plane)
+check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
+print "a_torus_is_not_claimed_to_be_understood" as a line
+
+set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+set other to intersect plane at [0.0,0.0,3.0] normal [0.0,0.0,1.0]
+check intersect ((the cad meeting of one and other within 1e-9) = (the cad meeting of other and one within 1e-9))
+print "the_answer_does_not_depend_on_which_surface_comes_first" as a line
+
+set one to intersect sphere at [512345.678,4512345.678,91.5] radius 5.0
+set other to intersect plane at [512345.678,4512345.678,94.5] normal [0.0,0.0,1.0]
+set meeting to the cad meeting of one and other within 1e-6
+check intersect (meeting's kind = 1)
+check intersect ((the length of meeting's curves) = 1)
+set curve to the item at 0 in meeting's curves
+check intersect (curve's kind = 1)
+check intersect ((the absolute value of (curve's circle's radius - 4.0)) < 1e-6)
+print "survey_coordinates_find_the_same_intersection" as a line

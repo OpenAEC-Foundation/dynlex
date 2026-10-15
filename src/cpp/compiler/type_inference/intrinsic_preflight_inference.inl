@@ -46,6 +46,7 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 			}
 			if (context.parseContext.options.emitSPIRV) {
 				bool stageProvidesInput =
+					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
 					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
 				if (!stageProvidesInput) {
 					failWithDetail(
@@ -69,6 +70,21 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 				{{"operation", expr->intrinsicName}}
 			),
 			0
+		);
+		break;
+	}
+}
+
+if (kind == IntrinsicKind::DestroyAt) {
+	DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+	if (!pointerType.isDeduced() || !pointerType.isPointer()) {
+		setConfiguredTypeFailure(expr->range, "store at requires pointer");
+		break;
+	}
+	DataType elementType = pointerType.dereferenced();
+	if (!elementType.isConcrete()) {
+		setConfiguredTypeFailure(
+			expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
 		);
 		break;
 	}

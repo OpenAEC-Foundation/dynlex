@@ -1,0 +1,18 @@
+flex section add private seed to target:
+    replacement:
+        @intrinsic("store", saved, seed)
+        @intrinsic("execute body")
+        @intrinsic("store", target, @intrinsic("add", target, saved))
+
+function the accumulated private values for seed:
+    execute:
+        @intrinsic("store", total, 0)
+        add private seed to total:
+            add private 3 to total:
+                @intrinsic("discard", 0)
+        @intrinsic("return", total)
+
+@intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the accumulated private values for 5, @intrinsic("type", "int", 32))))
+@intrinsic("store", runtime, the accumulated private values for @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 5))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), runtime))

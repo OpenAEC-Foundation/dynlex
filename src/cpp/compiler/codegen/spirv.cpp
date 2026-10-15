@@ -22,6 +22,7 @@
 // SPIR-V opcodes
 static constexpr uint32_t spvOpCapability = 17;
 static constexpr uint32_t spvOpEntryPoint = 15;
+static constexpr uint32_t spvOpExecutionMode = 16;
 static constexpr uint32_t spvOpMemoryModel = 14;
 static constexpr uint32_t spvOpDecorate = 71;
 static constexpr uint32_t spvOpName = 5;
@@ -324,6 +325,9 @@ static bool patchShaderBinary(
 			output.insert(output.end(), nameWords.begin(), nameWords.end());
 			for (const auto &v : vars)
 				output.push_back(v.id);
+			if (executionModel == 5) { // GLCompute, with a fixed 64-thread workgroup.
+				output.insert(output.end(), {spvInstWord(6, spvOpExecutionMode), mainId, 17, 64, 1, 1});
+			}
 			entryPointInserted = true;
 			skip = true; // MemoryModel already emitted above
 		}
@@ -641,7 +645,8 @@ bool emitSPIRVModule(ParseContext &context) {
 
 	// Build I/O variable descriptors based on shader stage
 	bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
-	uint32_t executionModel = isVertex ? 0 : 4; // Vertex=0, Fragment=4
+	bool isCompute = context.options.shaderStage == ParseContext::ShaderStage::Compute;
+	uint32_t executionModel = isCompute ? 5 : (isVertex ? 0 : 4); // Vertex=0, Fragment=4, GLCompute=5
 
 	auto makeIoVar = [](const std::string &name, uint32_t sc, bool builtIn, uint32_t decVal) {
 		ShaderIoVar v;
@@ -656,7 +661,7 @@ bool emitSPIRVModule(ParseContext &context) {
 	if (isVertex) {
 		ioVars.push_back(makeIoVar("in_Position", spvStorageClassInput, false, 0));
 		ioVars.push_back(makeIoVar("gl_Position", spvStorageClassOutput, true, 0));
-	} else {
+	} else if (!isCompute) {
 		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));
 		ioVars.push_back(makeIoVar("gl_FragColor", spvStorageClassOutput, false, 0));
 	}

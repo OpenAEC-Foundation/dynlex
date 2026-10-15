@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/area2/main.dl
+
+function check centroid2 {cad centroid2 result:result} at {cad vector2:expected}:
+    execute:
+        check area2 result's valid
+        check area2 near result's value's x to expected's x within 1e-9
+        check area2 near result's value's y to expected's y within 1e-9
+
+set shifted to cross2 circle [3.0,-4.0] with radius 2.0
+check centroid2 (the cad enclosed centroid of shifted) at (cross2 point [3.0,-4.0])
+check centroid2 (the cad chord closed centroid of shifted) at (cross2 point [3.0,-4.0])
+set ellipsoid to cross2 ellipse [512345.678,4512345.678] with radii 7.0 and 3.0
+check centroid2 (the cad enclosed centroid of ellipsoid) at (cross2 point [512345.678,4512345.678])
+
+set square to cross2 polyline [[3.0,4.0,0.0],[5.0,4.0,0.0],[5.0,6.0,0.0],[3.0,6.0,0.0]] with closure true
+set copy to the cad clone of square
+check centroid2 (the cad enclosed centroid of square) at (cross2 point [4.0,5.0])
+check centroid2 (the cad chord closed centroid of square) at (cross2 point [4.0,5.0])
+check area2 (copy = square)
+set square's polyline's closed to false
+check centroid2 (the cad enclosed centroid of square) at (cross2 point [4.0,5.0])
+# Source behavior: the open polyline's area already includes its closing chord;
+# chord_closed_area adds the chord again. Preserve that convention exactly.
+set closedArea to the cad chord closed area of square
+check area2 closedArea's valid
+check area2 near closedArea's value to 1.0 within 1e-12
+
+set semi to the cad curve2 of (a cad arc2 at the cad zero vector2 with radius 2.0 from 0.0 to 3.141592653589793)
+set openCentroid to the cad enclosed centroid of semi
+check area2 (openCentroid's valid = false)
+check centroid2 (the cad chord closed centroid of semi) at (a cad vector2 with x 0.0 and y (8.0 / (3.0 * 3.141592653589793)))
+
+set line to cross2 segment [1.0,1.0] to [2.0,2.0]
+set emptyCentre to the cad chord closed centroid of line
+check area2 (emptyCentre's valid = false)
+set emptyCircle to cross2 circle [0.0,0.0] with radius 0.0
+set emptyCentre to the cad enclosed centroid of emptyCircle
+check area2 (emptyCentre's valid = false)
+set ray to cross2 ray [0.0,0.0] along [1.0,0.0]
+set emptyCentre to the cad chord closed centroid of ray
+check area2 (emptyCentre's valid = false)
+set emptyArea to the cad chord closed area of ray
+check area2 (emptyArea's valid = false)
+
+function centroid2 [retained local result]:
+    execute:
+        set local to cross2 polyline [[0.0,0.0,0.0],[2.0,0.0,0.0],[2.0,2.0,0.0],[0.0,2.0,0.0]] with closure false
+        return the cad enclosed centroid of local
+set retained to centroid2 retained local result
+set duplicate to retained
+check centroid2 duplicate at (cross2 point [1.0,1.0])
+print "area conventions, translated centroids and borrowed input ownership" as a line

@@ -1,0 +1,16 @@
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function finish with value:
+    replacement:
+        @intrinsic("return", value)
+
+function the descending result at depth:
+    execute:
+        if @intrinsic("greater than", depth, 0):
+            finish with the descending result at @intrinsic("subtract", depth, 1)
+        finish with 7
+
+@intrinsic("discard", @intrinsic("array", the descending result at 20))
+@intrinsic("return", @intrinsic("subtract", the descending result at 20, 7))

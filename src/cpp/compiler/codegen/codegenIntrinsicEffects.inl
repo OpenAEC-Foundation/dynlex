@@ -47,11 +47,12 @@ if (kind == IntrinsicKind::LoopWhile) {
 	builder.CreateBr(condBlock);
 	builder.SetInsertPoint(condBlock);
 
-	ParseContext::SectionFlexBodyFrame &bodyFrame = activeSectionFlexBodyFrame(context);
-	requireCompilerInvariant(bodyFrame.openingExpression, "loop codegen frame has no opening expression");
 	llvm::Value *condValue = nullptr;
 	if (!generateRuntimeValue(args[1], condValue))
 		return CodegenResult::failure();
+	// Generating a condition can grow the frame stack through lazy function codegen.
+	ParseContext::SectionFlexBodyFrame &bodyFrame = activeSectionFlexBodyFrame(context);
+	requireCompilerInvariant(bodyFrame.openingExpression, "loop codegen frame has no opening expression");
 	DataType condType = finalizedExpressionType(context, args[1]);
 	if (condType.kind != DataType::Kind::Bool)
 		crashCompilerBug("loop while condition must be boolean after type inference");

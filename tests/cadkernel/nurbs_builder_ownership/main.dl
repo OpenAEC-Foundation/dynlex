@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/nurbs_builder/main.dl
+
+function rational builder local:
+    execute:
+        set source to cross2 circle [3.0,5.0] with radius 2.0
+        set result to the cad rational builder of source
+        return result's value
+
+loop repetition from 0 to 24:
+    set original to rational builder local
+    set retained to original
+    set copied to the cad clone of original
+    check rational builder (copied's controls != original's controls)
+    check rational builder (copied's knots != original's knots)
+    check rational builder (copied's weights != original's weights)
+    free cad rational original
+    check rational builder ((the length of retained's controls) = 9)
+    set reverse to the cad reverse of retained
+    set liftedValue to the cad lift of reverse onto (the cad xy plane)
+    set liftedCopy to liftedValue
+    set liftedClone to the cad clone of liftedValue
+    check rational builder (liftedClone's controls != liftedValue's controls)
+    check rational builder (liftedClone's knots != liftedValue's knots)
+    check rational builder (liftedClone's weights != liftedValue's weights)
+    free cad rational retained
+    free cad rational reverse
+    free cad rational liftedValue
+    set moved to the cad translation of liftedCopy by (a cad vector3 with x 1.0, y 2.0 and z 3.0)
+    set reverse3 to the cad reverse of moved
+    check rational builder ((the length of reverse3's controls) = 9)
+    set ruledValue to the cad ruled surface from liftedCopy to moved
+    free cad rational liftedCopy
+    free cad rational moved
+    check rational builder ruledValue's valid
+    set corner to the cad point on ruledValue's value at parameters 0.0 and 0.0
+    rational builder scalar corner's x near 5.0
+    rational builder scalar corner's y near 5.0
+    rational builder scalar corner's z near 0.0
+print "managed_builders_survive_local_returns_copies_and_resets" as a line
+set empty2 to an empty cad rational curve2
+set empty2Copy to the cad clone of empty2
+set empty3 to an empty cad rational curve3
+set empty3Copy to the cad clone of empty3
+free cad rational empty2
+free cad rational empty3
+check rational builder ((the length of empty2Copy's controls) = 0)
+check rational builder ((the length of empty3Copy's controls) = 0)
+set absentCurve to the cad curve of empty2Copy
+set absentSurface to the cad ruled surface from empty3Copy to empty3Copy
+check rational builder (absentCurve's valid = false)
+check rational builder (absentSurface's valid = false)
+print "empty_builders_clone_and_fail_safely" as a line

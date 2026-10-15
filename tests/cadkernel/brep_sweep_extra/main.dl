@@ -1,0 +1,111 @@
+# SPDX-License-Identifier: MPL-2.0
+# Seven additional non-mesh extrusion groups from src/brep/sweep.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+import tests/cadkernel/brep_sweep_extrude/main.dl
+
+function extra extrusion line from {a 64 bit floating-point number array of 2 items:first} to {a 64 bit floating-point number array of 2 items:last}:
+    execute:
+        return the cad curve2 of (a cad line2 from (extrusion point first) to (extrusion point last))
+function check extra extrusion body {cad body:value}:
+    execute:
+        set findings to the cad flaws of value
+        check extrusion ((the length of findings) = 0)
+        free findings
+
+set extraProfile to a list containing (extra extrusion line from [0.0,0.0] to [10.0,0.0])
+append (extra extrusion line from [10.0,0.0] to [4.0,0.0]) to extraProfile
+append (extra extrusion line from [4.0,0.0] to [0.0,0.0]) to extraProfile
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+check extrusion ((extraResult's valid) = false)
+free extraProfile
+print "a_profile_that_encloses_nothing_is_refused" as a line
+
+set extraProfile to a list containing (extra extrusion line from [0.0,0.0] to [10.0,0.0])
+set extraArc to a cad arc2 at (extrusion point [10.0,5.0]) with radius 5.0 from -1.5707963267948966 to 1.5707963267948966
+append (the cad curve2 of extraArc) to extraProfile
+append (extra extrusion line from [10.0,10.0] to [0.0,10.0]) to extraProfile
+append (extra extrusion line from [0.0,10.0] to [0.0,0.0]) to extraProfile
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+check extrusion (extraResult's valid)
+check extra extrusion body (extraResult's value)
+set extraSurfaceKeys to the cad keys of (extraResult's value's surfaces)
+set extraCylinderCount to 0
+loop extraIndex from 0 to the length of extraSurfaceKeys:
+    set extraSurface to the cad node pointer for (the item at extraIndex in extraSurfaceKeys) in (extraResult's value's surfaces)
+    if (extraSurface's kind) = 1:
+        increment extraCylinderCount
+check extrusion (extraCylinderCount = 1)
+free extraSurfaceKeys
+set extraBounds to the cad bounds of (extraResult's value)
+check extrusion (extraBounds's valid)
+check extrusion ((the absolute value of ((extraBounds's value's high's x) - 15.0)) < 1e-9)
+free extraProfile
+print "a_profile_with_an_arc_in_it_sweeps_into_a_cylinder_wall" as a line
+
+set extraPlane to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (the cad y axis)
+check extrusion (extraPlane's valid)
+set extraProfile to extrusion square of size 2.0
+set extraResult to the cad extrusion of extraProfile on (extraPlane's value) along (a cad vector3 with x 0.0, y 5.0 and z 0.0)
+check extrusion (extraResult's valid)
+check extra extrusion body (extraResult's value)
+set extraBounds to the cad bounds of (extraResult's value)
+check extrusion (extraBounds's valid)
+check extrusion ((the absolute value of ((extraBounds's value's high's y) - 5.0)) < 1e-9)
+free extraProfile
+print "an_extrusion_on_a_tilted_plane_goes_where_the_plane_points" as a line
+
+set extraProfile to extrusion square of size 10.0
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 1.0, y 0.0 and z 0.0)
+check extrusion ((extraResult's valid) = false)
+free extraProfile
+print "a_sweep_along_the_profiles_own_plane_is_refused" as a line
+
+set extraProfile to a list containing (extra extrusion line from [0.0,0.0] to [10.0,0.0])
+append (extra extrusion line from [10.0,0.0] to [10.0,10.0]) to extraProfile
+append (extra extrusion line from [10.0,10.0] to [5.0,20.0]) to extraProfile
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+check extrusion ((extraResult's valid) = false)
+free extraProfile
+set extraSquare to extrusion square of size 1.0
+set extraProfile to a list containing (the item at 0 in extraSquare)
+append (the item at 1 in extraSquare) to extraProfile
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+check extrusion ((extraResult's valid) = false)
+free extraProfile
+free extraSquare
+print "a_profile_that_does_not_close_is_refused" as a line
+
+set extraControls to a list containing (extrusion point [0.0,0.0])
+append (extrusion point [5.0,5.0]) to extraControls
+append (extrusion point [10.0,0.0]) to extraControls
+set extraScalars to an empty list of a 64 bit floating-point number
+set extraSpline to the cad nurbs curve2 of degree 2 with controls extraControls, knots extraScalars and weights extraScalars
+check extrusion (extraSpline's valid)
+free extraScalars
+free extraControls
+set extraProfile to a list containing (the cad curve2 of (extraSpline's value))
+append (extra extrusion line from [10.0,0.0] to [0.0,0.0]) to extraProfile
+set extraResult to the cad extrusion of extraProfile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 1.0)
+check extrusion (extraResult's valid)
+check extra extrusion body (extraResult's value)
+set extraSurfaceKeys to the cad keys of (extraResult's value's surfaces)
+set extraNurbsFound to false
+loop extraIndex from 0 to the length of extraSurfaceKeys:
+    set extraSurface to the cad node pointer for (the item at extraIndex in extraSurfaceKeys) in (extraResult's value's surfaces)
+    if (extraSurface's kind) = 5:
+        set extraNurbsFound to true
+check extrusion extraNurbsFound
+free extraSurfaceKeys
+free extraProfile
+print "a_spline_profile_extrudes_as_an_exact_nurbs_wall" as a line
+
+set extraSurveyOrigin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
+set extraSurveyPlane to a cad plane with origin extraSurveyOrigin, x axis (the cad x axis) and y axis (the cad y axis)
+set extraProfile to extrusion square of size 0.5
+set extraResult to the cad extrusion of extraProfile on extraSurveyPlane along (a cad vector3 with x 0.0, y 0.0 and z 0.5)
+check extrusion (extraResult's valid)
+check extra extrusion body (extraResult's value)
+check extrusion ((the cad euler characteristic of (extraResult's value)) = 2)
+check extrusion ((the cad worst vertex gap of (extraResult's value)) < 1e-6)
+free extraProfile
+print "an_extrusion_at_survey_coordinates_is_the_same_solid" as a line

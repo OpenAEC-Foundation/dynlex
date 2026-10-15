@@ -60,6 +60,13 @@ case Expression::Kind::IntrinsicCall: {
 			CompileTimeValue conditionValue;
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {
+				if (context.currentInstantiation) {
+					if (context.trial) {
+						requireCompilerInvariant(context.trialJournal, "trial return inference requires a rollback journal");
+						context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
+					}
+					context.currentInstantiation->hasReturnIntrinsic = true;
+				}
 				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
 				ResolvedBindingLayers resolvedReturnValue =
 					returnValueExpression
@@ -180,8 +187,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!context.typesValid)
 					break;
 				DataType refinedElementType;
-				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType) &&
-					refinedElementType != elementType) {
+				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType)) {
 					refinePointerStoragePointeeType(expr->arguments[1], valueType, context, flexBindingFrameStack);
 					pointerType = effectiveInferredExpressionType(expr->arguments[1]);
 					elementType = pointerType.dereferenced();
@@ -203,13 +209,6 @@ case Expression::Kind::IntrinsicCall: {
 					context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), expr->arguments[2],
 					flexBindingFrameStack
 				);
-			}
-			if (kind == IntrinsicKind::DestroyAt) {
-				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
-					setConfiguredTypeFailure(expr->range, "store at requires pointer");
-					break;
-				}
 			}
 			if (kind == IntrinsicKind::ExecuteBody && !inferSectionFlexCallerBody(expr, context))
 				break;
@@ -532,6 +531,14 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				DataType valueType = typeArgType.toReferencedType();
+				if (!typeArgType.toReferencedType().isConcrete() && context.currentInstantiation) {
+					// A later write in the same inference chain can refine an
+					// unspecified class layout. Preserve the known result type and
+					// revisit this body after that refinement reaches the caller.
+					observeUnresolvedRecursiveDependency(context);
+					expr->type = {DataType::Kind::Int, 8};
+					break;
+				}
 				if (!valueType.isConcrete() || !valueType.isRuntimeValueType()) {
 					if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0) {
 						auto unknownMember =

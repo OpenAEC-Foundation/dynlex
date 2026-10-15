@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: MPL-2.0
+# Three source tests requiring geom2d arclength and linear-deviation sampling.
+import tests/cadkernel/planar3/support.dl
+function verify planar measurement assertions:
+    execute:
+        set flat to a flat cad planar curve3 of (the planar unit arc)
+        set raised to a cad planar curve3 of (the planar unit arc) on (the planar upright frame)
+        planar check ((the absolute value of ((the cad length of flat) - 1.5707963267948966)) < 1e-12) named "flat arc length"
+        planar check ((the absolute value of ((the cad length of raised) - 1.5707963267948966)) < 1e-12) named "upright arc length"
+        set half to the cad point on raised at distance (1.5707963267948966 * 0.5)
+        planar check ((the absolute value of ((the x of half) - 0.7071067811865476)) < 1e-9) named "half arc distance x"
+        planar check ((the absolute value of ((the z of half) - 0.7071067811865476)) < 1e-9) named "half arc distance z"
+        print "distance_along_a_tilted_curve_is_measured_in_world_units" as a line
+
+        set large to a flat cad planar curve3 of (the cad curve2 of (a cad arc2 at (the cad zero vector2) with radius 10000.0 from 0.0 to 1.5707963267948966))
+        set smallDensity to the cad samples of flat with density 20.0
+        set largeDensity to the cad samples of large with density 20.0
+        planar check ((the length of smallDensity) = (the length of largeDensity)) named "density ignores radius"
+        free smallDensity
+        free largeDensity
+        set smallTolerance to the cad samples of flat within 0.01
+        set largeTolerance to the cad samples of large within 0.01
+        planar check ((the length of largeTolerance) > ((the length of smallTolerance) * 20)) named "tolerance reflects radius"
+        set scaledFrame to a cad plane with origin (the cad zero vector3), x axis (planar v3 10.0 0.0 0.0) and y axis (planar v3 0.0 20.0 0.0)
+        set stretched to a cad planar curve3 of (the planar unit arc) on scaledFrame
+        set scaledTolerance to the cad samples of stretched within 0.01
+        planar check ((the length of scaledTolerance) = (the length of smallTolerance)) named "tolerance stays in frame units"
+        planar check ((the absolute value of ((the cad length of stretched) - 1.5707963267948966)) < 1e-12) named "length stays in frame units"
+        planar point (the cad point on stretched at distance 0.7853981633974483) is near (planar v3 7.0710678118654755 14.142135623730951 0.0) within 1e-12
+        free scaledTolerance
+        free smallTolerance
+        free largeTolerance
+        print "a_tolerance_scales_the_point_count_with_the_size" as a line
+
+        set tilted to a cad planar curve3 of (the planar unit arc) on (the planar tilted frame)
+        set points to the cad samples of tilted within 0.001
+        planar check ((the length of points) > 8) named "tilted tolerance count"
+        loop index from 0 to the length of points:
+            planar check (cad (the plane of tilted) contains (the item at index in points) within 1e-9) named "tolerance samples on plane"
+        free points
+        print "a_tolerance_sampling_lands_on_the_plane_too" as a line
+
+        # The source has no separate assertion for parameter_at_distance; exercise its
+        # wrapper with an independent exact quarter-circle distance here.
+        planar check ((the absolute value of ((the cad parameter on raised at distance 0.7853981633974483) - 0.5)) < 1e-12) named "distance parameter"
+
+verify planar measurement assertions

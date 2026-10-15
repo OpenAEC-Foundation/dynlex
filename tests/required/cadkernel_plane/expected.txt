@@ -1,0 +1,18 @@
+cadkernel plane: XY coordinates
+cadkernel plane: orthonormal round trips
+cadkernel plane: skew round trips
+cadkernel plane: skew least squares
+cadkernel plane: direction projection
+cadkernel plane: signed distance and containment
+cadkernel plane: leaning axis correction
+cadkernel plane: right handed frame
+cadkernel plane: degenerate construction
+cadkernel plane: collapsed frame
+cadkernel plane: orthonormal classification
+cadkernel plane: tilted unit axes
+cadkernel plane: survey precision
+cadkernel plane: XY intersection and scale thresholds
+cadkernel plane: exact basis and boundary semantics
+cadkernel plane: coplanarity tolerance
+cadkernel plane: coplanar points and directions
+cadkernel plane: IEEE optional results

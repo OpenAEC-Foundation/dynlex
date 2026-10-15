@@ -1,0 +1,24 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+flex section repeat count:
+    replacement:
+        @intrinsic("store", iteration, 0)
+        while @intrinsic("less than", iteration, count):
+            @intrinsic("execute body")
+            @intrinsic("store", iteration, @intrinsic("add", iteration, 1))
+        @intrinsic("discard", 0)
+
+function the nested count for limit:
+    execute:
+        @intrinsic("store", total, 1)
+        repeat limit:
+            repeat 3:
+                @intrinsic("store", total, @intrinsic("add", total, 2))
+        @intrinsic("return", total)
+
+@intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the nested count for 4, @intrinsic("type", "int", 32))))
+@intrinsic("store", runtime, the nested count for @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 4))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 2, "%d %d\n", @intrinsic("type extent", fixed, 0), runtime))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), runtime))

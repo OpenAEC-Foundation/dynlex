@@ -84,6 +84,7 @@ to get an aggregate of {fixed integer:count} {type:kind} values:
     return @intrinsic("array", count, kind)
 
 this is a fragment shader means: @intrinsic("shader stage is", "fragment")
+this is a compute shader means: @intrinsic("shader stage is", "compute")
 this is a vertex shader means: @intrinsic("shader stage is", "vertex")
 the size of kind means: @intrinsic("size of", kind)
 the type of value means: @intrinsic("type of", value)
@@ -164,9 +165,12 @@ to get the checked allocation from {pointer:allocation} resized to {integer:coun
         stop because a collection allocation failed
     set quantity to count as a word sized integer
     set width to (the size of kind) as a word sized integer
-    if quantity > the maximum allocation byte count / width:
-        stop because a collection allocation failed
-    set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, quantity * width)
+    set byteCount to 1 as a word sized integer
+    if width != 0:
+        if quantity > (the maximum allocation byte count / width):
+            stop because a collection allocation failed
+        set byteCount to quantity * width
+    set replacement to @intrinsic("call", "libc", "realloc", a pointer to kind, allocation, byteCount)
     if replacement = 0 as a pointer to kind:
         stop because a collection allocation failed
     return replacement

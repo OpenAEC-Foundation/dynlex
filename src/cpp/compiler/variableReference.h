@@ -6,10 +6,6 @@
 #include <string>
 #include <vector>
 
-namespace llvm {
-class AllocaInst;
-}
-
 struct PatternDefinition;
 
 struct DependentVariableTypeConstraint {
@@ -29,8 +25,6 @@ struct VariableReference {
 	bool hasDependentTypeConstraint = false;
 	std::vector<DependentVariableTypeConstraint> dependentTypeConstraints;
 	VariableReference *definition{};
-	// stack allocation for this variable (set during codegen, only for definitions)
-	llvm::AllocaInst *alloca{};
 	VariableReference(Range range, const std::string &name) : range(range), name(name) {}
 	bool isDefinition() const { return definition == nullptr; }
 };
