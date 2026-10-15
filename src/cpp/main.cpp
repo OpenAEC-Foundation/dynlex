@@ -394,7 +394,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	explicitOutputModes += context.options.emitSPIRV ? 1 : 0;
 	if (explicitOutputModes > 1) {
 		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-object, --emit-wasm, or --emit-spirv"
-			  << std::endl;
+				  << std::endl;
 		return 1;
 	}
 	if (context.options.noMain && !context.options.emitLLVM && !context.options.emitObject) {

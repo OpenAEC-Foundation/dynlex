@@ -66,7 +66,8 @@ bool ensureSectionInstantiationInferred(
 	std::string functionName = definition ? (std::string)definition->range.subString : "";
 	bool instantiationFallsThrough = true;
 	bool inferenceSucceeded = runInstantiationReinferenceLoop(
-		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
+		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr,
+		[&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		beginParameterOutputReinference(inst);
 		inst.writtenGlobalReferences.clear();
