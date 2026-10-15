@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/required/scope_rules_local_hidden/helper.dl
+
+print hidden helper as a line

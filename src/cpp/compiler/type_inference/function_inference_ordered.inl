@@ -189,24 +189,44 @@ static void inferOrderedExpression(
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
 		CompileTimeValue literalValue{};
-		if (const auto *integer = std::get_if<std::int64_t>(&expr->literalValue)) {
-			NumericLiteralValue numericValue{*integer};
-			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
-			literalValue = numericLiteralCompileTimeValue(numericValue);
-		} else if (const auto *integer = std::get_if<std::uint64_t>(&expr->literalValue)) {
-			NumericLiteralValue numericValue{*integer};
-			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
-			literalValue = numericLiteralCompileTimeValue(numericValue);
-		} else if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
-			NumericLiteralValue numericValue{*minimumMagnitude};
-			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
-			literalValue = numericLiteralCompileTimeValue(numericValue);
-		} else if (const auto *floatingPoint = std::get_if<double>(&expr->literalValue)) {
-			NumericLiteralValue numericValue{*floatingPoint};
+		if (std::optional<NumericLiteralValue> numericValue = numericLiteralValueOf(*expr)) {
 			// Shader pipelines default explicit float literals to f32 to avoid
 			// introducing Float64 arithmetic from constants like 0.5 or 800.0.
-			expr->type = numericLiteralType(numericValue, context.parseContext.options.emitSPIRV);
-			literalValue = numericLiteralCompileTimeValue(numericValue);
+			NumericLiteralTyping typing = typeNumericLiteral(context.parseContext, expr->range.line, *numericValue);
+			if (typing.unrepresentableBy) {
+				setConfiguredTypeFailure(
+					expr->range, "number rule literal unrepresentable", "message",
+					{{"rule", std::string(typing.unrepresentableBy->range.subString)}}
+				);
+				context.typeFailureRelatedInfo.push_back(
+					{renderConfiguredMessage(
+						 syntaxConfigForRange(context.parseContext, expr->range), "number rule literal unrepresentable",
+						 "related rule"
+					 ),
+					 typing.unrepresentableBy->range}
+				);
+				break;
+			}
+			// A literal's typing does not depend on how its line is grouped, so trials record it too.
+			if (typing.widenedBy) {
+				context.parseContext.scopeRuleWarnings.push_back(
+					{"number rule literal widened",
+					 expr->range,
+					 typing.widenedBy->range,
+					 {{"rule", std::string(typing.widenedBy->range.subString)}, {"type", typeToUserName(typing.type)}}}
+				);
+			}
+			if (typing.contradicted) {
+				context.parseContext.scopeRuleWarnings.push_back(
+					{"number rule contradicted",
+					 expr->range,
+					 typing.contradicted->range,
+					 {{"explicit", std::string(expr->range.subString)},
+					  {"rule", std::string(typing.contradicted->range.subString)}}}
+				);
+			}
+			expr->type = typing.type;
+			literalValue = typing.value;
 		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
 			expr->type = {DataType::Kind::Int, 1};
 			expr->type.pointerDepth = 1;

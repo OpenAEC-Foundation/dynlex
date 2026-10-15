@@ -33,6 +33,7 @@ struct SyntaxConfig {
 	std::string className = "class";
 	std::string flexName = "flex";
 	std::string localName = "local";
+	std::string publicName = "public";
 	std::string exposedName = "exposed";
 	std::string actionShorthand = "to";
 	std::string valueShorthand = "to get";
@@ -50,6 +51,17 @@ struct SyntaxConfig {
 	std::string precedenceDefaultName = "default";
 	std::string alignmentName = "alignment";
 	std::string paddingName = "padding";
+
+	// Scope rule blocks: `<scope>[<default marker>]:` followed by rule lines.
+	std::string fileScopeName = "in this file";
+	std::string classScopeName = "in this class";
+	std::string functionScopeName = "in this function";
+	std::string defaultScopeMarker = ", by default";
+	std::string everythingLocalRule = "everything is local";
+	std::string functionsLocalRule = "functions are local";
+	std::string classesLocalRule = "classes are local";
+	std::string sectionsLocalRule = "sections are local";
+	std::string conversionsLocalRule = "conversions are local";
 };
 
 std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &config);

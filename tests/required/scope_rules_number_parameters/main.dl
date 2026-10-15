@@ -1,0 +1,11 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are floating-point
+
+function half of {a number:value}:
+    execute:
+        return value / 2
+
+print half of 3 as a line
+print (7 as a number) / 2 as a line

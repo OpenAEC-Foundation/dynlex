@@ -211,7 +211,8 @@ resolveCodegenBindingLayers(ParseContext &context, Expression *expression, Bindi
 	if (bindingFrameStack.empty())
 		bindingFrameStack.pushFrame(BindingFrame{});
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), [&](Expression *expression) -> std::optional<FlexBindingExpansion> {
+		expression, std::move(bindingFrameStack),
+		[&](Expression *expression) -> std::optional<FlexBindingExpansion> {
 		if (!expression || expression->kind != Expression::Kind::PatternCall)
 			return std::nullopt;
 		PatternDefinition *definition = finalizedPatternDefinition(context, expression);
@@ -281,10 +282,8 @@ std::string getPatternFunctionName(Section *section) {
 	std::string name;
 	if (!section->patternDefinitions.empty()) {
 		name = std::string(section->patternDefinitions.front()->range.subString);
-	} else if (
-		(section->type == SectionType::Retain || section->type == SectionType::Release) && section->parent &&
-		!section->parent->patternDefinitions.empty()
-	) {
+	} else if ((section->type == SectionType::Retain || section->type == SectionType::Release) && section->parent &&
+			   !section->parent->patternDefinitions.empty()) {
 		name = sectionTypeToString(section->type) + " " +
 			   std::string(section->parent->patternDefinitions.front()->range.subString);
 	} else {

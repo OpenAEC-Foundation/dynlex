@@ -1,0 +1,1 @@
+tests/required/scope_rules_number_redundant/main.dl:5-25: Warning: 'numbers are a number' adds no property to numbers

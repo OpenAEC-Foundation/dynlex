@@ -1,0 +1,19 @@
+import lib/std.dl
+
+in this file, by default:
+    everything is local
+
+function secret value:
+    execute:
+        return 7
+
+class:
+    patterns:
+        [a|] secret record
+    members:
+        amount as an integer
+
+public function the shared value:
+    execute:
+        set record to @intrinsic("construct", a secret record, secret value)
+        return record's amount * 6

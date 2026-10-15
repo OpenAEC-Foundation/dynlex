@@ -11,6 +11,42 @@ case Expression::Kind::IntrinsicCall: {
 			if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
+				if (kind == IntrinsicKind::And && leftType.isMetaType() && rightType.isMetaType()) {
+					// Two type or constraint values: the result accepts exactly the values both accept.
+					std::optional<TypeConstraint> constraints[2];
+					for (size_t index = 1; index <= 2; index++) {
+						constraints[index - 1] = getCompileTimeConstraintValue(
+							resolveStoredCompileTimeValue(expr->arguments[index], flexBindingFrameStack, &context)
+						);
+						if (!constraints[index - 1] || !constraints[index - 1]->isResolved())
+							break;
+					}
+					if (!constraints[0] || !constraints[0]->isResolved()) {
+						failCompileTimeOnlyIntrinsicArgument(1, "a type or constraint value");
+						break;
+					}
+					if (!constraints[1] || !constraints[1]->isResolved()) {
+						failCompileTimeOnlyIntrinsicArgument(2, "a type or constraint value");
+						break;
+					}
+					std::optional<TypeConstraint> combined = TypeConstraint::conjunction(*constraints[0], *constraints[1]);
+					if (!combined) {
+						setConfiguredTypeFailure(
+							expr->range, "constraint conjunction empty", "message",
+							{{"left_type", typeToUserName(*constraints[0])}, {"right_type", typeToUserName(*constraints[1])}}
+						);
+						break;
+					}
+					if (std::optional<TypeReferenceValue> typeValue =
+							TypeReferenceValue::forConstraint(*combined, context.parseContext.options.emitSPIRV)) {
+						expr->type = typeValue->type;
+						context.setExpressionValue(expr, *typeValue);
+					} else {
+						expr->type = {DataType::Kind::Constraint};
+						context.setExpressionValue(expr, *combined);
+					}
+					break;
+				}
 				if (!isLogicalOperandType(leftType) || !isLogicalOperandType(rightType)) {
 					setConfiguredTypeFailure(
 						expr->range, "logical operator operands invalid", "message",
@@ -447,6 +483,27 @@ case Expression::Kind::IntrinsicCall: {
 					TypeReferenceValue::builtin(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
 				expr->type = typeRefValue.type;
 				context.setExpressionValue(expr, typeRefValue);
+			} else if (kind == IntrinsicKind::NumberRule) {
+				// @intrinsic("number rule", properties): the number properties a scope rule fills in.
+				std::optional<TypeConstraint> properties = getCompileTimeConstraintValue(
+					resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context)
+				);
+				if (!properties || !properties->isResolved()) {
+					failCompileTimeOnlyIntrinsicArgument(1, "a type or constraint value");
+					break;
+				}
+				TypeConstraint number = TypeConstraint::any();
+				number.requiresNumeric = true;
+				std::optional<TypeConstraint> rule = TypeConstraint::conjunction(number, *properties);
+				if (!rule) {
+					setConfiguredTypeFailure(
+						expr->range, "number rule requires number properties", "message",
+						{{"properties", typeToUserName(*properties)}}
+					);
+					break;
+				}
+				expr->type = {DataType::Kind::Constraint};
+				context.setExpressionValue(expr, *rule);
 			} else if (kind == IntrinsicKind::Fix) {
 				CompileTimeValue sourceValue =
 					resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);

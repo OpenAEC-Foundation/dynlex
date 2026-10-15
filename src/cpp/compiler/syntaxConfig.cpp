@@ -312,6 +312,62 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "exposed") {
 		return assignNameValue(context, path, node, config.exposedName);
 	}
+	if (node.key == "public") {
+		return assignNameValue(context, path, node, config.publicName);
+	}
+	if (node.key == "scope rules") {
+		if (node.value) {
+			addConfigError(context, path, node.lineNumber, "config entry 'scope rules' cannot define a value");
+			return false;
+		}
+		for (const auto &child : node.children) {
+			if (child->key == "local") {
+				if (child->value) {
+					addConfigError(context, path, child->lineNumber, "config entry 'scope rules.local' cannot define a value");
+					return false;
+				}
+				for (const auto &localChild : child->children) {
+					std::string *target = nullptr;
+					if (localChild->key == "everything")
+						target = &config.everythingLocalRule;
+					else if (localChild->key == "functions")
+						target = &config.functionsLocalRule;
+					else if (localChild->key == "classes")
+						target = &config.classesLocalRule;
+					else if (localChild->key == "sections")
+						target = &config.sectionsLocalRule;
+					else if (localChild->key == "conversions")
+						target = &config.conversionsLocalRule;
+					else {
+						addConfigError(
+							context, path, localChild->lineNumber,
+							"unknown config key '" + localChild->key + "' under 'scope rules.local'"
+						);
+						return false;
+					}
+					if (!assignNameValue(context, path, *localChild, *target, false, true, true))
+						return false;
+				}
+				continue;
+			}
+			std::string *target = nullptr;
+			if (child->key == "file")
+				target = &config.fileScopeName;
+			else if (child->key == "class")
+				target = &config.classScopeName;
+			else if (child->key == "function")
+				target = &config.functionScopeName;
+			else if (child->key == "by default")
+				target = &config.defaultScopeMarker;
+			else {
+				addConfigError(context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'scope rules'");
+				return false;
+			}
+			if (!assignNameValue(context, path, *child, *target, false, true, true))
+				return false;
+		}
+		return true;
+	}
 	if (node.key == "shorthand definitions") {
 		if (node.value) {
 			addConfigError(context, path, node.lineNumber, "config entry 'shorthand definitions' cannot define a value");
@@ -479,8 +535,8 @@ std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &co
 		return phrase.substr(0, phrase.find(' '));
 	};
 	const std::vector<std::string_view> definitionLeadingKeywords = {
-		config.functionName, config.conversionName, config.sectionName, config.className,
-		config.flexName,	 config.localName,		config.exposedName, config.implicitName,
+		config.functionName, config.conversionName, config.sectionName,	 config.className,	config.flexName,
+		config.localName,	 config.exposedName,	config.implicitName, config.publicName,
 	};
 	const std::vector<std::string_view> childSectionKeywords = {
 		config.executeSectionName, config.replacementSectionName, config.patternsSectionName, config.globalsSectionName,

@@ -110,8 +110,9 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 	}
 	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix || kind == IntrinsicKind::TypeOf ||
 		kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType || kind == IntrinsicKind::Number ||
-		kind == IntrinsicKind::TypeExtent || kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector ||
-		kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth) {
+		kind == IntrinsicKind::NumberRule || kind == IntrinsicKind::TypeExtent || kind == IntrinsicKind::Array ||
+		kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth ||
+		(kind == IntrinsicKind::And && expr->type.isMetaType())) {
 		return readStoredValue(expr);
 	}
 
@@ -672,7 +673,7 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 	requireCompilerInvariant(body && body->sourceSection == section, "pure execution received the wrong inferred section body");
 	ScopedPureActiveBody activeBody(state, body);
 	auto executeOpenedSection = [&](CodeLine *line, Expression *lineExpression) -> PureExpressionExecutionResult {
-		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
+		if (!line || !line->sectionOpening || !line->sectionOpening->runsInEnclosingBody())
 			return {};
 		if (lineExpression && lineExpression->sectionBodyExecution != Expression::SectionBodyExecution::None)
 			return {};
@@ -685,12 +686,12 @@ static PureExpressionExecutionResult executePureSectionBodyOnce(
 	for (size_t i = 0; i < section->codeLines.size(); i++) {
 		CodeLine *line = section->codeLines[i];
 		Expression *lineExpression = body->lineExpression(i);
-		if (lineExpression && line->sectionOpening && !dynamic_cast<DefinitionSection *>(line->sectionOpening) &&
+		if (lineExpression && line->sectionOpening && line->sectionOpening->runsInEnclosingBody() &&
 			lineExpression->sectionOutcome.kind == Expression::SectionOutcome::Kind::Conditional) {
 			size_t chainEnd = i;
 			while (chainEnd + 1 < section->codeLines.size()) {
 				CodeLine *next = section->codeLines[chainEnd + 1];
-				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
+				if (!next->sectionOpening || !next->sectionOpening->runsInEnclosingBody())
 					break;
 				Expression *nextExpression = body->lineExpression(chainEnd + 1);
 				if (!nextExpression)

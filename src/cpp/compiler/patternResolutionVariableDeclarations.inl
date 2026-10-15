@@ -15,7 +15,11 @@ static std::optional<std::string> explicitWholeVariableSourceName(const PatternR
 			return std::nullopt;
 		result += *numericSpelling;
 	}
-	return result;
+	const size_t first = result.find_first_not_of(" \t\r\n");
+	if (first == std::string::npos)
+		return std::nullopt;
+	const size_t last = result.find_last_not_of(" \t\r\n");
+	return result.substr(first, last - first + 1);
 }
 
 static const std::string *findVisibleExplicitWholeVariableName(const PatternReference *reference) {

@@ -1,0 +1,13 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are floating-point
+
+function the integer half of seven:
+    in this function, by default:
+        numbers are integer
+    execute:
+        return 7 / 2
+
+print the integer half of seven as a line
+print 7 / 2 as a line

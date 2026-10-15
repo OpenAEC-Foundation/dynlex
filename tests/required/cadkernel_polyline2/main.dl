@@ -87,10 +87,10 @@ check polyline2 (((the item at 0 in interval) = 4.0) and ((the item at 1 in inte
 set interval to the cad interpolation of second from 6.0 to 10.0
 check polyline2 (((the item at 0 in interval) = 6.0) and ((the item at 1 in interval) = 8.0))
 print "a_range_keeps_segment_provenance_and_interpolation_parameters" as a line
-set signed to polyline2 test shape [[-1.0,0.0,-1.0],[1.0,0.0,0.0]] with closure false
-set original to the cad segment arc of signed at index 0
+set {signed} to polyline2 test shape [[-1.0,0.0,-1.0],[1.0,0.0,0.0]] with closure false
+set original to the cad segment arc of {signed} at index 0
 check polyline2 original's valid
-set restricted to the cad range of signed from 0.25 to 0.75
+set restricted to the cad range of {signed} from 0.25 to 0.75
 check polyline2 restricted's valid
 set partial to the cad segment arc of restricted's value's polyline at index 0
 check polyline2 partial's valid

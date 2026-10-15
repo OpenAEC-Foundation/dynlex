@@ -1,0 +1,12 @@
+import lib/std.dl
+
+class:
+    in this class, by default:
+        numbers are 64 bit floating-point
+    patterns:
+        [a|] measurement
+    members:
+        amount as a number
+
+set reading to @intrinsic("construct", a measurement, 2.0)
+print reading's amount / 4.0 as a line

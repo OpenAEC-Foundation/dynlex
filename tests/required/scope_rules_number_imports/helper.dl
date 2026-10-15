@@ -1,0 +1,8 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are floating-point
+
+function the floating half of seven:
+    execute:
+        return 7 / 2

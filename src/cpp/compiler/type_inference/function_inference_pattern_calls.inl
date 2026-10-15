@@ -253,6 +253,8 @@ struct ImplicitPatternOverload {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
 	std::vector<std::optional<DataType>> conversionTargets;
+	// Literals typed by a number rule that take the explicitly typed parameter's type instead.
+	std::vector<std::optional<NumericLiteralTyping>> literalTypings;
 	std::vector<bool> conversionRequiresCompileTime;
 	std::vector<TypeConstraint> constraints;
 	size_t conversionCount = 0;
@@ -263,6 +265,15 @@ struct DeferredConversionAmbiguity {
 	std::string targetDescription;
 	std::vector<ConversionCandidate> candidates;
 };
+
+// A literal whose type came from a number rule yields to a parameter that explicitly requires another number type.
+static std::optional<NumericLiteralTyping>
+parameterLiteralTyping(Expression *argument, const TypeConstraint &parameterConstraint, InferenceContext &context) {
+	std::optional<NumericLiteralValue> value = argument ? numericLiteralValueOf(*argument) : std::nullopt;
+	if (!value || !typeNumericLiteral(context.parseContext, argument->range.line, *value).ruleTyped)
+		return std::nullopt;
+	return numericLiteralTypingForParameter(context.parseContext, *value, parameterConstraint);
+}
 
 static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConversions(
 	const std::vector<PatternDefinition *> &definitions, const std::vector<PatternTreeNode *> &nodesPassed,
@@ -279,6 +290,7 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 			candidate.definition = definition;
 			candidate.pathIndex = pathIndex;
 			candidate.conversionTargets.resize(arguments.size());
+			candidate.literalTypings.resize(arguments.size());
 			candidate.conversionRequiresCompileTime.resize(arguments.size());
 			bool possible = true;
 			bool constraintDeferred = false;
@@ -309,6 +321,13 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 				bool compileTimeKnown =
 					argumentIndex < argumentCompileTimeKnown.size() && argumentCompileTimeKnown[argumentIndex];
 				if (resolvedConstraint->accepts(argumentType, compileTimeKnown)) {
+					argumentIndex++;
+					return;
+				}
+				if (std::optional<NumericLiteralTyping> literalTyping =
+						parameterLiteralTyping(arguments[argumentIndex], parameterConstraint, context)) {
+					candidate.literalTypings[argumentIndex] = std::move(literalTyping);
+					candidate.conversionCount++;
 					argumentIndex++;
 					return;
 				}
@@ -498,6 +517,15 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 		);
 		if (convertedOverload) {
 			for (size_t argumentIndex = 0; argumentIndex < convertedOverload->conversionTargets.size(); argumentIndex++) {
+				if (const std::optional<NumericLiteralTyping> &literalTyping =
+						convertedOverload->literalTypings[argumentIndex]) {
+					Expression *literal = expr->arguments[argumentIndex];
+					literal->type = literalTyping->type;
+					context.setExpressionValue(literal, literalTyping->value);
+					argTypesForOverload[argumentIndex] = literalTyping->type;
+					argCompileTimeKnown[argumentIndex] = true;
+					continue;
+				}
 				if (!convertedOverload->conversionTargets[argumentIndex])
 					continue;
 				if (!tryApplyUserConversion(
@@ -569,7 +597,8 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -603,6 +632,39 @@ static void inferClassPatternCall(
 		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 }
 
+// A number type phrase written in a scope with a number rule gets the rule's properties where it leaves them open.
+static void applyNumberRuleToTypePhrase(Expression *expr, InferenceContext &context) {
+	if (!expr->type.isMetaType() || !expr->range.line)
+		return;
+	std::optional<EffectiveNumberRule> rule = effectiveNumberRule(context.parseContext, expr->range.line);
+	if (!rule)
+		return;
+	std::optional<TypeConstraint> constraint = getCompileTimeConstraintValue(context.lookupExpressionValue(expr));
+	if (!constraint || !constraint->isResolved())
+		return;
+	std::vector<const ScopeRuleSource *> contradictions;
+	TypeConstraint adjusted = applyNumberRule(*constraint, *rule, &contradictions);
+	// Recorded during trials too: whether a phrase contradicts a rule does not depend on how its line is grouped.
+	for (const ScopeRuleSource *source : contradictions) {
+		context.parseContext.scopeRuleWarnings.push_back(
+			{"number rule contradicted",
+			 expr->range,
+			 source->range,
+			 {{"explicit", std::string(expr->range.subString)}, {"rule", std::string(source->range.subString)}}}
+		);
+	}
+	if (adjusted == *constraint)
+		return;
+	if (std::optional<TypeReferenceValue> typeValue =
+			TypeReferenceValue::forConstraint(adjusted, context.parseContext.options.emitSPIRV)) {
+		expr->type = typeValue->type;
+		context.setExpressionValue(expr, *typeValue);
+		return;
+	}
+	expr->type = {DataType::Kind::Constraint};
+	context.setExpressionValue(expr, adjusted);
+}
+
 static void pushResolvedFlexBindingScope(
 	BindingFrameStack &bindingFrameStack, Expression *expression, const PatternCallResolution &resolution
 ) {
@@ -614,7 +676,8 @@ static void pushResolvedFlexBindingScope(
 	BindingFrame frame;
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex,
+		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;
@@ -794,6 +857,7 @@ static void inferFlexPatternCall(
 			return;
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(bodyExpr));
+	applyNumberRuleToTypePhrase(expr, context);
 }
 
 static bool inferNonFlexPatternCall(
@@ -866,7 +930,8 @@ static bool inferNonFlexPatternCall(
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
 		bool instantiationFallsThrough = true;
 		bool inferenceSucceeded = runInstantiationReinferenceLoop(
-			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
+			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
+			[&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
 			inst.writtenGlobalReferences.clear();
@@ -885,7 +950,8 @@ static bool inferNonFlexPatternCall(
 			inst.purity = InstantiationPurity::Pure;
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
-				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
+				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
+				[&](Expression *argumentExpression) {
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())

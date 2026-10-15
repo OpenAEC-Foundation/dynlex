@@ -29,28 +29,42 @@ flex function set the subject to value:
 a value means: @intrinsic("type", "any")
 fixed means: @intrinsic("fix", a value)
 fixed value means: @intrinsic("fix", value)
-[an|] integer means: @intrinsic("type", "int")
-[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
-
-[an|] unsigned integer means: @intrinsic("type", "uint")
-[a|] {fixed integer:bits} bit unsigned integer means: @intrinsic("type", "uint", bits)
-
+# Numbers have three independent properties: kind (integer or floating-point),
+# sign (signed or unsigned, integers only) and width. A number type is the
+# combination of its properties; unspecified properties accept every value, and
+# an exact type completes them with the defaults: signed, 32 bit integers and
+# 64 bit floating-point numbers (32 bit on GPU targets).
+[an|] integer means: @intrinsic("type", "integer")
+signed means: @intrinsic("type", "int")
+unsigned means: @intrinsic("type", "uint")
+floating-point means: @intrinsic("type", "float")
+{fixed integer:bits} bit means: @intrinsic("type", "any", bits)
+[a|an|] {fixed integer:bits} bit {properties} means: @intrinsic("and", @intrinsic("type", "any", bits), properties)
+[a|an|] signed {properties} means: @intrinsic("and", @intrinsic("type", "int"), properties)
+[a|an|] unsigned {properties} means: @intrinsic("and", @intrinsic("type", "uint"), properties)
 [a|] floating-point number means: @intrinsic("type", "float")
-[a|] {fixed integer:bits} bit floating-point number means: @intrinsic("type", "float", bits)
+[a|an|] {fixed integer:bits} bit number means: @intrinsic("and", @intrinsic("type", "any", bits), a number)
+{type:left} and {type:right} means: @intrinsic("and", left, right)
+{type:left} and {constraint:right} means: @intrinsic("and", left, right)
+{constraint:left} and {type:right} means: @intrinsic("and", left, right)
+{constraint:left} and {constraint:right} means: @intrinsic("and", left, right)
+
 [a|] byte means: @intrinsic("type", "int", 8)
 [a|] boolean means: @intrinsic("type", "bool")
 true means: 1 as a boolean
 false means: 0 as a boolean
 [a|] type means: @intrinsic("type", "type")
 [a|] constraint means: @intrinsic("type", "constraint")
-[a|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
+[a|an|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
 nothing means: @intrinsic("type", "nothing")
 the type [nothing] means: @intrinsic("type", "nothing")
 a number means: @intrinsic("number")
+numbers are {properties} means: @intrinsic("number rule", properties)
 # --- Pointer and string types ---
 
 [a|] pointer means: a pointer to a byte
 [a|] pointer to {type:kind} means: @intrinsic("add pointer depth", kind)
+[a|] pointer to {constraint:kind} means: @intrinsic("add pointer depth", kind)
 an array means: @intrinsic("array")
 [an|] array of {fixed integer:count} [item|items] means: @intrinsic("array", count)
 {type:kind} array of {fixed integer:count} [item|items] means: @intrinsic("array", count, kind)

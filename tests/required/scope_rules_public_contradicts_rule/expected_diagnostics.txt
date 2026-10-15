@@ -1,0 +1,2 @@
+tests/required/scope_rules_public_contradicts_rule/helper.dl:1-7: Warning: 'public' contradicts the scope rule 'functions are local'
+  note: The rule is stated here tests/required/scope_rules_public_contradicts_rule/helper.dl:5-24

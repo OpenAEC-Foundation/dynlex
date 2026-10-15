@@ -212,6 +212,24 @@ static bool resolveReferences(
 	std::vector<Section *> *pendingPromotionCleanupSections = nullptr
 ) {
 	return std::erase_if(references, [&](PatternReference *reference) {
+		if (const std::string *explicitVariableName = findVisibleExplicitWholeVariableName(reference)) {
+			failedMatchDependencies.erase(reference);
+			if (decrementCounts)
+				decrementVariableLikeCounts(reference);
+			size_t lineStart = reference->pattern.getLinePos(0);
+			size_t lineEnd = reference->pattern.getLinePos(reference->pattern.text.size());
+			Range variableRange(
+				reference->range().line, reference->range().start() + static_cast<int>(lineStart),
+				reference->range().start() + static_cast<int>(lineEnd)
+			);
+			reference->patternElements = {PatternElement(PatternElement::Type::Variable, *explicitVariableName, 0)};
+			reference->resolve();
+			reference->range().section()->addVariableReference(
+				context, context.createVariableReference(variableRange, *explicitVariableName)
+			);
+			traceResolution(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
+			return reference->resolved;
+		}
 		PatternMatch *match = nullptr;
 		MatchDependencies dependencies;
 		auto failedMatch = failedMatchDependencies.find(reference);
@@ -300,22 +318,6 @@ static bool resolveReferences(
 				*activeReference = nullptr;
 			if (activeMatch)
 				*activeMatch = nullptr;
-		} else if (const std::string *explicitVariableName = findVisibleExplicitWholeVariableName(reference)) {
-			failedMatchDependencies.erase(reference);
-			if (decrementCounts)
-				decrementVariableLikeCounts(reference);
-			size_t lineStart = reference->pattern.getLinePos(0);
-			size_t lineEnd = reference->pattern.getLinePos(reference->pattern.text.size());
-			Range variableRange(
-				reference->range().line, reference->range().start() + static_cast<int>(lineStart),
-				reference->range().start() + static_cast<int>(lineEnd)
-			);
-			reference->patternElements = {PatternElement(PatternElement::Type::Variable, *explicitVariableName, 0)};
-			reference->resolve();
-			reference->range().section()->addVariableReference(
-				context, context.createVariableReference(variableRange, *explicitVariableName)
-			);
-			traceResolution(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			const std::string &varName = reference->patternElements[0].text;

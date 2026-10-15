@@ -1,0 +1,17 @@
+function type:
+    replacement:
+        @intrinsic("type", "type")
+
+function signed:
+    replacement:
+        @intrinsic("type", "int")
+
+function signed {type:properties}:
+    replacement:
+        @intrinsic("and", @intrinsic("type", "int"), properties)
+
+function identity {signed octet}:
+    execute:
+        @intrinsic("return", signed octet)
+
+@intrinsic("variadic call", "libc", "printf", @intrinsic("type", "nothing"), 1, "%d\n", identity 7)

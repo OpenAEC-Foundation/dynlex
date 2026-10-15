@@ -65,7 +65,8 @@ static int getRefinedClassInstantiationIndex(
 	std::vector<DataType> refinedFieldTypes = baseFieldTypes;
 	refinedFieldTypes[fieldIndex] = refinedFieldType;
 	bool instantiationExists = std::any_of(
-		classDef->instantiations.begin(), classDef->instantiations.end(), [&](const ClassInstantiation &instantiation) {
+		classDef->instantiations.begin(), classDef->instantiations.end(),
+		[&](const ClassInstantiation &instantiation) {
 		return instantiation.fieldTypes == refinedFieldTypes;
 	}
 	);

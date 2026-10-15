@@ -76,7 +76,8 @@ std::unordered_set<std::string> collectExplicitCompileTimeParameters(
 	std::unordered_set<std::string> requiredParameters;
 	size_t bindingIndex = 0;
 	forEachPatternParameterName(
-		definition, pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		definition, pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(bindingIndex < argTypes.size(), "matched pattern has more parameters than call arguments");
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(definition, parameterName, startPos);
 		requireCompilerInvariant(parameterElement != nullptr, "matched pattern parameter has no definition element");
