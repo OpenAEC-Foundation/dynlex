@@ -94,4 +94,3 @@ fit2 near first's bulge to 0.0
 free points
 free directions
 print "arc_fit2: source collinear fallback remains straight with opposing directions" as a line
-

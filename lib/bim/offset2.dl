@@ -100,7 +100,7 @@ local function cad offset2 circles at {cad vector2:firstCentre} with radius {a 6
     execute:
         set between to the cad difference of secondCentre and firstCentre
         set distance to the cad length of between
-        if (distance <= 1e-12) or (distance > (firstRadius + secondRadius + 1e-9)):
+        if (distance <= 1e-12) or (distance > ((firstRadius + secondRadius) + 1e-9)):
             return no cad offset2 point
         if distance < ((the absolute value of (firstRadius - secondRadius)) - 1e-9):
             return no cad offset2 point

@@ -42,4 +42,3 @@ fit2 check ((the length of fitted's vertices) = 0)
 free points
 free directions
 print "invalid_direction_rejects_the_entire_fit" as a line
-

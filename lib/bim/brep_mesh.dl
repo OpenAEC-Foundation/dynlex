@@ -1847,7 +1847,7 @@ local function the cad mesh silhouette precision of {cad mesh:meshValue}:
             set scaleValue to the maximum of scaleValue and (the absolute value of pointValue's x)
             set scaleValue to the maximum of scaleValue and (the absolute value of pointValue's y)
             set scaleValue to the maximum of scaleValue and (the absolute value of pointValue's z)
-        return the maximum of (scaleValue * 2.220446049250313e-16 * 1024.0) and 1e-12
+        return the maximum of ((scaleValue * 2.220446049250313e-16) * 1024.0) and 1e-12
 
 function the cad tessellation of {cad body:bodyValue} with tolerance {cad tessellation tolerance:toleranceValue}:
     execute:
