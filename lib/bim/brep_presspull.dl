@@ -1101,7 +1101,7 @@ local function the cad presspull trigonometric parameters where {cad plane:moved
         set roots to a cad topology list of a 64 bit floating-point number
         loop turn from -2 to 3:
             set fullTurn to (turn as a 64 bit floating-point number) * (cad presspull tau)
-            append (phase - angle + fullTurn) to roots's values
+            append ((phase - angle) + fullTurn) to roots's values
             append ((phase + angle) + fullTurn) to roots's values
         return the cad presspull parameters roots
 
