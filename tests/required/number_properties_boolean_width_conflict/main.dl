@@ -1,0 +1,1 @@
+@intrinsic("and", @intrinsic("type", "bool"), @intrinsic("type", "any", 32))

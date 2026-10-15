@@ -528,7 +528,9 @@ static std::optional<TypeConstraintTemplate> compileDependentParameterConstraint
 		value.type = parameters[earlierIndex].staticParameterType;
 		value.domain = parameters[earlierIndex].constraint.structuralEnvelope();
 		value.sourceArgumentIndex = earlierIndex;
-		if (value.domain.kind && *value.domain.kind == DataType::Kind::Int)
+		if (value.domain.pointerDepth.value_or(0) == 0 &&
+			(value.domain.requiresInteger ||
+			 (value.domain.kind && (*value.domain.kind == DataType::Kind::Int || *value.domain.kind == DataType::Kind::UInt))))
 			value.integerTerm = ConstraintIntegerTerm::fixedArgument(earlierIndex);
 		bindings.emplace(parameterDefinition, std::move(value));
 	}

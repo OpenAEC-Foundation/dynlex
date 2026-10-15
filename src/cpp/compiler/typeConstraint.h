@@ -137,9 +137,10 @@ struct TypeConstraint {
 			return false;
 		if (matrixColumns && argumentType.arraySize != *matrixColumns)
 			return false;
-		if (requiresNumeric && !argumentType.isNumeric())
+		if (requiresNumeric && argumentType.kind != DataType::Kind::Int && argumentType.kind != DataType::Kind::UInt &&
+			argumentType.kind != DataType::Kind::Float)
 			return false;
-		if (requiresInteger && !argumentType.isInteger())
+		if (requiresInteger && argumentType.kind != DataType::Kind::Int && argumentType.kind != DataType::Kind::UInt)
 			return false;
 		if (constrainsClassDefinition && argumentType.classDefinition != classDefinition)
 			return false;
@@ -184,16 +185,14 @@ struct TypeConstraint {
 			const bool hasNonNumericKind = constraint.kind && *constraint.kind != DataType::Kind::Int &&
 										   *constraint.kind != DataType::Kind::UInt &&
 										   *constraint.kind != DataType::Kind::Float;
-			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
-			return hasNonNumericKind || requiresPointer;
+			return hasNonNumericKind;
 		};
 		if ((requiresNumeric && excludesNumericValues(other)) || (other.requiresNumeric && excludesNumericValues(*this)))
 			return false;
 		auto excludesIntegerValues = [](const TypeConstraint &constraint) {
 			const bool hasNonIntegerKind =
 				constraint.kind && *constraint.kind != DataType::Kind::Int && *constraint.kind != DataType::Kind::UInt;
-			const bool requiresPointer = constraint.pointerDepth && *constraint.pointerDepth != 0;
-			return hasNonIntegerKind || requiresPointer;
+			return hasNonIntegerKind;
 		};
 		if ((requiresInteger && excludesIntegerValues(other)) || (other.requiresInteger && excludesIntegerValues(*this)))
 			return false;
@@ -230,18 +229,16 @@ struct TypeConstraint {
 			!containsField(matrixRows, other.matrixRows) || !containsField(matrixColumns, other.matrixColumns) ||
 			(requiresCompileTimeValue && !other.requiresCompileTimeValue))
 			return false;
-		const bool otherHasNumericDomain = other.requiresNumeric || other.requiresInteger ||
-										   (other.kind &&
-											(*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt ||
-											 *other.kind == DataType::Kind::Float) &&
-											other.pointerDepth && *other.pointerDepth == 0) ||
-										   (other.numericSize && other.pointerDepth && *other.pointerDepth == 0);
+		const bool otherHasNumericDomain =
+			other.requiresNumeric || other.requiresInteger ||
+			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt ||
+							*other.kind == DataType::Kind::Float)) ||
+			other.numericSize.has_value();
 		if (requiresNumeric && !otherHasNumericDomain)
 			return false;
 		const bool otherHasIntegerDomain =
 			other.requiresInteger ||
-			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt) && other.pointerDepth &&
-			 *other.pointerDepth == 0);
+			(other.kind && (*other.kind == DataType::Kind::Int || *other.kind == DataType::Kind::UInt));
 		if (requiresInteger && !otherHasIntegerDomain)
 			return false;
 		if (constrainsClassDefinition && (!other.constrainsClassDefinition || classDefinition != other.classDefinition))
@@ -322,15 +319,16 @@ struct TypeConstraint {
 
 		const bool integerKind = result.kind && (*result.kind == DataType::Kind::Int || *result.kind == DataType::Kind::UInt);
 		const bool numericKind = integerKind || (result.kind && *result.kind == DataType::Kind::Float);
-		const bool requiresPointer = result.pointerDepth && *result.pointerDepth != 0;
+		if (result.numericSize && result.kind && !numericKind)
+			return std::nullopt;
 		if (result.requiresInteger) {
-			if ((result.kind && !integerKind) || requiresPointer)
+			if (result.kind && !integerKind)
 				return std::nullopt;
 			if (integerKind)
 				result.requiresInteger = false;
 		}
 		if (result.requiresNumeric) {
-			if ((result.kind && !numericKind) || requiresPointer)
+			if (result.kind && !numericKind)
 				return std::nullopt;
 			if (numericKind || result.requiresInteger)
 				result.requiresNumeric = false;

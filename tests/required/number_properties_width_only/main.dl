@@ -1,0 +1,20 @@
+import lib/std.dl
+
+function width only of {32 bit:value}:
+    execute:
+        return value
+
+function width only pointer of {a pointer to 32 bit:address}:
+    execute:
+        return the value at address
+
+print width only of (42 as a 32 bit signed integer) as a line
+print width only of (4294967295 as a 32 bit unsigned integer) as a line
+print width only of (1.5 as a 32 bit floating-point number) as a line
+
+set {signed sample} to 42 as a 32 bit signed integer
+set {unsigned sample} to 4294967295 as a 32 bit unsigned integer
+set {float sample} to 1.5 as a 32 bit floating-point number
+print width only pointer of (the address of {signed sample}) as a line
+print width only pointer of (the address of {unsigned sample}) as a line
+print width only pointer of (the address of {float sample}) as a line

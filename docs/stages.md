@@ -80,6 +80,7 @@ We discover what is a variable based on these principles:
 - `{name}` explicitly introduces or references a variable. The name can contain multiple words separated by spaces.
 - `{type:name}` does the same and constrains the variable to values accepted by the type expression. This syntax works both in pattern definitions and in executable code.
 - After a multi-word name has been introduced explicitly, later unbraced occurrences of that full name are matched as one variable in the same lexical scope and its children.
+  An exact visible explicit name is resolved before attempting a pattern call; whitespace surrounding an intrinsic argument does not change its variable identity.
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.

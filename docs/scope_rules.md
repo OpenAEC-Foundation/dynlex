@@ -60,7 +60,8 @@ Locality is decided while parsing, so these lines are syntax rather than pattern
 
 ## Numbers
 
-`numbers are {properties}` is a pattern in `lib/std.dl`. The properties are number
+`numbers are {properties}` is a pattern in `lib/std.dl`. The bare word
+`numbers` remains available as a variable name. The properties are number
 constraints joined like any type phrase, e.g. `64 bit floating-point`,
 `unsigned`, `32 bit`, `integer`. A number has three independent properties:
 
@@ -115,6 +116,11 @@ An error that involves a number whose type came from a rule carries a note point
 ## Number type phrases
 
 Number types are built from properties joined with `and`:
+
+Width properties constrain numeric kinds. They cannot be combined with a
+Boolean or another nonnumeric kind. Pointer shaping preserves the numeric
+restriction on the pointee: a pointer to an integer accepts signed and unsigned
+integer pointers, and a pointer to `32 bit` accepts 32-bit numeric pointers.
 
 ```dynlex
 function [an|] integer:

@@ -19,6 +19,8 @@ struct TypeReferenceValue {
 		if (!numericByteSize && (kindName == "int" || kindName == "uint" || kindName == "float" || kindName == "integer")) {
 			constraint.numericSize.reset();
 		}
+		if (kindName == "any" && numericByteSize)
+			constraint.requiresNumeric = true;
 		// An integer leaves its sign unspecified; as an exact type it is signed by default.
 		if (kindName == "integer") {
 			constraint.kind.reset();

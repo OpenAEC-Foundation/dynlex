@@ -59,7 +59,6 @@ false means: 0 as a boolean
 nothing means: @intrinsic("type", "nothing")
 the type [nothing] means: @intrinsic("type", "nothing")
 a number means: @intrinsic("number")
-numbers means: a number
 numbers are {properties} means: @intrinsic("number rule", properties)
 # --- Pointer and string types ---
 

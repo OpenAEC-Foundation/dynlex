@@ -1,0 +1,2 @@
+tests/required/number_properties_width_boolean_conflict/main.dl:1-77: Error: No value is both a 32-bit value and a boolean
+  note: while inferring intrinsic 'and' in '@intrinsic("and", @intrinsic("type", "any", 32), @intrinsic("type", "bool"))' with arguments [a type, a type] -> an unresolved value tests/required/number_properties_width_boolean_conflict/main.dl:1-77
