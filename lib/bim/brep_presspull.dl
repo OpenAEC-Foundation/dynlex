@@ -225,7 +225,7 @@ function the cad planar face profile of {cad body:sourceBody} at {cad face key:f
                 loop partIndex from 0 to the length of (partsResult's parts's values):
                     set partValue to the item at partIndex in (partsResult's parts's values)
                     if (partValue's coedge = useKey) and (foundPart = false):
-                        append (the cad clone of partValue's curve) to curveValues's values
+                        append (the cad clone of (partValue's curve)) to curveValues's values
                         set foundPart to true
                 if foundPart = false:
                     return no cad planar face profile

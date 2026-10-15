@@ -181,7 +181,7 @@ local function cad nurbs point lists left and right are equal:
         loop index from 0 to the length of left:
             set a to the item at index in left
             set b to the item at index in right
-            if ((the x of a) = (the x of b) and (the y of a) = (the y of b) and (the z of a) = (the z of b)) = false:
+            if ((((the x of a) = (the x of b)) and ((the y of a) = (the y of b))) and ((the z of a) = (the z of b))) = false:
                 return false
         return true
 
@@ -1164,7 +1164,7 @@ function the cad spline point at {integer:column} from {cad nurbs surface row so
             increment nextRow
         else:
             increment nextColumn
-            set denominator to (the item at (column + (the vDegree of shape) + 1) in the vKnots of shape) - (the item at (column + 1) in the vKnots of shape)
+            set denominator to (the item at ((column + (the vDegree of shape)) + 1) in the vKnots of shape) - (the item at (column + 1) in the vKnots of shape)
             set factor to 0.0
             if (the absolute value of denominator) > 2.220446049250313e-16:
                 set factor to ((the vDegree of shape) as a 64 bit floating-point number) / denominator
@@ -1180,7 +1180,7 @@ function the cad spline point at {integer:row} from {cad nurbs surface source:so
         set derivativeAxis to the derivativeAxis of source
         set factor to 0.0 as a 64 bit floating-point number
         if derivativeAxis = 1:
-            set denominator to (the item at (row + (the uDegree of shape) + 1) in the uKnots of shape) - (the item at (row + 1) in the uKnots of shape)
+            set denominator to (the item at ((row + (the uDegree of shape)) + 1) in the uKnots of shape) - (the item at (row + 1) in the uKnots of shape)
             if (the absolute value of denominator) > 2.220446049250313e-16:
                 set factor to ((the uDegree of shape) as a 64 bit floating-point number) / denominator
         set inner to @intrinsic("construct", a cad nurbs surface row source, shape, row, derivativeAxis, factor)

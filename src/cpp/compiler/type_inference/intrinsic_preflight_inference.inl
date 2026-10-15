@@ -74,3 +74,18 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 		break;
 	}
 }
+
+if (kind == IntrinsicKind::DestroyAt) {
+	DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+	if (!pointerType.isDeduced() || !pointerType.isPointer()) {
+		setConfiguredTypeFailure(expr->range, "store at requires pointer");
+		break;
+	}
+	DataType elementType = pointerType.dereferenced();
+	if (!elementType.isConcrete()) {
+		setConfiguredTypeFailure(
+			expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
+		);
+		break;
+	}
+}
