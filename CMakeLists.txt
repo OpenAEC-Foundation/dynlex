@@ -510,6 +510,21 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_expression_ownership_test EXCLUDE_FROM_ALL
+        tests/cpp/expressionOwnershipTest.cpp
+        ${DYNLEX_COMPILER_TEST_SOURCES}
+    )
+    target_compile_definitions(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
+
+    add_executable(
         dynlex_class_layout_test EXCLUDE_FROM_ALL
         tests/cpp/classLayoutTest.cpp
         src/cpp/compiler/classLayout.cpp

@@ -437,6 +437,8 @@ We do not clone the expression tree for reordering; we reorder it. Even when sto
 
 reusable expression trees are cloned only to own per-usage inference state: once for each function instantiation and flex expansion. the original tree is unmodified.
 
+Each instantiated body owns its cloned nodes independently of the mutable argument tree. Replacing a body releases those nodes when its last user ends. Trial journals retain provisional bodies and standalone conversion/header storage until rollback or promotion finishes, including when nested journals are absorbed. A rollback restores borrowed expression and instantiation state before releasing that storage. Conversion calls own their synthetic matches, and only conversions whose source still owns the selected call storage are materialized.
+
 We do not use pointers to expression-pointer locations (`expression**`), since those can be dangling pointers.
 
 **ALL** functions can be seen as one of these 4 categories of operators.

@@ -18,12 +18,13 @@
 #include <unordered_set>
 
 namespace {
-void deleteExpressionTree(Expression *expression, std::unordered_set<Expression *> &visited) {
+void deleteExpressionTree(Expression *expression, std::unordered_set<Expression *> &visited, bool deleteNode = true) {
 	if (!expression || !visited.insert(expression).second)
 		return;
 	for (Expression *argument : expression->arguments)
-		deleteExpressionTree(argument, visited);
-	delete expression;
+		deleteExpressionTree(argument, visited, argument != expression->materializedConversionArgument.get());
+	if (deleteNode)
+		delete expression;
 }
 
 void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode *> &visited) {
@@ -136,18 +137,18 @@ VariableReference *ParseContext::createVariableReference(Range range, const std:
 
 namespace {
 Expression *cloneExpressionTreeImpl(
-	ParseContext &context, Expression *expression, bool preserveInferenceMetadata, InstantiatedSectionBody *owningBody
+	ExpressionStorage &storage, Expression *expression, bool preserveInferenceMetadata, InstantiatedSectionBody *owningBody
 ) {
 	if (!expression)
 		return nullptr;
-	Expression *clone = new Expression();
-	context.ownedClonedExpressions.push_back(clone);
+	Expression *clone = storage.create();
 	clone->kind = expression->kind;
 	clone->range = expression->range;
 	clone->literalValue = expression->literalValue;
 	clone->variable = expression->variable;
 	clone->owningSectionBody = owningBody;
 	clone->patternMatch = expression->patternMatch;
+	clone->syntheticPatternMatch = expression->syntheticPatternMatch;
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
@@ -180,14 +181,28 @@ Expression *cloneExpressionTreeImpl(
 	clone->compileTimeValue = preserveInferenceMetadata ? expression->compileTimeValue : CompileTimeValue{};
 	clone->arguments.reserve(expression->arguments.size());
 	for (Expression *argument : expression->arguments)
-		clone->arguments.push_back(cloneExpressionTreeImpl(context, argument, preserveInferenceMetadata, owningBody));
+		clone->arguments.push_back(cloneExpressionTreeImpl(storage, argument, preserveInferenceMetadata, owningBody));
 	return clone;
 }
 } // namespace
 
-Expression *ParseContext::cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata) {
+ExpressionStorage::ExpressionStorage(std::shared_ptr<ExpressionAllocationStats> stats) : allocationStats(std::move(stats)) {}
+ExpressionStorage::~ExpressionStorage() { allocationStats->liveExpressions -= expressions.size(); }
+Expression *ExpressionStorage::create() {
+	expressions.push_back(std::make_unique<Expression>());
+	allocationStats->liveExpressions++;
+	allocationStats->peakExpressions = std::max(allocationStats->peakExpressions, allocationStats->liveExpressions);
+	return expressions.back().get();
+}
+
+std::shared_ptr<ExpressionStorage> ParseContext::createExpressionStorage() {
+	return std::make_shared<ExpressionStorage>(expressionAllocationStats);
+}
+
+Expression *
+ParseContext::cloneExpressionTree(Expression *expression, ExpressionStorage &storage, bool preserveInferenceMetadata) {
 	return cloneExpressionTreeImpl(
-		*this, expression, preserveInferenceMetadata, expression ? expression->owningSectionBody : nullptr
+		storage, expression, preserveInferenceMetadata, expression ? expression->owningSectionBody : nullptr
 	);
 }
 
@@ -210,11 +225,12 @@ ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata,
 	auto body = std::make_shared<InstantiatedSectionBody>();
 	body->sourceSection = section;
 	body->parentBody = parentBody;
+	body->expressions = createExpressionStorage();
 	body->lineExpressions.reserve(section->codeLines.size());
 	for (CodeLine *line : section->codeLines) {
-		body->lineExpressions.push_back(
-			cloneExpressionTreeImpl(*this, line ? line->expression : nullptr, preserveInferenceMetadata, body.get())
-		);
+		body->lineExpressions.push_back(cloneExpressionTreeImpl(
+			*body->expressions, line ? line->expression : nullptr, preserveInferenceMetadata, body.get()
+		));
 	}
 	body->childBodies.reserve(section->children.size());
 	for (Section *child : section->children)
@@ -223,13 +239,11 @@ ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata,
 }
 
 ParseContext::~ParseContext() {
-	std::unordered_set<Expression *> visitedFunctions(ownedClonedExpressions.begin(), ownedClonedExpressions.end());
+	std::unordered_set<Expression *> visitedFunctions;
 	for (auto &line : ownedCodeLines) {
 		if (line && line->expression)
 			deleteExpressionTree(line->expression, visitedFunctions);
 	}
-	for (Expression *expression : ownedClonedExpressions)
-		delete expression;
 	std::unordered_set<Section *> visitedSections;
 	std::unordered_set<PatternDefinition *> visitedDefinitions;
 	std::unordered_set<PatternReference *> visitedReferences;

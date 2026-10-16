@@ -902,25 +902,21 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 }
 
 static void materializeInferredConversionCalls(ParseContext &parseContext) {
-	std::unordered_set<Expression *> materialized;
-	for (Expression *source : parseContext.expressionsWithInferredConversions) {
-		if (!source || !source->inferredConversion || !materialized.insert(source).second)
+	for (const auto &[source, lifetime] : parseContext.expressionsWithInferredConversions) {
+		auto storage = lifetime.lock();
+		if (!storage)
 			continue;
-
 		Expression *call = source->inferredConversion;
 		requireCompilerInvariant(
-			call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
+			call && call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
 			"inferred conversion is not a unary function call"
 		);
-
-		auto *argument = new Expression(std::move(*source));
-		parseContext.ownedClonedExpressions.push_back(argument);
+		auto argument = std::make_shared<Expression>(std::move(*source));
 		argument->inferredConversion = nullptr;
-
+		argument->inferredConversionStorage.reset();
 		*source = std::move(*call);
-		source->inferredConversion = nullptr;
-		source->arguments.clear();
-		source->arguments.push_back(argument);
+		source->arguments = {argument.get()};
+		source->materializedConversionArgument = std::move(argument);
 	}
 	parseContext.expressionsWithInferredConversions.clear();
 }

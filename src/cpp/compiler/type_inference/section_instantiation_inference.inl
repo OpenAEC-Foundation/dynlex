@@ -32,7 +32,7 @@ bool ensureSectionInstantiationInferred(
 		instIt = section->instantiations.emplace(instantiationKey, Instantiation{}).first;
 	Instantiation &inst = instIt->second;
 	if (!inst.body)
-		inst.body = parseContext.cloneSectionBody(section);
+		inst.body = callerContext ? callerContext->cloneSectionBody(section) : parseContext.cloneSectionBody(section);
 	if (inst.argumentTypes.empty())
 		inst.argumentTypes = argTypes;
 	else
@@ -98,7 +98,7 @@ bool ensureSectionInstantiationInferred(
 				context.setKnownConstant(var->definition, value);
 		}
 		if (context.trial)
-			inst.body = parseContext.cloneSectionBody(section);
+			inst.body = context.cloneSectionBody(section);
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 		finishParameterOutputReinference(context, inst, passSucceeded);
 		inst.fallsThrough = instantiationFallsThrough;

@@ -30,9 +30,11 @@ struct Diagnostic;
 struct Section;
 struct Variable;
 struct Expression;
+struct ExpressionStorage;
 struct PatternDefinition;
 
 struct InstantiatedSectionBody {
+	std::shared_ptr<ExpressionStorage> expressions;
 	Section *sourceSection{};
 	InstantiatedSectionBody *parentBody{};
 	std::vector<Expression *> lineExpressions;
