@@ -46,7 +46,12 @@ struct ConversionOutcome {
 	bool compileTimeKnown = false;
 };
 
-static Expression *
+struct OwnedConversionCall {
+	std::shared_ptr<ExpressionStorage> storage;
+	Expression *expression;
+};
+
+static OwnedConversionCall
 createConversionCall(InferenceContext &context, Expression *source, PatternDefinition *definition, size_t pathIndex) {
 	requireCompilerInvariant(source != nullptr, "conversion call requires a source expression");
 	requireCompilerInvariant(
@@ -58,27 +63,27 @@ createConversionCall(InferenceContext &context, Expression *source, PatternDefin
 		"conversion definition does not have one indexed parameter"
 	);
 
-	auto match = std::make_unique<PatternMatch>();
+	auto storage = context.createExpressionStorage();
+	auto match = std::make_shared<PatternMatch>();
 	match->nodesPassed = definition->indexedNodePaths[pathIndex];
 	match->matchedEndNode = match->nodesPassed.back();
 	match->matchingDefinitions = {definition};
 	match->lineStartPos = static_cast<size_t>(std::max(0, source->range.start()));
 	match->lineEndPos = static_cast<size_t>(std::max(0, source->range.end()));
 	PatternMatch *matchPointer = match.get();
-	context.parseContext.ownedSyntheticPatternMatches.push_back(std::move(match));
 
-	auto *call = new Expression();
-	context.parseContext.ownedClonedExpressions.push_back(call);
+	auto *call = storage->create();
 	call->kind = Expression::Kind::PatternCall;
 	call->range = source->range;
 	call->owningSectionBody = source->owningSectionBody;
 	call->patternMatch = matchPointer;
-	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, true);
+	call->syntheticPatternMatch = std::move(match);
+	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, *storage, true);
 	if (!source->reusableTemplateExpression)
 		sourceClone->reusableTemplateExpression = nullptr;
 	context.setExpressionValue(sourceClone, context.lookupExpressionValue(source));
 	call->arguments.push_back(sourceClone);
-	return call;
+	return {std::move(storage), call};
 }
 
 static std::optional<ConversionOutcome> probeConversionOutcome(
@@ -99,7 +104,8 @@ static std::optional<ConversionOutcome> probeConversionOutcome(
 		trialContext.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
 	trialContext.detectGroupingAmbiguity = false;
 
-	Expression *call = createConversionCall(trialContext, source, candidate.definition, candidate.pathIndex);
+	auto conversion = createConversionCall(trialContext, source, candidate.definition, candidate.pathIndex);
+	Expression *call = conversion.expression;
 	bool inferred = inferPatternCall(call, trialContext, bindingFrameStack, true) && trialContext.typesValid;
 	deferred = trialContext.unresolvedPatternConstraintSignal && *trialContext.unresolvedPatternConstraintSignal;
 	std::optional<ConversionOutcome> result;
@@ -236,7 +242,8 @@ static bool tryApplyUserConversion(
 	}
 	if (!lookup.selected)
 		return false;
-	Expression *call = createConversionCall(context, source, lookup.selected->definition, lookup.selected->pathIndex);
+	auto conversion = createConversionCall(context, source, lookup.selected->definition, lookup.selected->pathIndex);
+	Expression *call = conversion.expression;
 	if (!inferPatternCall(call, context, bindingFrameStack, true) || !context.typesValid)
 		return false;
 	requireCompilerInvariant(
@@ -244,7 +251,8 @@ static bool tryApplyUserConversion(
 	);
 	requireCompilerInvariant(call->type == targetType, "committed conversion outcome differs from its successful probe");
 	source->inferredConversion = call;
-	context.parseContext.expressionsWithInferredConversions.push_back(source);
+	source->inferredConversionStorage = std::move(conversion.storage);
+	context.parseContext.expressionsWithInferredConversions.emplace_back(source, source->inferredConversionStorage);
 	context.setExpressionValue(source, context.lookupExpressionValue(call));
 	return true;
 }
@@ -569,7 +577,8 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -614,7 +623,8 @@ static void pushResolvedFlexBindingScope(
 	BindingFrame frame;
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex,
+		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;
@@ -727,8 +737,7 @@ static void inferFlexPatternCall(
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
-	std::shared_ptr<InstantiatedSectionBody> flexBody =
-		context.parseContext.cloneSectionBody(matchedSection, false, expr->owningSectionBody);
+	std::shared_ptr<InstantiatedSectionBody> flexBody = context.cloneSectionBody(matchedSection, expr->owningSectionBody);
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();
 	bool flexFallsThrough = true;
@@ -858,14 +867,15 @@ static bool inferNonFlexPatternCall(
 	if (!inst.inferring && !hasReusableInstantiation) {
 		ScopedSectionLocalVariableState calleeVariableState(matchedSection);
 		if (context.trial)
-			inst.body = context.parseContext.cloneSectionBody(matchedSection);
+			inst.body = context.cloneSectionBody(matchedSection);
 		Instantiation *savedInst = context.currentInstantiation;
 		auto callerKnownConstants = context.currentVariableValues;
 		auto callerAddressState = context.currentAddressState;
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
 		bool instantiationFallsThrough = true;
 		bool inferenceSucceeded = runInstantiationReinferenceLoop(
-			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
+			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
+			[&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
 			inst.writtenGlobalReferences.clear();
@@ -883,7 +893,8 @@ static bool inferNonFlexPatternCall(
 			inst.purity = InstantiationPurity::Pure;
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
-				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
+				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
+				[&](Expression *argumentExpression) {
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
@@ -911,7 +922,7 @@ static bool inferNonFlexPatternCall(
 			bool savedReinferSuppression = context.suppressReinferPassDiagnostics;
 			context.suppressReinferPassDiagnostics = true;
 			if (!inst.body)
-				inst.body = context.parseContext.cloneSectionBody(matchedSection);
+				inst.body = context.cloneSectionBody(matchedSection);
 			bool passSucceeded =
 				inferSection(matchedSection, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
 			finishParameterOutputReinference(context, inst, passSucceeded);
