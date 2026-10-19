@@ -21,8 +21,22 @@ struct InferenceContext {
 	struct SubjectState {
 		Expression *setter{};
 		bool ambiguous = false;
+		// Saved execution state can outlive a replaced flex expansion. Keep
+		// the setter and its lexical scopes alive through restoration/replay.
+		std::shared_ptr<const std::vector<std::shared_ptr<InstantiatedSectionBody>>> bodyOwners{};
 
-		bool operator==(const SubjectState &) const = default;
+		static SubjectState assigned(Expression *expression) {
+			SubjectState state{.setter = expression};
+			if (expression->owningSectionBody) {
+				auto owners = std::make_shared<std::vector<std::shared_ptr<InstantiatedSectionBody>>>();
+				for (auto *body = expression->owningSectionBody; body; body = body->parentBody)
+					owners->push_back(body->shared_from_this());
+				state.bodyOwners = std::move(owners);
+			}
+			return state;
+		}
+
+		bool operator==(const SubjectState &other) const { return setter == other.setter && ambiguous == other.ambiguous; }
 	};
 
 	struct OperandGroupingWarning {

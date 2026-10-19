@@ -254,7 +254,7 @@ case Expression::Kind::IntrinsicCall: {
 					failWithDetail(expr->arguments[1]->range, "the subject must have a runtime value");
 					break;
 				}
-				context.currentSubject = {.setter = expr, .ambiguous = false};
+				context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 			}
 			if (kind == IntrinsicKind::ShaderOutput) {
 				DataType outputType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
