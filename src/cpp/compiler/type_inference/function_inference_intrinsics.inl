@@ -15,8 +15,8 @@ case Expression::Kind::IntrinsicCall: {
 					))
 					expr->type = {DataType::Kind::Int, 8};
 				else if (kind == IntrinsicKind::Negate && expr->type.isDeduced()) {
-					bool numericVector = expr->type.isVector() && expr->type.arrayElementType &&
-							expr->type.vectorElementType().isNumeric();
+					bool numericVector =
+						expr->type.isVector() && expr->type.arrayElementType && expr->type.vectorElementType().isNumeric();
 					if (!expr->type.isNumeric() && !numericVector) {
 						setConfiguredTypeFailure(
 							expr->range, "numeric unary operand invalid", "message",
@@ -163,9 +163,8 @@ case Expression::Kind::IntrinsicCall: {
 						} else if (!context.currentInstantiation->returnPointerStorageParameterName) {
 							context.currentInstantiation->returnPointerStorageParameterName =
 								std::move(pointerStorageParameter);
-						} else if (
-							*context.currentInstantiation->returnPointerStorageParameterName != *pointerStorageParameter
-						) {
+						} else if (*context.currentInstantiation->returnPointerStorageParameterName !=
+								   *pointerStorageParameter) {
 							context.currentInstantiation->returnPointerStorageParameterName.reset();
 							context.currentInstantiation->returnPointerStorageAmbiguous = true;
 						}
@@ -255,8 +254,7 @@ case Expression::Kind::IntrinsicCall: {
 				DataType elementType = pointerType.dereferenced();
 				if (!elementType.isConcrete()) {
 					setConfiguredTypeFailure(
-						expr->range, "destroy at requires concrete pointee", "message",
-						{{"type", typeToUserName(elementType)}}
+						expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
 					);
 					break;
 				}
@@ -269,7 +267,7 @@ case Expression::Kind::IntrinsicCall: {
 					failWithDetail(expr->arguments[1]->range, "the subject must have a runtime value");
 					break;
 				}
-				context.currentSubject = {.setter = expr, .ambiguous = false};
+				context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 			}
 			if (kind == IntrinsicKind::ShaderOutput) {
 				DataType outputType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);

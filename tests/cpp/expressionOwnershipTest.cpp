@@ -66,6 +66,19 @@ function discard value:
 function the result for {integer:value}:
     execute:
         return the outer value of value
+function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+function publish value:
+    replacement:
+        @intrinsic("set subject", value)
+function it:
+    replacement:
+        @intrinsic("subject")
+flex function {nothing:first} and {nothing:second}:
+    replacement:
+        @intrinsic("discard", first)
+        @intrinsic("discard", second)
 flex section while condition:
     replacement:
         @intrinsic("loop while", condition)
@@ -90,8 +103,8 @@ function the boxed payload of {a number box:container}:
 		source += "discard (the result for " + std::to_string(i) + ")\n";
 	source += "discard (the result for 5000000000)\n";
 	source += "discard (the boxed payload of 7)\n";
-	source +=
-		"set counter to 0\nwhile counter < 3:\n    set counter to counter + 1\n    discard (the outer value of counter)\n";
+	source += "set counter to 0\nwhile counter < 3:\n    publish counter and set captured to it\n    set counter to counter + "
+			  "1\n    discard (the outer value of counter)\n";
 	std::shared_ptr<ExpressionAllocationStats> stats;
 	{
 		ParseContext context;
