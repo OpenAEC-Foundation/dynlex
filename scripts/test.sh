@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$PROJECT_DIR/tests/required"
 source "$SCRIPT_DIR/test_fixture_options.sh"
+
+if ! (cd "$PROJECT_DIR" && python3 -B "$SCRIPT_DIR/check_no_elf_binaries.py"); then
+    exit 1
+fi
 if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX")"; then
     echo "Failed to create the required-test output directory." >&2
     exit 1
@@ -627,6 +631,7 @@ run_auxiliary_test() {
     fi
 }
 
+run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
