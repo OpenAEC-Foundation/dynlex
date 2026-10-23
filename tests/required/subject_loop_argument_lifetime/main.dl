@@ -1,0 +1,30 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+function left + right:
+    replacement:
+        @intrinsic("add", left, right)
+function left < right:
+    replacement:
+        @intrinsic("less than", left, right)
+function publish value:
+    replacement:
+        @intrinsic("set subject", value)
+function it:
+    replacement:
+        @intrinsic("subject")
+function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+flex function {nothing:first} and {nothing:second}:
+    replacement:
+        @intrinsic("discard", first)
+        @intrinsic("discard", second)
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+set counter to 0
+while counter < 2:
+    publish counter and set captured to it
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\n", captured))
+    set counter to counter + 1

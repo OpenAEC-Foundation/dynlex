@@ -82,6 +82,8 @@ static bool expressionContains(Expression *root, Expression *target) {
 static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (!visited.insert(expr).second)
 		return;
+	auto inferredFlexBody = std::move(expr->inferredFlexBody);
+	auto conversionStorage = std::move(expr->inferredConversionStorage);
 	Expression *inferredFlexExpansion = expr->inferredFlexExpansion;
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
