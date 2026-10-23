@@ -68,8 +68,7 @@ static bool inferNonFlexPatternCall(
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
 		bool instantiationFallsThrough = true;
 		bool inferenceSucceeded = runInstantiationReinferenceLoop(
-			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
-			[&]() -> bool {
+			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
 			inst.writtenGlobalReferences.clear();
@@ -88,8 +87,7 @@ static bool inferNonFlexPatternCall(
 			inst.purity = InstantiationPurity::Pure;
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
-				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
-				[&](Expression *argumentExpression) {
+				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
@@ -230,4 +228,3 @@ static bool inferNonFlexPatternCall(
 	context.setExpressionValue(expr, context.lookupExpressionValue(expr));
 	return true;
 }
-

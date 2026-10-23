@@ -161,7 +161,8 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}

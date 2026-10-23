@@ -605,8 +605,7 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex,
-		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -684,8 +683,7 @@ static void pushResolvedFlexBindingScope(
 	BindingFrame frame;
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex,
-		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;

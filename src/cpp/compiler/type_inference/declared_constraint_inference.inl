@@ -337,4 +337,3 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 	return finalizeVariableTypeConstraints(parseContext) && compileDependentPatternSignatures(parseContext) &&
 		   compileDependentLocalVariableConstraints(parseContext);
 }
-

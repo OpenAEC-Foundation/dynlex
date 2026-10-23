@@ -219,8 +219,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
