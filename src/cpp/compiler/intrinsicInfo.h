@@ -89,6 +89,7 @@ enum class IntrinsicPurityKind {
 	X(ElementType, "element type", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                            \
 	X(PromoteArithmeticType, "promote arithmetic type", 3, IntrinsicReturnKind::Custom, 1, 2, IntrinsicPurityKind::Pure)       \
 	X(Number, "number", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
+	X(NumberRule, "number rule", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                              \
 	X(TypeExtent, "type extent", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                              \
 	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                      \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                \

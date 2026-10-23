@@ -1,0 +1,2 @@
+tests/required/scope_rules_number_float_widening/main.dl:7-15: Warning: This literal does not fit the numbers of 'numbers are 32 bit floating-point', so it is a 64-bit floating-point number
+  note: The rule is stated here tests/required/scope_rules_number_float_widening/main.dl:5-38

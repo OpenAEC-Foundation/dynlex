@@ -1,0 +1,5 @@
+import lib/std.dl
+import tests/required/scope_rules_local_kinds/helper.dl
+
+print the visible value as a line
+set record to @intrinsic("construct", a hidden record, 1)

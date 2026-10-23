@@ -1,5 +1,7 @@
 #pragma once
 
+#include "numberScopeRules.h"
+#include "scopeRulesSection.h"
 #include "operand_reordering.inl"
 #include "section_inference_helpers.inl"
 #include <unordered_set>
@@ -70,7 +72,7 @@ static bool inferSectionLineRange(
 	}
 
 	auto inferOpenedSection = [&](CodeLine *line, bool *openedSectionFallsThrough = nullptr) {
-		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
+		if (!line || !line->sectionOpening || !line->sectionOpening->runsInEnclosingBody())
 			return true;
 		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
 		Expression *activeOpeningExpression =
@@ -314,7 +316,7 @@ static bool inferSectionLineRange(
 				if (k + 1 >= section->codeLines.size())
 					break;
 				CodeLine *next = section->codeLines[k + 1];
-				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
+				if (!next->sectionOpening || !next->sectionOpening->runsInEnclosingBody())
 					break;
 				Expression *&nextExpression = body ? body->lineExpression(k + 1) : next->expression;
 				applyCodeLineGrouping(next, nextExpression, context);
@@ -521,6 +523,36 @@ static PatternTypeConstraintProbe probeDeclaredTypeConstraint(
 	return pure ? PatternTypeConstraintProbe::Ready : PatternTypeConstraintProbe::Impure;
 }
 
+static bool expressionEvaluatesIntrinsic(Expression *expression, IntrinsicKind kind) {
+	while (expression && expression->kind == Expression::Kind::PatternCall && expression->inferredFlexExpansion)
+		expression = expression->inferredFlexExpansion;
+	return expression && expression->kind == Expression::Kind::IntrinsicCall && intrinsicKind(expression->intrinsicName) == kind;
+}
+
+// Records the properties of a `numbers are ...` rule once its line is inferred.
+static bool commitNumberRule(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext, const TypeConstraint &rule) {
+	CodeLine *line = item.numberRuleLine;
+	line->expression = item.expression;
+	auto *rulesSection = static_cast<ScopeRulesSection *>(line->section);
+	if (!expressionEvaluatesIntrinsic(item.expression, IntrinsicKind::NumberRule)) {
+		parseContext.diagnostics.push_back(
+			Diagnostic(parseContext, Diagnostic::Level::Error, "number rule not a rule", item.diagnosticRange)
+		);
+		return false;
+	}
+	TypeConstraint number = TypeConstraint::any();
+	number.requiresNumeric = true;
+	if (rule.equivalentTo(number)) {
+		parseContext.diagnostics.push_back(Diagnostic(
+			parseContext, Diagnostic::Level::Warning, "number rule adds nothing", item.diagnosticRange, "rule",
+			item.diagnosticRange.subString
+		));
+	}
+	rulesSection->rules.numbers = NumberScopeRule{{item.diagnosticRange, rulesSection->absolute}, rule};
+	rulesSection->rules.numberRulePending = false;
+	return true;
+}
+
 static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
 	InferenceContext context(parseContext);
 	Instantiation signatureInstantiation;
@@ -545,7 +577,9 @@ static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, P
 		"pattern type-constraint probe and committed result type disagreed"
 	);
 	item.expression = expression;
-	if (item.element) {
+	if (item.numberRuleLine) {
+		item.numberRuleConstraint = std::move(constraint);
+	} else if (item.element) {
 		item.element->resolvedTypeConstraint = std::move(constraint);
 		item.element->resolvedParameterType = std::move(parameterType);
 	} else {
@@ -576,6 +610,37 @@ static bool classifyPatternTypeConstraintDependencies(
 static bool collectDeclaredTypeConstraintWorkItems(
 	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items
 ) {
+	if (auto *rulesSection = dynamic_cast<ScopeRulesSection *>(section)) {
+		for (CodeLine *line : section->codeLines) {
+			if (!line->expression)
+				continue;
+			Range ruleRange(line, line->patternText);
+			ScopeRules &rules = rulesSection->rules;
+			if (rules.numberRulePending) {
+				const SyntaxConfig &syntax = syntaxConfigForRange(parseContext, ruleRange);
+				Diagnostic diagnostic(
+					parseContext, Diagnostic::Level::Error, "scope rule repeated", ruleRange, "rule", line->patternText
+				);
+				auto first = std::find_if(items.begin(), items.end(), [&](const DeclaredTypeConstraintWorkItem &item) {
+					return item.numberRuleLine && &static_cast<ScopeRulesSection *>(item.numberRuleLine->section)->rules == &rules;
+				});
+				requireCompilerInvariant(first != items.end(), "pending number rule has no work item");
+				diagnostic.relatedInfo.push_back(
+					{renderConfiguredMessage(syntax, "scope rule repeated", "related rule"), first->diagnosticRange}
+				);
+				parseContext.diagnostics.push_back(std::move(diagnostic));
+				return false;
+			}
+			rules.numberRulePending = true;
+			DeclaredTypeConstraintWorkItem item;
+			item.diagnosticRange = ruleRange;
+			item.typeConstraintName = std::string(line->patternText);
+			item.expression = line->expression;
+			item.numberRuleLine = line;
+			items.push_back(std::move(item));
+		}
+		return true;
+	}
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		bool definitionValid = true;
 		std::function<void(std::vector<DefinitionPatternElement> &)> collectElements =
@@ -604,7 +669,7 @@ static bool collectDeclaredTypeConstraintWorkItems(
 				}
 				items.push_back(
 					{definition, &element, nullptr, nullptr, definition->range, element.typeConstraintName, expression,
-					 std::nullopt}
+					 std::nullopt, nullptr, TypeConstraint{}}
 				);
 			}
 		};
@@ -631,7 +696,7 @@ static bool collectDeclaredTypeConstraintWorkItems(
 			}
 			items.push_back(
 				{nullptr, nullptr, variable, reference, reference->declaredTypeConstraintRange,
-				 reference->declaredTypeConstraintName, expression, std::nullopt}
+				 reference->declaredTypeConstraintName, expression, std::nullopt, nullptr, TypeConstraint{}}
 			);
 		}
 	}
@@ -662,7 +727,8 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
 				continue;
-			destroyTypeConstraintExpression(item.expression);
+			if (!item.numberRuleLine)
+				destroyTypeConstraintExpression(item.expression);
 			item.expression = nullptr;
 		}
 	};
@@ -688,9 +754,17 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 		for (DeclaredTypeConstraintWorkItem &item : items) {
 			if (!item.expression)
 				continue;
-			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference)) {
+			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference) && !item.numberRuleLine) {
 				destroyExpressions();
 				crashCompilerBug("declared type-constraint work item lost its target");
+			}
+			if (!item.numberRuleLine) {
+				// Code waits for the number rules of its scope.
+				const CodeLine *governedLine = item.element ? item.definition->range.line : item.variableReference->range.line;
+				bool numberRulePending = false;
+				effectiveNumberRule(parseContext, governedLine, &numberRulePending);
+				if (numberRulePending)
+					continue;
 			}
 			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, parseContext);
 			if (probe == PatternTypeConstraintProbe::Deferred)
@@ -712,7 +786,15 @@ static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
 				return false;
 			}
 			commitDeclaredTypeConstraint(item, parseContext);
-			destroyTypeConstraintExpression(item.expression);
+			if (item.numberRuleLine) {
+				if (!commitNumberRule(item, parseContext, item.numberRuleConstraint)) {
+					item.expression = nullptr;
+					destroyExpressions();
+					return false;
+				}
+			} else {
+				destroyTypeConstraintExpression(item.expression);
+			}
 			item.expression = nullptr;
 			unresolvedCount--;
 			madeProgress = true;
@@ -836,6 +918,10 @@ static void materializeInferredConversionCalls(ParseContext &parseContext) {
 
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
+	struct ScopeRuleWarningEmission {
+		ParseContext &context;
+		~ScopeRuleWarningEmission() { emitScopeRuleWarnings(context); }
+	} scopeRuleWarningEmission{parseContext};
 	if (!inferDeclaredTypeConstraints(parseContext))
 		return false;
 	if (!validatePatternDefinitionConflicts(parseContext))

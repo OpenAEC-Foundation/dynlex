@@ -8,6 +8,7 @@
 #include "parseContext.h"
 #include "parseUtils.h"
 #include "patternTreeNode.h"
+#include "scopeRulesSection.h"
 #include "sectionSection.h"
 #include "stringHierarchy.h"
 #include "syntaxConfig.h"
@@ -101,11 +102,14 @@ bool Section::processLine(ParseContext &context, CodeLine *line) {
 
 Section *Section::createSection(ParseContext &context, CodeLine *line) {
 	// determine the section type by parsing keywords
+	if (std::optional<Section *> scopeRulesSection = createScopeRulesSection(context, line, this))
+		return *scopeRulesSection;
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	std::string_view remaining = line->patternText;
 	Section *newSection{};
 	bool isFlex = false;
-	bool isLocal = false;
+	std::optional<Range> localModifier;
+	std::optional<Range> publicModifier;
 	bool isExposed = false;
 	bool isImplicit = false;
 
@@ -135,7 +139,9 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 			if (current == syntax.flexName) {
 				isFlex = true;
 			} else if (current == syntax.localName) {
-				isLocal = true;
+				localModifier = Range(line, current);
+			} else if (current == syntax.publicName) {
+				publicModifier = Range(line, current);
 			} else if (current == syntax.exposedName) {
 				isExposed = true;
 			} else if (current == syntax.implicitName) {
@@ -163,7 +169,8 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 
 	if (newSection) {
 		newSection->isFlex = isFlex;
-		newSection->isLocal = isLocal;
+		if (!applyDefinitionLocality(context, line, this, newSection, localModifier, publicModifier))
+			return nullptr;
 		newSection->isExposed = isExposed;
 		if (isImplicit && !newSection->isConversion) {
 			context.addDiagnostic(Diagnostic(

@@ -1,0 +1,7 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are 32 bit floating-point
+
+print 16777217 as a line
+print 0.5 as a line

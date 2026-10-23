@@ -1,0 +1,9 @@
+import lib/std.dl
+
+in this file:
+    numbers are floating-point
+
+in this file, by default:
+    numbers are 64 bit
+
+print 1 as a line

@@ -13,6 +13,18 @@ dynlex options:
         padding: "padding"
     flex: "flex"
     local: "local"
+    public: "public"
+    scope rules:
+        file: "in this file"
+        class: "in this class"
+        function: "in this function"
+        by default: ", by default"
+        local:
+            everything: "everything is local"
+            functions: "functions are local"
+            classes: "classes are local"
+            sections: "sections are local"
+            conversions: "conversions are local"
     shorthand definitions:
         action: "to"
         value: "to get"
@@ -189,6 +201,40 @@ dynlex options:
             related assignment: "Assigned here"
         incompatible operand types: "Incompatible operand types '{left_type}' and '{right_type}'"
         numeric unary operand invalid: "Numeric unary operator '{operator}' requires a number or numeric vector, got '{value_type}'"
+        file scope rules misplaced: "'{scope}' must appear at the top level of a file"
+        class scope rules misplaced: "'{scope}' must appear directly inside a class definition"
+        function scope rules misplaced: "'{scope}' must appear directly inside a function, conversion or section definition"
+        scope rules not first:
+            message: "Scope rules must precede every other line of their scope"
+            related line: "This line comes first"
+        scope rules block repeated: "Each scope can have one rule block and one default block"
+        scope rules cannot contain sections: "A scope rule block cannot contain sections"
+        locality rule in class: "Locality rules have no effect in a class, which contains no definitions"
+        scope rule repeated:
+            message: "'{rule}' repeats a rule of this scope"
+            related rule: "The rule is first stated here"
+        local and public modifiers: "A definition cannot be both '{local}' and '{public}'"
+        public modifier redundant: "'{modifier}' is redundant: no scope rule makes this definition local"
+        local modifier redundant:
+            message: "'{modifier}' is redundant: a scope rule already makes this definition local"
+            related rule: "The rule is stated here"
+        public modifier contradicts rule:
+            message: "'{modifier}' contradicts the scope rule '{rule}'"
+            related rule: "The rule is stated here"
+        number rule requires number properties: "Numbers cannot be {properties}"
+        number rule adds nothing: "'{rule}' adds no property to numbers"
+        number rule not a rule: "A scope rule block can only contain scope rules"
+        number rule literal widened:
+            message: "This literal does not fit the numbers of '{rule}', so it is {type}"
+            related rule: "The rule is stated here"
+        number rule literal unrepresentable:
+            message: "This literal cannot be represented by the numbers of '{rule}'"
+            related rule: "The rule is stated here"
+        number rule contradicted:
+            message: "'{explicit}' contradicts the scope rule '{rule}'"
+            related rule: "The rule is stated here"
+        number rule origin: "'{rule}' gives these numbers their type"
+        constraint conjunction empty: "No value is both {left_type} and {right_type}"
         logical operator operands invalid: "Logical operator '{operator}' requires boolean operands, got '{left_type}' and '{right_type}'"
         logical operator operand invalid: "Logical operator '{operator}' requires a boolean operand, got '{value_type}'"
         bitwise operator operands invalid: "Bitwise operator '{operator}' requires integer operands, got '{left_type}' and '{right_type}'"

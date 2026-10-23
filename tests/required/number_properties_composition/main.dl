@@ -1,0 +1,20 @@
+import lib/std.dl
+
+# Number types are composed from independent properties.
+function half of {floating-point and 32 bit:value}:
+    execute:
+        return value / (2.0 as a 32 bit floating-point number)
+
+function the byte width of {64 bit and floating-point:value}:
+    execute:
+        return 8
+
+print (3.7 as an integer) as a line
+print (300 as an 8 bit unsigned integer) as a line
+print ((0 - 1) as a 16 bit signed integer) as a line
+print (1 as a 64 bit floating-point number) / 4.0 as a line
+print (1 as a floating-point number) / 8.0 as a line
+print half of (1 as a 32 bit floating-point number) as a line
+print the byte width of 2.5 as a line
+print (4294967295 as a 32 bit unsigned integer) as a line
+print (5 as a word sized unsigned integer) as a line

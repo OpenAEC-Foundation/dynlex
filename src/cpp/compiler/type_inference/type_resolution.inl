@@ -13,13 +13,6 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 static bool
 refineUnspecifiedClassInstantiation(const DataType &currentType, const DataType &incomingType, DataType &refinedType);
 
-static std::optional<DataType> parseNumericTokenType(std::string_view token, bool emitSPIRV) {
-	NumericLiteralParseResult parsed = parseNumericLiteral(token);
-	if (!parsed)
-		return std::nullopt;
-	return numericLiteralType(parsed.value, emitSPIRV);
-}
-
 static Expression *prepareCompileTimeTypeReferenceExpression(
 	Expression *expr, const BindingFrameStack &bindingFrameStack, BindingFrameStack &effectiveBindingFrameStack,
 	InferenceContext *inferenceContext
@@ -171,13 +164,13 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		~ActiveTypeResolutionGuard() { popActiveTypeResolutionKey(typeResolutionKey); }
 	} activeGuard(std::move(typeResolutionKey));
 	if (resolved->kind == Expression::Kind::Literal) {
-		bool emitSPIRV = activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV;
-		if (const auto *integer = std::get_if<std::int64_t>(&resolved->literalValue))
-			return numericLiteralType(NumericLiteralValue{*integer}, emitSPIRV);
-		if (const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&resolved->literalValue))
-			return numericLiteralType(NumericLiteralValue{*minimumMagnitude}, emitSPIRV);
-		if (const auto *floatingPoint = std::get_if<double>(&resolved->literalValue))
-			return numericLiteralType(NumericLiteralValue{*floatingPoint}, emitSPIRV);
+		if (std::optional<NumericLiteralValue> numericValue = numericLiteralValueOf(*resolved)) {
+			if (!activeTypeResolutionParseContext)
+				return {};
+			NumericLiteralTyping typing =
+				typeNumericLiteral(*activeTypeResolutionParseContext, resolved->range.line, *numericValue);
+			return typing.unrepresentableBy ? DataType{} : typing.type;
+		}
 		if (std::holds_alternative<std::string>(resolved->literalValue)) {
 			DataType strType{DataType::Kind::Int, 1};
 			strType.pointerDepth = 1;
@@ -208,11 +201,14 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 		Variable *var = sec ? sec->findVariable(varRef) : nullptr;
 		if (var && var->type.isDeduced())
 			return var->type;
-		if (std::optional<DataType> numericTokenType = parseNumericTokenType(
-				resolved->variable->name,
-				activeTypeResolutionParseContext && activeTypeResolutionParseContext->options.emitSPIRV
-			))
-			return *numericTokenType;
+		if (activeTypeResolutionParseContext) {
+			NumericLiteralParseResult parsed = parseNumericLiteral(resolved->variable->name);
+			if (parsed) {
+				NumericLiteralTyping typing =
+					typeNumericLiteral(*activeTypeResolutionParseContext, resolved->range.line, parsed.value);
+				return typing.unrepresentableBy ? DataType{} : typing.type;
+			}
+		}
 	}
 	if (resolved->kind == Expression::Kind::TypedPlaceholder && resolved->type.isDeduced())
 		return resolved->type;
@@ -255,6 +251,23 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					DataType rightType = resolveKnownExpressionType(resolved->arguments[2], effectiveBindingFrameStack);
 					if (leftType.kind == DataType::Kind::Bool && rightType.kind == DataType::Kind::Bool) {
 						return {DataType::Kind::Bool};
+					}
+					if (kind == IntrinsicKind::And && leftType.isMetaType() && rightType.isMetaType() &&
+						activeTypeResolutionParseContext) {
+						std::optional<TypeConstraint> left = getCompileTimeConstraintValue(
+							::resolveStoredCompileTimeValue(resolved->arguments[1], effectiveBindingFrameStack)
+						);
+						std::optional<TypeConstraint> right = getCompileTimeConstraintValue(
+							::resolveStoredCompileTimeValue(resolved->arguments[2], effectiveBindingFrameStack)
+						);
+						if (!left || !right || !left->isResolved() || !right->isResolved())
+							return {};
+						std::optional<TypeConstraint> combined = TypeConstraint::conjunction(*left, *right);
+						if (!combined)
+							return {};
+						std::optional<TypeReferenceValue> typeValue =
+							TypeReferenceValue::forConstraint(*combined, activeTypeResolutionParseContext->options.emitSPIRV);
+						return typeValue ? typeValue->type : DataType{DataType::Kind::Constraint};
 					}
 					return {};
 				}
@@ -391,7 +404,7 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 				return aggregateType.aggregateElementType().asTypeReference();
 		} else if (kind == IntrinsicKind::PromoteArithmeticType) {
 			return {DataType::Kind::Type};
-		} else if (kind == IntrinsicKind::Number) {
+		} else if (kind == IntrinsicKind::Number || kind == IntrinsicKind::NumberRule) {
 			return {DataType::Kind::Constraint};
 		} else if (kind == IntrinsicKind::ExtractElement) {
 			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);

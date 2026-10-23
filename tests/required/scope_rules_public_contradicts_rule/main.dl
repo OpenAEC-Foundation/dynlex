@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/required/scope_rules_public_contradicts_rule/helper.dl
+
+print the answer as a line
