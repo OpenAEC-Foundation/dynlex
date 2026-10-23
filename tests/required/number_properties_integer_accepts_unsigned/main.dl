@@ -1,0 +1,25 @@
+import lib/std.dl
+
+# `integer` says nothing about the sign: it accepts signed and unsigned values.
+function the doubled value of {integer:value}:
+    execute:
+        return value * 2
+
+function the kind of {integer:value}:
+    execute:
+        return "an integer"
+
+function the kind of {unsigned integer:value}:
+    execute:
+        return "an unsigned integer"
+
+function the kind of {signed integer:value}:
+    execute:
+        return "a signed integer"
+
+print the doubled value of 7 as a line
+print the doubled value of (7 as a 32 bit unsigned integer) as a line
+print the doubled value of (7 as a 64 bit unsigned integer) as a line
+print the kind of (7 as an unsigned integer) as a line
+print the kind of 7 as a line
+print the kind of (7 as a 64 bit integer) as a line

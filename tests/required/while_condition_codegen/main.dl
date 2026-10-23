@@ -1,0 +1,15 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+function counted value:
+    execute:
+        @intrinsic("store", result, 0)
+        while @intrinsic("less than", result, value):
+            @intrinsic("store", result, @intrinsic("add", result, 1))
+        @intrinsic("return", result)
+
+@intrinsic("store", count, @intrinsic("command line argument count"))
+while @intrinsic("less than", counted count, 5):
+    @intrinsic("store", count, @intrinsic("add", count, 1))
+@intrinsic("return", @intrinsic("subtract", count, 5))

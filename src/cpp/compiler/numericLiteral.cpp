@@ -1,9 +1,39 @@
 #include "numericLiteral.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 #include <charconv>
-#include <cmath>
 #include <limits>
-#include <string>
 #include <system_error>
+
+namespace {
+
+bool isDecimalFloatingLiteral(std::string_view text) {
+	size_t position = text.starts_with('-') ? 1 : 0;
+	auto consumeDigits = [&]() {
+		size_t start = position;
+		while (position < text.size() && text[position] >= '0' && text[position] <= '9')
+			position++;
+		return position != start;
+	};
+	bool hasDigits = consumeDigits();
+	if (position < text.size() && text[position] == '.') {
+		position++;
+		hasDigits = consumeDigits() || hasDigits;
+	}
+	if (!hasDigits)
+		return false;
+	if (position < text.size() && (text[position] == 'e' || text[position] == 'E')) {
+		position++;
+		if (position < text.size() && (text[position] == '+' || text[position] == '-'))
+			position++;
+		if (!consumeDigits())
+			return false;
+	}
+	return position == text.size();
+}
+
+} // namespace
 
 NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 	if (text.empty())
@@ -28,19 +58,19 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 		return {{magnitude}, NumericLiteralParseError::None};
 	}
 
-	try {
-		size_t parsedLength = 0;
-		double value = std::stod(std::string(text), &parsedLength);
-		if (parsedLength != text.size())
-			return {{0.0}, NumericLiteralParseError::Invalid};
-		if (!std::isfinite(value))
-			return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-		return {{value}, NumericLiteralParseError::None};
-	} catch (const std::out_of_range &) {
-		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-	} catch (const std::invalid_argument &) {
+	// APFloat also accepts hexadecimal, special values and empty exponents.
+	if (!isDecimalFloatingLiteral(text))
+		return {{0.0}, NumericLiteralParseError::Invalid};
+	llvm::APFloat value(0.0);
+	auto status = value.convertFromString(llvm::StringRef(text.data(), text.size()), llvm::APFloat::rmNearestTiesToEven);
+	if (!status) {
+		llvm::consumeError(status.takeError());
 		return {{0.0}, NumericLiteralParseError::Invalid};
 	}
+	// Inexact subnormals are representable; only underflow rounded to zero is out of range.
+	if (!value.isFinite() || ((*status & llvm::APFloat::opUnderflow) && value.isZero()))
+		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
+	return {{value.convertToDouble()}, NumericLiteralParseError::None};
 }
 
 DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {

@@ -15,7 +15,11 @@ static std::optional<std::string> explicitWholeVariableSourceName(const PatternR
 			return std::nullopt;
 		result += *numericSpelling;
 	}
-	return result;
+	const size_t first = result.find_first_not_of(" \t\r\n");
+	if (first == std::string::npos)
+		return std::nullopt;
+	const size_t last = result.find_last_not_of(" \t\r\n");
+	return result.substr(first, last - first + 1);
 }
 
 static const std::string *findVisibleExplicitWholeVariableName(const PatternReference *reference) {
@@ -42,15 +46,17 @@ static std::pair<int, int> variableReferenceSourcePosition(const VariableReferen
 	return {reference->range.line->mergedLineIndex, reference->range.start()};
 }
 
+static bool isVariableFunctionScope(const Section *section) {
+	return (section->type == SectionType::Function && !section->isFlex) || section->type == SectionType::Retain ||
+		   section->type == SectionType::Release;
+}
+
 static Section *enclosingVariableFunctionScope(Section *section) {
-	Section *functionScope = nullptr;
 	for (Section *ancestor = section; ancestor; ancestor = ancestor->parent) {
-		if (ancestor->type == SectionType::Function && !ancestor->isFlex) {
-			functionScope = ancestor;
-			break;
-		}
+		if (isVariableFunctionScope(ancestor))
+			return ancestor;
 	}
-	return functionScope;
+	return nullptr;
 }
 
 static bool functionDeclaresGlobalName(const Section *functionScope, const std::string &name) {
@@ -80,15 +86,14 @@ static Section *highestImplicitVariableSection(
 ) {
 	Section *highest = section;
 	Section *functionScope = enclosingVariableFunctionScope(section);
-	bool declaredGlobalHere = false;
-	if (functionScope)
-		declaredGlobalHere = functionDeclaresGlobalName(functionScope, name);
-	for (Section *ancestor = section->parent; ancestor; ancestor = ancestor->parent) {
+	bool declaredGlobalHere = functionDeclaresGlobalName(functionScope, name);
+	// Lifecycle bodies can declare locals directly in the function scope.
+	// Include that scope, but do not let its own references escape to a parent.
+	for (Section *ancestor = section; ancestor; ancestor = ancestor->parent) {
+		if (earliestImplicitSectionReferences.contains(ancestor))
+			highest = ancestor;
 		if (!declaredGlobalHere && ancestor == functionScope)
 			break;
-		if (!earliestImplicitSectionReferences.contains(ancestor))
-			continue;
-		highest = ancestor;
 	}
 	return highest;
 }
@@ -100,15 +105,7 @@ static void materializeVariableGroup(
 		*std::min_element(groupReferences.begin(), groupReferences.end(), [](auto *left, auto *right) {
 		return variableReferenceSourcePosition(left) < variableReferenceSourcePosition(right);
 	});
-	bool groupIsGlobal = isGlobal;
-	if (groupIsGlobal) {
-		for (Section *ancestor = highestSection; ancestor; ancestor = ancestor->parent) {
-			if (ancestor->type == SectionType::Function && !ancestor->isFlex) {
-				groupIsGlobal = false;
-				break;
-			}
-		}
-	}
+	bool groupIsGlobal = isGlobal && !enclosingVariableFunctionScope(highestSection);
 
 	auto existingDefinition = highestSection->variableDefinitions.find(name);
 	if (existingDefinition != highestSection->variableDefinitions.end() && existingDefinition->second != definition) {

@@ -1,0 +1,33 @@
+import lib/list.dl
+
+function verify empty item {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "exit", nothing, 1)
+
+set item to a new (a 64 bit floating-point number array of 0 items)
+set values to a list containing item
+loop index from 0 to 9:
+    append item to values
+verify empty item ((the length of values) = 10)
+insert item into values at index 3
+replace item at index 4 in values with item
+remove item 2 from values
+remove the last item from values
+verify empty item ((the length of values) = 9)
+verify empty item ((the length of (the item at 8 in values)) = 0)
+clear values
+verify empty item (values is empty)
+append item to values
+verify empty item ((the length of values) = 1)
+free values
+
+# Logical capacity does not imply allocating one byte per zero-sized element.
+set reserved to an empty list of the type of item
+ensure enough capacity in reserved for 2147483647 items
+verify empty item ((the capacity of reserved) = 2147483647)
+append item to reserved
+verify empty item ((the length of reserved) = 1)
+free reserved
+
+print "zero-sized list storage and lifecycle passed" as a line

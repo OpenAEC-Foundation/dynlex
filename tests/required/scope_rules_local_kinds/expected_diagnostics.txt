@@ -1,0 +1,1 @@
+tests/required/scope_rules_local_kinds/main.dl:38-54: Error: This pattern couldn't be resolved

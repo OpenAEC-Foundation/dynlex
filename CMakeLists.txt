@@ -499,6 +499,32 @@ if(NOT EMSCRIPTEN)
     )
 
     add_executable(
+        dynlex_numeric_literal_test EXCLUDE_FROM_ALL
+        tests/cpp/numericLiteralTest.cpp
+        src/cpp/compiler/numericLiteral.cpp
+    )
+    target_include_directories(dynlex_numeric_literal_test PRIVATE src/cpp)
+    dynlex_link_llvm(dynlex_numeric_literal_test support)
+    set_target_properties(dynlex_numeric_literal_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+
+    add_executable(
+        dynlex_expression_ownership_test EXCLUDE_FROM_ALL
+        tests/cpp/expressionOwnershipTest.cpp
+        ${DYNLEX_COMPILER_TEST_SOURCES}
+    )
+    target_compile_definitions(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_expression_ownership_test PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
+
+    add_executable(
         dynlex_class_layout_test EXCLUDE_FROM_ALL
         tests/cpp/classLayoutTest.cpp
         src/cpp/compiler/classLayout.cpp

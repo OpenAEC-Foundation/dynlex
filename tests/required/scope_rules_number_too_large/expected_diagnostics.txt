@@ -1,0 +1,4 @@
+tests/required/scope_rules_number_too_large/main.dl:7-23: Error: This literal cannot be represented by the numbers of 'numbers are 64 bit floating-point'
+  note: while inferring call 'print 9007199254740993' with arguments [an unresolved value] -> an unresolved value tests/required/scope_rules_number_too_large/main.dl:1-23
+  note: while inferring call 'print 9007199254740993 as a line' with arguments [an unresolved value] -> an unresolved value tests/required/scope_rules_number_too_large/main.dl:1-33
+  note: The rule is stated here tests/required/scope_rules_number_too_large/main.dl:5-38

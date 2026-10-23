@@ -19,6 +19,11 @@ struct PatternReference;
 struct VariableReference;
 struct Instantiation;
 struct InstantiatedSectionBody;
+struct ExpressionStorage;
+struct ExpressionAllocationStats {
+	size_t liveExpressions = 0;
+	size_t peakExpressions = 0;
+};
 
 struct Expression {
 	struct SectionOutcome {
@@ -44,6 +49,8 @@ struct Expression {
 		int selectedBranchIndex = -1;
 	};
 
+	enum class SectionBodyExecution { None, Explicit, Implicit };
+
 	enum class Kind {
 		Literal,
 		ArrayLiteral,
@@ -65,6 +72,8 @@ struct Expression {
 
 	// For Variable: reference to the variable
 	VariableReference *variable{};
+	// Lexical instance containing this expression; source templates have none.
+	InstantiatedSectionBody *owningSectionBody{};
 
 	// For PatternCall: the matched pattern (filled after resolution)
 	PatternMatch *patternMatch{};
@@ -91,6 +100,9 @@ struct Expression {
 	// here. Successful inference materializes it as an ordinary PatternCall
 	// before any later compiler stage observes the expression tree.
 	Expression *inferredConversion{};
+	std::shared_ptr<ExpressionStorage> inferredConversionStorage;
+	std::shared_ptr<PatternMatch> syntheticPatternMatch;
+	std::shared_ptr<Expression> materializedConversionArgument;
 	// For pointer-producing calls: the caller expression whose storage supplies
 	// the returned pointer.
 	Expression *inferredPointerStorage{};
@@ -107,10 +119,10 @@ struct Expression {
 	// Branch headers are inferred even when compile-time control flow proves
 	// their bodies unreachable. Later stages skip those uninferred bodies.
 	bool sectionBodyReachable = true;
-	// Set when a section flex executes or otherwise consumes its caller body
-	// while its replacement is inferred. The enclosing source walk must not
-	// infer that body a second time.
-	bool sectionBodyInferred = false;
+	// Inference assigns a consumed caller body either to an explicit transfer
+	// or to the continuation after the replacement. This is static ownership:
+	// an explicit transfer may execute zero or many times inside a runtime loop.
+	SectionBodyExecution sectionBodyExecution = SectionBodyExecution::None;
 	// The control-flow result produced while consuming that body. This remains
 	// separate from sectionOutcome because the flex still forwards the header
 	// outcome (for example, Conditional) to the enclosing section walk.
@@ -150,6 +162,17 @@ struct Expression {
 	bool groupingStartsWithArgument = false;
 	bool groupingEndsWithArgument = false;
 	// Precedence of the source pattern that expanded into this expression root.
+};
+
+// Own nodes independently of their mutable operand grouping. Argument pointers
+// and reusable-template pointers never transfer ownership.
+struct ExpressionStorage {
+	std::vector<std::unique_ptr<Expression>> expressions;
+
+	std::shared_ptr<ExpressionAllocationStats> allocationStats;
+	explicit ExpressionStorage(std::shared_ptr<ExpressionAllocationStats> stats);
+	~ExpressionStorage();
+	Expression *create();
 };
 
 template <typename Visitor>

@@ -1,0 +1,11 @@
+import lib/std.dl
+
+in this file:
+    numbers are integer
+
+function the half of {floating-point number:value}:
+    execute:
+        return value / (2 as a floating-point number)
+
+print the half of 1.5 as a line
+print 7 / 2 as a line

@@ -1,0 +1,16 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are floating-point
+
+function the doubled count of {integer:count}:
+    execute:
+        return count * 2
+
+function the width of {a 32 bit integer:value}:
+    execute:
+        return 32
+
+print the doubled count of 3 as a line
+print the width of (5 as a 32 bit integer) as a line
+print 7 / 2 as a line

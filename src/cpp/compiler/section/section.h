@@ -6,6 +6,7 @@
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "range.h"
+#include "scopeRules.h"
 #include "sectionType.h"
 #include "stringHierarchy.h"
 #include "type.h"
@@ -29,10 +30,13 @@ struct Diagnostic;
 struct Section;
 struct Variable;
 struct Expression;
+struct ExpressionStorage;
 struct PatternDefinition;
 
-struct InstantiatedSectionBody {
+struct InstantiatedSectionBody : std::enable_shared_from_this<InstantiatedSectionBody> {
+	std::shared_ptr<ExpressionStorage> expressions;
 	Section *sourceSection{};
+	InstantiatedSectionBody *parentBody{};
 	std::vector<Expression *> lineExpressions;
 	std::vector<std::shared_ptr<InstantiatedSectionBody>> childBodies;
 
@@ -64,10 +68,20 @@ struct InstantiationKey {
 struct FlexExpansionKey {
 	PatternDefinition *definition{};
 	size_t pathIndex{};
+	Range callSite;
 	std::vector<DataType> argumentTypes;
 	std::vector<CompileTimeValue> compileTimeArguments;
 
-	bool operator==(const FlexExpansionKey &) const = default;
+	bool sameDefinitionAndArguments(const FlexExpansionKey &other) const {
+		return definition == other.definition && pathIndex == other.pathIndex && argumentTypes == other.argumentTypes &&
+			   compileTimeArguments == other.compileTimeArguments;
+	}
+
+	bool operator==(const FlexExpansionKey &other) const {
+		return sameDefinitionAndArguments(other) && callSite.line == other.callSite.line &&
+			   callSite.subString.data() == other.callSite.subString.data() &&
+			   callSite.subString.size() == other.callSite.subString.size();
+	}
 };
 
 inline bool parameterRequiresCompileTimeInstantiationValue(
@@ -100,16 +114,9 @@ inline InstantiationKey buildInstantiationKey(
 	return key;
 }
 
-// Per-instantiation state for monomorphized functions.
-// Each unique combination of argument types produces a separate instantiation.
-struct Instantiation {
-	std::shared_ptr<const Diagnostic> memoryViolation;
-	DataType returnType{DataType::Kind::Any};
-	Range returnTypeOriginRange;
-	std::vector<DataType> argumentTypes;
-	std::unordered_map<std::string, DataType> parameterTypesByName;
+// Effects of executing a function, separate from its inferred representation.
+struct InstantiationExecutionEffects {
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
-	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
 	VariableAddressProvenance finalGlobalAddressProvenance;
@@ -121,8 +128,22 @@ struct Instantiation {
 	bool returnPointerStorageAmbiguous = false;
 	bool writesThroughUnknownAddress = false;
 	bool externallyEscapesUnknownAddress = false;
-	std::unordered_set<std::string> requiredCompileTimeParameters;
 	InstantiationPurity purity = InstantiationPurity::Pure;
+	bool operator==(const InstantiationExecutionEffects &) const = default;
+};
+
+// Per-instantiation state for monomorphized functions.
+// Each unique combination of argument types produces a separate instantiation.
+struct Instantiation : InstantiationExecutionEffects {
+	std::shared_ptr<const Diagnostic> memoryViolation;
+	DataType returnType{DataType::Kind::Any};
+	Range returnTypeOriginRange;
+	bool hasReturnIntrinsic = false;
+	std::vector<DataType> argumentTypes;
+	std::unordered_map<std::string, DataType> parameterTypesByName;
+	std::unordered_map<std::string, DataType> parameterSeedTypesByName;
+	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
+	std::unordered_set<std::string> requiredCompileTimeParameters;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
 	std::shared_ptr<InstantiatedSectionBody> body;
 	llvm::Function *llvmFunction = nullptr;
@@ -181,6 +202,8 @@ struct Section {
 	std::vector<std::string> globalVariables;
 	// precedence declarations: patterns that this definition evaluates before/after
 	std::vector<std::string> beforePatterns, afterPatterns;
+	// Rules stated by `in this class` or `in this function` blocks directly inside this definition.
+	ScopeRules scopeRules;
 	void collectPatternReferencesAndSections(
 		std::list<PatternReference *> &bodyReferences, std::list<PatternReference *> &globalReferences,
 		std::list<Section *> &sections, bool insideDefinition = false
@@ -188,6 +211,9 @@ struct Section {
 	virtual bool processLine(ParseContext &context, CodeLine *line);
 	virtual Section *createSection(ParseContext &context, CodeLine *line);
 	virtual bool finalize(ParseContext &context);
+	// Whether the enclosing body executes this section's lines when it reaches the opening line. Definitions and
+	// scope rule blocks only declare.
+	virtual bool runsInEnclosingBody() const { return true; }
 	Expression *
 	detectPatterns(ParseContext &context, Range range, SectionType patternType, bool registerPatternReferences = true);
 	Expression *detectPatternsRecursively(

@@ -1,0 +1,11 @@
+import lib/std.dl
+import lib/list.dl
+
+class:
+    patterns:
+        box
+    members:
+        payload
+
+set values to an empty list of box
+free values

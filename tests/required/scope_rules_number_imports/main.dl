@@ -1,0 +1,5 @@
+import lib/std.dl
+import tests/required/scope_rules_number_imports/helper.dl
+
+print the floating half of seven as a line
+print 7 / 2 as a line

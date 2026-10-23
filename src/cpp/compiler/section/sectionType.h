@@ -34,6 +34,8 @@ enum class SectionType {
 	// precedence declarations
 	Before,
 	After,
+	// a block of scope rules, such as `in this file, by default:`
+	ScopeRules,
 	Count
 };
 

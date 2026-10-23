@@ -84,6 +84,40 @@ static void rollbackClassInstantiationTransaction() {
 	}
 }
 
+// A discarded signature probe must not poison or commit into an enclosing
+// class-layout transaction. Keep a savepoint for the nested speculative work.
+struct ScopedClassInstantiationSavepoint {
+	std::optional<ClassInstantiationTransaction> saved;
+	std::unordered_map<ClassDefinition *, size_t> savedSizes;
+
+	ScopedClassInstantiationSavepoint() : saved(activeClassInstantiationTransaction) {
+		if (!saved)
+			return;
+		for (const auto &[definition, originalSize] : saved->originalInstantiationSizes)
+			savedSizes.emplace(definition, definition->instantiations.size());
+	}
+
+	~ScopedClassInstantiationSavepoint() {
+		if (!saved)
+			return;
+		requireCompilerInvariant(
+			activeClassInstantiationTransaction.has_value(), "nested class probe lost its outer transaction"
+		);
+		auto &current = *activeClassInstantiationTransaction;
+		for (size_t index = current.insertedRequestKeys.size(); index > saved->insertedRequestKeys.size(); --index) {
+			const auto &[definition, request] = current.insertedRequestKeys[index - 1];
+			definition->instantiationIndicesByRequest.erase(request);
+		}
+		for (const auto &[definition, originalSize] : current.originalInstantiationSizes) {
+			auto previous = savedSizes.find(definition);
+			size_t size = previous == savedSizes.end() ? originalSize : previous->second;
+			requireCompilerInvariant(definition->instantiations.size() >= size, "nested class probe shrank an outer layout");
+			definition->instantiations.resize(size);
+		}
+		activeClassInstantiationTransaction = std::move(saved);
+	}
+};
+
 static bool
 replaceSymbolicClassInstantiation(DataType &type, ClassDefinition *classDefinition, int symbolicIndex, int concreteIndex) {
 	bool changed = false;

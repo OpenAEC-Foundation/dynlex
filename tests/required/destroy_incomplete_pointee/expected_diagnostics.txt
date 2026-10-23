@@ -1,0 +1,2 @@
+tests/required/destroy_incomplete_pointee/main.dl:1-86: Error: destroy at requires a pointer to a concrete type; 'a box' has no complete layout
+  note: while inferring intrinsic 'destroy at' in '@intrinsic("destroy at", @intrinsic("cast", 0, @intrinsic("add pointer depth", box)))' with arguments [a pointer to a box] -> an unresolved value tests/required/destroy_incomplete_pointee/main.dl:1-86

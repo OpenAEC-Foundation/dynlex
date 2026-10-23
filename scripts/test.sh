@@ -4,6 +4,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$PROJECT_DIR/tests/required"
+source "$SCRIPT_DIR/test_fixture_options.sh"
 
 if ! (cd "$PROJECT_DIR" && python3 -B "$SCRIPT_DIR/check_no_elf_binaries.py"); then
     exit 1
@@ -268,7 +269,10 @@ if os.name == "nt":
 else:
     popen_options["start_new_session"] = True
 
-process = subprocess.Popen(cmd, **popen_options)
+sys.path.insert(0, str(project_directory / "scripts"))
+from process_error_mode import unattended_child_processes
+with unattended_child_processes():
+    process = subprocess.Popen(cmd, **popen_options)
 
 try:
     stdout, stderr = process.communicate(input=standard_input, timeout=timeout_seconds)
@@ -392,6 +396,13 @@ for test_dir in "$TESTS_DIR"/*/; do
     compile_timeout=10
     if [[ "$is_windows" == "true" ]]; then
         compile_timeout=20
+    fi
+    if ! compile_timeout=$(dynlex_fixture_compile_timeout "$test_dir" "$compile_timeout"); then
+        test_elapsed_ms=$(elapsed_ms_since "$test_start_ms")
+        append_test_result "FAIL" "$RED" "$test_name" "invalid compile_timeout_seconds.txt" "$test_elapsed_ms"
+        ((failed++))
+        failures+=("$test_name")
+        continue
     fi
     rm -f "$output_binary"
     if [[ -f "$stack_limit_file" && "$is_windows" != "true" ]]; then
@@ -622,7 +633,9 @@ run_auxiliary_test() {
 
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
+run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
+run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_error_mode.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
 run_auxiliary_test "runtime_feature_macros" 10 python3 -B "$SCRIPT_DIR/test_runtime_feature_macros.py"
 run_auxiliary_test "vulkan_test_environment" 10 python3 -B "$SCRIPT_DIR/test_vulkan_test_environment.py"
@@ -637,8 +650,10 @@ else
     run_auxiliary_test "process_posix_write" 10 python3 -B "$SCRIPT_DIR/test_process_posix_write.py"
 fi
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
+run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
+run_auxiliary_test "expression_ownership" 600 python3 -B "$SCRIPT_DIR/test_expression_ownership.py" "$PROJECT_DIR"
 run_auxiliary_test "path_utils" 30 python3 -B "$SCRIPT_DIR/test_path_utils.py" "$PROJECT_DIR"
 run_auxiliary_test "native_target" 30 python3 -B "$SCRIPT_DIR/test_native_target.py" "$PROJECT_DIR"
 if [[ "$is_windows" != "true" ]]; then

@@ -14,7 +14,9 @@ static void seedNonFlexSectionParameterState(Section *section, InferenceContext 
 		Variable *parameterVariable = findOwnSectionVariable(section, name);
 		if (!parameterVariable || parameterVariable->isGlobal)
 			continue;
-		parameterVariable->type = parameterType;
+		auto seedType = context.currentInstantiation->parameterSeedTypesByName.find(name);
+		parameterVariable->type =
+			seedType != context.currentInstantiation->parameterSeedTypesByName.end() ? seedType->second : parameterType;
 		parameterVariable->typeOriginRange = parameterVariable->definition ? parameterVariable->definition->range : Range();
 		parameterVariable->typeOriginFloatLiteralReplacement.clear();
 	}
@@ -134,7 +136,6 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	Expression::SectionOutcome &outcome
 ) {
 	requireCompilerInvariant(sectionOutcomeIsLoop(openingExpression), "loop reinference has no loop header outcome");
-	Expression *trialExpression = context.parseContext.cloneExpressionTree(openingExpression);
 	InferenceContext::TrialJournal journal;
 	InferenceContext trialContext(context.parseContext, true);
 	trialContext.currentInstantiation = context.currentInstantiation;
@@ -147,6 +148,8 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 	trialContext.trialJournal = &journal;
 	trialContext.unresolvedPatternConstraintSignal = context.unresolvedPatternConstraintSignal;
 	trialContext.detectGroupingAmbiguity = false;
+	auto storage = trialContext.createExpressionStorage();
+	Expression *trialExpression = context.parseContext.cloneExpressionTree(openingExpression, *storage);
 	bool inferred = inferExpression(trialExpression, trialContext, true, bindingFrameStack, false) && trialContext.typesValid;
 	if (inferred) {
 		requireCompilerInvariant(

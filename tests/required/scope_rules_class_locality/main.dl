@@ -1,0 +1,11 @@
+import lib/std.dl
+
+class:
+    in this class, by default:
+        functions are local
+    patterns:
+        [a|] record
+    members:
+        amount as an integer
+
+print 1 as a line

@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MPL-2.0
+# Public 2D geometry entry point corresponding to cadkernel src/geom2d/mod.rs.
+# The imported modules preserve the upstream layering and expose the verified
+# curve, topology, offset and sampling operations through one DynLex import.
+import lib/bim/core.dl
+import lib/bim/geometry2.dl
+import lib/bim/angle.dl
+import lib/bim/arc_fit2.dl
+import lib/bim/arclength2.dl
+import lib/bim/area2.dl
+import lib/bim/arrangement2.dl
+import lib/bim/band2.dl
+import lib/bim/bounds2.dl
+import lib/bim/centerline2.dl
+import lib/bim/clip2.dl
+import lib/bim/constrained2.dl
+import lib/bim/construct2.dl
+import lib/bim/containment2.dl
+import lib/bim/cross2.dl
+import lib/bim/curve2.dl
+import lib/bim/deviation2.dl
+import lib/bim/fillet2.dl
+import lib/bim/frame.dl
+import lib/bim/gradient.dl
+import lib/bim/intersect2.dl
+import lib/bim/nurbs2.dl
+import lib/bim/offset2.dl
+import lib/bim/polyline2.dl
+import lib/bim/snap2.dl
+import lib/bim/tessellate2.dl
+import lib/bim/transform2.dl
+import lib/bim/triangulate2.dl

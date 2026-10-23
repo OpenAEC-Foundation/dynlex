@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/planar3/support.dl
+
+function the planar test polyline with bulge {a 64 bit floating-point number:bulge}:
+    execute:
+        set vertices to a list containing (a cad polyline vertex2 at (planar v2 0.0 0.0) with bulge bulge)
+        append (a straight cad polyline vertex2 at (planar v2 2.0 0.0)) to vertices
+        append (a straight cad polyline vertex2 at (planar v2 0.0 2.0)) to vertices
+        set result to a cad planar curve3 of (the cad curve2 of (the cad polyline2 with vertices vertices and closure false)) on (the planar upright frame)
+        free vertices
+        return result
+
+function verify planar helpers assertions:
+    execute:
+        set original to the planar test polyline with bulge 0.0
+        set shared to original
+        set cloned to the cad clone of original
+        planar check (cloned = original) named "deep clone structural equality"
+        planar check (((the vertices of the polyline of the curve of cloned) != (the vertices of the polyline of the curve of original)) and ((the vertices of the polyline of the curve of shared) = (the vertices of the polyline of the curve of original))) named "nested clone and shared copies"
+        free cad planar curve original
+        planar point (the cad point on shared at 0.5) equals (planar v3 2.0 0.0 0.0)
+        planar point (the cad point on cloned at 1.0) equals (planar v3 0.0 0.0 2.0)
+        set the plane of cloned to the cad xy plane
+        planar check ((cloned = shared) = false) named "frame participates in equality"
+        planar point (the cad point on cloned at 1.0) equals (planar v3 0.0 2.0 0.0)
+        planar point (the cad point on shared at 1.0) equals (planar v3 0.0 0.0 2.0)
+        print "nested managed copy, deep clone and independent frame" as a line
+
+        set curves to a list containing cloned
+        set inferred to the cad common plane of curves within 1e-9
+        planar check (the valid of inferred) named "straight polyline full support"
+        planar point (the xAxis of the value of inferred) equals (planar v3 0.0 1.0 0.0)
+        planar point (the yAxis of the value of inferred) equals (planar v3 1.0 0.0 0.0)
+        set refused to the cad common plane of curves within 2.0
+        planar check ((the valid of refused) = false) named "axis threshold inclusive"
+        set invalid to [-1.0,0.0,-0.0,1.0 / 0.0,0.0 / 0.0]
+        loop index from 0 to 5:
+            set refused to the cad common plane of curves within (the item at index in invalid)
+            planar check ((the valid of refused) = false) named "invalid support tolerance"
+        clear curves
+        set refused to the cad common plane of curves within 1e-9
+        planar check ((the valid of refused) = false) named "empty support"
+        print "affine support ties, inclusive threshold and invalid tolerances" as a line
+
+        set conic to a flat cad planar curve3 of (the cad curve2 of (a cad circle2 at (planar v2 (0.0 / 0.0) 0.0) with radius 0.0))
+        append conic to curves
+        set inferred to the cad common plane of curves within 1e-9
+        planar check (the valid of inferred) named "conic uses storage basis even for invalid shape"
+        clear curves
+        append (the planar test polyline with bulge (0.0 / 0.0)) to curves
+        set inferred to the cad common plane of curves within 1e-9
+        planar check (the valid of inferred) named "nonzero bulge uses storage basis"
+        planar point (the value of the cad normal of (the value of inferred)) equals (planar v3 0.0 1.0 0.0)
+        clear curves
+        set line to a flat cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 0.0) to (planar v2 2.0 0.0)))
+        append line to curves
+        set refused to the cad common plane of curves within 1e-9
+        planar check ((the valid of refused) = false) named "collinear line storage does not impose plane"
+        set ray to a cad planar curve3 of (the cad curve2 of (a cad ray2 from (planar v2 0.0 0.0) along (planar v2 0.0 1.0))) on (the planar upright frame)
+        append ray to curves
+        set inferred to the cad common plane of curves within 1e-9
+        planar check (the valid of inferred) named "line ray combined affine support"
+        planar check (cad (the value of inferred) contains (planar v3 0.0 0.0 10.0) within 1e-9) named "ray contributes direction"
+        planar check ((the cad extent of ray) = (the cad forward extent2)) named "ray extent forwarded"
+        set xline to a cad planar curve3 of (the cad curve2 of (a cad xline2 through (planar v2 0.0 0.0) along (planar v2 0.0 1.0))) on (the planar upright frame)
+        planar check ((the cad extent of xline) = (the cad infinite extent2)) named "xline extent forwarded"
+        free curves
+        print "conic, bulge and straight support semantics" as a line
+
+        set frame to a cad plane with origin (planar v3 4.0 5.0 6.0), x axis (planar v3 2.0 0.0 0.0) and y axis (planar v3 1.0 3.0 0.0)
+        set skew to a cad planar curve3 of (the cad curve2 of (a cad line2 from (planar v2 0.0 0.0) to (planar v2 2.0 2.0))) on frame
+        planar point (the cad point on skew at 0.5) equals (planar v3 7.0 8.0 6.0)
+        set back to the cad parameter on skew nearest (planar v3 7.0 8.0 100.0)
+        planar check ((the valid of back) and ((the value of back) = 0.5)) named "skew projection before inverse"
+        planar point (the cad curve point of skew at 0.5) equals (planar v3 7.0 8.0 6.0)
+        planar point (the cad curve tangent of skew at 0.5) equals (planar v3 6.0 6.0 0.0)
+        set samples to the cad angular samples of skew within 0.1
+        planar check ((the length of samples) = 2) named "angular sampling delegates line"
+        planar point (the item at 1 in samples) equals (planar v3 10.0 11.0 6.0)
+        free samples
+        # Aligned lift intentionally ignores an invalid world elevation.
+        set back to the cad parameter on line nearest (planar v3 1.0 0.0 (0.0 / 0.0))
+        planar check ((the valid of back) and ((the value of back) = 0.5)) named "xy shortcut ignores world z"
+        print "skew projection, evaluator protocol and angular sampling" as a line
+
+verify planar helpers assertions

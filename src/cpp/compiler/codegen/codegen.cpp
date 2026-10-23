@@ -11,6 +11,7 @@
 #include "intrinsicInfo.h"
 #include "native.h"
 #include "nativeScalarABI.h"
+#include "numberScopeRules.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
 #include "sectionFlexBody.h"
@@ -95,51 +96,6 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 }
 
 namespace {
-struct VariableAllocaSnapshotEntry {
-	VariableReference *reference = nullptr;
-	llvm::AllocaInst *alloca = nullptr;
-	std::optional<DataType> finalizedType;
-};
-static void collectVariableAllocaSnapshotEntries(
-	ParseContext &context, Section *section, std::unordered_set<VariableReference *> &visitedReferences,
-	std::vector<VariableAllocaSnapshotEntry> &entries
-) {
-	if (!section)
-		return;
-	for (const auto &[ignoredName, definitionReference] : section->variableDefinitions) {
-		(void)ignoredName;
-		if (!definitionReference || !visitedReferences.insert(definitionReference).second)
-			continue;
-		auto finalizedType = context.finalizedVariableTypes.find(definitionReference);
-		entries.push_back(
-			{definitionReference, definitionReference->alloca,
-			 finalizedType == context.finalizedVariableTypes.end() ? std::nullopt
-																   : std::optional<DataType>(finalizedType->second)}
-		);
-	}
-	for (Section *child : section->children)
-		collectVariableAllocaSnapshotEntries(context, child, visitedReferences, entries);
-}
-struct ScopedVariableAllocaRestore {
-	ParseContext &context;
-	std::vector<VariableAllocaSnapshotEntry> entries;
-	explicit ScopedVariableAllocaRestore(ParseContext &context, Section *section) : context(context) {
-		std::unordered_set<VariableReference *> visitedReferences;
-		collectVariableAllocaSnapshotEntries(context, section, visitedReferences, entries);
-	}
-	~ScopedVariableAllocaRestore() {
-		for (const VariableAllocaSnapshotEntry &entry : entries) {
-			requireCompilerInvariant(
-				entry.reference != nullptr, "ScopedVariableAllocaRestore contains null definition reference"
-			);
-			entry.reference->alloca = entry.alloca;
-			if (entry.finalizedType)
-				context.finalizedVariableTypes[entry.reference] = *entry.finalizedType;
-			else
-				context.finalizedVariableTypes.erase(entry.reference);
-		}
-	}
-};
 struct ScopedActiveFlexDefinition {
 	ParseContext &context;
 	ScopedActiveFlexDefinition(ParseContext &ctx, Section *section) : context(ctx) {
@@ -306,7 +262,6 @@ bool generateSpecializedFunction(
 		argIdx++;
 	}
 	context.currentCodegenInstantiation = &activeInst;
-	ScopedVariableAllocaRestore functionVariableAllocas(context, section);
 
 	// Generate function body
 	requireCompilerInvariant(
@@ -478,40 +433,34 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 
 	switch (expr->kind) {
 	case Expression::Kind::Literal: {
-		if (auto *integer = std::get_if<std::int64_t>(&expr->literalValue)) {
+		if (std::optional<NumericLiteralValue> number = numericLiteralValueOf(*expr)) {
 			DataType numType = finalizedExpressionType(context, expr);
+			llvm::Type *llvmType = getLLVMType(context, numType);
+			if (const auto *floatingPoint = std::get_if<double>(&*number)) {
+				requireCompilerInvariant(numType.kind == DataType::Kind::Float, "floating-point literal has a non-float type");
+				return llvm::ConstantFP::get(llvmType, *floatingPoint);
+			}
+			const auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&*number);
+			requireCompilerInvariant(
+				!minimumMagnitude || minimumMagnitude->identity != nullptr,
+				"minimum integer magnitude reached literal codegen without an identity"
+			);
+			std::uint64_t magnitude = minimumMagnitude ? std::uint64_t{1} << 63
+									  : std::holds_alternative<std::uint64_t>(*number)
+										  ? std::get<std::uint64_t>(*number)
+										  : static_cast<std::uint64_t>(std::get<std::int64_t>(*number));
+			// A number rule can make an integer literal floating-point; inference proved the value exact.
+			if (numType.kind == DataType::Kind::Float)
+				return llvm::ConstantFP::get(llvmType, static_cast<double>(magnitude));
 			requireCompilerInvariant(numType.isInteger(), "integer literal has a non-integer finalized type");
 			unsigned bitWidth = static_cast<unsigned>(numType.numericSize * 8);
 			requireCompilerInvariant(bitWidth > 0 && bitWidth <= 64, "integer literal has an unsupported finalized width");
-			if (bitWidth < 64) {
-				std::int64_t minimum = -(std::int64_t{1} << (bitWidth - 1));
-				std::int64_t maximum = (std::int64_t{1} << (bitWidth - 1)) - 1;
-				requireCompilerInvariant(
-					*integer >= minimum && *integer <= maximum, "integer literal does not fit its finalized signed integer type"
-				);
-			}
-			return llvm::ConstantInt::get(getLLVMType(context, numType), *integer, true);
-		}
-		if (auto *integer = std::get_if<std::uint64_t>(&expr->literalValue)) {
-			DataType numType = finalizedExpressionType(context, expr);
-			requireCompilerInvariant(numType.isInteger(), "unsigned integer literal has a non-integer finalized type");
-			return llvm::ConstantInt::get(getLLVMType(context, numType), *integer, false);
-		}
-		if (auto *minimumMagnitude = std::get_if<MinimumSignedIntegerMagnitude>(&expr->literalValue)) {
+			unsigned valueBits = numType.kind == DataType::Kind::Int && !minimumMagnitude ? bitWidth - 1 : bitWidth;
 			requireCompilerInvariant(
-				minimumMagnitude->identity != nullptr, "minimum integer magnitude reached literal codegen without an identity"
+				valueBits >= 64 || magnitude < (std::uint64_t{1} << valueBits),
+				"integer literal does not fit its finalized integer type"
 			);
-			DataType numType = finalizedExpressionType(context, expr);
-			requireCompilerInvariant(
-				numType.isInteger() && numType.numericSize == 8, "minimum integer magnitude is not a 64-bit integer"
-			);
-			return llvm::ConstantInt::get(getLLVMType(context, numType), std::uint64_t{1} << 63, false);
-		}
-		if (auto *doubleVal = std::get_if<double>(&expr->literalValue)) {
-			DataType numType = finalizedExpressionType(context, expr);
-			llvm::Type *llvmType = getLLVMType(context, numType);
-			requireCompilerInvariant(numType.kind == DataType::Kind::Float, "floating-point literal has a non-float type");
-			return llvm::ConstantFP::get(llvmType, *doubleVal);
+			return llvm::ConstantInt::get(llvmType, magnitude, false);
 		}
 		if (auto *strVal = std::get_if<std::string>(&expr->literalValue)) {
 			return generateStringConstant(context, *strVal);
@@ -583,9 +532,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (bindingIt != context.codegenParameterBindings.end())
 			return loadOwnedValue(bindingIt->second, varName + "_val");
 
-		// Local variable: load from alloca
-		if (definition->alloca)
-			return loadOwnedValue(definition->alloca, varName + "_val");
+		auto storage = context.variableStorage.find(variableStorageKey(expr));
+		if (storage != context.variableStorage.end())
+			return loadOwnedValue(storage->second, varName + "_val");
 
 		crashCompilerBug("Variable '" + varName + "' reached codegen without storage");
 	}
@@ -624,7 +573,6 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			// Push current bindings and set only this flex's parameters (scoped).
 			pushPatternCallBindingScope(context.flexBindingFrames, expr, matchedDef);
 			ScopedFlexCallSiteRange callSiteRangeScope(context, expr->range);
-			ScopedVariableAllocaRestore flexVariableAllocas(context, matchedSection);
 			ScopedActiveFlexDefinition activeFlexScope(context, matchedSection);
 			Section *callSiteSection = expr->range.line ? expr->range.line->section : nullptr;
 			ScopedFlexCallSiteSection callSiteScope(context, callSiteSection);

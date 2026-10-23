@@ -1,0 +1,2 @@
+tests/required/scope_rules_number_widening/main.dl:7-17: Warning: This literal does not fit the numbers of 'numbers are 32 bit', so it is a 64-bit integer
+  note: The rule is stated here tests/required/scope_rules_number_widening/main.dl:5-23

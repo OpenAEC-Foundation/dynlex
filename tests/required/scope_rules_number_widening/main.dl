@@ -1,0 +1,6 @@
+import lib/std.dl
+
+in this file, by default:
+    numbers are 32 bit
+
+print 5000000000 as a line

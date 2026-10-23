@@ -7,50 +7,8 @@ case Expression::Kind::IntrinsicCall: {
 		switch (info->returnKind) {
 #include "intrinsics/arithmetic_inference.inl"
 #include "intrinsics/bitwise_inference.inl"
-		case IntrinsicReturnKind::Bool: {
-			if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				if (!isLogicalOperandType(leftType) || !isLogicalOperandType(rightType)) {
-					setConfiguredTypeFailure(
-						expr->range, "logical operator operands invalid", "message",
-						{{"operator", expr->intrinsicName},
-						 {"left_type", typeToUserName(leftType)},
-						 {"right_type", typeToUserName(rightType)}}
-					);
-					break;
-				}
-			} else if (kind == IntrinsicKind::Not) {
-				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!isLogicalOperandType(valueType)) {
-					setConfiguredTypeFailure(
-						expr->range, "logical operator operand invalid", "message",
-						{{"operator", "not"}, {"value_type", typeToUserName(valueType)}}
-					);
-					break;
-				}
-			} else {
-				DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				DataType promoted;
-				DataType refinedPointerType;
-				bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
-				bool pointerEquality =
-					equality && leftType.isPointer() && rightType.isPointer() &&
-					(leftType == rightType || refineUnspecifiedClassInstantiation(leftType, rightType, refinedPointerType));
-				bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
-										   : DataType::promoteArithmetic(leftType, rightType, promoted);
-				if (!pointerEquality && !promotable) {
-					setConfiguredTypeFailure(
-						expr->range, "incompatible operand types", "message",
-						{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
-					);
-					break;
-				}
-			}
-			expr->type = {DataType::Kind::Bool};
-			break;
-		}
+#include "intrinsics/boolean_inference.inl"
+
 		case IntrinsicReturnKind::Void: {
 			if (kind == IntrinsicKind::CheckDeallocation &&
 				!ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack).isPointer()) {
@@ -60,6 +18,13 @@ case Expression::Kind::IntrinsicCall: {
 			CompileTimeValue conditionValue;
 			DataType sectionConditionType;
 			if (kind == IntrinsicKind::Return) {
+				if (context.currentInstantiation) {
+					if (context.trial) {
+						requireCompilerInvariant(context.trialJournal, "trial return inference requires a rollback journal");
+						context.trialJournal->recordInstantiationWrite(context.currentInstantiation);
+					}
+					context.currentInstantiation->hasReturnIntrinsic = true;
+				}
 				Expression *returnValueExpression = expr->arguments.size() > 1 ? expr->arguments[1] : nullptr;
 				ResolvedBindingLayers resolvedReturnValue =
 					returnValueExpression
@@ -180,8 +145,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (!context.typesValid)
 					break;
 				DataType refinedElementType;
-				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType) &&
-					refinedElementType != elementType) {
+				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType)) {
 					refinePointerStoragePointeeType(expr->arguments[1], valueType, context, flexBindingFrameStack);
 					pointerType = effectiveInferredExpressionType(expr->arguments[1]);
 					elementType = pointerType.dereferenced();
@@ -204,13 +168,6 @@ case Expression::Kind::IntrinsicCall: {
 					flexBindingFrameStack
 				);
 			}
-			if (kind == IntrinsicKind::DestroyAt) {
-				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
-					setConfiguredTypeFailure(expr->range, "store at requires pointer");
-					break;
-				}
-			}
 			if (kind == IntrinsicKind::ExecuteBody && !inferSectionFlexCallerBody(expr, context))
 				break;
 			if (kind == IntrinsicKind::SetSubject) {
@@ -219,7 +176,7 @@ case Expression::Kind::IntrinsicCall: {
 					failWithDetail(expr->arguments[1]->range, "the subject must have a runtime value");
 					break;
 				}
-				context.currentSubject = {.setter = expr, .ambiguous = false};
+				context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 			}
 			if (kind == IntrinsicKind::ShaderOutput) {
 				DataType outputType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
@@ -448,6 +405,27 @@ case Expression::Kind::IntrinsicCall: {
 					TypeReferenceValue::builtin(kindStr, context.parseContext.options.emitSPIRV, numericByteSize);
 				expr->type = typeRefValue.type;
 				context.setExpressionValue(expr, typeRefValue);
+			} else if (kind == IntrinsicKind::NumberRule) {
+				// @intrinsic("number rule", properties): the number properties a scope rule fills in.
+				std::optional<TypeConstraint> properties = getCompileTimeConstraintValue(
+					resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context)
+				);
+				if (!properties || !properties->isResolved()) {
+					failCompileTimeOnlyIntrinsicArgument(1, "a type or constraint value");
+					break;
+				}
+				TypeConstraint number = TypeConstraint::any();
+				number.requiresNumeric = true;
+				std::optional<TypeConstraint> rule = TypeConstraint::conjunction(number, *properties);
+				if (!rule) {
+					setConfiguredTypeFailure(
+						expr->range, "number rule requires number properties", "message",
+						{{"properties", typeToUserName(*properties)}}
+					);
+					break;
+				}
+				expr->type = {DataType::Kind::Constraint};
+				context.setExpressionValue(expr, *rule);
 			} else if (kind == IntrinsicKind::Fix) {
 				CompileTimeValue sourceValue =
 					resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
@@ -532,6 +510,14 @@ case Expression::Kind::IntrinsicCall: {
 					break;
 				}
 				DataType valueType = typeArgType.toReferencedType();
+				if (!typeArgType.toReferencedType().isConcrete() && context.currentInstantiation) {
+					// A later write in the same inference chain can refine an
+					// unspecified class layout. Preserve the known result type and
+					// revisit this body after that refinement reaches the caller.
+					observeUnresolvedRecursiveDependency(context);
+					expr->type = {DataType::Kind::Int, 8};
+					break;
+				}
 				if (!valueType.isConcrete() || !valueType.isRuntimeValueType()) {
 					if (valueType.kind == DataType::Kind::Class && valueType.classDefinition && valueType.classInstIndex < 0) {
 						auto unknownMember =

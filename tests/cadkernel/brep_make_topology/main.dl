@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_make_cuboid/main.dl
+import tests/cadkernel/brep_make_topology/support.dl
+
+function a topology maker unit box:
+    execute:
+        set created to the cad cuboid at (the cad zero vector3) with size (a maker point [1.0,1.0,1.0])
+        check solid maker (created's valid)
+        return created's value
+function maker solid {cad body:solid} has flaw {integer:kind}:
+    execute:
+        set flaws to the cad flaws of solid
+        set found to false
+        loop cursor from 0 to the length of flaws:
+            if ((the item at cursor in flaws)'s kind) = kind:
+                set found to true
+        free flaws
+        return found
+
+set loopKeys to the maker loop keys of body
+loop ringIndex from 0 to the length of loopKeys:
+    set ringNode to the cad node pointer for (the item at ringIndex in loopKeys) in body
+    set count to the length of (ringNode's coedges's values)
+    check solid maker (count = 4)
+    loop useIndex from 0 to count:
+        set nextIndex to the remainder of (useIndex + 1) divided by count
+        set ends to the cad coedge vertices of (the item at useIndex in (ringNode's coedges's values)) in body
+        set begins to the cad coedge vertices of (the item at nextIndex in (ringNode's coedges's values)) in body
+        check solid maker ((ends's valid) and (begins's valid))
+        check solid maker ((ends's end) = (begins's start))
+free loopKeys
+print "every_loop_closes" as a line
+
+set faceKeys to the cad face keys of body
+loop faceIndex from 0 to the length of faceKeys:
+    set faceKey to the item at faceIndex in faceKeys
+    set faceNode to the cad node pointer for faceKey in body
+    set surfaceNode to the cad node pointer for (faceNode's surface) in body
+    set uses to the cad face coedges of faceKey in body
+    loop useIndex from 0 to the length of uses:
+        set endpoints to the cad coedge vertices of (the item at useIndex in uses) in body
+        check solid maker (endpoints's valid)
+        set vertexNode to the cad node pointer for (endpoints's start) in body
+        check solid maker ((@intrinsic("dereference", surfaceNode)) contains cad point (vertexNode's point) within 1e-9)
+    free uses
+free faceKeys
+print "every_face_lies_on_its_own_surface" as a line
+
+set positioned to the cad cuboid at (a maker point [10.0,20.0,30.0]) with size (a maker point [1.0,2.0,3.0])
+check solid maker (positioned's valid)
+set vertexKeys to the maker vertex keys of (positioned's value)
+check solid maker ((the length of vertexKeys) = 8)
+set lowerFound to false
+set upperFound to false
+loop vertexIndex from 0 to the length of vertexKeys:
+    set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in (positioned's value)
+    set point to vertexNode's point
+    if ((point's x) = 10.0) and (((point's y) = 20.0) and ((point's z) = 30.0)):
+        set lowerFound to true
+    if ((point's x) = 11.0) and (((point's y) = 22.0) and ((point's z) = 33.0)):
+        set upperFound to true
+    loop otherIndex from (vertexIndex + 1) to the length of vertexKeys:
+        set otherNode to the cad node pointer for (the item at otherIndex in vertexKeys) in (positioned's value)
+        check solid maker ((the cad distance from point to (otherNode's point)) > 0.0)
+check solid maker (lowerFound and upperFound)
+free vertexKeys
+print "the_corners_are_where_the_size_puts_them" as a line
+
+set coedgeKeys to the maker coedge keys of body
+loop useIndex from 0 to the length of coedgeKeys:
+    set useKey to the item at useIndex in coedgeKeys
+    set partner to the cad partner of useKey in body
+    check solid maker (partner's valid)
+    check solid maker ((partner's value) != useKey)
+    set back to the cad partner of (partner's value) in body
+    check solid maker (back's valid)
+    check solid maker ((back's value) = useKey)
+free coedgeKeys
+print "each_coedge_has_the_one_on_the_far_side" as a line
+
+set damaged to a topology maker unit box
+set faceKeys to the cad face keys of damaged
+set removed to the cad removal of (the item at 0 in faceKeys) from damaged
+check solid maker (removed's valid)
+check solid maker (maker solid damaged has flaw (cad dangling key flaw))
+check solid maker ((the cad euler characteristic of damaged) != 2)
+free faceKeys
+print "validation_notices_a_face_taken_away" as a line
+
+set damaged to a topology maker unit box
+set loopKeys to the maker loop keys of damaged
+set ringNode to the cad node pointer for (the item at 0 in loopKeys) in damaged
+set firstUse to the item at 0 in (ringNode's coedges's values)
+set secondUse to the item at 1 in (ringNode's coedges's values)
+replace item at index 0 in (ringNode's coedges's values) with secondUse
+replace item at index 1 in (ringNode's coedges's values) with firstUse
+check solid maker (maker solid damaged has flaw (cad open loop flaw))
+free loopKeys
+print "validation_notices_a_loop_that_no_longer_closes" as a line
+
+set damaged to a topology maker unit box
+set loopKeys to the maker loop keys of damaged
+set ringNode to the cad node pointer for (the item at 0 in loopKeys) in damaged
+loop useIndex from 0 to the length of (ringNode's coedges's values):
+    set useNode to the cad node pointer for (the item at useIndex in (ringNode's coedges's values)) in damaged
+    set useNode's forward to (useNode's forward) = false
+check solid maker (maker solid damaged has flaw (cad same sided edge flaw))
+free loopKeys
+print "validation_notices_a_face_wound_the_wrong_way" as a line
+
+set marked to a topology maker unit box
+set clean to the clean cad provenance of (a cad source reference for (0 as a 32 bit unsigned integer))
+set vertexKeys to the maker vertex keys of marked
+set edgeKeys to the cad edge keys of marked
+set faceKeys to the cad face keys of marked
+loop vertexIndex from 0 to the length of vertexKeys:
+    set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in marked
+    set vertexNode's provenance to clean
+loop edgeIndex from 0 to the length of edgeKeys:
+    set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in marked
+    set edgeNode's provenance to clean
+loop faceIndex from 0 to the length of faceKeys:
+    set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in marked
+    set faceNode's provenance to clean
+soil cad vertex (the item at 0 in vertexKeys) in marked
+set dirtyVertices to 0
+set dirtyEdges to 0
+set dirtyFaces to 0
+loop vertexIndex from 0 to the length of vertexKeys:
+    set vertexNode to the cad node pointer for (the item at vertexIndex in vertexKeys) in marked
+    if (cad (vertexNode's provenance) is reusable) = false:
+        increment dirtyVertices
+loop edgeIndex from 0 to the length of edgeKeys:
+    set edgeNode to the cad node pointer for (the item at edgeIndex in edgeKeys) in marked
+    if (cad (edgeNode's provenance) is reusable) = false:
+        increment dirtyEdges
+loop faceIndex from 0 to the length of faceKeys:
+    set faceNode to the cad node pointer for (the item at faceIndex in faceKeys) in marked
+    if (cad (faceNode's provenance) is reusable) = false:
+        increment dirtyFaces
+check solid maker (dirtyVertices = 1)
+check solid maker (dirtyEdges = 3)
+check solid maker (dirtyFaces = 3)
+free vertexKeys
+free edgeKeys
+free faceKeys
+print "moving_a_vertex_dirties_what_names_it_and_nothing_else" as a line

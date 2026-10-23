@@ -109,11 +109,13 @@ static bool refineStorageExpressionType(
 		if (!variable || !variable->type.isDeduced())
 			return false;
 		DataType refinedType;
-		if (!mergeVariableAssignmentType(variable->type, candidateType, refinedType) || refinedType == variable->type)
+		if (!mergeVariableAssignmentType(variable->type, candidateType, refinedType))
 			return false;
-		if (context.trial && context.trialJournal)
-			context.trialJournal->recordVariableWrite(variable);
-		variable->type = refinedType;
+		if (refinedType != variable->type) {
+			if (context.trial && context.trialJournal)
+				context.trialJournal->recordVariableWrite(variable);
+			variable->type = refinedType;
+		}
 		storage->type = refinedType;
 		expression->type = refinedType;
 		recordParameterOutputType(context, variable);
@@ -146,9 +148,13 @@ static bool refineStorageExpressionType(
 			continue;
 		const DataType &currentFieldType = classDefinition->instantiations[ownerType.classInstIndex].fieldTypes[fieldIndex];
 		DataType refinedFieldType;
-		if (!mergeVariableAssignmentType(currentFieldType, candidateType, refinedFieldType) ||
-			refinedFieldType == currentFieldType)
+		if (!mergeVariableAssignmentType(currentFieldType, candidateType, refinedFieldType))
 			return false;
+		if (refinedFieldType == currentFieldType) {
+			storage->type = refinedFieldType;
+			expression->type = refinedFieldType;
+			return refineStorageExpressionType(ownerExpression, ownerType, context, storageBindingFrameStack);
+		}
 		int refinedInstantiationIndex =
 			getRefinedClassInstantiationIndex(context, classDefinition, ownerType.classInstIndex, fieldIndex, refinedFieldType);
 		if (refinedInstantiationIndex < 0)
@@ -183,7 +189,7 @@ static bool refinePointerStoragePointeeType(
 		return false;
 	DataType elementType = pointerType.dereferenced();
 	DataType refinedElementType;
-	if (!mergeVariableAssignmentType(elementType, valueType, refinedElementType) || refinedElementType == elementType)
+	if (!mergeVariableAssignmentType(elementType, valueType, refinedElementType))
 		return false;
 	DataType refinedPointerType = refinedElementType.pointed();
 

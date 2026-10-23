@@ -39,7 +39,7 @@ void printUsage(std::ostream &output) {
 		   << "Compiler options:\n"
 		   << "  --emit-llvm | --emit-object | --emit-wasm | --emit-spirv  --no-main\n"
 		   << "  --emit-completions line:column  --dump-purity\n"
-		   << "  --shader-stage=vertex|fragment  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
+		   << "  --shader-stage=vertex|fragment|compute  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
 		   << "  -ffast-math|-fno-fast-math  -ffp-contract=fast|off\n"
 		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
 		   << "  -fvectorize|-fno-vectorize  -fslp-vectorize|-fno-slp-vectorize\n"
@@ -257,6 +257,9 @@ int main(int argumentCount, char *argumentValues[]) {
 		} else if (arg == "--shader-stage=fragment") {
 			explicitShaderStage = true;
 			context.options.shaderStage = ParseContext::ShaderStage::Fragment;
+		} else if (arg == "--shader-stage=compute") {
+			explicitShaderStage = true;
+			context.options.shaderStage = ParseContext::ShaderStage::Compute;
 		} else if (arg == "-g" || arg == "--debug") {
 			context.options.emitDebugInfo = true;
 		} else if (arg == "--trace-execution") {
@@ -391,7 +394,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	explicitOutputModes += context.options.emitSPIRV ? 1 : 0;
 	if (explicitOutputModes > 1) {
 		std::cerr << "Choose at most one explicit output mode: --emit-llvm, --emit-object, --emit-wasm, or --emit-spirv"
-			  << std::endl;
+				  << std::endl;
 		return 1;
 	}
 	if (context.options.noMain && !context.options.emitLLVM && !context.options.emitObject) {

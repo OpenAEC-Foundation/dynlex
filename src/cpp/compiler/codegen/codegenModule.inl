@@ -103,8 +103,7 @@ bool generateCode(ParseContext &context) {
 
 	// No first pass — non-flex functions are generated on-demand via monomorphization.
 	const bool generatesMain = !context.options.noMain;
-	const bool supportsCommandLineArguments =
-		generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
+	const bool supportsCommandLineArguments = generatesMain && !context.options.emitSPIRV && !context.options.emitWASM;
 	if (supportsCommandLineArguments) {
 		context.commandLineArgumentCountGlobal = new llvm::GlobalVariable(
 			*context.llvmModule, builder.getInt32Ty(), false, llvm::GlobalValue::InternalLinkage, builder.getInt32(0),
@@ -119,7 +118,7 @@ bool generateCode(ParseContext &context) {
 	// In SPIR-V mode, declare shader I/O globals before generating code.
 	llvm::GlobalVariable *shaderInputGlobal = nullptr;
 	llvm::GlobalVariable *shaderOutputGlobal = nullptr;
-	if (generatesMain && context.options.emitSPIRV) {
+	if (generatesMain && context.options.emitSPIRV && context.options.shaderStage != ParseContext::ShaderStage::Compute) {
 		constexpr unsigned spirvInputAddressSpace = 7;
 		constexpr unsigned spirvOutputAddressSpace = 8;
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
@@ -239,10 +238,9 @@ bool generateCode(ParseContext &context) {
 	// Add SPIR-V metadata for shader execution model and decorations
 	if (mainFunc && context.options.emitSPIRV) {
 		llvm::LLVMContext &ctx = *context.llvmContext;
-		bool isVertex = context.options.shaderStage == ParseContext::ShaderStage::Vertex;
 
 		// spirv.ExecutionMode: OriginUpperLeft (required for Fragment only)
-		if (!isVertex) {
+		if (context.options.shaderStage == ParseContext::ShaderStage::Fragment) {
 			llvm::Metadata *execModeOps[] = {
 				llvm::ValueAsMetadata::get(mainFunc),
 				llvm::ConstantAsMetadata::get(builder.getInt32(7)), // OriginUpperLeft

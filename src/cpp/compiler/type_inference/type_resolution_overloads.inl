@@ -13,14 +13,30 @@ static bool mergeArrayElementType(const DataType &current, const DataType &next,
 	return false;
 }
 
+struct InferredArgumentScope;
+
 // Wraps ParseContext with type validity tracking and trial mode for operand reordering.
 // During reordering trials, diagnostics are suppressed and failures only affect the current trial.
 struct InferenceContext {
 	struct SubjectState {
 		Expression *setter{};
 		bool ambiguous = false;
+		// Saved execution state can outlive a replaced flex expansion. Keep
+		// the setter and its lexical scopes alive through restoration/replay.
+		std::shared_ptr<const std::vector<std::shared_ptr<InstantiatedSectionBody>>> bodyOwners{};
 
-		bool operator==(const SubjectState &) const = default;
+		static SubjectState assigned(Expression *expression) {
+			SubjectState state{.setter = expression};
+			if (expression->owningSectionBody) {
+				auto owners = std::make_shared<std::vector<std::shared_ptr<InstantiatedSectionBody>>>();
+				for (auto *body = expression->owningSectionBody; body; body = body->parentBody)
+					owners->push_back(body->shared_from_this());
+				state.bodyOwners = std::move(owners);
+			}
+			return state;
+		}
+
+		bool operator==(const SubjectState &other) const { return setter == other.setter && ambiguous == other.ambiguous; }
 	};
 
 	struct OperandGroupingWarning {
@@ -50,6 +66,10 @@ struct InferenceContext {
 	};
 
 	struct TrialJournal {
+		struct BorrowedExpressionUndo {
+			Expression *expression;
+			Expression value;
+		};
 		enum class SectionInstantiationRetargetResult {
 			Updated,
 			MissingSourceRecord,
@@ -76,7 +96,13 @@ struct InferenceContext {
 			std::unique_ptr<Instantiation> value;
 		};
 
+		// Trial value maps and grouping journals borrow pointers into discarded
+		// bodies. Retain their storage until rollback/promotion finishes.
+		std::vector<std::shared_ptr<InstantiatedSectionBody>> clonedBodies;
+		std::vector<std::shared_ptr<ExpressionStorage>> expressionStorage;
 		std::vector<VariableUndo> variableTypeUndo;
+		std::vector<BorrowedExpressionUndo> borrowedExpressionUndo;
+		std::unordered_set<Expression *> seenBorrowedExpressions;
 		std::unordered_set<Variable *> seenVariables;
 		std::vector<std::pair<ClassDefinition *, size_t>> classInstantiationSizes;
 		std::unordered_set<ClassDefinition *> seenClassDefinitions;
@@ -105,6 +131,14 @@ struct InferenceContext {
 				return;
 			seenVariables.insert(var);
 			variableTypeUndo.push_back({var, var->type, var->typeOriginRange, var->typeOriginFloatLiteralReplacement});
+		}
+
+		void recordBorrowedExpressionWrite(Expression *expression) {
+			visitExpressionTree(expression, [&](Expression *node) {
+				if (seenBorrowedExpressions.insert(node).second)
+					borrowedExpressionUndo.push_back({node, *node});
+				return false;
+			});
 		}
 
 		void recordClassInstantiationAppend(ClassDefinition *classDef) {
@@ -143,6 +177,14 @@ struct InferenceContext {
 		}
 
 		void absorb(TrialJournal &&nested) {
+			for (BorrowedExpressionUndo &undo : nested.borrowedExpressionUndo) {
+				if (seenBorrowedExpressions.insert(undo.expression).second)
+					borrowedExpressionUndo.push_back(std::move(undo));
+			}
+			for (auto &body : nested.clonedBodies)
+				clonedBodies.push_back(std::move(body));
+			for (auto &storage : nested.expressionStorage)
+				expressionStorage.push_back(std::move(storage));
 			for (VariableUndo &undo : nested.variableTypeUndo) {
 				if (seenVariables.insert(undo.variable).second)
 					variableTypeUndo.push_back(std::move(undo));
@@ -177,8 +219,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -305,8 +346,24 @@ struct InferenceContext {
 		bool observed = false;
 	};
 
+	// Nested inference borrows the enclosing grouping decisions. Keep their
+	// scopes separate so a trial records only the roots it actually resolves.
+	struct FixedGroupingScope {
+		const std::unordered_set<Expression *> &roots;
+		const FixedGroupingScope *parent{};
+
+		bool contains(Expression *expression) const {
+			for (auto *scope = this; scope; scope = scope->parent) {
+				if (scope->roots.contains(expression))
+					return true;
+			}
+			return false;
+		}
+	};
+
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
+	const InferredArgumentScope *inferredArguments{};
 	RecursiveInferenceObservationFrame *recursiveInferenceObservationFrame{};
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
@@ -340,7 +397,7 @@ struct InferenceContext {
 	// expression. Encountering an overload whose own signature is unresolved
 	// defers the probe instead of choosing a declaration-order candidate.
 	std::shared_ptr<bool> unresolvedPatternConstraintSignal;
-	const std::unordered_set<Expression *> *fixedGroupingRoots{};
+	const FixedGroupingScope *fixedGroupingRoots{};
 	std::unordered_set<Expression *> *resolvedGroupingRoots{};
 	bool detectGroupingAmbiguity = false;
 	std::vector<OperandGroupingWarning> *pendingOperandGroupingWarnings{};
@@ -468,6 +525,24 @@ struct InferenceContext {
 		if (!reference)
 			return nullptr;
 		return reference->definition ? reference->definition : reference;
+	}
+
+	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, InstantiatedSectionBody *parentBody = nullptr) {
+		auto body = parseContext.cloneSectionBody(section, false, parentBody);
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial cloning requires a journal");
+			trialJournal->clonedBodies.push_back(body);
+		}
+		return body;
+	}
+
+	std::shared_ptr<ExpressionStorage> createExpressionStorage() {
+		auto storage = parseContext.createExpressionStorage();
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial expression allocation requires a journal");
+			trialJournal->expressionStorage.push_back(storage);
+		}
+		return storage;
 	}
 
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {

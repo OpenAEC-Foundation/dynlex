@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MPL-2.0
+import tests/cadkernel/brep_place/support.dl
+function check placement edge case {boolean:condition}:
+    execute:
+        if condition = false:
+            @intrinsic("call", "libc", "abort", nothing)
+set original to place test body 4 with pcurves 0 from 0.0 to 1.0
+set mirrorScale to a cad placement with axes (place test point [-2.0,0.0,0.0]), (place test point [0.0,2.0,0.0]) and (place test point [0.0,0.0,2.0]) at (place test point [4.0,5.0,6.0])
+set moved to the cad transformed original by mirrorScale
+check placement edge case (moved's valid)
+set curves to the cad keys of (original's curves)
+loop index from 0 to the length of curves:
+    set sourceCurve to the cad value of (the cad lookup of (the item at index in curves) in (original's curves))
+    set movedCurve to the cad value of (the cad lookup of (the item at index in curves) in (moved's value's curves))
+    loop cursor from 0 to 5:
+        set t to (cursor as a 64 bit floating-point number) / 4.0
+        set expected to the cad image of (the cad point on sourceCurve at t) under mirrorScale
+        check placement edge case ((the cad distance from expected to (the cad point on movedCurve at t)) < 1e-12)
+free curves
+set faces to the cad face keys of original
+loop index from 0 to the length of faces:
+    set sourceFace to the cad node pointer for (the item at index in faces) in original
+    set movedFace to the cad node pointer for (the item at index in faces) in (moved's value)
+    check placement edge case ((movedFace's forward) = (index != 5))
+    set sourceSurface to the cad value of (the cad lookup of (sourceFace's surface) in original)
+    set movedSurface to the cad value of (the cad lookup of (movedFace's surface) in (moved's value))
+    set uses to the cad face coedges of (the item at index in faces) in original
+    set sourceUse to the cad node pointer for (the item at 0 in uses) in original
+    set movedUse to the cad node pointer for (the item at 0 in uses) in (moved's value)
+    set sourceUV to the cad point on (sourceUse's pcurve's value) at 0.37
+    set movedUV to the cad point on (movedUse's pcurve's value) at 0.37
+    set expected to the cad image of (the cad point on sourceSurface at parameters (sourceUV's x) and (sourceUV's y)) under mirrorScale
+    set actual to the cad point on movedSurface at parameters (movedUV's x) and (movedUV's y)
+    check placement edge case ((the cad distance from expected to actual) < 1e-11)
+    free uses
+free faces
+print "reflection_preserves_curve_parameters_pcurves_and_surface_orientation" as a line
+
+set original to place test body 4 with pcurves 4 from 0.0 to 1.0
+set moved to the cad transformed original by mirrorScale
+check placement edge case (moved's valid)
+set faces to the cad face keys of (moved's value)
+loop index from 0 to the length of faces:
+    set uses to the cad face coedges of (the item at index in faces) in (moved's value)
+    set coedge to the cad node pointer for (the item at 0 in uses) in (moved's value)
+    check placement edge case ((coedge's pcurve's valid) = ((index != 1) and (index != 2)))
+    free uses
+free faces
+print "unsupported_anisotropic_bulged_pcurves_are_removed_without_rejecting_body" as a line
+
+set sampledBody to place test body 6 with pcurves -1 from 0.0 to 1.0
+set edges to the cad edge keys of sampledBody
+set key to the item at 0 in edges
+set samples to the cad edge samples of key in sampledBody within 0.0
+check placement edge case (samples's valid)
+check placement edge case ((the length of (samples's value's values)) = 65537)
+check placement edge case (((the item at 0 in (samples's value's values))'s parameter) = 0.0)
+check placement edge case (((the last item of (samples's value's values))'s parameter) = 1.0)
+free edges
+print "adaptive_sampling_stops_at_depth_sixteen_and_preserves_both_ends" as a line

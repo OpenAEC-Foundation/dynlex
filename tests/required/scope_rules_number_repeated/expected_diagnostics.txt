@@ -1,0 +1,2 @@
+tests/required/scope_rules_number_repeated/main.dl:5-23: Error: 'numbers are 64 bit' repeats a rule of this scope
+  note: The rule is first stated here tests/required/scope_rules_number_repeated/main.dl:5-31

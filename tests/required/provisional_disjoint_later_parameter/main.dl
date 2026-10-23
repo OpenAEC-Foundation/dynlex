@@ -1,0 +1,24 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+function text:
+    replacement:
+        @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+function the type of value:
+    replacement:
+        @intrinsic("type of", value)
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function first matches second:
+    replacement:
+        @intrinsic("equal", first, second)
+function sample:
+    execute:
+        if 1 matches 1:
+            @intrinsic("return", 7)
+        @intrinsic("return", 0)
+function {the type of sample:first} matches {text:second}:
+    execute:
+        @intrinsic("return", @intrinsic("equal", first, @intrinsic("cast", @intrinsic("dereference", second), integer)))
+@intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, @intrinsic("add", sample, 48)))

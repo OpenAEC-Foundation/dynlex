@@ -1,0 +1,41 @@
+import lib/std.dl
+
+function pointer kind {a pointer to an integer:value}:
+    execute:
+        return 1
+
+function numeric pointer {a pointer to a number:value}:
+    execute:
+        return 2
+
+function width pointer {a pointer to a 32 bit value:value}:
+    execute:
+        return 3
+
+set signedValue to 1
+set unsignedValue to 1 as a 32 bit unsigned integer
+set floatValue to 1.0 as a 32 bit floating-point number
+print pointer kind (the address of signedValue) as a line
+print pointer kind (the address of unsignedValue) as a line
+print numeric pointer (the address of signedValue) as a line
+print numeric pointer (the address of floatValue) as a line
+print width pointer (the address of unsignedValue) as a line
+print width pointer (the address of floatValue) as a line
+
+function pointer kind {a pointer to a boolean:value}:
+    execute:
+        return 4
+
+function byte pointer {a pointer to an 8 bit value:value}:
+    execute:
+        return 5
+
+function byte pointer {a pointer to a boolean:value}:
+    execute:
+        return 6
+
+set boolValue to true
+set byteValue to 1 as an 8 bit integer
+print pointer kind (the address of boolValue) as a line
+print byte pointer (the address of byteValue) as a line
+print byte pointer (the address of boolValue) as a line

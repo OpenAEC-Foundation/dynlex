@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MPL-2.0
+# All sixteen pinned planar.rs tests plus managed/frame/support checks.
+import tests/cadkernel/planar3/basic/main.dl
+import tests/cadkernel/planar3/measurement/main.dl
+import tests/cadkernel/planar3/helpers/main.dl
+import tests/cadkernel/planar3/nurbs_ownership/main.dl

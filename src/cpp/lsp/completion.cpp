@@ -601,6 +601,9 @@ void addKeywordCompletions(
 		{syntax.className + " ", "define a class"},
 		{syntax.flexName + " " + syntax.functionName + " ", "define a flex"},
 		{syntax.localName + " " + syntax.functionName + " ", "define a local function"},
+		{syntax.publicName + " " + syntax.functionName + " ", "define a public function"},
+		{syntax.fileScopeName + syntax.sectionOpener, "state rules for this file"},
+		{syntax.fileScopeName + syntax.defaultScopeMarker + syntax.sectionOpener, "state default rules for this file"},
 	};
 
 	for (const auto &[keyword, detail] : keywordSuggestions) {

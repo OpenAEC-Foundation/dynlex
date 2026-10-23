@@ -1,6 +1,8 @@
 #pragma once
 
+#include "numberScopeRules.h"
 #include "operand_reordering.inl"
+#include "scopeRulesSection.h"
 #include "section_inference_helpers.inl"
 #include <unordered_set>
 
@@ -70,12 +72,13 @@ static bool inferSectionLineRange(
 	}
 
 	auto inferOpenedSection = [&](CodeLine *line, bool *openedSectionFallsThrough = nullptr) {
-		if (!line || !line->sectionOpening || dynamic_cast<DefinitionSection *>(line->sectionOpening))
+		if (!line || !line->sectionOpening || !line->sectionOpening->runsInEnclosingBody())
 			return true;
 		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
 		Expression *activeOpeningExpression =
 			body && line->sectionOpening ? body->findCloneOf(line->expression) : line->expression;
-		if (activeOpeningExpression && activeOpeningExpression->sectionBodyInferred) {
+		if (activeOpeningExpression &&
+			activeOpeningExpression->sectionBodyExecution != Expression::SectionBodyExecution::None) {
 			if (openedSectionFallsThrough)
 				*openedSectionFallsThrough = activeOpeningExpression->sectionBodyFallsThrough;
 			return true;
@@ -158,7 +161,8 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
@@ -316,7 +320,7 @@ static bool inferSectionLineRange(
 				if (k + 1 >= section->codeLines.size())
 					break;
 				CodeLine *next = section->codeLines[k + 1];
-				if (!next->sectionOpening || dynamic_cast<DefinitionSection *>(next->sectionOpening))
+				if (!next->sectionOpening || !next->sectionOpening->runsInEnclosingBody())
 					break;
 				Expression *&nextExpression = body ? body->lineExpression(k + 1) : next->expression;
 				applyCodeLineGrouping(next, nextExpression, context);
@@ -478,244 +482,7 @@ static bool inferSection(
 
 #include "declared_type_constraint_work_item.inl"
 
-static PatternTypeConstraintProbe
-probeDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
-	item.failureDiagnostic.reset();
-	GroupingSnapshot originalGrouping = captureGroupingSnapshot(item.expression);
-	resetExpressionTypes(item.expression);
-	InferenceContext::TrialJournal journal;
-	InferenceContext trialContext(parseContext, true);
-	Instantiation signatureInstantiation;
-	trialContext.currentInstantiation = &signatureInstantiation;
-	trialContext.trialJournal = &journal;
-	trialContext.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
-	trialContext.detectGroupingAmbiguity = false;
-	Expression *trialExpression = item.expression;
-	bool inferred = inferExpression(trialExpression, trialContext, false, {}, false) && trialContext.typesValid;
-	bool deferred = *trialContext.unresolvedPatternConstraintSignal;
-	TypeConstraint constraint;
-	DataType parameterType;
-	bool producedType = inferred && readPatternTypeConstraintValue(trialExpression, trialContext, constraint, parameterType);
-	bool pure = signatureInstantiation.purity == InstantiationPurity::Pure;
-	if (!deferred && (!inferred || !producedType) && trialContext.hasTypeFailureDiagnostic)
-		item.failureDiagnostic = trialContext.typeFailureDiagnostic;
-	rollbackTrialJournal(journal);
-	applyGroupingSnapshot(originalGrouping);
-	item.expression = originalGrouping.root;
-	recomputeRanges(item.expression);
-	resetExpressionTypes(item.expression);
-	if (deferred)
-		return PatternTypeConstraintProbe::Deferred;
-	if (!inferred || !producedType)
-		return PatternTypeConstraintProbe::Invalid;
-	return pure ? PatternTypeConstraintProbe::Ready : PatternTypeConstraintProbe::Impure;
-}
-
-static void commitDeclaredTypeConstraint(DeclaredTypeConstraintWorkItem &item, ParseContext &parseContext) {
-	InferenceContext context(parseContext);
-	Instantiation signatureInstantiation;
-	context.currentInstantiation = &signatureInstantiation;
-	context.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
-	resetExpressionTypes(item.expression);
-	Expression *expression = item.expression;
-	bool inferred = inferExpression(expression, context, false, {}, false) && context.typesValid;
-	requireCompilerInvariant(
-		!*context.unresolvedPatternConstraintSignal,
-		"committed pattern type-constraint inference encountered an unresolved signature dependency"
-	);
-	requireCompilerInvariant(inferred, "pattern type-constraint probe and committed inference disagreed");
-	requireCompilerInvariant(
-		signatureInstantiation.purity == InstantiationPurity::Pure,
-		"pattern type-constraint probe and committed purity classification disagreed"
-	);
-	TypeConstraint constraint;
-	DataType parameterType;
-	requireCompilerInvariant(
-		readPatternTypeConstraintValue(expression, context, constraint, parameterType),
-		"pattern type-constraint probe and committed result type disagreed"
-	);
-	item.expression = expression;
-	if (item.element) {
-		item.element->resolvedTypeConstraint = std::move(constraint);
-		item.element->resolvedParameterType = std::move(parameterType);
-	} else {
-		requireCompilerInvariant(
-			item.variable && item.variableReference, "declared variable type-constraint work item has no target"
-		);
-		item.variableReference->declaredTypeConstraint = std::move(constraint);
-		item.variableReference->declaredType = std::move(parameterType);
-	}
-}
-
-static bool classifyPatternTypeConstraintDependencies(
-	ParseContext &parseContext, PatternDefinition &definition, DefinitionPatternElement &element, Expression *expression
-) {
-	(void)parseContext;
-	bool referencesPatternParameter = visitExpressionTree(expression, [&](Expression *current) {
-		if (current->kind != Expression::Kind::Variable || !current->variable)
-			return false;
-		VariableReference *referencedDefinition = normalizeBindingReference(current->variable);
-		auto sectionDefinition = definition.section->variableDefinitions.find(referencedDefinition->name);
-		return sectionDefinition != definition.section->variableDefinitions.end() &&
-			   normalizeBindingReference(sectionDefinition->second) == referencedDefinition;
-	});
-	element.hasDependentTypeConstraint = referencesPatternParameter;
-	return true;
-}
-
-static bool collectDeclaredTypeConstraintWorkItems(
-	ParseContext &parseContext, Section *section, std::vector<DeclaredTypeConstraintWorkItem> &items
-) {
-	for (PatternDefinition *definition : section->patternDefinitions) {
-		bool definitionValid = true;
-		std::function<void(std::vector<DefinitionPatternElement> &)> collectElements =
-			[&](std::vector<DefinitionPatternElement> &elements) {
-			for (DefinitionPatternElement &element : elements) {
-				if (!definitionValid)
-					return;
-				if (element.type == PatternElement::Type::Choice) {
-					for (auto &alternative : element.alternatives)
-						collectElements(alternative);
-					continue;
-				}
-				if (element.typeConstraintName.empty() || element.resolvedTypeConstraint.isResolved())
-					continue;
-				Range constraintRange = patternElementTypeConstraintRange(*definition, element);
-				Expression *expression = createTypeConstraintExpression(parseContext, definition->section, constraintRange);
-				if (expression && !classifyPatternTypeConstraintDependencies(parseContext, *definition, element, expression)) {
-					destroyTypeConstraintExpression(expression);
-					definitionValid = false;
-					return;
-				}
-				if (element.hasDependentTypeConstraint) {
-					element.resolvedTypeConstraint = TypeConstraint::any();
-					destroyTypeConstraintExpression(expression);
-					continue;
-				}
-				items.push_back(
-					{definition, &element, nullptr, nullptr, definition->range, element.typeConstraintName, expression,
-					 std::nullopt}
-				);
-			}
-		};
-		collectElements(definition->patternElements);
-		if (!definitionValid)
-			return false;
-	}
-	for (auto &[name, variable] : section->variables) {
-		(void)name;
-		if (!variable || !variable->hasDeclaredTypeConstraint())
-			continue;
-		for (VariableReference *reference : variable->declaredTypeConstraintReferences) {
-			requireCompilerInvariant(
-				reference && !reference->declaredTypeConstraintName.empty(),
-				"variable constraint declaration has no source constraint"
-			);
-			Expression *expression =
-				createTypeConstraintExpression(parseContext, section, reference->declaredTypeConstraintRange);
-			Section *definitionSection = enclosingPatternDefinitionSection(section);
-			if (expression && definitionSection && expressionReferencesSectionPatternParameter(definitionSection, expression)) {
-				reference->hasDependentTypeConstraint = true;
-				destroyTypeConstraintExpression(expression);
-				continue;
-			}
-			items.push_back(
-				{nullptr, nullptr, variable, reference, reference->declaredTypeConstraintRange,
-				 reference->declaredTypeConstraintName, expression, std::nullopt}
-			);
-		}
-	}
-	for (Section *child : section->children) {
-		if (!collectDeclaredTypeConstraintWorkItems(parseContext, child, items))
-			return false;
-	}
-	return true;
-}
-
-#include "dependent_constraint_compilation.inl"
-#include "variable_type_constraint_materialization.inl"
-
-static bool inferDeclaredTypeConstraints(ParseContext &parseContext) {
-	materializeExplicitPatternParameterDefinitions(parseContext);
-	std::vector<DeclaredTypeConstraintWorkItem> items;
-	size_t diagnosticsBeforeParsing = parseContext.diagnostics.size();
-	if (!collectDeclaredTypeConstraintWorkItems(parseContext, parseContext.mainSection, items))
-		return false;
-	auto destroyExpressions = [&]() {
-		for (DeclaredTypeConstraintWorkItem &item : items) {
-			if (!item.expression)
-				continue;
-			destroyTypeConstraintExpression(item.expression);
-			item.expression = nullptr;
-		}
-	};
-	for (const DeclaredTypeConstraintWorkItem &item : items) {
-		if (item.expression)
-			continue;
-		if (parseContext.diagnostics.size() == diagnosticsBeforeParsing) {
-			parseContext.diagnostics.push_back(
-				unknownTypeConstraintDiagnostic(parseContext, item.diagnosticRange, item.typeConstraintName)
-			);
-		}
-		destroyExpressions();
-		return false;
-	}
-
-	size_t unresolvedCount = items.size();
-	while (unresolvedCount > 0) {
-		if (!initializePatternPathSignatures(parseContext)) {
-			destroyExpressions();
-			return false;
-		}
-		bool madeProgress = false;
-		for (DeclaredTypeConstraintWorkItem &item : items) {
-			if (!item.expression)
-				continue;
-			if ((!item.definition || !item.element) && (!item.variable || !item.variableReference)) {
-				destroyExpressions();
-				crashCompilerBug("declared type-constraint work item lost its target");
-			}
-			PatternTypeConstraintProbe probe = probeDeclaredTypeConstraint(item, parseContext);
-			if (probe == PatternTypeConstraintProbe::Deferred)
-				continue;
-			if (probe == PatternTypeConstraintProbe::Invalid || probe == PatternTypeConstraintProbe::Impure) {
-				if (probe == PatternTypeConstraintProbe::Invalid && item.failureDiagnostic) {
-					parseContext.diagnostics.push_back(std::move(*item.failureDiagnostic));
-				} else if (probe == PatternTypeConstraintProbe::Invalid) {
-					parseContext.diagnostics.push_back(
-						unknownTypeConstraintDiagnostic(parseContext, item.diagnosticRange, item.typeConstraintName)
-					);
-				} else {
-					parseContext.diagnostics.push_back(Diagnostic(
-						parseContext, Diagnostic::Level::Error, "impure type constraint", item.diagnosticRange,
-						"type_constraint", item.typeConstraintName
-					));
-				}
-				destroyExpressions();
-				return false;
-			}
-			commitDeclaredTypeConstraint(item, parseContext);
-			destroyTypeConstraintExpression(item.expression);
-			item.expression = nullptr;
-			unresolvedCount--;
-			madeProgress = true;
-		}
-		if (madeProgress)
-			continue;
-		auto unresolved = std::find_if(items.begin(), items.end(), [](const DeclaredTypeConstraintWorkItem &item) {
-			return item.expression != nullptr;
-		});
-		requireCompilerInvariant(unresolved != items.end(), "type-constraint worklist lost its unresolved item");
-		parseContext.diagnostics.push_back(Diagnostic(
-			parseContext, Diagnostic::Level::Error, "cyclic type constraint", unresolved->diagnosticRange, "type_constraint",
-			unresolved->typeConstraintName
-		));
-		destroyExpressions();
-		return false;
-	}
-	return finalizeVariableTypeConstraints(parseContext) && compileDependentPatternSignatures(parseContext) &&
-		   compileDependentLocalVariableConstraints(parseContext);
-}
+#include "declared_constraint_inference.inl"
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
 	std::vector<ClassSection *> classes;
@@ -798,31 +565,31 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 }
 
 static void materializeInferredConversionCalls(ParseContext &parseContext) {
-	std::unordered_set<Expression *> materialized;
-	for (Expression *source : parseContext.expressionsWithInferredConversions) {
-		if (!source || !source->inferredConversion || !materialized.insert(source).second)
+	for (const auto &[source, lifetime] : parseContext.expressionsWithInferredConversions) {
+		auto storage = lifetime.lock();
+		if (!storage)
 			continue;
-
 		Expression *call = source->inferredConversion;
 		requireCompilerInvariant(
-			call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
+			call && call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
 			"inferred conversion is not a unary function call"
 		);
-
-		auto *argument = new Expression(std::move(*source));
-		parseContext.ownedClonedExpressions.push_back(argument);
+		auto argument = std::make_shared<Expression>(std::move(*source));
 		argument->inferredConversion = nullptr;
-
+		argument->inferredConversionStorage.reset();
 		*source = std::move(*call);
-		source->inferredConversion = nullptr;
-		source->arguments.clear();
-		source->arguments.push_back(argument);
+		source->arguments = {argument.get()};
+		source->materializedConversionArgument = std::move(argument);
 	}
 	parseContext.expressionsWithInferredConversions.clear();
 }
 
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
+	struct ScopeRuleWarningEmission {
+		ParseContext &context;
+		~ScopeRuleWarningEmission() { emitScopeRuleWarnings(context); }
+	} scopeRuleWarningEmission{parseContext};
 	if (!inferDeclaredTypeConstraints(parseContext))
 		return false;
 	if (!validatePatternDefinitionConflicts(parseContext))
