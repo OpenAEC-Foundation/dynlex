@@ -48,3 +48,15 @@ user/
 
 # Repository-local Git worktrees
 .worktrees/
+
+# Local native executables (keep source files tracked)
+/lib/string
+/tests/games/city_flyover
+/tests/games/event_horizon/event_horizon
+/tests/games/lexi8/lexi8
+/tests/games/shader_gallery
+
+# Personal agent state and session-history tools
+/.claude/projects/
+/.claude/settings.json
+/scripts/extract_codex_user_messages.py

@@ -256,16 +256,9 @@ struct ParseContext {
 	// Explicit source captures are parsed before pattern definitions. Register
 	// their references after definition parameters have been indexed.
 	std::vector<VariableReference *> pendingExplicitVariableReferences;
-	// Compilation-lifetime arena for every expression allocated by an instance or
-	// flex clone. Ownership is independent of mutable grouping-tree topology.
-	std::vector<Expression *> ownedClonedExpressions;
-	// Compiler-created conversion calls use matches that are not owned by a
-	// source PatternReference.
-	std::vector<std::unique_ptr<PatternMatch>> ownedSyntheticPatternMatches;
-	// Type inference can select calls while evaluating operand-grouping trials.
-	// Successful selections are materialized as ordinary calls when inference
-	// finishes; stale trial entries have no inferred conversion at that point.
-	std::vector<Expression *> expressionsWithInferredConversions;
+	// A conversion source is usable only while its selected call storage lives.
+	// Failed trials and replaced bodies expire these entries before finalization.
+	std::vector<std::pair<Expression *, std::weak_ptr<ExpressionStorage>>> expressionsWithInferredConversions;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
@@ -291,7 +284,9 @@ struct ParseContext {
 	void registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range);
 	void registerShaderInterpolantName(const std::string &interpolantName);
 	VariableReference *createVariableReference(Range range, const std::string &name);
-	Expression *cloneExpressionTree(Expression *expression, bool preserveInferenceMetadata = false);
+	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();
+	std::shared_ptr<ExpressionStorage> createExpressionStorage();
+	Expression *cloneExpressionTree(Expression *expression, ExpressionStorage &storage, bool preserveInferenceMetadata = false);
 	std::shared_ptr<InstantiatedSectionBody>
 	cloneSectionBody(Section *section, bool preserveInferenceMetadata = false, InstantiatedSectionBody *parentBody = nullptr);
 };
@@ -393,8 +388,7 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex,
-		[&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -483,8 +477,7 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
-		[](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
 		return false;
 	}
 	);
@@ -526,26 +519,4 @@ inline Expression *singleExpressionFlexFunctionOutcome(PatternDefinition *defini
 		return true;
 	});
 	return expressionLineCount == 1 ? outcomeExpression : nullptr;
-}
-
-inline Expression *
-expandFlexPatternCall(ParseContext &context, Expression *expr, PatternDefinition *def, BindingFrame &outBindings) {
-	if (!expr || expr->kind != Expression::Kind::PatternCall || !expr->patternMatch || !expr->patternMatch->matchedEndNode)
-		return nullptr;
-	auto &defs = expr->patternMatch->matchingDefinitions;
-	if (def)
-		requireCompilerInvariant(
-			std::find(defs.begin(), defs.end(), def) != defs.end(),
-			"expandFlexPatternCall received a definition that no longer matches the pattern call"
-		);
-	if (!def || !def->section || !def->section->isFlex)
-		return nullptr;
-	Expression *bodyExpr = flexPatternBodyExpression(def);
-	if (!bodyExpr)
-		return nullptr;
-	collectPatternCallBindings(expr, def, outBindings);
-	Expression *expandedBody = context.cloneExpressionTree(bodyExpr);
-	if (expandedBody)
-		expandedBody->isExplicitGroup = true;
-	return expandedBody;
 }

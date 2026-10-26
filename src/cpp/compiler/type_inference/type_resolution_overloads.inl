@@ -21,8 +21,22 @@ struct InferenceContext {
 	struct SubjectState {
 		Expression *setter{};
 		bool ambiguous = false;
+		// Saved execution state can outlive a replaced flex expansion. Keep
+		// the setter and its lexical scopes alive through restoration/replay.
+		std::shared_ptr<const std::vector<std::shared_ptr<InstantiatedSectionBody>>> bodyOwners{};
 
-		bool operator==(const SubjectState &) const = default;
+		static SubjectState assigned(Expression *expression) {
+			SubjectState state{.setter = expression};
+			if (expression->owningSectionBody) {
+				auto owners = std::make_shared<std::vector<std::shared_ptr<InstantiatedSectionBody>>>();
+				for (auto *body = expression->owningSectionBody; body; body = body->parentBody)
+					owners->push_back(body->shared_from_this());
+				state.bodyOwners = std::move(owners);
+			}
+			return state;
+		}
+
+		bool operator==(const SubjectState &other) const { return setter == other.setter && ambiguous == other.ambiguous; }
 	};
 
 	struct OperandGroupingWarning {
@@ -82,6 +96,10 @@ struct InferenceContext {
 			std::unique_ptr<Instantiation> value;
 		};
 
+		// Trial value maps and grouping journals borrow pointers into discarded
+		// bodies. Retain their storage until rollback/promotion finishes.
+		std::vector<std::shared_ptr<InstantiatedSectionBody>> clonedBodies;
+		std::vector<std::shared_ptr<ExpressionStorage>> expressionStorage;
 		std::vector<VariableUndo> variableTypeUndo;
 		std::vector<BorrowedExpressionUndo> borrowedExpressionUndo;
 		std::unordered_set<Expression *> seenBorrowedExpressions;
@@ -163,6 +181,10 @@ struct InferenceContext {
 				if (seenBorrowedExpressions.insert(undo.expression).second)
 					borrowedExpressionUndo.push_back(std::move(undo));
 			}
+			for (auto &body : nested.clonedBodies)
+				clonedBodies.push_back(std::move(body));
+			for (auto &storage : nested.expressionStorage)
+				expressionStorage.push_back(std::move(storage));
 			for (VariableUndo &undo : nested.variableTypeUndo) {
 				if (seenVariables.insert(undo.variable).second)
 					variableTypeUndo.push_back(std::move(undo));
@@ -197,8 +219,7 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
-				[&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -504,6 +525,24 @@ struct InferenceContext {
 		if (!reference)
 			return nullptr;
 		return reference->definition ? reference->definition : reference;
+	}
+
+	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, InstantiatedSectionBody *parentBody = nullptr) {
+		auto body = parseContext.cloneSectionBody(section, false, parentBody);
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial cloning requires a journal");
+			trialJournal->clonedBodies.push_back(body);
+		}
+		return body;
+	}
+
+	std::shared_ptr<ExpressionStorage> createExpressionStorage() {
+		auto storage = parseContext.createExpressionStorage();
+		if (trial) {
+			requireCompilerInvariant(trialJournal, "trial expression allocation requires a journal");
+			trialJournal->expressionStorage.push_back(storage);
+		}
+		return storage;
 	}
 
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {

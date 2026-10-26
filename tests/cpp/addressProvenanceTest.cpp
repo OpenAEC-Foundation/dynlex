@@ -84,7 +84,8 @@ void checkSectionOutcomeIsolation() {
 	source.sectionOutcome.write().conditionValue = true;
 	source.sectionOutcome.write().conditionType = DataType{DataType::Kind::Bool};
 	auto snapshot = source.sectionOutcome;
-	Expression *clone = context.cloneExpressionTree(&source, true);
+	auto storage = context.createExpressionStorage();
+	Expression *clone = context.cloneExpressionTree(&source, *storage, true);
 	clone->sectionOutcome.write().conditionValue = false;
 	expect(std::get<bool>(source.sectionOutcome.read().conditionValue), "clone changed its source loop condition");
 	expect(!std::get<bool>(clone->sectionOutcome.read().conditionValue), "clone did not retain its own loop condition");

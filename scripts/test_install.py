@@ -215,8 +215,11 @@ esac
 """,
             )
 
-            for command in ("ccache", "cmake", "git", "go", "node"):
+            for command in ("ccache", "cmake", "go", "node"):
                 write_executable(bin_directory / command, "#!/bin/bash\nexit 0\n")
+            # The isolated installation is not a Git checkout. Reporting success
+            # without a repository path violates the toolchain discovery contract.
+            write_executable(bin_directory / "git", "#!/bin/bash\nexit 1\n")
             write_executable(
                 bin_directory / "cut",
                 "#!/bin/bash\nIFS=. read -r first remainder\nprintf '%s\\n' \"$first\"\n",

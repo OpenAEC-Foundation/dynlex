@@ -20,6 +20,11 @@ struct PatternReference;
 struct VariableReference;
 struct Instantiation;
 struct InstantiatedSectionBody;
+struct ExpressionStorage;
+struct ExpressionAllocationStats {
+	size_t liveExpressions = 0;
+	size_t peakExpressions = 0;
+};
 
 struct Expression {
 	struct SectionOutcome {
@@ -96,6 +101,9 @@ struct Expression {
 	// here. Successful inference materializes it as an ordinary PatternCall
 	// before any later compiler stage observes the expression tree.
 	Expression *inferredConversion{};
+	std::shared_ptr<ExpressionStorage> inferredConversionStorage;
+	std::shared_ptr<PatternMatch> syntheticPatternMatch;
+	std::shared_ptr<Expression> materializedConversionArgument;
 	// For pointer-producing calls: the caller expression whose storage supplies
 	// the returned pointer.
 	Expression *inferredPointerStorage{};
@@ -155,6 +163,17 @@ struct Expression {
 	bool groupingStartsWithArgument = false;
 	bool groupingEndsWithArgument = false;
 	// Precedence of the source pattern that expanded into this expression root.
+};
+
+// Own nodes independently of their mutable operand grouping. Argument pointers
+// and reusable-template pointers never transfer ownership.
+struct ExpressionStorage {
+	std::vector<std::unique_ptr<Expression>> expressions;
+
+	std::shared_ptr<ExpressionAllocationStats> allocationStats;
+	explicit ExpressionStorage(std::shared_ptr<ExpressionAllocationStats> stats);
+	~ExpressionStorage();
+	Expression *create();
 };
 
 template <typename Visitor>

@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TESTS_DIR="$PROJECT_DIR/tests/required"
 source "$SCRIPT_DIR/test_fixture_options.sh"
+
+if ! (cd "$PROJECT_DIR" && python3 -B "$SCRIPT_DIR/check_no_elf_binaries.py"); then
+    exit 1
+fi
 if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX")"; then
     echo "Failed to create the required-test output directory." >&2
     exit 1
@@ -627,6 +631,7 @@ run_auxiliary_test() {
     fi
 }
 
+run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
@@ -649,6 +654,7 @@ run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_li
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
+run_auxiliary_test "expression_ownership" 600 python3 -B "$SCRIPT_DIR/test_expression_ownership.py" "$PROJECT_DIR"
 run_auxiliary_test "path_utils" 30 python3 -B "$SCRIPT_DIR/test_path_utils.py" "$PROJECT_DIR"
 run_auxiliary_test "native_target" 30 python3 -B "$SCRIPT_DIR/test_native_target.py" "$PROJECT_DIR"
 if [[ "$is_windows" != "true" ]]; then
