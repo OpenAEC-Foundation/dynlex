@@ -425,11 +425,17 @@ bool resolvePatterns(ParseContext &context) {
 	};
 
 	auto appendRequeuedReferences = [&]() {
+		if (referencesToRequeue.empty())
+			return false;
 		bool appended = false;
 		std::sort(referencesToRequeue.begin(), referencesToRequeue.end(), referenceComesBefore);
+		// Keep the ordered worklist, but index membership once per batch.
+		// Resolution erases entries between calls, so rebuild from the actual list.
+		std::unordered_set<PatternReference *> queuedReferences;
+		queuedReferences.reserve(bodyReferences.size() + referencesToRequeue.size());
+		queuedReferences.insert(bodyReferences.begin(), bodyReferences.end());
 		for (PatternReference *reference : referencesToRequeue) {
-			if (reference->resolved ||
-				std::find(bodyReferences.begin(), bodyReferences.end(), reference) != bodyReferences.end())
+			if (reference->resolved || !queuedReferences.insert(reference).second)
 				continue;
 			bodyReferences.push_back(reference);
 			appended = true;
@@ -803,107 +809,111 @@ bool resolvePatterns(ParseContext &context) {
 		if (!collectPrecedence(context.mainSection))
 			return false;
 
+		// Precedence is a partial order between connected syntax families.
+		// Expanding every edge to all member pairs is unnecessary: compute
+		// reachability on the quotient DAG, then expose the same definition sets.
+		std::vector<std::vector<PatternDefinition *>> familyMembers;
+		std::unordered_map<PatternDefinition *, size_t> familyIndices;
+		auto familyIndexFor = [&](PatternDefinition *definition) -> size_t {
+			auto existing = familyIndices.find(definition);
+			if (existing != familyIndices.end())
+				return existing->second;
+			std::vector<PatternDefinition *> family = definition == &defaultSentinel
+				? std::vector<PatternDefinition *>{definition} : connectedPatternFamily(definition);
+			const size_t index = familyMembers.size();
+			for (PatternDefinition *member : family) {
+				auto [found, inserted] = familyIndices.try_emplace(member, index);
+				requireCompilerInvariant(inserted || found->second == index, "syntax families overlap inconsistently");
+			}
+			familyMembers.push_back(std::move(family));
+			return index;
+		};
+		auto patternFamily = [&](PatternDefinition *definition) -> const std::vector<PatternDefinition *> & {
+			return familyMembers[familyIndexFor(definition)];
+		};
+		std::vector<PatternDefinition *> familySeeds(involvedDefs.begin(), involvedDefs.end());
+		// The virtual default node has no source range and cannot be source-sorted.
+		std::erase(familySeeds, &defaultSentinel);
+		std::sort(familySeeds.begin(), familySeeds.end(), patternDefinitionComesBefore);
+		if (involvedDefs.contains(&defaultSentinel))
+			familyIndexFor(&defaultSentinel);
+		for (PatternDefinition *definition : familySeeds)
+			familyIndexFor(definition);
+
 		std::vector<PatternDefinition *> precedenceTargets(involvedDefs.begin(), involvedDefs.end());
 		std::unordered_set<PatternDefinition *> generatedPropertyAccessors;
 		std::unordered_set<PatternDefinition *> generatedPropertyAccessorFamilyDefinitions;
 		collectGeneratedPropertyAccessorFamilies(
-			context.mainSection, generatedPropertyAccessors, generatedPropertyAccessorFamilyDefinitions
+			context.mainSection, generatedPropertyAccessors, generatedPropertyAccessorFamilyDefinitions, patternFamily
 		);
 		for (PatternDefinition *definition : generatedPropertyAccessors) {
 			involvedDefs.insert(definition);
-			// Every syntax family containing a generated accessor has equal automatic precedence.
 			for (PatternDefinition *target : precedenceTargets)
 				if (!generatedPropertyAccessorFamilyDefinitions.contains(target))
 					edges.push_back({definition, target});
 		}
-		auto patternFamily = [&](PatternDefinition *definition) {
-			return definition == &defaultSentinel ? std::vector<PatternDefinition *>{definition}
-												  : connectedPatternFamily(definition);
-		};
-		std::set<std::pair<PatternDefinition *, PatternDefinition *>> familyEdges;
+
+		std::set<std::pair<size_t, size_t>> familyEdges;
 		for (const PrecedenceEdge &edge : edges) {
-			for (PatternDefinition *higher : patternFamily(edge.higher)) {
-				for (PatternDefinition *lower : patternFamily(edge.lower)) {
-					familyEdges.insert({higher, lower});
-					involvedDefs.insert(higher);
-					involvedDefs.insert(lower);
-				}
-			}
+			const size_t higher = familyIndexFor(edge.higher);
+			const size_t lower = familyIndexFor(edge.lower);
+			familyEdges.insert({higher, lower});
+			for (PatternDefinition *definition : familyMembers[higher])
+				involvedDefs.insert(definition);
+			for (PatternDefinition *definition : familyMembers[lower])
+				involvedDefs.insert(definition);
 		}
 		edges.clear();
-		edges.reserve(familyEdges.size());
-		for (const auto &[higher, lower] : familyEdges)
-			edges.push_back({higher, lower});
+		for (PatternDefinition *definition : involvedDefs)
+			familyIndexFor(definition);
 
 		if (!involvedDefs.empty()) {
-			// Topological sort (Kahn's algorithm) validates the expanded syntax-family graph.
-			std::unordered_map<PatternDefinition *, std::vector<PatternDefinition *>> adjList;
-			std::unordered_map<PatternDefinition *, int> inDegree;
-			for (PatternDefinition *def : involvedDefs)
-				inDegree[def] = 0;
-			for (auto &edge : edges) {
-				adjList[edge.higher].push_back(edge.lower);
-				inDegree[edge.lower]++;
+			const size_t familyCount = familyMembers.size();
+			std::vector<std::vector<size_t>> adjacent(familyCount);
+			std::vector<size_t> inDegree(familyCount, 0);
+			for (const auto &[higher, lower] : familyEdges) {
+				adjacent[higher].push_back(lower);
+				++inDegree[lower];
 			}
-
-			std::vector<PatternDefinition *> zeroInDegree;
-			zeroInDegree.reserve(inDegree.size());
-			for (auto &[def, deg] : inDegree) {
-				if (deg == 0) {
-					zeroInDegree.push_back(def);
-				}
+			std::queue<size_t> pending;
+			for (size_t index = 0; index < familyCount; ++index)
+				if (inDegree[index] == 0)
+					pending.push(index);
+			std::vector<size_t> topological;
+			topological.reserve(familyCount);
+			while (!pending.empty()) {
+				const size_t current = pending.front();
+				pending.pop();
+				topological.push_back(current);
+				for (size_t lower : adjacent[current])
+					if (--inDegree[lower] == 0)
+						pending.push(lower);
 			}
-			std::sort(zeroInDegree.begin(), zeroInDegree.end(), patternDefinitionComesBefore);
-
-			// Validate the authored partial order without collapsing unrelated
-			// definitions into numeric tiers.
-			size_t processedCount = 0;
-			std::vector<PatternDefinition *> currentWave = zeroInDegree;
-			while (!currentWave.empty()) {
-				std::vector<PatternDefinition *> nextWave;
-				for (PatternDefinition *def : currentWave) {
-					processedCount++;
-					for (PatternDefinition *lower : adjList[def]) {
-						if (--inDegree[lower] == 0)
-							nextWave.push_back(lower);
-					}
-				}
-				std::sort(nextWave.begin(), nextWave.end(), patternDefinitionComesBefore);
-				nextWave.erase(std::unique(nextWave.begin(), nextWave.end()), nextWave.end());
-				currentWave = std::move(nextWave);
-			}
-
-			if (processedCount != involvedDefs.size()) {
+			if (topological.size() != familyCount) {
 				context.diagnostics.push_back(
 					Diagnostic(context, Diagnostic::Level::Error, "precedence cycle detected", Range())
 				);
 				return false;
 			}
 
-			for (PatternDefinition *definition : involvedDefs) {
-				if (definition != &defaultSentinel)
-					definition->precedenceSuccessors.clear();
-			}
-			for (PatternDefinition *definition : involvedDefs) {
-				if (definition == &defaultSentinel)
-					continue;
-				std::vector<PatternDefinition *> pending(adjList[definition].begin(), adjList[definition].end());
-				std::unordered_set<PatternDefinition *> visited;
-				while (!pending.empty()) {
-					PatternDefinition *successor = pending.back();
-					pending.pop_back();
-					if (!visited.insert(successor).second)
-						continue;
-					if (successor != &defaultSentinel)
-						definition->precedenceSuccessors.insert(successor);
-					auto adjacent = adjList.find(successor);
-					if (adjacent != adjList.end())
-						pending.insert(pending.end(), adjacent->second.begin(), adjacent->second.end());
+			std::vector<llvm::BitVector> reachable(familyCount, llvm::BitVector(familyCount));
+			for (auto order = topological.rbegin(); order != topological.rend(); ++order) {
+				for (size_t lower : adjacent[*order]) {
+					reachable[*order].set(lower);
+					reachable[*order] |= reachable[lower];
 				}
 			}
-
-			// Precedence re-matching is NOT done here — operand reordering in type inference
-			// handles grouping selection using the resolved partial order.
+			for (size_t index = 0; index < familyCount; ++index) {
+				std::unordered_set<PatternDefinition *> successors;
+				for (unsigned lower : reachable[index].set_bits())
+					for (PatternDefinition *definition : familyMembers[lower])
+						if (definition != &defaultSentinel)
+							successors.insert(definition);
+				for (PatternDefinition *definition : familyMembers[index])
+					if (definition != &defaultSentinel && involvedDefs.contains(definition))
+						definition->precedenceSuccessors = successors;
+			}
+			// Keep the authored partial order; unrelated families remain unrelated.
 		}
 	}
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;

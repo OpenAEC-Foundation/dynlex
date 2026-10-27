@@ -1,0 +1,20 @@
+function integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function left + right:
+    after: default
+    execute:
+        @intrinsic("return", @intrinsic("add", left, right))
+
+function left * right:
+    before: default
+    execute:
+        @intrinsic("return", @intrinsic("multiply", left, right))
+
+function show value:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", value))
+
+show 3 * 2 + 1
+show 1 + 3 * 2

@@ -1,0 +1,172 @@
+function ignore value:
+    replacement:
+        @intrinsic("discard", value)
+
+function [an|] integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function [a|] byte:
+    replacement:
+        @intrinsic("type", "int", 8)
+
+function nothing:
+    replacement:
+        @intrinsic("type", "nothing")
+
+function the type for item and quantity:
+    replacement:
+        ignore item
+        ignore quantity
+        an integer
+
+class:
+    patterns:
+        [a|] batch alfa
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch bravo
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch charlie
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch delta
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch echo
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch foxtrot
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch golf
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch hotel
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch india
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch juliet
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch kilo
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch lima
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch mike
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch november
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch oscar
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+class:
+    patterns:
+        [a|] batch papa
+    members:
+        first as the type for lights and an integer
+        second as the type for lights and an integer
+        third as the type for lights and an integer
+        fourth as the type for lights and an integer
+
+function the type for lights and quantity:
+    replacement:
+        ignore the type for placeholder and quantity
+        a byte
+
+@intrinsic("call", "libc", "exit", nothing, @intrinsic("subtract", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("add", @intrinsic("size of", a batch alfa), @intrinsic("size of", a batch bravo)), @intrinsic("size of", a batch charlie)), @intrinsic("size of", a batch delta)), @intrinsic("size of", a batch echo)), @intrinsic("size of", a batch foxtrot)), @intrinsic("size of", a batch golf)), @intrinsic("size of", a batch hotel)), @intrinsic("size of", a batch india)), @intrinsic("size of", a batch juliet)), @intrinsic("size of", a batch kilo)), @intrinsic("size of", a batch lima)), @intrinsic("size of", a batch mike)), @intrinsic("size of", a batch november)), @intrinsic("size of", a batch oscar)), @intrinsic("size of", a batch papa)), 64))

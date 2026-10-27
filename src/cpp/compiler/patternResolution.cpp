@@ -1,3 +1,5 @@
+#include <queue>
+#include <llvm/ADT/BitVector.h>
 #include "classSection.h"
 #include "compiler.h"
 #include "compilerUtils.h"
@@ -256,19 +258,20 @@ static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition
 	return family;
 }
 
+template <typename FamilyLookup>
 static void collectGeneratedPropertyAccessorFamilies(
 	Section *section, std::unordered_set<PatternDefinition *> &accessors,
-	std::unordered_set<PatternDefinition *> &familyDefinitions
+	std::unordered_set<PatternDefinition *> &familyDefinitions, const FamilyLookup &familyFor
 ) {
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		if (!definition->isGeneratedClassPropertyAccessor)
 			continue;
 		accessors.insert(definition);
-		for (PatternDefinition *familyDefinition : connectedPatternFamily(definition))
+		for (PatternDefinition *familyDefinition : familyFor(definition))
 			familyDefinitions.insert(familyDefinition);
 	}
 	for (Section *child : section->children)
-		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions);
+		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions, familyFor);
 }
 
 static bool resolutionTraceEnabled() {
