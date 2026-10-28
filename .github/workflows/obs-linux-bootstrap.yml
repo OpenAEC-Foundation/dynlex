@@ -38,3 +38,64 @@ jobs:
           name: obs-linux-toolchain-c2d32bea
           path: obs-linux-toolchain.tar.gz
           retention-days: 14
+  application:
+    needs: compiler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: obs-linux-toolchain-c2d32bea
+          path: /tmp/obs-compiler-artifact
+      - name: Restore compiler and build native runtimes
+        run: |
+          tar -xzf /tmp/obs-compiler-artifact/obs-linux-toolchain.tar.gz -C /tmp
+          mkdir -p build lib/dynlex
+          cp /tmp/obs-toolchain/build/dynlex build/dynlex
+          chmod +x build/dynlex
+          sudo apt-get update
+          sudo apt-get install -y libfreetype-dev libglfw3-dev libvulkan-dev
+          mkdir -p build/runtime-objects
+          for file in filesystemRuntime hostRuntime pathRuntime pathUriRuntime processRuntime runtimeError runtimeText filesystemRuntimePosix filesystemTransactionPosix hostRuntimePosix processRuntimePosix processRuntimePosixWrite; do
+            cc -std=c11 -O2 -fPIC -Isrc/runtime -c src/runtime/$file.c -o build/runtime-objects/$file.o
+          done
+          ar rcs lib/dynlex/libdynlex_runtime.a build/runtime-objects/*.o
+          for file in graphicsRuntime graphicsRuntimeDraw graphicsRuntimePipeline graphicsRuntimeTexture graphicsRuntimeVulkan; do
+            cc -std=c11 -O2 -fPIC -Isrc/runtime -c src/runtime/$file.c -o build/runtime-objects/$file.o
+          done
+          ar rcs lib/dynlex/libdynlex_graphics.a build/runtime-objects/graphics*.o
+      - uses: actions/checkout@v7
+        with:
+          repository: OpenAEC-Foundation/open-bim-studio
+          ref: 2b58b0ffbeb1e16c507ab8c98bfd9af566b7cbe7
+          path: obs
+      - name: Build Linux application without embedded checks
+        working-directory: obs
+        env:
+          DYNLEX_ROOT: ${{ github.workspace }}
+          BIM_DEBUG: '0'
+        run: |
+          bash build.sh toolchain-info > toolchain-info.txt
+          /usr/bin/time -v bash build.sh dev > app-build.log 2> app-build.time
+      - name: Package the application
+        working-directory: obs
+        run: |
+          mkdir -p app-linux
+          cp build/open-bim-studio-dev app-linux/
+          cp toolchain-info.txt app-build.log app-build.time app-linux/
+          git rev-parse HEAD > app-linux/SOURCE-COMMIT
+          sha256sum app-linux/open-bim-studio-dev > app-linux/SHA256SUMS
+          tar -czf obs-linux-application.tar.gz app-linux
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: obs-linux-application
+          path: |
+            obs/obs-linux-application.tar.gz
+            obs/app-build.log
+            obs/app-build.time
+          if-no-files-found: warn
+          retention-days: 14
