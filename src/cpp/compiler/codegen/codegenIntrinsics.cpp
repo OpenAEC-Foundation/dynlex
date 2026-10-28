@@ -1,4 +1,6 @@
 #include "arithmeticTypePromotion.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/IntrinsicsSPIRV.h"
 #include "atomicIntrinsics.h"
 #include "classDefinition.h"
 #include "codegenInternal.h"

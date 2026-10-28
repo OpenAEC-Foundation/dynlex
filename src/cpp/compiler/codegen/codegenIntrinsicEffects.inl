@@ -693,11 +693,13 @@ if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpola
 		globalName = "gl_FragCoord";
 	} else if (inputName == "Position") {
 		globalName = "in_Position";
+	} else if (isShaderVertexAttributeName(inputName)) {
+		globalName = "in_" + inputName;
 	} else {
 		crashCompilerBug("unknown shader input reached codegen after type inference");
 	}
 	llvm::GlobalVariable *global = context.llvmModule->getGlobalVariable(globalName);
-	if (!global && kind == IntrinsicKind::ShaderInterpolantInput) {
+	if (!global && (kind == IntrinsicKind::ShaderInterpolantInput || isShaderVertexAttributeName(inputName))) {
 		constexpr unsigned spirvInputAddressSpace = 7;
 		llvm::Type *vec4Ty = llvm::FixedVectorType::get(builder.getFloatTy(), 4);
 		global = new llvm::GlobalVariable(
@@ -711,6 +713,122 @@ if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpola
 	llvm::LoadInst *input = builder.CreateLoad(vec4Ty, global, inputName);
 	input->setVolatile(true);
 	return input;
+}
+
+if (kind == IntrinsicKind::ShaderDerivativeX || kind == IntrinsicKind::ShaderDerivativeY) {
+	// How a fragment value changes from one pixel to the next across (x) or
+	// down (y) the screen.
+	llvm::Value *value = nullptr;
+	if (!generateRuntimeValue(args[1], value))
+		return CodegenResult::failure();
+	DataType floatType = {DataType::Kind::Float, 4};
+	value = ensureType(context, value, finalizedExpressionType(context, args[1]), floatType);
+	llvm::Function *derivative = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule,
+		kind == IntrinsicKind::ShaderDerivativeX ? llvm::Intrinsic::spv_ddx : llvm::Intrinsic::spv_ddy,
+		{builder.getFloatTy()}
+	);
+	return builder.CreateCall(derivative, {value});
+}
+
+if (kind == IntrinsicKind::ShaderDiscard) {
+	// The fragment is dropped: nothing of it is written.
+	llvm::Function *discard =
+		llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, llvm::Intrinsic::spv_discard, {});
+	builder.CreateCall(discard, {});
+	return nullptr;
+}
+
+if (kind == IntrinsicKind::ShaderBufferRead) {
+	// Float `index` of the read-only storage buffer at `binding` in descriptor
+	// set zero: shader parameters in one buffer, and data looked up per
+	// vertex or per element.
+	std::optional<std::int64_t> bindingValue =
+		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[1], context.flexBindingFrames));
+	requireCompilerInvariant(
+		bindingValue && *bindingValue >= 0 && *bindingValue < 1000, "shader buffer read reached codegen without a binding"
+	);
+	llvm::Value *index = nullptr;
+	if (!generateRuntimeValue(args[2], index))
+		return CodegenResult::failure();
+	DataType indexType = {DataType::Kind::Int, 4};
+	index = ensureType(context, index, finalizedExpressionType(context, args[2]), indexType);
+	llvm::LLVMContext &llvmContext = *context.llvmContext;
+	llvm::Type *f32Ty = builder.getFloatTy();
+	// spirv.VulkanBuffer: a runtime array of floats in StorageBuffer storage,
+	// read-only.
+	llvm::Type *bufferTy =
+		llvm::TargetExtType::get(llvmContext, "spirv.VulkanBuffer", {llvm::ArrayType::get(f32Ty, 0)}, {12, 0});
+	std::string bindingText = std::to_string(*bindingValue);
+	llvm::GlobalVariable *bufferName = context.llvmModule->getGlobalVariable("dynlex_buffer_name_" + bindingText, true);
+	llvm::Value *nameValue = bufferName ? static_cast<llvm::Value *>(bufferName)
+										: builder.CreateGlobalString("dynlex_buffer_" + bindingText, "dynlex_buffer_name_" + bindingText);
+	llvm::Function *handleFunction = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule, llvm::Intrinsic::spv_resource_handlefrombinding, {bufferTy}
+	);
+	llvm::Value *handle = builder.CreateCall(
+		handleFunction,
+		{builder.getInt32(0), builder.getInt32(static_cast<std::uint32_t>(*bindingValue)), builder.getInt32(1),
+		 builder.getInt32(0), nameValue}
+	);
+	llvm::Type *pointerTy = llvm::PointerType::get(llvmContext, 11);
+	llvm::Function *pointerFunction = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule, llvm::Intrinsic::spv_resource_getpointer, {pointerTy, bufferTy, builder.getInt32Ty()}
+	);
+	llvm::Value *element = builder.CreateCall(pointerFunction, {handle, index});
+	return builder.CreateLoad(f32Ty, element, "buffer_value");
+}
+
+if (kind == IntrinsicKind::ShaderSample) {
+	// A 2D texture sampled at (u, v): a sampled image at the binding given and
+	// its sampler at the next binding, both in descriptor set zero.
+	std::optional<std::int64_t> bindingValue =
+		getCompileTimeIntegerValue(resolveStoredCompileTimeValue(args[1], context.flexBindingFrames));
+	requireCompilerInvariant(
+		bindingValue && *bindingValue >= 0 && *bindingValue < 1000, "shader sample reached codegen without a binding"
+	);
+	llvm::Value *u = nullptr;
+	llvm::Value *v = nullptr;
+	if (!generateRuntimeValue(args[2], u) || !generateRuntimeValue(args[3], v))
+		return CodegenResult::failure();
+	DataType floatType = {DataType::Kind::Float, 4};
+	u = ensureType(context, u, finalizedExpressionType(context, args[2]), floatType);
+	v = ensureType(context, v, finalizedExpressionType(context, args[3]), floatType);
+	llvm::LLVMContext &llvmContext = *context.llvmContext;
+	llvm::Type *f32Ty = builder.getFloatTy();
+	llvm::Type *i32Ty = builder.getInt32Ty();
+	// spirv.Image: sampled type float, Dim 2D, depth unknown, not arrayed, not
+	// multisampled, sampled, format unknown.
+	llvm::Type *imageTy = llvm::TargetExtType::get(llvmContext, "spirv.Image", {f32Ty}, {1, 2, 0, 0, 1, 0});
+	llvm::Type *samplerTy = llvm::TargetExtType::get(llvmContext, "spirv.Sampler");
+	std::string bindingText = std::to_string(*bindingValue);
+	llvm::Value *imageName = builder.CreateGlobalString("dynlex_image_" + bindingText, "dynlex_image_name_" + bindingText);
+	llvm::Value *samplerName =
+		builder.CreateGlobalString("dynlex_sampler_" + bindingText, "dynlex_sampler_name_" + bindingText);
+	llvm::Function *handleImage = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule, llvm::Intrinsic::spv_resource_handlefrombinding, {imageTy}
+	);
+	llvm::Function *handleSampler = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule, llvm::Intrinsic::spv_resource_handlefrombinding, {samplerTy}
+	);
+	std::uint32_t binding = static_cast<std::uint32_t>(*bindingValue);
+	llvm::Value *image = builder.CreateCall(
+		handleImage, {builder.getInt32(0), builder.getInt32(binding), builder.getInt32(1), builder.getInt32(0), imageName}
+	);
+	llvm::Value *sampler = builder.CreateCall(
+		handleSampler,
+		{builder.getInt32(0), builder.getInt32(binding + 1), builder.getInt32(1), builder.getInt32(0), samplerName}
+	);
+	llvm::Type *vec2Ty = llvm::FixedVectorType::get(f32Ty, 2);
+	llvm::Type *ivec2Ty = llvm::FixedVectorType::get(i32Ty, 2);
+	llvm::Type *vec4Ty = llvm::FixedVectorType::get(f32Ty, 4);
+	llvm::Value *coordinates = llvm::Constant::getNullValue(vec2Ty);
+	coordinates = builder.CreateInsertElement(coordinates, u, builder.getInt32(0));
+	coordinates = builder.CreateInsertElement(coordinates, v, builder.getInt32(1));
+	llvm::Function *sample = llvm::Intrinsic::getOrInsertDeclaration(
+		context.llvmModule, llvm::Intrinsic::spv_resource_sample, {vec4Ty, imageTy, samplerTy, vec2Ty, ivec2Ty}
+	);
+	return builder.CreateCall(sample, {image, sampler, coordinates, llvm::Constant::getNullValue(ivec2Ty)});
 }
 
 if (kind == IntrinsicKind::ShaderUniform) {

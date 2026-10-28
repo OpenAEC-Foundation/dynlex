@@ -1,5 +1,5 @@
 bool handledAggregateIntrinsic = true;
-if (kind == IntrinsicKind::ShaderInput) {
+if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderSample) {
 	expr->type = {DataType::Kind::Vector};
 	expr->type.arraySize = 4;
 	expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);

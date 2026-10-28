@@ -13,6 +13,7 @@
 #include "llvm/Support/Process.h"
 #include <algorithm>
 #include <climits>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <list>
@@ -244,31 +245,56 @@ static std::vector<PatternDefinition *> connectedPatternFamily(PatternDefinition
 	std::vector<PatternDefinition *> family;
 	std::vector<PatternDefinition *> pending{definition};
 	std::unordered_set<PatternDefinition *> visited;
+	std::unordered_set<PatternTreeNode *> visitedEndpoints;
 	while (!pending.empty()) {
 		PatternDefinition *current = pending.back();
 		pending.pop_back();
 		if (!visited.insert(current).second)
 			continue;
 		family.push_back(current);
-		for (PatternTreeNode *endNode : current->endNodes)
-			pending.insert(pending.end(), endNode->matchingDefinitions.begin(), endNode->matchingDefinitions.end());
+		for (PatternTreeNode *endNode : current->endNodes) {
+			if (visitedEndpoints.insert(endNode).second)
+				pending.insert(pending.end(), endNode->matchingDefinitions.begin(), endNode->matchingDefinitions.end());
+		}
 	}
 	return family;
 }
 
+// The indexed pattern graph is immutable while precedence is resolved.
+// Definitions sharing an endpoint belong to one undirected component.
+class PatternFamilyIndex {
+  public:
+	const std::vector<PatternDefinition *> &family(PatternDefinition *definition) {
+		auto found = componentIndices.find(definition);
+		if (found != componentIndices.end())
+			return components[found->second];
+		size_t componentIndex = components.size();
+		components.push_back(connectedPatternFamily(definition));
+		for (PatternDefinition *member : components.back()) {
+			bool inserted = componentIndices.emplace(member, componentIndex).second;
+			requireCompilerInvariant(inserted, "pattern family graph changed during precedence resolution");
+		}
+		return components.back();
+	}
+
+  private:
+	std::deque<std::vector<PatternDefinition *>> components;
+	std::unordered_map<PatternDefinition *, size_t> componentIndices;
+};
+
 static void collectGeneratedPropertyAccessorFamilies(
 	Section *section, std::unordered_set<PatternDefinition *> &accessors,
-	std::unordered_set<PatternDefinition *> &familyDefinitions
+	std::unordered_set<PatternDefinition *> &familyDefinitions, PatternFamilyIndex &families
 ) {
 	for (PatternDefinition *definition : section->patternDefinitions) {
 		if (!definition->isGeneratedClassPropertyAccessor)
 			continue;
 		accessors.insert(definition);
-		for (PatternDefinition *familyDefinition : connectedPatternFamily(definition))
+		for (PatternDefinition *familyDefinition : families.family(definition))
 			familyDefinitions.insert(familyDefinition);
 	}
 	for (Section *child : section->children)
-		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions);
+		collectGeneratedPropertyAccessorFamilies(child, accessors, familyDefinitions, families);
 }
 
 static bool resolutionTraceEnabled() {

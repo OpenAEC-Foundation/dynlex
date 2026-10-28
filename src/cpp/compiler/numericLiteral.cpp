@@ -1,5 +1,7 @@
 #include "numericLiteral.h"
+#include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -28,19 +30,20 @@ NumericLiteralParseResult parseNumericLiteral(std::string_view text) {
 		return {{magnitude}, NumericLiteralParseError::None};
 	}
 
-	try {
-		size_t parsedLength = 0;
-		double value = std::stod(std::string(text), &parsedLength);
-		if (parsedLength != text.size())
-			return {{0.0}, NumericLiteralParseError::Invalid};
-		if (!std::isfinite(value))
-			return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-		return {{value}, NumericLiteralParseError::None};
-	} catch (const std::out_of_range &) {
-		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
-	} catch (const std::invalid_argument &) {
+	// `strtod` reports ERANGE both for overflow and for any underflow, including
+	// representable subnormal values; only overflow and underflow of a nonzero
+	// literal to zero are out of range.
+	std::string literal(text);
+	errno = 0;
+	char *end = nullptr;
+	double value = std::strtod(literal.c_str(), &end);
+	if (end != literal.c_str() + literal.size())
 		return {{0.0}, NumericLiteralParseError::Invalid};
-	}
+	if (!std::isfinite(value))
+		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
+	if (errno == ERANGE && value == 0.0 && literal.find_first_of("123456789") < literal.find_first_of("eE"))
+		return {{0.0}, NumericLiteralParseError::FloatingPointOutOfRange};
+	return {{value}, NumericLiteralParseError::None};
 }
 
 DataType numericLiteralType(const NumericLiteralValue &value, bool emitSPIRV) {

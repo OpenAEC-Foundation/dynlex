@@ -1,4 +1,5 @@
 #include "spirv.h"
+#include "intrinsicInfo.h"
 #include "compilerUtils.h"
 #include "parseContext.h"
 #include "targetOptions.h"
@@ -240,14 +241,22 @@ static bool patchShaderBinary(
 
 	// First pass: collect all OpVariable result IDs so we only match names against actual variables
 	std::unordered_set<uint32_t> variableIds;
+	// Resource variables the backend declared itself (sampled images,
+	// samplers and storage buffers) join the entry point's
+	// interface, which SPIR-V 1.4 and later require to list every global used.
+	std::vector<uint32_t> resourceIds;
 	size_t pos = 5;
 	while (pos < binary.size()) {
 		uint32_t wc = spvWordCount(binary[pos]);
 		uint32_t op = spvOpcode(binary[pos]);
 		if (wc == 0)
 			break;
-		if (op == spvOpVariable && wc >= 4)
+		if (op == spvOpVariable && wc >= 4) {
 			variableIds.insert(binary[pos + 2]); // result ID
+			// UniformConstant (images, samplers) and StorageBuffer.
+			if (binary[pos + 3] == 0 || binary[pos + 3] == 12)
+				resourceIds.push_back(binary[pos + 2]);
+		}
 		pos += wc;
 	}
 
@@ -318,13 +327,15 @@ static bool patchShaderBinary(
 
 			// Then emit the EntryPoint
 			std::vector<uint32_t> nameWords = encodeSpvString("main");
-			uint32_t entryWc = 3 + nameWords.size() + vars.size();
+			uint32_t entryWc = 3 + nameWords.size() + vars.size() + resourceIds.size();
 			output.push_back(spvInstWord(entryWc, spvOpEntryPoint));
 			output.push_back(executionModel);
 			output.push_back(mainId);
 			output.insert(output.end(), nameWords.begin(), nameWords.end());
 			for (const auto &v : vars)
 				output.push_back(v.id);
+			for (uint32_t resourceId : resourceIds)
+				output.push_back(resourceId);
 			if (executionModel == 5) { // GLCompute, with a fixed 64-thread workgroup.
 				output.insert(output.end(), {spvInstWord(6, spvOpExecutionMode), mainId, 17, 64, 1, 1});
 			}
@@ -660,6 +671,12 @@ bool emitSPIRVModule(ParseContext &context) {
 	std::vector<ShaderIoVar> ioVars;
 	if (isVertex) {
 		ioVars.push_back(makeIoVar("in_Position", spvStorageClassInput, false, 0));
+		// Extra vertex attributes, at the locations their names give.
+		for (uint32_t location = 1; location <= maxShaderVertexAttribute; location++) {
+			std::string attributeName = "in_Attribute" + std::to_string(location);
+			if (context.llvmModule->getGlobalVariable(attributeName))
+				ioVars.push_back(makeIoVar(attributeName, spvStorageClassInput, false, location));
+		}
 		ioVars.push_back(makeIoVar("gl_Position", spvStorageClassOutput, true, 0));
 	} else if (!isCompute) {
 		ioVars.push_back(makeIoVar("gl_FragCoord", spvStorageClassInput, true, 15));

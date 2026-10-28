@@ -25,7 +25,7 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			context.fail(buildFailureDetailDiagnostic(expr->arguments[1]->range, detail), 0);
 		};
 		if (kind == IntrinsicKind::ShaderInput) {
-			bool knownInput = *name == "FragCoord" || *name == "Position";
+			bool knownInput = *name == "FragCoord" || *name == "Position" || isShaderVertexAttributeName(*name);
 			if (!knownInput) {
 				failWithDetail("unknown shader input");
 				return false;
@@ -33,7 +33,8 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 			if (context.parseContext.options.emitSPIRV) {
 				bool stageProvidesInput =
 					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
-					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
+					(*name == "Position" || isShaderVertexAttributeName(*name)) ==
+						(context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
 				if (!stageProvidesInput) {
 					failWithDetail("shader input unavailable");
 					return false;
@@ -70,6 +71,16 @@ static bool validateShaderRuntimeIntrinsic(Expression *expr, IntrinsicKind kind,
 	if (context.parseContext.options.emitSPIRV &&
 		context.parseContext.options.shaderStage == ParseContext::ShaderStage::Compute &&
 		(kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderUniform)) {
+		std::string detail = renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable for stage", "message",
+			{{"operation", expr->intrinsicName}}
+		);
+		context.setTypeFailure(detail);
+		context.fail(buildFailureDetailDiagnostic(expr->range, detail), 0);
+		return false;
+	}
+	if (context.parseContext.options.emitSPIRV && kind == IntrinsicKind::ShaderDiscard &&
+		context.parseContext.options.shaderStage != ParseContext::ShaderStage::Fragment) {
 		std::string detail = renderConfiguredMessage(
 			syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable for stage", "message",
 			{{"operation", expr->intrinsicName}}

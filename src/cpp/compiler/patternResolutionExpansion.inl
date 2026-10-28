@@ -167,15 +167,15 @@ static void decrementVariableLikeCounts(PatternReference *reference) {
 }
 
 // Recursively record which definition each reference matched (including sub-match definitions)
+using DefinitionReferenceIndex = std::unordered_map<PatternDefinition *, std::unordered_set<PatternReference *>>;
+
 static void trackMatchDefinitions(
 	PatternMatch &match, PatternReference *reference,
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
+	DefinitionReferenceIndex &defToRefs
 ) {
 	if (!match.matchingDefinitions.empty()) {
 		for (auto *def : match.matchingDefinitions) {
-			auto &refs = defToRefs[def];
-			if (std::find(refs.begin(), refs.end(), reference) == refs.end())
-				refs.push_back(reference);
+			defToRefs[def].insert(reference);
 		}
 	}
 	for (PatternMatch &subMatch : match.subMatches) {
@@ -186,15 +186,14 @@ static void trackMatchDefinitions(
 // Recursively remove a reference from all definition tracking buckets represented in this match tree.
 static void untrackMatchDefinitions(
 	PatternMatch &match, PatternReference *reference,
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs
+	DefinitionReferenceIndex &defToRefs
 ) {
 	if (!match.matchingDefinitions.empty()) {
 		for (auto *def : match.matchingDefinitions) {
 			auto it = defToRefs.find(def);
 			if (it == defToRefs.end())
 				continue;
-			auto &vec = it->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), reference), vec.end());
+			it->second.erase(reference);
 		}
 	}
 	for (PatternMatch &subMatch : match.subMatches) {

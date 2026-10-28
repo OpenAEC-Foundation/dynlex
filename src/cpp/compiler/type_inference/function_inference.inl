@@ -503,6 +503,11 @@ static void rollbackTrialJournal(InferenceContext::TrialJournal &journal) {
 		if (it->first->instantiations.size() < it->second)
 			crashCompilerBug("trial rollback observed class instantiation list shrink below recorded snapshot");
 		it->first->instantiations.resize(it->second);
+		// Requests completed during the trial cached indices of the discarded
+		// instantiations; drop them so a later request instantiates afresh.
+		std::erase_if(it->first->instantiationIndicesByRequest, [size = it->second](const auto &entry) {
+			return entry.second >= static_cast<int>(size);
+		});
 	}
 }
 

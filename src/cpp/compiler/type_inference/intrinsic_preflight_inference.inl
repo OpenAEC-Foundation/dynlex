@@ -32,7 +32,7 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 			break;
 		}
 		if (kind == IntrinsicKind::ShaderInput) {
-			bool knownInput = *name == "FragCoord" || *name == "Position";
+			bool knownInput = *name == "FragCoord" || *name == "Position" || isShaderVertexAttributeName(*name);
 			if (!knownInput) {
 				failWithDetail(
 					expr->arguments[1]->range,
@@ -47,7 +47,8 @@ if (isShaderRuntimeIntrinsicKind(kind)) {
 			if (context.parseContext.options.emitSPIRV) {
 				bool stageProvidesInput =
 					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
-					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
+					(*name == "Position" || isShaderVertexAttributeName(*name)) ==
+						(context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
 				if (!stageProvidesInput) {
 					failWithDetail(
 						expr->arguments[1]->range,

@@ -401,7 +401,7 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			DataType aggregateType = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
 			if (aggregateType.hasAggregateElementType())
 				return aggregateType;
-		} else if (kind == IntrinsicKind::ShaderInput) {
+		} else if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderSample) {
 			DataType vectorType{DataType::Kind::Vector};
 			vectorType.arraySize = 4;
 			vectorType.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);

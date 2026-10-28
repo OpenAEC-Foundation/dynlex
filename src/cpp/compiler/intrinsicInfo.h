@@ -1,4 +1,5 @@
 #pragma once
+#include <string_view>
 #include <string>
 #include <unordered_map>
 
@@ -74,6 +75,11 @@ enum class IntrinsicPurityKind {
 	X(ShaderInterpolantOutput, "shader interpolant output", 6, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderInterpolantInput, "shader interpolant input", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)   \
 	X(ShaderUniform, "shader uniform", 3, IntrinsicReturnKind::Float, 1, 2, IntrinsicPurityKind::Impure)                       \
+	X(ShaderSample, "shader sample", 4, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Impure)                       \
+	X(ShaderBufferRead, "shader buffer read", 3, IntrinsicReturnKind::Float, 1, 1, IntrinsicPurityKind::Impure)               \
+	X(ShaderDerivativeX, "shader derivative x", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)             \
+	X(ShaderDerivativeY, "shader derivative y", 2, IntrinsicReturnKind::Float, 0, 0, IntrinsicPurityKind::Impure)             \
+	X(ShaderDiscard, "shader discard", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Impure)                      \
 	X(ExtractElement, "extract element", 3, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                      \
 	X(InsertElement, "insert element", 4, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                        \
 	X(Function, "function", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                   \
@@ -273,10 +279,21 @@ constexpr IntrinsicPurityKind intrinsicPurityKind(IntrinsicKind kind) {
 
 constexpr bool isAlwaysPureIntrinsicKind(IntrinsicKind kind) { return intrinsicPurityKind(kind) == IntrinsicPurityKind::Pure; }
 
+// Vertex shaders read extra per-vertex inputs named "Attribute1" to
+// "Attribute7", at the SPIR-V input locations their digits give; location 0
+// is "Position".
+constexpr unsigned maxShaderVertexAttribute = 7;
+constexpr bool isShaderVertexAttributeName(std::string_view name) {
+	return name.size() == 10 && name.substr(0, 9) == "Attribute" && name[9] >= '1' &&
+		   name[9] < static_cast<char>('1' + maxShaderVertexAttribute);
+}
+
 constexpr bool isShaderRuntimeIntrinsicKind(IntrinsicKind kind) {
 	return kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput ||
 		   kind == IntrinsicKind::ShaderInterpolantOutput || kind == IntrinsicKind::ShaderUniform ||
-		   kind == IntrinsicKind::ShaderOutput;
+		   kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderSample ||
+		   kind == IntrinsicKind::ShaderBufferRead || kind == IntrinsicKind::ShaderDerivativeX ||
+		   kind == IntrinsicKind::ShaderDerivativeY || kind == IntrinsicKind::ShaderDiscard;
 }
 
 static_assert(isAlwaysPureIntrinsicKind(IntrinsicKind::Multiply));

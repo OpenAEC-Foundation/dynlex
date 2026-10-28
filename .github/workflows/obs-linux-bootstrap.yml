@@ -1,0 +1,40 @@
+name: Open BIM Studio pinned Linux bootstrap
+on:
+  push:
+    branches: [build/obs-linux-c2d32bea]
+permissions:
+  contents: read
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/cache@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+      - name: Install bootstrap dependencies
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          sudo bash /tmp/llvm.sh 20
+          sudo apt-get install -y cmake ninja-build nlohmann-json3-dev libfreetype-dev libglfw3-dev libvulkan-dev ccache
+      - name: Build pinned compiler
+        run: ./scripts/build.sh --release
+      - name: Record provenance and package
+        run: |
+          mkdir -p obs-toolchain/build
+          cp build/dynlex obs-toolchain/build/
+          cp -a lib obs-toolchain/
+          git rev-parse HEAD > obs-toolchain/SOURCE-COMMIT
+          git show --format=fuller --stat HEAD > obs-toolchain/SOURCE-CHANGES.txt
+          sha256sum obs-toolchain/build/dynlex > obs-toolchain/SHA256SUMS
+          ./build/dynlex --version > obs-toolchain/VERSION.txt
+          tar -czf obs-linux-toolchain.tar.gz obs-toolchain
+      - uses: actions/upload-artifact@v7
+        with:
+          name: obs-linux-toolchain-c2d32bea
+          path: obs-linux-toolchain.tar.gz
+          retention-days: 14

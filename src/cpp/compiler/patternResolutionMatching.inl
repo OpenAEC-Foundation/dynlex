@@ -79,7 +79,7 @@ static void removeVariableReferencesFromMatch(
 // Returns the set of definition sections that had their VL classification affected.
 static std::vector<Section *> unresolveReference(
 	ParseContext &context, PatternReference *reference,
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> &defToRefs, bool revertImplicitPromotions = true
+	DefinitionReferenceIndex &defToRefs, bool revertImplicitPromotions = true
 ) {
 	std::vector<Section *> affectedSections;
 	// Remove variable references created from the match
@@ -206,7 +206,7 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 static bool resolveReferences(
 	ParseContext &context, std::list<PatternReference *> &references, bool decrementCounts, bool allowUnmatchedVariables,
 	FailedMatchDependencies &failedMatchDependencies,
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> *defToRefs = nullptr, const char *phase = "body",
+	DefinitionReferenceIndex *defToRefs = nullptr, const char *phase = "body",
 	PatternReference **activeReference = nullptr, PatternMatch **activeMatch = nullptr,
 	bool *activeReferenceNeedsRematch = nullptr, bool *deferredActiveRematch = nullptr,
 	std::vector<Section *> *pendingPromotionCleanupSections = nullptr
@@ -400,7 +400,7 @@ bool resolvePatterns(ParseContext &context) {
 	});
 
 	// Phase 1: resolve body references and definitions
-	std::unordered_map<PatternDefinition *, std::vector<PatternReference *>> definitionToReferences;
+	DefinitionReferenceIndex definitionToReferences;
 	FailedMatchDependencies failedBodyMatchDependencies;
 	bool staleInvalidationOccurred = false;
 	std::vector<Section *> pendingPromotionCleanupSections;
@@ -465,8 +465,8 @@ bool resolvePatterns(ParseContext &context) {
 			auto it = definitionToReferences.find(lessDef);
 			if (it == definitionToReferences.end())
 				continue;
-			// Copy the vector since unresolveReference modifies it
-			std::vector<PatternReference *> refs = it->second;
+			// Copy before invalidation mutates the index; process in source order.
+			std::vector<PatternReference *> refs(it->second.begin(), it->second.end());
 			std::sort(refs.begin(), refs.end(), referenceComesBefore);
 			for (PatternReference *ref : refs) {
 				if (!ref->resolved)
@@ -498,7 +498,7 @@ bool resolvePatterns(ParseContext &context) {
 
 		auto referencesIt = definitionToReferences.find(&definition);
 		if (referencesIt != definitionToReferences.end()) {
-			std::vector<PatternReference *> oldReferences = referencesIt->second;
+			std::vector<PatternReference *> oldReferences(referencesIt->second.begin(), referencesIt->second.end());
 			std::sort(oldReferences.begin(), oldReferences.end(), referenceComesBefore);
 			for (PatternReference *reference : oldReferences)
 				queueReferenceForRematch(reference);
@@ -804,10 +804,11 @@ bool resolvePatterns(ParseContext &context) {
 			return false;
 
 		std::vector<PatternDefinition *> precedenceTargets(involvedDefs.begin(), involvedDefs.end());
+		PatternFamilyIndex patternFamilies;
 		std::unordered_set<PatternDefinition *> generatedPropertyAccessors;
 		std::unordered_set<PatternDefinition *> generatedPropertyAccessorFamilyDefinitions;
 		collectGeneratedPropertyAccessorFamilies(
-			context.mainSection, generatedPropertyAccessors, generatedPropertyAccessorFamilyDefinitions
+			context.mainSection, generatedPropertyAccessors, generatedPropertyAccessorFamilyDefinitions, patternFamilies
 		);
 		for (PatternDefinition *definition : generatedPropertyAccessors) {
 			involvedDefs.insert(definition);
@@ -816,14 +817,16 @@ bool resolvePatterns(ParseContext &context) {
 				if (!generatedPropertyAccessorFamilyDefinitions.contains(target))
 					edges.push_back({definition, target});
 		}
-		auto patternFamily = [&](PatternDefinition *definition) {
-			return definition == &defaultSentinel ? std::vector<PatternDefinition *>{definition}
-												  : connectedPatternFamily(definition);
-		};
-		std::set<std::pair<PatternDefinition *, PatternDefinition *>> familyEdges;
+		std::set<std::pair<PatternDefinition *, PatternDefinition *>> componentEdges;
 		for (const PrecedenceEdge &edge : edges) {
-			for (PatternDefinition *higher : patternFamily(edge.higher)) {
-				for (PatternDefinition *lower : patternFamily(edge.lower)) {
+			PatternDefinition *higher = patternFamilies.family(edge.higher).front();
+			PatternDefinition *lower = patternFamilies.family(edge.lower).front();
+			componentEdges.insert({higher, lower});
+		}
+		std::set<std::pair<PatternDefinition *, PatternDefinition *>> familyEdges;
+		for (const auto &[higherComponent, lowerComponent] : componentEdges) {
+			for (PatternDefinition *higher : patternFamilies.family(higherComponent)) {
+				for (PatternDefinition *lower : patternFamilies.family(lowerComponent)) {
 					familyEdges.insert({higher, lower});
 					involvedDefs.insert(higher);
 					involvedDefs.insert(lower);
