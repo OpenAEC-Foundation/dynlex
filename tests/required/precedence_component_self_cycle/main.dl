@@ -1,0 +1,8 @@
+function an integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function {an integer:left} [woven with|braided with] {an integer:right}:
+    before: $ braided with $
+    replacement:
+        @intrinsic("add", left, right)

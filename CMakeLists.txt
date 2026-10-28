@@ -654,6 +654,18 @@ if(NOT EMSCRIPTEN)
         )
     endif()
 
+    # Windows reserves 1 MiB for the main thread's stack, where Linux gives
+    # 8 MiB. Compiling a large program (the BIM slice) needs more than
+    # that and ends in STATUS_STACK_OVERFLOW without a diagnostic. Reserve
+    # 512 MiB of address space; pages are committed only when used.
+    if(WIN32)
+        if(MSVC OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+            target_link_options(${PROJECT_NAME} PRIVATE "LINKER:/STACK:536870912")
+        else()
+            target_link_options(${PROJECT_NAME} PRIVATE "LINKER:--stack,536870912")
+        endif()
+    endif()
+
     add_executable(fbx_to_obj tools/fbx_to_obj.cpp third_party/ufbx/ufbx.c)
     target_include_directories(
         fbx_to_obj SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ufbx ${CMAKE_SOURCE_DIR}/third_party/stb

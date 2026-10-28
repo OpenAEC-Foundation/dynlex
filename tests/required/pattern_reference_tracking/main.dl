@@ -1,0 +1,39 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function emit value:
+    replacement:
+        @intrinsic("call", "libc", "printf", @intrinsic("type", "nothing"), "%lld\n", value)
+
+function the tracked code for item:
+    replacement:
+        @intrinsic("add", item, 1)
+
+function a tracked marker:
+    replacement:
+        7
+
+function exercise tracking:
+    execute:
+        set first to 3
+        set second to the tracked code for first
+        set third to the tracked code for the tracked code for second
+        set a tracked marker to third
+        emit the tracked code for a tracked marker
+        emit the tracked code for the tracked code for a tracked marker
+        emit first
+        emit second
+        emit third
+
+exercise tracking
+
+function set a tracked marker to value:
+    execute:
+        set forwarded to value
+        emit @intrinsic("add", forwarded, 100)
+
+function the tracked code for a tracked marker:
+    execute:
+        set placeholder to 10
+        @intrinsic("return", the tracked code for placeholder)

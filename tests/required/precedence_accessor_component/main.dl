@@ -1,0 +1,38 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+
+function an integer:
+    replacement:
+        @intrinsic("type", "int")
+
+function emit value:
+    replacement:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value))
+
+function left + right:
+    before: default
+    replacement:
+        @intrinsic("add", left, right)
+
+class:
+    patterns:
+        storage0
+    members:
+        x as an integer
+
+class:
+    patterns:
+        storage1
+    members:
+        x as an integer
+
+class:
+    patterns:
+        storage2
+    members:
+        x as an integer
+
+set first to @intrinsic("construct", storage0, 10)
+set second to @intrinsic("construct", storage1, 20)
+emit first's x + second's x

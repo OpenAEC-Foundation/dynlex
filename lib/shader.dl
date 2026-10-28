@@ -43,6 +43,29 @@ function the vertex w:
     replacement:
         @intrinsic("extract element", @intrinsic("shader input", "Position"), 3)
 
+# Extra per-vertex inputs, named "Attribute1" to "Attribute7": each is read
+# at the vertex input location its digit gives (location 0 is the position).
+function the vertex input named {a value:name} x:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader input", name), 0)
+
+function the vertex input named {a value:name} y:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader input", name), 1)
+
+function the vertex input named {a value:name} z:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader input", name), 2)
+
+function the vertex input named {a value:name} w:
+    replacement:
+        @intrinsic("extract element", @intrinsic("shader input", name), 3)
+
+# Drops the fragment being shaded: nothing of it is drawn (fragment shaders).
+function discard the fragment:
+    replacement:
+        @intrinsic("shader discard")
+
 function set the output position with x {a value:horizontal}, y {a value:vertical}, z {a value:depth} and w {a value:magnitude}:
     replacement:
         @intrinsic(
