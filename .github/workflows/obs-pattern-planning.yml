@@ -1,0 +1,52 @@
+name: Studio pattern planning checks
+on:
+  push:
+    branches: [build/obs-pattern-planning]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  planning:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Restore the pinned compiler artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 40773371392 --repo OpenAEC-Foundation/dynlex --name obs-linux-toolchain-c2d32bea --dir /tmp/compiler-artifact
+          tar -xzf /tmp/compiler-artifact/obs-linux-toolchain.tar.gz -C /tmp
+          mkdir -p build lib/dynlex build/runtime-objects
+          cp /tmp/obs-toolchain/build/dynlex build/dynlex
+          chmod +x build/dynlex
+          sha256sum build/dynlex
+          for file in filesystemRuntime hostRuntime pathRuntime pathUriRuntime processRuntime runtimeError runtimeText filesystemRuntimePosix filesystemTransactionPosix hostRuntimePosix processRuntimePosix processRuntimePosixWrite; do
+            cc -std=c11 -O2 -fPIC -Isrc/runtime -c src/runtime/$file.c -o build/runtime-objects/$file.o
+          done
+          ar rcs lib/dynlex/libdynlex_runtime.a build/runtime-objects/*.o
+      - uses: actions/checkout@v7
+        with:
+          repository: OpenAEC-Foundation/open-bim-studio
+          ref: mod/pattern/generator-design
+          path: obs
+      - name: Validate catalogue and compile isolated native planning fixture
+        working-directory: obs
+        run: |
+          git rev-parse HEAD > planning-source.txt
+          python3 tools/validate_building_system_catalogue.py
+          export LIBRARY_PATH="$GITHUB_WORKSPACE/lib/dynlex"
+          ../build/dynlex pattern/common/tests/system_planning.dl -O0 -o /tmp/system-planning > planning.diag 2>&1
+          test ! -s planning.diag
+          /tmp/system-planning > planning.out
+          diff -u pattern/common/tests/system_planning.expected.txt planning.out
+          cat planning.out
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: obs-pattern-planning
+          path: |
+            obs/planning-source.txt
+            obs/planning.diag
+            obs/planning.out
+          retention-days: 14
