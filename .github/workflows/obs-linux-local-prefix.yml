@@ -1,0 +1,48 @@
+name: Studio Linux compiler for the local source prefix
+on:
+  push:
+    branches: [build/obs-linux-local-prefix]
+permissions:
+  contents: read
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: actions/cache@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+      - name: Install bootstrap dependencies
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          sudo bash /tmp/llvm.sh 20
+          sudo apt-get install -y cmake ninja-build nlohmann-json3-dev libfreetype-dev libglfw3-dev libvulkan-dev ccache
+      - name: Build at the destination source prefix
+        run: |
+          destination=/home/aia07/.local/share/open-bim-studio/dynlex-c2d32bea
+          sudo mkdir -p /home/aia07/.local/share/open-bim-studio
+          sudo chown -R "$(id -u):$(id -g)" /home/aia07
+          cp -a "$GITHUB_WORKSPACE" "$destination"
+          cd "$destination"
+          ./scripts/build.sh --release
+      - name: Package native toolchain and provenance
+        run: |
+          destination=/home/aia07/.local/share/open-bim-studio/dynlex-c2d32bea
+          mkdir -p obs-toolchain/build
+          cp "$destination/build/dynlex" obs-toolchain/build/
+          cp -a "$destination/lib" obs-toolchain/
+          mkdir -p obs-toolchain/lib/dynlex
+          cp "$destination/build/libdynlex_runtime.a" "$destination/build/libdynlex_graphics.a" obs-toolchain/lib/dynlex/
+          git rev-parse HEAD > obs-toolchain/SOURCE-COMMIT
+          "$destination/build/dynlex" --version > obs-toolchain/VERSION.txt
+          sha256sum obs-toolchain/build/dynlex obs-toolchain/lib/dynlex/*.a > obs-toolchain/SHA256SUMS
+          tar -czf obs-linux-local-prefix-toolchain.tar.gz obs-toolchain
+      - uses: actions/upload-artifact@v7
+        with:
+          name: obs-linux-local-prefix-toolchain
+          path: obs-linux-local-prefix-toolchain.tar.gz
+          retention-days: 14
