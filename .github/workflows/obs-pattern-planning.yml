@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: OpenAEC-Foundation/open-bim-studio
-          ref: f729ae0c75fc6ad0e858edc2df560a8b0c81b3cb
+          ref: e5b851b7712f78ec82d0bae04771c85bb00958c2
           path: obs
       - name: Validate catalogue and compile isolated native fixtures
         working-directory: obs
