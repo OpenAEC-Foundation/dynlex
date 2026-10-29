@@ -30,23 +30,27 @@ jobs:
           repository: OpenAEC-Foundation/open-bim-studio
           ref: mod/pattern/generator-design
           path: obs
-      - name: Validate catalogue and compile isolated native planning fixture
+      - name: Validate catalogue and compile isolated native fixtures
         working-directory: obs
         run: |
           git rev-parse HEAD > planning-source.txt
           python3 tools/validate_building_system_catalogue.py
           export LIBRARY_PATH="$GITHUB_WORKSPACE/lib/dynlex"
-          ../build/dynlex pattern/common/tests/system_planning.dl -O0 -o /tmp/system-planning > planning.diag 2>&1
-          test ! -s planning.diag
-          /tmp/system-planning > planning.out
-          diff -u pattern/common/tests/system_planning.expected.txt planning.out
-          cat planning.out
+          for fixture in system_planning system_catalogue; do
+            ../build/dynlex pattern/common/tests/$fixture.dl -O0 -o /tmp/$fixture > $fixture.diag 2>&1
+            test ! -s $fixture.diag
+            /tmp/$fixture > $fixture.out
+            diff -u pattern/common/tests/$fixture.expected.txt $fixture.out
+            cat $fixture.out
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: obs-pattern-planning
           path: |
             obs/planning-source.txt
-            obs/planning.diag
-            obs/planning.out
+            obs/system_planning.diag
+            obs/system_planning.out
+            obs/system_catalogue.diag
+            obs/system_catalogue.out
           retention-days: 14
