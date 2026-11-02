@@ -251,6 +251,7 @@ function value shifted right by distance:
         return @intrinsic("shift right", value, distance)
 
 function left[ |]+[ |]right:
+    associativity: left
     before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("add", left, right)
@@ -261,6 +262,7 @@ function left[ |]-[ |]right:
         return @intrinsic("subtract", left, right)
 
 function left[ |]*[ |]right:
+    associativity: left
     before: $ + $, $ - $
     execute:
         return @intrinsic("multiply", left, right)
@@ -479,6 +481,7 @@ function not value:
         @intrinsic("not", value)
 
 function {boolean:left} and {boolean:right}:
+    associativity: left
     before: $ or $
     replacement:
         @intrinsic("and", left, right)
@@ -490,6 +493,7 @@ flex function {nothing:left}[ and|.] {nothing:right}:
         @intrinsic("discard", right)
 
 function left or right:
+    associativity: left
     before: default
     replacement:
         @intrinsic("or", left, right)

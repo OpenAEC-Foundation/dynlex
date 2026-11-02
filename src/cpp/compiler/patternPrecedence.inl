@@ -77,6 +77,34 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 	};
 	std::function<bool(Section *)> collect = [&](Section *section) {
 		for (PatternDefinition *definition : section->patternDefinitions) {
+			if (section->associativity != PatternAssociativity::Unspecified) {
+				for (const auto &path : definition->indexedPaths) {
+					if (path.front().type != PatternElement::Variable || path.back().type != PatternElement::Variable ||
+						std::ranges::count_if(path, [](const PatternElement &element) {
+						return element.type == PatternElement::Variable;
+					}) != 2) {
+						context.addDiagnostic(Diagnostic(
+							context, Diagnostic::Level::Error, "associativity requires binary infix", definition->range
+						));
+						return false;
+					}
+				}
+				PatternFamily &family = *definition->family;
+				if (family.associativity != PatternAssociativity::Unspecified &&
+					family.associativity != section->associativity) {
+					Diagnostic diagnostic(context, Diagnostic::Level::Error, "conflicting associativity", definition->range);
+					diagnostic.relatedInfo.push_back(
+						{renderConfiguredMessage(
+							 syntaxConfigForRange(context, definition->range), "conflicting associativity related"
+						 ),
+						 family.associativityOrigin->range}
+					);
+					context.addDiagnostic(std::move(diagnostic));
+					return false;
+				}
+				family.associativity = section->associativity;
+				family.associativityOrigin = definition;
+			}
 			for (const std::string &signature : section->beforePatterns)
 				if (!addDeclaration(definition, signature, true))
 					return false;

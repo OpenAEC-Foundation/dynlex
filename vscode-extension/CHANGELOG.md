@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.45.0
+
+- Use the same ISO year, week and revision version as the compiler and WGSL translator.
+
 ## 0.0.3
 
 - Make registry packages reproducible from a standalone source checkout.

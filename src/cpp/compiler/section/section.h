@@ -204,6 +204,7 @@ struct Section {
 	std::vector<std::string> globalVariables;
 	// precedence declarations: patterns that this definition evaluates before/after
 	std::vector<std::string> beforePatterns, afterPatterns;
+	PatternAssociativity associativity = PatternAssociativity::Unspecified;
 	// Rules stated by `in this class` or `in this function` blocks directly inside this definition.
 	ScopeRules scopeRules;
 	void collectPatternReferencesAndSections(

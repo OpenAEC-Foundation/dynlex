@@ -1,3 +1,7 @@
+case Expression::Kind::IntrinsicCall:
+support.inferIntrinsic();
+break;
+
 case Expression::Kind::PatternCall:
 if (!inferPatternCall(
 		expr, context, flexBindingFrameStack, preserveCurrentGrouping, argumentEffects ? &*argumentEffects : nullptr

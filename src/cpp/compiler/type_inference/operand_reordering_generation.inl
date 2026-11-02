@@ -207,6 +207,17 @@ canClaimGroupingSpan(int start, int end, int rootIndex, Expression *rootExpressi
 	return true;
 }
 
+static bool groupingOperatorPrecedes(const GroupingGenerationState &state, size_t leftIndex, size_t rightIndex) {
+	Expression *left = state.flatNodes[leftIndex];
+	Expression *right = state.flatNodes[rightIndex];
+	if (expressionMustEvaluateBefore(left, right))
+		return true;
+	const PatternFamily *family = expressionPrecedenceFamily(left);
+	return family && family == expressionPrecedenceFamily(right) &&
+		   ((family->associativity == PatternAssociativity::Left && leftIndex < rightIndex) ||
+			(family->associativity == PatternAssociativity::Right && leftIndex > rightIndex));
+}
+
 static bool
 isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpression, GroupingGenerationState &state) {
 	if (!canClaimGroupingSpan(start, end, rootIndex, rootExpression, state))
@@ -217,7 +228,7 @@ isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpres
 		Expression *otherExpression = state.flatNodes[otherIndex];
 		if (!canClaimGroupingSpan(start, end, otherIndex, otherExpression, state))
 			continue;
-		if (expressionMustEvaluateBefore(rootExpression, otherExpression))
+		if (groupingOperatorPrecedes(state, rootIndex, otherIndex))
 			return false;
 	}
 	return true;
@@ -316,7 +327,7 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 	}
 }
 
-static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState &state) {
+static void collectFlatGroupingNodes(Expression *expr, GroupingGenerationState &state) {
 	struct CollectionFrame {
 		Expression *expression;
 		bool isOnBoundary;
@@ -326,13 +337,11 @@ static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState
 
 	std::stack<CollectionFrame> pending;
 	pending.push({expr, true, true, false});
-	size_t operatorCount = 0;
 	while (!pending.empty()) {
 		CollectionFrame frame = pending.top();
 		pending.pop();
 		Expression *expression = frame.expression;
 		if (frame.emitOperator) {
-			operatorCount++;
 			state.flatNodes.push_back(expression);
 			continue;
 		}
@@ -361,7 +370,25 @@ static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState
 				pending.push({expression->arguments[leftArgumentIndex], true, false, false});
 		}
 	}
-	return operatorCount;
+}
+
+static size_t ambiguousGroupingOperatorCount(const GroupingGenerationState &state) {
+	ExpressionNodeSet ambiguous;
+	for (size_t i = 0; i < state.flatNodes.size(); i++) {
+		Expression *left = state.flatNodes[i];
+		if (!expressionHasGroupingShape(left) || state.opaqueNodes.contains(left))
+			continue;
+		for (size_t j = i + 1; j < state.flatNodes.size(); j++) {
+			Expression *right = state.flatNodes[j];
+			if (!expressionHasGroupingShape(right) || state.opaqueNodes.contains(right))
+				continue;
+			if (!groupingOperatorPrecedes(state, i, j) && !groupingOperatorPrecedes(state, j, i)) {
+				ambiguous.insert(left);
+				ambiguous.insert(right);
+			}
+		}
+	}
+	return ambiguous.size();
 }
 
 static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
@@ -391,7 +418,8 @@ static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates
 		co_return;
 	}
 
-	if (collectFlatGroupingNodes(expr, state) > 8) {
+	collectFlatGroupingNodes(expr, state);
+	if (ambiguousGroupingOperatorCount(state) > 8) {
 		if (!context.hasTypeFailureDiagnostic)
 			context.fail(
 				buildFailureDetailDiagnostic(

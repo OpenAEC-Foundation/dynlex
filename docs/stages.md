@@ -432,6 +432,15 @@ Unary arithmetic intrinsics require numeric scalar or vector values. Classes, po
 
 ## Operand Reordering
 
+Binary infix patterns may declare `associativity: left` or `associativity: right`.
+This is a syntax-family rule shared by typed overloads and choice spellings;
+contradictory declarations are errors. It determines grouping, not algebraic
+equivalence or reassociation by an optimizer. Explicit operand parentheses take
+precedence. The standard `+`, `*`, `and` and `or` families group to the left.
+Unspecified families retain ambiguity checking. The grouping complexity limit
+counts operators with unconstrained relative order, so declared chains can be
+long without being classified as ambiguous.
+
 We iterate over all possible operand orders until we find a valid one.
 
 All instantiation types are known when instantiating a function and do not change. We use this fact for reordering.

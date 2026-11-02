@@ -120,6 +120,9 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 #include "function_inference_pattern_calls.inl"
 #include "intrinsics/shader_runtime_inference.inl"
 
+#include "expression_inference_support.inl"
+#include "function_inference_intrinsics.inl"
+
 // Infer the type of an expression bottom-up.
 // Sets context.typesValid = false if types are invalid for this grouping.
 static void inferOrderedExpression(
@@ -139,35 +142,7 @@ static void inferOrderedExpression(
 		}
 		~ExpressionTraceGuard() { context.popExpression(); }
 	} expressionTraceGuard(context, expr);
-	auto resolveThroughFlexBindings = [&](Expression *expression) {
-		return resolveInferenceBindingLayers(expression, flexBindingFrameStack, &context).expression;
-	};
-	auto setConfiguredTypeFailure = [&](Range range, std::string_view key, std::string_view variant = "message",
-										std::vector<std::pair<std::string, std::string>> replacements = {}) {
-		context.setTypeFailure(
-			renderConfiguredMessage(syntaxConfigForRange(context.parseContext, range), key, variant, replacements)
-		);
-	};
-	auto failWithDetail = [&](Range range, const std::string &detail, int priority = 1) {
-		context.setTypeFailure(detail);
-		context.fail(buildFailureDetailDiagnostic(range, detail), priority);
-	};
-	auto failConfigured = [&](Range range, std::string_view key, std::string_view variant = "message",
-							  std::vector<std::pair<std::string, std::string>> replacements = {}) {
-		failWithDetail(
-			range, renderConfiguredMessage(syntaxConfigForRange(context.parseContext, range), key, variant, replacements)
-		);
-	};
-	auto failIntrinsicArgumentRequirement = [&](size_t argumentIndex, std::string_view requirement) {
-		if (argumentIndex >= expr->arguments.size() || !expr->arguments[argumentIndex])
-			crashCompilerBug("intrinsic argument validation encountered a missing argument expression");
-		std::string detail = "Intrinsic '" + expr->intrinsicName + "' argument " + std::to_string(argumentIndex) + " must be " +
-							 std::string(requirement);
-		failWithDetail(expr->arguments[argumentIndex]->range, detail, 0);
-	};
-	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
-		failIntrinsicArgumentRequirement(argumentIndex, requirement);
-	};
+	ExpressionInferenceSupport support{expr, context, flexBindingFrameStack};
 	bool typeQuery =
 		expr->kind == Expression::Kind::IntrinsicCall && (intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeOf ||
 														  intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeExtent);
@@ -245,7 +220,7 @@ static void inferOrderedExpression(
 			// introducing Float64 arithmetic from constants like 0.5 or 800.0.
 			NumericLiteralTyping typing = typeNumericLiteral(context.parseContext, expr->range.line, *numericValue);
 			if (typing.unrepresentableBy) {
-				setConfiguredTypeFailure(
+				support.setConfiguredTypeFailure(
 					expr->range, "number rule literal unrepresentable", "message",
 					{{"rule", std::string(typing.unrepresentableBy->range.subString)}}
 				);
@@ -315,7 +290,7 @@ static void inferOrderedExpression(
 			DataType merged;
 			if (!mergeArrayElementType(elementType, nextType, merged)) {
 				context.typesValid = false;
-				setConfiguredTypeFailure(expr->range, "array literal element type mismatch");
+				support.setConfiguredTypeFailure(expr->range, "array literal element type mismatch");
 				return;
 			}
 			elementType = merged;
@@ -402,5 +377,4 @@ static void inferOrderedExpression(
 			context.setExpressionValue(expr, {});
 		break;
 
-#include "function_inference_intrinsics.inl"
 #include "function_inference_patterns.inl"

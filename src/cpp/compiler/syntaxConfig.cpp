@@ -324,6 +324,30 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "public") {
 		return assignNameValue(context, path, node, config.publicName);
 	}
+	if (node.key == "associativity") {
+		if (node.value) {
+			addConfigError(context, path, node.lineNumber, "config entry 'associativity' cannot define a value");
+			return false;
+		}
+		for (const auto &child : node.children) {
+			std::string *target = nullptr;
+			if (child->key == "left")
+				target = &config.leftAssociativityName;
+			else if (child->key == "right")
+				target = &config.rightAssociativityName;
+			else {
+				addConfigError(context, path, child->lineNumber, "unknown associativity config key '" + child->key + "'");
+				return false;
+			}
+			if (!assignNameValue(context, path, *child, *target))
+				return false;
+		}
+		if (config.leftAssociativityName == config.rightAssociativityName) {
+			addConfigError(context, path, node.lineNumber, "associativity directions must be distinct");
+			return false;
+		}
+		return true;
+	}
 	if (node.key == "scope rules") {
 		if (node.value) {
 			addConfigError(context, path, node.lineNumber, "config entry 'scope rules' cannot define a value");
@@ -477,6 +501,9 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 			} else if (child->key == "after") {
 				if (!assignNameValue(context, path, *child, config.afterSectionName))
 					return false;
+			} else if (child->key == "associativity") {
+				if (!assignNameValue(context, path, *child, config.associativitySectionName))
+					return false;
 			} else {
 				addConfigError(
 					context, path, child->lineNumber, "unknown config key '" + child->key + "' under 'child sections'"
@@ -550,7 +577,7 @@ std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &co
 	const std::vector<std::string_view> childSectionKeywords = {
 		config.executeSectionName, config.replacementSectionName, config.patternsSectionName, config.globalsSectionName,
 		config.beforeSectionName,  config.afterSectionName,		  config.membersSectionName,  config.retainSectionName,
-		config.releaseSectionName, config.alignmentName,		  config.paddingName,
+		config.releaseSectionName, config.alignmentName,		  config.paddingName,		  config.associativitySectionName,
 	};
 	auto conflictMessage = [](std::string_view phrase, std::string_view keyword) {
 		return "shorthand definition phrase '" + std::string(phrase) + "' conflicts with structural keyword '" +

@@ -13,6 +13,8 @@ Section *FunctionSection::createSection(ParseContext &context, CodeLine *line) {
 	if (matchesConfiguredKeyword(line->patternText, syntax.afterSectionName)) {
 		return new PrecedenceSection(SectionType::After, this);
 	}
+	if (matchesConfiguredKeyword(line->patternText, syntax.associativitySectionName))
+		return new PrecedenceSection(SectionType::Associativity, this);
 	// Fall back to base class (handles "replacement" for flexes, or gives error)
 	return DefinitionSection::createSection(context, line);
 }

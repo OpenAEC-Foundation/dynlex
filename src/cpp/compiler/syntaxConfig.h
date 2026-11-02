@@ -51,6 +51,9 @@ struct SyntaxConfig {
 	std::string globalsSectionName = "globals";
 	std::string beforeSectionName = "before";
 	std::string afterSectionName = "after";
+	std::string associativitySectionName = "associativity";
+	std::string leftAssociativityName = "left";
+	std::string rightAssociativityName = "right";
 	std::string precedenceDefaultName = "default";
 	std::string alignmentName = "alignment";
 	std::string paddingName = "padding";

@@ -6,4 +6,5 @@ struct PrecedenceSection : public ListingSection {
 
 	virtual bool addItem(ParseContext &context, Range itemRange) override;
 	virtual void addSeparator(ParseContext &context, Range separatorRange) override;
+	bool finalize(ParseContext &context) override;
 };
