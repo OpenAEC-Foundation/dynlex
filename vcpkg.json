@@ -4,6 +4,10 @@
     "freetype",
     "glfw3",
     "nlohmann-json",
+    {
+      "name": "spirv-tools",
+      "features": ["tools"]
+    },
     "vulkan"
   ]
 }

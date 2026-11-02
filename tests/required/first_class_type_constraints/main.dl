@@ -6,73 +6,43 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("type", "int", bits)
+[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
 
-function [a|] {fixed integer:bits} bit floating-point number:
-    replacement:
-        @intrinsic("type", "float", bits)
+[a|] {fixed integer:bits} bit floating-point number means: @intrinsic("type", "float", bits)
 
-function [a|] type:
-    replacement:
-        @intrinsic("type", "type")
+[a|] type means: @intrinsic("type", "type")
 
-function [a|] constraint:
-    replacement:
-        @intrinsic("type", "constraint")
+[a|] constraint means: @intrinsic("type", "constraint")
 
-function a value:
-    replacement:
-        @intrinsic("type", "any")
+a value means: @intrinsic("type", "any")
 
-function fixed:
-    replacement:
-        @intrinsic("fix", a value)
+fixed means: @intrinsic("fix", a value)
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function [a|] {fixed integer:bits} bit value:
-    replacement:
-        @intrinsic("type", "any", bits)
+[a|] {fixed integer:bits} bit value means: @intrinsic("type", "any", bits)
 
-function [a|] pointer to pointed:
-    replacement:
-        @intrinsic("add pointer depth", pointed)
+[a|] pointer to pointed means: @intrinsic("add pointer depth", pointed)
 
-function [an|] array containing {fixed integer:size} [item|items] of {type:element}:
-    replacement:
-        @intrinsic("array", size, element)
+[an|] array containing {fixed integer:size} [item|items] of {type:element} means: @intrinsic("array", size, element)
 
-function value as {fixed type:destination}:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as {fixed type:destination} means: @intrinsic("cast", value, destination)
 
-function the captured value of {fixed:value}:
-    execute:
-        return 1
+to get the captured value of {fixed:value}:
+    return 1
 
-function the description of {a 64 bit value:value}:
-    execute:
-        return 64
+to get the description of {a 64 bit value:value}:
+    return 64
 
-function the description of pointer {a pointer to a value:value}:
-    execute:
-        return 8
+to get the description of pointer {a pointer to a value:value}:
+    return 8
 
-function the description of pair {an array containing 2 items of a value:value}:
-    execute:
-        return 2
+to get the description of pair {an array containing 2 items of a value:value}:
+    return 2
 
-function print value:
-    execute:
-        ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value)
+to print value: ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value)
 
 print the captured value of 12
 print the captured value of an integer

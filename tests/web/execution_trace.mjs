@@ -22,8 +22,7 @@ echo "🌽é中" twice`), 0);
   // Intrinsic output inherits the authored call marker, in UTF-16 editor coordinates.
   assert.equal(unicode[0].range.start.line,2);
   assert.equal(unicode[0].range.end.character,'echo "🌽é中" twice'.length);
-  const plan = parseFarmPlan(run(FARM_PREFIX + `to rest:
-    wait
+  const plan = parseFarmPlan(run(FARM_PREFIX + `to rest: wait
 loop 2 times:
     rest
 if my hands are empty:
@@ -31,7 +30,7 @@ if my hands are empty:
 else:
     turn right`));
   assert.deepEqual(plan.map(instruction => [instruction.op,instruction.range.start.line]), [
-    ["loop",2],["action",1],["next",2],["test",4],["action",5],["jump",6],["action",7]
+    ["loop",1],["action",0],["next",1],["test",3],["action",4],["jump",5],["action",6]
   ]);
   const routine = newRoutine(), actions = [];
   const step = () => stepRoutine(routine, plan, () => false, ({key}) => { actions.push(key); return {done:true,message:key}; });
@@ -44,8 +43,7 @@ else:
 
   const source = `import lib/river_challenge.dl
 
-to take a passenger:
-    get the sheep in the boat
+to take a passenger: get the sheep in the boat
 if 1 = 2:
     get the hay in the boat
 else:
@@ -53,7 +51,7 @@ else:
 row to the other side`;
   const trace = parseRiverTrace(run(source));
   assert.deepEqual(trace.commands.map(command => [command.action,command.range.start.line,command.branch]), [
-    ["TEST",2,false],["LOAD",1,null],["CROSS",6,null]
+    ["TEST",1,false],["LOAD",0,null],["CROSS",5,null]
   ]);
   assert.equal(trace.outcome,"running");
   const dynamic = executionOutput(run(`import lib/std.dl
@@ -61,9 +59,9 @@ row to the other side`;
 set counter to 0
 loop 2 times:
     if counter = 0:
-        print "first" as a line
+        print line "first"
     else:
-        print "second" as a line
+        print line "second"
     increment counter`));
   assert.deepEqual(dynamic.filter(record => record.branch !== null).map(record => [record.range.start.line,record.branch]), [[2,true],[2,false]]);
   assert.throws(() => executionOutput("DYNLEX|TRACE|0|0|0|2|-1"), /range/);

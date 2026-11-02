@@ -4,4 +4,4 @@ public function the answer:
     execute:
         return 42
 
-print the answer as a line
+print line the answer

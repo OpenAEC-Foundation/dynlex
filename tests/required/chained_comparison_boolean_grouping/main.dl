@@ -1,0 +1,23 @@
+integer means: @intrinsic("type", "int")
+class:
+    patterns:
+        candidate record
+    members:
+        graphics as integer
+        present as integer
+function left = right:
+    before: $ or $
+    replacement:
+        @intrinsic("equal", left, right)
+left or right means: @intrinsic("or", left, right)
+function left = middle = right:
+    before: $ or $
+    replacement:
+        @intrinsic("and", @intrinsic("equal", left, middle), @intrinsic("equal", middle, right))
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+@intrinsic("store", candidate, @intrinsic("construct", candidate record, 1, 2))
+if candidate's graphics = 1 or candidate's present = 2:
+    @intrinsic("return", 0)
+@intrinsic("return", 1)

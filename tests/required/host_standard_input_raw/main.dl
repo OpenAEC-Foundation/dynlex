@@ -5,31 +5,18 @@ local function the unsigned byte at {integer:offset} in {string:text}:
         return (the character at offset in text as a 32 bit integer) bitwise and 255
 
 read a chunk from the standard input and set first to it
-print whether first succeeded as a line
-print whether first is supported as a line
-print whether first's contents's length = 4096 as a line
-print (the unsigned byte at 4094 in first's contents) as a line
-print (the unsigned byte at 4095 in first's contents) as a line
-print whether first has not reached the end of file as a line
-print whether (first's error message = "") as a line
+print lines (first succeeded), (first is supported) and (first's contents's length = 4096)
+print lines (the unsigned byte at 4094 in first's contents) and (the unsigned byte at 4095 in first's contents)
+print lines (first has not reached the end of file) and (first's error message = "")
 
 read a chunk from the standard input and set second to it
-print whether second succeeded as a line
-print whether second is supported as a line
-print whether second's contents's length = 4 as a line
-print (the unsigned byte at 0 in second's contents) as a line
-print (the unsigned byte at 1 in second's contents) as a line
-print (the unsigned byte at 2 in second's contents) as a line
-print (the unsigned byte at 3 in second's contents) as a line
-print whether second reached the end of file as a line
-print whether (second's error message = "") as a line
+print lines (second succeeded), (second is supported) and (second's contents's length = 4)
+print lines (the unsigned byte at 0 in second's contents) and (the unsigned byte at 1 in second's contents)
+print lines (the unsigned byte at 2 in second's contents) and (the unsigned byte at 3 in second's contents)
+print lines (second reached the end of file) and (second's error message = "")
 
 read a chunk from the standard input and set finished to it
-print whether finished succeeded as a line
-print whether finished is supported as a line
-print whether finished's contents's length = 0 as a line
-print whether finished reached the end of file as a line
-print whether (finished's error message = "") as a line
+print lines (finished succeeded), (finished is supported) and (finished's contents's length = 0)
+print lines (finished reached the end of file) and (finished's error message = "")
 
-print (the unsigned byte at 4094 in first's contents) as a line
-print (the unsigned byte at 0 in second's contents) as a line
+print lines (the unsigned byte at 4094 in first's contents) and (the unsigned byte at 0 in second's contents)

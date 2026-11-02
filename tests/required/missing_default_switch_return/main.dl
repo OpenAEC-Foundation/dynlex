@@ -1,9 +1,8 @@
 import lib/std.dl
 
-function the value chosen for choice:
-    execute:
-        match on choice:
-            case 1:
-                return 10
+to get the value chosen for choice:
+    match on choice:
+        case 1:
+            return 10
 
-print the value chosen for 1 as a line
+print line the value chosen for 1

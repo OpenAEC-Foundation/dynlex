@@ -8,4 +8,4 @@ match based on 3:
 		set result to 2
 	otherwise:
 		set result to 3
-print result as a line
+print line result

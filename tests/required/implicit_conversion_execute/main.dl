@@ -10,11 +10,10 @@ implicitly convert {integer:number}:
     execute:
         return @intrinsic("construct", a number box, number + 1000)
 
-function the payload unwrapped from {a number box:wrapped}:
-    execute:
-        return the payload of wrapped
+to get the payload unwrapped from {a number box:wrapped}:
+    return the payload of wrapped
 
-print (the payload unwrapped from 42) as a line
+print line (the payload unwrapped from 42)
 
 set stored to 7
-print (the payload unwrapped from stored) as a line
+print line (the payload unwrapped from stored)

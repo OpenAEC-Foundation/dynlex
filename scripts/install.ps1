@@ -342,7 +342,7 @@ function Ensure-Vcpkg {
     $manifestDependencies = @($manifest.dependencies | ForEach-Object {
         if ($_ -is [string]) { $_ } else { $_.name }
     })
-    foreach ($dependency in @("freetype", "glfw3", "nlohmann-json", "vulkan")) {
+    foreach ($dependency in @("freetype", "glfw3", "nlohmann-json", "spirv-tools", "vulkan")) {
         if ($dependency -notin $manifestDependencies) {
             throw "vcpkg.json is missing required dependency '$dependency'."
         }
@@ -424,6 +424,10 @@ function Install-VcpkgDependencies {
 
     $nativeLibraryDir = Join-Path $windowsRoot "lib"
     $nativeBinDir = Join-Path $windowsRoot "bin"
+    $spirvToolsDir = Join-Path $windowsRoot "tools\spirv-tools"
+    if (-not (Test-Path -LiteralPath (Join-Path $spirvToolsDir "spirv-val.exe") -PathType Leaf)) {
+        throw "vcpkg reported success but spirv-val is missing from $spirvToolsDir."
+    }
     $glfwImportLibrary = Get-ChildItem -Path $nativeLibraryDir -Filter "*glfw3*.lib" -File -ErrorAction SilentlyContinue |
         Select-Object -First 1
     $freetypeImportLibrary = Get-ChildItem -Path $nativeLibraryDir -Filter "*freetype*.lib" -File -ErrorAction SilentlyContinue |
@@ -449,7 +453,7 @@ function Install-VcpkgDependencies {
 
     $nlohmannJsonDirUnix = $nlohmannJsonDir -replace '\\', '/'
     $env:NLOHMANN_JSON_DIR = $nlohmannJsonDirUnix
-    $env:PATH = "$nativeBinDir;$env:PATH"
+    $env:PATH = "$spirvToolsDir;$nativeBinDir;$env:PATH"
     $env:LIB = if ($env:LIB) {
         "$nativeLibraryDir;$env:LIB"
     } else {
@@ -462,6 +466,7 @@ function Install-VcpkgDependencies {
     }
     [Environment]::SetEnvironmentVariable("NLOHMANN_JSON_DIR", $nlohmannJsonDirUnix, "User")
     Add-GitHubPathIfPresent -PathValue $nativeBinDir
+    Add-GitHubPathIfPresent -PathValue $spirvToolsDir
     if ($env:GITHUB_ENV) {
         Add-Content -Path $env:GITHUB_ENV -Value "NLOHMANN_JSON_DIR=$nlohmannJsonDirUnix"
         Add-Content -Path $env:GITHUB_ENV -Value "LIB=$env:LIB"
@@ -474,6 +479,7 @@ function Install-VcpkgDependencies {
         NlohmannJsonDir = $nlohmannJsonDir
         NativeLibraryDir = $nativeLibraryDir
         NativeBinDir = $nativeBinDir
+        SpirvToolsDir = $spirvToolsDir
     }
 }
 
@@ -585,6 +591,7 @@ Write-Host ('$env:NLOHMANN_JSON_DIR="' + $vcpkgDependencies.NlohmannJsonDir + '"
 Write-Host ('$env:LIB="' + $vcpkgDependencies.NativeLibraryDir + ';$env:LIB"')
 Write-Host ('$env:LIBRARY_PATH="' + $vcpkgDependencies.NativeLibraryDir + ';$env:LIBRARY_PATH"')
 Write-Host ('$env:PATH="' + $vcpkgDependencies.NativeBinDir + ';$env:PATH"')
+Write-Host ('$env:PATH="' + $vcpkgDependencies.SpirvToolsDir + ';$env:PATH"')
 Write-Host ('$env:DYNLEX_WINDOWS_TOOLCHAIN_ROOT="' + $llvmMingw.Root + '"')
 Write-Host ('$env:DYNLEX_WINDOWS_TOOLCHAIN_TARGET="' + $llvmMingw.TargetTriple + '"')
 Write-Host ('$env:DYNLEX_WINDOWS_DEPENDENCY_ROOT="' + $vcpkgDependencies.Root + '"')

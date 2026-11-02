@@ -36,8 +36,8 @@ memoryIntrinsicViolation(Expression *expression, InferenceContext &context, cons
 		if (address.unknown || address.mayBeNull || (address.mayTargets.empty() && !address.mayBeStatic))
 			return std::nullopt;
 		bool allLocal = !address.mayBeStatic;
-		for (VariableReference *target : address.mayTargets) {
-			if (variableReferenceIsCurrentInstantiationParameter(context, target))
+		for (const VariableStorageKey &target : address.mayTargets) {
+			if (variableReferenceIsCurrentInstantiationParameter(context, target.definition))
 				return std::nullopt;
 			Variable *variable = variableForAddressTarget(target);
 			requireCompilerInvariant(variable, "tracked deallocation target has no variable storage");
@@ -128,10 +128,7 @@ static void recordExpressionMemoryFacts(Expression *expression, InferenceContext
 			return;
 		}
 		for (size_t index = 1; index < expression->arguments.size(); index++) {
-			bool typeOnly = intrinsicArgumentIsCompileTimeOnly(expression->intrinsicName, static_cast<int>(index)) ||
-							(index == 1 && (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::ElementType ||
-											kind == IntrinsicKind::TypeExtent));
-			if (typeOnly)
+			if (intrinsicArgumentIsTypeOnly(expression->intrinsicName, static_cast<int>(index)))
 				continue;
 			const MemoryFacts &argument = expressionMemoryFacts(expression->arguments[index], bindings);
 			bool addressOnly = index == 1 && (kind == IntrinsicKind::AddressOf || kind == IntrinsicKind::Store);

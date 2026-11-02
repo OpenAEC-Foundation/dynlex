@@ -2,9 +2,7 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 set values to [7]
 @intrinsic(

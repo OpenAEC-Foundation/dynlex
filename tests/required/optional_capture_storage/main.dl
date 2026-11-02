@@ -1,0 +1,7 @@
+flex section count [using index|]:
+    replacement:
+        @intrinsic("store", index, 0)
+        @intrinsic("execute body")
+
+count:
+    @intrinsic("store", result, 1)

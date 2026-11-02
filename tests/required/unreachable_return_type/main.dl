@@ -1,16 +1,13 @@
 import lib/std.dl
 
-function the compile-time selected value for {fixed integer:choice}:
-    execute:
-        if choice = 2:
-            return 11
-        else:
-            return "unreachable"
-
-function immediately returned value:
-    execute:
-        return 12
+to get the compile-time selected value for {fixed integer:choice}:
+    if choice = 2:
+        return 11
+    else:
         return "unreachable"
 
-print the compile-time selected value for 2 as a line
-print immediately returned value as a line
+to get immediately returned value:
+    return 12
+    return "unreachable"
+
+print lines (the compile-time selected value for 2) and (immediately returned value)

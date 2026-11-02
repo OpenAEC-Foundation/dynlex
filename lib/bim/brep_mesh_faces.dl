@@ -1,0 +1,807 @@
+# SPDX-License-Identifier: MPL-2.0
+# Native import surface for src/brep/mesh.rs at
+# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
+# Surface-parameter triangulation and lifting of trimmed BREP faces.
+import lib/bim/brep_mesh_data.dl
+import lib/bim/brep_pcurve.dl
+import lib/bim/constrained2.dl
+import lib/bim/tessellation.dl
+
+local function cad mesh same parameter {cad vector2:firstPoint} and {cad vector2:secondPoint} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        return (the cad distance from firstPoint to secondPoint) <= tolerance
+
+local function cad mesh parameter {a 64 bit floating-point number:firstValue} is near {a 64 bit floating-point number:secondValue}:
+    execute:
+        set scaleValue to the maximum of (the maximum of (the absolute value of firstValue) and (the absolute value of secondValue)) and 1.0
+        return (the absolute value of (firstValue - secondValue)) <= (2.842170943040401e-14 * scaleValue)
+
+# A collapsed spline row has no differential normal at the pole. Use the
+# one-sided limit there, while retaining exact normals on regular boundaries.
+local function the cad mesh display normal of {cad surface:surfaceValue} at {cad vector2:parameters}:
+    execute:
+        set directResult to the cad normal of surfaceValue at parameters parameters's x and parameters's y
+        if surfaceValue's kind != 5:
+            return directResult
+        set domainValue to the cad domain of surfaceValue's nurbs
+        set uLow to domainValue's u's start
+        set uHigh to domainValue's u's end
+        set vLow to domainValue's v's start
+        set vHigh to domainValue's v's end
+        set onULow to cad mesh parameter parameters's x is near uLow
+        set onUHigh to cad mesh parameter parameters's x is near uHigh
+        set onVLow to cad mesh parameter parameters's y is near vLow
+        set onVHigh to cad mesh parameter parameters's y is near vHigh
+        if ((onULow or onUHigh) or (onVLow or onVHigh)) = false:
+            return directResult
+        set collapsed to false
+        set tangentResult to the cad tangents of surfaceValue at parameters parameters's x and parameters's y
+        if tangentResult's valid:
+            set uLength to (the cad length of tangentResult's u) * (uHigh - uLow)
+            set vLength to (the cad length of tangentResult's v) * (vHigh - vLow)
+            if (onVLow or onVHigh) and (uLength <= (vLength * 1e-12)):
+                set collapsed to true
+            if (onULow or onUHigh) and (vLength <= (uLength * 1e-12)):
+                set collapsed to true
+        if directResult's valid and (collapsed = false):
+            return directResult
+        set inward to parameters
+        if onULow:
+            set inward's x to uLow + ((uHigh - uLow) * 1e-6)
+        else if onUHigh:
+            set inward's x to uHigh - ((uHigh - uLow) * 1e-6)
+        if onVLow:
+            set inward's y to vLow + ((vHigh - vLow) * 1e-6)
+        else if onVHigh:
+            set inward's y to vHigh - ((vHigh - vLow) * 1e-6)
+        return the cad normal of surfaceValue at parameters inward's x and inward's y
+
+local function append cad mesh surface span breaks on {cad surface:surfaceValue} along axis {integer:axis} at {a 64 bit floating-point number:otherValue} from {a 64 bit floating-point number:firstValue} to {a 64 bit floating-point number:lastValue} within angle {a 64 bit floating-point number:maxAngle} at depth {integer:depth} into {a pointer to a list:outputValues}:
+    execute:
+        set normalValues to an empty list of a cad vector3
+        loop sampleIndex from 0 to 9:
+            set unitValue to (sampleIndex as a 64 bit floating-point number) * 0.125
+            set alongValue to firstValue + ((lastValue - firstValue) * unitValue)
+            set parameterValue to a cad vector2 with x alongValue and y otherValue
+            if axis = 1:
+                set parameterValue's x to otherValue
+                set parameterValue's y to alongValue
+            set normalResult to the cad mesh display normal of surfaceValue at parameterValue
+            if normalResult's valid = false:
+                free normalValues
+                return false
+            append normalResult's value to normalValues
+        set splitValue to (the cad maximum direction angle of normalValues) > maxAngle
+        free normalValues
+        if splitValue:
+            if depth >= 32:
+                return false
+            set middleValue to 0.5 * (firstValue + lastValue)
+            if (append cad mesh surface span breaks on surfaceValue along axis axis at otherValue from firstValue to middleValue within angle maxAngle at depth (depth + 1) into outputValues) = false:
+                return false
+            return append cad mesh surface span breaks on surfaceValue along axis axis at otherValue from middleValue to lastValue within angle maxAngle at depth (depth + 1) into outputValues
+        append firstValue to outputValues
+        return true
+
+local function the cad mesh distinct sorted scalars from {a pointer to a list:sourceValues}:
+    execute:
+        sort cad mesh scalars sourceValues
+        set outputValues to an empty list of a 64 bit floating-point number
+        for each sourceValue in sourceValues:
+            if (the length of outputValues) = 0:
+                append sourceValue to outputValues
+            else if (cad mesh parameter (the last item of outputValues) is near sourceValue) = false:
+                append sourceValue to outputValues
+        return outputValues
+
+local function the cad mesh nurbs axis values on {cad surface:surfaceValue} along axis {integer:axis} from {cad vector2:lowValue} to {cad vector2:highValue} within angle {a 64 bit floating-point number:maxAngle}:
+    execute:
+        set probeValues to an empty list of a 64 bit floating-point number
+        set axisKnots to surfaceValue's nurbs's uKnots
+        set otherKnots to surfaceValue's nurbs's vKnots
+        set axisLow to lowValue's x
+        set axisHigh to highValue's x
+        set otherLow to lowValue's y
+        set otherHigh to highValue's y
+        if axis = 1:
+            set axisKnots to surfaceValue's nurbs's vKnots
+            set otherKnots to surfaceValue's nurbs's uKnots
+            set axisLow to lowValue's y
+            set axisHigh to highValue's y
+            set otherLow to lowValue's x
+            set otherHigh to highValue's x
+        for each knotValueItem in otherKnots:
+            if otherLow <= knotValueItem <= otherHigh:
+                append knotValueItem to probeValues
+        append otherLow and otherHigh to probeValues
+        set distinctProbes to the cad mesh distinct sorted scalars from probeValues
+        free probeValues
+        set expandedProbes to an empty list of a 64 bit floating-point number
+        loop probeIndex from 0 to the length of distinctProbes:
+            append (the item at probeIndex in distinctProbes) to expandedProbes
+            if probeIndex + 1 < (the length of distinctProbes):
+                append (0.5 * ((the item at probeIndex in distinctProbes) + (the item at (probeIndex + 1) in distinctProbes))) to expandedProbes
+        free distinctProbes
+        set outputValues to an empty list of a 64 bit floating-point number
+        set axisAngle to maxAngle * 0.7071067811865476
+        loop probeIndex from 0 to the length of expandedProbes:
+            if (append cad mesh surface span breaks on surfaceValue along axis axis at (the item at probeIndex in expandedProbes) from axisLow to axisHigh within angle axisAngle at depth 0 into outputValues) = false:
+                free expandedProbes
+                free outputValues
+                return an empty list of a 64 bit floating-point number
+        free expandedProbes
+        for each knotValue in axisKnots:
+            if axisLow <= knotValue <= axisHigh:
+                append knotValue to outputValues
+        append axisHigh to outputValues
+        set distinctValues to the cad mesh distinct sorted scalars from outputValues
+        free outputValues
+        return distinctValues
+
+local function cad mesh nurbs boundary at {a 64 bit floating-point number:fixedValue} from {cad vector2:firstPoint} to {cad vector2:lastPoint} along axis {integer:axis} spanning {a 64 bit floating-point number:lowValue} to {a 64 bit floating-point number:highValue}:
+    execute:
+        set firstFixed to firstPoint's y
+        set lastFixed to lastPoint's y
+        set firstAlong to firstPoint's x
+        set lastAlong to lastPoint's x
+        if axis = 1:
+            set firstFixed to firstPoint's x
+            set lastFixed to lastPoint's x
+            set firstAlong to firstPoint's y
+            set lastAlong to lastPoint's y
+        return (((cad mesh parameter firstFixed is near fixedValue) and (cad mesh parameter lastFixed is near fixedValue)) and ((cad mesh parameter (the minimum of firstAlong and lastAlong) is near lowValue) and (cad mesh parameter (the maximum of firstAlong and lastAlong) is near highValue)))
+
+local function cad mesh nurbs boundary is collapsed on {cad surface:surfaceValue} at v {a 64 bit floating-point number:vValue} from u {a 64 bit floating-point number:uLow} to {a 64 bit floating-point number:uHigh} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set originValue to the cad point on surfaceValue at parameters uLow and vValue
+        loop sampleIndex from 1 to 5:
+            set uValue to uLow + (((uHigh - uLow) * (sampleIndex as a 64 bit floating-point number)) / 4.0)
+            if (the cad distance from originValue to (the cad point on surfaceValue at parameters uValue and vValue)) > tolerance:
+                return false
+        return true
+
+local function the cad mesh nurbs patch of {cad face key:faceKey} in {cad body:bodyValue} on {cad surface:surfaceValue} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set absentValue to @intrinsic("construct", a cad mesh nurbs patch, false, false, the cad zero vector2, the cad zero vector2)
+        if surfaceValue's kind != 5:
+            return absentValue
+        set faceNode to the cad node pointer for faceKey in bodyValue
+        if faceNode = (0 as the type of faceNode):
+            return absentValue
+        set faceValue to @intrinsic("dereference", faceNode)
+        if (the length of ((faceValue's loops's values))) != 1:
+            return absentValue
+        set domainValue to the cad domain of surfaceValue's nurbs
+        set lowValue to a cad vector2 with x domainValue's u's start and y domainValue's v's start
+        set highValue to a cad vector2 with x domainValue's u's end and y domainValue's v's end
+        if ((highValue's x > lowValue's x) and (highValue's y > lowValue's y)) = false:
+            return absentValue
+        set boundaryResult to the cad boundary parts of faceKey in bodyValue within tolerance
+        if boundaryResult's valid = false:
+            return absentValue
+        set partCount to the length of ((boundaryResult's parts's values))
+        if partCount = 4:
+            set lowUCount, highUCount, lowVCount and highVCount to 0
+            loop partIndex from 0 to partCount:
+                set partValue to the item at partIndex in ((boundaryResult's parts's values))
+                set firstPoint to the cad point on partValue's curve at 0.0
+                set lastPoint to the cad point on partValue's curve at 1.0
+                if cad mesh nurbs boundary at lowValue's x from firstPoint to lastPoint along axis 1 spanning lowValue's y to highValue's y:
+                    increment lowUCount
+                else if cad mesh nurbs boundary at highValue's x from firstPoint to lastPoint along axis 1 spanning lowValue's y to highValue's y:
+                    increment highUCount
+                else if cad mesh nurbs boundary at lowValue's y from firstPoint to lastPoint along axis 0 spanning lowValue's x to highValue's x:
+                    increment lowVCount
+                else if cad mesh nurbs boundary at highValue's y from firstPoint to lastPoint along axis 0 spanning lowValue's x to highValue's x:
+                    increment highVCount
+                else:
+                    return absentValue
+            if (((lowUCount = 1) and (highUCount = 1)) and ((lowVCount = 1) and (highVCount = 1))):
+                return @intrinsic("construct", a cad mesh nurbs patch, true, false, lowValue, highValue)
+        if (partCount = 3) and surfaceValue's nurbs's uClosed:
+            set rimCount and seamCount to 0
+            loop partIndex from 0 to partCount:
+                set partValue to the item at partIndex in ((boundaryResult's parts's values))
+                set firstPoint to the cad point on partValue's curve at 0.0
+                set lastPoint to the cad point on partValue's curve at 1.0
+                set isLowRim to cad mesh nurbs boundary at lowValue's y from firstPoint to lastPoint along axis 0 spanning lowValue's x to highValue's x
+                set isHighRim to cad mesh nurbs boundary at highValue's y from firstPoint to lastPoint along axis 0 spanning lowValue's x to highValue's x
+                if isLowRim or isHighRim:
+                    increment rimCount
+                else if ((cad mesh parameter firstPoint's x is near lastPoint's x) and (((cad mesh parameter firstPoint's y is near lowValue's y) and (cad mesh parameter lastPoint's y is near highValue's y)) or ((cad mesh parameter lastPoint's y is near lowValue's y) and (cad mesh parameter firstPoint's y is near highValue's y)))):
+                    increment seamCount
+            set lowCollapsed to cad mesh nurbs boundary is collapsed on surfaceValue at v lowValue's y from u lowValue's x to highValue's x within tolerance
+            set highCollapsed to cad mesh nurbs boundary is collapsed on surfaceValue at v highValue's y from u lowValue's x to highValue's x within tolerance
+            if ((rimCount = 1) and (seamCount = 2)) and (lowCollapsed != highCollapsed):
+                return @intrinsic("construct", a cad mesh nurbs patch, true, true, lowValue, highValue)
+        return absentValue
+
+local function the cad mesh of nurbs patch {cad mesh nurbs patch:patchValue} on {cad surface:surfaceValue} forward {boolean:forwardValue} with maximum angle {a 64 bit floating-point number:maxAngle} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set outputMesh to an empty cad mesh
+        if patchValue's valid = false:
+            return outputMesh
+        set uValues to the cad mesh nurbs axis values on surfaceValue along axis 0 from patchValue's low to patchValue's high within angle maxAngle
+        if (the length of uValues) < 2:
+            free uValues
+            return outputMesh
+        if patchValue's singular:
+            set lowCollapsed to cad mesh nurbs boundary is collapsed on surfaceValue at v patchValue's low's y from u patchValue's low's x to patchValue's high's x within tolerance
+            loop uIndex from 0 to (the length of uValues) - 1:
+                set u0 to the item at uIndex in uValues
+                set u1 to the item at (uIndex + 1) in uValues
+                if lowCollapsed:
+                    set apexParameter to a cad vector2 with x u1 and y patchValue's low's y
+                    set firstRim to a cad vector2 with x u1 and y patchValue's high's y
+                    set secondRim to a cad vector2 with x u0 and y patchValue's high's y
+                    append cad mesh surface cell triangle on surfaceValue at apexParameter firstRim secondRim forward forwardValue within tolerance into (the address of outputMesh)
+                else:
+                    set firstRim to a cad vector2 with x u0 and y patchValue's low's y
+                    set secondRim to a cad vector2 with x u1 and y patchValue's low's y
+                    set apexParameter to a cad vector2 with x u0 and y patchValue's high's y
+                    append cad mesh surface cell triangle on surfaceValue at firstRim secondRim apexParameter forward forwardValue within tolerance into (the address of outputMesh)
+            free uValues
+            return outputMesh
+        set vValues to the cad mesh nurbs axis values on surfaceValue along axis 1 from patchValue's low to patchValue's high within angle maxAngle
+        if (the length of vValues) < 2:
+            free uValues
+            free vValues
+            return outputMesh
+        set cellCount to (((the length of uValues) - 1) as a 64 bit integer) * (((the length of vValues) - 1) as a 64 bit integer)
+        if (cellCount <= 0) or ((cellCount * 2) > 262144):
+            free uValues
+            free vValues
+            return outputMesh
+        loop vIndex from 0 to (the length of vValues) - 1:
+            set v0 to the item at vIndex in vValues
+            set v1 to the item at (vIndex + 1) in vValues
+            loop uIndex from 0 to (the length of uValues) - 1:
+                set u0 to the item at uIndex in uValues
+                set u1 to the item at (uIndex + 1) in uValues
+                set lowerLeft to a cad vector2 with x u0 and y v0
+                set lowerRight to a cad vector2 with x u1 and y v0
+                set upperLeft to a cad vector2 with x u0 and y v1
+                set upperRight to a cad vector2 with x u1 and y v1
+                append cad mesh surface cell triangle on surfaceValue at lowerLeft lowerRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+                append cad mesh surface cell triangle on surfaceValue at lowerRight upperRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+        free uValues
+        free vValues
+        return outputMesh
+
+local function append cad mesh surface segment on {cad surface:surfaceValue} from {cad vector2:firstParameter} to {cad vector2:lastParameter} within angle {a 64 bit floating-point number:maxAngle} at depth {integer:depth} into {a pointer to a list:outputPoints}:
+    execute:
+        set middleParameter to the cad lerp from firstParameter to lastParameter at 0.5
+        set firstNormal to the cad normal of surfaceValue at parameters firstParameter's x and firstParameter's y
+        set middleNormal to the cad normal of surfaceValue at parameters middleParameter's x and middleParameter's y
+        set lastNormal to the cad normal of surfaceValue at parameters lastParameter's x and lastParameter's y
+        set splitSegment to false
+        if (firstNormal's valid) and ((middleNormal's valid) and (lastNormal's valid)):
+            set cosineLimit to the cosine of maxAngle
+            set firstChange to the cad dot of firstNormal's value and middleNormal's value
+            set lastChange to the cad dot of middleNormal's value and lastNormal's value
+            set splitSegment to (firstChange < cosineLimit) or (lastChange < cosineLimit)
+        if splitSegment and (depth < 20):
+            append cad mesh surface segment on surfaceValue from firstParameter to middleParameter within angle maxAngle at depth (depth + 1) into outputPoints
+            append cad mesh surface segment on surfaceValue from middleParameter to lastParameter within angle maxAngle at depth (depth + 1) into outputPoints
+        else:
+            append lastParameter to outputPoints
+
+to get the cad mesh divisions of {cad coedge key:coedgeKey} in {cad body:bodyValue} within angle {a 64 bit floating-point number:maxAngle}:
+    set coedgeNode to the cad node pointer for coedgeKey in bodyValue
+    if coedgeNode = (0 as the type of coedgeNode):
+        return 1
+    set coedgeValue to @intrinsic("dereference", coedgeNode)
+    set edgeNode to the cad node pointer for coedgeValue's edge in bodyValue
+    if edgeNode = (0 as the type of edgeNode):
+        return 1
+    set edgeValue to @intrinsic("dereference", edgeNode)
+    set curveNode to the cad node pointer for edgeValue's curve in bodyValue
+    if curveNode = (0 as the type of curveNode):
+        return 1
+    set curveValue to @intrinsic("dereference", curveNode)
+    set firstParameter to edgeValue's startParameter
+    set lastParameter to edgeValue's endParameter
+    set segmentCount to 1
+    set complete to false
+    loop passIndex from 0 to 21:
+        if complete = false:
+            set complete to true
+            loop divisionIndex from 0 to segmentCount:
+                set firstFraction to (divisionIndex as a 64 bit floating-point number) / (segmentCount as a 64 bit floating-point number)
+                set lastFraction to ((divisionIndex + 1) as a 64 bit floating-point number) / (segmentCount as a 64 bit floating-point number)
+                set middleFraction to (firstFraction + lastFraction) * 0.5
+                set firstAt to firstParameter + ((lastParameter - firstParameter) * firstFraction)
+                set middleAt to firstParameter + ((lastParameter - firstParameter) * middleFraction)
+                set lastAt to firstParameter + ((lastParameter - firstParameter) * lastFraction)
+                set firstTangent to the cad normalization of (the cad tangent of curveValue at firstAt)
+                set middleTangent to the cad normalization of (the cad tangent of curveValue at middleAt)
+                set lastTangent to the cad normalization of (the cad tangent of curveValue at lastAt)
+                if ((firstTangent's valid) and (middleTangent's valid)) and (lastTangent's valid):
+                    set cosineLimit to the cosine of maxAngle
+                    set firstChange to the cad dot of firstTangent's value and middleTangent's value
+                    set lastChange to the cad dot of middleTangent's value and lastTangent's value
+                    set fullChange to the cad dot of firstTangent's value and lastTangent's value
+                    if ((firstChange + 1e-12 < cosineLimit) or (lastChange + 1e-12 < cosineLimit)) or (fullChange + 1e-12 < cosineLimit):
+                        set complete to false
+            if complete = false:
+                set segmentCount to segmentCount * 2
+    return segmentCount
+
+local function the cad mesh position of {cad coedge key:coedgeKey} at fraction {a 64 bit floating-point number:fraction} in {cad body:bodyValue}:
+    execute:
+        set absent to @intrinsic("construct", a cad mesh point result, false, the cad zero vector3)
+        set coedgeNode to the cad node pointer for coedgeKey in bodyValue
+        if coedgeNode = (0 as the type of coedgeNode):
+            return absent
+        set coedgeValue to @intrinsic("dereference", coedgeNode)
+        set edgeNode to the cad node pointer for coedgeValue's edge in bodyValue
+        if edgeNode = (0 as the type of edgeNode):
+            return absent
+        set edgeValue to @intrinsic("dereference", edgeNode)
+        set curveNode to the cad node pointer for edgeValue's curve in bodyValue
+        if curveNode = (0 as the type of curveNode):
+            return absent
+        set curveValue to @intrinsic("dereference", curveNode)
+        set edgeFraction to fraction
+        if coedgeValue's forward = false:
+            set edgeFraction to 1.0 - fraction
+        set edgeParameter to edgeValue's startParameter + ((edgeValue's endParameter - edgeValue's startParameter) * edgeFraction)
+        return @intrinsic("construct", a cad mesh point result, true, the cad point on curveValue at edgeParameter)
+
+local function remember cad mesh boundary at {cad vector2:parameters} from {cad coedge key:coedgeKey} at fraction {a 64 bit floating-point number:fraction} in {cad body:bodyValue} among {a pointer to a list:boundaryVertices}:
+    execute:
+        set positionResult to the cad mesh position of coedgeKey at fraction fraction in bodyValue
+        if positionResult's valid:
+            append (@intrinsic("construct", a cad mesh boundary vertex, parameters, positionResult's value)) to boundaryVertices
+
+local function cad mesh sampled ring from {cad topology list:parts} starting at {integer:startIndex} with count {integer:partCount} in {cad body:bodyValue} on {cad surface:surfaceValue} within angle {a 64 bit floating-point number:maxAngle} and tolerance {a 64 bit floating-point number:tolerance} collecting {a pointer to a list:boundaryVertices}:
+    execute:
+        set ringValue to an empty list of a cad vector2
+        loop partOffset from 0 to partCount:
+            set partValue to the item at (startIndex + partOffset) in parts's values
+            set scheduleCount to the cad mesh divisions of (partValue's coedge) in bodyValue within angle maxAngle
+            set firstSample to the cad point on partValue's curve at 0.0
+            remember cad mesh boundary at firstSample from partValue's coedge at fraction 0.0 in bodyValue among boundaryVertices
+            if (the length of ringValue) = 0:
+                append firstSample to ringValue
+            else if (cad mesh same parameter (the last item of ringValue) and firstSample within tolerance) = false:
+                append firstSample to ringValue
+            loop divisionIndex from 0 to scheduleCount:
+                set firstFraction to (divisionIndex as a 64 bit floating-point number) / (scheduleCount as a 64 bit floating-point number)
+                set lastFraction to ((divisionIndex + 1) as a 64 bit floating-point number) / (scheduleCount as a 64 bit floating-point number)
+                set segmentStart to the cad point on partValue's curve at firstFraction
+                set segmentEnd to the cad point on partValue's curve at lastFraction
+                append cad mesh surface segment on surfaceValue from segmentStart to segmentEnd within angle maxAngle at depth 0 into ringValue
+                remember cad mesh boundary at segmentEnd from partValue's coedge at fraction lastFraction in bodyValue among boundaryVertices
+        if (the length of ringValue) > 1:
+            if cad mesh same parameter (the item at 0 in ringValue) and (the last item of ringValue) within tolerance:
+                remove the last item from ringValue
+        return ringValue
+
+to get cad mesh rings of {cad face key:faceKey} in {cad body:bodyValue} within angle {a 64 bit floating-point number:maxAngle} and tolerance {a 64 bit floating-point number:tolerance} collecting {a pointer to a list:boundaryVertices}:
+    set resultRings to an empty list of the type of (an empty list of a cad vector2)
+    set faceNode to the cad node pointer for faceKey in bodyValue
+    if faceNode = (0 as the type of faceNode):
+        return resultRings
+    set faceValue to @intrinsic("dereference", faceNode)
+    set surfaceNode to the cad node pointer for faceValue's surface in bodyValue
+    if surfaceNode = (0 as the type of surfaceNode):
+        return resultRings
+    set surfaceValue to @intrinsic("dereference", surfaceNode)
+    set boundaryResult to the cad boundary parts of faceKey in bodyValue within tolerance
+    if boundaryResult's valid = false:
+        # A planar spline edge can be parameterized exactly by projecting
+        # each canonical edge sample into the plane, even though the
+        # public closed-form pcurve projection deliberately has no NURBS
+        # variant.
+        if surfaceValue's kind != 0:
+            return resultRings
+        for each loopKeyItem in ((faceValue's loops's values)):
+            set loopNode to the cad node pointer for loopKeyItem in bodyValue
+            if loopNode = (0 as the type of loopNode):
+                cad mesh release rings resultRings
+                return an empty list of the type of (an empty list of a cad vector2)
+            set loopValue to @intrinsic("dereference", loopNode)
+            set ringValue to an empty list of a cad vector2
+            for each coedgeKey at coedgeIndex in ((loopValue's coedges's values)):
+                set scheduleCount to the cad mesh divisions of coedgeKey in bodyValue within angle maxAngle
+                if scheduleCount <= 0:
+                    free ringValue
+                    cad mesh release rings resultRings
+                    return an empty list of the type of (an empty list of a cad vector2)
+                loop sampleIndex from 0 to scheduleCount + 1:
+                    if (coedgeIndex = 0) or (sampleIndex > 0):
+                        set sampleFraction to (sampleIndex as a 64 bit floating-point number) / (scheduleCount as a 64 bit floating-point number)
+                        set positionResult to the cad mesh position of coedgeKey at fraction sampleFraction in bodyValue
+                        if positionResult's valid = false:
+                            free ringValue
+                            cad mesh release rings resultRings
+                            return an empty list of the type of (an empty list of a cad vector2)
+                        set parameterResult to the cad projection of positionResult's value onto surfaceValue's plane
+                        if parameterResult's valid = false:
+                            free ringValue
+                            cad mesh release rings resultRings
+                            return an empty list of the type of (an empty list of a cad vector2)
+                        if (the length of ringValue) = 0:
+                            append parameterResult's value to ringValue
+                        else if (cad mesh same parameter (the last item of ringValue) and parameterResult's value within tolerance) = false:
+                            append parameterResult's value to ringValue
+                        append (@intrinsic("construct", a cad mesh boundary vertex, parameterResult's value, positionResult's value)) to boundaryVertices
+            if (the length of ringValue) > 1:
+                if cad mesh same parameter (the item at 0 in ringValue) and (the last item of ringValue) within tolerance:
+                    remove the last item from ringValue
+            if (the length of ringValue) >= 3:
+                append ringValue to resultRings
+            else:
+                free ringValue
+        return resultRings
+    set partCursor to 0
+    for each loopKey in ((faceValue's loops's values)):
+        set loopNode to the cad node pointer for loopKey in bodyValue
+        if loopNode = (0 as the type of loopNode):
+            return resultRings
+        set loopValue to @intrinsic("dereference", loopNode)
+        set partCount to the length of ((loopValue's coedges's values))
+        set ringValue to cad mesh sampled ring from boundaryResult's parts starting at partCursor with count partCount in bodyValue on surfaceValue within angle maxAngle and tolerance tolerance collecting boundaryVertices
+        set partCursor to partCursor + partCount
+        if (the length of ringValue) >= 3:
+            append ringValue to resultRings
+        else:
+            free ringValue
+    return resultRings
+
+to cad mesh release rings {a pointer to a list:ringValues}:
+    loop ringIndex from 0 to the length of ringValues:
+        free (the item at ringIndex in ringValues)
+    free ringValues
+
+local function the cad mesh point at {cad vector2:parameters} on {cad surface:surfaceValue} among {a pointer to a list:boundaryVertices} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set parameterTolerance to the maximum of tolerance and 1e-12
+        for each boundaryValue in boundaryVertices:
+            if (the cad distance from parameters to boundaryValue's parameters) <= parameterTolerance:
+                return boundaryValue's position
+        return the cad point on surfaceValue at parameters parameters's x and parameters's y
+
+local function cad mesh face {cad face:faceValue} is whole periodic in {cad body:bodyValue}:
+    execute:
+        if (the length of ((faceValue's loops's values))) = 0:
+            return true
+        if (the length of ((faceValue's loops's values))) != 1:
+            return false
+        set loopNode to the cad node pointer for (the item at 0 in ((faceValue's loops's values))) in bodyValue
+        if loopNode = (0 as the type of loopNode):
+            return false
+        set loopValue to @intrinsic("dereference", loopNode)
+        if (the length of ((loopValue's coedges's values))) = 0:
+            return true
+        for each useKey at useIndex in ((loopValue's coedges's values)):
+            set useNode to the cad node pointer for useKey in bodyValue
+            if useNode = (0 as the type of useNode):
+                return false
+            set useValue to @intrinsic("dereference", useNode)
+            if useValue's pcurve's valid:
+                return false
+            set partnerFound to false
+            loop candidateIndex from 0 to the length of ((loopValue's coedges's values)):
+                if candidateIndex != useIndex:
+                    set candidateNode to the cad node pointer for (the item at candidateIndex in ((loopValue's coedges's values))) in bodyValue
+                    if candidateNode != (0 as the type of candidateNode):
+                        set candidateValue to @intrinsic("dereference", candidateNode)
+                        if (candidateValue's edge = useValue's edge) and (candidateValue's forward != useValue's forward):
+                            set partnerFound to true
+            if partnerFound = false:
+                return false
+        return true
+
+local function append cad mesh surface cell triangle on {cad surface:surfaceValue} at {cad vector2:firstParameter} {cad vector2:secondParameter} {cad vector2:thirdParameter} forward {boolean:forwardValue} within {a 64 bit floating-point number:tolerance} into {a pointer to a cad mesh:meshValue}:
+    execute:
+        set firstPoint to the cad point on surfaceValue at parameters firstParameter's x and firstParameter's y
+        set secondPoint to the cad point on surfaceValue at parameters secondParameter's x and secondParameter's y
+        set thirdPoint to the cad point on surfaceValue at parameters thirdParameter's x and thirdParameter's y
+        if ((the cad distance from firstPoint to secondPoint) <= tolerance) or (((the cad distance from secondPoint to thirdPoint) <= tolerance) or ((the cad distance from thirdPoint to firstPoint) <= tolerance)):
+            return nothing
+        set firstNormalResult to the cad mesh display normal of surfaceValue at firstParameter
+        set secondNormalResult to the cad mesh display normal of surfaceValue at secondParameter
+        set thirdNormalResult to the cad mesh display normal of surfaceValue at thirdParameter
+        if ((firstNormalResult's valid) and (secondNormalResult's valid)) and (thirdNormalResult's valid):
+            if forwardValue:
+                cad mesh append triangle from firstPoint through secondPoint to thirdPoint with normals firstNormalResult's value secondNormalResult's value thirdNormalResult's value into meshValue
+            else:
+                cad mesh append triangle from firstPoint through thirdPoint to secondPoint with normals (the cad negative of firstNormalResult's value) (the cad negative of thirdNormalResult's value) (the cad negative of secondNormalResult's value) into meshValue
+
+local function the cad whole surface mesh on {cad surface:surfaceValue} forward {boolean:forwardValue} with maximum angle {a 64 bit floating-point number:maxAngle} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set outputMesh to an empty cad mesh
+        set lowV to 0.0
+        set highV to 6.283185307179586
+        if surfaceValue's kind = 3:
+            set lowV to -1.5707963267948966
+            set highV to 1.5707963267948966
+        set stepValue to maxAngle / 1.4142135623730951
+        set uCells to (the ceiling of (6.283185307179586 / stepValue)) as an integer
+        set vCells to (the ceiling of ((highV - lowV) / stepValue)) as an integer
+        if ((uCells <= 0) or (vCells <= 0)) or ((((uCells as a 64 bit integer) * (vCells as a 64 bit integer)) * 2) > 262144):
+            return outputMesh
+        loop vIndex from 0 to vCells:
+            set v0 to lowV + (((highV - lowV) * (vIndex as a 64 bit floating-point number)) / (vCells as a 64 bit floating-point number))
+            set v1 to lowV + (((highV - lowV) * ((vIndex + 1) as a 64 bit floating-point number)) / (vCells as a 64 bit floating-point number))
+            loop uIndex from 0 to uCells:
+                set u0 to (6.283185307179586 * (uIndex as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
+                set u1 to (6.283185307179586 * ((uIndex + 1) as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
+                set lowerLeft to a cad vector2 with x u0 and y v0
+                set lowerRight to a cad vector2 with x u1 and y v0
+                set upperLeft to a cad vector2 with x u0 and y v1
+                set upperRight to a cad vector2 with x u1 and y v1
+                append cad mesh surface cell triangle on surfaceValue at lowerLeft lowerRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+                append cad mesh surface cell triangle on surfaceValue at lowerRight upperRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+        return outputMesh
+
+local function no cad mesh result:
+    execute:
+        return @intrinsic("construct", a cad mesh result, false, an empty cad mesh)
+
+local function the cad periodic band mesh of {cad face key:faceKey} in {cad body:bodyValue} on {cad surface:surfaceValue} forward {boolean:forwardValue} with maximum angle {a 64 bit floating-point number:maxAngle} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        set faceNode to the cad node pointer for faceKey in bodyValue
+        if faceNode = (0 as the type of faceNode):
+            return no cad mesh result
+        set faceValue to @intrinsic("dereference", faceNode)
+        if (the length of ((faceValue's loops's values))) != 2:
+            return no cad mesh result
+        set coedgeKeys to an empty list of a cad coedge key
+        loop ringIndex from 0 to 2:
+            set loopNode to the cad node pointer for (the item at ringIndex in ((faceValue's loops's values))) in bodyValue
+            if loopNode = (0 as the type of loopNode):
+                free coedgeKeys
+                return no cad mesh result
+            set loopValue to @intrinsic("dereference", loopNode)
+            if (the length of ((loopValue's coedges's values))) != 1:
+                free coedgeKeys
+                return no cad mesh result
+            append (the item at 0 in ((loopValue's coedges's values))) to coedgeKeys
+        set boundaries to the cad boundary parts of faceKey in bodyValue within tolerance
+        if (boundaries's valid = false) or ((the length of ((boundaries's parts's values))) != 2):
+            free coedgeKeys
+            return no cad mesh result
+        set firstPart to the item at 0 in ((boundaries's parts's values))
+        set secondPart to the item at 1 in ((boundaries's parts's values))
+        set firstStart to the cad point on firstPart's curve at 0.0
+        set firstEnd to the cad point on firstPart's curve at 1.0
+        set secondStart to the cad point on secondPart's curve at 0.0
+        set secondEnd to the cad point on secondPart's curve at 1.0
+        if ((the absolute value of (firstStart's y - firstEnd's y)) > tolerance) or ((the absolute value of (secondStart's y - secondEnd's y)) > tolerance):
+            free coedgeKeys
+            return no cad mesh result
+        set firstSpan to the absolute value of (firstEnd's x - firstStart's x)
+        set secondSpan to the absolute value of (secondEnd's x - secondStart's x)
+        if (firstSpan < 3.141592653589793) or (secondSpan < 3.141592653589793):
+            free coedgeKeys
+            return no cad mesh result
+        set lowV to the minimum of firstStart's y and secondStart's y
+        set highV to the maximum of firstStart's y and secondStart's y
+        if (highV - lowV) <= tolerance:
+            free coedgeKeys
+            return no cad mesh result
+        set lowU to the minimum of firstStart's x and firstEnd's x
+        set highU to the maximum of firstStart's x and firstEnd's x
+        set firstCount to the cad mesh divisions of (the item at 0 in coedgeKeys) in bodyValue within angle maxAngle
+        set secondCount to the cad mesh divisions of (the item at 1 in coedgeKeys) in bodyValue within angle maxAngle
+        set segmentCount to the maximum of firstCount and secondCount
+        free coedgeKeys
+        if segmentCount <= 0:
+            return no cad mesh result
+        set outputMesh to an empty cad mesh
+        loop segmentIndex from 0 to segmentCount:
+            set u0 to lowU + (((highU - lowU) * (segmentIndex as a 64 bit floating-point number)) / (segmentCount as a 64 bit floating-point number))
+            set u1 to lowU + (((highU - lowU) * ((segmentIndex + 1) as a 64 bit floating-point number)) / (segmentCount as a 64 bit floating-point number))
+            set lowerLeft to a cad vector2 with x u0 and y lowV
+            set lowerRight to a cad vector2 with x u1 and y lowV
+            set upperLeft to a cad vector2 with x u0 and y highV
+            set upperRight to a cad vector2 with x u1 and y highV
+            append cad mesh surface cell triangle on surfaceValue at lowerLeft lowerRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+            append cad mesh surface cell triangle on surfaceValue at lowerRight upperRight upperLeft forward forwardValue within tolerance into (the address of outputMesh)
+        return @intrinsic("construct", a cad mesh result, (the cad triangle count of outputMesh) > 0, outputMesh)
+
+local function the cad singular cone mesh of {cad face key:faceKey} in {cad body:bodyValue} on {cad surface:surfaceValue} forward {boolean:forwardValue} with maximum angle {a 64 bit floating-point number:maxAngle} within {a 64 bit floating-point number:tolerance}:
+    execute:
+        if surfaceValue's kind != 2:
+            return no cad mesh result
+        set faceNode to the cad node pointer for faceKey in bodyValue
+        if faceNode = (0 as the type of faceNode):
+            return no cad mesh result
+        set faceValue to @intrinsic("dereference", faceNode)
+        if (the length of ((faceValue's loops's values))) != 1:
+            return no cad mesh result
+        set loopNode to the cad node pointer for (the item at 0 in ((faceValue's loops's values))) in bodyValue
+        if loopNode = (0 as the type of loopNode):
+            return no cad mesh result
+        set loopValue to @intrinsic("dereference", loopNode)
+        if (the length of ((loopValue's coedges's values))) != 3:
+            return no cad mesh result
+        set boundaries to the cad boundary parts of faceKey in bodyValue within tolerance
+        if boundaries's valid = false:
+            return no cad mesh result
+        if (the length of ((boundaries's parts's values))) != 3:
+            return no cad mesh result
+        set rimIndex to -1
+        set rimCount to 0
+        loop partIndex from 0 to 3:
+            set partValue to the item at partIndex in ((boundaries's parts's values))
+            set firstPoint to the cad point on partValue's curve at 0.0
+            set lastPoint to the cad point on partValue's curve at 1.0
+            if ((the absolute value of (firstPoint's y - lastPoint's y)) <= tolerance) and ((the absolute value of (lastPoint's x - firstPoint's x)) >= 3.141592653589793):
+                set rimIndex to partIndex
+                increment rimCount
+        if rimCount != 1:
+            return no cad mesh result
+        set rimPart to the item at rimIndex in ((boundaries's parts's values))
+        set rimFirst to the cad point on rimPart's curve at 0.0
+        set rimLast to the cad point on rimPart's curve at 1.0
+        set rimV to (rimFirst's y + rimLast's y) * 0.5
+        set apexV to 0.0
+        set apexSet to false
+        set firstSeamIndex and secondSeamIndex to -1
+        set seamCount to 0
+        set validSeams to true
+        loop partIndex from 0 to 3:
+            if partIndex != rimIndex:
+                set partValue to the item at partIndex in ((boundaries's parts's values))
+                set firstPoint to the cad point on partValue's curve at 0.0
+                set lastPoint to the cad point on partValue's curve at 1.0
+                set candidateValid to false
+                set candidateV to 0.0
+                if (the absolute value of (firstPoint's y - rimV)) <= tolerance:
+                    set candidateValid to true
+                    set candidateV to lastPoint's y
+                else if (the absolute value of (lastPoint's y - rimV)) <= tolerance:
+                    set candidateValid to true
+                    set candidateV to firstPoint's y
+                if ((the absolute value of (lastPoint's x - firstPoint's x)) > tolerance) or (candidateValid = false):
+                    set validSeams to false
+                if candidateValid:
+                    if apexSet:
+                        if (the absolute value of (candidateV - apexV)) > tolerance:
+                            set validSeams to false
+                    else:
+                        set apexV to candidateV
+                        set apexSet to true
+                if seamCount = 0:
+                    set firstSeamIndex to partIndex
+                else:
+                    set secondSeamIndex to partIndex
+                increment seamCount
+        if (validSeams = false) or ((apexSet = false) or (seamCount != 2)):
+            return no cad mesh result
+        set firstSeamPart to the item at firstSeamIndex in ((boundaries's parts's values))
+        set secondSeamPart to the item at secondSeamIndex in ((boundaries's parts's values))
+        set firstSeamNode to the cad node pointer for firstSeamPart's coedge in bodyValue
+        set secondSeamNode to the cad node pointer for secondSeamPart's coedge in bodyValue
+        if (firstSeamNode = (0 as the type of firstSeamNode)) or (secondSeamNode = (0 as the type of secondSeamNode)):
+            return no cad mesh result
+        set firstSeam to @intrinsic("dereference", firstSeamNode)
+        set secondSeam to @intrinsic("dereference", secondSeamNode)
+        if (firstSeam's edge != secondSeam's edge) or (firstSeam's forward = secondSeam's forward):
+            return no cad mesh result
+        set firstApex to the cad point on surfaceValue at parameters rimFirst's x and apexV
+        set lastApex to the cad point on surfaceValue at parameters rimLast's x and apexV
+        if (the cad distance from firstApex to lastApex) > tolerance:
+            return no cad mesh result
+        set segmentCount to the cad mesh divisions of rimPart's coedge in bodyValue within angle maxAngle
+        if segmentCount <= 0:
+            return no cad mesh result
+        set outputMesh to an empty cad mesh
+        loop segmentIndex from 0 to segmentCount:
+            set u0 to rimFirst's x + (((rimLast's x - rimFirst's x) * (segmentIndex as a 64 bit floating-point number)) / (segmentCount as a 64 bit floating-point number))
+            set u1 to rimFirst's x + (((rimLast's x - rimFirst's x) * ((segmentIndex + 1) as a 64 bit floating-point number)) / (segmentCount as a 64 bit floating-point number))
+            set firstParameter to a cad vector2 with x u0 and y rimV
+            set secondParameter to a cad vector2 with x u1 and y rimV
+            set apexParameter to a cad vector2 with x u1 and y apexV
+            append cad mesh surface cell triangle on surfaceValue at firstParameter secondParameter apexParameter forward forwardValue within tolerance into (the address of outputMesh)
+        return @intrinsic("construct", a cad mesh result, (the cad triangle count of outputMesh) > 0, outputMesh)
+
+to get the cad mesh of {cad face key:faceKey} in {cad body:bodyValue} with maximum angle {a 64 bit floating-point number:maxAngle} within {a 64 bit floating-point number:tolerance}:
+    set outputMesh to an empty cad mesh
+    set faceNode to the cad node pointer for faceKey in bodyValue
+    if faceNode = (0 as the type of faceNode):
+        return outputMesh
+    set faceValue to @intrinsic("dereference", faceNode)
+    set surfaceNode to the cad node pointer for faceValue's surface in bodyValue
+    if surfaceNode = (0 as the type of surfaceNode):
+        return outputMesh
+    set surfaceValue to @intrinsic("dereference", surfaceNode)
+    if surfaceValue's kind = 5:
+        set nurbsPatch to the cad mesh nurbs patch of faceKey in bodyValue on surfaceValue within tolerance
+        if nurbsPatch's valid:
+            set nurbsMesh to the cad mesh of nurbs patch nurbsPatch on surfaceValue forward faceValue's forward with maximum angle maxAngle within tolerance
+            if (the cad triangle count of nurbsMesh) > 0:
+                free cad mesh outputMesh
+                return nurbsMesh
+            free cad mesh nurbsMesh
+    if (surfaceValue's kind is one of 3 and 4) and (cad mesh face faceValue is whole periodic in bodyValue):
+        free cad mesh outputMesh
+        return the cad whole surface mesh on surfaceValue forward faceValue's forward with maximum angle maxAngle within tolerance
+    if surfaceValue's kind is one of 1 and 2:
+        set periodicBand to the cad periodic band mesh of faceKey in bodyValue on surfaceValue forward faceValue's forward with maximum angle maxAngle within tolerance
+        if periodicBand's valid:
+            free cad mesh outputMesh
+            return periodicBand's value
+    if surfaceValue's kind = 2:
+        set singularCone to the cad singular cone mesh of faceKey in bodyValue on surfaceValue forward faceValue's forward with maximum angle maxAngle within tolerance
+        if singularCone's valid:
+            free cad mesh outputMesh
+            return singularCone's value
+    set boundaryVertices to an empty list of a cad mesh boundary vertex
+    set ringValues to cad mesh rings of faceKey in bodyValue within angle maxAngle and tolerance tolerance collecting boundaryVertices
+    if (the length of ringValues) = 0:
+        cad mesh release rings ringValues
+        free boundaryVertices
+        return outputMesh
+    set constrainedResult to the cad constrained mesh of rings ringValues
+    cad mesh release rings ringValues
+    if constrainedResult's valid = false:
+        free boundaryVertices
+        return outputMesh
+    set parameterTriangles to the cad constrained triangles of constrainedResult's value
+    for each parameterTriangle in parameterTriangles:
+        set firstPoint to the cad mesh point at parameterTriangle's first on surfaceValue among boundaryVertices within tolerance
+        set secondPoint to the cad mesh point at parameterTriangle's second on surfaceValue among boundaryVertices within tolerance
+        set thirdPoint to the cad mesh point at parameterTriangle's third on surfaceValue among boundaryVertices within tolerance
+        set firstNormalResult to the cad normal of surfaceValue at parameters parameterTriangle's first's x and parameterTriangle's first's y
+        set secondNormalResult to the cad normal of surfaceValue at parameters parameterTriangle's second's x and parameterTriangle's second's y
+        set thirdNormalResult to the cad normal of surfaceValue at parameters parameterTriangle's third's x and parameterTriangle's third's y
+        if (firstNormalResult's valid) and ((secondNormalResult's valid) and (thirdNormalResult's valid)):
+            set firstNormal to firstNormalResult's value
+            set secondNormal to secondNormalResult's value
+            set thirdNormal to thirdNormalResult's value
+            if faceValue's forward:
+                cad mesh append triangle from firstPoint through secondPoint to thirdPoint with normals firstNormal secondNormal thirdNormal into (the address of outputMesh)
+            else:
+                cad mesh append triangle from firstPoint through thirdPoint to secondPoint with normals (the cad negative of firstNormal) (the cad negative of thirdNormal) (the cad negative of secondNormal) into (the address of outputMesh)
+    free parameterTriangles
+    free boundaryVertices
+    free cad constrained mesh result constrainedResult
+    return outputMesh
+
+to get the cad mesh result of {cad face key:faceKey} in {cad body:bodyValue} with maximum angle {a number:requestedAngle} within {a number:requestedTolerance}:
+    set faceNode to the cad node pointer for faceKey in bodyValue
+    if faceNode = (0 as the type of faceNode):
+        return no cad mesh result
+    set maxAngle to the cad sampling angle for (requestedAngle as a 64 bit floating-point number)
+    set tolerance to requestedTolerance as a 64 bit floating-point number
+    if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+        set tolerance to 1e-9
+    set meshValue to the cad mesh of faceKey in bodyValue with maximum angle maxAngle within tolerance
+    return @intrinsic("construct", a cad mesh result, (the cad triangle count of meshValue) > 0, meshValue)
+
+function free cad mesh result {cad mesh result:resultValue}:
+    replacement:
+        set resultValue to a new (the type of resultValue)
+
+to get the cad mesh of {cad body:bodyValue} with maximum angle {a number:requestedAngle} within {a number:requestedTolerance}:
+    set maxAngle to the cad sampling angle for (requestedAngle as a 64 bit floating-point number)
+    set tolerance to requestedTolerance as a 64 bit floating-point number
+    if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+        set tolerance to 1e-9
+    set outputMesh to an empty cad mesh
+    set faceKeys to the cad face keys of bodyValue
+    loop faceIndex from 0 to the length of faceKeys:
+        set faceMesh to the cad mesh of (the item at faceIndex in faceKeys) in bodyValue with maximum angle maxAngle within tolerance
+        absorb cad mesh faceMesh into (the address of outputMesh)
+        free cad mesh faceMesh
+    free faceKeys
+    return outputMesh
+
+to sort cad mesh scalars {a pointer to a list:values}:
+    loop sourceIndex from 1 to the length of values:
+        set sourceValue to the item at sourceIndex in values
+        set destinationIndex to sourceIndex
+        set searching to true
+        loop while searching and (destinationIndex > 0):
+            set previousValue to the item at (destinationIndex - 1) in values
+            if previousValue > sourceValue:
+                replace item at index destinationIndex in values with previousValue
+                set destinationIndex to destinationIndex - 1
+            else:
+                set searching to false
+        replace item at index destinationIndex in values with sourceValue

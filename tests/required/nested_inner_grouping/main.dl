@@ -1,15 +1,12 @@
 import lib/std.dl
 
-function the text of {integer:value}:
-    execute:
-        return the string form of value
+to get the text of {integer:value}:
+    return the string form of value
 
-function {string:text} at character {integer:index}:
-    execute:
-        return the character at index in text
+to get {string:text} at character {integer:index}:
+    return the character at index in text
 
-function {integer:number} at character {integer:index}:
-    execute:
-        return the remainder of (number / (10 raised to the power of index)) divided by 10
+to get {integer:number} at character {integer:index}:
+    return (number / (10 raised to the power of index)) mod 10
 
-print the length of (the text of 123 at character 0) as a line
+print line the length of (the text of 123 at character 0)

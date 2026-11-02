@@ -1,0 +1,10 @@
+# Both branches are inferred; only the selected branch changes known state.
+@intrinsic("select", @intrinsic("equal", 1, 1), @intrinsic("store", count, 1), @intrinsic("store", count, 2))
+@intrinsic("store", selectedSize, @intrinsic("size of", @intrinsic("array", count, @intrinsic("type", "int"))))
+
+to get the selected count:
+    @intrinsic("select", @intrinsic("equal", 1, 1), @intrinsic("store", localCount, 1), @intrinsic("store", localCount, 2))
+    @intrinsic("return", localCount)
+
+@intrinsic("store", pureSize, @intrinsic("size of", @intrinsic("array", the selected count, @intrinsic("type", "int"))))
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", selectedSize, 4), @intrinsic("subtract", pureSize, 4)))

@@ -97,9 +97,9 @@ ParseContext::SectionFlexBodyFrame &activeSectionFlexBodyFrame(ParseContext &con
 bool emitSectionFlexCallerBody(
 	ParseContext &context, ParseContext::SectionFlexBodyFrame &frame, Section *executionSection, bool finalizeControlFlow = true
 );
-bool generateSpecializedFunction(
+llvm::Function *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	Instantiation &instantiation
+	Instantiation &instantiation, const std::vector<llvm::Value *> &arguments
 );
 bool ensureCallableFunctionGenerated(
 	ParseContext &context, const CallableFunctionMatch &match, Instantiation &instantiation, bool requireExternalLinkage,

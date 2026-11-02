@@ -3,9 +3,8 @@ import lib/std.dl
 in this file, by default:
     everything is local
 
-function secret value:
-    execute:
-        return 7
+to get secret value:
+    return 7
 
 class:
     patterns:

@@ -7,15 +7,9 @@ import lib/bim/brep_bounds.dl
 import lib/bim/brep_intersect.dl
 import lib/bim/brep_split.dl
 
-function cad imprint no closed form snag:
-    replacement:
-        1
-function cad imprint coincident snag:
-    replacement:
-        2
-function cad imprint cut refused snag:
-    replacement:
-        3
+cad imprint no closed form snag means: 1
+cad imprint coincident snag means: 2
+cad imprint cut refused snag means: 3
 
 class:
     patterns:
@@ -105,28 +99,27 @@ local function the cad imprint corners of {cad face key:faceKey} in {cad body:bo
         free uses
         return points
 
-function cad face {cad face key:oneKey} in {cad body:oneBody} and face {cad face key:otherKey} in {cad body:otherBody} have the same ground within {a number:givenTolerance}:
-    execute:
-        set tolerance to givenTolerance as a 64 bit floating-point number
-        set oneCorners to the cad imprint corners of oneKey in oneBody
-        set otherCorners to the cad imprint corners of otherKey in otherBody
-        if ((the length of (oneCorners's values)) = 0) or ((the length of (oneCorners's values)) != (the length of (otherCorners's values))):
-            return false
-        loop oneCursor from 0 to the length of (oneCorners's values):
-            set found to false
-            loop otherCursor from 0 to the length of (otherCorners's values):
-                if (the cad distance from (the item at oneCursor in (oneCorners's values)) to (the item at otherCursor in (otherCorners's values))) <= tolerance:
-                    set found to true
-            if found = false:
-                return false
+to get cad face {cad face key:oneKey} in {cad body:oneBody} and face {cad face key:otherKey} in {cad body:otherBody} have the same ground within {a number:givenTolerance}:
+    set tolerance to givenTolerance as a 64 bit floating-point number
+    set oneCorners to the cad imprint corners of oneKey in oneBody
+    set otherCorners to the cad imprint corners of otherKey in otherBody
+    if ((the length of (oneCorners's values)) = 0) or ((the length of (oneCorners's values)) != (the length of (otherCorners's values))):
+        return false
+    loop oneCursor from 0 to the length of (oneCorners's values):
+        set found to false
         loop otherCursor from 0 to the length of (otherCorners's values):
-            set found to false
-            loop oneCursor from 0 to the length of (oneCorners's values):
-                if (the cad distance from (the item at otherCursor in (otherCorners's values)) to (the item at oneCursor in (oneCorners's values))) <= tolerance:
-                    set found to true
-            if found = false:
-                return false
-        return true
+            if (the cad distance from (the item at oneCursor in (oneCorners's values)) to (the item at otherCursor in (otherCorners's values))) <= tolerance:
+                set found to true
+        if found = false:
+            return false
+    loop otherCursor from 0 to the length of (otherCorners's values):
+        set found to false
+        loop oneCursor from 0 to the length of (oneCorners's values):
+            if (the cad distance from (the item at otherCursor in (otherCorners's values)) to (the item at oneCursor in (oneCorners's values))) <= tolerance:
+                set found to true
+        if found = false:
+            return false
+    return true
 
 local function the cad imprint boundary curves of {cad face key:faceKey} in {cad body:body}:
     execute:
@@ -148,11 +141,9 @@ local function the cad imprint shared curves of {cad body:oneBody} and {cad body
         set output to a cad topology list of a cad imprint shared curves
         set oneFaces to the cad face keys of oneBody
         set otherFaces to the cad face keys of otherBody
-        loop oneCursor from 0 to the length of oneFaces:
-            set oneKey to the item at oneCursor in oneFaces
+        for each oneKey in oneFaces:
             set oneBounds to the cad bounds of oneKey in oneBody
-            loop otherCursor from 0 to the length of otherFaces:
-                set otherKey to the item at otherCursor in otherFaces
+            for each otherKey in otherFaces:
                 set otherBounds to the cad bounds of otherKey in otherBody
                 set shouldMeet to true
                 if oneBounds's valid and otherBounds's valid:
@@ -199,8 +190,7 @@ local function the cad imprint shared curves of {cad body:oneBody} and {cad body
 local function the cad imprint cuts in {cad body:body} along {cad topology list:curves} within {a 64 bit floating-point number:tolerance}:
     execute:
         set cutCount to 0
-        loop curveCursor from 0 to the length of (curves's values):
-            set curveValue to the item at curveCursor in (curves's values)
+        for each curveValue in (curves's values):
             set pending to the cad face keys of body
             set ceiling to (the cad count of body's faces) * 4 + 16
             set done to 0
@@ -214,8 +204,7 @@ local function the cad imprint cuts in {cad body:body} along {cad topology list:
                     set divided to the cad split of faceKey in body along curveValue within tolerance
                     if divided's valid:
                         increment cutCount
-                        append divided's kept to pending
-                        append divided's made to pending
+                        append divided's kept and divided's made to pending
             free pending
         return cad imprint cuts success cutCount
 
@@ -228,11 +217,9 @@ local function align cad imprint edge vertices from {cad body:sourceBody} into {
             if vertexNode != (0 as the type of vertexNode):
                 append vertexNode's point to (points's values)
         free vertexKeys
-        loop pointCursor from 0 to the length of (points's values):
-            set pointValue to the item at pointCursor in (points's values)
+        for each pointValue in (points's values):
             set edgeKeys to the cad edge keys of targetBody
-            loop edgeCursor from 0 to the length of edgeKeys:
-                set edgeKey to the item at edgeCursor in edgeKeys
+            for each edgeKey in edgeKeys:
                 set edgeNode to the cad node pointer for edgeKey in targetBody
                 if (edgeNode != (0 as the type of edgeNode)) and ((the length of (edgeNode's coedges's values)) > 0):
                     set splittable to true
@@ -246,7 +233,7 @@ local function align cad imprint edge vertices from {cad body:sourceBody} into {
                         set curveNode to the cad node pointer for edgeNode's curve in targetBody
                         if curveNode != (0 as the type of curveNode):
                             set located to the cad parameter on (@intrinsic("dereference", curveNode)) nearest pointValue
-                            if (curveNode's kind = 1) or (curveNode's kind = 2):
+                            if curveNode's kind is one of 1 and 2:
                                 set middle to 0.5 * (edgeNode's startParameter + edgeNode's endParameter)
                                 set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - located) / 6.283185307179586)
                                 set located to located + 6.283185307179586 * turns
@@ -257,24 +244,23 @@ local function align cad imprint edge vertices from {cad body:sourceBody} into {
                                     set ignored to the cad split of edgeKey in targetBody at parameter located
             free edgeKeys
 
-function the cad imprint of {cad body:oneBody} and {cad body:otherBody} within {a number:givenTolerance}:
-    execute:
-        set tolerance to givenTolerance as a 64 bit floating-point number
-        set shared to the cad imprint shared curves of oneBody and otherBody within tolerance
-        if shared's valid = false:
-            return cad imprint failure shared's snag
-        set cuts to 0
-        set meetingCount to the length of (shared's values's values)
-        loop sharedCursor from 0 to meetingCount:
-            set item to the item at sharedCursor in (shared's values's values)
-            set firstCuts to the cad imprint cuts in oneBody along item's curves within tolerance
-            if firstCuts's valid = false:
-                return cad imprint failure cad imprint cut refused snag
-            set cuts to cuts + firstCuts's count
-            set secondCuts to the cad imprint cuts in otherBody along item's curves within tolerance
-            if secondCuts's valid = false:
-                return cad imprint failure cad imprint cut refused snag
-            set cuts to cuts + secondCuts's count
-        align cad imprint edge vertices from oneBody into otherBody within tolerance
-        align cad imprint edge vertices from otherBody into oneBody within tolerance
-        return cad imprint success with cuts cuts and meetingCount meetings
+to get the cad imprint of {cad body:oneBody} and {cad body:otherBody} within {a number:givenTolerance}:
+    set tolerance to givenTolerance as a 64 bit floating-point number
+    set shared to the cad imprint shared curves of oneBody and otherBody within tolerance
+    if shared's valid = false:
+        return cad imprint failure shared's snag
+    set cuts to 0
+    set meetingCount to the length of (shared's values's values)
+    loop sharedCursor from 0 to meetingCount:
+        set item to the item at sharedCursor in (shared's values's values)
+        set firstCuts to the cad imprint cuts in oneBody along item's curves within tolerance
+        if firstCuts's valid = false:
+            return cad imprint failure cad imprint cut refused snag
+        set cuts to cuts + firstCuts's count
+        set secondCuts to the cad imprint cuts in otherBody along item's curves within tolerance
+        if secondCuts's valid = false:
+            return cad imprint failure cad imprint cut refused snag
+        set cuts to cuts + secondCuts's count
+    align cad imprint edge vertices from oneBody into otherBody within tolerance
+    align cad imprint edge vertices from otherBody into oneBody within tolerance
+    return cad imprint success with cuts cuts and meetingCount meetings

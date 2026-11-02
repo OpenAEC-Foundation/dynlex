@@ -1,18 +1,13 @@
 import regex.dl
 
 compile "^(ab|cd)+[0-9]?$" as a regular expression and set valid to it
-print whether valid is valid as a line
-print (the regular expression error position in "^(ab|cd)+[0-9]?$") as a line
-print whether "abcd7" matches valid as a line
+print lines (valid is valid), (the regular expression error position in "^(ab|cd)+[0-9]?$") and ("abcd7" matches valid)
 
 compile "(abc" as a regular expression and set unclosed to it
-print whether unclosed is valid as a line
-print the error position of unclosed as a line
+print lines (unclosed is valid) and (the error position of unclosed)
 
 compile "a|" as a regular expression and set empty to it
-print whether empty is valid as a line
-print the error position of empty as a line
+print lines (empty is valid) and (the error position of empty)
 
 compile "a**" as a regular expression and set repeated to it
-print whether repeated is valid as a line
-print the error position of repeated as a line
+print lines (repeated is valid) and (the error position of repeated)

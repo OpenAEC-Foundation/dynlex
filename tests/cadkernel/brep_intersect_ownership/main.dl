@@ -1,15 +1,13 @@
 # SPDX-License-Identifier: MPL-2.0
 import tests/cadkernel/brep_intersect/helpers.dl
-function intersect local curves:
-    execute:
-        set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
-        set other to intersect plane at [0.0,0.0,3.0] normal [0.0,0.0,1.0]
-        return the cad meeting of one and other within 1e-9
-function intersect local points:
-    execute:
-        set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
-        set other to intersect plane at [0.0,0.0,5.0] normal [0.0,0.0,1.0]
-        return the cad meeting of one and other within 1e-9
+to get intersect local curves:
+    set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+    set other to intersect plane at [0.0,0.0,3.0] normal [0.0,0.0,1.0]
+    return the cad meeting of one and other within 1e-9
+to get intersect local points:
+    set one to intersect sphere at [0.0,0.0,0.0] radius 5.0
+    set other to intersect plane at [0.0,0.0,5.0] normal [0.0,0.0,1.0]
+    return the cad meeting of one and other within 1e-9
 loop repetition from 0 to 100:
     set original to intersect local curves
     set retained to original
@@ -38,7 +36,7 @@ loop repetition from 0 to 100:
     set returned to the item at 0 in heldValues
     free heldValues
     intersect near ((the item at 0 in returned's points)'s z) to 5.0
-print "curves_and_points_survive_returns_copies_clones_resets_and_lists" as a line
+print line "curves_and_points_survive_returns_copies_clones_resets_and_lists"
 set absent to no cad surface meeting
 set unknown to an unknown cad surface meeting
 set coincident to a coincident cad surface meeting
@@ -50,4 +48,4 @@ check intersect (coincident = (the cad clone of coincident))
 free cad meeting absent
 set cloned to the cad clone of absent
 check intersect (cloned = (no cad surface meeting))
-print "empty_and_zero_results_clone_and_remain_distinct" as a line
+print line "empty_and_zero_results_clone_and_remain_distinct"

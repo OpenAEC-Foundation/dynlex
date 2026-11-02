@@ -4,9 +4,8 @@ import tests/required/scope_rules_local_default/helper.dl
 in this file, by default:
     everything is local
 
-function secret value:
-    execute:
-        return 1
+to get secret value:
+    return 1
 
 class:
     patterns:
@@ -14,5 +13,4 @@ class:
     members:
         amount as an integer
 
-print the shared value as a line
-print secret value as a line
+print lines (the shared value) and (secret value)

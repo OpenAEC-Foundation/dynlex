@@ -4,20 +4,17 @@
 
 import lib/bim/intersect2.dl
 
-function cad intersect check {boolean:passed} named {C string:label}:
-    execute:
-        if the inverse of passed:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to cad intersect check {boolean:passed} named {C string:label}:
+    if not passed:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function cad intersect scalar {a 64 bit floating-point number:actual} equals {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:epsilon} named {C string:label}:
-    execute:
-        cad intersect check ((the absolute value of (actual - expected)) < epsilon) named label
+to cad intersect scalar {a 64 bit floating-point number:actual} equals {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:epsilon} named {C string:label}:
+    cad intersect check ((the absolute value of (actual - expected)) < epsilon) named label
 
-function cad intersect point {cad vector2:actual} equals {cad vector2:expected} within {a 64 bit floating-point number:epsilon} named {C string:label}:
-    execute:
-        cad intersect scalar actual's x equals expected's x within epsilon named label
-        cad intersect scalar actual's y equals expected's y within epsilon named label
+to cad intersect point {cad vector2:actual} equals {cad vector2:expected} within {a 64 bit floating-point number:epsilon} named {C string:label}:
+    cad intersect scalar actual's x equals expected's x within epsilon named label
+    cad intersect scalar actual's y equals expected's y within epsilon named label
 
 set origin to the cad zero vector2
 set right to a cad vector2 with x 1.0 and y 0.0
@@ -32,9 +29,9 @@ cad intersect check crossing's valid named "crossing lines have a hit"
 cad intersect scalar crossing's value's first equals 5.0 within 1e-12 named "crossing first parameter"
 cad intersect scalar crossing's value's second equals 5.0 within 1e-12 named "crossing second parameter"
 set parallel to cad line intersection from origin along right with (a cad vector2 with x 0.0 and y 3.0) along right
-cad intersect check (the inverse of parallel's valid) named "parallel lines have no crossing"
+cad intersect check (not parallel's valid) named "parallel lines have no crossing"
 set coincident to cad line intersection from origin along right with (a cad vector2 with x 2.0 and y 0.0) along right
-cad intersect check (the inverse of coincident's valid) named "coincident lines have no discrete crossing"
+cad intersect check (not coincident's valid) named "coincident lines have no discrete crossing"
 set extended to cad line intersection from origin along right with (a cad vector2 with x 100.0 and y (-1.0)) along up
 cad intersect check (extended's valid and (extended's value's first > 1.0)) named "line parameters extend past endpoints"
 
@@ -67,8 +64,7 @@ cad intersect scalar secondAngle equals (pi / 3.0) within 1e-12 named "second ci
 free angles
 set points to cad circle intersection points at origin with radius 1.0 and at right with radius 1.0
 cad intersect check ((the length of points) = 2) named "circle point form has two hits"
-loop index from 0 to the length of points:
-    set point to the item at index in points
+for each point in points:
     cad intersect scalar (the cad length of point) equals 1.0 within 1e-9 named "point lies on first circle"
     cad intersect scalar (the cad distance from point to right) equals 1.0 within 1e-9 named "point lies on second circle"
 free points
@@ -101,8 +97,7 @@ set lineOrigin to a cad vector2 with x (-6.0) and y (-4.0)
 set lineDirection to a cad vector2 with x 1.0 and y 0.3
 set skewHits to cad line ellipse intersections from lineOrigin along lineDirection with rotated
 cad intersect check ((the length of skewHits) = 2) named "skew line crosses rotated ellipse twice"
-loop index from 0 to the length of skewHits:
-    set hit to the item at index in skewHits
+for each hit in skewHits:
     set onLine to the cad sum of lineOrigin and (lineDirection scaled by hit's first)
     set onEllipse to the cad point on rotated at hit's second
     cad intersect point onLine equals onEllipse within 1e-9 named "ellipse parameter reproduces rotated crossing"
@@ -110,8 +105,7 @@ free skewHits
 set wide to a cad ellipse at origin with radii 5.0 and 2.0 along right
 set diagonalHits to cad line ellipse intersections from (a cad vector2 with x (-10.0) and y 1.0) along right with wide
 cad intersect check ((the length of diagonalHits) = 2) named "line across upper ellipse has two hits"
-loop index from 0 to the length of diagonalHits:
-    set hit to the item at index in diagonalHits
+for each hit in diagonalHits:
     set onLine to a cad vector2 with x (-10.0 + hit's first) and y 1.0
     set centreAngle to the cad angle of onLine
     cad intersect check ((the absolute value of (hit's second - centreAngle)) > 0.1) named "ellipse parameter differs from geometric angle"
@@ -140,11 +134,11 @@ cad intersect scalar ((the cosine of (the item at 0 in verticalAngles)) + (the c
 loop index from 0 to the length of verticalAngles:
     cad intersect check ((the sine of (the item at index in verticalAngles)) > 0.0) named "vertical circle hits lie above centre"
 free verticalAngles
-print "cadkernel intersect2 upstream fixtures passed" as a line
+print line "cadkernel intersect2 upstream fixtures passed"
 
 # Thresholds are determinant/discriminant values, never world-distance tolerance.
 set belowDeterminant to cad line intersection from origin along right with up along (a cad vector2 with x 1.0 and y 5e-11)
-cad intersect check (the inverse of belowDeterminant's valid) named "determinant below threshold refused"
+cad intersect check (not belowDeterminant's valid) named "determinant below threshold refused"
 set atDeterminant to cad line intersection from origin along right with up along (a cad vector2 with x 1.0 and y 1e-10)
 cad intersect check atDeterminant's valid named "determinant threshold is strict"
 cad intersect scalar atDeterminant's value's first equals (-1e10) within 1e-5 named "negative line parameter remains unbounded"
@@ -211,11 +205,10 @@ free atRadiusHits
 set negativeEllipse to a cad ellipse at origin with radii (-3.0) and (-2.0) along right
 set negativeEllipseHits to cad line ellipse intersections from origin along right with negativeEllipse
 cad intersect check ((the length of negativeEllipseHits) = 2) named "negative ellipse radii retain upstream geometry"
-loop index from 0 to the length of negativeEllipseHits:
-    set hit to the item at index in negativeEllipseHits
+for each hit in negativeEllipseHits:
     cad intersect point (the cad point on negativeEllipse at hit's second) equals (right scaled by hit's first) within 1e-12 named "negative ellipse parameter reconstruction"
 free negativeEllipseHits
-print "cadkernel intersect2 boundary fixtures passed" as a line
+print line "cadkernel intersect2 boundary fixtures passed"
 
 # Complete Ellipse behavior: constructor, axes, point_at, degeneracy and equality.
 cad intersect point ellipse's centre equals origin within 1e-12 named "ellipse centre retained"
@@ -232,32 +225,32 @@ cad intersect point (the cad minor axis of rawAxisEllipse) equals (up scaled by 
 cad intersect point (the cad point on rawAxisEllipse at 0.0) equals (a cad vector2 with x 13.0 and y 8.0) within 1e-12 named "ellipse point retains raw axis magnitude"
 cad intersect check (cad flat is degenerate) named "zero major radius degenerate"
 cad intersect check (cad (a cad ellipse at origin with radii 3.0 and 5e-21 along right) is degenerate) named "tiny minor radius degenerate"
-cad intersect check (the inverse of (cad atRadius is degenerate)) named "radius threshold not degenerate"
-cad intersect check (the inverse of (cad negativeEllipse is degenerate)) named "negative finite radii not degenerate"
+cad intersect check (not (cad atRadius is degenerate)) named "radius threshold not degenerate"
+cad intersect check (not (cad negativeEllipse is degenerate)) named "negative finite radii not degenerate"
 cad intersect check (cad ellipse equals (a cad ellipse at origin with radii 3.0 and 2.0 along right)) named "ellipse value equality"
-cad intersect check (the inverse of (cad ellipse equals negativeEllipse)) named "ellipse unequal radii"
-cad intersect check (the inverse of (cad ellipse equals (a cad ellipse at up with radii 3.0 and 2.0 along right))) named "ellipse unequal centre"
-cad intersect check (the inverse of (cad ellipse equals (a cad ellipse at origin with radii 3.0 and 2.0 along up))) named "ellipse unequal axis"
-print "cadkernel ellipse fixtures passed" as a line
+cad intersect check (not (cad ellipse equals negativeEllipse)) named "ellipse unequal radii"
+cad intersect check (not (cad ellipse equals (a cad ellipse at up with radii 3.0 and 2.0 along right))) named "ellipse unequal centre"
+cad intersect check (not (cad ellipse equals (a cad ellipse at origin with radii 3.0 and 2.0 along up))) named "ellipse unequal axis"
+print line "cadkernel ellipse fixtures passed"
 
 # Tolerance upstream equality test plus positive, inclusive and IEEE boundaries.
 set tolerance to a cad tolerance of 1e-3
 cad intersect check (cad 1.0 and 1.0005 are equal within tolerance) named "tolerance accepts nearby scalars"
-cad intersect check (the inverse of (cad 1.0 and 1.002 are equal within tolerance)) named "tolerance rejects distant scalars"
+cad intersect check (not (cad 1.0 and 1.002 are equal within tolerance)) named "tolerance rejects distant scalars"
 cad intersect scalar (the cad linear tolerance of tolerance) equals 1e-3 within 1e-20 named "tolerance linear accessor"
 cad intersect check (cad 0.0 and 1e-3 are equal within tolerance) named "tolerance boundary is inclusive"
 cad intersect check (cad 1e-3 and 0.0 are equal within tolerance) named "tolerance equality is symmetric"
-cad intersect check (the inverse of (cad 0.0 and 1.001e-3 are equal within tolerance)) named "outside tolerance boundary refused"
+cad intersect check (not (cad 0.0 and 1.001e-3 are equal within tolerance)) named "outside tolerance boundary refused"
 set defaultTolerance to the default cad tolerance
 cad intersect check ((the cad linear tolerance of defaultTolerance) = 1e-7) named "default tolerance is 1e-7"
 cad intersect check (cad 0.0 and 1e-7 are equal within defaultTolerance) named "default tolerance includes its boundary"
 cad intersect check (cad tolerance equals (a cad tolerance of 1e-3)) named "tolerance value equality"
-cad intersect check (the inverse of (cad tolerance equals defaultTolerance)) named "different tolerances differ"
+cad intersect check (not (cad tolerance equals defaultTolerance)) named "different tolerances differ"
 set minimumTolerance to a cad tolerance of 5e-324
 cad intersect check ((the cad linear tolerance of minimumTolerance) = 5e-324) named "positive subnormal tolerance accepted"
 set maximumTolerance to a cad tolerance of 1.7976931348623157e308
 cad intersect check ((the cad linear tolerance of maximumTolerance) = 1.7976931348623157e308) named "maximum finite tolerance accepted"
-print "cadkernel tolerance fixtures passed" as a line
+print line "cadkernel tolerance fixtures passed"
 
 # No additional finite-value validation is imposed on upstream intersections.
 set infinity to 1e308 * 1e308
@@ -275,14 +268,14 @@ cad intersect check ((the length of nanCircles) = 2) named "NaN circle radii ret
 cad intersect check ((the item at 1 in nanCircles) != (the item at 1 in nanCircles)) named "NaN circle angle propagates"
 free nanCircles
 set nanEllipse to a cad ellipse at origin with radii notANumber and 2.0 along right
-cad intersect check (the inverse of (cad nanEllipse is degenerate)) named "NaN radius is not degenerate by upstream threshold"
-cad intersect check (the inverse of (cad nanEllipse equals nanEllipse)) named "ellipse NaN equality is not reflexive"
+cad intersect check (not (cad nanEllipse is degenerate)) named "NaN radius is not degenerate by upstream threshold"
+cad intersect check (not (cad nanEllipse equals nanEllipse)) named "ellipse NaN equality is not reflexive"
 set nanEllipseHits to cad line ellipse intersections from origin along right with nanEllipse
 cad intersect check ((the length of nanEllipseHits) = 2) named "NaN ellipse retains two parameter pairs"
 set nanHit to the item at 0 in nanEllipseHits
 cad intersect check ((nanHit's first != nanHit's first) and (nanHit's second != nanHit's second)) named "NaN ellipse parameter pair propagates"
 free nanEllipseHits
-cad intersect check (the inverse of (cad infinity and infinity are equal within tolerance)) named "tolerance rejects equal infinities"
-cad intersect check (the inverse of (cad notANumber and 0.0 are equal within tolerance)) named "tolerance rejects NaN comparison"
-cad intersect check (the inverse of (cad 1.7976931348623157e308 and (-1.7976931348623157e308) are equal within maximumTolerance)) named "tolerance preserves overflowed difference"
-print "cadkernel intersect2 IEEE fixtures passed" as a line
+cad intersect check (not (cad infinity and infinity are equal within tolerance)) named "tolerance rejects equal infinities"
+cad intersect check (not (cad notANumber and 0.0 are equal within tolerance)) named "tolerance rejects NaN comparison"
+cad intersect check (not (cad 1.7976931348623157e308 and (-1.7976931348623157e308) are equal within maximumTolerance)) named "tolerance preserves overflowed difference"
+print line "cadkernel intersect2 IEEE fixtures passed"

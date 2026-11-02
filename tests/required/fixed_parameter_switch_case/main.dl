@@ -1,11 +1,10 @@
 import lib/std.dl
 
-function the selected value for {fixed integer:choice}:
-    execute:
-        match based on choice:
-            case choice:
-                return 17
-            otherwise:
-                return 0
+to get the selected value for {fixed integer:choice}:
+    match based on choice:
+        case choice:
+            return 17
+        otherwise:
+            return 0
 
-print the selected value for 3 as a line
+print line the selected value for 3

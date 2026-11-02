@@ -6,18 +6,16 @@ flex section if condition:
 	replacement:
 		@intrinsic("if", condition)
 
-function the first recursive result for value:
-	execute:
-		if @intrinsic("not equal", value, 0):
-			@intrinsic("store", answer, the second recursive result for @intrinsic("subtract", value, 1))
-			@intrinsic("return", answer)
-		@intrinsic("return", @intrinsic("equal", value, 0))
+to get the first recursive result for value:
+	if @intrinsic("not equal", value, 0):
+		@intrinsic("store", answer, the second recursive result for @intrinsic("subtract", value, 1))
+		@intrinsic("return", answer)
+	@intrinsic("return", @intrinsic("equal", value, 0))
 
-function the second recursive result for value:
-	execute:
-		if @intrinsic("not equal", value, 0):
-			@intrinsic("store", answer, the first recursive result for @intrinsic("subtract", value, 1))
-			@intrinsic("return", answer)
-		@intrinsic("return", @intrinsic("equal", value, 0))
+to get the second recursive result for value:
+	if @intrinsic("not equal", value, 0):
+		@intrinsic("store", answer, the first recursive result for @intrinsic("subtract", value, 1))
+		@intrinsic("return", answer)
+	@intrinsic("return", @intrinsic("equal", value, 0))
 
 ignore the first recursive result for 2

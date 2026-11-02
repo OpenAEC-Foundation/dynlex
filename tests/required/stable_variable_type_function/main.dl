@@ -1,8 +1,7 @@
 import lib/std.dl
 
-function the integer form of {floating-point number:value}:
-    execute:
-        return value as a 32 bit integer
+to get the integer form of {floating-point number:value}:
+    return value as a 32 bit integer
 
 set number to 4.0
 set number to the integer form of number

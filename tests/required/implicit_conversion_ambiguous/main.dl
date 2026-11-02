@@ -14,8 +14,7 @@ implicitly convert {integer:second}:
     replacement:
         @intrinsic("construct", a number box, second)
 
-function the payload unwrapped from {a number box:boxed}:
-    execute:
-        return the payload of boxed
+to get the payload unwrapped from {a number box:boxed}:
+    return the payload of boxed
 
-print (the payload unwrapped from 8) as a line
+print line (the payload unwrapped from 8)

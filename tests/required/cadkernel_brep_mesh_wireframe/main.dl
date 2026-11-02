@@ -2,11 +2,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh wireframe {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh wireframe {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set solidResult to the cad cuboid at the cad zero vector3 with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
 check mesh wireframe (solidResult's valid) named "box"
@@ -43,4 +42,4 @@ check mesh wireframe ((the length of bodyMesh's missingFaces) = 0) named "no mis
 check mesh wireframe ((bodyMesh's precision) >= 1e-12) named "silhouette precision"
 free cad body mesh bodyMesh
 
-print "cadkernel brep mesh wireframe: PASS" as a line
+print line "cadkernel brep mesh wireframe: PASS"

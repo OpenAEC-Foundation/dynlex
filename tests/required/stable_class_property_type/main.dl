@@ -2,13 +2,9 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] C string:
-    replacement:
-        @intrinsic("type", "string")
+[a|] C string means: @intrinsic("type", "string")
 
 class:
     patterns:

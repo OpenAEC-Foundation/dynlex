@@ -2,6 +2,5 @@ import lib/std.dl
 import tests/required/local_functions/first.dl
 import tests/required/local_functions/second.dl
 
-print the result from first module as a line
-print the result from second module as a line
+print lines (the result from first module) and (the result from second module)
 visibility 1 before

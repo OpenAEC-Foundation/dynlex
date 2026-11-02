@@ -11,4 +11,4 @@ if maximum != (340282346638528859811704183484516925440.0 as a 32 bit floating-po
 if (scientific scale tiny) != (1.0 as a 32 bit floating-point number):
     @intrinsic("call", "libc", "exit", nothing, 1)
 
-print tiny as a line
+print line tiny

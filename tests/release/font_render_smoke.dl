@@ -11,7 +11,7 @@ if font loading failed:
     set {font release} to the result of releasing (the address of typeface)
     close the window
     return 1
-if typeface's texture is loaded = false:
+if typeface's cache = (0 as a pointer to a font cache):
     set {font release} to the result of releasing (the address of typeface)
     close the window
     return 1
@@ -21,9 +21,19 @@ use screen coordinates in frame
 set rendering to the result of drawing "A A" as text at x 16 and y 48 using typeface in color red 255, green 255 and blue 255 in frame
 display frame
 
+set glyph to typeface's cache's first
+set glyphCount to 0
+set renderedGlyphLoaded to false
+loop while glyph != (0 as a pointer to a font glyph):
+    if glyph's code = 65:
+        set renderedGlyphLoaded to glyph's texture is loaded
+    increment glyphCount
+    set glyph to glyph's next
+set cacheValid to (glyphCount = 2) and renderedGlyphLoaded
+
 set {font release} to the result of releasing (the address of typeface)
-set cleared to ((typeface's library = 0 as a pointer to a byte) and (typeface's face = 0 as a pointer to a byte)) and (typeface's texture is loaded = false)
+set cleared to ((typeface's library = 0 as a pointer to a byte) and (typeface's face = 0 as a pointer to a byte)) and (typeface's cache = (0 as a pointer to a font cache))
 close the window
-if rendering failed or (font release failed or (cleared = false)):
+if rendering failed or (font release failed or (not cleared or not cacheValid)):
     return 1
 return 0

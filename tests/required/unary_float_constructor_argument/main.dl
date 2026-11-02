@@ -11,4 +11,4 @@ a point with x {floating-point number:x} and y {floating-point number:y} means: 
 
 set half to 2.5
 set point to a point with x -half and y half
-print point's x as a line
+print line point's x

@@ -1,5 +1,3 @@
 import main.dl
 
-function relay the imported message:
-	execute:
-		print the imported message
+to relay the imported message: print the imported message

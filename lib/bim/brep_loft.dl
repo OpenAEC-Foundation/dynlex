@@ -15,19 +15,17 @@ class:
     members:
         plane as a cad plane
         profile as the type of (a cad topology list of the type of (the cad curve2 of (a new cad line2)))
-function a cad loft section on {cad plane:plane} with profile {a pointer to a list:profile}:
-    execute:
-        check cad loft (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in profile))
-        set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
-        loop index from 0 to the length of profile:
-            append (the item at index in profile) to (copied's values)
-        return @intrinsic("construct", a cad loft section, plane, copied)
-function the cad clone of {cad loft section:section}:
-    execute:
-        set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
-        loop index from 0 to the length of (section's profile's values):
-            append (the cad clone of (the item at index in (section's profile's values))) to (copied's values)
-        return @intrinsic("construct", a cad loft section, section's plane, copied)
+to get a cad loft section on {cad plane:plane} with profile {a pointer to a list:profile}:
+    check cad loft (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in profile))
+    set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+    loop index from 0 to the length of profile:
+        append (the item at index in profile) to (copied's values)
+    return @intrinsic("construct", a cad loft section, plane, copied)
+to get the cad clone of {cad loft section:section}:
+    set copied to a cad topology list of the type of (the cad curve2 of (a new cad line2))
+    loop index from 0 to the length of (section's profile's values):
+        append (the cad clone of (the item at index in (section's profile's values))) to (copied's values)
+    return @intrinsic("construct", a cad loft section, section's plane, copied)
 local function check cad loft expected against {the type of expected:actual}:
     execute:
         ignore expected
@@ -70,10 +68,8 @@ local function cad loft centre of {cad topology list:points}:
 local function cad loft tolerance of {cad topology list:rings}:
     execute:
         set scale to 1.0
-        loop row from 0 to the length of (rings's values):
-            set ring to the item at row in (rings's values)
-            loop col from 0 to the length of (ring's points's values):
-                set point to the item at col in (ring's points's values)
+        for each ring in (rings's values):
+            for each point in (ring's points's values):
                 set scale to the maximum of scale and (the absolute value of (point's x))
                 set scale to the maximum of scale and (the absolute value of (point's y))
                 set scale to the maximum of scale and (the absolute value of (point's z))
@@ -102,7 +98,7 @@ local function cad loft aligned points {cad topology list:ring} after {cad topol
                     set at to shift + index
                     if reverse = 1:
                         set at to (shift + count) - index
-                    set point to the item at (the remainder of at divided by count) in (ring's values)
+                    set point to the item at (at mod count) in (ring's values)
                     append point to (candidate's values)
                     set delta to the cad difference of (the item at index in (previous's values)) and point
                     set cost to cost + (the cad dot of delta and delta)
@@ -123,7 +119,7 @@ local function cad loft aligned curves {cad topology list:ring} after {cad topol
                     set at to shift + index
                     if reverse = 1:
                         set at to ((shift + count) - 1) - index
-                    set curve to the item at (the remainder of at divided by count) in (ring's values)
+                    set curve to the item at (at mod count) in (ring's values)
                     if reverse = 1:
                         set curve to the cad reverse of curve
                     append curve to (candidate's values)
@@ -164,8 +160,7 @@ local function cad loft [face] in {cad body:body} within {cad shell key:shellKey
             return false
         set faceKey to the cad body key after inserting (a cad face on surfaceKey forward forward owned by shellKey with provenance (the synthesized cad provenance)) into body
         set loopKey to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
-        loop index from 0 to the length of (circuit's values):
-            set usage to the item at index in (circuit's values)
+        for each usage at index in (circuit's values):
             set pcurve to no cad pcurve
             if hasPcurves:
                 set pcurve to the cad pcurve of (the item at index in (pcurves's values))
@@ -202,12 +197,10 @@ local function cad loft cap in {cad body:body} within {cad shell key:shell} on {
 local function cad loft unit pcurves:
     execute:
         set corners to a list containing (a cad vector2 with x 0.0 and y 0.0)
-        append (a cad vector2 with x 1.0 and y 0.0) to corners
-        append (a cad vector2 with x 1.0 and y 1.0) to corners
-        append (a cad vector2 with x 0.0 and y 1.0) to corners
+        append (a cad vector2 with x 1.0 and y 0.0), (a cad vector2 with x 1.0 and y 1.0) and (a cad vector2 with x 0.0 and y 1.0) to corners
         set result to a cad topology list of the type of (the cad curve2 of (a new cad line2))
         loop index from 0 to 4:
-            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at (the remainder of (index + 1) divided by 4) in corners))) to (result's values)
+            append (the cad curve2 of (a cad line2 from (the item at index in corners) to (the item at ((index + 1) mod 4) in corners))) to (result's values)
         free corners
         return result
 local function cad loft bilinear from {cad vector3:a} through {cad vector3:b} and {cad vector3:c} to {cad vector3:d}:
@@ -219,9 +212,7 @@ local function cad loft bilinear from {cad vector3:a} through {cad vector3:b} an
         set points to a list containing first
         append last to points
         set knots to a list containing 0.0
-        append 0.0 to knots
-        append 1.0 to knots
-        append 1.0 to knots
+        append 0.0, 1.0 and 1.0 to knots
         set weightRow to a list containing 1.0
         append 1.0 to weightRow
         set weights to a list containing weightRow
@@ -330,7 +321,7 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
             set ring to the item at row in (rings's values)
             loop index from 0 to count:
                 set start to the item at index in (ring's vertices's values)
-                set end to the item at (the remainder of (index + 1) divided by count) in (ring's vertices's values)
+                set end to the item at ((index + 1) mod count) in (ring's vertices's values)
                 set edge to a new cad loft edge result
                 if curved:
                     set edge to cad loft nurbs edge on (the item at index in (ring's curves's values)) from start to end in body
@@ -351,8 +342,7 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
         set lastRing to the item at lastIndex in (rings's values)
         set firstNormal to the cad zero vector3
         set lastNormal to the cad zero vector3
-        set firstAlong to false
-        set lastAlong to false
+        set firstAlong and lastAlong to false
         if curved:
             set firstFrameNormal to the cad normal of (firstSection's plane)
             set lastSection to the item at lastIndex in sections
@@ -395,12 +385,9 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
             set lower to the item at band in (rings's values)
             set upper to the item at (band + 1) in (rings's values)
             loop index from 0 to count:
-                set next to the remainder of (index + 1) divided by count
+                set next to (index + 1) mod count
                 set circuit to a cad topology list of a cad loft use
-                append (cad loft use of (the item at index in (lower's rims's values)) forward true) to (circuit's values)
-                append (cad loft use of (the item at next in (lower's rails's values)) forward true) to (circuit's values)
-                append (cad loft use of (the item at index in (upper's rims's values)) forward false) to (circuit's values)
-                append (cad loft use of (the item at index in (lower's rails's values)) forward false) to (circuit's values)
+                append (cad loft use of (the item at index in (lower's rims's values)) forward true), (cad loft use of (the item at next in (lower's rails's values)) forward true), (cad loft use of (the item at index in (upper's rims's values)) forward false) and (cad loft use of (the item at index in (lower's rails's values)) forward false) to (circuit's values)
                 set surface to the cad surface of (the cad xy plane)
                 set pcurves to a cad topology list of the type of (the cad curve2 of (a new cad line2))
                 set forward to true
@@ -446,16 +433,13 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
         append lumpKey to (body's roots)
         return the validated cad body result of body
 
-function the cad loft through {a pointer to a list:sections}:
-    execute:
-        check cad loft (0 as a pointer to a cad loft section) against (0 as a pointer to the type of (the item at 0 in sections))
-        set curved to false
-        loop row from 0 to the length of sections:
-            set section to the item at row in sections
-            loop index from 0 to the length of (section's profile's values):
-                if ((the item at index in (section's profile's values))'s kind) != 0:
-                    set curved to true
-        return cad loft build sections curved curved aligning true
-function the ordered cad polygon loft through {a pointer to a list:sections}:
-    execute:
-        return cad loft build sections curved false aligning false
+to get the cad loft through {a pointer to a list:sections}:
+    check cad loft (0 as a pointer to a cad loft section) against (0 as a pointer to the type of (the item at 0 in sections))
+    set curved to false
+    for each section in sections:
+        loop index from 0 to the length of (section's profile's values):
+            if ((the item at index in (section's profile's values))'s kind) != 0:
+                set curved to true
+    return cad loft build sections curved curved aligning true
+to get the ordered cad polygon loft through {a pointer to a list:sections}:
+    return cad loft build sections curved false aligning false

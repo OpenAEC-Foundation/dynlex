@@ -34,8 +34,8 @@ def main() -> int:
         raise AssertionError("completion hid a local function from its declaring source file")
 
     for source, position in [
-        (fixture_dir / "main.dl", "7:12"),
-        (fixture_dir / "first.dl", "34:12"),
+        (fixture_dir / "main.dl", "6:12"),
+        (fixture_dir / "first.dl", "31:12"),
     ]:
         labels = completion_labels(compiler, source, position)
         placeholders = sorted(
@@ -47,28 +47,28 @@ def main() -> int:
             )
 
     multi_word_source = project_dir / "tests" / "required" / "multi_word_variables" / "main.dl"
-    before_declaration = completion_labels(compiler, multi_word_source, "26:7")
+    before_declaration = completion_labels(compiler, multi_word_source, "20:12")
     for future_name in ["same line value", "val", "numeric value"]:
         if future_name in before_declaration:
             raise AssertionError(f"completion exposed '{future_name}' before its declaration")
     if "half width" not in before_declaration:
         raise AssertionError("completion hid a multi-word variable declared on an earlier line")
 
-    after_same_line_declaration = completion_labels(compiler, multi_word_source, "28:41")
+    after_same_line_declaration = completion_labels(compiler, multi_word_source, "22:41")
     if "same line value" not in after_same_line_declaration:
         raise AssertionError("completion hid a multi-word variable declared earlier on the cursor line")
 
-    partial_multi_word = completion_output(compiler, multi_word_source, "26:13")
+    partial_multi_word = completion_output(compiler, multi_word_source, "20:18")
     if not re.search(
-        r'^  - label="half width".* edit=\(26:7-26:13 -> half width\)$',
+        r'^  - label="half width".* edit=\(20:12-20:18 -> half width\)$',
         partial_multi_word,
         re.MULTILINE,
     ):
         raise AssertionError("completion did not replace a partially entered multi-word variable")
 
-    trailing_space = completion_output(compiler, multi_word_source, "26:12")
+    trailing_space = completion_output(compiler, multi_word_source, "20:17")
     if not re.search(
-        r'^  - label="half width".* edit=\(26:7-26:12 -> half width\)$',
+        r'^  - label="half width".* edit=\(20:12-20:17 -> half width\)$',
         trailing_space,
         re.MULTILINE,
     ):

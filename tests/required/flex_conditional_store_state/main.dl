@@ -1,11 +1,8 @@
 import lib/std.dl
 
-function bounded number:
-    execute:
-        set result to number
-        clamp result between 0 and 10
-        return result
+to get bounded number:
+    set result to number
+    clamp result between 0 and 10
+    return result
 
-print bounded (0 - 5) as a line
-print bounded 20 as a line
-print bounded 5 as a line
+print lines (bounded (0 - 5)), (bounded 20) and (bounded 5)

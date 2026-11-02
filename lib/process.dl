@@ -214,21 +214,21 @@ local function a failed process wait result:
         )
 
 {process action:result} succeeded means: result's success
-{process action:result} failed means: the inverse of result's success
+{process action:result} failed means: not result's success
 {process write result:result} succeeded means: result's success
-{process write result:result} failed means: the inverse of result's success
+{process write result:result} failed means: not result's success
 {process read result:result} succeeded means: result's success
-{process read result:result} failed means: the inverse of result's success
+{process read result:result} failed means: not result's success
 {process read result:result} reached the end of stream means: result's end of stream
-{process read result:result} has not reached the end of stream means: the inverse of result's end of stream
+{process read result:result} has not reached the end of stream means: not result's end of stream
 {process wait result:result} succeeded means: result's success
-{process wait result:result} failed means: the inverse of result's success
+{process wait result:result} failed means: not result's success
 {process activity result:result} succeeded means: result's success
-{process activity result:result} failed means: the inverse of result's success
+{process activity result:result} failed means: not result's success
 {process activity result:result} reports activity means: result's activity
-{process activity result:result} reports no activity means: the inverse of result's activity
+{process activity result:result} reports no activity means: not result's activity
 {process result:result} succeeded means: result's success
-{process result:result} failed means: the inverse of result's success
+{process result:result} failed means: not result's success
 {process wait result:result} reports completion means: result's completion
 {process wait result:result} does not report completion means: result's completion = false
 {process wait result:result} reports termination means: result's termination

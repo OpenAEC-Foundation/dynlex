@@ -71,9 +71,26 @@ static void expandMatch(Expression *rootExpression, Expression *expr, PatternMat
 	);
 	expr->arguments.clear();
 	expr->arguments.reserve(orderedArguments.size());
+	Expression *pack = nullptr;
+	size_t packArgumentIndex = 0;
 	for (const MatchedArgument &argument : orderedArguments) {
-		if (Expression *materialized = materializeMatchedArgument(rootExpression, match, argument))
+		Expression *materialized = materializeMatchedArgument(rootExpression, match, argument);
+		requireCompilerInvariant(materialized != nullptr, "matched argument could not be materialized");
+		if (!argument.isPackElement) {
+			pack = nullptr;
 			expr->arguments.push_back(materialized);
+			continue;
+		}
+		if (!pack || packArgumentIndex != argument.argumentIndex) {
+			pack = new Expression();
+			packArgumentIndex = argument.argumentIndex;
+			pack->kind = Expression::Kind::ArgumentPack;
+			pack->range = materialized->range;
+			expr->arguments.push_back(pack);
+		} else {
+			pack->range = Range(pack->range.line, pack->range.start(), materialized->range.end());
+		}
+		pack->arguments.push_back(materialized);
 	}
 }
 

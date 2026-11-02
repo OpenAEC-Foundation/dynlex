@@ -1,0 +1,6 @@
+count {arguments:items} means: @intrinsic("type extent", @intrinsic("type of", items), 0)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+set result to count 1, 2 and 3
+@intrinsic("return", @intrinsic("subtract", result, 3))

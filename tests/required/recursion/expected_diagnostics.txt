@@ -1,24 +1,48 @@
-tests/required/recursion/main.dl:9-42: Warning: Expression 'return number - 1 has even parity' has multiple valid operand groupings. Using 'return ((number - 1) has even parity)' instead of 'return (number - (1 has even parity))'.
-  note: while inferring call 'return number - 1 has even parity' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:9-42
-  note: while inferring call 'return number - 1 has odd parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-41
-  note: while inferring call 'return number - 1 has odd parity' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:9-41
-  note: while inferring call '4 has even parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-33
-  note: while inferring call '4 has even parity) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:16-44
-  note: while inferring call 'print whether (4 has even parity) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:1-44
-tests/required/recursion/main.dl:9-41: Warning: Expression 'return number - 1 has odd parity' has multiple valid operand groupings. Using 'return ((number - 1) has odd parity)' instead of 'return (number - (1 has odd parity))'.
-  note: while inferring call 'return number - 1 has odd parity' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:9-41
-  note: while inferring call '4 has even parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-33
-  note: while inferring call '4 has even parity) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:16-44
-  note: while inferring call 'print whether (4 has even parity) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:1-44
-tests/required/recursion/main.dl:13-62: Warning: Expression 'return number - 1 has even parity under inversion' has multiple valid operand groupings. Using 'return ((number - 1) has even parity under inversion)' instead of 'return (number - (1 has even parity under inversion))'.
-  note: while inferring call 'return number - 1 has even parity under inversion' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:13-62
-  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:20-61
-  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:13-61
-  note: while inferring call '4 has even parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-49
-  note: while inferring call '4 has even parity under inversion) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:16-60
-  note: while inferring call 'print whether (4 has even parity under inversion) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:1-60
-tests/required/recursion/main.dl:13-61: Warning: Expression 'return number - 1 has odd parity under inversion' has multiple valid operand groupings. Using 'return ((number - 1) has odd parity under inversion)' instead of 'return (number - (1 has odd parity under inversion))'.
-  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:13-61
-  note: while inferring call '4 has even parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-49
-  note: while inferring call '4 has even parity under inversion) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:16-60
-  note: while inferring call 'print whether (4 has even parity under inversion) as a line' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:1-60
+tests/required/recursion/main.dl:5-38: Warning: Expression 'return number - 1 has even parity' has multiple valid operand groupings. Using 'return ((number - 1) has even parity)' instead of 'return (number - (1 has even parity))'.
+  note: while inferring call 'return number - 1 has even parity' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:5-38
+  note: while inferring call 'return number - 1 has odd parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:12-37
+  note: while inferring call 'return number - 1 has odd parity' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:5-37
+  note: while inferring call '4 has even parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:14-31
+  note: while inferring call 'print line message' with arguments [an argument reference] -> an unresolved value lib/string.dl:13-31
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring call 'loop index from 0 to the length of collection' with arguments [a 32-bit integer, a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call 'for each {message} in messages' with arguments [an argument reference, an argument pack] -> an unresolved value lib/string.dl:9-39
+  note: while inferring call 'print lines (4 has even parity) and (7 has even parity' with arguments [an argument pack] -> an unresolved value tests/required/recursion/main.dl:1-55
+tests/required/recursion/main.dl:5-37: Warning: Expression 'return number - 1 has odd parity' has multiple valid operand groupings. Using 'return ((number - 1) has odd parity)' instead of 'return (number - (1 has odd parity))'.
+  note: while inferring call 'return number - 1 has odd parity' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:5-37
+  note: while inferring call '4 has even parity' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:14-31
+  note: while inferring call 'print line message' with arguments [an argument reference] -> an unresolved value lib/string.dl:13-31
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring call 'loop index from 0 to the length of collection' with arguments [a 32-bit integer, a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call 'for each {message} in messages' with arguments [an argument reference, an argument pack] -> an unresolved value lib/string.dl:9-39
+  note: while inferring call 'print lines (4 has even parity) and (7 has even parity' with arguments [an argument pack] -> an unresolved value tests/required/recursion/main.dl:1-55
+tests/required/recursion/main.dl:9-58: Warning: Expression 'return number - 1 has even parity under inversion' has multiple valid operand groupings. Using 'return ((number - 1) has even parity under inversion)' instead of 'return (number - (1 has even parity under inversion))'.
+  note: while inferring call 'return number - 1 has even parity under inversion' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:9-58
+  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:16-57
+  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [an unresolved value] -> an unresolved value tests/required/recursion/main.dl:9-57
+  note: while inferring call '4 has even parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:14-47
+  note: while inferring call 'print line message' with arguments [an argument reference] -> an unresolved value lib/string.dl:13-31
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring call 'loop index from 0 to the length of collection' with arguments [a 32-bit integer, a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call 'for each {message} in messages' with arguments [an argument reference, an argument pack] -> an unresolved value lib/string.dl:9-39
+  note: while inferring call 'print lines (4 has even parity under inversion) and (7 has even parity under inversion' with arguments [an argument pack] -> an unresolved value tests/required/recursion/main.dl:1-87
+tests/required/recursion/main.dl:9-57: Warning: Expression 'return number - 1 has odd parity under inversion' has multiple valid operand groupings. Using 'return ((number - 1) has odd parity under inversion)' instead of 'return (number - (1 has odd parity under inversion))'.
+  note: while inferring call 'return number - 1 has odd parity under inversion' with arguments [a 32-bit integer] -> nothing tests/required/recursion/main.dl:9-57
+  note: while inferring call '4 has even parity under inversion' with arguments [a 32-bit integer] -> an unresolved value tests/required/recursion/main.dl:14-47
+  note: while inferring call 'print line message' with arguments [an argument reference] -> an unresolved value lib/string.dl:13-31
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring call 'loop index from 0 to the length of collection' with arguments [a 32-bit integer, a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call 'for each {message} in messages' with arguments [an argument reference, an argument pack] -> an unresolved value lib/string.dl:9-39
+  note: while inferring call 'print lines (4 has even parity under inversion) and (7 has even parity under inversion' with arguments [an argument pack] -> an unresolved value tests/required/recursion/main.dl:1-87

@@ -88,12 +88,7 @@ function initialize the machine:
 			store 0 into console's keys at index
 			increment index
 		set console's program to 512
-		set console's index to 0
-		set console's depth to 0
-		set console's delay to 0
-		set console's sound to 0
-		set console's status to 0
-		set console's cycles to 0
+		set console's index, console's depth, console's delay, console's sound, console's status and console's cycles to 0
 		install the machine font
 
 function load the assembled program into the machine:
@@ -139,8 +134,7 @@ function the machine is running:
 function the count of lit machine pixels:
 	globals: console
 	execute:
-		set total to 0
-		set index to 0
+		set total and index to 0
 		loop while index < 2048:
 			add the item at index in (console's display) to total
 			increment index
@@ -166,8 +160,7 @@ function tick the machine timers:
 function report a machine fault for {integer:opcode}:
 	globals: console
 	execute:
-		print "LEXI-8 machine fault: unknown opcode" as a line
-		print opcode as a line
+		print lines "LEXI-8 machine fault: unknown opcode" and opcode
 		set console's status to 1
 
 function draw a machine sprite at {pixel position:origin} with {integer:count} [row|rows]:
@@ -312,8 +305,8 @@ function step the machine:
 					else if operand = 51:
 						set left to the item at target in (console's registers)
 						store left / 100 into console's memory at console's index
-						store the remainder of (left / 10) divided by 10 into console's memory at console's index + 1
-						store the remainder of left divided by 10 into console's memory at console's index + 2
+						store (left / 10) mod 10 into console's memory at console's index + 1
+						store left mod 10 into console's memory at console's index + 2
 					else if operand = 85:
 						set index to 0
 						loop while index <= target:

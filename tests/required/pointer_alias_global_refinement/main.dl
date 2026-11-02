@@ -1,0 +1,23 @@
+class:
+    patterns:
+        record
+    members:
+        kind
+class:
+    patterns:
+        holder
+    members:
+        data
+function update:
+    globals:
+        supplied
+        copied
+    execute:
+        @intrinsic("initialize at", @intrinsic("property", copied, "data"), supplied)
+@intrinsic("store", supplied, @intrinsic("construct", record, 1))
+@intrinsic("store", source, @intrinsic("construct", holder, @intrinsic("cast", @intrinsic("address of", supplied), @intrinsic("add pointer depth", record))))
+@intrinsic("store", original, @intrinsic("address of", source))
+@intrinsic("store", copied, original)
+update
+@intrinsic("store", readback, @intrinsic("dereference", @intrinsic("property", original, "data")))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("property", readback, "kind"), 1))

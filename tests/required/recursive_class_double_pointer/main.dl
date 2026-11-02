@@ -1,14 +1,8 @@
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function [a|] thirty two bit integer:
-    replacement:
-        @intrinsic("type", "int", 32)
+[a|] thirty two bit integer means: @intrinsic("type", "int", 32)
 
-function value as destination:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as destination means: @intrinsic("cast", value, destination)
 
 function set variable to value:
     replacement:

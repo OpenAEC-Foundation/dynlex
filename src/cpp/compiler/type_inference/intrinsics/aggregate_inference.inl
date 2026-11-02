@@ -44,41 +44,60 @@ if (kind == IntrinsicKind::ShaderInput) {
 	}
 } else if (kind == IntrinsicKind::ExtractElement || kind == IntrinsicKind::InsertElement) {
 	DataType aggregateType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-	bool isSequentialAggregate =
-		(aggregateType.kind == DataType::Kind::Array || aggregateType.kind == DataType::Kind::Vector) &&
-		aggregateType.pointerDepth == 0 && aggregateType.arrayElementType;
-	if (!isSequentialAggregate) {
-		setConfiguredTypeFailure(
-			expr->range, "element extraction requires aggregate", "message", {{"value_type", typeToUserName(aggregateType)}}
-		);
-	} else {
-		DataType indexType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-		if (!indexType.isInteger()) {
+	if (aggregateType.kind == DataType::Kind::ArgumentPack && kind == IntrinsicKind::ExtractElement) {
+		int index = 0;
+		if (!resolveStoredCompileTimeInteger(expr->arguments[2], flexBindingFrameStack, index, &context)) {
+			failIntrinsicArgumentRequirement(2, "a compile-time integer when indexing an argument pack");
+		} else if (index < 0 || index >= aggregateType.arraySize) {
 			setConfiguredTypeFailure(
-				expr->range, "element extraction requires integer index", "message", {{"index_type", typeToUserName(indexType)}}
+				expr->range, "element extraction index out of bounds", "message",
+				{{"index", std::to_string(index)}, {"length", std::to_string(aggregateType.arraySize)}}
 			);
 		} else {
-			std::optional<std::int64_t> index =
-				getCompileTimeIntegerValue(resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context));
-			if (index && (*index < 0 || *index >= aggregateType.arraySize)) {
+			expr->type = {DataType::Kind::ArgumentReference};
+			if (!context.staticLoopFrames.empty() &&
+				!isStructurallyCompileTimeConstant(expr->arguments[2], flexBindingFrameStack, context))
+				context.staticLoopFrames.back().required = true;
+		}
+	} else {
+		bool isSequentialAggregate =
+			(aggregateType.kind == DataType::Kind::Array || aggregateType.kind == DataType::Kind::Vector) &&
+			aggregateType.pointerDepth == 0 && aggregateType.arrayElementType;
+		if (!isSequentialAggregate) {
+			setConfiguredTypeFailure(
+				expr->range, "element extraction requires aggregate", "message", {{"value_type", typeToUserName(aggregateType)}}
+			);
+		} else {
+			DataType indexType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
+			if (!indexType.isInteger()) {
 				setConfiguredTypeFailure(
-					expr->range, "element extraction index out of bounds", "message",
-					{{"index", std::to_string(*index)}, {"length", std::to_string(aggregateType.arraySize)}}
+					expr->range, "element extraction requires integer index", "message",
+					{{"index_type", typeToUserName(indexType)}}
 				);
 			} else {
-				if (kind == IntrinsicKind::InsertElement) {
-					DataType valueType = ensureExpressionType(expr->arguments[3], context, flexBindingFrameStack);
-					if (!DataType::supportsRuntimeConversion(valueType, *aggregateType.arrayElementType)) {
-						setConfiguredTypeFailure(
-							expr->range, "element insertion value incompatible", "message",
-							{{"value_type", typeToUserName(valueType)},
-							 {"element_type", typeToUserName(*aggregateType.arrayElementType)}}
-						);
-					} else {
-						expr->type = aggregateType;
-					}
+				std::optional<std::int64_t> index = getCompileTimeIntegerValue(
+					resolveStoredCompileTimeValue(expr->arguments[2], flexBindingFrameStack, &context)
+				);
+				if (index && (*index < 0 || *index >= aggregateType.arraySize)) {
+					setConfiguredTypeFailure(
+						expr->range, "element extraction index out of bounds", "message",
+						{{"index", std::to_string(*index)}, {"length", std::to_string(aggregateType.arraySize)}}
+					);
 				} else {
-					expr->type = *aggregateType.arrayElementType;
+					if (kind == IntrinsicKind::InsertElement) {
+						DataType valueType = ensureExpressionType(expr->arguments[3], context, flexBindingFrameStack);
+						if (!DataType::supportsRuntimeConversion(valueType, *aggregateType.arrayElementType)) {
+							setConfiguredTypeFailure(
+								expr->range, "element insertion value incompatible", "message",
+								{{"value_type", typeToUserName(valueType)},
+								 {"element_type", typeToUserName(*aggregateType.arrayElementType)}}
+							);
+						} else {
+							expr->type = aggregateType;
+						}
+					} else {
+						expr->type = *aggregateType.arrayElementType;
+					}
 				}
 			}
 		}

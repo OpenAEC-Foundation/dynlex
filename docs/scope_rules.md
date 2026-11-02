@@ -123,17 +123,11 @@ restriction on the pointee: a pointer to an integer accepts signed and unsigned
 integer pointers, and a pointer to `32 bit` accepts 32-bit numeric pointers.
 
 ```dynlex
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "integer")
+[an|] integer means: @intrinsic("type", "integer")
 
-function unsigned:
-    replacement:
-        @intrinsic("type", "uint")
+unsigned means: @intrinsic("type", "uint")
 
-function [a|an|] unsigned {properties}:
-    replacement:
-        @intrinsic("and", unsigned, properties)
+[a|an|] unsigned {properties} means: @intrinsic("and", unsigned, properties)
 ```
 
 `and` of two type or constraint values accepts exactly the values both accept. The result keeps an exact type view

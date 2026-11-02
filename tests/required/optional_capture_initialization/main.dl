@@ -1,0 +1,13 @@
+# The macro supplies the initial value, including when no destination is passed.
+flex section initialize [using counter|] from start:
+    replacement:
+        @intrinsic("store", counter, start)
+        @intrinsic("execute body")
+
+@intrinsic("store", destination, 99)
+initialize using destination from 7:
+    @intrinsic("store", observed, destination)
+@intrinsic("store", destination, 9)
+initialize from 23:
+    @intrinsic("store", unaffected, destination)
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", observed, 7), @intrinsic("subtract", unaffected, 9)))

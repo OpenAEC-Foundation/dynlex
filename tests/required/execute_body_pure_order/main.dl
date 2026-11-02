@@ -6,15 +6,13 @@ flex section around:
         execute the body
         set marker to 2
 
-function observed:
-    execute:
-        set marker to 0
-        set captured to 0
-        around:
-            set captured to marker
-        return captured
+to get observed:
+    set marker and captured to 0
+    around:
+        set captured to marker
+    return captured
 
 if observed = 1:
-    print 1 as a line
+    print line 1
 else:
-    print 2 as a line
+    print line 2

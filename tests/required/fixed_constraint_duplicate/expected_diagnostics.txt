@@ -1,2 +1,2 @@
-tests/required/fixed_constraint_duplicate/main.dl:10-48: Error: Duplicate pattern definition
-  note: Conflicts with this definition tests/required/fixed_constraint_duplicate/main.dl:10-42
+tests/required/fixed_constraint_duplicate/main.dl:8-46: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/fixed_constraint_duplicate/main.dl:8-40

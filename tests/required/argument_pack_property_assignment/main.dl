@@ -1,0 +1,26 @@
+function assign {arguments:targets} to value:
+    replacement:
+        @intrinsic("store", {first}, @intrinsic("extract element", targets, 0))
+        @intrinsic("store", first, value)
+        @intrinsic("store", {second}, @intrinsic("extract element", targets, 1))
+        @intrinsic("store", second, value)
+
+class:
+    patterns: pair
+    members: x, y
+
+the horizontal field of owner means: @intrinsic("property", owner, "x")
+the vertical field of owner means: @intrinsic("property", owner, "y")
+the forwarded horizontal field of owner means: the horizontal field of owner
+the slot at address means: @intrinsic("dereference", address)
+
+@intrinsic("store", record, @intrinsic("construct", pair, 1, 2))
+@intrinsic("store", the forwarded horizontal field of record, 3)
+@intrinsic("store", sampled, @intrinsic("call", "libc", "rand", @intrinsic("type", "int")))
+@intrinsic("store", amount, @intrinsic("add", @intrinsic("modulo", sampled, 100), 6))
+assign (the forwarded horizontal field of record) and (the vertical field of record) to amount
+@intrinsic("store", left, 1)
+@intrinsic("store", right, 2)
+assign (the slot at @intrinsic("address of", left)) and (the slot at @intrinsic("address of", right)) to amount
+@intrinsic("store", fields, @intrinsic("add", @intrinsic("property", record, "x"), @intrinsic("property", record, "y")))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", fields, @intrinsic("add", left, right)), @intrinsic("multiply", amount, 4)))

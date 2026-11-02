@@ -1,0 +1,12 @@
+import lib/std.dl
+
+set kind to an integer
+set number to @intrinsic("construct", it, 8)
+print line number
+set label to "ready"
+print line formatted "Subject: {it}"
+set {a string:text} to it
+print line text
+set first, second and third to 4
+add 2
+print lines first, second, third and it

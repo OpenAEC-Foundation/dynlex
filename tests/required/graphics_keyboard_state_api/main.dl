@@ -1,19 +1,8 @@
 import lib/graphics.dl
 
-print the escape key as a line
-print the A key as a line
-print the D key as a line
-print the E key as a line
-print the Q key as a line
-print the S key as a line
-print the W key as a line
-print the 0 key as a line
-print the 1 key as a line
-print the 9 key as a line
-print the right arrow key as a line
-print the left arrow key as a line
-print the down arrow key as a line
-print the up arrow key as a line
+print lines (the escape key), (the A key), (the D key), (the E key), (the Q key), (the S key) and (the W key)
+print lines (the 0 key), (the 1 key), (the 9 key), (the right arrow key), (the left arrow key) and (the down arrow key)
+print line the up arrow key
 
 if false:
 	set window to a new hidden window with width 1 and height 1

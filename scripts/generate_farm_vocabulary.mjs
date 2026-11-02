@@ -10,8 +10,7 @@ import lib/subject.dl
 a farm number means: @intrinsic("type", "int", 32)
 a farm text means: @intrinsic("type", "string")
 
-to emit farm text:
-    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "%s\\n", text))
+to emit farm text: @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "%s\\n", text))
 `];
 for (const [type,members] of Object.entries({
   item:["identifier as a farm number","amount as a farm number"],
@@ -44,7 +43,8 @@ for (const [op,entries] of [["DO",ACTIONS],["IF",CONDITIONS]]) for (const entry 
   const body=[];
   if (entry.subject) body.push(`@intrinsic("set subject", ${entry.subject==="target"?construct("target",number(SUBJECT_TARGET),'""'):construct("item",number(SUBJECT_ITEMS),number(-1))})`);
   body.push(op==="DO"?emit:construct("condition",...values));
-  lines.push(`\nflex function ${pattern}:\n    replacement:\n${body.map(line=>`        ${line}`).join("\n")}`);
+  if (op === "IF" && body.length === 1) lines.push(`\n${pattern} means: ${body[0]}`);
+  else lines.push(`\nflex function ${pattern}:\n    replacement:\n${body.map(line=>`        ${line}`).join("\n")}`);
 }
 lines.push(`
 flex section if {farm condition:condition}:

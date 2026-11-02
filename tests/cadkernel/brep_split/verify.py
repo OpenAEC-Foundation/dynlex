@@ -333,7 +333,13 @@ def main():
         },
         "native_source_sha256": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in (ROOT / "lib/bim/brep_split.dl", HERE / "probe.dl", HERE / "main.dl")
+            for path in (
+                ROOT / "lib/bim/brep_split.dl",
+                ROOT / "lib/bim/brep_split_edges.dl",
+                ROOT / "lib/bim/brep_split_faces.dl",
+                HERE / "probe.dl",
+                HERE / "main.dl",
+            )
         },
     }
     name = "filtered-summary.json" if args.case else "summary.json"

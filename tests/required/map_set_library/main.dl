@@ -7,30 +7,24 @@ set ages to an empty map from string to integer
 put 30 for alice in ages
 put 40 for bob in ages
 put 31 for alice in ages
-print the number of entries in ages as a line
-print whether (ages contains key alice) as a line
-print the value for alice in ages as a line
+print lines (the number of entries in ages), (ages contains key alice) and (the value for alice in ages)
 remove alice from ages
-print whether (ages contains key alice) as a line
-print the value for bob in ages as a line
+print lines (ages contains key alice) and (the value for bob in ages)
 clear ages
-print the number of entries in ages as a line
+print line the number of entries in ages
 
 set answer to the string form of "answer"
 set labels to an empty map from integer to string
 put answer for 42 in labels
-print the value for 42 in labels as a line
+print line the value for 42 in labels
 
 set names to an empty set of string
-add alice to names
-add bob to names
-add alice to names
-print the size of names as a line
-print whether (names contains alice) as a line
+add alice, bob and alice to names
+print lines (the size of names) and (names contains alice)
 remove alice from names
-print whether (names contains alice) as a line
+print line (names contains alice)
 clear names
-print the size of names as a line
+print line the size of names
 
 free ages
 free labels

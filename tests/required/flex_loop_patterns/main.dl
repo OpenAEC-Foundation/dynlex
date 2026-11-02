@@ -12,7 +12,7 @@ flex section repeat count:
 repeat 4:
     add 2 to total
 
-print total as a line
+print line total
 
 set nested to 0
 
@@ -24,7 +24,7 @@ flex section repeat nested count:
 repeat nested 3:
     add 5 to nested
 
-print nested as a line
+print line nested
 
 flex section skip counter:
     replacement:
@@ -36,4 +36,4 @@ set skipped to 0
 skip skipped:
     add 100 to skipped
 
-print skipped as a line
+print line skipped

@@ -55,12 +55,10 @@ class:
         bulge as a 64 bit floating-point number
         length as a 64 bit floating-point number
 
-function an automatic cad [arc] fit direction2:
-    execute:
-        return @intrinsic("construct", a cad arc fit direction2, false, the cad zero vector2)
-function a cad [arc] fit direction2 along {cad vector2:direction}:
-    execute:
-        return @intrinsic("construct", a cad arc fit direction2, true, direction)
+to get an automatic cad [arc] fit direction2:
+    return @intrinsic("construct", a cad arc fit direction2, false, the cad zero vector2)
+to get a cad [arc] fit direction2 along {cad vector2:direction}:
+    return @intrinsic("construct", a cad arc fit direction2, true, direction)
 local function the cad [arc] fit2 typed direction {cad arc fit direction2:direction}:
     execute:
         return direction
@@ -159,8 +157,7 @@ local function cad [arc] fit2 span [from] {cad vector2:p0} [to] {cad vector2:p1}
         if ((cad arc fit2 finite total) = false) or (total <= 0.0):
             return false
         set fraction to first's length / total
-        append (the cad arc fit2 vertex at p0 with bulge first's bulge, source index, fraction 0.0 and inserted false) to result
-        append (the cad arc fit2 vertex at knee with bulge (-second's bulge), source index, fraction fraction and inserted true) to result
+        append (the cad arc fit2 vertex at p0 with bulge first's bulge, source index, fraction 0.0 and inserted false) and (the cad arc fit2 vertex at knee with bulge (-second's bulge), source index, fraction fraction and inserted true) to result
         return true
 
 local function cad [arc] fit2 build through {a pointer to a list:points} with closure {boolean:closed} and directions {a pointer to a list:directions} into {a pointer to a list:result}:
@@ -177,7 +174,7 @@ local function cad [arc] fit2 build through {a pointer to a list:points} with cl
         set chords to an empty list of a cad vector2
         set chordStorage to the cad arc fit2 storage owning chords
         loop index from 0 to spans:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set chord to the cad arc fit2 unit (the cad difference of (the item at next in points) and (the item at index in points))
             if chord's valid = false:
                 return false
@@ -187,8 +184,8 @@ local function cad [arc] fit2 build through {a pointer to a list:points} with cl
         loop index from 0 to count:
             set tangent to the cad zero vector2
             if closed or ((index != 0) and ((index + 1) != count)):
-                set previous to the remainder of ((index + spans) - 1) divided by spans
-                set next to the remainder of index divided by spans
+                set previous to ((index + spans) - 1) mod spans
+                set next to index mod spans
                 set tangent to the item at next in chords
                 set normalized to the cad normalization of (the cad sum of (the item at previous in chords) and tangent)
                 if normalized's valid:
@@ -217,7 +214,7 @@ local function cad [arc] fit2 build through {a pointer to a list:points} with cl
                     return false
                 replace item at index index in tangents with normalized's value
         loop index from 0 to spans:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set p0 to the item at index in points
             set p1 to the item at next in points
             set t0 to the item at index in tangents
@@ -228,18 +225,16 @@ local function cad [arc] fit2 build through {a pointer to a list:points} with cl
             append (the cad arc fit2 vertex at (the item at (count - 1) in points) with bulge 0.0, source (count - 1), fraction 0.0 and inserted false) to result
         return true
 
-function the cad [arc] chain2 through {a pointer to a list:points} with closure {boolean:closed} and directions {a pointer to a list:directions}:
-    execute:
-        set vertices to an empty list of a cad arc fit vertex2
-        set storage to the cad arc fit2 storage owning vertices
-        set valid to cad arc fit2 build through points with closure closed and directions directions into vertices
-        if valid = false:
-            clear vertices
-        return @intrinsic("construct", a cad arc fit result2, valid, vertices, storage)
-function the cad clone of {cad arc fit result2:fitted}:
-    execute:
-        set vertices to an empty list of a cad arc fit vertex2
-        if fitted's vertices != (0 as the type of fitted's vertices):
-            loop index from 0 to the length of fitted's vertices:
-                append (the item at index in fitted's vertices) to vertices
-        return @intrinsic("construct", a cad arc fit result2, fitted's valid, vertices, the cad arc fit2 storage owning vertices)
+to get the cad [arc] chain2 through {a pointer to a list:points} with closure {boolean:closed} and directions {a pointer to a list:directions}:
+    set vertices to an empty list of a cad arc fit vertex2
+    set storage to the cad arc fit2 storage owning vertices
+    set valid to cad arc fit2 build through points with closure closed and directions directions into vertices
+    if valid = false:
+        clear vertices
+    return @intrinsic("construct", a cad arc fit result2, valid, vertices, storage)
+to get the cad clone of {cad arc fit result2:fitted}:
+    set vertices to an empty list of a cad arc fit vertex2
+    if fitted's vertices != (0 as the type of fitted's vertices):
+        loop index from 0 to the length of fitted's vertices:
+            append (the item at index in fitted's vertices) to vertices
+    return @intrinsic("construct", a cad arc fit result2, fitted's valid, vertices, the cad arc fit2 storage owning vertices)

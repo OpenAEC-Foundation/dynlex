@@ -1,6 +1,4 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 function ignore value:
     replacement:

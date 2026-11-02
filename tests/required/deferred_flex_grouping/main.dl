@@ -2,9 +2,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function left = right:
-    replacement:
-        @intrinsic("equal", left, right)
+left = right means: @intrinsic("equal", left, right)
 
 function set variable to value:
     replacement:
@@ -26,17 +24,14 @@ class:
     members:
         values
 
-function {container:values} contains value:
-    execute:
-        return the stored value of values = value
+to get {container:values} contains value:
+    return the stored value of values = value
 
-function {box:object} contains value:
-    execute:
-        return the values of object contains value
+to get {box:object} contains value:
+    return the values of object contains value
 
-function {box:object} does not contain value:
-    execute:
-        return @intrinsic("not", object contains value)
+to get {box:object} does not contain value:
+    return @intrinsic("not", object contains value)
 
 flex function add value to {box:object}:
     replacement:

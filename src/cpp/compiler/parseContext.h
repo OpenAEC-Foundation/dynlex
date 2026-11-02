@@ -104,6 +104,7 @@ struct ParseContext {
 		Keyword,
 		Variable,
 		Number,
+		String,
 		PatternReference,
 	};
 
@@ -266,6 +267,7 @@ struct ParseContext {
 	std::vector<SourceTokenAnnotation> sourceTokenAnnotations;
 	SyntaxConfig builtinSyntax;
 	SyntaxConfig projectSyntax;
+	std::string builtinSyntaxConfigPath;
 	std::string projectSyntaxConfigPath;
 	// prohibit copies
 	ParseContext(ParseContext &) = delete;
@@ -286,9 +288,21 @@ struct ParseContext {
 	VariableReference *createVariableReference(Range range, const std::string &name);
 	std::shared_ptr<ExpressionAllocationStats> expressionAllocationStats = std::make_shared<ExpressionAllocationStats>();
 	std::shared_ptr<ExpressionStorage> createExpressionStorage();
+	std::unordered_map<InstantiatedSectionBody *, std::shared_ptr<InstantiatedSectionBody>> capturedExpressionBodies;
+	void retainCapturedExpressionBody(Expression *expression);
 	Expression *cloneExpressionTree(Expression *expression, ExpressionStorage &storage, bool preserveInferenceMetadata = false);
-	std::shared_ptr<InstantiatedSectionBody>
-	cloneSectionBody(Section *section, bool preserveInferenceMetadata = false, InstantiatedSectionBody *parentBody = nullptr);
+	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(
+		Section *section, bool preserveInferenceMetadata = false, InstantiatedSectionBody *parentBody = nullptr,
+		std::shared_ptr<const VariableStorageScope> storageScope = {}
+	);
+
+	std::map<
+		std::tuple<std::shared_ptr<const VariableStorageScope>, const Expression *, size_t>,
+		std::shared_ptr<const VariableStorageScope>>
+		invocationStorageScopes;
+	std::shared_ptr<const VariableStorageScope> storageScopeForInvocation(
+		const Expression *expression, size_t iteration = 0, std::shared_ptr<const VariableStorageScope> parentScope = {}
+	);
 };
 
 // Extract the body expression and parameter bindings from a flex PatternCall.
@@ -388,7 +402,8 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex,
+		[&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -398,6 +413,14 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 	forEachPatternCallBinding(expr, definition, [&](const std::string &parameterName, Expression *argumentExpression) {
 		bindings[parameterName] = argumentExpression;
 	});
+}
+
+inline BindingFrame patternDeclarationBindingFrame(PatternDefinition *definition) {
+	requireCompilerInvariant(definition && definition->section, "pattern binding scope requires a declaration section");
+	BindingFrame frame;
+	for (const auto &[name, reference] : definition->section->variableDefinitions)
+		frame.declarations.emplace(name, normalizeBindingReference(reference));
+	return frame;
 }
 
 inline void collectPatternCallBindings(Expression *expr, PatternDefinition *definition, BindingFrame &bindingFrame) {
@@ -410,13 +433,14 @@ inline void collectPatternCallBindings(Expression *expr, PatternDefinition *defi
 
 inline void
 pushPatternCallBindingScope(BindingFrameStack &bindingFrameStack, Expression *expression, PatternDefinition *definition) {
-	BindingFrame bindings;
+	BindingFrame bindings = patternDeclarationBindingFrame(definition);
 	collectPatternCallBindings(expression, definition, bindings);
 	pushBindingScope(bindingFrameStack, std::move(bindings));
 }
 
-inline ResolvedBindingLayers
-resolveExpressionBindingWithCallerScope(Expression *expression, const BindingFrameStack &bindingFrameStack) {
+inline ResolvedBindingLayers resolveExpressionBindingWithCallerScope(
+	Expression *expression, const BindingFrameStack &bindingFrameStack, bool followReferences = true
+) {
 	if (!expression)
 		return {nullptr, bindingFrameStack};
 	if (expression->kind == Expression::Kind::Pending && expression->patternReference) {
@@ -428,7 +452,7 @@ resolveExpressionBindingWithCallerScope(Expression *expression, const BindingFra
 			return resolveNamedBindingWithCallerScope(elements[0].text, expression, bindingFrameStack);
 		}
 	}
-	return resolveVariableBindingWithCallerScope(expression, bindingFrameStack);
+	return resolveVariableBindingWithCallerScope(expression, bindingFrameStack, followReferences);
 }
 
 struct FlexBindingExpansion {
@@ -444,17 +468,20 @@ inline std::optional<FlexBindingExpansion> selectedFlexBindingExpansion(Expressi
 
 template <typename SelectFlexExpansionFn, typename StopFn>
 inline ResolvedBindingLayers resolveThroughBindingLayers(
-	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion, StopFn &&stop
+	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion, StopFn &&stop,
+	bool followReferences = true
 ) {
 	std::unordered_set<Expression *> expandedFlexCalls;
-	while (expression && !stop(expression)) {
-		ResolvedBindingLayers bound = resolveExpressionBindingWithCallerScope(expression, bindingFrameStack);
+	while (expression) {
+		ResolvedBindingLayers bound = resolveExpressionBindingWithCallerScope(expression, bindingFrameStack, followReferences);
 		if (bound.expression != expression) {
 			expression = bound.expression;
 			bindingFrameStack = std::move(bound.bindingFrameStack);
 			continue;
 		}
 
+		if (stop(expression))
+			break;
 		std::optional<FlexBindingExpansion> expansion = selectFlexExpansion(expression);
 		if (!expansion)
 			break;
@@ -477,7 +504,8 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
+		[](Expression *) {
 		return false;
 	}
 	);

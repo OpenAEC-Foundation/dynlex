@@ -3,6 +3,7 @@
 #include "arithmeticTypePromotion.h"
 #include "compilerUtils.h"
 #include "const_evaluation.inl"
+#include "expressionCapture.h"
 #include "sectionFlexBody.h"
 static bool
 inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
@@ -55,41 +56,7 @@ static bool definitionsHaveUnresolvedTypeConstraints(const std::vector<PatternDe
 	});
 }
 
-// Inferring an argument determines its type even when the selected replacement
-// does not execute it. Restore only execution effects; keep inferred types,
-// overload selections and recursive inference dependencies.
-struct InferenceExecutionSnapshot {
-	KnownConstantState values;
-	AddressInferenceState addresses;
-	InferenceContext::SubjectState subject;
-	Instantiation *instantiation;
-	std::optional<InstantiationExecutionEffects> effects;
-
-	explicit InferenceExecutionSnapshot(const InferenceContext &context)
-		: values(context.currentVariableValues), addresses(context.currentAddressState), subject(context.currentSubject),
-		  instantiation(context.currentInstantiation) {
-		if (instantiation)
-			effects = *instantiation;
-	}
-
-	void restore(InferenceContext &context) const {
-		requireCompilerInvariant(context.currentInstantiation == instantiation, "argument inference changed its owner");
-		context.currentVariableValues = values;
-		context.currentAddressState = addresses;
-		context.currentSubject = subject;
-		if (effects) {
-			if (context.trial)
-				context.trialJournal->recordInstantiationWrite(instantiation);
-			static_cast<InstantiationExecutionEffects &>(*instantiation) = *effects;
-		}
-	}
-
-	bool matches(const InferenceContext &context) const {
-		return context.currentInstantiation == instantiation && context.currentVariableValues == values &&
-			   context.currentAddressState == addresses && context.currentSubject == subject &&
-			   (!effects || *effects == static_cast<const InstantiationExecutionEffects &>(*instantiation));
-	}
-};
+#include "execution_state.inl"
 
 // Reuse a binding only when inferring it made no execution-state change and
 // that exact state still holds. Mutating arguments are replayed at their use.
@@ -121,7 +88,7 @@ struct InstantiationProgressSnapshot {
 	std::unordered_map<std::string, CompileTimeValue> constantParameterValues;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
-	VariableAddressProvenance finalGlobalAddressProvenance;
+	GlobalAddressProvenance finalGlobalAddressProvenance;
 	std::unordered_set<VariableReference *> addressTakenGlobalReferences;
 	AddressProvenance externallyEscapedGlobalProvenance;
 	AddressProvenance returnAddressProvenance;
@@ -167,9 +134,8 @@ static void joinAddressProvenance(AddressProvenance &destination, const AddressP
 // direct store to each written global: the caller's own effect summary and the
 // value produced by the callee in the current execution state.
 static void mergeCalleeGlobalWritesIntoCaller(InferenceContext &context, const Instantiation &inst) {
-	context.currentAddressState.write().addressTakenVariables.insert(
-		inst.addressTakenGlobalReferences.begin(), inst.addressTakenGlobalReferences.end()
-	);
+	for (VariableReference *reference : inst.addressTakenGlobalReferences)
+		context.currentAddressState.write().addressTakenVariables.insert({reference, nullptr});
 	for (VariableReference *reference : inst.writtenGlobalReferences) {
 		context.noteWrittenGlobalReference(reference);
 		auto it = inst.finalGlobalConstantValues.find(reference);
@@ -382,11 +348,20 @@ classifyStoreIntrinsicPurity(Expression *storeExpr, InferenceContext &context, c
 	return InstantiationPurity::Impure;
 }
 
+static bool typeHasRefinableStructure(const DataType &type);
+
 static InstantiationPurity
 classifyCustomIntrinsicPurity(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	if (!expr)
 		return InstantiationPurity::Impure;
 	switch (intrinsicKind(expr->intrinsicName)) {
+	case IntrinsicKind::SetSubject: {
+		DataType type = effectiveInferredExpressionType(expr->arguments[1]);
+		if (type.isMetaType())
+			return InstantiationPurity::Pure;
+		return typeHasRefinableStructure(type) || typeHasManagedLifecycle(type) ? InstantiationPurity::Impure
+																				: InstantiationPurity::Pure;
+	}
 	case IntrinsicKind::Store:
 		return classifyStoreIntrinsicPurity(expr, context, flexBindingFrameStack);
 	case IntrinsicKind::Property:

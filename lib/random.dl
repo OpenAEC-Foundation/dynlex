@@ -8,5 +8,4 @@ to get a random number:
 to get the current time:
     return @intrinsic("call", "libc", "time", a 64 bit integer, 0)
 
-to seed the random number generator with value:
-    @intrinsic("call", "libc", "srand", nothing, value)
+to seed the random number generator with value: @intrinsic("call", "libc", "srand", nothing, value)

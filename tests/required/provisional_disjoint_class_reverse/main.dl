@@ -1,31 +1,21 @@
-function sample:
-    execute:
-        if 1 equals 1:
-            @intrinsic("return", 7)
-        @intrinsic("return", 0)
+to get sample:
+    if 1 equals 1:
+        @intrinsic("return", 7)
+    @intrinsic("return", 0)
 class:
     patterns:
         container
     members:
         value as the type of sample
-function {container:first} equals {container:second}:
-    execute:
-        @intrinsic("return", first's value equals second's value)
-function integer:
-    replacement:
-        @intrinsic("type", "int")
-function the type of value:
-    replacement:
-        @intrinsic("type of", value)
+to get {container:first} equals {container:second}:
+    @intrinsic("return", first's value equals second's value)
+integer means: @intrinsic("type", "int")
+the type of value means: @intrinsic("type of", value)
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
-function first equals second:
-    replacement:
-        @intrinsic("equal", first, second)
-function emit flag:
-    execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, @intrinsic("select", flag, 84, 70)))
+first equals second means: @intrinsic("equal", first, second)
+to emit flag: @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, @intrinsic("select", flag, 84, 70)))
 @intrinsic("store", first, @intrinsic("construct", container, sample))
 @intrinsic("store", second, @intrinsic("construct", container, 7))
 @intrinsic("store", third, @intrinsic("construct", container, 8))

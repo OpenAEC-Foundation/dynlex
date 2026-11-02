@@ -6,28 +6,19 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("type", "int", bits)
+[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
 
-function value as destination:
-    execute:
-        return @intrinsic("cast", value, destination)
+to get value as destination:
+    return @intrinsic("cast", value, destination)
 
-function the floor of value:
-    execute:
-        return @intrinsic("floor", value)
+to get the floor of value:
+    return @intrinsic("floor", value)
 
-function rounded value:
-    execute:
-        return (the floor of value) as a 64 bit integer
+to get rounded value:
+    return (the floor of value) as a 64 bit integer
 
 ignore rounded 1.5

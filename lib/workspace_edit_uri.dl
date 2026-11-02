@@ -53,7 +53,7 @@ to get the normalized workspace file URI for {string:input} using {path style:st
     set absolute to whether location's value is an absolute path using style
     if absolute failed:
         return a failed workspace URI reporting absolute's error message
-    if the inverse of absolute's value:
+    if not absolute's value:
         return a failed workspace URI reporting the string form of "File URI path must be absolute"
     set identity to the workspace identity of location's value using style
     return a successful workspace URI at location's value, identified by identity, with relative path an empty workspace edit text and directory hint (workspace URI input has a directory hint)
@@ -100,7 +100,7 @@ to get the normalized workspace file URI for {string:input} inside {string:root}
     if boundary failed:
         return a failed workspace URI reporting boundary's error message
     set absolute to whether boundary's value is an absolute path using style
-    if (absolute failed) or (the inverse of absolute's value):
+    if (absolute failed) or (not absolute's value):
         return a failed workspace URI reporting the string form of "Workspace root must be absolute"
     set location to the normalized workspace file URI for input using style
     if location failed:

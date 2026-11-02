@@ -1,12 +1,7 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
-function the length of values:
-    replacement:
-        @intrinsic("type extent", values, 0)
-function left < right:
-    execute:
-        @intrinsic("return", @intrinsic("less than", left, right))
+integer means: @intrinsic("type", "int")
+the length of values means: @intrinsic("type extent", values, 0)
+to get left < right:
+    @intrinsic("return", @intrinsic("less than", left, right))
 flex function loop while condition:
     replacement:
         @intrinsic("loop while", condition)
@@ -19,10 +14,9 @@ flex section loop index from start to end:
         loop while index < end:
             @intrinsic("execute body")
             @intrinsic("store", index, @intrinsic("add", index, 1))
-function examine item:
-    execute:
-        loop index from 0 to the length of item:
-            @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, 88))
-        @intrinsic("return", 55)
+to get examine item:
+    loop index from 0 to the length of item:
+        @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, 88))
+    @intrinsic("return", 55)
 @intrinsic("store", sample, [1, 2])
 @intrinsic("discard", @intrinsic("call", "libc", "putchar", integer, examine sample))

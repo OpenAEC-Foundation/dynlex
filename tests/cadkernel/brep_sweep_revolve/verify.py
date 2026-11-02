@@ -265,7 +265,14 @@ def main():
         "source_sha256": {str(source_file.relative_to(source)): hashlib.sha256(source_file.read_bytes()).hexdigest()},
         "native_source_sha256": {
             str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in (ROOT / "lib/bim/brep_sweep.dl", HERE / "main.dl", HERE / "probe.dl")
+            for path in (
+                ROOT / "lib/bim/brep_sweep.dl",
+                ROOT / "lib/bim/brep_sweep_topology.dl",
+                ROOT / "lib/bim/brep_sweep_revolve.dl",
+                ROOT / "lib/bim/brep_sweep_extrude.dl",
+                HERE / "main.dl",
+                HERE / "probe.dl",
+            )
         },
     }
     summary_name = "filtered-summary.json" if args.case else "summary.json"

@@ -6,25 +6,19 @@ function set variable to value:
 	replacement:
 		@intrinsic("store", variable, value)
 
-function [a|] C string:
-	replacement:
-		@intrinsic("type", "string")
+[a|] C string means: @intrinsic("type", "string")
 
-function left[ |]+[ |]right:
-	execute:
-		return @intrinsic("add", left, right)
+to get left[ |]+[ |]right:
+	return @intrinsic("add", left, right)
 
-function {C string:left}[ |]+[ |]{C string:right}:
-	execute:
-		return left
+to get {C string:left}[ |]+[ |]{C string:right}:
+	return left
 
 function add value to target:
 	replacement:
 		set target to (target + value)
 
-function apply gravity to velocity:
-	execute:
-		add 1.15 to velocity
+to apply gravity to velocity: add 1.15 to velocity
 
 @intrinsic("store", velocity, 0.0)
 apply gravity to velocity

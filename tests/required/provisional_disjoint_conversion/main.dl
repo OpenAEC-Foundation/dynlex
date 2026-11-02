@@ -1,21 +1,13 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
-function number:
-    replacement:
-        @intrinsic("type", "float", 64)
-function the type of value:
-    replacement:
-        @intrinsic("type of", value)
+integer means: @intrinsic("type", "int")
+number means: @intrinsic("type", "float", 64)
+the type of value means: @intrinsic("type of", value)
 implicitly convert {integer:value}:
     execute:
         @intrinsic("return", @intrinsic("cast", value, number))
-function measured {number:value}:
-    execute:
-        @intrinsic("return", @intrinsic("cast", value, integer))
-function sample:
-    execute:
-        @intrinsic("return", measured 7)
+to get measured {number:value}:
+    @intrinsic("return", @intrinsic("cast", value, integer))
+to get sample:
+    @intrinsic("return", measured 7)
 class:
     patterns:
         container

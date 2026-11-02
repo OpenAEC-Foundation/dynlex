@@ -1,39 +1,33 @@
 import lib/std.dl
 
-function the value from a guaranteed loop:
-    execute:
-        set unrelated to 0
-        loop while true:
-            set unrelated to 1
-            return 1
+to get the value from a guaranteed loop:
+    set unrelated to 0
+    loop while true:
+        set unrelated to 1
+        return 1
 
-function value after an unreachable loop:
-    execute:
-        loop while false:
-            return false
-        return 2
+to get value after an unreachable loop:
+    loop while false:
+        return false
+    return 2
 
-function value after a skipped falling loop:
-    execute:
-        loop while false:
-            ignore 0
-        return 3
+to get value after a skipped falling loop:
+    loop while false:
+        ignore 0
+    return 3
 
-function the value from a maybe returning loop condition:
-    execute:
-        loop while condition:
-            return 4
-        return 5
+to get the value from a maybe returning loop condition:
+    loop while condition:
+        return 4
+    return 5
 
-function value after a maybe falling loop condition:
-    execute:
-        loop while condition:
-            ignore 0
-        return 6
+to get value after a maybe falling loop condition:
+    loop while condition:
+        ignore 0
+    return 6
 
-print the value from a guaranteed loop as a line
-print value after an unreachable loop as a line
-print value after a skipped falling loop as a line
-print the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1) as a line
-print the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as a line
-print value after a maybe falling loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1) as a line
+print lines (the value from a guaranteed loop) and (value after an unreachable loop)
+print line value after a skipped falling loop
+print line the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1)
+print line the value from a maybe returning loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1)
+print line value after a maybe falling loop @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, 0), 1)

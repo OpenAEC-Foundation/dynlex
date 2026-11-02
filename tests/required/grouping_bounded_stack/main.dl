@@ -2,40 +2,32 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function left[ |]&[ |]right:
-    execute:
-        return @intrinsic("bitwise and", left, right)
+to get left[ |]&[ |]right:
+    return @intrinsic("bitwise and", left, right)
 
-function left[ |]+[ |]right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left[ |]+[ |]right:
+    return @intrinsic("add", left, right)
 
 function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function the result after one step from value:
-    execute:
-        return value + 2 + 3 + 4 + 5 & 1.5
+to get the result after one step from value:
+    return value + 2 + 3 + 4 + 5 & 1.5
 
-function the result after two steps from value:
-    execute:
-        return the result after one step from value
+to get the result after two steps from value:
+    return the result after one step from value
 
-function the result after three steps from value:
-    execute:
-        return the result after two steps from value
+to get the result after three steps from value:
+    return the result after two steps from value
 
-function the result after four steps from value:
-    execute:
-        return the result after three steps from value
+to get the result after four steps from value:
+    return the result after three steps from value
 
-function the result after five steps from value:
-    execute:
-        return the result after four steps from value
+to get the result after five steps from value:
+    return the result after four steps from value
 
-function the result after six steps from value:
-    execute:
-        return the result after five steps from value
+to get the result after six steps from value:
+    return the result after five steps from value
 
 ignore the result after six steps from 1

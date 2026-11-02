@@ -20,9 +20,8 @@ class:
         single as a singleton record
         pair as a pair record
 
-function the increment of {integer:value}:
-    execute:
-        return value + 1
+to get the increment of {integer:value}:
+    return value + 1
 
 set nestedSingleton to [@intrinsic(
     "construct",
@@ -31,25 +30,23 @@ set nestedSingleton to [@intrinsic(
     @intrinsic("construct", a pair record, the string form of "three", the increment of 3)
 )]
 set firstNested to the item at 0 in nestedSingleton
-print the value of the single of firstNested as a line
-print (the length of the name of the pair of firstNested) as a line
-print the value of the pair of firstNested as a line
+print lines (the value of the single of firstNested) and (the length of the name of the pair of firstNested)
+print line the value of the pair of firstNested
 
 set nestedArrays to [[@intrinsic("construct", a singleton record, 9)]]
 set firstRow to the item at 0 in nestedArrays
 set nestedValue to the item at 0 in firstRow
-print the value of nestedValue as a line
+print line the value of nestedValue
 
 set grouped to [(1 + 2) * 3]
-print the item at 0 in grouped as a line
+print line the item at 0 in grouped
 
 set singletonString to [the string form of "hello"]
 set word to the item at 0 in singletonString
-print (the length of word) as a line
+print line (the length of word)
 
 set multiple to [
     @intrinsic("construct", a singleton record, 11),
     @intrinsic("construct", a singleton record, 12)
 ]
-print the value of the item at 0 in multiple as a line
-print the value of the item at 1 in multiple as a line
+print lines (the value of the item at 0 in multiple) and (the value of the item at 1 in multiple)

@@ -1,14 +1,8 @@
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
-function value as destination:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as destination means: @intrinsic("cast", value, destination)
 
 function ignore value:
     replacement:
@@ -24,11 +18,10 @@ class:
     members:
         number
 
-function the requested pointer for {boolean:condition}:
-    execute:
-        if condition:
-            @intrinsic("return", 0 as a pointer to a sample)
-        @intrinsic("store", instance, @intrinsic("construct", a sample, 1))
-        @intrinsic("return", @intrinsic("address of", instance))
+to get the requested pointer for {boolean:condition}:
+    if condition:
+        @intrinsic("return", 0 as a pointer to a sample)
+    @intrinsic("store", instance, @intrinsic("construct", a sample, 1))
+    @intrinsic("return", @intrinsic("address of", instance))
 
 ignore the requested pointer for @intrinsic("equal", 0, 0)

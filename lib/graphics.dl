@@ -122,18 +122,15 @@ to close [the|] {pointer:window}:
 to set the title of {pointer:window} to {C string:title}:
 	@intrinsic("call", "glfw", "glfwSetWindowTitle", nothing, the GLFW window of window, title)
 
-to show {pointer:window}:
-	@intrinsic("call", "glfw", "glfwShowWindow", nothing, the GLFW window of window)
+to show {pointer:window}: @intrinsic("call", "glfw", "glfwShowWindow", nothing, the GLFW window of window)
 
-to hide {pointer:window}:
-	@intrinsic("call", "glfw", "glfwHideWindow", nothing, the GLFW window of window)
+to hide {pointer:window}: @intrinsic("call", "glfw", "glfwHideWindow", nothing, the GLFW window of window)
 
 to get {pointer:window} is visible:
 	return @intrinsic("call", "glfw", "glfwGetWindowAttrib", an integer, the GLFW window of window, 131076) != 0
 
 to get the cursor position of {pointer:window}:
-	set x to 0.0 as a floating-point number
-	set y to 0.0 as a floating-point number
+	set x and y to 0.0 as a floating-point number
 	@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, the GLFW window of window, the address of x, the address of y)
 	return @intrinsic("construct", a cursor position, x, y)
 
@@ -184,14 +181,12 @@ to request that {pointer:window} close:
 	@intrinsic("call", "glfw", "glfwSetWindowShouldClose", nothing, the GLFW window of window, 1)
 
 to get the framebuffer width of {pointer:window}:
-	set horizontal to 0
-	set vertical to 0
+	set horizontal and vertical to 0
 	@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
 	return horizontal
 
 to get the framebuffer height of {pointer:window}:
-	set horizontal to 0
-	set vertical to 0
+	set horizontal and vertical to 0
 	@intrinsic("call", "glfw", "glfwGetFramebufferSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
 	return vertical
 

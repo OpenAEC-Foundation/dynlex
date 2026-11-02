@@ -36,9 +36,6 @@ bool ensureCallableFunctionGenerated(
 	}
 
 	Section *section = definition->section;
-	if (!instantiationPointer->llvmFunction &&
-		!generateSpecializedFunction(context, section, parameterBindings, *instantiationPointer))
-		return false;
 	requireCompilerInvariant(instantiationPointer->valid, "invalid callable instantiation reached codegen");
 	requireCompilerInvariant(!instantiationPointer->needsReinfer, "unfinished callable instantiation reached codegen");
 	requireCompilerInvariant(instantiationPointer->returnType.isDeduced(), "callable without a return type reached codegen");
@@ -102,7 +99,11 @@ bool ensureCallableFunctionGenerated(
 	}
 
 	if (succeeded) {
-		llvm::CallInst *call = builder.CreateCall(instantiationPointer->llvmFunction, callArguments);
+		llvm::Function *function =
+			generateSpecializedFunction(context, section, parameterBindings, *instantiationPointer, callArguments);
+		if (!function)
+			succeeded = false;
+		llvm::CallInst *call = succeeded ? builder.CreateCall(function, callArguments) : nullptr;
 		for (auto storage = managedParameterStorage.rbegin(); storage != managedParameterStorage.rend(); storage++) {
 			if (!releaseManagedTemporaryStorage(context, *storage)) {
 				succeeded = false;

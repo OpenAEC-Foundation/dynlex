@@ -1,5 +1,4 @@
 import lib/std.dl
 
-function the hash from value and salt:
-    execute:
-        return value
+to get the hash from value and salt:
+    return value

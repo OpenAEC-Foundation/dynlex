@@ -1,54 +1,49 @@
 import unicode.dl
 
-function a Unicode test string:
-    execute:
-        set text to a new string buffer containing 10 bytes
-        store 65 as a byte into the data of text at 0
-        store 194 as a byte into the data of text at 1
-        store 162 as a byte into the data of text at 2
-        store 226 as a byte into the data of text at 3
-        store 130 as a byte into the data of text at 4
-        store 172 as a byte into the data of text at 5
-        store 240 as a byte into the data of text at 6
-        store 159 as a byte into the data of text at 7
-        store 152 as a byte into the data of text at 8
-        store 128 as a byte into the data of text at 9
-        return text
+to get a Unicode test string:
+    set text to a new string buffer containing 10 bytes
+    store 65 as a byte into the data of text at 0
+    store 194 as a byte into the data of text at 1
+    store 162 as a byte into the data of text at 2
+    store 226 as a byte into the data of text at 3
+    store 130 as a byte into the data of text at 4
+    store 172 as a byte into the data of text at 5
+    store 240 as a byte into the data of text at 6
+    store 159 as a byte into the data of text at 7
+    store 152 as a byte into the data of text at 8
+    store 128 as a byte into the data of text at 9
+    return text
 
-function a string containing bytes first second:
-    execute:
-        set text to a new string buffer containing 2 bytes
-        store first as a byte into the data of text at 0
-        store second as a byte into the data of text at 1
-        return text
+to get a string containing bytes first second:
+    set text to a new string buffer containing 2 bytes
+    store first as a byte into the data of text at 0
+    store second as a byte into the data of text at 1
+    return text
 
-function a three byte string from {integer:first} then {integer:second} then {integer:third}:
-    execute:
-        set text to a new string buffer containing 3 bytes
-        store first as a byte into the data of text at 0
-        store second as a byte into the data of text at 1
-        store third as a byte into the data of text at 2
-        return text
+to get a three byte string from {integer:first} then {integer:second} then {integer:third}:
+    set text to a new string buffer containing 3 bytes
+    store first as a byte into the data of text at 0
+    store second as a byte into the data of text at 1
+    store third as a byte into the data of text at 2
+    return text
 
-function a four byte string from {integer:first} then {integer:second} then {integer:third} then {integer:fourth}:
-    execute:
-        set text to a new string buffer containing 4 bytes
-        store first as a byte into the data of text at 0
-        store second as a byte into the data of text at 1
-        store third as a byte into the data of text at 2
-        store fourth as a byte into the data of text at 3
-        return text
+to get a four byte string from {integer:first} then {integer:second} then {integer:third} then {integer:fourth}:
+    set text to a new string buffer containing 4 bytes
+    store first as a byte into the data of text at 0
+    store second as a byte into the data of text at 1
+    store third as a byte into the data of text at 2
+    store fourth as a byte into the data of text at 3
+    return text
 
-function print validation of {string:text}:
-    execute:
-        validate text as UTF-8 and set validation to it
-        print the status of validation
-        print ":"
-        print the error byte offset of validation as a line
+to print validation of {string:text}:
+    validate text as UTF-8 and set validation to it
+    print the status of validation
+    print ":"
+    print line the error byte offset of validation
 
 set text to a Unicode test string
 validate text as UTF-8 and set validation to it
-print the status of validation as a line
+print line the status of validation
 
 set offset to 0
 loop while offset < the length of text:
@@ -57,26 +52,26 @@ loop while offset < the length of text:
     print "@"
     print the byte offset of decoded
     print "-"
-    print the next byte offset of decoded as a line
+    print line the next byte offset of decoded
     set offset to the next byte offset of decoded
 
 decode the UTF-8 code point in text at byte 2 and set middle to it
-print the status of middle as a line
+print line the status of middle
 decode the UTF-8 code point in text at byte 10 and set past to it
-print the status of past as a line
+print line the status of past
 
 set encoded to the UTF-16 position of UTF-8 byte offset 6 in text
 print the status of encoded
 print ":"
-print the position of encoded as a line
+print line the position of encoded
 set position to the UTF-8 byte offset of UTF-16 position 3 in text
 print the status of position
 print ":"
-print the position of position as a line
+print line the position of position
 set surrogate to the UTF-8 byte offset of UTF-16 position 4 in text
-print the status of surrogate as a line
+print line the status of surrogate
 set sequence to the UTF-16 position of UTF-8 byte offset 8 in text
-print the status of sequence as a line
+print line the status of sequence
 
 print validation of a string containing bytes 192 128
 print validation of a string containing bytes 226 130
@@ -96,17 +91,17 @@ set malformed to a string containing bytes 192 128
 decode the UTF-8 code point in malformed at byte 0 and set decoding to it
 print the status of decoding
 print ":"
-print the error byte offset of decoding as a line
+print line the error byte offset of decoding
 set conversion to the UTF-16 position of UTF-8 byte offset 0 in malformed
 print the status of conversion
 print ":"
-print the error byte offset of conversion as a line
+print line the error byte offset of conversion
 
 set source to the string form of "a\r\nb\rc\n"
 scan lines in source and set indexed to it
-print the status of indexed as a line
+print line the status of indexed
 set lines to the line index of indexed
-print the number of lines in lines as a line
+print line the number of lines in lines
 set number to 0
 loop while number < the number of lines in lines:
     set start to the start of line number in lines
@@ -116,37 +111,37 @@ loop while number < the number of lines in lines:
     print "-"
     print the position of finish
     print "-"
-    print the position of following as a line
+    print line the position of following
     set number to (number + 1)
 set newline to the line number at byte offset 1 in lines
 print the status of newline
 print ":"
-print the position of newline as a line
+print line the position of newline
 set carriage to the line number at byte offset 2 in lines
 print the status of carriage
 print ":"
-print the position of carriage as a line
+print line the position of carriage
 set following to the line number at byte offset 3 in lines
 print the status of following
 print ":"
-print the position of following as a line
+print line the position of following
 set nonexistent to the start of line 4 in lines
-print the status of nonexistent as a line
+print line the status of nonexistent
 free indexed
 
 scan lines in a string containing bytes 192 128 and set scanning to it
 print the status of scanning
 print ":"
-print the error byte offset of scanning as a line
+print line the error byte offset of scanning
 free scanning
 
 scan lines in "" and set empty to it
 print the status of empty
 print ":"
-print the number of lines in the line index of empty as a line
+print line the number of lines in the line index of empty
 set beginning to the start of line 0 in the line index of empty
 set ending to the content end of line 0 in the line index of empty
 print the position of beginning
 print "-"
-print the position of ending as a line
+print line the position of ending
 free empty

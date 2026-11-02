@@ -61,14 +61,18 @@ static bool instantiateClassFromArgumentTypes(
 );
 
 struct BindingContext {
-	std::unordered_map<std::string, const Expression *> bindingEntries;
-	std::unordered_map<const VariableReference *, const Expression *> parameterBindingEntries;
+	struct Frame {
+		BindingMap bindings;
+		ParameterBindingMap parameterBindings;
+		std::unordered_map<std::string, VariableReference *> declarations;
+
+		bool operator==(const Frame &) const = default;
+	};
+
+	std::vector<Frame> frames;
 	size_t fingerprint = 0;
 
-	bool operator==(const BindingContext &other) const {
-		return fingerprint == other.fingerprint && bindingEntries == other.bindingEntries &&
-			   parameterBindingEntries == other.parameterBindingEntries;
-	}
+	bool operator==(const BindingContext &other) const { return fingerprint == other.fingerprint && frames == other.frames; }
 };
 
 struct TypeResolutionKey {

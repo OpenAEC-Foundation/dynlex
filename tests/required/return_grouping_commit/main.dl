@@ -6,20 +6,15 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function left - right:
-    execute:
-        return @intrinsic("subtract", left, right)
+to get left - right:
+    return @intrinsic("subtract", left, right)
 
-function value adjusted:
-    execute:
-        return value
+to get value adjusted:
+    return value
 
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
+[a|] byte means: @intrinsic("type", "int", 8)
 
-function the tested form of value:
-    execute:
-        return value - 1 adjusted
+to get the tested form of value:
+    return value - 1 adjusted
 
 ignore @intrinsic("array", the tested form of 4, a byte)

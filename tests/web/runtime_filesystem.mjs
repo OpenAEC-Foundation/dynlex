@@ -65,8 +65,8 @@ for (const importSpec of importSpecs) {
 assert.equal(isSupportedRuntimeImport({ module: "env", name: "unknown" }), false);
 
 const filesystem = createRuntimeFilesystem();
-const emptyLayout = { staticDataEnd: 0 };
-const { env } = buildRuntimeImports(importSpecs, [], filesystem, emptyLayout);
+const emptyLayout = { heapBase: 8 * 1024 * 1024 + 16 };
+const { env } = buildRuntimeImports([], filesystem, emptyLayout);
 const memory = env.__linear_memory;
 let bytes = new Uint8Array(memory.buffer);
 const encoder = new TextEncoder();
@@ -365,7 +365,7 @@ assert.throws(() => env.memmove(5010, memorySizeBeforeInvalidCopy - 1, 3), WebAs
 assert.throws(() => env.memset(memorySizeBeforeInvalidCopy - 1, 0, 3), WebAssembly.RuntimeError);
 assert.equal(memory.buffer.byteLength, memorySizeBeforeInvalidCopy, "memcpy must not grow program memory");
 
-const secondRuntime = buildRuntimeImports(importSpecs, [], filesystem, emptyLayout).env;
+const secondRuntime = buildRuntimeImports([], filesystem, emptyLayout).env;
 const secondBytes = new Uint8Array(secondRuntime.__linear_memory.buffer);
 secondBytes.set(encoder.encode("persist.bin\0"), 1024);
 secondBytes.set(encoder.encode("rb\0"), 1056);
@@ -375,7 +375,7 @@ assert.equal(secondRuntime.fread(2048, 1, 2, stream), 2);
 assert.deepEqual([...secondBytes.subarray(2048, 2050)], [80, 81]);
 assert.equal(secondRuntime.fclose(stream), 0);
 
-const allocatorRuntime = buildRuntimeImports([], [], createRuntimeFilesystem(), emptyLayout).env;
+const allocatorRuntime = buildRuntimeImports([], createRuntimeFilesystem(), emptyLayout).env;
 const releasedAllocation = allocatorRuntime.malloc(16);
 assert.equal(releasedAllocation % 16, 0, "malloc must satisfy the wasm32 C maximum alignment");
 allocatorRuntime.free(releasedAllocation);
@@ -390,9 +390,9 @@ assert.equal(
   "calloc must satisfy the wasm32 C maximum alignment"
 );
 
-const boundaryRuntime = buildRuntimeImports([], [], createRuntimeFilesystem(), emptyLayout).env;
+const boundaryRuntime = buildRuntimeImports([], createRuntimeFilesystem(), emptyLayout).env;
 const boundaryMemory = boundaryRuntime.__linear_memory;
-const boundaryHeapStart = boundaryRuntime.__stack_pointer.value;
+const boundaryHeapStart = emptyLayout.heapBase;
 assert.notEqual(boundaryRuntime.malloc(boundaryMemory.buffer.byteLength - boundaryHeapStart), 0);
 const boundaryLength = boundaryMemory.buffer.byteLength;
 assert.notEqual(boundaryRuntime.malloc(65536), 0);
@@ -403,7 +403,6 @@ assert.equal(
 );
 
 const timeImportRuntime = buildRuntimeImports(
-  [{ module: "env", name: "time" }],
   [],
   createRuntimeFilesystem(),
   emptyLayout
@@ -417,18 +416,15 @@ const timeImportModule = new WebAssembly.Module(new Uint8Array([
 const timeImportInstance = new WebAssembly.Instance(timeImportModule, { env: timeImportRuntime });
 assert.equal(typeof timeImportInstance.exports.call_time(0), "bigint", "an i64 time import must return a BigInt");
 
-const largeStaticDataEnd = 10 * 1024 * 1024 + 3;
+const largeHeapBase = 18 * 1024 * 1024 + 16;
 const largeLayoutRuntime = buildRuntimeImports(
   [],
-  [],
   createRuntimeFilesystem(),
-  { staticDataEnd: largeStaticDataEnd }
+  { heapBase: largeHeapBase }
 ).env;
-const expectedStackEnd = Math.ceil(largeStaticDataEnd / 16) * 16 + 8 * 1024 * 1024;
-assert.equal(largeLayoutRuntime.__stack_pointer.value, expectedStackEnd);
 assert.equal(
   largeLayoutRuntime.malloc(1),
-  expectedStackEnd,
+  largeHeapBase,
   "runtime heap must start above both static data and the program stack"
 );
 

@@ -2,4 +2,4 @@ import lib/std.dl
 
 set {integer:value} to 1
 set {an integer:value} to 2
-print value as a line
+print line value

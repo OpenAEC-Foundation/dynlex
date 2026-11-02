@@ -2,22 +2,17 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/planar3.dl
 
-function check mesh surface {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh surface {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function a square cad mesh profile on {cad plane:profilePlane}:
-    execute:
-        set vertices to an empty list of a cad polyline vertex2
-        append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 0.0)) to vertices
-        append (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 0.0)) to vertices
-        append (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 1.0)) to vertices
-        append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 1.0)) to vertices
-        set polylineValue to the cad polyline2 with vertices vertices and closure true
-        free vertices
-        return a cad planar curve3 of (the cad curve2 of polylineValue) on profilePlane
+to get a square cad mesh profile on {cad plane:profilePlane}:
+    set vertices to an empty list of a cad polyline vertex2
+    append (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 0.0)), (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 0.0)), (a straight cad polyline vertex2 at (a cad vector2 with x 1.0 and y 1.0)) and (a straight cad polyline vertex2 at (a cad vector2 with x 0.0 and y 1.0)) to vertices
+    set polylineValue to the cad polyline2 with vertices vertices and closure true
+    free vertices
+    return a cad planar curve3 of (the cad curve2 of polylineValue) on profilePlane
 
 set profileValue to a square cad mesh profile on (the cad xy plane)
 set pathPlane to a cad plane with origin the cad zero vector3, x axis the cad z axis and y axis the cad x axis
@@ -54,4 +49,4 @@ check mesh surface ((refusedLoft's valid) = false) named "one profile refused"
 free cad surface mesh result refusedLoft
 free oneProfile
 
-print "cadkernel brep mesh surfaces: PASS" as a line
+print line "cadkernel brep mesh surfaces: PASS"

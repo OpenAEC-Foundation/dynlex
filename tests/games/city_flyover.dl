@@ -291,9 +291,8 @@ to draw a block at grid position {floating-point number:column}, {floating-point
         draw a traffic light module at signal in frame
 
 to print the city module statistics:
-    print "story module: 8-11 x 2.8 x 8-11, 12 triangles" as a line
-    print "vehicle module: 3.6 x 1.45 x 1.7, 24 triangles" as a line
-    print "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles" as a line
+    print lines "story module: 8-11 x 2.8 x 8-11, 12 triangles" and "vehicle module: 3.6 x 1.45 x 1.7, 24 triangles"
+    print line "traffic light module: 1.52 x 4.2 x 0.34 envelope, 36 triangles"
 
 set window to a new window with width 1280 and height 720
 print the city module statistics

@@ -115,7 +115,7 @@ loop while (window remains open) and (font failure = false):
 			# Grow if food eaten
 			if head overlaps game's food:
 				increment game's score
-				set game's food to a grid position at x (the remainder of (a random number) divided by board's cells) and y (the remainder of (a random number) divided by board's cells)
+				set game's food to a grid position at x ((a random number) mod board's cells) and y ((a random number) mod board's cells)
 				increment game's length
 
 			# Shift body segments backward
@@ -152,7 +152,7 @@ loop while (window remains open) and (font failure = false):
 		set rendering to the result of drawing "SCORE" as text at x 4 and y 20 using typeface in color red 200, green 200 and blue 200 in frame
 		if rendering failed:
 			set font failure to true
-		if the inverse of font failure:
+		if not font failure:
 			set rendering to the result of drawing game's score as a number at x 100 and y 20 using typeface in color red 255, green 255 and blue 100 in frame
 			if rendering failed:
 				set font failure to true
@@ -161,21 +161,21 @@ loop while (window remains open) and (font failure = false):
 		set rendering to the result of drawing "GAME OVER" as text at x 60 and y 180 using typeface in color red 255, green 255 and blue 255 in frame
 		if rendering failed:
 			set font failure to true
-		if the inverse of font failure:
+		if not font failure:
 			set rendering to the result of drawing "SCORE" as text at x 120 and y 220 using typeface in color red 200, green 200 and blue 200 in frame
 			if rendering failed:
 				set font failure to true
-		if the inverse of font failure:
+		if not font failure:
 			set rendering to the result of drawing game's score as a number at x 196 and y 220 using typeface in color red 255, green 255 and blue 100 in frame
 			if rendering failed:
 				set font failure to true
 
 	display frame
-	if the inverse of font failure:
+	if not font failure:
 		sleep for 150 milliseconds
 
 set {font release} to the result of releasing (the address of typeface)
 close the window
 if font failure or font release failed:
 	return 1
-print game's score as a line
+print line game's score

@@ -6,8 +6,7 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function the product of left and right:
-    execute:
-        return @intrinsic("multiply", left, right)
+to get the product of left and right:
+    return @intrinsic("multiply", left, right)
 
 ignore @intrinsic("type", "int", the product of 4 and 4)

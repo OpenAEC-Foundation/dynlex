@@ -1,0 +1,15 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+function visit {arguments:items}:
+    replacement:
+        @intrinsic("store", {index}, 0)
+        while @intrinsic("less than", index, @intrinsic("type extent", items, 0)):
+            @intrinsic("store", {item}, @intrinsic("extract element", items, index))
+            @intrinsic("discard", item)
+            @intrinsic("store", index, @intrinsic("add", index, 1))
+@intrinsic("store", count, 0)
+while @intrinsic("less than", count, 3):
+    visit 1 and 2
+    @intrinsic("store", count, @intrinsic("add", count, 1))
+@intrinsic("return", @intrinsic("subtract", count, 3))

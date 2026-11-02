@@ -45,6 +45,13 @@ static bool inferSectionFlexCallerBodyFrame(
 	Section *definitionSection = targetFrame.definitionSection;
 	Section *bodySection = targetFrame.bodySection;
 	InstantiatedSectionBody *instantiatedBody = targetFrame.instantiatedBody;
+	if (executeBodyCallSite && !context.staticLoopFrames.empty() && context.staticLoopFrames.back().required) {
+		executeBodyCallSite->inferredCallerBody = context.cloneSectionBody(
+			bodySection, instantiatedBody ? instantiatedBody->parentBody : nullptr,
+			context.parseContext.storageScopeForInvocation(executeBodyCallSite)
+		);
+		instantiatedBody = executeBodyCallSite->inferredCallerBody.get();
+	}
 	BindingFrameStack callerBindings = targetFrame.callerBindings;
 	pushSectionFlexCallerVariableBindings(
 		callerBindings, targetFrame.definitionSection, targetFrame.definitionBody, executionSection, bodySection
@@ -123,6 +130,7 @@ static void inferOrderedExpression(
 	if (!expr)
 		return;
 	context.setExpressionValue(expr, {});
+	expr->inferredArgumentReference.reset();
 	expr->memoryFacts = {};
 	struct ExpressionTraceGuard {
 		InferenceContext &context;
@@ -167,9 +175,15 @@ static void inferOrderedExpression(
 	if (expr->kind == Expression::Kind::PatternCall || typeQuery)
 		argumentEffects.emplace(context);
 	InferredArgumentScope argumentScope(context);
-	// Recurse into arguments first (bottom-up).
-	for (size_t i = 0; i < expr->arguments.size(); i++) {
-		Expression *arg = expr->arguments[i];
+	auto inferArgument = [&](size_t index) {
+		struct ReferenceTargetScope {
+			InferenceContext &context;
+			bool previous;
+			~ReferenceTargetScope() { context.inferringReferenceAssignmentTarget = previous; }
+		} targetScope{context, context.inferringReferenceAssignmentTarget};
+		context.inferringReferenceAssignmentTarget = expr->kind == Expression::Kind::IntrinsicCall &&
+													 intrinsicKind(expr->intrinsicName) == IntrinsicKind::Store && index == 1;
+		Expression *arg = expr->arguments[index];
 		std::optional<InferenceExecutionSnapshot> beforeArgument;
 		if (expr->kind == Expression::Kind::PatternCall)
 			beforeArgument.emplace(context);
@@ -177,11 +191,48 @@ static void inferOrderedExpression(
 			preserveCurrentGrouping && (!context.fixedGroupingRoots || context.fixedGroupingRoots->contains(arg));
 		bool inferred = preserveArgumentGrouping ? inferExpressionWithCurrentGrouping(arg, context, flexBindingFrameStack)
 												 : inferExpression(arg, context, false, flexBindingFrameStack);
-		expr->arguments[i] = arg;
-		if (!inferred)
-			return;
-		if (beforeArgument && beforeArgument->matches(context))
+		expr->arguments[index] = arg;
+		if (inferred && beforeArgument && beforeArgument->matches(context))
 			argumentScope.unchanged.emplace(arg, std::move(*beforeArgument));
+		return inferred;
+	};
+	// The condition executes before its branches. Infer every branch for typing,
+	// but retain execution effects only from reachable paths, as for sections.
+	for (size_t i = 0; expr->kind != Expression::Kind::ArgumentPack && i < expr->arguments.size(); i++) {
+		auto conditional = expr->kind == Expression::Kind::IntrinsicCall
+							   ? conditionalOperands(intrinsicKind(expr->intrinsicName))
+							   : std::nullopt;
+		if (i == 2 && conditional && expr->arguments[1]->type.kind == DataType::Kind::Bool) {
+			InferenceExecutionSnapshot branchInput(context);
+			CompileTimeValue conditionValue =
+				resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
+			const bool *condition = std::get_if<bool>(&conditionValue);
+			std::vector<KnownConstantState> values;
+			std::vector<AddressInferenceState> addresses;
+			std::vector<InferenceContext::SubjectState> subjects;
+			auto rememberPath = [&] {
+				values.push_back(context.currentVariableValues);
+				addresses.push_back(context.currentAddressState);
+				subjects.push_back(context.currentSubject);
+			};
+			if ((!condition && (!conditional->whenFalse || !conditional->whenTrue)) ||
+				(condition && !conditional->selected(*condition)))
+				rememberPath();
+			for (size_t branch = i; branch < expr->arguments.size(); branch++) {
+				branchInput.restoreState(context);
+				InferenceExecutionSnapshot beforeBranch(context);
+				if (!inferArgument(branch))
+					return;
+				if (!condition || conditional->selected(*condition) == branch)
+					rememberPath();
+				else
+					beforeBranch.restore(context);
+			}
+			mergeExecutionStates(context, values, addresses, subjects);
+			break;
+		}
+		if (!inferArgument(i))
+			return;
 	}
 	if (typeQuery)
 		argumentEffects->restore(context);
@@ -236,6 +287,22 @@ static void inferOrderedExpression(
 		break;
 	}
 
+	case Expression::Kind::ArgumentPack: {
+		ArgumentPackValue pack;
+		for (size_t index = 0; index < expr->arguments.size(); index++) {
+			Expression *argument = expr->arguments[index];
+			CompileTimeValue forwarded = resolveStoredCompileTimeValue(argument, flexBindingFrameStack, &context);
+			if (expr->arguments.size() == 1 && std::holds_alternative<ArgumentPackValue>(forwarded))
+				pack = std::get<ArgumentPackValue>(std::move(forwarded));
+			else
+				pack.elements.push_back(captureExpression(context.parseContext, expr, index, flexBindingFrameStack));
+		}
+		expr->type = {DataType::Kind::ArgumentPack};
+		expr->type.arraySize = static_cast<int>(pack.elements.size());
+		context.setExpressionValue(expr, std::move(pack));
+		break;
+	}
+
 	case Expression::Kind::ArrayLiteral: {
 		context.setExpressionValue(expr, {});
 		if (expr->arguments.empty())
@@ -284,6 +351,7 @@ static void inferOrderedExpression(
 				DataType boundType = ensureExpressionType(flexBinding, context, resolvedBinding.bindingFrameStack);
 				if (boundType.isDeduced())
 					expr->type = boundType;
+				expr->inferredArgumentReference = flexBinding->inferredArgumentReference;
 				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);
 				if (!isCompileTimeKnown(variableValue) && expr->type.kind == DataType::Kind::Type)
 					variableValue = TypeReferenceValue::exact(expr->type);
@@ -306,12 +374,24 @@ static void inferOrderedExpression(
 			}
 			if (context.currentInstantiation && var->isGlobal && !expressionIsLValueOnlyUse(context, expr))
 				markCurrentInstantiationImpure(context);
+			restoreRefinedVariableType(expr, var, context);
 			if (var->type.isDeduced())
 				expr->type = var->type;
 			else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
 				expr->type = var->declaredType;
 		}
 		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
+		if (expr->type.kind == DataType::Kind::ArgumentReference && !context.inferringReferenceAssignmentTarget) {
+			CompileTimeValue stored = context.lookupExpressionValue(expr);
+			const auto *capture = std::get_if<ExpressionCapture>(&stored);
+			requireCompilerInvariant(capture && capture->data, "argument reference variable lost its capture");
+			expr->inferredArgumentReference = *capture;
+			Expression *&referenced = capture->data->expression();
+			if (!inferExpression(referenced, context, referenced->type.isDeduced(), capture->data->bindings))
+				return;
+			expr->type = referenced->type;
+			context.setExpressionValue(expr, context.lookupExpressionValue(referenced));
+		}
 		break;
 	}
 

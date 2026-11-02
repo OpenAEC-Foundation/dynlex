@@ -1,8 +1,6 @@
 import lib/path.dl
 
-function check failure {file URI result:result}:
-    execute:
-        print ((result failed) and (result's error message is not empty)) as a line
+to check failure {file URI result:result}: print line ((result failed) and (result's error message is not empty))
 
 set windows to the Windows path style
 set posix to the POSIX path style
@@ -13,7 +11,7 @@ check failure (the path from "file:///tmp/%C0%80" interpreted as a file URI usin
 check failure (the path from "file:///tmp/%ED%A0%80" interpreted as a file URI using posix)
 check failure (the path from "file:///tmp/%F4%90%80%80" interpreted as a file URI using posix)
 set native to the native path style
-print (native's support = (the inverse of (the build target is WebAssembly))) as a line
+print line (native's support = (not (the build target is WebAssembly)))
 set input to the string form of "file:///tmp/test"
 set converted to the path from input interpreted as a file URI
-print (converted's support = (the inverse of (the build target is WebAssembly))) as a line
+print line (converted's support = (not (the build target is WebAssembly)))

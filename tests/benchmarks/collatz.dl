@@ -6,57 +6,36 @@ flex function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("type", "int", bits)
+[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
 
-function value as [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("cast", value, @intrinsic("type", "int", bits))
+value as [a|] {fixed integer:bits} bit integer means: @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function print message as a line:
+function print line message:
     replacement:
         @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%lld\n", message))
 
-function left < right:
-    execute:
-        return @intrinsic("less than", left, right)
+to get left < right:
+    return @intrinsic("less than", left, right)
 
-function left > right:
-    execute:
-        return @intrinsic("greater than", left, right)
+to get left > right:
+    return @intrinsic("greater than", left, right)
 
-function left equals right:
-    execute:
-        return @intrinsic("equal", left, right)
+to get left equals right:
+    return @intrinsic("equal", left, right)
 
-function truth if condition, else falsehood:
-    replacement:
-        @intrinsic("select", condition, truth, falsehood)
+truth if condition, else falsehood means: @intrinsic("select", condition, truth, falsehood)
 
-flex function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
-flex function left * right:
-    replacement:
-        @intrinsic("multiply", left, right)
+left * right means: @intrinsic("multiply", left, right)
 
-flex function left / right:
-    replacement:
-        @intrinsic("divide", left, right)
+left / right means: @intrinsic("divide", left, right)
 
-flex function the remainder of left divided by right:
-    replacement:
-        @intrinsic("modulo", left, right)
+left mod right means: @intrinsic("modulo", left, right)
 
 flex section loop while condition:
     replacement:
@@ -69,8 +48,8 @@ loop while number < 1000000:
     set current to number
     loop while current > 1:
         set steps to steps + 1
-        set remainder to the remainder of current divided by 2
+        set remainder to current mod 2
         set current to ((current / 2) if remainder equals 0, else ((current * 3) + 1))
     set number to number + 1
 
-print steps as a line
+print line steps

@@ -1,20 +1,12 @@
 import lib/path.dl
 
-function check {path result:result} against expected:
-    execute:
-        print whether (result succeeded) and (result's value = expected) as a line
+to check {path result:result} against expected: print line (result succeeded) and (result's value = expected)
 
-function check truth {path truth result:result}:
-    execute:
-        print ((result succeeded) and result's value) as a line
+to check truth {path truth result:result}: print line ((result succeeded) and result's value)
 
-function check falsehood {path truth result:result}:
-    execute:
-        print ((result succeeded) and (the inverse of result's value)) as a line
+to check falsehood {path truth result:result}: print line ((result succeeded) and (not result's value))
 
-function check path failure {path result:result}:
-    execute:
-        print whether (result failed) and (result's error message is not empty) as a line
+to check path failure {path result:result}: print line (result failed) and (result's error message is not empty)
 
 set style to the POSIX path style
 set windows to the Windows path style

@@ -19,16 +19,13 @@ local function visibility private after:
     execute:
         ignore private
 
-function visibility public before:
-    execute:
-        ignore public
+to visibility public before: ignore public
 
-function the result from first module:
-    execute:
-        set record to @intrinsic("construct", a shared record, secret)
-        set output to 0
-        when shared true:
-            set output to record's number
-        return output
+to get the result from first module:
+    set record to @intrinsic("construct", a shared record, secret)
+    set output to 0
+    when shared true:
+        set output to record's number
+    return output
 
 visibility 1 after

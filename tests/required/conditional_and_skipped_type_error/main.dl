@@ -1,0 +1,1 @@
+@intrinsic("discard", @intrinsic("and", @intrinsic("equal", 1, 2), 7))

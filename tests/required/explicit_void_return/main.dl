@@ -1,5 +1,3 @@
-function finish:
-    execute:
-        @intrinsic("return")
+to finish: @intrinsic("return")
 
 finish

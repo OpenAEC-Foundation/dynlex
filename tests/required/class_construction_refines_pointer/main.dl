@@ -1,6 +1,4 @@
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
 function return value:
     replacement:
@@ -26,14 +24,12 @@ class:
     members:
         payload as a pointer to a payload
 
-function a payload pointer:
-    execute:
-        set initial to @intrinsic("construct", a payload, 42)
-        return @intrinsic("address of", initial)
+to get a payload pointer:
+    set initial to @intrinsic("construct", a payload, 42)
+    return @intrinsic("address of", initial)
 
-function the wrapping of {a pointer to a payload:value}:
-    execute:
-        return @intrinsic("construct", an envelope, value)
+to get the wrapping of {a pointer to a payload:value}:
+    return @intrinsic("construct", an envelope, value)
 
 set wrapped to the wrapping of a payload pointer
 ignore the payload of wrapped

@@ -1,10 +1,6 @@
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
+nothing means: @intrinsic("type", "nothing")
 
-function finish:
-    execute:
-        @intrinsic("return")
+to finish: @intrinsic("return")
 
 flex function continue after {nothing:action}:
     replacement:

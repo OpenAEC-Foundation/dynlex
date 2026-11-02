@@ -1,6 +1,4 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
+integer means: @intrinsic("type", "int")
 
 class:
     patterns:

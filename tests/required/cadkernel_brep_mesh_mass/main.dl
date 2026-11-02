@@ -2,20 +2,17 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh mass {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh mass {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function check mesh mass {a 64 bit floating-point number:value} near {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:tolerance} named {C string:label}:
-    execute:
-        check mesh mass ((the absolute value of (value - expected)) <= tolerance) named label
+to check mesh mass {a 64 bit floating-point number:value} near {a 64 bit floating-point number:expected} within {a 64 bit floating-point number:tolerance} named {C string:label}:
+    check mesh mass ((the absolute value of (value - expected)) <= tolerance) named label
 
 set origins to a list containing (the cad zero vector3)
 append (a cad vector3 with x 1000000000.0, y -2000000000.0 and z 3000000000.0) to origins
-loop originIndex from 0 to the length of origins:
-    set origin to the item at originIndex in origins
+for each origin in origins:
     set made to the cad cuboid at origin with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
     check mesh mass made's valid named "cuboid"
     set meshValue to the cad mesh of made's value with maximum angle (the cad default sampling angle) within 1e-9
@@ -41,4 +38,4 @@ free origins
 set emptyMesh to the cad mesh of (an empty cad body) with maximum angle (the cad default sampling angle) within 1e-9
 check mesh mass (((the cad inertial properties of emptyMesh)'s valid) = false) named "empty"
 free cad mesh emptyMesh
-print "cadkernel brep mesh mass: PASS" as a line
+print line "cadkernel brep mesh mass: PASS"

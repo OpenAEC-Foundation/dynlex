@@ -111,40 +111,35 @@ to get the string form of {vector:value}:
     add the string form of "]" to result
     return result
 
-function the dot product of {vector:left} and {vector:right}:
-    execute:
-        set leftHorizontal to the x of left
-        set leftVertical to the y of left
-        set leftDepth to the z of left
-        set rightHorizontal to the x of right
-        set rightVertical to the y of right
-        set rightDepth to the z of right
-        set horizontal to leftHorizontal * rightHorizontal
-        set vertical to leftVertical * rightVertical
-        set depth to leftDepth * rightDepth
-        return (horizontal + vertical) + depth
+to get the dot product of {vector:left} and {vector:right}:
+    set leftHorizontal to the x of left
+    set leftVertical to the y of left
+    set leftDepth to the z of left
+    set rightHorizontal to the x of right
+    set rightVertical to the y of right
+    set rightDepth to the z of right
+    set horizontal to leftHorizontal * rightHorizontal
+    set vertical to leftVertical * rightVertical
+    set depth to leftDepth * rightDepth
+    return (horizontal + vertical) + depth
 
-function the cross product of {vector:left} and {vector:right}:
-    execute:
-        return a new vector with x (the y of left) * (the z of right) - (the z of left) * (the y of right), y (the z of left) * (the x of right) - (the x of left) * (the z of right) and z (the x of left) * (the y of right) - (the y of left) * (the x of right)
+to get the cross product of {vector:left} and {vector:right}:
+    return a new vector with x (the y of left) * (the z of right) - (the z of left) * (the y of right), y (the z of left) * (the x of right) - (the x of left) * (the z of right) and z (the x of left) * (the y of right) - (the y of left) * (the x of right)
 
-function the squared length of {vector:value}:
-    execute:
-        return the dot product of value and value
+to get the squared length of {vector:value}:
+    return the dot product of value and value
 
-function the length of {vector:value}:
-    execute:
-        return the square root of the squared length of value
+to get the length of {vector:value}:
+    return the square root of the squared length of value
 
-function {vector:value} normalized:
-    execute:
-        set magnitude to the length of value
-        if magnitude = 0.0:
-            set horizontal to 0.0 as (the type of ((the x of value) / magnitude))
-            set vertical to 0.0 as (the type of ((the y of value) / magnitude))
-            set depth to 0.0 as (the type of ((the z of value) / magnitude))
-            return a new vector with x horizontal, y vertical and z depth
-        set horizontal to (the x of value) / magnitude
-        set vertical to (the y of value) / magnitude
-        set depth to (the z of value) / magnitude
+to get {vector:value} normalized:
+    set magnitude to the length of value
+    if magnitude = 0.0:
+        set horizontal to 0.0 as (the type of ((the x of value) / magnitude))
+        set vertical to 0.0 as (the type of ((the y of value) / magnitude))
+        set depth to 0.0 as (the type of ((the z of value) / magnitude))
         return a new vector with x horizontal, y vertical and z depth
+    set horizontal to (the x of value) / magnitude
+    set vertical to (the y of value) / magnitude
+    set depth to (the z of value) / magnitude
+    return a new vector with x horizontal, y vertical and z depth

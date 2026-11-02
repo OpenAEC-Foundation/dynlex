@@ -10,41 +10,23 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function fixed quantity:
-    replacement:
-        @intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("type", "int", bits)
+[a|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
 
-function value as [a|] {fixed integer:bits} bit integer:
-    replacement:
-        @intrinsic("cast", value, @intrinsic("type", "int", bits))
+value as [a|] {fixed integer:bits} bit integer means: @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function affirmative if condition, else negative:
-    replacement:
-        @intrinsic("select", condition, affirmative, negative)
+affirmative if condition, else negative means: @intrinsic("select", condition, affirmative, negative)
 
-function the build target is WebAssembly:
-    replacement:
-        @intrinsic("target is", "wasm")
+the build target is WebAssembly means: @intrinsic("target is", "wasm")
 
-function left = right:
-    replacement:
-        @intrinsic("equal", left, right)
+left = right means: @intrinsic("equal", left, right)
 
-function the WebAssembly output result for message:
-    replacement:
-        @intrinsic("call", "env", "dynlex_print_i64", a 32 bit integer, message as a 64 bit integer)
+the WebAssembly output result for message means: @intrinsic("call", "env", "dynlex_print_i64", a 32 bit integer, message as a 64 bit integer)
 
-function the native output result for message:
-    replacement:
-        @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%ld", message as a 64 bit integer)
+the native output result for message means: @intrinsic("variadic call", "libc", "printf", a 32 bit integer, 1, "%ld", message as a 64 bit integer)
 
 function print message:
     replacement:
@@ -54,9 +36,7 @@ function print message:
             else (the native output result for message)
         )
 
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
 # Simple test
 set first to 42

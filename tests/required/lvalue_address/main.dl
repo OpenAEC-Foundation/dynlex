@@ -2,13 +2,9 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
 class:
     patterns:
@@ -36,10 +32,9 @@ class:
         @intrinsic("store", count, @intrinsic("subtract", @intrinsic("dereference", @intrinsic("property", @intrinsic("lifecycle value"), "references")), 1))
         @intrinsic("store at", @intrinsic("property", @intrinsic("lifecycle value"), "references"), count)
 
-function pointer after incrementing counter:
-    execute:
-        @intrinsic("store", counter, @intrinsic("add", counter, 1))
-        @intrinsic("return", pointer)
+to get pointer after incrementing counter:
+    @intrinsic("store", counter, @intrinsic("add", counter, 1))
+    @intrinsic("return", pointer)
 
 @intrinsic("store", number, 10)
 @intrinsic("store", pointer, @intrinsic("address of", number))

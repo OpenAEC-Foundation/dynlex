@@ -1,8 +1,7 @@
 import lib/process.dl
 
-function the lifecycle test interpreter:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the lifecycle test interpreter:
+    return "python" if the process platform is Windows, else "python3"
 
 set discovery to a process command for the lifecycle test interpreter
 add "-c" as an argument to discovery
@@ -16,14 +15,13 @@ add "import os; os.remove('sentinel.tmp') if os.path.exists('sentinel.tmp') else
 use "tests/required/process_lifecycle_cleanup" as the working directory of setup
 run setup and set preparation to it
 
-function whether an abandoned process launches using interpreter:
-    execute:
-        set command to a process command for interpreter
-        add "-c" as an argument to command
-        add "import time; time.sleep(0.4); open('sentinel.tmp', 'w').close()" as an argument to command
-        use "tests/required/process_lifecycle_cleanup" as the working directory of command
-        launch command and set child to it
-        return child was launched
+to get whether an abandoned process launches using interpreter:
+    set command to a process command for interpreter
+    add "-c" as an argument to command
+    add "import time; time.sleep(0.4); open('sentinel.tmp', 'w').close()" as an argument to command
+    use "tests/required/process_lifecycle_cleanup" as the working directory of command
+    launch command and set child to it
+    return child was launched
 
 set abandoned to whether an abandoned process launches using interpreter
 
@@ -33,8 +31,5 @@ add "import os,sys,time; time.sleep(1); existed=os.path.exists('sentinel.tmp'); 
 use "tests/required/process_lifecycle_cleanup" as the working directory of verification
 run verification and set check to it
 
-print whether found succeeded as a line
-print whether preparation succeeded as a line
-print abandoned as a line
-print whether check succeeded as a line
-print whether (check's standard output = "False\n") as a line
+print lines (found succeeded), (preparation succeeded), abandoned and (check succeeded)
+print line (check's standard output = "False\n")

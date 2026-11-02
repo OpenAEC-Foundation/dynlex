@@ -95,11 +95,10 @@ notifyLsp("initialized", {});
 const mainUri = "file:///workspace/main.dl";
 const mainSource = `import lib/std.dl
 
-function value squared:
-    execute:
-        return value * value
+to get value squared:
+    return value * value
 
-print 8 squared as a line
+print line 8 squared
 `;
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [mainSource]);
 const didOpenMessages = notifyLsp("textDocument/didOpen", {
@@ -166,18 +165,18 @@ if (typeof wasmBase64 !== "string" || wasmBase64.length === 0) {
 const textDocument = { uri: mainUri };
 const hoverPayload = requestLsp("textDocument/hover", {
   textDocument,
-  position: { line: 6, character: 8 }
+  position: { line: 5, character: 14 }
 });
 assert.ok(hoverPayload?.contents, `Expected hover payload, got: ${JSON.stringify(hoverPayload)}`);
 
 const definitionPayload = requestLsp("textDocument/definition", {
   textDocument,
-  position: { line: 6, character: 8 }
+  position: { line: 5, character: 14 }
 });
 assert.equal(definitionPayload?.uri, mainUri);
 const importedDefinitionPayload = requestLsp("textDocument/definition", {
   textDocument,
-  position: { line: 6, character: 2 }
+  position: { line: 5, character: 2 }
 });
 assert.notEqual(importedDefinitionPayload?.uri, mainUri);
 assert.equal(
@@ -187,7 +186,7 @@ assert.equal(
 
 const completionPayload = requestLsp("textDocument/completion", {
   textDocument,
-  position: { line: 6, character: 3 }
+  position: { line: 5, character: 3 }
 });
 assert.ok(Array.isArray(completionPayload?.items) && completionPayload.items.length > 0);
 
@@ -249,7 +248,7 @@ notifyLsp("dynlex/activeCursorChanged", {
   clientId: "web-smoke",
   uri: mainUri,
   version: 1,
-  position: { line: 6, character: 8 }
+  position: { line: 5, character: 14 }
 });
 
 const documentText = requestLsp("dynlex/readDocument", textDocument);
@@ -259,8 +258,8 @@ assert.match(standardLibraryText, /function|flex|import/);
 
 const quickFixDiagnostic = {
   range: {
-    start: { line: 6, character: 0 },
-    end: { line: 6, character: 5 }
+    start: { line: 5, character: 0 },
+    end: { line: 5, character: 5 }
   },
   severity: 1,
   message: "synthetic quick fix",
@@ -270,8 +269,8 @@ const quickFixDiagnostic = {
         title: "Replace print",
         replacement: "print",
         range: {
-          start: { line: 6, character: 0 },
-          end: { line: 6, character: 5 }
+          start: { line: 5, character: 0 },
+          end: { line: 5, character: 5 }
         },
         uri: mainUri
       }
@@ -293,8 +292,8 @@ const didChangeMessages = notifyLsp("textDocument/didChange", {
   contentChanges: [
     {
       range: {
-        start: { line: 6, character: 6 },
-        end: { line: 6, character: 7 }
+        start: { line: 5, character: 11 },
+        end: { line: 5, character: 12 }
       },
       text: "9"
     }
@@ -428,6 +427,42 @@ if (
   }`);
 }
 
+moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], [
+  `an integer means: @intrinsic("type", "int")
+class:
+    patterns:
+        a type-only resource
+    members:
+        value as an integer
+    retain:
+        @intrinsic("discard", @intrinsic("lifecycle value"))
+    release:
+        @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))
+@intrinsic("discard", @intrinsic("size of", a type-only resource))
+to increase value:
+    @intrinsic("store", value, @intrinsic("add", value, 1.0))
+function run:
+    globals: number
+    execute:
+        @intrinsic("store", local, 0.5)
+        increase local
+        increase number
+@intrinsic("store", number, @intrinsic("extract element", @intrinsic("shader input", "FragCoord"), 0))
+run
+@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), number, 0.0, 0.0, 1.0))
+`
+]);
+const globalReferenceStatus = moduleInstance.ccall(
+  "dynlex_web_compile_and_emit_shader_spirv", "number", ["string"], ["fragment"]
+);
+assert.equal(
+  globalReferenceStatus, 0,
+  moduleInstance.ccall("dynlex_web_get_diagnostics_json", "string", [], [])
+);
+const globalReferenceSpirv = moduleInstance.ccall("dynlex_web_get_output_shader_spirv_base64", "string", [], []);
+const globalReferenceWgsl = translator.translate(Uint8Array.from(Buffer.from(globalReferenceSpirv, "base64")));
+assert.match(globalReferenceWgsl, /@fragment/);
+
 moduleInstance.ccall("dynlex_web_set_main_source", null, ["string"], ["this shader does not compile"]);
 const invalidShaderStatus = moduleInstance.ccall(
   "dynlex_web_compile_and_emit_shader_spirv",
@@ -451,10 +486,10 @@ if (invalidShaderSpirv !== "") {
 const wasmBytes = Uint8Array.from(Buffer.from(wasmBase64, "base64"));
 const wasmModule = await WebAssembly.compile(wasmBytes);
 const importSpecs = WebAssembly.Module.imports(wasmModule);
+assert.ok(importSpecs.every(isSupportedRuntimeImport), "Program imports must be supported by the runtime");
 const stdoutChunks = [];
 const runtimeFilesystem = createRuntimeFilesystem();
 const runtimeImports = buildRuntimeImports(
-  importSpecs,
   stdoutChunks,
   runtimeFilesystem,
   inspectRuntimeWasmLayout(wasmBytes)
@@ -495,7 +530,6 @@ async function compileAndRun(source) {
 
   const output = [];
   const imports = buildRuntimeImports(
-    compiledImports,
     output,
     runtimeFilesystem,
     inspectRuntimeWasmLayout(compiledBytes)
@@ -505,17 +539,28 @@ async function compileAndRun(source) {
   if (typeof compiledEntryPoint !== "function") {
     throw new Error("Expected filesystem program entry point export named 'main' or '_start'");
   }
-  compiledEntryPoint();
+  assert.equal(compiledEntryPoint(), 0, "Compiled program must return successfully");
   return output.join("");
 }
 
+assert.equal(await compileAndRun(`to get pointer is null:
+    @intrinsic("return", @intrinsic("equal", pointer, @intrinsic("cast", 0, @intrinsic("type", "string"))))
+@intrinsic("return", "x" is null)
+`), "");
+
+const capturedStorageSource = await readFile(
+  path.resolve(import.meta.dirname, "../required/argument_pack_property_assignment/main.dl"),
+  "utf8"
+);
+assert.equal(await compileAndRun(capturedStorageSource), "");
+
 const writeOutput = await compileAndRun(`import lib/filesystem.dl
 
-write the string form of "saved" to the file at "session.txt" and print whether it succeeded as a line
-append the string form of "-data" to the file at "session.txt" and print whether it succeeded as a line
-copy the filesystem entry at "session.txt" to "copy.txt" and print whether it succeeded as a line
-rename the filesystem entry at "copy.txt" to "moved.txt" and print whether it succeeded as a line
-delete the filesystem entry at "session.txt" and print whether it succeeded
+write the string form of "saved" to the file at "session.txt" and print line it succeeded
+append the string form of "-data" to the file at "session.txt" and print line it succeeded
+copy the filesystem entry at "session.txt" to "copy.txt" and print line it succeeded
+rename the filesystem entry at "copy.txt" to "moved.txt" and print line it succeeded
+delete the filesystem entry at "session.txt" and print it succeeded
 `);
 if (writeOutput !== "true\ntrue\ntrue\ntrue\ntrue") {
   throw new Error(`Unexpected filesystem mutation output: ${JSON.stringify(writeOutput)}`);
@@ -523,9 +568,9 @@ if (writeOutput !== "true\ntrue\ntrue\ntrue\ntrue") {
 
 const readOutput = await compileAndRun(`import lib/filesystem.dl
 
-read the file at "moved.txt" and print whether it succeeded as a line
-print the contents of it as a line
-delete the filesystem entry at "moved.txt" and print whether it succeeded
+read the file at "moved.txt" and print line it succeeded
+print line the contents of it
+delete the filesystem entry at "moved.txt" and print it succeeded
 `);
 if (readOutput !== "true\nsaved-data\ntrue") {
   throw new Error(`Unexpected persistent filesystem output: ${JSON.stringify(readOutput)}`);
@@ -533,15 +578,14 @@ if (readOutput !== "true\nsaved-data\ntrue") {
 
 const metadataOutput = await compileAndRun(`import lib/filesystem.dl
 
-create a directory at "metadata" and print whether it succeeded as a line
-print whether "metadata" is a regular file as a line
-print whether "metadata" is readable as a line
-write the string form of "contents" to the file at "metadata/file.txt" and print whether it succeeded as a line
-print whether "metadata/file.txt" is a regular file as a line
+create a directory at "metadata" and print line it succeeded
+print lines ("metadata" is a regular file) and ("metadata" is readable)
+write the string form of "contents" to the file at "metadata/file.txt" and print line it succeeded
+print line "metadata/file.txt" is a regular file
 set entry to the file system entry at "metadata/file.txt"
-print whether entry's modification time's seconds > 0 as a line
-read the file at "missing.txt" and print whether it succeeded as a line
-print whether the error message of it is not empty as a line
+print line entry's modification time's seconds > 0
+read the file at "missing.txt" and print line it succeeded
+print line the error message of it is not empty
 delete the filesystem entry at "metadata/file.txt"
 delete the filesystem entry at "metadata"
 `);
@@ -553,17 +597,10 @@ const transactionOutput = await compileAndRun(`import lib/filesystem.dl
 
 write the string form of "web" to the file at "transaction-source.txt"
 set entry to the file system entry at "transaction-source.txt"
-print whether entry is supported as a line
-print whether entry lookup succeeded as a line
-print whether entry was found as a line
-print whether entry is a regular file as a line
-print whether entry's mode is unsupported as a line
-print whether entry supports modification times as a line
-print whether entry's identity is unsupported as a line
+print lines (entry is supported), (entry lookup succeeded), (entry was found) and (entry is a regular file)
+print lines (entry's mode is unsupported), (entry supports modification times) and (entry's identity is unsupported)
 create a staging file beside "transaction-source.txt" and set staging to it
-print whether staging is unsupported as a line
-print whether staging failed as a line
-print whether staging's error message is not empty as a line
+print lines (staging is unsupported), (staging failed) and (staging's error message is not empty)
 delete the filesystem entry at "transaction-source.txt"
 `);
 if (transactionOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
@@ -574,21 +611,15 @@ const pathOutput = await compileAndRun(`import lib/path.dl
 
 set style to the POSIX path style
 set decoding to the path from "file:///tmp/%C3%A9%20path" interpreted as a file URI using style
-print whether decoding succeeded as a line
-print whether decoding is supported as a line
-print whether (decoding's value = "/tmp/é path") as a line
+print lines (decoding succeeded), (decoding is supported) and (decoding's value = "/tmp/é path")
 set encoding to the file URI representing "/tmp/é path" using style
-print whether ((encoding succeeded) and ((encoding is supported) and ((encoding's value) = "file:///tmp/%C3%A9%20path"))) as a line
+print line ((encoding succeeded) and ((encoding is supported) and ((encoding's value) = "file:///tmp/%C3%A9%20path")))
 
 set resolution to the path from (the string form of "file:///tmp/native") interpreted as a file URI
-print whether resolution failed as a line
-print whether resolution is unsupported as a line
-print whether (resolution's value is empty) as a line
-print whether resolution's error message is not empty as a line
+print lines (resolution failed), (resolution is unsupported) and (resolution's value is empty)
+print line resolution's error message is not empty
 set reference to the file URI for (the string form of "/tmp/native") interpreted as a native path
-print whether reference failed as a line
-print whether reference is unsupported as a line
-print whether reference's error message is not empty as a line
+print lines (reference failed), (reference is unsupported) and (reference's error message is not empty)
 `);
 if (pathOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
   throw new Error(`Unexpected browser path output: ${JSON.stringify(pathOutput)}`);
@@ -600,20 +631,11 @@ set executable to the running executable path
 set directory to the running executable directory
 set platform to whether the host platform is Windows
 read a chunk from the standard input and set input to it
-print whether executable failed as a line
-print whether executable is unsupported as a line
-print whether executable's error message is not empty as a line
-print whether directory failed as a line
-print whether directory is unsupported as a line
-print whether directory's error message is not empty as a line
-print whether platform failed as a line
-print whether platform is unsupported as a line
-print whether platform's error message is not empty as a line
-print whether input failed as a line
-print whether input is unsupported as a line
-print whether the length of input's contents is 0 as a line
-print whether input has not reached the end of file as a line
-print whether input's error message is not empty as a line
+print lines (executable failed), (executable is unsupported) and (executable's error message is not empty)
+print lines (directory failed), (directory is unsupported) and (directory's error message is not empty)
+print lines (platform failed), (platform is unsupported), (platform's error message is not empty) and (input failed)
+print lines (input is unsupported), (the length of input's contents is 0) and (input has not reached the end of file)
+print line input's error message is not empty
 `);
 if (hostOutput !== "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n") {
   throw new Error(`Unexpected browser host output: ${JSON.stringify(hostOutput)}`);
@@ -652,9 +674,7 @@ class:
         count as a 32 bit integer
         tail as a byte
 
-function an aligned layout sample with marker {byte:marker}, count {a 32 bit integer:count} and tail {byte:tail}:
-    replacement:
-        @intrinsic("construct", an aligned layout sample, marker, count, tail)
+an aligned layout sample with marker {byte:marker}, count {a 32 bit integer:count} and tail {byte:tail} means: @intrinsic("construct", an aligned layout sample, marker, count, tail)
 
 class:
     patterns:
@@ -662,16 +682,13 @@ class:
     members:
         value
 
-print the size of a pointer to a generic layout sample as a line
-print the size of a pointer to a pointer to a generic layout sample as a line
-print @intrinsic("size of", @intrinsic("array", 3, a pointer to a generic layout sample)) as a line
-print the size of a string as a line
-print the size of a layout sample as a line
-print the size of a C long integer as a line
-print the size of an aligned layout sample as a line
+print line the size of a pointer to a generic layout sample
+print line the size of a pointer to a pointer to a generic layout sample
+print line @intrinsic("size of", @intrinsic("array", 3, a pointer to a generic layout sample))
+print lines (the size of a string), (the size of a layout sample) and (the size of a C long integer)
+print line the size of an aligned layout sample
 set sample to an aligned layout sample with marker 1 as a byte, count 42 and tail 2 as a byte
-print sample's count as a line
-print sample's tail as a line
+print lines sample's count and sample's tail
 `);
 if (targetLayoutOutput !== "4\n4\n12\n12\n20\n4\n16\n42\n2\n") {
   throw new Error(`Unexpected wasm target layout output: ${JSON.stringify(targetLayoutOutput)}`);

@@ -1,14 +1,9 @@
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
+[a|] byte means: @intrinsic("type", "int", 8)
 
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function value as destination:
-    execute:
-        return @intrinsic("cast", value, destination)
+to get value as destination:
+    return @intrinsic("cast", value, destination)
 
 function ignore value:
     replacement:
@@ -18,8 +13,7 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function an empty pointer:
-    execute:
-        return 0 as a pointer to a byte
+to get an empty pointer:
+    return 0 as a pointer to a byte
 
 ignore an empty pointer

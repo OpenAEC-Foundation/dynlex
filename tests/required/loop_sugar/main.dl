@@ -4,20 +4,20 @@ set sum to 0
 
 loop 3 times:
     add 1 to sum
-print sum as a line
+print line sum
 
 loop ascending from 2 to 5:
     add ascending to sum
-print sum as a line
+print line sum
 
 loop inclusive from 1 through 3:
     add inclusive to sum
-print sum as a line
+print line sum
 
 loop descending from 5 down to 2:
     add descending to sum
-print sum as a line
+print line sum
 
 loop reverse from 3 down through 1:
     add reverse to sum
-print sum as a line
+print line sum

@@ -6,20 +6,16 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function left[ |]+[ |]right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left[ |]+[ |]right:
+    return @intrinsic("add", left, right)
 
-function left[ |]-[ |]right:
-    execute:
-        return @intrinsic("subtract", left, right)
+to get left[ |]-[ |]right:
+    return @intrinsic("subtract", left, right)
 
-function left[ |]*[ |]right:
-    execute:
-        return @intrinsic("multiply", left, right)
+to get left[ |]*[ |]right:
+    return @intrinsic("multiply", left, right)
 
-function first second suffix:
-    execute:
-        return @intrinsic("add", first, second)
+to get first second suffix:
+    return @intrinsic("add", first, second)
 
 set red to (red * 0.5 + 0.5 set green to green * 0.5 +import0.5)

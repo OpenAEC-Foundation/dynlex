@@ -1,0 +1,255 @@
+# Double-sided comparisons share their middle operand and short-circuit.
+
+import lib/std.dl
+
+function left < middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center < right
+
+function left < middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center <= right
+
+function left < middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center > right
+
+function left < middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center >= right
+
+function left < middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center = right
+
+function left < middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first < center and center != right
+
+function left <= middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center < right
+
+function left <= middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center <= right
+
+function left <= middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center > right
+
+function left <= middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center >= right
+
+function left <= middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center = right
+
+function left <= middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first <= center and center != right
+
+function left > middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center < right
+
+function left > middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center <= right
+
+function left > middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center > right
+
+function left > middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center >= right
+
+function left > middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center = right
+
+function left > middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first > center and center != right
+
+function left >= middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center < right
+
+function left >= middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center <= right
+
+function left >= middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center > right
+
+function left >= middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center >= right
+
+function left >= middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center = right
+
+function left >= middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first >= center and center != right
+
+function left = middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center < right
+
+function left = middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center <= right
+
+function left = middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center > right
+
+function left = middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center >= right
+
+function left = middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center = right
+
+function left = middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first = center and center != right
+
+function left != middle < right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center < right
+
+function left != middle <= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center <= right
+
+function left != middle > right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center > right
+
+function left != middle >= right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center >= right
+
+function left != middle = right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center = right
+
+function left != middle != right:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {first}, left)
+        @intrinsic("store", {center}, middle)
+        first != center and center != right

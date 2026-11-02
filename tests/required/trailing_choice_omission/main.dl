@@ -2,27 +2,21 @@ import std.dl
 
 # A trailing choice with an empty alternative can be omitted entirely.
 
-function describe amount [loudly|]:
-	execute:
-		print amount as a line
+to describe amount [loudly|]: print line amount
 
 describe 4 loudly
 describe 9
 
 # The same works when the trailing alternative is a parameter: bound when the
 # caller supplies it, a fresh local when omitted.
-function amount stretched [by factor|]:
-	execute:
-		set factor to (amount * 3)
-		return factor
+to get amount stretched [by factor|]:
+	set factor to (amount * 3)
+	return factor
 
-print (2 stretched by 5) as a line
-print (4 stretched) as a line
+print lines (2 stretched by 5) and (4 stretched)
 
 # Adjacent omittable choices: every combination composes with clean separators.
-function report [gently|] [twice|]:
-	execute:
-		print 5 as a line
+to report [gently|] [twice|]: print line 5
 
 report
 report gently
@@ -30,9 +24,7 @@ report twice
 report gently twice
 
 # Author-placed spaces inside alternatives are equivalent to spaces outside.
-function start [the |]drill:
-	execute:
-		print 8 as a line
+to start [the |]drill: print line 8
 
 start the drill
 start drill

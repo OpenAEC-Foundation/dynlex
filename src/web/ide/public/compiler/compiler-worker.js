@@ -287,7 +287,6 @@ async function runLastSuccessfulProgram() {
 
   const stdoutChunks = [];
   const importsObject = runtimeImports.buildRuntimeImports(
-    imports,
     stdoutChunks,
     state.runtimeFilesystem,
     runtimeImports.inspectRuntimeWasmLayout(state.lastSuccessfulWasm)

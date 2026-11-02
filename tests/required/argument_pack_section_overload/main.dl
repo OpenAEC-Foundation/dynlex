@@ -1,0 +1,21 @@
+import lib/std.dl
+
+# Override the ordinary section only for compile-time argument packs.
+flex section for each item [at index|] in {an argument pack:values}:
+    replacement:
+        loop index from (the length of values) - 1 down to -1:
+            set item to the item at index in values
+            execute the body
+
+function reversed decimal {arguments:digits}:
+    replacement:
+        set {accumulated} to 0
+        for each {digit} in digits:
+            set accumulated to (accumulated * 10) + digit
+        {accumulated}
+
+print line reversed decimal 1, 2 and 3
+set accumulated to 0
+for each digit in [1, 2, 3]:
+    set accumulated to (accumulated * 10) + digit
+print line accumulated

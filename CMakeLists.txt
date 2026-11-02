@@ -169,6 +169,19 @@ if(NOT DYNLEX_LLVM_VCS_ID STREQUAL DYNLEX_EXPECTED_LLVM_VCS_ID)
     message(FATAL_ERROR "LLVM toolchain was not built from the pinned DynLex fork")
 endif()
 
+set(DYNLEX_LLD_TOOLCHAIN_MARKER "${DYNLEX_LLVM_INSTALL_DIR}/.dynlex-lld-toolchain")
+if(NOT EXISTS "${DYNLEX_LLD_TOOLCHAIN_MARKER}")
+    message(FATAL_ERROR "Pinned WebAssembly linker is missing; run scripts/build_llvm.sh")
+endif()
+file(READ "${DYNLEX_LLD_TOOLCHAIN_MARKER}" DYNLEX_LLD_TOOLCHAIN_ID)
+string(STRIP "${DYNLEX_LLD_TOOLCHAIN_ID}" DYNLEX_LLD_TOOLCHAIN_ID)
+if(NOT DYNLEX_LLD_TOOLCHAIN_ID STREQUAL DYNLEX_EXPECTED_LLVM_TOOLCHAIN_ID)
+    message(FATAL_ERROR "WebAssembly linker does not match the pinned LLVM profile")
+endif()
+find_package(LLD REQUIRED CONFIG
+    PATHS "${DYNLEX_LLVM_INSTALL_DIR}/lib/cmake/lld" NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+include_directories(SYSTEM ${LLD_INCLUDE_DIRS})
+
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 separate_arguments(DYNLEX_LLVM_COMPILE_OPTIONS NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 
@@ -470,7 +483,7 @@ if(NOT EMSCRIPTEN)
         )
     endif()
 
-    target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json)
+    target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json lldWasm)
     dynlex_link_llvm(${PROJECT_NAME} ${DYNLEX_LLVM_NATIVE_COMPONENTS})
     if(WIN32)
         target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 shell32 ole32 uuid)
@@ -619,7 +632,7 @@ if(DYNLEX_WEB)
     )
     target_compile_definitions(dynlex_web PRIVATE DYNLEX_WEB=1 DYNLEX_VERSION="${PROJECT_VERSION}")
     target_compile_options(dynlex_web PRIVATE "-fexceptions")
-    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json spirv-cross-core)
+    target_link_libraries(dynlex_web PRIVATE nlohmann_json::nlohmann_json spirv-cross-core lldWasm)
     dynlex_link_llvm(dynlex_web ${DYNLEX_LLVM_COMMON_COMPONENTS} SPIRV)
 
     set(DYNLEX_WEB_EXPORTED_FUNCTIONS

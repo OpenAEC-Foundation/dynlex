@@ -1,15 +1,14 @@
 import lib/std.dl
 
-function value after guaranteed loop:
-    execute:
-        set ongoing to true
-        set result to 0
-        loop while ongoing:
-            set result to 1
-            set ongoing to false
-        if result = 1:
-            return 1
-        else:
-            return "wrong"
+to get value after guaranteed loop:
+    set ongoing to true
+    set result to 0
+    loop while ongoing:
+        set result to 1
+        set ongoing to false
+    if result = 1:
+        return 1
+    else:
+        return "wrong"
 
-print value after guaranteed loop as a line
+print line value after guaranteed loop

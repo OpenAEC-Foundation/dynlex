@@ -187,6 +187,8 @@ static bool matchDependenciesChanged(const MatchDependencies &dependencies) {
 			return dependency.node->endpointRevision != dependency.endpointRevision;
 		case MatchDependency::Kind::ArgumentChild:
 			return dependency.node->argumentChild != nullptr;
+		case MatchDependency::Kind::ArgumentPackChild:
+			return dependency.node->argumentPackChild != nullptr;
 		case MatchDependency::Kind::LiteralChild:
 			return dependency.node->literalChildren.contains(dependency.literal);
 		}
@@ -341,6 +343,8 @@ static bool resolveReferences(
 	}) > 0;
 }
 
+#include "patternPrecedenceMatching.inl"
+
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
 	generateClassPropertyPatterns(context);
@@ -489,8 +493,13 @@ bool resolvePatterns(ParseContext &context) {
 		invalidateStaleMatches(definition, treeType);
 	};
 
+	bool precedenceNeedsRebuild = false;
 	context.indexedPatternDefinitionMutation = [&](PatternDefinition &definition, const std::function<void()> &mutation) {
 		requireCompilerInvariant(definition.resolved, "indexed pattern mutation requires a resolved definition");
+		if (context.compilationStage >= ParseContext::CompilationStage::ResolvedPatternPrecedence) {
+			precedenceNeedsRebuild = true;
+			context.compilationStage = ParseContext::CompilationStage::AnalyzedSections;
+		}
 		PatternTreeNode *tree = definition.indexedTree;
 		SectionType treeType = definition.indexedTreeType;
 		requireCompilerInvariant(
@@ -520,222 +529,273 @@ bool resolvePatterns(ParseContext &context) {
 		~IndexedPatternMutationScope() { context.indexedPatternDefinitionMutation = {}; }
 	} indexedPatternMutationScope{context};
 
-	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
+	auto resolveReferencesAndDefinitions = [&]() -> bool {
+		for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations;
+			 resolutionIteration++) {
 
-		bool madeProgress = false;
-		staleInvalidationOccurred = false;
-		size_t sectionsBefore = unResolvedSections.size();
-		traceResolution(
-			"iter " + std::to_string(resolutionIteration) + " begin sections=" + std::to_string(unResolvedSections.size()) +
-			" body_refs=" + std::to_string(bodyReferences.size())
-		);
-		if (resolutionTraceEnabled()) {
-			std::vector<Section *> debugSections(unResolvedSections.begin(), unResolvedSections.end());
-			std::sort(debugSections.begin(), debugSections.end(), sectionComesBefore);
-			std::ostringstream sectionList;
-			sectionList << "iter " << resolutionIteration << " section-list";
-			for (Section *section : debugSections)
-				sectionList << " | " << sectionTraceId(section);
-			traceResolution(sectionList.str());
-		}
+			bool madeProgress = false;
+			staleInvalidationOccurred = false;
+			size_t sectionsBefore = unResolvedSections.size();
+			traceResolution(
+				"iter " + std::to_string(resolutionIteration) + " begin sections=" + std::to_string(unResolvedSections.size()) +
+				" body_refs=" + std::to_string(bodyReferences.size())
+			);
+			if (resolutionTraceEnabled()) {
+				std::vector<Section *> debugSections(unResolvedSections.begin(), unResolvedSections.end());
+				std::sort(debugSections.begin(), debugSections.end(), sectionComesBefore);
+				std::ostringstream sectionList;
+				sectionList << "iter " << resolutionIteration << " section-list";
+				for (Section *section : debugSections)
+					sectionList << " | " << sectionTraceId(section);
+				traceResolution(sectionList.str());
+			}
 
-		// each iteration, we go over all sections first
-		std::erase_if(unResolvedSections, [&](Section *section) {
-			section->patternDefinitionsResolved = true;
-			for (PatternDefinition *definition : section->patternDefinitions) {
-				if (!definition->resolved) {
-					definition->resolved = true;
-					bool resolveImmediately = hasSingleWordPatternSpelling(definition->patternElements);
-					forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
-						if (!resolveImmediately && section->canPromoteImplicitParameter(*definition, element)) {
-							if (definition->patternElements.size() > 1) {
-								if (section->variableLikeCounts[element.text] != 0) {
-									definition->resolved = false;
-									section->patternDefinitionsResolved = false;
-								}
-							}
-						}
-					});
-					if (definition->resolved) {
-						SectionType treeType = definitionPatternTreeType(section);
-						addDefinitionToTree(definition, treeType);
-					}
-				}
-			}
-			if (!section->patternDefinitionsResolved) {
-				section->patternDefinitionsResolved = section->unresolvedCount == 0;
-			}
-			if (section->patternDefinitionsResolved) {
-				for (PatternDefinition *definition : section->patternDefinitions) {
-					if (!definition->resolved) {
-						definition->resolved = true;
-						SectionType treeType = definitionPatternTreeType(section);
-						addDefinitionToTree(definition, treeType);
-					}
-				}
-			}
-			return section->patternDefinitionsResolved;
-		});
-		if (unResolvedSections.size() < sectionsBefore) {
-			madeProgress = true;
-		}
-		if (staleInvalidationOccurred) {
-			madeProgress = true;
-		}
-
-		appendRequeuedReferences();
-		activeResolvingReference = nullptr;
-		activeResolvingMatch = nullptr;
-		activeReferenceNeedsRematch = false;
-		bool deferredActiveRematch = false;
-		bool resolvedReference = resolveReferences(
-			context, bodyReferences, true, unResolvedSections.empty(), failedBodyMatchDependencies, &definitionToReferences,
-			"body", &activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
-			&pendingPromotionCleanupSections
-		);
-		activeResolvingReference = nullptr;
-		activeResolvingMatch = nullptr;
-		activeReferenceNeedsRematch = false;
-		bool appendedAfterResolution = appendRequeuedReferences();
-		if (resolvedReference || deferredActiveRematch || appendedAfterResolution || staleInvalidationOccurred) {
-			madeProgress = true;
-		}
-		if (!deferredActiveRematch && !appendedAfterResolution && !pendingPromotionCleanupSections.empty()) {
-			std::vector<Section *> sectionsToClean = std::move(pendingPromotionCleanupSections);
-			pendingPromotionCleanupSections.clear();
-			std::sort(sectionsToClean.begin(), sectionsToClean.end(), sectionComesBefore);
-			bool cleanupChanged = false;
-			for (Section *sec : sectionsToClean) {
-				if (!cleanupStaleImplicitPromotionsInSection(context, sec))
-					continue;
-				cleanupChanged = true;
-			}
-			appendRequeuedReferences();
-			if (cleanupChanged)
-				madeProgress = true;
-		}
-
-		if (unResolvedSections.empty() && bodyReferences.empty())
-			break;
-
-		// Deadlock detection: if no progress was made, we have a cycle (self-recursion,
-		// mutual recursion, or any dependency loop). Break the cycle by force-resolving
-		// all remaining sections — their unresolved VL elements become parameters.
-		// The cyclic body references will then resolve against the newly-added definitions
-		// in the next iteration.
-		if (!madeProgress) {
-			bool promotedCyclicParameter = false;
-			for (Section *section : unResolvedSections) {
-				std::unordered_set<std::string> promotableNames;
-				std::unordered_set<Section *> visitedSections;
-				collectPromotablePatternNames(section, promotableNames, visitedSections);
-				if (promotableNames.empty())
-					continue;
-				for (PatternReference *reference : bodyReferences) {
-					Section *referenceSection = reference->range().section();
-					if (!sectionContainsOrIsAncestorOf(section, referenceSection))
-						continue;
-					// Deadlock recovery must not reinterpret multi-word call literals as
-					// parameters; only unresolved single-token references are valid
-					// evidence for implicit parameter promotion here.
-					if (reference->patternElements.size() != 1)
-						continue;
-					const PatternElement &element = reference->patternElements.front();
-					if (element.type != PatternElement::Type::VariableLike || !promotableNames.contains(element.text))
-						continue;
-					if (promotePatternNameInSectionChain(context, referenceSection, element.text, reference->range())) {
-						promotedCyclicParameter = true;
-						traceResolution(
-							"iter " + std::to_string(resolutionIteration) + " cyclic promote '" + element.text + "' from " +
-							referenceTraceId(reference)
-						);
-					}
-				}
-			}
-			if (promotedCyclicParameter) {
-				computeVariableLikeCounts(unResolvedSections);
-				continue;
-			}
-			traceResolution("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
-			if (unResolvedSections.empty())
-				break; // no sections to force-resolve and no progress — truly stuck
-			// Force-resolve all remaining sections by adding their definitions as-is.
-			// Copy the list first because addDefinitionToTree may trigger invalidations
-			// whose cleanup re-adds sections on the next iteration.
-			std::list<Section *> toForceResolve = std::move(unResolvedSections);
-			unResolvedSections.clear();
-			for (Section *section : toForceResolve) {
+			// each iteration, we go over all sections first
+			std::erase_if(unResolvedSections, [&](Section *section) {
 				section->patternDefinitionsResolved = true;
 				for (PatternDefinition *definition : section->patternDefinitions) {
 					if (!definition->resolved) {
 						definition->resolved = true;
-						SectionType treeType = definitionPatternTreeType(section);
-						addDefinitionToTree(definition, treeType);
+						bool resolveImmediately = hasSingleWordPatternSpelling(definition->patternElements);
+						forEachLeafElement(definition->patternElements, [&](DefinitionPatternElement &element) {
+							if (!resolveImmediately && section->canPromoteImplicitParameter(*definition, element)) {
+								if (definition->patternElements.size() > 1) {
+									if (section->variableLikeCounts[element.text] != 0) {
+										definition->resolved = false;
+										section->patternDefinitionsResolved = false;
+									}
+								}
+							}
+						});
+						if (definition->resolved) {
+							SectionType treeType = definitionPatternTreeType(section);
+							addDefinitionToTree(definition, treeType);
+						}
 					}
 				}
+				if (!section->patternDefinitionsResolved) {
+					section->patternDefinitionsResolved = section->unresolvedCount == 0;
+				}
+				if (section->patternDefinitionsResolved) {
+					for (PatternDefinition *definition : section->patternDefinitions) {
+						if (!definition->resolved) {
+							definition->resolved = true;
+							SectionType treeType = definitionPatternTreeType(section);
+							addDefinitionToTree(definition, treeType);
+						}
+					}
+				}
+				return section->patternDefinitionsResolved;
+			});
+			if (unResolvedSections.size() < sectionsBefore) {
+				madeProgress = true;
 			}
-			// Invalidation cleanup runs during the next iteration.
-		}
-	}
+			if (staleInvalidationOccurred) {
+				madeProgress = true;
+			}
 
-	auto emitUnresolvedPatternDiagnostics = [&]() {
-		traceResolution(
-			"failed sections=" + std::to_string(unResolvedSections.size()) +
-			" body_refs=" + std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
-		);
-		for (Section *sec : unResolvedSections) {
-			for (PatternDefinition *def : sec->patternDefinitions) {
-				context.diagnostics.push_back(Diagnostic(
-					context, Diagnostic::Level::Error, "unresolved pattern definition", def->range, "pattern",
-					(std::string)def->range.subString
-				));
+			appendRequeuedReferences();
+			activeResolvingReference = nullptr;
+			activeResolvingMatch = nullptr;
+			activeReferenceNeedsRematch = false;
+			bool deferredActiveRematch = false;
+			bool resolvedReference = resolveReferences(
+				context, bodyReferences, true, unResolvedSections.empty(), failedBodyMatchDependencies, &definitionToReferences,
+				"body", &activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
+				&pendingPromotionCleanupSections
+			);
+			activeResolvingReference = nullptr;
+			activeResolvingMatch = nullptr;
+			activeReferenceNeedsRematch = false;
+			bool appendedAfterResolution = appendRequeuedReferences();
+			if (resolvedReference || deferredActiveRematch || appendedAfterResolution || staleInvalidationOccurred) {
+				madeProgress = true;
+			}
+			if (!deferredActiveRematch && !appendedAfterResolution && !pendingPromotionCleanupSections.empty()) {
+				std::vector<Section *> sectionsToClean = std::move(pendingPromotionCleanupSections);
+				pendingPromotionCleanupSections.clear();
+				std::sort(sectionsToClean.begin(), sectionsToClean.end(), sectionComesBefore);
+				bool cleanupChanged = false;
+				for (Section *sec : sectionsToClean) {
+					if (!cleanupStaleImplicitPromotionsInSection(context, sec))
+						continue;
+					cleanupChanged = true;
+				}
+				appendRequeuedReferences();
+				if (cleanupChanged)
+					madeProgress = true;
+			}
+
+			if (unResolvedSections.empty() && bodyReferences.empty())
+				break;
+
+			// Deadlock detection: if no progress was made, we have a cycle (self-recursion,
+			// mutual recursion, or any dependency loop). Break the cycle by force-resolving
+			// all remaining sections — their unresolved VL elements become parameters.
+			// The cyclic body references will then resolve against the newly-added definitions
+			// in the next iteration.
+			if (!madeProgress) {
+				bool promotedCyclicParameter = false;
+				for (Section *section : unResolvedSections) {
+					std::unordered_set<std::string> promotableNames;
+					std::unordered_set<Section *> visitedSections;
+					collectPromotablePatternNames(section, promotableNames, visitedSections);
+					if (promotableNames.empty())
+						continue;
+					for (PatternReference *reference : bodyReferences) {
+						Section *referenceSection = reference->range().section();
+						if (!sectionContainsOrIsAncestorOf(section, referenceSection))
+							continue;
+						// Deadlock recovery must not reinterpret multi-word call literals as
+						// parameters; only unresolved single-token references are valid
+						// evidence for implicit parameter promotion here.
+						if (reference->patternElements.size() != 1)
+							continue;
+						const PatternElement &element = reference->patternElements.front();
+						if (element.type != PatternElement::Type::VariableLike || !promotableNames.contains(element.text))
+							continue;
+						if (promotePatternNameInSectionChain(context, referenceSection, element.text, reference->range())) {
+							promotedCyclicParameter = true;
+							traceResolution(
+								"iter " + std::to_string(resolutionIteration) + " cyclic promote '" + element.text + "' from " +
+								referenceTraceId(reference)
+							);
+						}
+					}
+				}
+				if (promotedCyclicParameter) {
+					computeVariableLikeCounts(unResolvedSections);
+					continue;
+				}
+				traceResolution("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
+				if (unResolvedSections.empty())
+					break; // no sections to force-resolve and no progress — truly stuck
+				// Force-resolve all remaining sections by adding their definitions as-is.
+				// Copy the list first because addDefinitionToTree may trigger invalidations
+				// whose cleanup re-adds sections on the next iteration.
+				std::list<Section *> toForceResolve = std::move(unResolvedSections);
+				unResolvedSections.clear();
+				for (Section *section : toForceResolve) {
+					section->patternDefinitionsResolved = true;
+					for (PatternDefinition *definition : section->patternDefinitions) {
+						if (!definition->resolved) {
+							definition->resolved = true;
+							SectionType treeType = definitionPatternTreeType(section);
+							addDefinitionToTree(definition, treeType);
+						}
+					}
+				}
+				// Invalidation cleanup runs during the next iteration.
 			}
 		}
-		auto emitReferenceDiagnostic = [&](PatternReference *reference) {
-			Diagnostic diagnostic =
-				reference->purpose == PatternReference::Purpose::TypeConstraint
-					? unknownTypeConstraintDiagnostic(context, reference->range(), reference->range().subString)
-					: Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
-			appendUnusedLiteralParameterNotes(context, reference, diagnostic);
-			context.diagnostics.push_back(std::move(diagnostic));
+
+		auto emitUnresolvedPatternDiagnostics = [&]() {
+			traceResolution(
+				"failed sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" +
+				std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
+			);
+			for (Section *sec : unResolvedSections) {
+				for (PatternDefinition *def : sec->patternDefinitions) {
+					context.diagnostics.push_back(Diagnostic(
+						context, Diagnostic::Level::Error, "unresolved pattern definition", def->range, "pattern",
+						(std::string)def->range.subString
+					));
+				}
+			}
+			auto emitReferenceDiagnostic = [&](PatternReference *reference) {
+				Diagnostic diagnostic =
+					reference->purpose == PatternReference::Purpose::TypeConstraint
+						? unknownTypeConstraintDiagnostic(context, reference->range(), reference->range().subString)
+						: Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range());
+				appendUnusedLiteralParameterNotes(context, reference, diagnostic);
+				context.diagnostics.push_back(std::move(diagnostic));
+			};
+			for (PatternReference *reference : bodyReferences) {
+				emitReferenceDiagnostic(reference);
+			}
+			for (PatternReference *reference : globalReferences) {
+				emitReferenceDiagnostic(reference);
+			}
 		};
-		for (PatternReference *reference : bodyReferences) {
-			emitReferenceDiagnostic(reference);
+
+		// Commit phase 1 only after definitions and definition bodies are fully resolved.
+		if (!unResolvedSections.empty() || !bodyReferences.empty()) {
+			emitUnresolvedPatternDiagnostics();
+			return false;
 		}
-		for (PatternReference *reference : globalReferences) {
-			emitReferenceDiagnostic(reference);
+		context.compilationStage = ParseContext::CompilationStage::ResolvedFunctionPatterns;
+		// Phase 2: resolve global references (all definitions are now in the tree).
+		// Typed-domain conflicts are checked after signature inference, when every
+		// constraint has a concrete type.
+		emitDuplicatePatternWordWarnings(context);
+
+		FailedMatchDependencies failedGlobalMatchDependencies;
+		for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations;
+			 resolutionIteration++) {
+			resolveReferences(context, globalReferences, false, true, failedGlobalMatchDependencies, nullptr, "global");
+			if (globalReferences.empty())
+				break;
 		}
+
+		if (!globalReferences.empty()) {
+			emitUnresolvedPatternDiagnostics();
+			return false;
+		}
+		context.compilationStage = ParseContext::CompilationStage::ResolvedGlobalPatterns;
+		return true;
 	};
 
-	// Commit phase 1 only after definitions and definition bodies are fully resolved.
-	if (!unResolvedSections.empty() || !bodyReferences.empty()) {
-		emitUnresolvedPatternDiagnostics();
-		return false;
-	}
-	context.compilationStage = ParseContext::CompilationStage::ResolvedFunctionPatterns;
-	// Phase 2: resolve global references (all definitions are now in the tree).
-	// Typed-domain conflicts are checked after signature inference, when every
-	// constraint has a concrete type.
-	emitDuplicatePatternWordWarnings(context);
-
-	FailedMatchDependencies failedGlobalMatchDependencies;
-	for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations; resolutionIteration++) {
-		resolveReferences(context, globalReferences, false, true, failedGlobalMatchDependencies, nullptr, "global");
-		if (globalReferences.empty())
+	int precedencePass = 0;
+	while (true) {
+		if (!resolveReferencesAndDefinitions() || !resolvePatternPrecedence(context))
+			return false;
+		context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;
+		precedenceNeedsRebuild = false;
+		PrecedenceMatchChanges changes;
+		if (!collectPrecedenceMatchChanges(context, changes))
+			return false;
+		for (auto &[reference, match] : changes) {
+			std::vector<Section *> affectedSections;
+			removeVariableReferencesFromMatch(context, reference, *reference->match, affectedSections, false);
+			untrackMatchDefinitions(*reference->match, reference, definitionToReferences);
+			delete reference->match;
+			reference->match = match.release();
+			activeResolvingReference = reference;
+			activeResolvingMatch = reference->match;
+			activeReferenceNeedsRematch = false;
+			addVariableReferencesFromMatch(context, reference, *reference->match);
+			trackMatchDefinitions(*reference->match, reference, definitionToReferences);
+			activeResolvingReference = nullptr;
+			activeResolvingMatch = nullptr;
+			for (Section *section : affectedSections)
+				appendUniqueSection(pendingPromotionCleanupSections, section);
+			if (activeReferenceNeedsRematch) {
+				auto affected = unresolveReference(context, reference, definitionToReferences, false);
+				for (Section *section : affected)
+					appendUniqueSection(pendingPromotionCleanupSections, section);
+				bodyReferences.push_back(reference);
+				activeReferenceNeedsRematch = false;
+			}
+			if (precedenceNeedsRebuild)
+				break;
+		}
+		if (!precedenceNeedsRebuild) {
+			auto cleanupSections = std::move(pendingPromotionCleanupSections);
+			pendingPromotionCleanupSections.clear();
+			for (Section *section : cleanupSections)
+				cleanupStaleImplicitPromotionsInSection(context, section);
+		}
+		if (!precedenceNeedsRebuild)
 			break;
+		appendRequeuedReferences();
+		clearPatternFamilies(context);
+		if (++precedencePass >= context.options.maxResolutionIterations) {
+			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "pattern resolution did not converge", Range())
+			);
+			return false;
+		}
 	}
-
-	if (!globalReferences.empty()) {
-		emitUnresolvedPatternDiagnostics();
-		return false;
-	}
-	context.compilationStage = ParseContext::CompilationStage::ResolvedGlobalPatterns;
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
-
-	// Phase 3: Resolve the family partial order used by operand grouping.
-	if (!resolvePatternPrecedence(context))
-		return false;
-	context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;
 	// All patterns resolved — expand expressions and resolve variable references
 	for (CodeLine *line : context.codeLines) {
 		if (line->expression)

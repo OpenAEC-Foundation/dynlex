@@ -4,6 +4,9 @@ dynlex options:
     open section: ":"
     section: "section"
     function: "function"
+    formatted string: "formatted"
+    argument pack separator: ","
+    argument pack conjunction: "and"
     convert: "convert"
     implicitly: "implicitly"
     class:
@@ -43,6 +46,8 @@ dynlex options:
         invalid indentation character: "Invalid indentation! expected only {expected}, but found {found}"
         invalid indentation increase: "Invalid indentation! expected at max {expected}, but found {found}"
         missing body section: "Code without body section"
+        invalid formatted string: "Invalid formatted string: {detail}"
+        argument packs require replacement definitions: "Argument packs preserve source expressions and can only be passed to replacement definitions"
         unknown section: "Unknown section: {section}"
         unexpected class line: "unexpected line in class definition"
         explicit parameter ambiguity: "Explicit parameter '{parameter}' may be ambiguous with a callable single-word function pattern of the same name."
@@ -57,6 +62,7 @@ dynlex options:
             quick fix: "Use '{spelling}'"
         duplicate pattern definition: "Duplicate pattern definition"
         duplicate pattern definition related existing: "Conflicts with this definition"
+        pattern resolution did not converge: "Pattern declarations and precedence did not converge"
         unresolved pattern definition: "This pattern definition couldn't be resolved: {pattern}"
         unresolved pattern:
             message: "This pattern couldn't be resolved"

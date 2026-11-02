@@ -1,9 +1,8 @@
 import lib/std.dl
 
-function a string buffer measuring length:
-    execute:
-        allocate length bytes
-        set address to it
-        return a new string from address containing length bytes
+to get a string buffer measuring length:
+    allocate length bytes
+    set address to it
+    return a new string from address containing length bytes
 
 ignore a string buffer measuring 1

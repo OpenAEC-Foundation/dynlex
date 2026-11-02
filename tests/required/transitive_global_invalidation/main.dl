@@ -17,12 +17,11 @@ function tick the delay:
 		if delay > 0:
 			decrement delay
 
-function arm the delay count [time|times]:
-	execute:
-		set iteration to 0
-		loop while iteration < count:
-			arm the delay
-			increment iteration
+to arm the delay count [time|times]:
+	set iteration to 0
+	loop while iteration < count:
+		arm the delay
+		increment iteration
 
 function the delay:
 	globals: delay
@@ -30,10 +29,10 @@ function the delay:
 		return delay
 
 arm the delay 4 times
-print (the delay) as a line
+print line (the delay)
 tick the delay
-print (the delay) as a line
+print line (the delay)
 tick the delay
-print (the delay) as a line
+print line (the delay)
 tick the delay
-print (the delay) as a line
+print line (the delay)

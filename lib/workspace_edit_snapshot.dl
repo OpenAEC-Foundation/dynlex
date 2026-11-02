@@ -90,7 +90,7 @@ local function snapshot workspace resource at {string:path} identified by {strin
         set existing to the original workspace resource identified by identity in the resources of plan
         if existing != (0 as a pointer to a workspace resource snapshot):
             if recursive and existing's disk kind = the workspace directory resource kind:
-                if the inverse of existing's descendant scan completion:
+                if not existing's descendant scan completion:
                     set existing's descendant scan completion to true
                     snapshot workspace directory descendants of existing for change protocol using context in plan
             @intrinsic("return")

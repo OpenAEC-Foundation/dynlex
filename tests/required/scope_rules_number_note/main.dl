@@ -3,9 +3,7 @@ import lib/std.dl
 in this file, by default:
     numbers are floating-point
 
-function show {integer:value}:
-    execute:
-        print value as a line
+to show {integer:value}: print line value
 
 set count to 3
 show count

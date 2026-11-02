@@ -1,0 +1,10 @@
+flex section assign [using slot|] from value:
+    replacement:
+        @intrinsic("store", slot, value)
+        @intrinsic("execute body")
+
+@intrinsic("store", destination, 99)
+assign using destination from 7:
+    assign from 23:
+        @intrinsic("store", result, 1)
+@intrinsic("return", @intrinsic("subtract", destination, 7))

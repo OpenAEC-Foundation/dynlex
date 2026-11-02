@@ -53,7 +53,7 @@ static CompileTimeValue resolveStoredCompileTimeValue(
 		CompileTimeValue knownValue = lookupCompileTimeExpressionValue(currentExpression, inferenceContext);
 		if (!isCompileTimeKnown(knownValue) && inferenceContext && currentExpression->kind == Expression::Kind::Variable &&
 			currentExpression->variable) {
-			knownValue = inferenceContext->lookupKnownConstant(currentExpression->variable);
+			knownValue = inferenceContext->lookupKnownConstant(variableStorageKey(currentExpression));
 		}
 		return knownValue;
 	});

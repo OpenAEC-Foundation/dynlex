@@ -24,6 +24,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		}
 		return expr->arguments[index];
 	};
+	if (kind == IntrinsicKind::ExtractElement && expr->arguments[1]->type.kind == DataType::Kind::ArgumentPack) {
+		CompileTimeValue aggregate = readArgumentValue(expr->arguments[1]);
+		const auto *pack = std::get_if<ArgumentPackValue>(&aggregate);
+		auto index = getCompileTimeIntegerValue(readArgumentValue(expr->arguments[2]));
+		requireCompilerInvariant(
+			pack && index && *index >= 0 && static_cast<size_t>(*index) < pack->elements.size(),
+			"validated argument pack extraction lost its compile-time operands"
+		);
+		return pack->elements[static_cast<size_t>(*index)];
+	}
 	if (kind == IntrinsicKind::BuildInfo) {
 		CompileTimeValue keyValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		if (auto *key = std::get_if<std::string>(&keyValue))
@@ -59,16 +69,13 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			valueType.getByteSize(parseContext.llvmModule->getDataLayout(), *parseContext.llvmContext)
 		);
 	}
-	if (kind == IntrinsicKind::Select) {
+	if (auto conditional = conditionalOperands(kind); conditional && !expr->type.isMetaType()) {
 		CompileTimeValue conditionValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		CompileTimeValue leftValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
-		CompileTimeValue rightValue = readArgumentValue(requireArgument(3, expr->intrinsicName));
-		(void)leftValue;
-		(void)rightValue;
-		auto *condition = std::get_if<bool>(&conditionValue);
+		const bool *condition = std::get_if<bool>(&conditionValue);
 		if (!condition)
 			return {};
-		return readArgumentValue(requireArgument(*condition ? 2 : 3, expr->intrinsicName));
+		size_t selected = conditional->selected(*condition);
+		return selected ? readArgumentValue(requireArgument(selected, expr->intrinsicName)) : CompileTimeValue(*condition);
 	}
 	if (kind == IntrinsicKind::Cast && expr->arguments.size() > 2) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
@@ -172,26 +179,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return {};
 	}
 
-	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or || kind == IntrinsicKind::Equal ||
-		kind == IntrinsicKind::NotEqual || kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr ||
-		kind == IntrinsicKind::BitwiseXor || kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight ||
-		kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract || kind == IntrinsicKind::Multiply ||
-		kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo || kind == IntrinsicKind::LessThan ||
-		kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
+	if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual || kind == IntrinsicKind::BitwiseAnd ||
+		kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor || kind == IntrinsicKind::ShiftLeft ||
+		kind == IntrinsicKind::ShiftRight || kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract ||
+		kind == IntrinsicKind::Multiply || kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo ||
+		kind == IntrinsicKind::LessThan || kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
 		kind == IntrinsicKind::GreaterThanOrEqual || kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
 		CompileTimeValue leftValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		CompileTimeValue rightValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
 		if (!isCompileTimeKnown(leftValue) || !isCompileTimeKnown(rightValue))
 			return {};
-
-		if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-			auto *leftBool = std::get_if<bool>(&leftValue);
-			auto *rightBool = std::get_if<bool>(&rightValue);
-			if (!leftBool || !rightBool)
-				return {};
-			return kind == IntrinsicKind::And ? CompileTimeValue(*leftBool && *rightBool)
-											  : CompileTimeValue(*leftBool || *rightBool);
-		}
 
 		DataType leftType = expr->arguments[1]->type;
 		DataType rightType = expr->arguments[2]->type;
@@ -387,6 +384,7 @@ struct ScopedPureExecution {
 struct PureExecutionFrame {
 	Instantiation *instantiation{};
 	std::map<VariableStorageKey, CompileTimeValue> localValues;
+	std::unordered_map<Expression *, CompileTimeValue> subjectValues;
 };
 
 static Expression *resolvePureExecutionBinding(
@@ -566,6 +564,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 	case Expression::Kind::TypedPlaceholder:
 	case Expression::Kind::Pending:
 	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::ArgumentPack:
 		return {pureExecutionStoredValue(expr, state), false, {}};
 
 	case Expression::Kind::Variable: {
@@ -577,6 +576,17 @@ static PureExpressionExecutionResult evaluatePureExpression(
 
 	case Expression::Kind::IntrinsicCall: {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+		if (kind == IntrinsicKind::SetSubject) {
+			auto value = evaluatePureExpression(expr->arguments[1], state, frame, bindingFrameStack);
+			requireCompilerInvariant(!value.returned, "subject value returned during pure evaluation");
+			frame.subjectValues[expr] = std::move(value.value);
+			return {};
+		}
+		if (kind == IntrinsicKind::Subject) {
+			auto value = frame.subjectValues.find(expr->subjectSetter);
+			requireCompilerInvariant(value != frame.subjectValues.end(), "pure subject read has no executed assignment");
+			return {value->second, false, {}};
+		}
 		if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::TypeExtent)
 			return {pureExecutionStoredValue(expr, state), false, {}};
 		if (kind == IntrinsicKind::ExecuteBody)
@@ -604,6 +614,18 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			}
 			setPureExecutionLocalValue(frame, variableStorageKey(destinationExpression), valueResult.value);
 			return {};
+		}
+
+		if (auto conditional = conditionalOperands(kind); conditional && !expr->type.isMetaType()) {
+			auto conditionResult = evaluatePureExpression(expr->arguments[1], state, frame, bindingFrameStack);
+			if (conditionResult.returned)
+				return conditionResult;
+			const bool *condition = std::get_if<bool>(&conditionResult.value);
+			if (!condition)
+				return {};
+			size_t selected = conditional->selected(*condition);
+			return selected ? evaluatePureExpression(expr->arguments[selected], state, frame, bindingFrameStack)
+							: PureExpressionExecutionResult{*condition, false, {}};
 		}
 
 		std::unordered_map<Expression *, CompileTimeValue> argumentValues;
@@ -803,6 +825,14 @@ static PureExpressionExecutionResult executePureSection(
 	}
 	if (!openingExpression || openingExpression->sectionOutcome.read().kind != Expression::SectionOutcome::Kind::Loop)
 		return executePureSectionBodyOnce(state, frame, section, body, bindingFrameStack);
+	if (openingExpression->staticLoopBodies) {
+		for (const auto &iteration : *openingExpression->staticLoopBodies) {
+			auto result = executePureSectionBodyOnce(state, frame, section, iteration.get(), bindingFrameStack);
+			if (result.returned)
+				return result;
+		}
+		return {};
+	}
 	while (true) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
@@ -933,7 +963,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 		}
 	}
 	if (!isCompileTimeKnown(computedValue))
-		computedValue = context.lookupKnownConstant(expr->variable);
+		computedValue = context.lookupKnownConstant(variableStorageKey(expr));
 	if (!isCompileTimeKnown(computedValue) && context.currentInstantiation) {
 		if (variableReferenceIsCurrentInstantiationParameter(context, expr->variable) &&
 			context.currentInstantiation->requiredCompileTimeParameters.contains(expr->variable->name)) {
@@ -951,6 +981,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 	return computedValue;
 }
 
+#include "variable_flow.inl"
+
 #include "intrinsics/store_inference.inl"
 #include "return_inference.inl"
-#include "variable_flow.inl"

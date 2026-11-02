@@ -55,85 +55,7 @@ static llvm::Value *coerceIndexToSizeT(ParseContext &context, llvm::Value *index
 	return indexVal;
 }
 
-static CodegenResult buildRuntimeSelect(ParseContext &context, const std::vector<Expression *> &args, DataType resultType) {
-	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	llvm::Function *function = builder.GetInsertBlock() ? builder.GetInsertBlock()->getParent() : nullptr;
-	if (!function)
-		return nullptr;
-
-	DataType conditionType = finalizedExpressionType(context, args[1]);
-	if (conditionType.kind != DataType::Kind::Bool)
-		crashCompilerBug("runtime select condition must be boolean after type inference");
-	CodegenResult condition = generateExpressionCode(context, args[1]);
-	if (!condition)
-		return condition;
-	llvm::Value *conditionValue = condition.value;
-	requireCompilerInvariant(conditionValue != nullptr, "runtime select condition produced no value");
-
-	if (resultType.isMetaType()) {
-		context.diagnostics.push_back(
-			Diagnostic(context, Diagnostic::Level::Error, "compile time type value used at runtime", args[1]->range)
-		);
-		return CodegenResult::failure();
-	}
-
-	llvm::BasicBlock *trueBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.true", function);
-	llvm::BasicBlock *falseBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.false", function);
-	llvm::BasicBlock *mergeBlock = llvm::BasicBlock::Create(*context.llvmContext, "select.merge", function);
-	builder.CreateCondBr(conditionValue, trueBlock, falseBlock);
-
-	struct PhiIncoming {
-		llvm::Value *value;
-		llvm::BasicBlock *block;
-	};
-	std::vector<PhiIncoming> incomingValues;
-	incomingValues.reserve(2);
-
-	builder.SetInsertPoint(trueBlock);
-	CodegenResult generatedTrue = generateExpressionCode(context, args[2]);
-	if (!generatedTrue)
-		return generatedTrue;
-	llvm::Value *trueValue = generatedTrue.value;
-	llvm::BasicBlock *trueEndBlock = builder.GetInsertBlock();
-	if (!trueEndBlock->hasTerminator()) {
-		if (resultType.kind != DataType::Kind::Void) {
-			DataType trueType = finalizedExpressionType(context, args[2]);
-			trueValue = ensureType(context, trueValue, trueType, resultType);
-			if (typeHasManagedLifecycle(resultType) && !managedExpressionResultIsOwned(context, args[2]) &&
-				!retainManagedValue(context, resultType, trueValue))
-				return CodegenResult::failure();
-			incomingValues.push_back({trueValue, trueEndBlock});
-		}
-		builder.CreateBr(mergeBlock);
-	}
-
-	builder.SetInsertPoint(falseBlock);
-	CodegenResult generatedFalse = generateExpressionCode(context, args[3]);
-	if (!generatedFalse)
-		return generatedFalse;
-	llvm::Value *falseValue = generatedFalse.value;
-	llvm::BasicBlock *falseEndBlock = builder.GetInsertBlock();
-	if (!falseEndBlock->hasTerminator()) {
-		if (resultType.kind != DataType::Kind::Void) {
-			DataType falseType = finalizedExpressionType(context, args[3]);
-			falseValue = ensureType(context, falseValue, falseType, resultType);
-			if (typeHasManagedLifecycle(resultType) && !managedExpressionResultIsOwned(context, args[3]) &&
-				!retainManagedValue(context, resultType, falseValue))
-				return CodegenResult::failure();
-			incomingValues.push_back({falseValue, falseEndBlock});
-		}
-		builder.CreateBr(mergeBlock);
-	}
-
-	builder.SetInsertPoint(mergeBlock);
-	if (resultType.kind == DataType::Kind::Void || incomingValues.empty())
-		return nullptr;
-
-	auto *phi = builder.CreatePHI(getLLVMType(context, resultType), static_cast<unsigned>(incomingValues.size()), "select");
-	for (const PhiIncoming &incoming : incomingValues)
-		phi->addIncoming(incoming.value, incoming.block);
-	return phi;
-}
+#include "codegenConditional.inl"
 
 static CodegenResult
 buildVectorValue(ParseContext &context, DataType vectorType, const std::vector<Expression *> &args, size_t startIndex) {
@@ -430,6 +352,8 @@ CodegenResult generateIntrinsicCode(
 		DataType valueType = finalizedExpressionType(context, args[1]);
 		if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void)
 			crashCompilerBug("subject assignment reached codegen without a runtime value type");
+		if (valueType.isMetaType())
+			return nullptr;
 		CodegenResult generatedValue = generateExpressionCode(context, args[1]);
 		if (!generatedValue)
 			return generatedValue;
@@ -454,6 +378,8 @@ CodegenResult generateIntrinsicCode(
 	if (kind == IntrinsicKind::Subject) {
 		if (!callExpr || !callExpr->subjectSetter)
 			crashCompilerBug("subject read reached codegen without an inferred assignment");
+		if (resultType.isMetaType())
+			return nullptr;
 		auto storage = context.subjectStorage.find(callExpr->subjectSetter);
 		if (storage == context.subjectStorage.end())
 			crashCompilerBug("subject read reached codegen before its inferred assignment");
@@ -668,23 +594,6 @@ CodegenResult generateIntrinsicCode(
 		if (resultType.kind == DataType::Kind::Bool)
 			return cmp; // already i1
 		return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
-	}
-
-	// Logical operators
-	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-		llvm::Value *left = nullptr;
-		llvm::Value *right = nullptr;
-		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-			return CodegenResult::failure();
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
-		if (leftType.kind != DataType::Kind::Bool || rightType.kind != DataType::Kind::Bool)
-			crashCompilerBug("logical and/or operands must be boolean after type inference");
-
-		if (kind == IntrinsicKind::And)
-			return builder.CreateAnd(left, right, "and");
-		else
-			return builder.CreateOr(left, right, "or");
 	}
 
 	if (kind == IntrinsicKind::Not) {

@@ -1,0 +1,15 @@
+function set {first} and {second} to value:
+    replacement:
+        @intrinsic("store", first, value)
+        @intrinsic("store", second, value)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+left and right means: @intrinsic("and", left, right)
+@intrinsic("store", x, 7)
+@intrinsic("store", y, 7)
+set x and y to 8
+to get fixed eight:
+    @intrinsic("return", 8)
+set x and y to fixed eight
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", x, y), 16))

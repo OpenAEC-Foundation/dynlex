@@ -1,14 +1,12 @@
 import lib/bim/brep_geometry.dl
 
-function geometry extra check {boolean:condition}:
-    execute:
-        if condition = false:
-            print "B-rep geometry extra assertion failed" as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to geometry extra check {boolean:condition}:
+    if condition = false:
+        print line "B-rep geometry extra assertion failed"
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function the geometry extra point {a number:x} {a number:y} {a number:z}:
-    execute:
-        return a cad vector3 with x x, y y and z z
+to get the geometry extra point {a number:x} {a number:y} {a number:z}:
+    return a cad vector3 with x x, y y and z z
 
 set sphere to the cad surface of (a cad sphere with frame the cad xy plane and radius 2.0)
 set hits to the cad ray hits of sphere from (the geometry extra point 5.0 0.0 0.0) along (the geometry extra point -1.0 0.0 0.0)
@@ -67,4 +65,4 @@ geometry extra check (clone = torus)
 set clone's torus's majorRadius to 8.0
 geometry extra check ((clone = torus) = false)
 geometry extra check (torus's nurbs's owner = (0 as a pointer to an integer))
-print "B-rep geometry extra checks passed" as a line
+print line "B-rep geometry extra checks passed"

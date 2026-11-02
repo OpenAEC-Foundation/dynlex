@@ -149,4 +149,4 @@ close secondWindow
 set fullscreen to a new fullscreen window
 require condition (((the framebuffer width of fullscreen) > 0) and ((the framebuffer height of fullscreen) > 0)) reporting "Fullscreen dimensions were not taken from the monitor"
 close fullscreen
-print "Graphics integration passed" as a line
+print line "Graphics integration passed"

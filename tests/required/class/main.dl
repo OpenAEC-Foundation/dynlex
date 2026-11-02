@@ -7,17 +7,10 @@ class:
         x
         y
 
-function a new point with x horizontal and y vertical:
-    replacement:
-        @intrinsic("construct", a point, horizontal, vertical)
+a new point with x horizontal and y vertical means: @intrinsic("construct", a point, horizontal, vertical)
 
 set sample to a new point with x 10 and y 20
-print the x of sample as a line
-print sample's y as a line
-print the x of sample + the y of sample as a line
+print lines (the x of sample), sample's y and (the x of sample + the y of sample)
 
 # Type cast tests
-print 3.14 as an integer as a line
-print 42 as a 16 bit integer as a line
-print 7 as a byte as a line
-print 100 as a floating-point number as a line
+print lines (3.14 as an integer), (42 as a 16 bit integer), (7 as a byte) and (100 as a floating-point number)

@@ -1,21 +1,17 @@
 import lib/std.dl
 
 # Multiplication before addition
-print 3 * 2 + 1 as a line
-print 1 + 3 * 2 as a line
-print 10 - 2 * 3 as a line
+print lines (3 * 2 + 1), (1 + 3 * 2) and (10 - 2 * 3)
 
 # Left-associative
-print 2 + 3 + 4 as a line
-print 2 * 3 * 4 as a line
+print lines (2 + 3 + 4) and (2 * 3 * 4)
 
 # Low-precedence prefix functions consume following operators
 set operand to 4.0
 set result to (the square root of operand + the square root of operand)
-print result as an integer as a line
+print line result as an integer
 
 # Multi-argument prefix functions apply their precedence to the right boundary
 set minimum to (the minimum of 1.0 + 5.0 and 2.0 + 19.0)
 set maximum to (the maximum of 1.0 + 5.0 and 2.0 + 19.0)
-print minimum as a line
-print maximum as a line
+print lines minimum and maximum

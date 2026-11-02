@@ -605,7 +605,8 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -680,10 +681,11 @@ static void pushResolvedFlexBindingScope(
 		expression && definition && resolution.argumentConstraints.size() == expression->arguments.size(),
 		"resolved flex bindings and constraints diverged"
 	);
-	BindingFrame frame;
+	BindingFrame frame = patternDeclarationBindingFrame(definition);
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex,
+		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;
@@ -796,7 +798,20 @@ static void inferFlexPatternCall(
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
-	std::shared_ptr<InstantiatedSectionBody> flexBody = context.cloneSectionBody(matchedSection, expr->owningSectionBody);
+	ScopedSectionLocalVariableState calleeVariableState(matchedSection);
+	resetSectionLocalVariableTypes(matchedSection);
+	std::shared_ptr<InstantiatedSectionBody> flexBody =
+		context.cloneSectionBody(matchedSection, expr->owningSectionBody, context.parseContext.storageScopeForInvocation(expr));
+	for (const auto &[storage, value] : context.currentVariableValues.read()) {
+		(void)value;
+		if (storage.scope == flexBody->storageScope)
+			context.currentVariableValues.write()[storage] = {};
+	}
+	for (const auto &[storage, provenance] : context.currentAddressState.read().variables) {
+		(void)provenance;
+		if (storage.scope == flexBody->storageScope)
+			context.currentAddressState.write().variables[storage] = {.mayTargets = {}, .unknown = true};
+	}
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();
 	bool flexFallsThrough = true;
@@ -814,7 +829,7 @@ static void inferFlexPatternCall(
 	if (!bodyInferred || !context.typesValid)
 		return;
 	Expression *templateBodyExpression = flexPatternBodyExpression(def);
-	Expression *bodyExpr = flexBody->findCloneOf(templateBodyExpression);
+	Expression *bodyExpr = flexBody->expressionForLine(templateBodyExpression->range.line);
 	if (!bodyExpr) {
 		crashCompilerBug("flex clone is missing its replacement expression");
 		return;
@@ -825,8 +840,9 @@ static void inferFlexPatternCall(
 	Expression *outcomeExpression = bodyExpr;
 	if (matchedSection->type == SectionType::Function) {
 		Expression *templateOutcomeExpression = singleExpressionFlexFunctionOutcome(def);
-		outcomeExpression =
-			templateOutcomeExpression ? expr->inferredFlexBody->findCloneOf(templateOutcomeExpression) : nullptr;
+		outcomeExpression = templateOutcomeExpression
+								? expr->inferredFlexBody->expressionForLine(templateOutcomeExpression->range.line)
+								: nullptr;
 	}
 	// A nested flex may transfer control through this active call while
 	// its replacement is being inferred. That direct outcome takes
@@ -877,6 +893,14 @@ static bool inferPatternCall(
 	if (!resolution)
 		return true;
 	Section *matchedSection = resolution->definition->section;
+	if (!matchedSection->isFlex && std::ranges::any_of(expr->arguments, [](Expression *argument) {
+		return argument->type.kind == DataType::Kind::ArgumentPack || argument->type.kind == DataType::Kind::ArgumentReference;
+	})) {
+		context.fail(Diagnostic(
+			context.parseContext, Diagnostic::Level::Error, "argument packs require replacement definitions", expr->range
+		));
+		return false;
+	}
 	if (matchedSection->type == SectionType::Class && !matchedSection->isFlex) {
 		inferClassPatternCall(expr, context, flexBindingFrameStack, *resolution);
 	} else if (matchedSection->isFlex) {

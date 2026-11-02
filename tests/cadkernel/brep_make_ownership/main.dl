@@ -3,39 +3,36 @@ import tests/cadkernel/brep_make_cuboid/main.dl
 import tests/cadkernel/brep_make_topology/support.dl
 
 # Each branch returns a local result so its body must outlive the constructor scope.
-function a retained maker [result] for {integer:kind}:
-    execute:
-        set origin to a maker point [1.0,2.0,3.0]
-        set result to no cad body
-        if kind = 0:
-            set result to the cad cuboid at origin with size (a maker point [2.0,3.0,4.0])
-        else if kind = 1:
-            set result to the cad cylinder body at origin with radius 2.0 and height 4.0
-        else if kind = 2:
-            set result to the cad sphere body at origin with radius 2.0
-        else if kind = 3:
-            set result to the cad cone body at origin with radius 2.0 and height 4.0
-        else if kind = 4:
-            set result to the cad pyramid body at origin with radius 2.0, height 4.0 and sides 5
-        else if kind = 5:
-            set result to the cad polygonal frustum at origin with base radius 2.0, top radius 1.0, height 4.0 and sides 5
-        return result
-function a retained maker value for {integer:kind}:
-    execute:
-        set localResult to a retained maker result for kind
-        check solid maker (localResult's valid)
-        set retainedValue to localResult's value
-        set localResult to no cad body
-        return retainedValue
-function check maker survivor {cad body:solid} with vertices {integer:vertices}, edges {integer:edges} and faces {integer:faces}:
-    execute:
-        check solid maker ((the cad count of (solid's vertices)) = vertices)
-        check solid maker ((the cad count of (solid's edges)) = edges)
-        check solid maker ((the cad count of (solid's faces)) = faces)
-        check solid maker ((the length of (solid's roots)) = 1)
-        check solid maker ((the cad euler characteristic of solid) = 2)
-        check solid maker ((the cad worst vertex gap of solid) < 1e-9)
-        check consistent solid solid
+to get a retained maker [result] for {integer:kind}:
+    set origin to a maker point [1.0,2.0,3.0]
+    set result to no cad body
+    if kind = 0:
+        set result to the cad cuboid at origin with size (a maker point [2.0,3.0,4.0])
+    else if kind = 1:
+        set result to the cad cylinder body at origin with radius 2.0 and height 4.0
+    else if kind = 2:
+        set result to the cad sphere body at origin with radius 2.0
+    else if kind = 3:
+        set result to the cad cone body at origin with radius 2.0 and height 4.0
+    else if kind = 4:
+        set result to the cad pyramid body at origin with radius 2.0, height 4.0 and sides 5
+    else if kind = 5:
+        set result to the cad polygonal frustum at origin with base radius 2.0, top radius 1.0, height 4.0 and sides 5
+    return result
+to get a retained maker value for {integer:kind}:
+    set localResult to a retained maker result for kind
+    check solid maker (localResult's valid)
+    set retainedValue to localResult's value
+    set localResult to no cad body
+    return retainedValue
+to check maker survivor {cad body:solid} with vertices {integer:vertices}, edges {integer:edges} and faces {integer:faces}:
+    check solid maker ((the cad count of (solid's vertices)) = vertices)
+    check solid maker ((the cad count of (solid's edges)) = edges)
+    check solid maker ((the cad count of (solid's faces)) = faces)
+    check solid maker ((the length of (solid's roots)) = 1)
+    check solid maker ((the cad euler characteristic of solid) = 2)
+    check solid maker ((the cad worst vertex gap of solid) < 1e-9)
+    check consistent solid solid
 
 set vertexCounts to [8,2,2,2,6,10]
 set edgeCounts to [12,3,1,2,10,15]
@@ -93,7 +90,7 @@ loop repetition from 0 to 12:
         set returnedCopy to returnedValue
         set returnedValue to an empty cad body
         check maker survivor returnedCopy with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
-print "all_six_builders_survive_result_returns_copies_clones_and_resets" as a line
+print line "all_six_builders_survive_result_returns_copies_clones_and_resets"
 
 # Removing a face through one copy is visible through another, never in the clone.
 loop kind from 0 to 6:
@@ -110,7 +107,7 @@ loop kind from 0 to 6:
     set retained to no cad body
     check maker survivor cloned with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
     free keys
-print "shared_arena_removals_leave_clones_independent" as a line
+print line "shared_arena_removals_leave_clones_independent"
 
 # Invalid results can replace live results and be copied repeatedly without double release.
 loop kind from 0 to 6:
@@ -139,4 +136,4 @@ loop kind from 0 to 6:
     set absentCopy to a retained maker result for kind
     set survivor to no cad body
     check maker survivor (absentCopy's value) with vertices (the item at kind in vertexCounts), edges (the item at kind in edgeCounts) and faces (the item at kind in faceCounts)
-print "invalid_results_copy_reset_and_replace_live_results_safely" as a line
+print line "invalid_results_copy_reset_and_replace_live_results_safely"

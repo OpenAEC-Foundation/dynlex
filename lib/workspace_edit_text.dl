@@ -51,7 +51,7 @@ local function {workspace offset result:result} succeeded:
 
 local function {workspace offset result:result} failed:
     replacement:
-        the inverse of result's success
+        not result's success
 
 local function {prepared workspace text edit result:result} succeeded:
     replacement:
@@ -59,7 +59,7 @@ local function {prepared workspace text edit result:result} succeeded:
 
 local function {prepared workspace text edit result:result} failed:
     replacement:
-        the inverse of result's success
+        not result's success
 
 local function a successful workspace offset at {integer:position}:
     replacement:
@@ -85,8 +85,7 @@ local function the workspace UTF32 offset for position {integer:goal} in {string
     execute:
         if goal < 0:
             return a failed workspace offset reporting the string form of "Text position is negative"
-        set cursor to 0
-        set count to 0
+        set cursor and count to 0
         loop while count < goal and cursor < the length of line:
             decode the UTF-8 code point in line at byte cursor and set decoded to it
             if decoded failed:
@@ -248,7 +247,7 @@ local function the result of validating workspace text edit indexes {a pointer t
             set insertion to (prepared's start offset = prepared's end offset)
             if insertion and replacement:
                 return a failed workspace text result reporting the string form of "Equal-position inserts must precede a replacement"
-            if the inverse of insertion:
+            if not insertion:
                 if replacement:
                     return a failed workspace text result reporting the string form of "Text edit ranges overlap"
                 set replacement to true
@@ -297,7 +296,7 @@ local function the prepared workspace text edit result for {a pointer to a works
                 ) to prepared workspace edits collection
             set position to (position + 1)
         free indexing
-        if the inverse of valid:
+        if not valid:
             return @intrinsic(
                 "construct",
                 a prepared workspace text edit result,
@@ -313,54 +312,51 @@ local function the prepared workspace text edit result for {a pointer to a works
             an empty workspace edit text
         )
 
-function the result of applying workspace text edits {a pointer to a workspace text edit collection:edits} to {string:source} using {integer:encoding}:
-    execute:
-        set preparation to the prepared workspace text edit result for edits against source using encoding
-        set prepared to preparation's edits
-        if preparation failed:
-            set reason to preparation's failure reason
-            free prepared workspace text edits prepared
-            return a failed workspace text result reporting reason
-        set order to the stable prepared workspace edit indexes for prepared
-        set validation to the result of validating workspace text edit indexes prepared ordered by order
-        if validation failed:
-            free workspace edit index collection order
-            free prepared workspace text edits prepared
-            return validation
-        set length to the length of source
-        set position to 0
-        loop while position < the length of order:
-            set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
-            set length to (length + the length of change's new text)
-            set length to (length - (change's end offset - change's start offset))
-            set position to (position + 1)
-        if (length < 0) or (length > the maximum string buffer length):
-            free workspace edit index collection order
-            free prepared workspace text edits prepared
-            return a failed workspace text result reporting the string form of "Text edit result is too large"
-        set output to a new string buffer containing length bytes
-        set reader to 0
-        set writer to 0
-        set position to 0
-        loop while position < the length of order:
-            set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
-            set span to (change's start offset - reader)
-            if span > 0:
-                set unchanged to the substring of source from reader spanning span bytes
-                copy unchanged into the data of output at offset writer
-                set writer to (writer + span)
-            copy change's new text into the data of output at offset writer
-            set writer to (writer + the length of change's new text)
-            if change's end offset > reader:
-                set reader to change's end offset
-            set position to (position + 1)
-        set remainder to (the length of source - reader)
-        if remainder > 0:
-            set tail to the substring of source from reader spanning remainder bytes
-            copy tail into the data of output at offset writer
-            set writer to (writer + remainder)
+to get the result of applying workspace text edits {a pointer to a workspace text edit collection:edits} to {string:source} using {integer:encoding}:
+    set preparation to the prepared workspace text edit result for edits against source using encoding
+    set prepared to preparation's edits
+    if preparation failed:
+        set reason to preparation's failure reason
+        free prepared workspace text edits prepared
+        return a failed workspace text result reporting reason
+    set order to the stable prepared workspace edit indexes for prepared
+    set validation to the result of validating workspace text edit indexes prepared ordered by order
+    if validation failed:
         free workspace edit index collection order
         free prepared workspace text edits prepared
-        if writer != length:
-            @intrinsic("call", "libc", "abort", nothing)
-        return a successful workspace text result containing output
+        return validation
+    set length to the length of source
+    set position to 0
+    loop while position < the length of order:
+        set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
+        set length to (length + the length of change's new text)
+        set length to (length - (change's end offset - change's start offset))
+        set position to (position + 1)
+    if (length < 0) or (length > the maximum string buffer length):
+        free workspace edit index collection order
+        free prepared workspace text edits prepared
+        return a failed workspace text result reporting the string form of "Text edit result is too large"
+    set output to a new string buffer containing length bytes
+    set reader, writer and position to 0
+    loop while position < the length of order:
+        set change to the prepared workspace text edit at (the workspace edit index at position in order) in prepared
+        set span to (change's start offset - reader)
+        if span > 0:
+            set unchanged to the substring of source from reader spanning span bytes
+            copy unchanged into the data of output at offset writer
+            set writer to (writer + span)
+        copy change's new text into the data of output at offset writer
+        set writer to (writer + the length of change's new text)
+        if change's end offset > reader:
+            set reader to change's end offset
+        set position to (position + 1)
+    set remainder to (the length of source - reader)
+    if remainder > 0:
+        set tail to the substring of source from reader spanning remainder bytes
+        copy tail into the data of output at offset writer
+        set writer to (writer + remainder)
+    free workspace edit index collection order
+    free prepared workspace text edits prepared
+    if writer != length:
+        @intrinsic("call", "libc", "abort", nothing)
+    return a successful workspace text result containing output

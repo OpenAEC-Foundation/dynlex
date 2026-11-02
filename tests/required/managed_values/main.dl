@@ -29,18 +29,14 @@ class:
         marker as a byte
         value as a tracked allocation
 
-function a new tracked allocation numbered number:
-    execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
-        return @intrinsic("construct", a tracked allocation, references, number)
+to get a new tracked allocation numbered number:
+    set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+    return @intrinsic("construct", a tracked allocation, references, number)
 
-function the identity of {tracked allocation:value}:
-    execute:
-        return value
+to get the identity of {tracked allocation:value}:
+    return value
 
-function consume {tracked allocation:value}:
-    execute:
-        ignore the number of value
+to consume {tracked allocation:value}: ignore the number of value
 
 flex function publish {tracked allocation:value}:
     replacement:
@@ -50,77 +46,62 @@ flex function publish through a nested flex {tracked allocation:value}:
     replacement:
         publish value
 
-function exercise copies:
-    execute:
-        set first to a new tracked allocation numbered 1
-        set second to first
-        set second to a new tracked allocation numbered 2
-        ignore a new tracked allocation numbered 3
+to exercise copies:
+    set first to a new tracked allocation numbered 1
+    set second to first
+    set second to a new tracked allocation numbered 2
+    ignore a new tracked allocation numbered 3
 
-function exercise return:
-    execute:
-        set original to a new tracked allocation numbered 4
-        set returned to the identity of original
+to exercise return:
+    set original to a new tracked allocation numbered 4
+    set returned to the identity of original
 
-function exercise temporary argument:
-    execute:
-        consume a new tracked allocation numbered 5
+to exercise temporary argument: consume a new tracked allocation numbered 5
 
-function exercise subject:
-    execute:
-        publish a new tracked allocation numbered 6
+to exercise subject:
+    publish a new tracked allocation numbered 6
+    ignore it
+
+to exercise conditional ownership for condition:
+    if condition:
+        set branch to a new tracked allocation numbered 7
+    else:
+        set branch to a new tracked allocation numbered 8
+
+to exercise loop:
+    set number to 9
+    loop while number <= 10:
+        set iteration to a new tracked allocation numbered number
+        set number to (number + 1)
+
+to exercise array: set values to [a new tracked allocation numbered 11, a new tracked allocation numbered 12]
+
+to exercise aggregate:
+    set container to @intrinsic("construct", a tracked container, a new tracked allocation numbered 13)
+
+to exercise property:
+    set container to @intrinsic("construct", a tracked container, a new tracked allocation numbered 14)
+    set extracted to the value of container
+
+to exercise padded aggregate:
+    set container to @intrinsic("construct", a padded tracked container, 1 as a byte, a new tracked allocation numbered 15)
+    set extracted to the value of container
+
+to exercise nested subject condition:
+    if condition:
+        publish through a nested flex a new tracked allocation numbered 16
         ignore it
 
-function exercise conditional ownership for condition:
-    execute:
-        if condition:
-            set branch to a new tracked allocation numbered 7
-        else:
-            set branch to a new tracked allocation numbered 8
+to exercise runtime select:
+    set left to a new tracked allocation numbered 17
+    set right to a new tracked allocation numbered 18
+    set condition to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
+    set selected to (left if condition, else right)
 
-function exercise loop:
-    execute:
-        set number to 9
-        loop while number <= 10:
-            set iteration to a new tracked allocation numbered number
-            set number to (number + 1)
-
-function exercise array:
-    execute:
-        set values to [a new tracked allocation numbered 11, a new tracked allocation numbered 12]
-
-function exercise aggregate:
-    execute:
-        set container to @intrinsic("construct", a tracked container, a new tracked allocation numbered 13)
-
-function exercise property:
-    execute:
-        set container to @intrinsic("construct", a tracked container, a new tracked allocation numbered 14)
-        set extracted to the value of container
-
-function exercise padded aggregate:
-    execute:
-        set container to @intrinsic("construct", a padded tracked container, 1 as a byte, a new tracked allocation numbered 15)
-        set extracted to the value of container
-
-function exercise nested subject condition:
-    execute:
-        if condition:
-            publish through a nested flex a new tracked allocation numbered 16
-            ignore it
-
-function exercise runtime select:
-    execute:
-        set left to a new tracked allocation numbered 17
-        set right to a new tracked allocation numbered 18
-        set condition to (@intrinsic("call", "libc", "abs", a 32 bit integer, 1) = 1)
-        set selected to (left if condition, else right)
-
-function exercise compile time select:
-    execute:
-        set left to a new tracked allocation numbered 19
-        set right to a new tracked allocation numbered 20
-        set selected to (left if true, else right)
+to exercise compile time select:
+    set left to a new tracked allocation numbered 19
+    set right to a new tracked allocation numbered 20
+    set selected to (left if true, else right)
 
 function observe explicit return global:
     globals:
@@ -128,17 +109,15 @@ function observe explicit return global:
     execute:
         ignore the number of global
 
-function exercise managed pointer reads:
-    execute:
-        set original to a new tracked allocation numbered 23
-        set source to @intrinsic("address of", original)
-        set dereferenced to @intrinsic("dereference", source)
-        set second to @intrinsic("dereference", source)
+to exercise managed pointer reads:
+    set original to a new tracked allocation numbered 23
+    set source to @intrinsic("address of", original)
+    set dereferenced to @intrinsic("dereference", source)
+    set second to @intrinsic("dereference", source)
 
-function exercise direct managed construction:
-    execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
-        set value to @intrinsic("construct", a tracked allocation, references, 24)
+to exercise direct managed construction:
+    set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+    set value to @intrinsic("construct", a tracked allocation, references, 24)
 
 exercise copies
 exercise return

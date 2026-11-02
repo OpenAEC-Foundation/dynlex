@@ -5,9 +5,7 @@ A zero-argument function with a `replacement` body is a named compile-time
 value when that replacement is compile-time known:
 
 ```dynlex
-function the GLFW press status:
-    replacement:
-        1
+the GLFW press status means: 1
 ```
 
 The name can be used anywhere an ordinary value can be used. The compiler
@@ -15,11 +13,10 @@ infers the replacement and propagates its compile-time value, so it can also
 be passed to a parameter requiring a fixed value:
 
 ```dynlex
-function the selected value for {fixed integer:value}:
-    execute:
-        return value
+to get the selected value for {fixed integer:value}:
+    return value
 
-print the selected value for the GLFW press status as a line
+print line the selected value for the GLFW press status
 ```
 
 This is the same general pattern used by the JSON, LSP, workspace, path, and

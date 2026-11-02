@@ -7,15 +7,13 @@ class:
     members:
         arguments as a pointer to list
 
-function a backend using {a pointer to list:arguments}:
-    execute:
-        set value to @intrinsic("construct", a backend, arguments)
-        allocate one slot of value and set result to it
-        return result
+to get a backend using {a pointer to list:arguments}:
+    set value to @intrinsic("construct", a backend, arguments)
+    allocate one slot of value and set result to it
+    return result
 
-function the argument count of {a pointer to backend:value}:
-    execute:
-        return the length of (value's arguments)
+to get the argument count of {a pointer to backend:value}:
+    return the length of (value's arguments)
 
 set arguments to an empty list of string
 append the string form of "first" to arguments

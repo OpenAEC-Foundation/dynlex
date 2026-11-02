@@ -1,10 +1,6 @@
-function [a|] value:
-    replacement:
-        @intrinsic("type", "any")
+[a|] value means: @intrinsic("type", "any")
 
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
+nothing means: @intrinsic("type", "nothing")
 
 function finish:
     replacement:

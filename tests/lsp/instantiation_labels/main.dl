@@ -1,9 +1,7 @@
 import lib/std.dl
 import tests/lsp/instantiation_labels/user.dl
 
-function send {string:message} to {user record:recipient}:
-    execute:
-        print message as a line
+to send {string:message} to {user record:recipient}: print line message
 
 set recipient to a user named "DynLex"
 send the string form of "hello" to recipient

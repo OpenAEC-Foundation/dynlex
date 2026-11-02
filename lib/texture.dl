@@ -34,24 +34,22 @@ to get an empty graphics texture:
 
 local function skip PPM header whitespace and comments in {pointer:stream}:
     execute:
-        set done to false
-        set found to false
+        set done and found to false
         while done = false:
             set character to the next byte from stream
             if character = -1:
                 set done to true
             else:
-                if (character = 9) or ((character = 10) or ((character = 11) or ((character = 12) or ((character = 13) or (character = 32))))):
+                if character is one of 9, 10, 11, 12, 13 and 32:
                     ignore character
                 else:
                     if character = 35:
                         set character to the next byte from stream
-                        while (character != -1) and ((character != 10) and (character != 13)):
+                        while (character != -1) and (10 != character != 13):
                             set character to the next byte from stream
                     else:
                         put character back in stream
-                        set found to true
-                        set done to true
+                        set found and done to true
         return found
 
 local function the PPM magic token is valid in {pointer:stream}:
@@ -61,14 +59,14 @@ local function the PPM magic token is valid in {pointer:stream}:
         set separator to the next byte from stream
         if (first != 80) or ((second != 54) or (separator = -1)):
             return false
-        if (separator != 9) and ((separator != 10) and ((separator != 11) and ((separator != 12) and ((separator != 13) and (separator != 32))))):
+        if (separator != 9) and ((separator != 10) and ((separator != 11) and ((separator != 12) and (13 != separator != 32)))):
             return false
         put separator back in stream
         return true
 
 local function a PPM integer token from {pointer:stream}:
     execute:
-        if the inverse of skip PPM header whitespace and comments in stream:
+        if not skip PPM header whitespace and comments in stream:
             return -1
 
         set character to the next byte from stream
@@ -76,7 +74,7 @@ local function a PPM integer token from {pointer:stream}:
             return -1
 
         set value to 0
-        while (character >= 48) and (character <= 57):
+        while 48 <= character <= 57:
             set digit to character - 48
             if (value > 214748364) or ((value = 214748364) and (digit > 7)):
                 return -1
@@ -85,7 +83,7 @@ local function a PPM integer token from {pointer:stream}:
 
         if character = -1:
             return -1
-        if (character != 9) and ((character != 10) and ((character != 11) and ((character != 12) and ((character != 13) and (character != 32))))):
+        if (character != 9) and ((character != 10) and ((character != 11) and ((character != 12) and (13 != character != 32)))):
             return -1
         put character back in stream
         return value
@@ -95,11 +93,11 @@ local function consume the PPM pixel separator in {pointer:stream}:
         set delimiter to the next byte from stream
         if delimiter = -1:
             return false
-        if (delimiter != 9) and ((delimiter != 10) and ((delimiter != 11) and ((delimiter != 12) and ((delimiter != 13) and (delimiter != 32))))):
+        if (delimiter != 9) and ((delimiter != 10) and ((delimiter != 11) and ((delimiter != 12) and (13 != delimiter != 32)))):
             return false
         if delimiter = 13:
             set following to the next byte from stream
-            if following != 10 and following != -1:
+            if 10 != following != -1:
                 put following back in stream
         return true
 
@@ -108,7 +106,7 @@ to get a graphics texture loaded from PPM file at path for {pointer:window}:
     if stream = 0 as a pointer to a byte:
         return an empty graphics texture
 
-    if the inverse of the PPM magic token is valid in stream:
+    if not the PPM magic token is valid in stream:
         close PPM stream
         return an empty graphics texture
 
@@ -118,7 +116,7 @@ to get a graphics texture loaded from PPM file at path for {pointer:window}:
     if (width <= 0) or ((height <= 0) or (maximum != 255)):
         close PPM stream
         return an empty graphics texture
-    if the inverse of consume the PPM pixel separator in stream:
+    if not consume the PPM pixel separator in stream:
         close PPM stream
         return an empty graphics texture
 
@@ -175,5 +173,4 @@ flex function release {graphics texture:texture}:
         if texture is loaded:
             release graphics texture resource (texture's resource as a pointer to DynlexGraphicsTexture)
         set texture's resource to 0 as a pointer to a byte
-        set texture's width to 0
-        set texture's height to 0
+        set texture's width and texture's height to 0

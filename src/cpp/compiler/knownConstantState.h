@@ -2,12 +2,13 @@
 
 #include "compileTimeInfo.h"
 #include "copyOnWrite.h"
+#include "variableStorageKey.h"
 #include <unordered_map>
 #include <utility>
 
 struct VariableReference;
 
-using KnownConstantStorage = std::unordered_map<VariableReference *, CompileTimeValue>;
+using KnownConstantStorage = std::unordered_map<VariableStorageKey, CompileTimeValue, VariableStorageKeyHash>;
 
 class KnownConstantState {
   public:

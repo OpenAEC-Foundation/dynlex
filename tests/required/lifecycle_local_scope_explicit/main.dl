@@ -18,11 +18,9 @@ class:
         if explicitOuter != 333 or implicitOuter != 444:
             @intrinsic("call", "libc", "exit", nothing, 84)
 
-function exercise explicit lifetime:
-    execute:
-        set held to @intrinsic("construct", an explicit scope probe, 0)
-        ignore held
+to exercise explicit lifetime:
+    set held to @intrinsic("construct", an explicit scope probe, 0)
+    ignore held
 
 exercise explicit lifetime
-print explicitOuter as a line
-print implicitOuter as a line
+print lines explicitOuter and implicitOuter

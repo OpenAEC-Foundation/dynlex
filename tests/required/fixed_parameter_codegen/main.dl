@@ -10,30 +10,21 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed quantity:
-    replacement:
-        @intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function left is right:
-    replacement:
-        @intrinsic("equal", left, right)
+left is right means: @intrinsic("equal", left, right)
 
-function left and right:
-    replacement:
-        @intrinsic("and", left, right)
+left and right means: @intrinsic("and", left, right)
 
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the selection for {fixed integer:height} rows and {fixed integer:width} columns:
-    execute:
-        if height is 4 and width is 4:
-            return 7
+to get the selection for {fixed integer:height} rows and {fixed integer:width} columns:
+    if height is 4 and width is 4:
+        return 7
 
 set result to the selection for 4 rows and 4 columns
 ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", result)

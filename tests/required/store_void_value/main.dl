@@ -1,4 +1,3 @@
-function no value:
-	execute:
+to no value:
 
 @intrinsic("store", target, no value)

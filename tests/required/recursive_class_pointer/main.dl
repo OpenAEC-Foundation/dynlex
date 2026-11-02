@@ -1,26 +1,18 @@
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
 function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function value as destination:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as destination means: @intrinsic("cast", value, destination)
 
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function the address of variable:
-    replacement:
-        @intrinsic("address of", variable)
+the address of variable means: @intrinsic("address of", variable)
 
-function the value at pointer:
-    replacement:
-        @intrinsic("dereference", pointer)
+the value at pointer means: @intrinsic("dereference", pointer)
 
 class:
     patterns:

@@ -1,0 +1,6 @@
+function initialize [using slot|]:
+    replacement:
+        @intrinsic("store", slot, 1)
+        @intrinsic("store", slot, "text")
+
+initialize

@@ -436,7 +436,9 @@ bool parsePatternElements(
 			} else {
 				// Argument capture, optionally with a type constraint.
 				DefinitionPatternElement elem(PatternElement::Type::Variable, name, namePos);
-				elem.typeConstraintName = std::string(capture.typeConstraint);
+				elem.isArgumentPack = capture.typeConstraint == "arguments";
+				if (!elem.isArgumentPack)
+					elem.typeConstraintName = std::string(capture.typeConstraint);
 				result.push_back(std::move(elem));
 			}
 		} else {

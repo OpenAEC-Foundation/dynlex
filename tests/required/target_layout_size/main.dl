@@ -20,9 +20,6 @@ class:
         count as a 32 bit integer
         tail as a byte
 
-print the size of a string as a line
-print the size of a layout sample as a line
-print the size of an aligned layout sample as a line
+print lines (the size of a string), (the size of a layout sample) and (the size of an aligned layout sample)
 set aligned to @intrinsic("construct", an aligned layout sample, 1 as a byte, 42, 2 as a byte)
-print the count of aligned as a line
-print the tail of aligned as a line
+print lines (the count of aligned) and (the tail of aligned)

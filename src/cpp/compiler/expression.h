@@ -55,6 +55,7 @@ struct Expression {
 	enum class Kind {
 		Literal,
 		ArrayLiteral,
+		ArgumentPack,
 		Variable,
 		PatternCall,
 		IntrinsicCall,
@@ -89,6 +90,7 @@ struct Expression {
 	std::optional<size_t> selectedCallablePathIndex;
 	// For the subject intrinsic: the exact preceding subject assignment whose runtime value is read.
 	Expression *subjectSetter{};
+	std::optional<ExpressionCapture> inferredArgumentReference;
 	// For non-flex PatternCalls: the exact monomorphized callee selected during
 	// type inference. Later stages consume this instance without rebuilding its key.
 	Instantiation *selectedInstantiation{};
@@ -109,6 +111,8 @@ struct Expression {
 	Expression *inferredPointerStorage{};
 	// Section flexes own the complete call-site-specific replacement structure.
 	std::shared_ptr<InstantiatedSectionBody> inferredFlexBody;
+	std::shared_ptr<InstantiatedSectionBody> inferredCallerBody;
+	std::optional<std::vector<std::shared_ptr<InstantiatedSectionBody>>> staticLoopBodies;
 	// Control-flow intrinsics produce section outcomes during ordinary inference.
 	// Flex calls forward the outcome of their inferred replacement expression.
 	CopyOnWrite<SectionOutcome> sectionOutcome;

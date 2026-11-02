@@ -1,10 +1,9 @@
 f {@intrinsic("type", "int"):x} means: @intrinsic("add", x, 0)
 f {@intrinsic("type", "float"):x} means: @intrinsic("add", x, 0.0)
 g x means: f x
-function h x:
-    execute:
-        @intrinsic("return", f x)
-        @intrinsic("discard", f "unreachable")
+to get h x:
+    @intrinsic("return", f x)
+    @intrinsic("discard", f "unreachable")
 
 @intrinsic("discard", g 8)
 @intrinsic("discard", g 9)

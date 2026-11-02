@@ -1,7 +1,6 @@
 import tests/games/shader_values.dl
 
 # Concentric rings with animated color wave — hypnotic pattern
-# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 
 set pixel to a planar position with x the fragment x coordinate and y the fragment y coordinate
 set time to the shader time

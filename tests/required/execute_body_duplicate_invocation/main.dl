@@ -7,9 +7,8 @@ flex section execute body twice:
         relay body
         relay body
 
-function exercise duplicate:
-    execute:
-        execute body twice:
-            @intrinsic("discard", 0)
+to exercise duplicate:
+    execute body twice:
+        @intrinsic("discard", 0)
 
 exercise duplicate

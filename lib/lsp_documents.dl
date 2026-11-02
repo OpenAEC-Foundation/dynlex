@@ -90,7 +90,7 @@ to get the result of opening LSP document {a value:uri} written in {a value:lang
     set addressable to address is valid UTF-8
     set recognizable to dialect is valid UTF-8
     set readable to body is valid UTF-8
-    if (the inverse of addressable) or ((the inverse of recognizable) or (the inverse of readable)):
+    if (not addressable) or ((not recognizable) or (not readable)):
         return a failed JSON-RPC operation with status the JSON-RPC invalid UTF-8 status reporting "LSP document fields must be valid UTF-8"
     if state's synchronization's open and close notifications:
         set parameters to the LSP document opening parameters for URI address, language dialect, version 1 and text body
@@ -147,7 +147,7 @@ to get the result of saving LSP document uri {a value:uri} using {a pointer to a
     set index to the LSP document index for address in state
     if index < 0:
         return a failed JSON-RPC operation with status the LSP document error status reporting "LSP document is not open"
-    if the inverse of state's synchronization's save notifications:
+    if not state's synchronization's save notifications:
         return a successful JSON-RPC operation
     set entry to the LSP document at index in state
     if state's synchronization's saved text inclusion:
@@ -177,7 +177,7 @@ local function {LSP offset result:outcome} succeeded:
 
 local function {LSP offset result:outcome} failed:
     replacement:
-        the inverse of outcome's success
+        not outcome's success
 
 local function the byte offset for LSP line {integer:row} and character {integer:offset} in {string:contents}:
     execute:

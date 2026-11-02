@@ -94,80 +94,26 @@ static void recordParameterOutputType(InferenceContext &context, Variable *varia
 		context.currentInstantiation->parameterOutputTypesByName[variable->name] = variable->type;
 }
 
+#include "storage_type_refinement.inl"
+
 static bool refineStorageExpressionType(
 	Expression *expression, const DataType &candidateType, InferenceContext &context, const BindingFrameStack &bindingFrameStack
 ) {
 	ResolvedBindingLayers resolved = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
 	Expression *storage = resolved.expression;
-	BindingFrameStack storageBindingFrameStack = std::move(resolved.bindingFrameStack);
-	if (!storage)
-		crashCompilerBug("storage type refinement lost its expression while resolving bindings");
-
-	if (storage->kind == Expression::Kind::Variable && storage->variable) {
-		Section *section = storage->range.line ? storage->range.line->section : nullptr;
-		Variable *variable = section ? section->findVariable(storage->variable) : nullptr;
-		if (!variable || !variable->type.isDeduced())
-			return false;
-		DataType refinedType;
-		if (!mergeVariableAssignmentType(variable->type, candidateType, refinedType))
-			return false;
-		if (refinedType != variable->type) {
-			if (context.trial && context.trialJournal)
-				context.trialJournal->recordVariableWrite(variable);
-			variable->type = refinedType;
-		}
-		storage->type = refinedType;
-		expression->type = refinedType;
-		recordParameterOutputType(context, variable);
-		return true;
-	}
-
-	if (storage->kind != Expression::Kind::IntrinsicCall || intrinsicKind(storage->intrinsicName) != IntrinsicKind::Property)
+	requireCompilerInvariant(storage != nullptr, "storage type refinement lost its expression");
+	auto view = storageTypeView(storage, context, resolved.bindingFrameStack);
+	if (!view)
 		return false;
-
-	Expression *ownerExpression = storage->arguments[1];
-	DataType ownerType = ensureExpressionTypeWithCurrentGrouping(ownerExpression, context, storageBindingFrameStack);
-	if (ownerType.kind != DataType::Kind::Class || !ownerType.classDefinition || ownerType.classInstIndex < 0)
+	const auto &root = context.typeRefinements.read().roots.at(view->root);
+	Variable *variable = root.variable;
+	DataType refined = root.type;
+	if (!refineProjectedStorageType(refined, view->projections, 0, candidateType, context) ||
+		!refineStorageRootType(view->root, variable, refined, context))
 		return false;
-
-	CompileTimeValue propertyValue = resolveStoredCompileTimeValue(storage->arguments[2], storageBindingFrameStack, &context);
-	std::string fieldName;
-	if (const auto *propertyName = std::get_if<std::string>(&propertyValue))
-		fieldName = *propertyName;
-	if (fieldName.empty()) {
-		Expression *fieldExpression =
-			resolveInferenceBindingLayers(storage->arguments[2], storageBindingFrameStack, &context).expression;
-		fieldName = extractFieldName(fieldExpression);
-	}
-	if (fieldName.empty())
-		return false;
-
-	ClassDefinition *classDefinition = ownerType.classDefinition;
-	for (size_t fieldIndex = 0; fieldIndex < classDefinition->fields.size(); fieldIndex++) {
-		if (classDefinition->fields[fieldIndex].name != fieldName)
-			continue;
-		const DataType &currentFieldType = classDefinition->instantiations[ownerType.classInstIndex].fieldTypes[fieldIndex];
-		DataType refinedFieldType;
-		if (!mergeVariableAssignmentType(currentFieldType, candidateType, refinedFieldType))
-			return false;
-		if (refinedFieldType == currentFieldType) {
-			storage->type = refinedFieldType;
-			expression->type = refinedFieldType;
-			return refineStorageExpressionType(ownerExpression, ownerType, context, storageBindingFrameStack);
-		}
-		int refinedInstantiationIndex =
-			getRefinedClassInstantiationIndex(context, classDefinition, ownerType.classInstIndex, fieldIndex, refinedFieldType);
-		if (refinedInstantiationIndex < 0)
-			return false;
-		DataType refinedOwnerType = ownerType;
-		refinedOwnerType.classInstIndex = refinedInstantiationIndex;
-		if (!refineStorageExpressionType(ownerExpression, refinedOwnerType, context, storageBindingFrameStack))
-			return false;
-		storage->type = refinedFieldType;
-		expression->type = refinedFieldType;
-		return true;
-	}
-	return false;
+	storage->type = projectStorageType(context.typeRefinements.read().roots.at(view->root).type, view->projections);
+	expression->type = storage->type;
+	return true;
 }
 
 static bool refinePointerStoragePointeeType(

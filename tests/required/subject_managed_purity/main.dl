@@ -1,0 +1,14 @@
+integer means: @intrinsic("type", "int")
+class:
+    patterns:
+        marker
+    members:
+        number as integer
+    retain:
+        @intrinsic("discard", @intrinsic("property", @intrinsic("lifecycle value"), "number"))
+    release:
+        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("property", @intrinsic("lifecycle value"), "number")))
+to get effectful type:
+    @intrinsic("set subject", @intrinsic("construct", marker, 7))
+    @intrinsic("return", integer)
+@intrinsic("store", {effectful type:item}, 0)

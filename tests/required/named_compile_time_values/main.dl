@@ -1,8 +1,6 @@
 import lib/graphics.dl
 
-function the selected value for {fixed integer:value}:
-    execute:
-        return value
+to get the selected value for {fixed integer:value}:
+    return value
 
-print the selected value for the escape key as a line
-print the selected value for the A key as a line
+print lines (the selected value for the escape key) and (the selected value for the A key)

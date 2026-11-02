@@ -4,6 +4,7 @@
 #include <string_view>
 
 struct ParseContext;
+struct CodeLine;
 
 struct TopLevelSectionOpener {
 	size_t offset{};
@@ -12,3 +13,4 @@ struct TopLevelSectionOpener {
 
 std::optional<TopLevelSectionOpener> findTopLevelSectionOpener(std::string_view text, std::string_view sectionOpener);
 bool expandDefinitionShorthands(ParseContext &context);
+CodeLine *expandFormattedStringLine(ParseContext &context, CodeLine &line);

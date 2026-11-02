@@ -1,14 +1,12 @@
 # SPDX-License-Identifier: MPL-2.0
 import lib/bim/brep_revolve_rational.dl
 
-function check rational revolution {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to check rational revolution {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 
-function rational revolution near {a number:actual} to {a number:expected}:
-    execute:
-        check rational revolution ((the absolute value of (actual - expected)) < 1e-9)
+to rational revolution near {a number:actual} to {a number:expected}:
+    check rational revolution ((the absolute value of (actual - expected)) < 1e-9)
 
 set plane to the cad xy plane
 set pivot to the cad zero vector3
@@ -28,7 +26,7 @@ set onSurface to the cad point on swept's value at parameters 0.0 and 0.0
 rational revolution near onSurface's x to 4.0
 rational revolution near onSurface's y to 1.0
 rational revolution near onSurface's z to 0.0
-print "ellipse_revolution_is_exact_rational_surface" as a line
+print line "ellipse_revolution_is_exact_rational_surface"
 
 free profile
 set piece to the cad curve2 of (the full cad ellipse arc2 on ellipse)
@@ -39,20 +37,14 @@ set swept to the cad rational revolution surface of piece on plane for frame
 check rational revolution swept's valid
 check rational revolution swept's value's uClosed
 check rational revolution (swept's value's vClosed = false)
-print "closed_profile_preserves_source_periodicity" as a line
+print line "closed_profile_preserves_source_periodicity"
 
 set controls to a list containing (a cad vector2 with x 1.0 and y 0.0)
-append (a cad vector2 with x -0.1 and y 1.0) to controls
-append (a cad vector2 with x 1.0 and y 2.0) to controls
+append (a cad vector2 with x -0.1 and y 1.0) and (a cad vector2 with x 1.0 and y 2.0) to controls
 set knots to a list containing 0.0
-append 0.0 to knots
-append 0.0 to knots
-append 1.0 to knots
-append 1.0 to knots
-append 1.0 to knots
+append 0.0, 0.0, 1.0, 1.0 and 1.0 to knots
 set weights to a list containing 1.0
-append 1.0 to weights
-append 1.0 to weights
+append 1.0 and 1.0 to weights
 set nurbs to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
 check rational revolution nurbs's valid
 set piece to the cad curve2 of nurbs's value
@@ -68,9 +60,7 @@ check rational revolution swept's value's vClosed
 set axisControls to a list containing (a cad vector2 with x 0.0 and y 0.0)
 append (a cad vector2 with x 0.0 and y 2.0) to axisControls
 set axisKnots to a list containing 0.0
-append 0.0 to axisKnots
-append 1.0 to axisKnots
-append 1.0 to axisKnots
+append 0.0, 1.0 and 1.0 to axisKnots
 set axisWeights to a list containing 1.0
 append 1.0 to axisWeights
 set axisCurve to the strict cad nurbs curve2 of degree 1 with controls axisControls, knots axisKnots and weights axisWeights
@@ -87,9 +77,9 @@ free profile
 free axisControls
 free axisKnots
 free axisWeights
-print "axis_collapsed_nurbs_piece_is_omitted" as a line
+print line "axis_collapsed_nurbs_piece_is_omitted"
 check rational revolution ((the length of swept's value's controls) = 3)
-print "nurbs_hull_refines_and_full_turn_closes" as a line
+print line "nurbs_hull_refines_and_full_turn_closes"
 
 replace item at index 1 in controls with (a cad vector2 with x -2.0 and y 1.0)
 set crossing to the strict cad nurbs curve2 of degree 2 with controls controls, knots knots and weights weights
@@ -99,7 +89,7 @@ set frame to the cad rational revolution turn of profile on plane about pivot al
 check rational revolution (frame's valid = false)
 set refused to the cad rational revolution surface of piece on plane for validFrame
 check rational revolution (refused's valid = false)
-print "nurbs_axis_crossing_is_refused" as a line
+print line "nurbs_axis_crossing_is_refused"
 
 free controls
 free knots

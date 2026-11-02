@@ -98,7 +98,7 @@ local function an invalid UTF-8 code point position at {integer:offset}:
 
 local function {integer:value} is a UTF-8 continuation byte:
     execute:
-        return value >= 128 and value <= 191
+        return 128 <= value <= 191
 
 local function {integer:value} is not a UTF-8 continuation byte:
     execute:
@@ -217,8 +217,7 @@ local function the UTF-16 position result in {string:text} for byte {integer:off
             return an invalid text input position reporting the error byte offset of validation
         if offset < 0 or offset > the length of text:
             return an invalid requested text position
-        set cursor to 0
-        set total to 0
+        set cursor and total to 0
         loop while cursor < offset:
             set decoded to the raw UTF-8 code point in text at cursor
             if the next byte offset of decoded > offset:
@@ -239,8 +238,7 @@ local function the UTF-8 byte offset result for UTF-16 position {integer:request
             return an invalid text input position reporting the error byte offset of validation
         if request < 0:
             return an invalid requested text position
-        set cursor to 0
-        set total to 0
+        set cursor and total to 0
         loop while cursor < the length of text:
             if total = request:
                 return a successful text position at cursor
@@ -273,9 +271,7 @@ local function the line index scanned from {string:text}:
             return a failed text line index reporting the error byte offset of validation
         set capacity to the length of text + 1
         set lines to a text line array of capacity slots
-        set count to 0
-        set start to 0
-        set offset to 0
+        set count, start and offset to 0
         loop while offset < the length of text:
             set character to the unsigned UTF-8 byte at offset in text
             if character = 13:
@@ -286,15 +282,13 @@ local function the line index scanned from {string:text}:
                 set entry to @intrinsic("construct", a text line, start, offset, next)
                 initialize entry at lines + count
                 increment count
-                set start to next
-                set offset to next
+                set start and offset to next
             else if character = 10:
                 set next to offset + 1
                 set entry to @intrinsic("construct", a text line, start, offset, next)
                 initialize entry at lines + count
                 increment count
-                set start to next
-                set offset to next
+                set start and offset to next
             else:
                 increment offset
         set entry to @intrinsic("construct", a text line, start, the length of text, the length of text)
@@ -365,24 +359,22 @@ class:
         length as an integer
         error offset as an integer
 
-function [the UTF-16 encoding of] {string:text}:
-    execute:
-        validate text as UTF-8 and set validation to it
-        if validation failed:
-            return @intrinsic("construct", a UTF-16 encoding, false, the string form of "", 0, the error byte offset of validation)
-        set storage to a new string buffer containing ((text's length + 1) * 2) bytes
-        set output to (the data of storage) as a pointer to a 16 bit unsigned integer
-        set cursor to 0
-        set length to 0
-        loop while cursor < text's length:
-            set decoded to the raw UTF-8 code point in text at cursor
-            set point to the code point of decoded
-            if point >= 65536:
-                store ((((point - 65536) >> 10) + 55296) as a 16 bit unsigned integer) into output at length
-                increment length
-                set point to ((point - 65536) bitwise and 1023) + 56320
-            store (point as a 16 bit unsigned integer) into output at length
+to get [the UTF-16 encoding of] {string:text}:
+    validate text as UTF-8 and set validation to it
+    if validation failed:
+        return @intrinsic("construct", a UTF-16 encoding, false, the string form of "", 0, the error byte offset of validation)
+    set storage to a new string buffer containing ((text's length + 1) * 2) bytes
+    set output to (the data of storage) as a pointer to a 16 bit unsigned integer
+    set cursor and length to 0
+    loop while cursor < text's length:
+        set decoded to the raw UTF-8 code point in text at cursor
+        set point to the code point of decoded
+        if point >= 65536:
+            store ((((point - 65536) >> 10) + 55296) as a 16 bit unsigned integer) into output at length
             increment length
-            set cursor to the next byte offset of decoded
-        store (0 as a 16 bit unsigned integer) into output at length
-        return @intrinsic("construct", a UTF-16 encoding, true, storage, length, -1)
+            set point to ((point - 65536) bitwise and 1023) + 56320
+        store (point as a 16 bit unsigned integer) into output at length
+        increment length
+        set cursor to the next byte offset of decoded
+    store (0 as a 16 bit unsigned integer) into output at length
+    return @intrinsic("construct", a UTF-16 encoding, true, storage, length, -1)

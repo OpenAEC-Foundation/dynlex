@@ -1,15 +1,9 @@
 import lib/std.dl
 
-function the result after the first passage of source:
-    replacement:
-        the result after the second passage of source
+the result after the first passage of source means: the result after the second passage of source
 
-function the result after the second passage of source:
-    replacement:
-        the result after the third passage of source
+the result after the second passage of source means: the result after the third passage of source
 
-function the result after the third passage of source:
-    replacement:
-        @intrinsic("select", @intrinsic("equal", 0, 0), source, source)
+the result after the third passage of source means: @intrinsic("select", @intrinsic("equal", 0, 0), source, source)
 
-print (the result after the first passage of 7) as a line
+print line (the result after the first passage of 7)

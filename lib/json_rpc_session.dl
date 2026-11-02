@@ -52,11 +52,11 @@ class:
         error message as a string
 
 {JSON-RPC send result:outcome} succeeded means: outcome's success
-{JSON-RPC send result:outcome} failed means: the inverse of outcome's success
+{JSON-RPC send result:outcome} failed means: not outcome's success
 {JSON-RPC queued message:outcome} succeeded means: outcome's success
-{JSON-RPC queued message:outcome} failed means: the inverse of outcome's success
+{JSON-RPC queued message:outcome} failed means: not outcome's success
 {JSON-RPC response:outcome} succeeded means: outcome's success
-{JSON-RPC response:outcome} failed means: the inverse of outcome's success
+{JSON-RPC response:outcome} failed means: not outcome's success
 [the|] JSON-RPC server request pending status means: 10
 [the|] JSON-RPC remote error status means: 11
 [the|] JSON-RPC protocol error status means: 12
@@ -413,7 +413,7 @@ local function the finished JSON-RPC response {a pointer to a JSON value:envelop
         set lexeme to the text of code
         set numeric to 0
         set number to the number of code
-        if number >= -2147483648.0 and number <= 2147483647.0:
+        if -2147483648.0 <= number <= 2147483647.0:
             set numeric to number as a 32 bit integer
         set data to an empty JSON-RPC session message
         if error has JSON member named "data":

@@ -98,14 +98,22 @@ foreach ($line in Get-Content -LiteralPath $vcpkgMetadataPath) {
 }
 $vcpkgManifest = Get-Content -LiteralPath (Join-Path $projectRoot "vcpkg.json") -Raw |
     ConvertFrom-Json
+$vcpkgDependencyNames = @($vcpkgManifest.dependencies | ForEach-Object {
+    if ($_ -is [string]) { $_ } else { $_.name }
+})
+$spirvTools = @($vcpkgManifest.dependencies | Where-Object {
+    $_ -isnot [string] -and $_.name -eq "spirv-tools"
+})
 if (
     $vcpkgMetadata.repository -ne "https://github.com/microsoft/vcpkg.git" -or
     $vcpkgMetadata.release -ne "2026.04.27" -or
     $vcpkgMetadata.commit -ne "56bb2411609227288b70117ead2c47585ba07713" -or
     $vcpkgManifest.'builtin-baseline' -ne $vcpkgMetadata.commit -or
     (Compare-Object `
-        @($vcpkgManifest.dependencies | Sort-Object) `
-        @("freetype", "glfw3", "nlohmann-json", "vulkan"))
+        @($vcpkgDependencyNames | Sort-Object) `
+        @("freetype", "glfw3", "nlohmann-json", "spirv-tools", "vulkan")) -or
+    $spirvTools.Count -ne 1 -or
+    (Compare-Object @($spirvTools[0].features) @("tools"))
 ) {
     throw "The vcpkg toolchain and manifest do not match the pinned dependency baseline."
 }

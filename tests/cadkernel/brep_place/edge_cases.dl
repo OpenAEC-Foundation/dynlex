@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: MPL-2.0
 import tests/cadkernel/brep_place/support.dl
-function check placement edge case {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to check placement edge case {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 set original to place test body 4 with pcurves 0 from 0.0 to 1.0
 set mirrorScale to a cad placement with axes (place test point [-2.0,0.0,0.0]), (place test point [0.0,2.0,0.0]) and (place test point [0.0,0.0,2.0]) at (place test point [4.0,5.0,6.0])
 set moved to the cad transformed original by mirrorScale
@@ -34,7 +33,7 @@ loop index from 0 to the length of faces:
     check placement edge case ((the cad distance from expected to actual) < 1e-11)
     free uses
 free faces
-print "reflection_preserves_curve_parameters_pcurves_and_surface_orientation" as a line
+print line "reflection_preserves_curve_parameters_pcurves_and_surface_orientation"
 
 set original to place test body 4 with pcurves 4 from 0.0 to 1.0
 set moved to the cad transformed original by mirrorScale
@@ -43,10 +42,10 @@ set faces to the cad face keys of (moved's value)
 loop index from 0 to the length of faces:
     set uses to the cad face coedges of (the item at index in faces) in (moved's value)
     set coedge to the cad node pointer for (the item at 0 in uses) in (moved's value)
-    check placement edge case ((coedge's pcurve's valid) = ((index != 1) and (index != 2)))
+    check placement edge case ((coedge's pcurve's valid) = (1 != index != 2))
     free uses
 free faces
-print "unsupported_anisotropic_bulged_pcurves_are_removed_without_rejecting_body" as a line
+print line "unsupported_anisotropic_bulged_pcurves_are_removed_without_rejecting_body"
 
 set sampledBody to place test body 6 with pcurves -1 from 0.0 to 1.0
 set edges to the cad edge keys of sampledBody
@@ -57,4 +56,4 @@ check placement edge case ((the length of (samples's value's values)) = 65537)
 check placement edge case (((the item at 0 in (samples's value's values))'s parameter) = 0.0)
 check placement edge case (((the last item of (samples's value's values))'s parameter) = 1.0)
 free edges
-print "adaptive_sampling_stops_at_depth_sixteen_and_preserves_both_ends" as a line
+print line "adaptive_sampling_stops_at_depth_sixteen_and_preserves_both_ends"

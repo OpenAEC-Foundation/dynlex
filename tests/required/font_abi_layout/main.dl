@@ -18,8 +18,7 @@ if error = 0:
     set metadata to face as a pointer to an FT face
     set glyph to metadata's glyph
     set slot to glyph as a pointer to an FT glyph slot
-    print slot's bitmap width as a line
-    print slot's bitmap rows as a line
+    print lines (slot's bitmap width) and (slot's bitmap rows)
 
 set cleanup to @intrinsic("call", "freetype", "FT_Done_FreeType", an integer, library)
 if error != 0 or cleanup != 0:

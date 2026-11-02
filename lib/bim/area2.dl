@@ -64,8 +64,7 @@ local function cad integrated first moments2 of {shape}:
         set nodes to cad area2 nodes
         set weights to cad area2 weights
         set width to 1.0 / 16.0
-        set firstX to 0.0
-        set firstY to 0.0
+        set firstX and firstY to 0.0
         loop panel from 0 to 16:
             set half to 0.5 * width
             set middle to (width * (panel as a 64 bit floating-point number)) + half
@@ -112,7 +111,7 @@ local function cad polyline area2 of {cad polyline2:shape}:
         set count to the length of shape's vertices
         set total to 0.0
         loop index from 0 to cad area2 segment count of shape:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set start to (the item at index in shape's vertices)'s position
             set end to (the item at next in shape's vertices)'s position
             set arc to the cad segment arc of shape at index index
@@ -127,23 +126,22 @@ local function cad polyline area2 of {cad polyline2:shape}:
             set total to total + (0.5 * (the cad cross of start and end))
         return total
 
-function the cad enclosed area of {cad curve2:shape}:
-    execute:
-        if shape's kind = 0:
-            return 0.5 * (the cad cross of shape's line's start and shape's line's end)
-        if (shape's kind = 6) or (shape's kind = 7):
-            return 0.0
-        if shape's kind = 1:
-            return cad circular area2 at shape's circle's centre with radius shape's circle's radius from 0.0 to 6.283185307179586
-        if shape's kind = 2:
-            set start to the cad normalized angle of shape's arc's startAngle
-            return cad circular area2 at shape's arc's centre with radius shape's arc's radius from start to (start + (the cad sweep of shape's arc))
-        if shape's kind = 4:
-            return cad polyline area2 of (shape's polyline)
-        if (shape's kind = 3) or (shape's kind = 5):
-            return cad integrated area2 of shape
-        @intrinsic("call", "libc", "abort", nothing)
+to get the cad enclosed area of {cad curve2:shape}:
+    if shape's kind = 0:
+        return 0.5 * (the cad cross of shape's line's start and shape's line's end)
+    if shape's kind is one of 6 and 7:
         return 0.0
+    if shape's kind = 1:
+        return cad circular area2 at shape's circle's centre with radius shape's circle's radius from 0.0 to 6.283185307179586
+    if shape's kind = 2:
+        set start to the cad normalized angle of shape's arc's startAngle
+        return cad circular area2 at shape's arc's centre with radius shape's arc's radius from start to (start + (the cad sweep of shape's arc))
+    if shape's kind = 4:
+        return cad polyline area2 of (shape's polyline)
+    if shape's kind is one of 3 and 5:
+        return cad integrated area2 of shape
+    @intrinsic("call", "libc", "abort", nothing)
+    return 0.0
 
 local function cad summed moments2 of {cad moments2:first} and {cad moments2:second}:
     execute:
@@ -166,7 +164,7 @@ local function cad polyline moments2 of {cad polyline2:shape}:
         set count to the length of shape's vertices
         set total to @intrinsic("construct", a cad moments2, 0.0, 0.0, 0.0)
         loop index from 0 to cad area2 segment count of shape:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set start to (the item at index in shape's vertices)'s position
             set end to (the item at next in shape's vertices)'s position
             set arc to the cad segment arc of shape at index index
@@ -187,14 +185,13 @@ local function cad enclosed moments2 of {cad curve2:shape}:
         set first to cad integrated first moments2 of shape
         return @intrinsic("construct", a cad moments2, the cad enclosed area of shape, first's x, first's y)
 
-function the cad [chord] closed area of {cad curve2:shape}:
-    execute:
-        if (shape's kind = 6) or (shape's kind = 7):
-            return @intrinsic("construct", a cad area2 result, false, 0.0)
-        set start to the cad point on shape at 0.0
-        set end to the cad point on shape at 1.0
-        set chord to cad line moments2 from end to start
-        return @intrinsic("construct", a cad area2 result, true, (the cad enclosed area of shape) + chord's area)
+to get the cad [chord] closed area of {cad curve2:shape}:
+    if shape's kind is one of 6 and 7:
+        return @intrinsic("construct", a cad area2 result, false, 0.0)
+    set start to the cad point on shape at 0.0
+    set end to the cad point on shape at 1.0
+    set chord to cad line moments2 from end to start
+    return @intrinsic("construct", a cad area2 result, true, (the cad enclosed area of shape) + chord's area)
 
 local function cad centroid2 from {cad moments2:contribution} at {cad vector2:origin}:
     execute:
@@ -204,29 +201,27 @@ local function cad centroid2 from {cad moments2:contribution} at {cad vector2:or
                 return @intrinsic("construct", a cad centroid2 result, true, value)
         return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
 
-function the cad enclosed centroid of {cad curve2:shape}:
-    execute:
-        if shape's kind = 4:
-            if (the length of shape's polyline's vertices) < 2:
-                return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
-        else:
-            if (shape is cad closed) = false:
-                return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
-        set origin to the cad point on shape at 0.0
-        set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
-        if local's valid = false:
+to get the cad enclosed centroid of {cad curve2:shape}:
+    if shape's kind = 4:
+        if (the length of shape's polyline's vertices) < 2:
             return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
-        return cad centroid2 from (cad enclosed moments2 of (local's value)) at origin
+    else:
+        if (shape is cad closed) = false:
+            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+    set origin to the cad point on shape at 0.0
+    set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
+    if local's valid = false:
+        return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+    return cad centroid2 from (cad enclosed moments2 of (local's value)) at origin
 
-function the cad chord closed centroid of {cad curve2:shape}:
-    execute:
-        if (shape's kind = 6) or (shape's kind = 7):
-            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
-        set origin to the cad point on shape at 0.0
-        set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
-        if local's valid = false:
-            return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
-        set start to the cad point on local's value at 0.0
-        set end to the cad point on local's value at 1.0
-        set contribution to cad summed moments2 of (cad enclosed moments2 of (local's value)) and (cad line moments2 from end to start)
-        return cad centroid2 from contribution at origin
+to get the cad chord closed centroid of {cad curve2:shape}:
+    if shape's kind is one of 6 and 7:
+        return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+    set origin to the cad point on shape at 0.0
+    set local to the cad transformed shape by (a cad translation2 by (the cad negative of origin))
+    if local's valid = false:
+        return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)
+    set start to the cad point on local's value at 0.0
+    set end to the cad point on local's value at 1.0
+    set contribution to cad summed moments2 of (cad enclosed moments2 of (local's value)) and (cad line moments2 from end to start)
+    return cad centroid2 from contribution at origin

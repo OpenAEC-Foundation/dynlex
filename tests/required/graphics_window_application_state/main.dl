@@ -7,5 +7,5 @@ exposed function exercise the application state API for {pointer:window}:
         set retrieved to the application state of window
         ignore retrieved
 
-print "window application state is readable" as a line
+print line "window application state is readable"
 return 0

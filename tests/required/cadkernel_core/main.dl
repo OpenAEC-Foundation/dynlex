@@ -3,26 +3,22 @@
 # src/geom2d/vec.rs and src/space/vec.rs; additional independent edge cases.
 import lib/bim/core.dl
 
-function cad check {boolean:condition} named {string:label}:
-    execute:
-        if the inverse of condition:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to cad check {boolean:condition} named {string:label}:
+    if not condition:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function cad check scalar {a number:actual} against {a number:expected} within {a number:tolerance} named {string:label}:
-    execute:
-        cad check ((the absolute value of (actual - expected)) <= tolerance) named label
+to cad check scalar {a number:actual} against {a number:expected} within {a number:tolerance} named {string:label}:
+    cad check ((the absolute value of (actual - expected)) <= tolerance) named label
 
-function cad check vector {cad vector2:actual} against {cad vector2:expected} within {a number:tolerance} named {string:label}:
-    execute:
-        cad check scalar (the x of actual) against (the x of expected) within tolerance named label
-        cad check scalar (the y of actual) against (the y of expected) within tolerance named label
+to cad check vector {cad vector2:actual} against {cad vector2:expected} within {a number:tolerance} named {string:label}:
+    cad check scalar (the x of actual) against (the x of expected) within tolerance named label
+    cad check scalar (the y of actual) against (the y of expected) within tolerance named label
 
-function cad check vector {cad vector3:actual} against {cad vector3:expected} within {a number:tolerance} named {string:label}:
-    execute:
-        cad check scalar (the x of actual) against (the x of expected) within tolerance named label
-        cad check scalar (the y of actual) against (the y of expected) within tolerance named label
-        cad check scalar (the z of actual) against (the z of expected) within tolerance named label
+to cad check vector {cad vector3:actual} against {cad vector3:expected} within {a number:tolerance} named {string:label}:
+    cad check scalar (the x of actual) against (the x of expected) within tolerance named label
+    cad check scalar (the y of actual) against (the y of expected) within tolerance named label
+    cad check scalar (the z of actual) against (the z of expected) within tolerance named label
 
 set zero2 to the cad zero vector2
 set a2 to a cad vector2 with x 1 and y 2
@@ -84,7 +80,7 @@ cad check ((the valid of tiny2) = false) named "2D squared length underflow inva
 set small2 to the cad normalization of (a cad vector2 with x 1e-150 and y 0)
 cad check (the valid of small2) named "2D small representable length valid"
 cad check vector (the value of small2) against axis2 within 1e-15 named "2D small normalized value"
-print "cadkernel vector2 fixtures passed" as a line
+print line "cadkernel vector2 fixtures passed"
 
 set zero3 to the cad zero vector3
 set x3 to the cad x axis
@@ -151,7 +147,7 @@ cad check scalar (the cad distance from survey3 to nearby3) against 0.001 within
 set tiny3 to the cad normalization of (a cad vector3 with x 1e-200, y 0 and z 0)
 cad check ((the valid of tiny3) = false) named "3D squared length underflow invalid"
 cad check (cad a3 is finite) named "3D finite"
-print "cadkernel vector3 fixtures passed" as a line
+print line "cadkernel vector3 fixtures passed"
 
 # IEEE cases preserve upstream behavior, including Some(nonfinite) normalization.
 set inf to 1e308 * 1e308
@@ -187,4 +183,4 @@ set nanDistance2 to the cad distance from bad2 to the segment from zero2 to end2
 set nanDistance3 to the cad distance from bad3 to the segment from zero3 to end3
 cad check (nanDistance2 != nanDistance2) named "2D segment NaN preserved"
 cad check (nanDistance3 != nanDistance3) named "3D segment NaN preserved"
-print "cadkernel IEEE edge fixtures passed" as a line
+print line "cadkernel IEEE edge fixtures passed"

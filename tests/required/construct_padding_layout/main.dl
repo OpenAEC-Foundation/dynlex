@@ -15,5 +15,4 @@ set beginning to zero as a pointer to a byte
 set ending to one as a pointer to a byte
 set value to @intrinsic("construct", a padded data, beginning, 11, ending, 22)
 
-print the count of value as a line
-print the total of value as a line
+print lines (the count of value) and (the total of value)

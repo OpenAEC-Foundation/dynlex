@@ -1,14 +1,8 @@
-function number:
-    replacement:
-        @intrinsic("type", "int")
+number means: @intrinsic("type", "int")
 
-function sheep:
-    replacement:
-        @intrinsic("add", 1, 0)
+sheep means: @intrinsic("add", 1, 0)
 
-function wolf:
-    replacement:
-        @intrinsic("add", 2, 0)
+wolf means: @intrinsic("add", 2, 0)
 
 function get zulu:
     execute:

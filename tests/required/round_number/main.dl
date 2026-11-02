@@ -1,45 +1,36 @@
 import lib/std.dl
 
-function numeric width of {a 32 bit floating-point number:value}:
-    execute:
-        return 32
+to get numeric width of {a 32 bit floating-point number:value}:
+    return 32
 
-function numeric width of {a 64 bit floating-point number:value}:
-    execute:
-        return 64
+to get numeric width of {a 64 bit floating-point number:value}:
+    return 64
 
-function fixed rounded {fixed a number:value}:
-    execute:
-        return value
+to get fixed rounded {fixed a number:value}:
+    return value
 
 exposed function print rounded signed {a 64 bit integer:value}:
     execute:
-        print (the rounded value of value) as a line
-        print (the floor of value) as a line
-        print (the ceiling of value) as a line
+        print lines (the rounded value of value), (the floor of value) and (the ceiling of value)
 
 exposed function print rounded fraction {a 32 bit floating-point number:value}:
     execute:
-        print (the rounded value of value) as a 32 bit integer as a line
+        print line (the rounded value of value) as a 32 bit integer
 
 set first to 1.49 as a 32 bit floating-point number
 set positiveTie to 1.5 as a 32 bit floating-point number
 set negativeTie to (-1.5) as a 32 bit floating-point number
-print (the rounded value of first) as a 32 bit integer as a line
-print (the rounded value of positiveTie) as a 32 bit integer as a line
-print (the rounded value of negativeTie) as a 32 bit integer as a line
-print (numeric width of (the rounded value of first)) as a line
-print (numeric width of (the rounded value of 2.5)) as a line
-print (fixed rounded (the rounded value of (-2.5))) as a 32 bit integer as a line
-print (the rounded value of (-4)) as a line
-print (the rounded value of 18446744073709551615) as a line
+print line (the rounded value of first) as a 32 bit integer
+print line (the rounded value of positiveTie) as a 32 bit integer
+print lines ((the rounded value of negativeTie) as a 32 bit integer) and (numeric width of (the rounded value of first))
+print line (numeric width of (the rounded value of 2.5))
+print lines ((fixed rounded (the rounded value of (-2.5))) as a 32 bit integer) and (the rounded value of (-4))
+print line (the rounded value of 18446744073709551615)
 set largeSigned to 9007199254740993
-print (the rounded value of largeSigned) as a line
-print (the floor of largeSigned) as a line
-print (the ceiling of largeSigned) as a line
-print (fixed rounded (the floor of (-1.5))) as a 32 bit integer as a line
-print (fixed rounded (the ceiling of (-1.5))) as a 32 bit integer as a line
-print (fixed rounded (the absolute value of (-2.0))) as a 32 bit integer as a line
+print lines (the rounded value of largeSigned), (the floor of largeSigned) and (the ceiling of largeSigned)
+print line (fixed rounded (the floor of (-1.5))) as a 32 bit integer
+print line (fixed rounded (the ceiling of (-1.5))) as a 32 bit integer
+print line (fixed rounded (the absolute value of (-2.0))) as a 32 bit integer
 print rounded signed largeSigned
 print rounded signed (-9007199254740993)
 print rounded fraction positiveTie

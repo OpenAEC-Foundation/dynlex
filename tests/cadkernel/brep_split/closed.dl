@@ -9,29 +9,26 @@ class:
         valid as a boolean
         value as a cad face key
 
-function check cad closed split {boolean:condition} code {integer:code}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "exit", nothing, code)
+to check cad closed split {boolean:condition} code {integer:code}:
+    if condition = false:
+        @intrinsic("call", "libc", "exit", nothing, code)
 
-function the cad closed split face of kind {integer:kind} in {cad body:body} at height {a 64 bit floating-point number:zValue}:
-    execute:
-        set found to false
-        set answer to a new cad face key
-        set faceKeys to the cad face keys of body
-        loop cursor from 0 to the length of faceKeys:
-            set faceKey to the item at cursor in faceKeys
-            set faceNode to the cad node pointer for faceKey in body
-            set surfaceNode to the cad node pointer for faceNode's surface in body
-            if surfaceNode's kind = kind:
-                if kind = 1:
-                    set found to true
-                    set answer to faceKey
-                else if (the absolute value of (surfaceNode's plane's origin's z - zValue)) < 1e-12:
-                    set found to true
-                    set answer to faceKey
-        free faceKeys
-        return @intrinsic("construct", a cad closed split selected face, found, answer)
+to get the cad closed split face of kind {integer:kind} in {cad body:body} at height {a 64 bit floating-point number:zValue}:
+    set found to false
+    set answer to a new cad face key
+    set faceKeys to the cad face keys of body
+    for each faceKey in faceKeys:
+        set faceNode to the cad node pointer for faceKey in body
+        set surfaceNode to the cad node pointer for faceNode's surface in body
+        if surfaceNode's kind = kind:
+            if kind = 1:
+                set found to true
+                set answer to faceKey
+            else if (the absolute value of (surfaceNode's plane's origin's z - zValue)) < 1e-12:
+                set found to true
+                set answer to faceKey
+    free faceKeys
+    return @intrinsic("construct", a cad closed split selected face, found, answer)
 
 set planarMade to the cad cylinder body at (the cad zero vector3) with radius 5.0 and height 8.0
 set planarBody to planarMade's value
@@ -48,7 +45,7 @@ set planarRepeatKept to the cad split of planarSplit's kept in planarBody along 
 set planarRepeatMade to the cad split of planarSplit's made in planarBody along innerCircle within 1e-9
 check cad closed split (planarRepeatKept's valid = false) code 14
 check cad closed split (planarRepeatMade's valid = false) code 15
-print "a_closed_circle_splits_a_planar_face_once" as a line
+print line "a_closed_circle_splits_a_planar_face_once"
 
 set periodicMade to the cad cylinder body at (the cad zero vector3) with radius 5.0 and height 8.0
 set periodicBody to periodicMade's value
@@ -65,7 +62,7 @@ set periodicRepeatKept to the cad split of periodicSplit's kept in periodicBody 
 set periodicRepeatMade to the cad split of periodicSplit's made in periodicBody along sectionCircle within 1e-9
 check cad closed split (periodicRepeatKept's valid = false) code 24
 check cad closed split (periodicRepeatMade's valid = false) code 25
-print "a_closed_section_splits_a_periodic_face_once" as a line
+print line "a_closed_section_splits_a_periodic_face_once"
 
 set upperPlane to the cad orthonormal plane with origin (a cad vector3 with x 0.0, y 0.0 and z 6.0), x axis (the cad x axis) and normal (the cad z axis)
 set upperCircle to the cad edge curve3 of (a cad circle3 with plane upperPlane's value and radius 5.0)
@@ -78,7 +75,7 @@ check cad closed split ((the cad count of periodicBody's faces) = 5) code 29
 set twiceFlaws to the cad flaws of periodicBody
 check cad closed split ((the length of twiceFlaws) = 0) code 30
 free twiceFlaws
-print "distinct_closed_sections_split_successive_periodic_bands" as a line
+print line "distinct_closed_sections_split_successive_periodic_bands"
 
 set sphereMade to the cad sphere body at (a cad vector3 with x 2.0, y -1.0 and z 3.0) with radius 5.0
 set sphereBody to sphereMade's value
@@ -98,7 +95,7 @@ free sphereFlaws
 set sphereRepeatKept to the cad split of sphereSplit's kept in sphereBody along latitude within 1e-9
 set sphereRepeatMade to the cad split of sphereSplit's made in sphereBody along latitude within 1e-9
 check cad closed split ((sphereRepeatKept's valid = false) and (sphereRepeatMade's valid = false)) code 36
-print "a_closed_section_replaces_the_artificial_full_sphere_seam" as a line
+print line "a_closed_section_replaces_the_artificial_full_sphere_seam"
 
 set obliqueMade to the cad sphere body at (a cad vector3 with x -3.0, y 4.0 and z 2.0) with radius 6.0
 set obliqueBody to obliqueMade's value
@@ -128,4 +125,4 @@ check cad closed split (obliquePolylineUses = 2) code 46
 set obliqueFlaws to the cad flaws of obliqueBody
 check cad closed split ((the length of obliqueFlaws) = 0) code 47
 free obliqueFlaws
-print "an_oblique_sphere_section_keeps_reversed_sampled_pcurves" as a line
+print line "an_oblique_sphere_section_keeps_reversed_sampled_pcurves"

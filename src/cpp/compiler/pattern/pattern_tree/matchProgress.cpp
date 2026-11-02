@@ -1,7 +1,9 @@
 #include "matchProgress.h"
 #include "parseContext.h"
 #include "patternDefinition.h"
+#include "patternFamily.h"
 #include "patternReference.h"
+#include "syntaxConfig.h"
 #include <algorithm>
 #include <iterator>
 #include <limits>
@@ -125,6 +127,57 @@ remainingPatternElement(const PatternReference *reference, size_t elementIndex, 
 	return {true, element.type, text};
 }
 
+// A literal continuation belongs to the enclosing pattern. Prefer reaching it
+// over extending a captured variable into an inner operator expression. Visible
+// single-word functions still resolve as functions before variable capture.
+static bool hasLiteralContinuation(const MatchProgress &progress) {
+	PatternTreeNode *node = progress.currentNode;
+	size_t elementIndex = progress.sourceElementIndex;
+	size_t charIndex = progress.sourceCharIndex;
+	// Spaces separate arguments and words in every pattern; they do not
+	// establish a literal continuation. Look through them to the actual word
+	// or operator before preferring a variable over a nested expression.
+	while (elementIndex < progress.patternReference->patternElements.size()) {
+		RemainingPatternElement next = remainingPatternElement(progress.patternReference, elementIndex, charIndex);
+		if (!next.exists || next.type == PatternElement::Type::Variable)
+			return false;
+		auto literal = node->literalChildren.find(next.text);
+		if (literal != node->literalChildren.end()) {
+			if (std::ranges::any_of(next.text, [](unsigned char character) {
+				return !std::isspace(character);
+			}))
+				return true;
+			node = literal->second;
+			elementIndex++;
+			charIndex = 0;
+			continue;
+		}
+		if (next.type == PatternElement::Type::Other) {
+			for (size_t length = 1; length < next.text.size(); length++) {
+				std::string_view prefix = next.text.substr(0, length);
+				if (node->literalChildren.contains(prefix) && std::ranges::any_of(prefix, [](unsigned char character) {
+					return !std::isspace(character);
+				}))
+					return true;
+			}
+		}
+		return false;
+	}
+	return false;
+}
+
+static bool namesVisibleSingleWordFunction(const MatchProgress &progress, std::string_view name) {
+	PatternTreeNode *functions = progress.context->patternTrees[static_cast<int>(SectionType::Function)];
+	auto literal = functions->literalChildren.find(name);
+	if (literal == functions->literalChildren.end())
+		return false;
+	MatchProgress named = progress;
+	named.currentNode = literal->second;
+	named.match = {};
+	named.pack = {};
+	return !named.visibleDefinitions().empty();
+}
+
 template <typename T>
 static std::vector<T> materializeSequence(const MatchSequence<T> &sequence, const std::vector<MatchSequenceNode<T>> &storage) {
 	std::vector<T> result;
@@ -161,8 +214,12 @@ static void appendSequence(std::vector<MatchSequenceNode<T>> &storage, MatchSequ
 
 } // namespace
 
+#include "matchArgumentPacks.inl"
+
 void collectMatchDependencies(const MatchControlState &state, MatchDependencies &dependencies) {
 	dependencies.push_back({MatchDependency::Kind::Endpoint, state.currentNode, state.currentNode->endpointRevision, {}});
+	if (!state.rootNode->argumentPackChild)
+		dependencies.push_back({MatchDependency::Kind::ArgumentPackChild, state.rootNode, 0, {}});
 	if (!state.rootNode->argumentChild)
 		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.rootNode, 0, {}});
 
@@ -171,6 +228,8 @@ void collectMatchDependencies(const MatchControlState &state, MatchDependencies 
 	if (!element.exists)
 		return;
 
+	if (!state.currentNode->argumentPackChild)
+		dependencies.push_back({MatchDependency::Kind::ArgumentPackChild, state.currentNode, 0, {}});
 	if (!state.currentNode->argumentChild)
 		dependencies.push_back({MatchDependency::Kind::ArgumentChild, state.currentNode, 0, {}});
 	if (element.type == PatternElement::Type::Variable) {
@@ -232,6 +291,20 @@ size_t MatchControlStateHash::operator()(const MatchControlState &state) const {
 	combineMatchStateHash(hash, state.patternStartPos);
 	combineMatchStateHash(hash, state.patternPos);
 	combineMatchStateHash(hash, state.matchedArgumentIndex);
+	combineMatchStateHash(hash, std::hash<PatternTreeNode *>{}(state.pack.captureNode));
+	combineMatchStateHash(hash, state.pack.argumentIndex);
+	combineMatchStateHash(hash, state.pack.count);
+	combineMatchStateHash(hash, state.pack.minimumCount);
+	combineMatchStateHash(hash, state.pack.expectsItem);
+	combineMatchStateHash(hash, state.pack.finalSeparator);
+	combineMatchStateHash(hash, state.pack.singleOnly);
+	for (const auto &operand : state.operandFamilies) {
+		combineMatchStateHash(hash, std::hash<const PatternFamily *>{}(operand.family));
+		combineMatchStateHash(hash, operand.start);
+		combineMatchStateHash(hash, operand.end);
+		combineMatchStateHash(hash, operand.startsWithArgument);
+		combineMatchStateHash(hash, operand.endsWithArgument);
+	}
 	return hash;
 }
 
@@ -256,6 +329,8 @@ CompletedMatchState CompletedMatchProgress::state() const {
 }
 
 bool MatchParentAlternatives::addParent(const MatchProgress *parent) {
+	if (redirect)
+		return canonical()->addParent(parent);
 	if (!parent || !valueStates.insert(parent->continuationState()).second)
 		return false;
 	values.push_back(parent);
@@ -263,10 +338,24 @@ bool MatchParentAlternatives::addParent(const MatchProgress *parent) {
 }
 
 bool MatchParentAlternatives::addCompletion(CompletedMatchProgress completion) {
+	if (redirect)
+		return canonical()->addCompletion(std::move(completion));
 	if (!completedSubmatchStates.insert(completion.state()).second)
 		return false;
 	completedSubmatches.push_back(std::move(completion));
 	return true;
+}
+
+MatchParentAlternatives *MatchParentAlternatives::canonical() {
+	MatchParentAlternatives *root = this;
+	while (root->redirect)
+		root = root->redirect;
+	for (MatchParentAlternatives *node = this; node->redirect;) {
+		MatchParentAlternatives *next = node->redirect;
+		node->redirect = root;
+		node = next;
+	}
+	return root;
 }
 
 MatchProgress::MatchProgress(ParseContext *context, PatternReference *patternReference)
@@ -289,13 +378,22 @@ bool MatchProgress::isSubmatchComplete(const std::vector<PatternDefinition *> &v
 
 std::vector<PatternDefinition *> MatchProgress::visibleDefinitions() const {
 	std::vector<PatternDefinition *> result;
-	if (!currentNode)
+	if (!currentNode || !packCanEnd(pack))
 		return result;
 	const lsp::SourceFile *sourceFile =
 		patternReference && patternReference->range().line ? patternReference->range().line->sourceFile : nullptr;
 	requireCompilerInvariant(sourceFile != nullptr, "pattern matching requires a source file");
 	for (PatternDefinition *definition : currentNode->matchingDefinitions) {
 		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
+		if (context->compilationStage >= ParseContext::CompilationStage::ResolvedPatternPrecedence) {
+			requireCompilerInvariant(definition->family != nullptr, "precedence matching requires a syntax family");
+			if (std::ranges::any_of(match.operandFamilies, [&](const MatchedOperandPrecedence &operand) {
+				return definition->family->precedenceSuccessors.contains(operand.family) &&
+					   (operand.start == patternStartPos || operand.startsWithArgument) &&
+					   (operand.end == patternPos || operand.endsWithArgument);
+			}))
+				continue;
+		}
 		if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
 			result.push_back(definition);
 	}
@@ -316,6 +414,8 @@ MatchControlState MatchProgress::controlState() const {
 		patternStartPos,
 		patternPos,
 		matchedArgumentIndex,
+		match.operandFamilies,
+		pack,
 	};
 }
 
@@ -324,17 +424,35 @@ MatchContinuationState MatchProgress::continuationState() const { return {contro
 MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) {
 	MatchStep result;
 	auto &nextMatches = result.nextMatches;
+	if (pack.captureNode && !pack.expectsItem) {
+		for (bool final : {false, true})
+			if (auto continuation = packContinuation(*this, final))
+				nextMatches.push_back(std::move(*continuation));
+		if (!packCanEnd(pack))
+			return result;
+	}
+	if (!pack.expectsItem && currentNode->argumentPackChild) {
+		// Single-item packs are a fallback when an ordinary capture also matches.
+		MatchProgress single = *this;
+		single.pack = {
+			.captureNode = currentNode->argumentPackChild,
+			.argumentIndex = matchedArgumentIndex,
+			.expectsItem = true,
+			.singleOnly = true
+		};
+		nextMatches.insert(nextMatches.begin(), std::move(single));
+	}
 
 	RemainingPatternElement element = remainingPatternElement(patternReference, sourceElementIndex, sourceCharIndex);
 	bool hasSourceElement = element.exists;
 	PatternElement::Type elementType = element.type;
 	std::string_view elementText = element.text;
-	auto fullLiteralMatch = hasSourceElement && elementType != PatternElement::Type::Variable
+	auto fullLiteralMatch = !pack.expectsItem && hasSourceElement && elementType != PatternElement::Type::Variable
 								? currentNode->literalChildren.find(elementText)
 								: currentNode->literalChildren.end();
 
 	// Lowest priority first. ParseContext::match() explores queue.back(), so later pushes run earlier.
-	if (hasSourceElement && elementType == PatternElement::Type::Other && elementText.size() > 1) {
+	if (!pack.expectsItem && hasSourceElement && elementType == PatternElement::Type::Other && elementText.size() > 1) {
 		if (fullLiteralMatch == currentNode->literalChildren.end()) {
 			for (size_t prefixLength = 1; prefixLength < elementText.size(); prefixLength++) {
 				std::string_view prefix = elementText.substr(0, prefixLength);
@@ -351,7 +469,7 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 		}
 	}
 
-	if (hasSourceElement && options.acceptLiterals && elementType == PatternElement::Type::Variable) {
+	if (!pack.expectsItem && hasSourceElement && options.acceptLiterals && elementType == PatternElement::Type::Variable) {
 		struct LiteralFallbackCandidate {
 			PatternTreeNode *node{};
 			size_t firstStartPos{std::numeric_limits<size_t>::max()};
@@ -398,17 +516,28 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 
 		// Try extending as left operand of a new expression first (lower LIFO priority).
 		// f.e: 'the result' in 'the result = 10', or '$ + $' in 'set $ to $ + $ dollars'
-		if (canStartSubmatch() && rootNode->argumentChild) {
-			MatchProgress clone = *this;
-			clone.rootNode = rootNode;
-			// advance past the argument slot — the completed sub-expression occupies it
-			clone.currentNode = rootNode->argumentChild;
-			clone.match = {};
-			storage.append(clone.match.nodesPassed, clone.currentNode);
-			clone.matchedArgumentIndex = 0;
-
-			clone.type = SectionType::Function;
-			nextMatches.push_back(resumeParent(storage, clone, result.completedSubmatch));
+		if (canStartSubmatch()) {
+			auto extend = [&](PatternTreeNode *slot, PackMatchState pack) {
+				if (!slot)
+					return;
+				MatchProgress clone = *this;
+				clone.currentNode = slot;
+				clone.match = {};
+				clone.pack = std::move(pack);
+				storage.append(clone.match.nodesPassed, slot);
+				clone.matchedArgumentIndex = 0;
+				clone.type = SectionType::Function;
+				nextMatches.push_back(resumeParent(storage, clone, result.completedSubmatch));
+			};
+			extend(
+				rootNode->argumentPackChild,
+				{.captureNode = rootNode->argumentPackChild, .expectsItem = true, .singleOnly = true}
+			);
+			extend(rootNode->argumentChild, {});
+			extend(
+				rootNode->argumentPackChild,
+				{.captureNode = rootNode->argumentPackChild, .minimumCount = 2, .expectsItem = true}
+			);
 		}
 		// Step up to parent match (higher LIFO priority — prefer returning to the
 		// parent over speculatively extending into a new expression).
@@ -420,14 +549,21 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 
 	if (hasSourceElement) {
 		// less priority: arguments
-		if (currentNode->argumentChild) {
+		PatternTreeNode *captureNode = pack.expectsItem ? pack.captureNode : currentNode->argumentChild;
+		if (captureNode) {
 
+			llvm::SmallVector<MatchProgress, 2> literalContinuations;
 			auto pushArgumentCapture = [&]() -> void {
 				if (elementType != PatternElement::Type::Variable && elementType != PatternElement::Type::VariableLike)
 					return;
+				if (elementType == PatternElement::Type::VariableLike && namesVisibleSingleWordFunction(*this, elementText))
+					return;
 				MatchProgress substituteStep = *this;
-				substituteStep.currentNode = currentNode->argumentChild;
-				storage.append(substituteStep.match.nodesPassed, substituteStep.currentNode);
+				substituteStep.currentNode = captureNode;
+				if (!pack.expectsItem || pack.count == 0)
+					storage.append(substituteStep.match.nodesPassed, captureNode);
+				if (!pack.expectsItem)
+					substituteStep.pack = {};
 				substituteStep.sourceElementIndex++;
 				if (elementType == PatternElement::Type::VariableLike) {
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
@@ -436,39 +572,41 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 					storage.append(
 						substituteStep.match.discoveredVariables, VariableMatch{std::string(elementText), lineStart, lineEnd}
 					);
-					storage.append(
-						substituteStep.match.orderedArguments,
-						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
+					substituteStep.appendArgument(
+						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
 				} else {
-					storage.append(
-						substituteStep.match.orderedArguments,
-						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
-						 patternReference->expression->arguments[sourceArgumentIndex], 0}
+					substituteStep.appendArgument(
+						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Expression,
+								  patternReference->expression->arguments[sourceArgumentIndex], 0}
 					);
 					substituteStep.sourceArgumentIndex++;
 				}
-				substituteStep.matchedArgumentIndex++;
 				substituteStep.patternPos += elementText.size();
-				nextMatches.push_back(std::move(substituteStep));
+				if (hasLiteralContinuation(substituteStep) || packContinuation(substituteStep, false) ||
+					packContinuation(substituteStep, true))
+					literalContinuations.push_back(std::move(substituteStep));
+				else
+					nextMatches.push_back(std::move(substituteStep));
 			};
 
 			auto pushExplicitMultiWordCaptures = [&]() {
 				for (const ExplicitVariableCandidate &candidate : explicitMultiWordVariableCandidates(*this)) {
 					MatchProgress substituteStep = *this;
-					substituteStep.currentNode = currentNode->argumentChild;
-					storage.append(substituteStep.match.nodesPassed, substituteStep.currentNode);
+					substituteStep.currentNode = captureNode;
+					if (!pack.expectsItem || pack.count == 0)
+						storage.append(substituteStep.match.nodesPassed, captureNode);
+					if (!pack.expectsItem)
+						substituteStep.pack = {};
 					substituteStep.sourceElementIndex += candidate.elementCount;
 					substituteStep.sourceArgumentIndex += candidate.sourceArgumentCount;
 					size_t lineStart = patternReference->pattern.getLinePos(patternPos);
 					size_t lineEnd = patternReference->pattern.getLinePos(patternPos + candidate.patternLength);
 					size_t variableIndex = substituteStep.match.discoveredVariables.size();
 					storage.append(substituteStep.match.discoveredVariables, VariableMatch{candidate.name, lineStart, lineEnd});
-					storage.append(
-						substituteStep.match.orderedArguments,
-						{substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
+					substituteStep.appendArgument(
+						storage, {substituteStep.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, variableIndex}
 					);
-					substituteStep.matchedArgumentIndex++;
 					substituteStep.patternPos += candidate.patternLength;
 					nextMatches.push_back(std::move(substituteStep));
 				}
@@ -483,10 +621,14 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				subMatch.type = SectionType::Function;
 				subMatch.patternStartPos = patternPos;
 				subMatch.match = {};
+				subMatch.pack = {};
 
 				MatchProgress parentStep = *this;
-				parentStep.currentNode = currentNode->argumentChild;
-				storage.append(parentStep.match.nodesPassed, parentStep.currentNode);
+				parentStep.currentNode = captureNode;
+				if (!pack.expectsItem || pack.count == 0)
+					storage.append(parentStep.match.nodesPassed, captureNode);
+				if (!pack.expectsItem)
+					parentStep.pack = {};
 				subMatch.parents = storage.createParentAlternatives();
 				subMatch.parents->addParent(storage.storeParent(std::move(parentStep)));
 				nextMatches.push_back(std::move(subMatch));
@@ -495,18 +637,23 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			pushArgumentCapture();
 			pushExplicitMultiWordCaptures();
 			pushSubmatch();
+			nextMatches.insert(
+				nextMatches.end(), std::make_move_iterator(literalContinuations.begin()),
+				std::make_move_iterator(literalContinuations.end())
+			);
 		}
 		// most priority: text match
 		if (fullLiteralMatch != currentNode->literalChildren.end()) {
 			MatchProgress elemStep = *this;
 			elemStep.currentNode = fullLiteralMatch->second;
+			elemStep.pack = {};
 			storage.append(elemStep.match.nodesPassed, elemStep.currentNode);
 			elemStep.sourceElementIndex++;
 			elemStep.sourceCharIndex = 0;
 			elemStep.patternPos += elementText.size();
 			nextMatches.push_back(std::move(elemStep));
 		}
-		if (elementType == PatternElement::Type::Variable) {
+		if (!pack.expectsItem && elementType == PatternElement::Type::Variable) {
 			std::optional<std::string> numericSpelling = numericPatternArgumentSpelling(patternReference, sourceArgumentIndex);
 			if (numericSpelling) {
 				auto numericLiteralMatch = currentNode->literalChildren.find(*numericSpelling);
@@ -521,6 +668,16 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 				}
 			}
 		}
+	}
+	if (!pack.expectsItem && hasSourceElement && currentNode->argumentPackChild) {
+		MatchProgress multiple = *this;
+		multiple.pack = {
+			.captureNode = currentNode->argumentPackChild,
+			.argumentIndex = matchedArgumentIndex,
+			.minimumCount = 2,
+			.expectsItem = true
+		};
+		nextMatches.push_back(std::move(multiple));
 	}
 	return result;
 }
@@ -549,15 +706,26 @@ MatchProgress MatchProgress::resumeParent(
 ) {
 	requireCompilerInvariant(submatch.match != nullptr, "cannot resume a pattern match from a null submatch");
 	MatchProgress resumed = parentProgress;
+	if (resumed.context->compilationStage >= ParseContext::CompilationStage::ResolvedPatternPrecedence) {
+		requireCompilerInvariant(!submatch.match->matchingDefinitions.empty(), "matched operand has no definition");
+		const PatternFamily *family = submatch.match->matchingDefinitions.front()->family;
+		requireCompilerInvariant(family != nullptr, "matched operand has no syntax family");
+		MatchedOperandPrecedence operand{
+			family, submatch.patternStartPos, submatch.patternPos,
+			submatch.match->nodesPassed.front()->type == PatternElement::Type::Variable,
+			submatch.match->nodesPassed.back()->type == PatternElement::Type::Variable
+		};
+		auto &families = resumed.match.operandFamilies;
+		auto position = std::lower_bound(families.begin(), families.end(), operand);
+		if (position == families.end() || *position != operand)
+			families.insert(position, operand);
+	}
 	size_t subMatchIndex = resumed.match.subMatches.size();
 	storage.append(resumed.match.subMatches, submatch.match);
-	storage.append(
-		resumed.match.orderedArguments, {resumed.matchedArgumentIndex, MatchedArgument::Kind::SubMatch, nullptr, subMatchIndex}
-	);
+	resumed.appendArgument(storage, {0, MatchedArgument::Kind::SubMatch, nullptr, subMatchIndex});
 	// We already consumed the submatch's last source element.
 	resumed.sourceElementIndex = submatch.sourceElementIndex;
 	resumed.sourceArgumentIndex = submatch.sourceArgumentIndex;
-	resumed.matchedArgumentIndex++;
 	resumed.patternPos = submatch.patternPos;
 	return resumed;
 }

@@ -130,9 +130,31 @@ def edited_completion_labels(root: pathlib.Path, document: pathlib.Path, line: i
         session.close()
 
 
+def assert_formatted_tokens(root: pathlib.Path) -> None:
+    # Import-free expression-only formatting reproduces the closing-fragment gap.
+    source = ('formatted part means: @intrinsic("add", part, 0)\n'
+              '@intrinsic("store", score, 42)\n'
+              '@intrinsic("discard", formatted "{score}")\n')
+    uri = to_file_uri(root / "tests/lsp/formatted-source-mapping.dl")
+    session = LspSession(default_server_path(root), root, False, False)
+    try:
+        initialize_session(session, root)
+        session.notify("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "dynlex", "version": 1, "text": source,
+        }})
+        tagged = session.request("dynlex/renderSemanticTokens", {"uri": uri})
+        expected = '<function>formatted</function> <string>"{</string><variable>score</variable><string>}"</string>'
+        assert expected in tagged, tagged
+    finally:
+        session.close()
+    tagged = tagged_tokens(root, root / "tests/required/syntax_sugar/main.dl")
+    assert '<variable>score</variable><function> + </function><number>1</number>' in tagged, tagged
+
+
 def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
     assert_multiline_inline_tokens(root)
+    assert_formatted_tokens(root)
     declaration_document = root / "tests" / "required" / "declaration_shorthands" / "main.dl"
     declaration_tokens = tagged_tokens(root, declaration_document)
     expected_comments = {
@@ -147,8 +169,8 @@ def main() -> None:
     mapping_document = root / "tests" / "required" / "declaration_shorthand_source_mapping" / "main.dl"
     mapping_tokens = tagged_tokens(root, mapping_document)
     expected_fragments = (
-        "<keyword>to</keyword><section> </section><patternDefinition>announce </patternDefinition><variable>value</variable>",
-        "<section>:</section> <function>print </function><variable>value</variable><function> as a line</function>",
+        "<keyword>to</keyword> <patternDefinition>announce </patternDefinition><variable>value</variable>",
+        "<section>:</section> <function>print line </function><variable>value</variable>",
         "<comment># mapped shorthand comment</comment>",
     )
     for fragment in expected_fragments:

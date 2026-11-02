@@ -247,6 +247,49 @@ dynlex_native_llvm_cmake_arguments
                 ],
             )
 
+    def test_lld_profiles_install_only_the_required_linker_and_reuse_the_cache(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="dynlex-lld-profiles-") as temporary_directory:
+            environment = os.environ.copy()
+            environment["DYNLEX_LLVM_CACHE_DIR"] = temporary_directory
+            completed = subprocess.run(
+                [BASH_EXECUTABLE, "-c", r'''
+set -euo pipefail
+. "$1"
+dynlex_prepare_llvm_source() { :; }
+dynlex_resolve_bootstrap_compilers() {
+    DYNLEX_LLVM_BOOTSTRAP_CC=fixture-clang
+    DYNLEX_LLVM_BOOTSTRAP_CXX=fixture-clang++
+}
+dynlex_require_command() { :; }
+emcmake() { "$@"; }
+cmake() {
+    printf '%s\n' "$*"
+    mkdir -p "$DYNLEX_LLVM_CACHE_DIR/$profile/install/lib/cmake/lld"
+    touch "$DYNLEX_LLVM_CACHE_DIR/$profile/install/lib/cmake/lld/LLDConfig.cmake"
+}
+dynlex_build_lld native
+dynlex_build_lld web
+dynlex_build_lld native
+dynlex_build_lld web
+cat "$DYNLEX_LLVM_NATIVE_INSTALL_DIR/.dynlex-lld-toolchain"
+cat "$DYNLEX_LLVM_WEB_INSTALL_DIR/.dynlex-lld-toolchain"
+''', BASH_EXECUTABLE, str(SCRIPTS_DIR / "llvm_toolchain.sh")],
+                capture_output=True, env=environment, text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+            lines = completed.stdout.splitlines()
+            self.assertEqual(len(lines), 6, completed.stdout)
+            for configure, build in (lines[:2], lines[2:4]):
+                self.assertIn("-DLLVM_DISTRIBUTION_COMPONENTS=lldWasm;lldCommon;lld-headers;lld-cmake-exports", configure)
+                self.assertIn("-DLLVM_INCLUDE_TESTS=OFF", configure)
+                self.assertIn("--target install-lldWasm install-lldCommon install-lld-headers install-lld-cmake-exports", build)
+            self.assertIn("-DCMAKE_CXX_COMPILER=fixture-clang++", lines[0])
+            self.assertNotIn("-DCMAKE_CXX_COMPILER=fixture-clang++", lines[2])
+            self.assertIn("/native/install/lib/cmake/llvm", lines[0].replace("\\", "/"))
+            self.assertIn("/web/install/lib/cmake/llvm", lines[2].replace("\\", "/"))
+            native_profile = "native:static-msvc-crt" if os.name == "nt" else "native"
+            self.assertEqual(lines[4:], [f"{PINNED_REVISION}:{PINNED_SCHEMA}:{native_profile}", f"{PINNED_REVISION}:{PINNED_SCHEMA}:web"])
+
     def test_windows_bootstrap_compiler_path_names_the_exe_file(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dynlex-llvm-windows-exe-") as temporary_directory:
             compiler = Path(temporary_directory) / "clang.exe"

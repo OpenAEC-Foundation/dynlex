@@ -2,17 +2,15 @@
 import tests/cadkernel/brep_place/checks.dl
 import tests/cadkernel/brep_place/support.dl
 
-function placement locally returned samples:
-    execute:
-        set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
-        set edges to the cad edge keys of localBody
-        set sampled to the cad edge samples of (the item at 3 in edges) in localBody within 0.01
-        free edges
-        return sampled
-function placement locally returned polylines:
-    execute:
-        set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
-        return the cad edge polylines of localBody within 0.01
+to get placement locally returned samples:
+    set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
+    set edges to the cad edge keys of localBody
+    set sampled to the cad edge samples of (the item at 3 in edges) in localBody within 0.01
+    free edges
+    return sampled
+to get placement locally returned polylines:
+    set localBody to place test body 4 with pcurves 5 from 0.0 to 1.0
+    return the cad edge polylines of localBody within 0.01
 
 loop repetition from 0 to 12:
     set source to place test body 4 with pcurves 5 from 0.0 to 1.0
@@ -65,13 +63,13 @@ loop repetition from 0 to 12:
     check placement (count > 2)
     set before to @intrinsic("dereference", samples's value's references)
     set retainedSamples to samples
-    check placement ((@intrinsic("dereference", samples's value's references)) = (before + 1))
+    check placement ((@intrinsic("dereference", samples's value's references)) = (before + 2))
     set sampleList to a list containing samples
     set samples to a new (the type of samples)
     check placement ((the length of (retainedSamples's value's values)) = count)
     clear sampleList
     free sampleList
-    check placement ((@intrinsic("dereference", retainedSamples's value's references)) = before)
+    check placement ((@intrinsic("dereference", retainedSamples's value's references)) = (before + 1))
     set retainedSamples to a new (the type of retainedSamples)
 
     set polylines to placement locally returned polylines
@@ -81,7 +79,7 @@ loop repetition from 0 to 12:
     set retainedLines to a new (the type of retainedLines)
     check placement ((the length of (firstLine's values)) = 2)
     check placement scalar ((the item at 0 in (firstLine's values))'s x) near 1.0
-print "transformed_bodies_and_nested_samples_have_independent_managed_lifetimes" as a line
+print line "transformed_bodies_and_nested_samples_have_independent_managed_lifetimes"
 
 set rejectedSource to place test body 4 with pcurves 5 from 0.0 to 1.0
 damage place test rejectedSource with 12 and 0.0
@@ -93,7 +91,7 @@ loop repetition from 0 to 24:
     set retainedRejection to rejected
     set rejected to no cad body
     check placement (retainedRejection's valid = false)
-print "rejected_transforms_release_partial_clones_without_consuming_inputs" as a line
+print line "rejected_transforms_release_partial_clones_without_consuming_inputs"
 
 set emptyBody to an empty cad body
 set emptyPolylines to the cad edge polylines of emptyBody within 0.1
@@ -104,4 +102,4 @@ set absentPoints to the cad edge points of absentKey in emptyBody within 0.1
 check placement ((absentSamples's valid = false) and (absentPoints's valid = false))
 check placement ((the length of (absentSamples's value's values)) = 0)
 check placement ((the length of (absentPoints's value's values)) = 0)
-print "empty_and_missing_edge_results_have_safe_owned_storage" as a line
+print line "empty_and_missing_edge_results_have_safe_owned_storage"

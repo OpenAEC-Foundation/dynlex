@@ -5,7 +5,7 @@ set copy to "tests/required/filesystem_copy_rename/copy.tmp"
 delete the filesystem entry at copy
 
 copy the filesystem entry at source to copy
-print whether it succeeded as a line
+print line it succeeded
 set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, copy, "rb")
 set initial to @intrinsic("call", "libc", "fgetc", an integer, stream)
 ignore @intrinsic("call", "libc", "fclose", an integer, stream)

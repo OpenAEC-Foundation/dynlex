@@ -10,10 +10,7 @@ add argument as an argument to command
 launch command and set child to it
 set expected to the string form of "Process argument must not be null or contain a zero byte"
 
-print whether child failed to launch as a line
-print whether (the starting error of child = expected) as a line
+print lines (child failed to launch) and (the starting error of child = expected)
 
 run command and set result to it
-print whether result failed to launch as a line
-print whether result failed as a line
-print whether (result's error message = expected) as a line
+print lines (result failed to launch), (result failed) and (result's error message = expected)

@@ -16,19 +16,18 @@ implicitly convert {integer:number}:
     replacement:
         @intrinsic("construct", a number box, number)
 
-function the boxed value chosen using {boolean:first}:
-    execute:
-        if first:
-            return @intrinsic("construct", a number box, 31)
-        return 47
+to get the boxed value chosen using {boolean:first}:
+    if first:
+        return @intrinsic("construct", a number box, 31)
+    return 47
 
 set variable to @intrinsic("construct", a number box, 1)
 set variable to 2
-print the payload of variable as a line
+print line the payload of variable
 
 set holder to @intrinsic("construct", a box holder, @intrinsic("construct", a number box, 3))
 set the held of holder to 4
-print the payload of the held of holder as a line
+print line the payload of the held of holder
 
 set returned to the boxed value chosen using false
-print the payload of returned as a line
+print line the payload of returned

@@ -1,5 +1,5 @@
 import lib/filesystem.dl
 
 set path to a new string from "A" containing 2 bytes
-print whether path is readable as a line
-delete the filesystem entry at path and print whether it succeeded as a line
+print line path is readable
+delete the filesystem entry at path and print line it succeeded

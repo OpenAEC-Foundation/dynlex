@@ -1,0 +1,42 @@
+21
+16
+10
+4
+7
+true
+true
+false
+true
+false
+false
+true
+false
+false
+true
+true
+true
+true
+false
+2
+2
+2
+-2
+8
+Score: 42
+Next: 43; braces: {score}
+true
+true
+true
+false
+true
+true
+
+42
+Quoted: value; {ok}
+3
+2
+4
+true
+1
+2
+false

@@ -8,10 +8,6 @@ set negative to (-1.25) as a 32 bit floating-point number
 set fractionalup to 1.75 as a 32 bit floating-point number
 set fractionaldown to 1.25 as a 32 bit floating-point number
 
-print (base raised to the power of exponent) as a line
-print (the sine of zero) as a line
-print (the cosine of zero) as a line
-print (the square root of square) as a line
-print (the absolute value of negative) as a line
-print (the floor of fractionalup) as a line
-print (the ceiling of fractionaldown) as a line
+print lines (base raised to the power of exponent), (the sine of zero) and (the cosine of zero)
+print lines (the square root of square), (the absolute value of negative) and (the floor of fractionalup)
+print line (the ceiling of fractionaldown)

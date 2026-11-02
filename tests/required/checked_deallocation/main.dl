@@ -9,4 +9,4 @@ function a counted allocation:
 
 deallocate a counted allocation
 deallocate 0 as a pointer to integer
-print counter as a line
+print line counter

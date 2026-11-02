@@ -191,6 +191,14 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 		return "t" + encodeDataTypeForCacheKey(typeRef->type) + "|" + encodeTypeConstraintForCacheKey(typeRef->constraint);
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 		return "c" + encodeTypeConstraintForCacheKey(*constraint);
+	if (const auto *capture = std::get_if<ExpressionCapture>(&value))
+		return "r" + std::to_string(capture->identity.size()) + ":" + capture->identity;
+	if (const auto *pack = std::get_if<ArgumentPackValue>(&value)) {
+		std::string encoded = "p";
+		for (const auto &element : pack->elements)
+			encoded += std::to_string(element.identity.size()) + ":" + element.identity;
+		return encoded;
+	}
 	return "?";
 }
 

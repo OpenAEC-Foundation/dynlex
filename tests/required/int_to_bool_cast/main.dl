@@ -8,12 +8,11 @@ function output message natively:
     replacement:
         ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
 
-function output message:
-    execute:
-        if the build target is WebAssembly:
-            output message through WebAssembly
-        else:
-            output message natively
+to output message:
+    if the build target is WebAssembly:
+        output message through WebAssembly
+    else:
+        output message natively
 
 set one to 1 as a boolean
 set zero to 0 as a boolean

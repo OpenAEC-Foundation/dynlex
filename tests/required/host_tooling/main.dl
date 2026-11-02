@@ -10,20 +10,9 @@ if platform's value = "Windows":
     set candidate to "cmd"
 set executable to the executable named candidate
 
-print path succeeded as a line
-print path was found as a line
-print path's value is not empty as a line
-print absent succeeded as a line
-print absent was absent as a line
-print absent's value is empty as a line
-print empty succeeded as a line
-print empty was found as a line
-print empty's value is empty as a line
-print platform succeeded as a line
-print platform's value is not empty as a line
-print administrator succeeded as a line
-print executable succeeded as a line
-print executable was found as a line
-print executable's value is not empty as a line
+print lines (path succeeded), (path was found), (path's value is not empty), (absent succeeded) and (absent was absent)
+print lines (absent's value is empty), (empty succeeded), (empty was found) and (empty's value is empty)
+print lines (platform succeeded), (platform's value is not empty), (administrator succeeded) and (executable succeeded)
+print lines (executable was found) and (executable's value is not empty)
 write "standard error works\n" to standard error
-print whether it succeeded as a line
+print line it succeeded

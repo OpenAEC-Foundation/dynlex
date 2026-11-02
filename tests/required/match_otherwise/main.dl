@@ -2,21 +2,18 @@ import std.dl
 
 # `otherwise` (or `default`) runs when no case matches.
 
-function the classification of value:
-	execute:
-		set result to 0
-		match based on value:
-			case 1:
-				set result to 10
-			case 2:
-				set result to 20
-			otherwise:
-				set result to 99
-		return result
+to get the classification of value:
+	set result to 0
+	match based on value:
+		case 1:
+			set result to 10
+		case 2:
+			set result to 20
+		otherwise:
+			set result to 99
+	return result
 
-print (the classification of 1) as a line
-print (the classification of 2) as a line
-print (the classification of 7) as a line
+print lines (the classification of 1), (the classification of 2) and (the classification of 7)
 
 set result to 0
 match based on 5:
@@ -24,26 +21,23 @@ match based on 5:
 		set result to 1
 	default:
 		set result to 42
-print result as a line
+print line result
 
 # Nested matches keep their case and default branches on their own switch.
-function the pair code for first and second:
-	execute:
-		set result to 0
-		match based on first:
-			case 1:
-				match based on second:
-					case 5:
-						set result to 15
-					otherwise:
-						set result to 19
-			case 2:
-				set result to 2
-			otherwise:
-				set result to 90
-		return result
+to get the pair code for first and second:
+	set result to 0
+	match based on first:
+		case 1:
+			match based on second:
+				case 5:
+					set result to 15
+				otherwise:
+					set result to 19
+		case 2:
+			set result to 2
+		otherwise:
+			set result to 90
+	return result
 
-print (the pair code for 1 and 5) as a line
-print (the pair code for 1 and 8) as a line
-print (the pair code for 2 and 5) as a line
-print (the pair code for 7 and 7) as a line
+print lines (the pair code for 1 and 5), (the pair code for 1 and 8) and (the pair code for 2 and 5)
+print line (the pair code for 7 and 7)

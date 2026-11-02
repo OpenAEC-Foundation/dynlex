@@ -18,5 +18,5 @@ if overflow is loaded or ((overflow's width != 0) or (overflow's height != 0)):
 set truncated to a graphics texture loaded from PPM file at "tests/release/texture_truncated_extreme.ppm" for 0 as a pointer to a byte
 if truncated is loaded or ((truncated's width != 0) or (truncated's height != 0)):
     return 1
-print "graphics texture resource API is available" as a line
+print line "graphics texture resource API is available"
 return 0

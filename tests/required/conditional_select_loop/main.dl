@@ -1,0 +1,7 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+@intrinsic("store", index, 0)
+while @intrinsic("select", @intrinsic("less than", index, 3), @intrinsic("equal", 1, 1), @intrinsic("equal", 1, 0)):
+    @intrinsic("store", index, @intrinsic("add", index, 1))
+@intrinsic("return", @intrinsic("subtract", index, 3))

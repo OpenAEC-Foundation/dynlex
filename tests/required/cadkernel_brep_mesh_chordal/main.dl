@@ -2,11 +2,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh chordal {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh chordal {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set cylinderResult to the cad cylinder body at the cad zero vector3 with radius 5.0 and height 10.0
 check mesh chordal (cylinderResult's valid) named "cylinder"
@@ -35,4 +34,4 @@ check mesh chordal ((the length of invalidMesh's edges) = (the length of coarseM
 free cad body mesh invalidMesh
 free cad body mesh chordalMesh
 free cad body mesh coarseMesh
-print "cadkernel brep mesh chordal: PASS" as a line
+print line "cadkernel brep mesh chordal: PASS"

@@ -1,6 +1,4 @@
-function [a|] thirty two bit integer:
-    replacement:
-        @intrinsic("type", "int", 32)
+[a|] thirty two bit integer means: @intrinsic("type", "int", 32)
 
 function set variable to value:
     replacement:

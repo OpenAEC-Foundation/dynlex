@@ -297,6 +297,15 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "function") {
 		return assignNameValue(context, path, node, config.functionName);
 	}
+	if (node.key == "formatted string") {
+		return assignNameValue(context, path, node, config.formattedStringPrefix);
+	}
+	if (node.key == "argument pack separator") {
+		return assignNameValue(context, path, node, config.argumentPackSeparator);
+	}
+	if (node.key == "argument pack conjunction") {
+		return assignNameValue(context, path, node, config.argumentPackConjunction);
+	}
 	if (node.key == "convert") {
 		return assignNameValue(context, path, node, config.conversionName);
 	}
@@ -566,6 +575,7 @@ std::optional<std::string> definitionShorthandSyntaxError(const SyntaxConfig &co
 
 bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath) {
 	context.builtinSyntax = {};
+	context.builtinSyntaxConfigPath.clear();
 	std::vector<std::string> builtinCandidates = {
 #ifdef DYNLEX_WEB
 		"/lib/config.dl",
@@ -579,6 +589,7 @@ bool initializeSyntaxConfigs(ParseContext &context, const std::string &mainPath)
 			continue;
 		if (!loadSyntaxConfigFile(context, candidate, context.builtinSyntax))
 			return false;
+		context.builtinSyntaxConfigPath = candidate;
 		break;
 	}
 
@@ -662,6 +673,9 @@ SyntaxConfig::Messages::Messages() {
 	set("invalid indentation character", "message", "Invalid indentation! expected only {expected}, but found {found}");
 	set("invalid indentation increase", "message", "Invalid indentation! expected at max {expected}, but found {found}");
 	set("missing body section", "message", "Code without body section");
+	set("invalid formatted string", "message", "Invalid formatted string: {detail}");
+	set("argument packs require replacement definitions", "message",
+		"Argument packs preserve source expressions and can only be passed to replacement definitions");
 	set("unknown section", "message", "Unknown section: {section}");
 	set("unexpected class line", "message", "unexpected line in class definition");
 	set("integer literal out of range", "message", "Integer literal exceeds the signed 64-bit range");

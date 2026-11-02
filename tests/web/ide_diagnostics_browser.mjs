@@ -13,9 +13,9 @@ async function replaceActiveLine(text) {
 async function loadValidSource() {
   await replaceMonacoSource(`import lib/std.dl
 
-print 1 as a line`);
+print line 1`);
   await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the valid source to compile");
-  await findMonacoText("print 1 as a line");
+  await findMonacoText("print line 1");
 }
 
 const diagnosticExpression = `document.querySelector('#diagnostics-list')?.textContent.includes(

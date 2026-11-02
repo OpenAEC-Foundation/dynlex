@@ -2,7 +2,6 @@ import tests/games/shader_values.dl
 
 # EVENT HORIZON
 # An interactive procedural black hole rendered entirely by DynLex.
-# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
 #
 # Uniform bindings are explicit:
 #   0 time, 1 width, 2 height, 3 mouse x, 4 mouse y, 5 pulse age,

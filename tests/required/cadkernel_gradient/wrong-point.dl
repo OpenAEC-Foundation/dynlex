@@ -6,5 +6,5 @@ import lib/vector.dl
 set prototype to a new vector with x (1.0 as a 32 bit floating-point number), y (0.0 as a 32 bit floating-point number) and z (0.0 as a 32 bit floating-point number)
 set boundary to an empty list of the type of prototype
 set result to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within (the default cad tolerance)
-print (the valid of result) as a line
+print line (the valid of result)
 free boundary

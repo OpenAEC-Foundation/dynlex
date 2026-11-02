@@ -1,12 +1,9 @@
 import lib/std.dl
 
-function consume a private subject:
-    execute:
-        ignore it
+to consume a private subject: ignore it
 
-function call with a caller subject:
-    execute:
-        set the subject to 1
-        consume a private subject
+to call with a caller subject:
+    set the subject to 1
+    consume a private subject
 
 call with a caller subject

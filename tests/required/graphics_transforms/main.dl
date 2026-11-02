@@ -1,9 +1,8 @@
 import lib/graphics.dl
 
-function require {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to require {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 
 set translation to a graphics translation by x 10.0 y 20.0 z 30.0
 set rotation to a graphics rotation of 90.0 degrees around x 0.0 y 0.0 z 2.0
@@ -59,7 +58,7 @@ set native's swapchain_extent's width to 640 as a 32 bit unsigned integer
 set native's swapchain_extent's height to 320 as a 32 bit unsigned integer
 use perspective with a vertical field of view of 90.0 degrees, a near plane of 1.0 and a far plane of 11.0 in frame
 require ((the absolute value of ((the item at 0 in native's projection) - 0.5)) < 0.00001)
-print "graphics transforms passed" as a line
+print line "graphics transforms passed"
 
 set native's swapchain_format to 50
 set encoded to graphics color channel 128 for (the address of native)

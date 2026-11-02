@@ -6,17 +6,12 @@ class:
     members:
         success as a boolean
 
-function a successful example action:
-    replacement:
-        @intrinsic("construct", an example action, true)
+a successful example action means: @intrinsic("construct", an example action, true)
 
-function a failed example action:
-    replacement:
-        @intrinsic("construct", an example action, false)
+a failed example action means: @intrinsic("construct", an example action, false)
 
-function {example action:action} succeeded:
-    execute:
-        return action's success
+to get {example action:action} succeeded:
+    return action's success
 
 flex function perform a successful example action:
     replacement:
@@ -26,20 +21,17 @@ flex function perform a failed example action:
     replacement:
         set the subject to a failed example action
 
-function preserve subject through branch condition:
-    execute:
-        set the subject to a successful example action
-        if condition:
-            ignore 1
-        else:
-            ignore 2
-        print whether it succeeded as a line
+to preserve subject through branch condition:
+    set the subject to a successful example action
+    if condition:
+        ignore 1
+    else:
+        ignore 2
+    print line it succeeded
 
-perform a successful example action and print whether it succeeded as a line
-perform a failed example action and print whether it succeeded as a line
+perform a successful example action and print line it succeeded
+perform a failed example action and print line it succeeded
 perform a successful example action
-print whether it succeeded as a line
-print whether true and false as a line
-print whether true and true as a line
+print lines (it succeeded), (true and false) and (true and true)
 preserve subject through branch true
 preserve subject through branch false

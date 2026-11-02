@@ -1,14 +1,12 @@
 import lib/std.dl
 
-function selected type:
-    execute:
-        return a 32 bit integer
+to get selected type:
+    return a 32 bit integer
 
-function selected absence type:
-    execute:
-        return the type nothing
+to get selected absence type:
+    return the type nothing
 
 set kind to selected type
 set value to a new kind
-print value as a line
+print line value
 ignore selected absence type

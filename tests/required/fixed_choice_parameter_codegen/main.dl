@@ -2,16 +2,11 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-	replacement:
-		@intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed quantity:
-	replacement:
-		@intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function the number selected from [a fixed value of {fixed integer:number}|a plain value of number]:
-	execute:
-		@intrinsic("return", number)
+to get the number selected from [a fixed value of {fixed integer:number}|a plain value of number]:
+	@intrinsic("return", number)
 
 ignore @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\n", the number selected from a fixed value of 81)

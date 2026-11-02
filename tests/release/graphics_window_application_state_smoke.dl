@@ -8,7 +8,7 @@ exposed function inspect the application state during graphics scroll for {point
         if application pointer = 0 as a pointer to a byte:
             @intrinsic("call", "libc", "abort", nothing)
         set marker to application pointer as a pointer to an integer
-        print @intrinsic("dereference", marker) as a line
+        print line @intrinsic("dereference", marker)
 
 set window to a new window with width 128 and height 64
 if window = 0 as a pointer to a byte:

@@ -1,10 +1,6 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] value:
-    replacement:
-        @intrinsic("type", "any")
+[a|] value means: @intrinsic("type", "any")
 
 class:
     patterns:

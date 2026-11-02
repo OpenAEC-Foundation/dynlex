@@ -97,7 +97,7 @@ local class:
 
 local function {native filesystem path:path} is invalid:
     replacement:
-        the inverse of path's validity
+        not path's validity
 
 local class:
     patterns:
@@ -111,17 +111,17 @@ local class:
         identity as an integer
 
 {file identity:identity} is supported means: identity's support
-{file identity:identity} is unsupported means: the inverse of identity's support
+{file identity:identity} is unsupported means: not identity's support
 {file identity:identity} is available means: identity's availability
-{file identity:identity} is unavailable means: the inverse of identity's availability
+{file identity:identity} is unavailable means: not identity's availability
 {file system entry:entry} is supported means: entry's support
-{file system entry:entry} is unsupported means: the inverse of entry's support
+{file system entry:entry} is unsupported means: not entry's support
 {file system entry:entry} lookup succeeded means: entry's success
-{file system entry:entry} lookup failed means: the inverse of entry's success
+{file system entry:entry} lookup failed means: not entry's success
 {file system entry:entry} was found means: entry's presence
-{file system entry:entry} was absent means: the inverse of entry's presence
+{file system entry:entry} was absent means: not entry's presence
 {file system entry:entry} is a regular file means: entry's regular file kind
-{file system entry:entry} is not a regular file means: the inverse of entry's regular file kind
+{file system entry:entry} is not a regular file means: not entry's regular file kind
 {file system entry:entry} is a directory means: entry's directory kind
 {file system entry:entry} is not a directory means: entry's directory kind = false
 {file system entry:entry} is a symbolic link means: entry's symbolic link kind
@@ -129,26 +129,26 @@ local class:
 {file system entry:entry} has another filesystem kind means: entry's other kind
 {file system entry:entry} does not have another filesystem kind means: entry's other kind = false
 {file system entry:entry}'s mode is supported means: entry's mode support
-{file system entry:entry}'s mode is unsupported means: the inverse of entry's mode support
+{file system entry:entry}'s mode is unsupported means: not entry's mode support
 {file system entry:entry}'s Windows attributes are supported means: entry's Windows attributes support
-{file system entry:entry}'s Windows attributes are unsupported means: the inverse of entry's Windows attributes support
+{file system entry:entry}'s Windows attributes are unsupported means: not entry's Windows attributes support
 {file system entry:entry}'s access time is supported means: entry's access time support
-{file system entry:entry}'s access time is unsupported means: the inverse of entry's access time support
+{file system entry:entry}'s access time is unsupported means: not entry's access time support
 {file system entry:entry} supports modification times means: entry's modification time support
-{file system entry:entry} does not support modification times means: the inverse of entry's modification time support
+{file system entry:entry} does not support modification times means: not entry's modification time support
 {file system entry:entry}'s creation time is supported means: entry's creation time support
-{file system entry:entry}'s creation time is unsupported means: the inverse of entry's creation time support
+{file system entry:entry}'s creation time is unsupported means: not entry's creation time support
 {file system staging file:staging} is supported means: staging's support
-{file system staging file:staging} is unsupported means: the inverse of staging's support
+{file system staging file:staging} is unsupported means: not staging's support
 {file system staging file:staging} succeeded means: staging's success
-{file system staging file:staging} failed means: the inverse of staging's success
+{file system staging file:staging} failed means: not staging's success
 {file system staging file:staging}'s commit outcome is known means: staging's commit outcome knowledge
 {file system staging file:staging} was committed means: staging's commitment
 {file system staging file:staging} was not committed means: staging's commitment = false
 {file system staging file:staging} is durable means: staging's durability
 {file system staging file:staging} is not durable means: staging's durability = false
 {file system staging file:staging}'s cleanup succeeded means: staging's cleanup success
-{file system staging file:staging}'s cleanup failed means: the inverse of staging's cleanup success
+{file system staging file:staging}'s cleanup failed means: not staging's cleanup success
 local function an empty native filesystem failure text:
     execute:
         return the string form of ""
@@ -647,9 +647,7 @@ local function the result of committing {file system staging file:staging} where
                 staging's error message
             )
         set knowledge to 1
-        set committed to 0
-        set durable to 0
-        set cleanup to 0
+        set committed, durable and cleanup to 0
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",

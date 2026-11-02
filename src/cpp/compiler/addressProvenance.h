@@ -1,13 +1,16 @@
 #pragma once
 
 #include "copyOnWrite.h"
+#include "variableStorageKey.h"
 #include <unordered_map>
 #include <unordered_set>
 
 struct VariableReference;
 
+using VariableStorageSet = std::unordered_set<VariableStorageKey, VariableStorageKeyHash>;
+
 struct AddressProvenance {
-	std::unordered_set<VariableReference *> mayTargets;
+	VariableStorageSet mayTargets;
 	// A known null alternative is distinct from having no tracked addresses.
 	bool mayBeNull = false;
 	// Unknown origins can include null as well as untracked non-null addresses.
@@ -18,11 +21,12 @@ struct AddressProvenance {
 	bool operator==(const AddressProvenance &) const = default;
 };
 
-using VariableAddressProvenance = std::unordered_map<VariableReference *, AddressProvenance>;
+using VariableAddressProvenance = std::unordered_map<VariableStorageKey, AddressProvenance, VariableStorageKeyHash>;
+using GlobalAddressProvenance = std::unordered_map<VariableReference *, AddressProvenance>;
 
 struct AddressInferenceStorage {
 	VariableAddressProvenance variables;
-	std::unordered_set<VariableReference *> addressTakenVariables;
+	VariableStorageSet addressTakenVariables;
 	AddressProvenance externallyEscaped;
 
 	bool operator==(const AddressInferenceStorage &) const = default;

@@ -9,27 +9,24 @@ class:
         kind as an integer
         turns as a 64 bit floating-point number
 
-function the cad curve point of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
-    execute:
-        if the kind of curve = 0:
-            return a cad vector3 with x parameter, y 0.0 and z 0.0
-        set angle to (parameter * (the turns of curve)) * 6.283185307179586
-        return a cad vector3 with x (@intrinsic("cos", angle)), y (@intrinsic("sin", angle)) and z parameter
+to get the cad curve point of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
+    if the kind of curve = 0:
+        return a cad vector3 with x parameter, y 0.0 and z 0.0
+    set angle to (parameter * (the turns of curve)) * 6.283185307179586
+    return a cad vector3 with x (@intrinsic("cos", angle)), y (@intrinsic("sin", angle)) and z parameter
 
-function the cad curve tangent of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
-    execute:
-        if the kind of curve = 0:
-            return the cad x axis
-        if the kind of curve = 2:
-            return the cad zero vector3
-        set rate to (the turns of curve) * 6.283185307179586
-        set angle to parameter * rate
-        return a cad vector3 with x ((the negative of @intrinsic("sin", angle)) * rate), y (@intrinsic("cos", angle) * rate) and z 1.0
+to get the cad curve tangent of {sampling test curve:curve} at {a 64 bit floating-point number:parameter}:
+    if the kind of curve = 0:
+        return the cad x axis
+    if the kind of curve = 2:
+        return the cad zero vector3
+    set rate to (the turns of curve) * 6.283185307179586
+    set angle to parameter * rate
+    return a cad vector3 with x ((the negative of @intrinsic("sin", angle)) * rate), y (@intrinsic("cos", angle) * rate) and z 1.0
 
-function sampling check {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to sampling check {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 
 sampling check ((the cad sampling angle for 0.0) = (the cad default sampling angle))
 sampling check ((the cad sampling angle for -1.0) = (the cad default sampling angle))
@@ -62,9 +59,7 @@ store 1.0 at largeDirection + 16
 sampling check ((the cad direction angle between largeDirection and largeDirection) = 0.0)
 set directions to an empty list of a cad vector3
 sampling check ((the cad maximum direction angle of directions) = 0.0)
-append (the cad x axis) to directions
-append (the cad y axis) to directions
-append (the cad negative of the cad x axis) to directions
+append (the cad x axis), (the cad y axis) and (the cad negative of the cad x axis) to directions
 sampling check ((the cad maximum direction angle of directions) = 3.141592653589793)
 free directions
 
@@ -88,4 +83,4 @@ set sampled to the cad angular samples of curve with maximum angle 0.1
 sampling check ((the length of sampled) = 65537)
 sampling check ((the z of (the last item of sampled)) = 1.0)
 free sampled
-print "cadkernel tessellation: PASS" as a line
+print line "cadkernel tessellation: PASS"

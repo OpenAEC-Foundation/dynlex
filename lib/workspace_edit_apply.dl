@@ -101,7 +101,7 @@ local function the result of committing {a pointer to a workspace edit plan:plan
         set position to 0
         loop while position < the length of the operations of plan:
             set operation to the planned workspace operation at position in the operations of plan
-            if the inverse of operation's skip:
+            if not operation's skip:
                 if operation's kind = the workspace text change kind:
                     if operation's open document != (0 as a pointer to a workspace open document):
                         set the text of operation's open document to operation's text
@@ -119,7 +119,7 @@ local function the result of committing {a pointer to a workspace edit plan:plan
                         create a directory tree at operation's path and set creation to it
                         if creation failed:
                             return a workspace commit failure for operation after mutation mutated
-                        if the inverse of operation's overwrite target:
+                        if not operation's overwrite target:
                             set mutated to true
                     else:
                         set path to operation's path

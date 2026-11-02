@@ -3,7 +3,7 @@ import lib/std.dl
 flex function count down {fixed integer:value}:
     replacement:
         if value > 0:
-            print value as a line
+            print line value
             count down (value - 1)
 
 count down 3

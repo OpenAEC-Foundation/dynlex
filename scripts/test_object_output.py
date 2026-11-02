@@ -29,7 +29,7 @@ exposed function predicate {32 bit floating-point number:left} above {32 bit flo
 
 exposed function negate {boolean:flag}:
     execute:
-        return the inverse of flag
+        return not flag
 
 exposed function foreign predicate {32 bit floating-point number:left} above {32 bit floating-point number:right} minimum {32 bit floating-point number:minimum}:
     execute:
@@ -72,7 +72,7 @@ exposed function foreign unsigned result:
 EXECUTABLE_SOURCE = """\
 import lib/std.dl
 
-print 42 as a line
+print line 42
 """
 
 COMMAND_LINE_LIBRARY_SOURCE = """\
@@ -85,18 +85,16 @@ exposed function the argument count:
 
 TOP_LEVEL_SECTION_SOURCE = LIBRARY_SOURCE + """
 if true:
-    print 1 as a line
+    print line 1
 """
 
-NEGATIVE_FIXED_VALUE_SOURCE = """\
-import lib/std.dl
+NEGATIVE_FIXED_VALUE_SOURCE = '''import lib/std.dl
 
-function the fixed value {fixed integer:value}:
-    execute:
-        return value
+to get the fixed value {fixed integer:value}:
+    return value
 
 ignore the fixed value -1
-"""
+'''
 
 SUM_SYMBOL = "sum_3a_32_bit_integer8left5_and_3a_32_bit_integer8right5_callable_i32_i32"
 INCREMENT_SYMBOL = "increment_3a_pointer_to_a_32_bit_integer8value5_callable_i32_2a_"
@@ -268,12 +266,12 @@ int main(void) {{
                 "--no-main requires --emit-llvm or --emit-object",
             )
             require_failure(
-                run([str(compiler), "--emit-object", "print 1 as a line"], repo_root),
+                run([str(compiler), "--emit-object", "print line 1"], repo_root),
                 "Command-line source supports native execution options only",
             )
 
             statement_library = temporary / "statement-library.dl"
-            statement_library.write_text(LIBRARY_SOURCE + "\nprint 1 as a line\n", encoding="utf-8")
+            statement_library.write_text(LIBRARY_SOURCE + "\nprint line 1\n", encoding="utf-8")
             require_failure(
                 run([str(compiler), str(statement_library), "--emit-object", "--no-main"], repo_root),
                 "definition-only output cannot contain executable top-level statements",

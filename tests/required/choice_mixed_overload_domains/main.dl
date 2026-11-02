@@ -1,6 +1,4 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 function return value:
     replacement:
@@ -18,6 +16,5 @@ class:
     members:
         element as an integer
 
-function the length of {vector value:value}:
-    execute:
-        return 7
+to get the length of {vector value:value}:
+    return 7

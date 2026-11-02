@@ -2,19 +2,16 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh hole {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh hole {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set corners to a list containing (a cad vector2 with x 4.0 and y 0.0)
-append (a cad vector2 with x 7.0 and y 0.0) to corners
-append (a cad vector2 with x 7.0 and y 2.0) to corners
-append (a cad vector2 with x 4.0 and y 2.0) to corners
+append (a cad vector2 with x 7.0 and y 0.0), (a cad vector2 with x 7.0 and y 2.0) and (a cad vector2 with x 4.0 and y 2.0) to corners
 set profile to an empty list of the type of (the cad curve2 of (a new cad line2))
 loop cornerIndex from 0 to 4:
-    set nextIndex to the remainder of (cornerIndex + 1) divided by 4
+    set nextIndex to (cornerIndex + 1) mod 4
     append (the cad curve2 of (a cad line2 from (the item at cornerIndex in corners) to (the item at nextIndex in corners))) to profile
 set planeResult to the cad orthonormal plane with origin (the cad zero vector3), x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
 check mesh hole planeResult's valid named "plane"
@@ -24,8 +21,7 @@ set bodyValue to made's value
 set faceKeys to the cad face keys of bodyValue
 set faceFound to false
 set holedFace to a new cad face key
-loop faceIndex from 0 to the length of faceKeys:
-    set faceKey to the item at faceIndex in faceKeys
+for each faceKey in faceKeys:
     set faceNode to the cad node pointer for faceKey in bodyValue
     if (the length of ((faceNode's loops's values))) = 2:
         set faceFound to true
@@ -50,4 +46,4 @@ set swappedArea to the cad surface area of swappedResult's value
 check mesh hole (swappedArea's valid and ((the absolute value of (swappedArea's value - firstArea)) < 1e-9)) named "loop order"
 free profile
 free corners
-print "cadkernel brep mesh hole: PASS" as a line
+print line "cadkernel brep mesh hole: PASS"

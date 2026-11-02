@@ -7,57 +7,41 @@ set leaf to "tests/required/filesystem_directory_tree/tree.tmp/one/two/nested.bi
 set missing to "tests/required/filesystem_directory_tree/missing.tmp"
 
 remove the filesystem tree at root and set initial to it
-print whether initial succeeded as a line
+print line initial succeeded
 
 create a directory tree at folder and set created to it
-print whether created succeeded as a line
+print line created succeeded
 create a directory tree at folder and set duplicate to it
-print whether duplicate succeeded as a line
+print line duplicate succeeded
 
 write the string form of "root" to the file at file
 write the string form of "nested" to the file at leaf
 
 set metadata to the file system entry at file
-print whether metadata lookup succeeded as a line
-print whether metadata was found as a line
-print whether metadata is a regular file as a line
-print whether metadata is a directory as a line
-print whether metadata is a symbolic link as a line
-print whether metadata has another filesystem kind as a line
-print whether (metadata's modification time)'s seconds > 0 as a line
+print lines (metadata lookup succeeded), (metadata was found) and (metadata is a regular file)
+print lines (metadata is a directory), (metadata is a symbolic link) and (metadata has another filesystem kind)
+print line (metadata's modification time)'s seconds > 0
 
 set listing to the file system entry at folder
-print whether listing lookup succeeded as a line
-print whether listing was found as a line
-print whether listing is a regular file as a line
-print whether listing is a directory as a line
+print lines (listing lookup succeeded), (listing was found), (listing is a regular file) and (listing is a directory)
 
 set absence to the file system entry at missing
-print whether absence lookup succeeded as a line
-print whether absence was found as a line
-print (the length of absence's error message) as a line
+print lines (absence lookup succeeded), (absence was found) and (the length of absence's error message)
 
 set invalid to a new string from "A" containing 2 bytes
 set failure to the file system entry at invalid
-print whether failure lookup succeeded as a line
-print whether failure was found as a line
-print whether (the length of failure's error message) > 0 as a line
+print lines (failure lookup succeeded), (failure was found) and ((the length of failure's error message) > 0)
 remove the filesystem tree at invalid and set cleanup to it
-print whether cleanup succeeded as a line
-print whether (the length of cleanup's error message) > 0 as a line
+print lines (cleanup succeeded) and ((the length of cleanup's error message) > 0)
 
 open the directory at root and set enumeration to it
-print whether enumeration succeeded as a line
-set entries to 0
-set files to 0
-set directories to 0
-set success to true
-set reading to true
+print line enumeration succeeded
+set entries, files and directories to 0
+set success and reading to true
 loop while reading:
     read the next directory entry from enumeration and set next to it
     if next lookup failed:
-        set success to false
-        set reading to false
+        set success and reading to false
     else if next was found:
         increment entries
         if next is a regular file:
@@ -66,13 +50,9 @@ loop while reading:
             increment directories
     else:
         set reading to false
-print success as a line
-print entries as a line
-print files as a line
-print directories as a line
+print lines success, entries, files and directories
 
 remove the filesystem tree at root and set removed to it
-print whether removed succeeded as a line
+print line removed succeeded
 set remnant to the file system entry at root
-print whether remnant lookup succeeded as a line
-print whether remnant was found as a line
+print lines (remnant lookup succeeded) and (remnant was found)

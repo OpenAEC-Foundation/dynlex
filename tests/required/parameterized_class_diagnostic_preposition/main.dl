@@ -6,13 +6,9 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
 class:
     patterns:
@@ -20,9 +16,7 @@ class:
     members:
         value
 
-function a record owned by {fixed integer:owner} containing value:
-    replacement:
-        @intrinsic("construct", a record owned by owner, value)
+a record owned by {fixed integer:owner} containing value means: @intrinsic("construct", a record owned by owner, value)
 
 function consume {integer:value}:
     replacement:

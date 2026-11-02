@@ -6,12 +6,10 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function one more than value:
-    execute:
-        return @intrinsic("add", value, 1)
+to get one more than value:
+    return @intrinsic("add", value, 1)
 
-function two more than value:
-    execute:
-        return one more than one more than value
+to get two more than value:
+    return one more than one more than value
 
 ignore @intrinsic("type", "int", two more than 6)

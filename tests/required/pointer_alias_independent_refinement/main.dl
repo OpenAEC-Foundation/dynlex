@@ -1,0 +1,24 @@
+class:
+    patterns:
+        record
+    members:
+        kind
+class:
+    patterns:
+        holder
+    members:
+        data
+to put item in owner: @intrinsic("initialize at", @intrinsic("property", owner, "data"), item)
+@intrinsic("store", firstItem, @intrinsic("construct", record, 7))
+@intrinsic("store", firstSource, @intrinsic("construct", holder, @intrinsic("cast", @intrinsic("address of", firstItem), @intrinsic("add pointer depth", record))))
+@intrinsic("store", firstOriginal, @intrinsic("address of", firstSource))
+@intrinsic("store", firstCopy, firstOriginal)
+put firstItem in firstCopy
+@intrinsic("store", firstReadback, @intrinsic("dereference", @intrinsic("property", firstOriginal, "data")))
+@intrinsic("store", secondItem, @intrinsic("construct", record, @intrinsic("equal", 1, 1)))
+@intrinsic("store", secondSource, @intrinsic("construct", holder, @intrinsic("cast", @intrinsic("address of", secondItem), @intrinsic("add pointer depth", record))))
+@intrinsic("store", secondOriginal, @intrinsic("address of", secondSource))
+@intrinsic("store", secondCopy, secondOriginal)
+put secondItem in secondCopy
+@intrinsic("store", secondReadback, @intrinsic("dereference", @intrinsic("property", secondOriginal, "data")))
+@intrinsic("return", @intrinsic("select", @intrinsic("and", @intrinsic("equal", @intrinsic("property", firstReadback, "kind"), 7), @intrinsic("property", secondReadback, "kind")), 0, 1))

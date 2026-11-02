@@ -21,7 +21,9 @@ Requires C++23, Clang 20 or newer, CMake, Ninja, `nlohmann_json`, Git, and GNU
 binutils on ELF systems. `scripts/build.sh` checks out and caches the exact LLVM
 23 fork recorded in `metadata/LLVM_TOOLCHAIN`; system LLVM installations are not
 used. Linked Git worktrees automatically share the primary checkout's
-`.cache/llvm-toolchain` directory. Set `DYNLEX_LLVM_CACHE_DIR` to use an explicit
+`.cache/llvm-toolchain` directory. The matching LLD WebAssembly driver is built
+and embedded in both compilers to finalize executable modules and their memory layout.
+Set `DYNLEX_LLVM_CACHE_DIR` to use an explicit
 cache location instead. Build that toolchain independently with:
 
 ```bash

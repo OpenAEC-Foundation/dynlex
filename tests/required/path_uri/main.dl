@@ -1,26 +1,21 @@
 import lib/path.dl
 
-function check {file URI result:result} against expected:
-    execute:
-        print whether (result succeeded) and ((result is supported) and (result's value = expected)) as a line
+to check {file URI result:result} against expected:
+    print line (result succeeded) and ((result is supported) and (result's value = expected))
 
-function check failure {file URI result:result}:
-    execute:
-        print whether (
-            (result failed) and
-            ((result is supported) and (result's error message is not empty))
-        ) as a line
+to check failure {file URI result:result}:
+    print line (
+        (result failed) and
+        ((result is supported) and (result's error message is not empty))
+    )
 
-function check unsupported {file URI result:result}:
-    execute:
-        print whether (
-            (result failed) and
-            ((result is unsupported) and (result's error message is not empty))
-        ) as a line
+to check unsupported {file URI result:result}:
+    print line (
+        (result failed) and
+        ((result is unsupported) and (result's error message is not empty))
+    )
 
-function check path failure {path result:result}:
-    execute:
-        print whether (result failed) and (result's error message is not empty) as a line
+to check path failure {path result:result}: print line (result failed) and (result's error message is not empty)
 
 set style to the POSIX path style
 set windows to the Windows path style

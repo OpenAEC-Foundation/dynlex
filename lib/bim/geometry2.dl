@@ -15,35 +15,30 @@ class:
         majorAxis as a cad vector2
 
 # Preserve the supplied axes and signed radii exactly, as the upstream record does.
-function a cad ellipse at {cad vector2:centre} with radii {a 64 bit floating-point number:majorRadius} and {a 64 bit floating-point number:minorRadius} along {cad vector2:majorAxis}:
-    execute:
-        return @intrinsic("construct", a cad ellipse, centre, majorRadius, minorRadius, majorAxis)
+to get a cad ellipse at {cad vector2:centre} with radii {a 64 bit floating-point number:majorRadius} and {a 64 bit floating-point number:minorRadius} along {cad vector2:majorAxis}:
+    return @intrinsic("construct", a cad ellipse, centre, majorRadius, minorRadius, majorAxis)
 
-function the cad minor axis of {cad ellipse:shape}:
-    execute:
-        return the cad perpendicular of shape's majorAxis
+to get the cad minor axis of {cad ellipse:shape}:
+    return the cad perpendicular of shape's majorAxis
 
 # The intrinsic ellipse parameter is not the geometric angle at the centre.
-function the cad point on {cad ellipse:shape} at {a 64 bit floating-point number:parameter}:
-    execute:
-        set along to shape's majorRadius * (the cosine of parameter)
-        set across to shape's minorRadius * (the sine of parameter)
-        set minor to the cad minor axis of shape
-        set horizontal to (shape's centre's x + (along * shape's majorAxis's x)) + (across * minor's x)
-        set vertical to (shape's centre's y + (along * shape's majorAxis's y)) + (across * minor's y)
-        return a cad vector2 with x horizontal and y vertical
+to get the cad point on {cad ellipse:shape} at {a 64 bit floating-point number:parameter}:
+    set along to shape's majorRadius * (the cosine of parameter)
+    set across to shape's minorRadius * (the sine of parameter)
+    set minor to the cad minor axis of shape
+    set horizontal to (shape's centre's x + (along * shape's majorAxis's x)) + (across * minor's x)
+    set vertical to (shape's centre's y + (along * shape's majorAxis's y)) + (across * minor's y)
+    return a cad vector2 with x horizontal and y vertical
 
-function cad {cad ellipse:shape} is degenerate:
-    execute:
-        return ((the absolute value of shape's majorRadius) < 1e-20) or ((the absolute value of shape's minorRadius) < 1e-20)
+to get cad {cad ellipse:shape} is degenerate:
+    return ((the absolute value of shape's majorRadius) < 1e-20) or ((the absolute value of shape's minorRadius) < 1e-20)
 
 # Rust-derived PartialEq compares all scalar fields, including IEEE NaN behavior.
-function cad {cad ellipse:left} equals {cad ellipse:right}:
-    execute:
-        set centresEqual to (left's centre's x = right's centre's x) and (left's centre's y = right's centre's y)
-        set radiiEqual to (left's majorRadius = right's majorRadius) and (left's minorRadius = right's minorRadius)
-        set axesEqual to (left's majorAxis's x = right's majorAxis's x) and (left's majorAxis's y = right's majorAxis's y)
-        return centresEqual and (radiiEqual and axesEqual)
+to get cad {cad ellipse:left} equals {cad ellipse:right}:
+    set centresEqual to (left's centre's x = right's centre's x) and (left's centre's y = right's centre's y)
+    set radiiEqual to (left's majorRadius = right's majorRadius) and (left's minorRadius = right's minorRadius)
+    set axesEqual to (left's majorAxis's x = right's majorAxis's x) and (left's majorAxis's y = right's majorAxis's y)
+    return centresEqual and (radiiEqual and axesEqual)
 
 class:
     patterns:
@@ -53,25 +48,20 @@ class:
 
 # This is a distance in world units, separate from intersection and angular epsilons.
 # Explicit process failure is the native equivalent of Tolerance::new's assertion.
-function a cad tolerance of {a 64 bit floating-point number:linear}:
-    execute:
-        if the inverse of ((linear > 0.0) and (linear <= 1.7976931348623157e308)):
-            print "cad tolerance must be finite and positive" as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
-        return @intrinsic("construct", a cad tolerance, linear)
+to get a cad tolerance of {a 64 bit floating-point number:linear}:
+    if not (0.0 < linear <= 1.7976931348623157e308):
+        print line "cad tolerance must be finite and positive"
+        @intrinsic("call", "libc", "exit", nothing, 1)
+    return @intrinsic("construct", a cad tolerance, linear)
 
-function the default cad tolerance:
-    execute:
-        return a cad tolerance of 1e-7
+to get the default cad tolerance:
+    return a cad tolerance of 1e-7
 
-function the cad linear tolerance of {cad tolerance:value}:
-    execute:
-        return value's linear
+to get the cad linear tolerance of {cad tolerance:value}:
+    return value's linear
 
-function cad {a 64 bit floating-point number:left} and {a 64 bit floating-point number:right} are equal within {cad tolerance:tolerance}:
-    execute:
-        return (the absolute value of (left - right)) <= tolerance's linear
+to get cad {a 64 bit floating-point number:left} and {a 64 bit floating-point number:right} are equal within {cad tolerance:tolerance}:
+    return (the absolute value of (left - right)) <= tolerance's linear
 
-function cad {cad tolerance:left} equals {cad tolerance:right}:
-    execute:
-        return left's linear = right's linear
+to get cad {cad tolerance:left} equals {cad tolerance:right}:
+    return left's linear = right's linear

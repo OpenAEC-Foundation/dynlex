@@ -3,10 +3,9 @@ flex function deallocate address:
         @intrinsic("check deallocation", address)
         @intrinsic("call", "libc", "free", @intrinsic("type", "nothing"), address)
 
-function exercise:
-    execute:
-        @intrinsic("store", value, 0)
-        @intrinsic("store", pointer, @intrinsic("address of", value))
-        deallocate pointer
+to exercise:
+    @intrinsic("store", value, 0)
+    @intrinsic("store", pointer, @intrinsic("address of", value))
+    deallocate pointer
 
 exercise

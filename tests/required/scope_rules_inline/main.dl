@@ -2,8 +2,7 @@ import lib/std.dl
 
 in this file, by default: functions are local
 
-function the answer:
-    execute:
-        return 42
+to get the answer:
+    return 42
 
-print the answer as a line
+print line the answer

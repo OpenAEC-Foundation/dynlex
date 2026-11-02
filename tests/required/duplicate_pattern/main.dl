@@ -1,15 +1,9 @@
-function [an|] integer:
-	replacement:
-		@intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 function ignore value:
 	replacement:
 		@intrinsic("discard", value)
 
-function test:
-	execute:
-		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "1")
+to test: ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "1")
 
-function te[st|]:
-	execute:
-		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "2")
+to te[st|]: ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "2")

@@ -5,7 +5,6 @@ set words to an empty list of a string
 set numbers to an empty list of an integer
 append word to words
 append 2 to numbers
-print the item at 0 in words as a line
-print the item at 0 in numbers as a line
+print lines (the item at 0 in words) and (the item at 0 in numbers)
 free words
 free numbers

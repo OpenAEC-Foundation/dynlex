@@ -1,0 +1,3 @@
+to get count {arguments:items}:
+    @intrinsic("return", @intrinsic("type extent", items, 0))
+@intrinsic("return", (count 1 and 2))

@@ -45,12 +45,12 @@ class:
         error message as a string
 
 {JSON-RPC operation:outcome} succeeded means: outcome's success
-{JSON-RPC operation:outcome} failed means: the inverse of outcome's success
+{JSON-RPC operation:outcome} failed means: not outcome's success
 {JSON-RPC receive result:outcome} succeeded means: outcome's success
-{JSON-RPC receive result:outcome} failed means: the inverse of outcome's success
+{JSON-RPC receive result:outcome} failed means: not outcome's success
 {JSON-RPC frame header result:outcome} succeeded means: outcome's success
-{JSON-RPC frame header result:outcome} failed means: the inverse of outcome's success
-{JSON-RPC frame header result:outcome} is incomplete means: the inverse of outcome's complete
+{JSON-RPC frame header result:outcome} failed means: not outcome's success
+{JSON-RPC frame header result:outcome} is incomplete means: not outcome's complete
 [the|] JSON-RPC success status means: 0
 [the|] JSON-RPC end of stream status means: 1
 [the|] JSON-RPC I/O error status means: 2
@@ -126,7 +126,7 @@ to get the validation of {JSON-RPC limit configuration:limits} as a JSON-RPC lim
 
 local function ASCII character input folded to lowercase:
     execute:
-        if input >= 65 and input <= 90:
+        if 65 <= input <= 90:
             return input + 32
         return input as a 32 bit integer
 
@@ -149,17 +149,17 @@ local function {string:actual} differs from ASCII text {C string:expected}:
 
 local function {integer:value} is valid in a JSON-RPC header name:
     execute:
-        if value >= 48 and value <= 57:
+        if 48 <= value <= 57:
             return true
-        if value >= 65 and value <= 90:
+        if 65 <= value <= 90:
             return true
-        if value >= 97 and value <= 122:
+        if 97 <= value <= 122:
             return true
-        if value = 33 or ((value = 35) or ((value = 36) or ((value = 37) or (value = 38)))):
+        if value is one of 33, 35, 36, 37 and 38:
             return true
-        if value = 39 or ((value = 42) or ((value = 43) or ((value = 45) or (value = 46)))):
+        if value is one of 39, 42, 43, 45 and 46:
             return true
-        if value = 94 or ((value = 95) or ((value = 96) or ((value = 124) or (value = 126)))):
+        if value is one of 94, 95, 96, 124 and 126:
             return true
         return false
 
@@ -238,7 +238,7 @@ local function the JSON-RPC header separator in {string:input}:
                     if the character at cursor + 2 in input = 13 and the character at cursor + 3 in input = 10:
                         return cursor
                 increment cursor
-            else if value > 126 or ((value < 32) and (value != 9)):
+            else if value > 126 or (32 > value != 9):
                 return -2
             increment cursor
         return -1
@@ -311,7 +311,7 @@ local function the JSON-RPC decimal in {string:input} from {integer:start} befor
                 return -1
             set number to digit - 48
             set prefix to maximum / 10
-            set remainder to the remainder of maximum divided by 10
+            set remainder to maximum mod 10
             if (result > prefix) or ((result = prefix) and (number > remainder)):
                 return -2
             set result to result * 10 + number
@@ -374,10 +374,8 @@ to get the JSON-RPC frame header in {string:input} under {JSON-RPC limit configu
         return an invalid JSON-RPC frame header with status the JSON-RPC limit exceeded status reporting "JSON-RPC header exceeds its configured limit"
     if separator = 0:
         return an invalid JSON-RPC frame header with status the JSON-RPC malformed frame status reporting "JSON-RPC header is empty"
-    set sized to false
-    set typed to false
-    set payload to 0
-    set start to 0
+    set sized and typed to false
+    set payload and start to 0
     set boundary to separator + 2
     loop while start < separator:
         set end to the next JSON-RPC CRLF in input from start before boundary
@@ -407,7 +405,7 @@ to get the JSON-RPC frame header in {string:input} under {JSON-RPC limit configu
                 return an invalid JSON-RPC frame header with status the JSON-RPC malformed frame status reporting "Content-Type must specify application/vscode-jsonrpc with UTF-8"
             set typed to true
         set start to end + 2
-    if the inverse of sized:
+    if not sized:
         return an invalid JSON-RPC frame header with status the JSON-RPC malformed frame status reporting "JSON-RPC frame is missing Content-Length"
     return a complete JSON-RPC frame header of length offset with payload length payload
 
@@ -544,7 +542,7 @@ to get the validation of JSON-RPC message {a pointer to a JSON value:envelope}:
         return a failed JSON-RPC operation with status the JSON-RPC invalid message status reporting "JSON-RPC response is missing id"
     if the JSON member named "id" in envelope is an invalid JSON-RPC identifier:
         return a failed JSON-RPC operation with status the JSON-RPC invalid message status reporting "JSON-RPC response ID must be an integer, string, or null"
-    if (resolved and errored) or (the inverse of resolved and the inverse of errored):
+    if (resolved and errored) or (not resolved and not errored):
         return a failed JSON-RPC operation with status the JSON-RPC invalid message status reporting "JSON-RPC response must contain exactly one of result or error"
     if errored:
         return the validation of JSON-RPC error object the JSON member named "error" in envelope

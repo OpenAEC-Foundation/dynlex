@@ -1,18 +1,10 @@
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
+[a|] byte means: @intrinsic("type", "int", 8)
 
-function [a|] thirty two bit integer:
-    replacement:
-        @intrinsic("type", "int", 32)
+[a|] thirty two bit integer means: @intrinsic("type", "int", 32)
 
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function the size of measured:
-    replacement:
-        @intrinsic("size of", measured)
+the size of measured means: @intrinsic("size of", measured)
 
 function ignore value:
     replacement:

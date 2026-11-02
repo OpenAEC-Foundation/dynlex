@@ -1,5 +1,5 @@
 import json.dl
 
 parse "{\"unicode\":\"A\\u00df\\u6771\\ud834\\udd1e\",\"raw\":\"é\",\"enabled\":true,\"values\":[1,2.5,null],\"nested\":{}}" as JSON and set parsed to it
-print the compact JSON form of the value of parsed as a line
+print line the compact JSON form of the value of parsed
 free parsed

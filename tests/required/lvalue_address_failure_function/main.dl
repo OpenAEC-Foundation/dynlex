@@ -1,5 +1,3 @@
-function fail:
-    execute:
-        @intrinsic("discard", @intrinsic("address of", 1))
+to fail: @intrinsic("discard", @intrinsic("address of", 1))
 
 fail

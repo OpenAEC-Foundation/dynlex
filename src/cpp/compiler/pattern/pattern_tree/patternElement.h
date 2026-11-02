@@ -37,6 +37,8 @@ struct PatternElement {
 	Type type;
 	// for example: 'the'
 	std::string text;
+	// A variadic capture retains each supplied expression instead of evaluating an array.
+	bool isArgumentPack = false;
 	// position relative to pattern start
 	size_t startPos{};
 	PatternElement(Type type, const std::string &text = {}, size_t startPos = {})

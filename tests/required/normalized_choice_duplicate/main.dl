@@ -1,5 +1,3 @@
-function overlap [alpha|] tail:
-	execute:
+to overlap [alpha|] tail:
 
-function overlap [beta |]tail:
-	execute:
+to overlap [beta |]tail:

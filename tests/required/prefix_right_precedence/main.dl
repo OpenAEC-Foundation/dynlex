@@ -1,0 +1,13 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+function the square root of value:
+    after: default
+    replacement:
+        @intrinsic("sqrt", value)
+function left + right:
+    before: the square root of $
+    replacement:
+        @intrinsic("add", left, right)
+set operand to 4.0
+set result to (1 + the square root of operand)

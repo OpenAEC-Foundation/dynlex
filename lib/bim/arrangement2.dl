@@ -64,36 +64,30 @@ class:
         second as an integer
         tag as a 64 bit unsigned integer
 
-function a cad tagged line2 from {cad line2:line} with tag {a 64 bit unsigned integer:tag}:
-    execute:
-        return @intrinsic("construct", a cad tagged line2, line, tag)
-function {cad segment crossing2:left} = {cad segment crossing2:right}:
-    execute:
-        if left's kind != right's kind:
-            return false
-        if left's kind = 0:
-            return true
-        return (left's aStart = right's aStart) and ((left's aEnd = right's aEnd) and ((left's bStart = right's bStart) and (left's bEnd = right's bEnd)))
-function the cad clone of {cad segment crossing2:crossing}:
-    execute:
-        return crossing
-function the cad clone of {cad tagged line2:edge}:
-    execute:
-        return edge
+to get a cad tagged line2 from {cad line2:line} with tag {a 64 bit unsigned integer:tag}:
+    return @intrinsic("construct", a cad tagged line2, line, tag)
+to get {cad segment crossing2:left} = {cad segment crossing2:right}:
+    if left's kind != right's kind:
+        return false
+    if left's kind = 0:
+        return true
+    return (left's aStart = right's aStart) and ((left's aEnd = right's aEnd) and ((left's bStart = right's bStart) and (left's bEnd = right's bEnd)))
+to get the cad clone of {cad segment crossing2:crossing}:
+    return crossing
+to get the cad clone of {cad tagged line2:edge}:
+    return edge
 local function cad arrangement2 owning {a pointer to a list:rings}:
     execute:
         allocate one slot of 0 and set owner to it
         return @intrinsic("construct", a cad arrangement regions2, rings, owner)
-function the cad clone of {cad arrangement regions2:regions}:
-    execute:
-        set rings to an empty list of the type of (the item at 0 in regions's rings)
-        loop index from 0 to the length of regions's rings:
-            set ring to the item at index in regions's rings
-            set copied to an empty list of the type of (the item at 0 in ring)
-            loop vertex from 0 to the length of ring:
-                append (the item at vertex in ring) to copied
-            append copied to rings
-        return cad arrangement2 owning rings
+to get the cad clone of {cad arrangement regions2:regions}:
+    set rings to an empty list of the type of (the item at 0 in regions's rings)
+    for each ring in regions's rings:
+        set copied to an empty list of the type of (the item at 0 in ring)
+        loop vertex from 0 to the length of ring:
+            append (the item at vertex in ring) to copied
+        append copied to rings
+    return cad arrangement2 owning rings
 
 local function cad arrangement2 point of {cad vector2:vertex}:
     execute:
@@ -101,17 +95,16 @@ local function cad arrangement2 point of {cad vector2:vertex}:
 local function cad arrangement2 point of {cad tagged line2:vertex}:
     execute:
         return vertex's line's start
-function the cad signed area of {a pointer to a list:ring}:
-    execute:
-        if (the length of ring) < 3:
-            return 0.0
-        set origin to cad arrangement2 point of (the item at 0 in ring)
-        set total to 0.0
-        loop index from 1 to ((the length of ring) - 1):
-            set a to the cad difference of (cad arrangement2 point of (the item at index in ring)) and origin
-            set b to the cad difference of (cad arrangement2 point of (the item at (index + 1) in ring)) and origin
-            set total to total + (the cad cross of a and b)
-        return total * 0.5
+to get the cad signed area of {a pointer to a list:ring}:
+    if (the length of ring) < 3:
+        return 0.0
+    set origin to cad arrangement2 point of (the item at 0 in ring)
+    set total to 0.0
+    loop index from 1 to ((the length of ring) - 1):
+        set a to the cad difference of (cad arrangement2 point of (the item at index in ring)) and origin
+        set b to the cad difference of (cad arrangement2 point of (the item at (index + 1) in ring)) and origin
+        set total to total + (the cad cross of a and b)
+    return total * 0.5
 
 local function cad arrangement2 clamped {a 64 bit floating-point number:value}:
     execute:
@@ -123,44 +116,43 @@ local function cad arrangement2 clamped {a 64 bit floating-point number:value}:
 local function cad arrangement2 point crossing at {a 64 bit floating-point number:a} and {a 64 bit floating-point number:b}:
     execute:
         return @intrinsic("construct", a cad segment crossing2, 1, a, a, b, b)
-function the cad crossing between {cad line2:first} and {cad line2:second} within {cad tolerance:tolerance}:
-    execute:
-        set slack to tolerance's linear
-        set alongA to the cad difference of first's end and first's start
-        set alongB to the cad difference of second's end and second's start
-        set aSquared to the cad squared length of alongA
-        set bSquared to the cad squared length of alongB
-        if (aSquared <= 2.220446049250313e-16) or (bSquared <= 2.220446049250313e-16):
-            return a new cad segment crossing2
-        set aLength to the square root of aSquared
-        set bLength to the square root of bSquared
-        set turn to the cad cross of alongA and alongB
-        set offset to the cad difference of second's start and first's start
-        if (the absolute value of turn) <= ((1e-12 * aLength) * bLength):
-            if (the absolute value of (the cad cross of offset and alongA)) > (slack * aLength):
-                return a new cad segment crossing2
-            set from to (the cad dot of offset and alongA) / aSquared
-            set to to from + ((the cad dot of alongB and alongA) / aSquared)
-            set low to the maximum of (the minimum of from and to) and 0.0
-            set high to the minimum of (the maximum of from and to) and 1.0
-            if high < (low - (slack / aLength)):
-                return a new cad segment crossing2
-            set low to cad arrangement2 clamped low
-            set high to cad arrangement2 clamped high
-            set lowOffset to the cad difference of (the cad lerp from first's start to first's end at low) and second's start
-            set highOffset to the cad difference of (the cad lerp from first's start to first's end at high) and second's start
-            set bLow to (the cad dot of lowOffset and alongB) / bSquared
-            set bHigh to (the cad dot of highOffset and alongB) / bSquared
-            if ((high - low) * aLength) <= slack:
-                return cad arrangement2 point crossing at ((low + high) * 0.5) and ((bLow + bHigh) * 0.5)
-            return @intrinsic("construct", a cad segment crossing2, 2, low, high, bLow, bHigh)
-        set t to (the cad cross of offset and alongB) / turn
-        set u to (the cad cross of offset and alongA) / turn
-        set tSlack to slack / aLength
-        set uSlack to slack / bLength
-        if (t >= (-tSlack)) and ((t <= (1.0 + tSlack)) and ((u >= (-uSlack)) and (u <= (1.0 + uSlack)))):
-            return cad arrangement2 point crossing at t and u
+to get the cad crossing between {cad line2:first} and {cad line2:second} within {cad tolerance:tolerance}:
+    set slack to tolerance's linear
+    set alongA to the cad difference of first's end and first's start
+    set alongB to the cad difference of second's end and second's start
+    set aSquared to the cad squared length of alongA
+    set bSquared to the cad squared length of alongB
+    if (aSquared <= 2.220446049250313e-16) or (bSquared <= 2.220446049250313e-16):
         return a new cad segment crossing2
+    set aLength to the square root of aSquared
+    set bLength to the square root of bSquared
+    set turn to the cad cross of alongA and alongB
+    set offset to the cad difference of second's start and first's start
+    if (the absolute value of turn) <= ((1e-12 * aLength) * bLength):
+        if (the absolute value of (the cad cross of offset and alongA)) > (slack * aLength):
+            return a new cad segment crossing2
+        set from to (the cad dot of offset and alongA) / aSquared
+        set to to from + ((the cad dot of alongB and alongA) / aSquared)
+        set low to the maximum of (the minimum of from and to) and 0.0
+        set high to the minimum of (the maximum of from and to) and 1.0
+        if high < (low - (slack / aLength)):
+            return a new cad segment crossing2
+        set low to cad arrangement2 clamped low
+        set high to cad arrangement2 clamped high
+        set lowOffset to the cad difference of (the cad lerp from first's start to first's end at low) and second's start
+        set highOffset to the cad difference of (the cad lerp from first's start to first's end at high) and second's start
+        set bLow to (the cad dot of lowOffset and alongB) / bSquared
+        set bHigh to (the cad dot of highOffset and alongB) / bSquared
+        if ((high - low) * aLength) <= slack:
+            return cad arrangement2 point crossing at ((low + high) * 0.5) and ((bLow + bHigh) * 0.5)
+        return @intrinsic("construct", a cad segment crossing2, 2, low, high, bLow, bHigh)
+    set t to (the cad cross of offset and alongB) / turn
+    set u to (the cad cross of offset and alongA) / turn
+    set tSlack to slack / aLength
+    set uSlack to slack / bLength
+    if (t >= (-tSlack)) and ((t <= (1.0 + tSlack)) and ((u >= (-uSlack)) and (u <= (1.0 + uSlack)))):
+        return cad arrangement2 point crossing at t and u
+    return a new cad segment crossing2
 
 # Signed integer keys implement f64::total_cmp, including NaNs and signed zero.
 local function cad arrangement2 total key of {a 64 bit floating-point number:value}:
@@ -209,8 +201,7 @@ local function cad arrangement2 congestion of {a pointer to a list:bounds} verti
         set low to 1.0 / 0.0
         set high to -1.0 / 0.0
         set total to (-0.0) as a 64 bit floating-point number
-        loop index from 0 to the length of bounds:
-            set box to the item at index in bounds
+        for each box in bounds:
             set a to cad arrangement2 coordinate of box's low vertical vertical
             set b to cad arrangement2 coordinate of box's high vertical vertical
             set low to the minimum of low and a
@@ -273,8 +264,7 @@ local function cad arrangement2 [pieces] of {a pointer to a list:segments} withi
                         append (cad arrangement2 clamped crossing's bEnd) to (the item at other in cuts)
             append index to active
         set pieces to an empty list of a cad tagged line2
-        loop index from 0 to the length of segments:
-            set segment to the item at index in segments
+        for each segment at index in segments:
             set params to the item at index in cuts
             set length to the cad distance from segment's line's start to segment's line's end
             if (length <= slack) = false:
@@ -332,8 +322,7 @@ local function cad arrangement2 welded {cad vector2:point} in {a pointer to a li
                 set bucket to the cad pair value for key nx and ny in table
                 if bucket >= 0:
                     set indices to the item at bucket in buckets
-                    loop position from 0 to the length of indices:
-                        set index to the item at position in indices
+                    for each index in indices:
                         if (the cad distance from (the item at index in vertices) to point) <= tolerance:
                             return index
         set index to the length of vertices
@@ -379,8 +368,7 @@ local function cad arrangement2 traced [pieces] {a pointer to a list:pieces} wit
             append edge's second to (the item at edge's first in neighbors)
             append edge's first to (the item at edge's second in neighbors)
         set order to an empty list of a cad arrangement order2
-        loop vertex from 0 to the length of vertices:
-            set origin to the item at vertex in vertices
+        for each origin at vertex in vertices:
             set around to the item at vertex in neighbors
             clear order
             loop index from 0 to the length of around:
@@ -400,8 +388,7 @@ local function cad arrangement2 traced [pieces] {a pointer to a list:pieces} wit
         set limit to ((the length of edges) * 2) + 1
         loop from from 0 to the length of vertices:
             set nexts to the item at from in neighbors
-            loop position from 0 to the length of nexts:
-                set to to the item at position in nexts
+            for each to in nexts:
                 if (the cad pair value for key (from as a 64 bit integer) and (to as a 64 bit integer) in walked) < 0:
                     set ring to an empty list of a cad tagged line2
                     set closed to false
@@ -444,26 +431,23 @@ local function cad arrangement2 traced [pieces] {a pointer to a list:pieces} wit
         free edges
         return cad arrangement2 owning rings
 
-function the cad bounded face edges of {a pointer to a list:segments} within {cad tolerance:tolerance}:
-    execute:
-        set pieces to cad arrangement2 pieces of segments within tolerance checking parameter distances false
-        set result to cad arrangement2 traced pieces pieces within tolerance's linear
-        free pieces
-        return result
-function the cad bounded faces of {a pointer to a list:segments} within {cad tolerance:tolerance}:
-    execute:
-        set tagged to an empty list of a cad tagged line2
-        loop index from 0 to the length of segments:
-            append (a cad tagged line2 from (the item at index in segments) with tag (0 as a 64 bit unsigned integer)) to tagged
-        set pieces to cad arrangement2 pieces of tagged within tolerance checking parameter distances true
-        free tagged
-        set traced to cad arrangement2 traced pieces pieces within tolerance's linear
-        free pieces
-        set rings to an empty list of the type of (an empty list of a cad vector2)
-        loop index from 0 to the length of traced's rings:
-            set edges to the item at index in traced's rings
-            set ring to an empty list of a cad vector2
-            loop vertex from 0 to the length of edges:
-                append ((the item at vertex in edges)'s line's start) to ring
-            append ring to rings
-        return cad arrangement2 owning rings
+to get the cad bounded face edges of {a pointer to a list:segments} within {cad tolerance:tolerance}:
+    set pieces to cad arrangement2 pieces of segments within tolerance checking parameter distances false
+    set result to cad arrangement2 traced pieces pieces within tolerance's linear
+    free pieces
+    return result
+to get the cad bounded faces of {a pointer to a list:segments} within {cad tolerance:tolerance}:
+    set tagged to an empty list of a cad tagged line2
+    loop index from 0 to the length of segments:
+        append (a cad tagged line2 from (the item at index in segments) with tag (0 as a 64 bit unsigned integer)) to tagged
+    set pieces to cad arrangement2 pieces of tagged within tolerance checking parameter distances true
+    free tagged
+    set traced to cad arrangement2 traced pieces pieces within tolerance's linear
+    free pieces
+    set rings to an empty list of the type of (an empty list of a cad vector2)
+    for each edges in traced's rings:
+        set ring to an empty list of a cad vector2
+        loop vertex from 0 to the length of edges:
+            append ((the item at vertex in edges)'s line's start) to ring
+        append ring to rings
+    return cad arrangement2 owning rings

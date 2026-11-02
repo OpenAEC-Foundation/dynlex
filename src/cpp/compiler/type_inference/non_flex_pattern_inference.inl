@@ -68,7 +68,8 @@ static bool inferNonFlexPatternCall(
 		InferenceContext::SubjectState callerSubject = context.currentSubject;
 		bool instantiationFallsThrough = true;
 		bool inferenceSucceeded = runInstantiationReinferenceLoop(
-			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr, [&]() -> bool {
+			context, inst, def, expr->range, (std::string)def->range.subString, savedInst != nullptr,
+			[&]() -> bool {
 			seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 			beginParameterOutputReinference(inst);
 			inst.writtenGlobalReferences.clear();
@@ -87,7 +88,8 @@ static bool inferNonFlexPatternCall(
 			inst.purity = InstantiationPurity::Pure;
 			inst.pureReturnValuesByArguments.clear();
 			seedInstantiationCompileTimeParameters(
-				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, [&](Expression *argumentExpression) {
+				inst, paramBindings, argTypes, inst.requiredCompileTimeParameters,
+				[&](Expression *argumentExpression) {
 				if (context.trial) {
 					auto trialIt = context.trialExpressionValues.find(argumentExpression);
 					if (trialIt != context.trialExpressionValues.end())
@@ -124,20 +126,20 @@ static bool inferNonFlexPatternCall(
 			inst.finalGlobalConstantValues.clear();
 			for (VariableReference *reference : inst.writtenGlobalReferences) {
 				const KnownConstantStorage &knownConstants = context.currentVariableValues.read();
-				auto knownIt = knownConstants.find(reference);
+				auto knownIt = knownConstants.find({reference, nullptr});
 				if (knownIt != knownConstants.end() && isCompileTimeKnown(knownIt->second))
 					inst.finalGlobalConstantValues[reference] = knownIt->second;
 				const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
-				auto provenance = variables.find(reference);
+				auto provenance = variables.find({reference, nullptr});
 				inst.finalGlobalAddressProvenance[reference] =
 					provenance != variables.end() ? provenance->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 			}
-			for (VariableReference *reference : context.currentAddressState.read().addressTakenVariables) {
+			for (const VariableStorageKey &reference : context.currentAddressState.read().addressTakenVariables) {
 				Variable *variable = variableForAddressTarget(reference);
 				if (variable && variable->isGlobal)
-					inst.addressTakenGlobalReferences.insert(reference);
+					inst.addressTakenGlobalReferences.insert(reference.definition);
 			}
-			for (VariableReference *reference : context.currentAddressState.read().externallyEscaped.mayTargets) {
+			for (const VariableStorageKey &reference : context.currentAddressState.read().externallyEscaped.mayTargets) {
 				Variable *variable = variableForAddressTarget(reference);
 				if (variable && variable->isGlobal)
 					inst.externallyEscapedGlobalProvenance.mayTargets.insert(reference);

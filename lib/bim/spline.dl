@@ -55,44 +55,37 @@ class:
         controls
         knots
 
-function the cad uniform parameterization:
-    execute:
-        return @intrinsic("construct", a cad spline parameterization, 0)
+to get the cad uniform parameterization:
+    return @intrinsic("construct", a cad spline parameterization, 0)
 
-function the cad centripetal parameterization:
-    execute:
-        return @intrinsic("construct", a cad spline parameterization, 1)
+to get the cad centripetal parameterization:
+    return @intrinsic("construct", a cad spline parameterization, 1)
 
-function the cad chord parameterization:
-    execute:
-        return @intrinsic("construct", a cad spline parameterization, 2)
+to get the cad chord parameterization:
+    return @intrinsic("construct", a cad spline parameterization, 2)
 
-function a cad spline tangent with value {cad spline coordinates:point}:
-    execute:
-        return @intrinsic("construct", a cad spline tangent, true, point)
+to get a cad spline tangent with value {cad spline coordinates:point}:
+    return @intrinsic("construct", a cad spline tangent, true, point)
 
-function no cad spline tangent matching {cad spline coordinates:point}:
-    execute:
-        return @intrinsic("construct", a cad spline tangent, false, a new (the type of point))
+to get no cad spline tangent matching {cad spline coordinates:point}:
+    return @intrinsic("construct", a cad spline tangent, false, a new (the type of point))
 
-function the cad spline point at {integer:index} from {a pointer to a list:source}:
-    execute:
-        return the item at index in source
+to get the cad spline point at {integer:index} from {a pointer to a list:source}:
+    return the item at index in source
 
-function the cad span of degree {integer:degree} with knots {a pointer to a list:knots} and last {integer:last} at {a number:parameter}:
-    execute:
-        set u to parameter as a 64 bit floating-point number
-        if u >= (the item at (last + 1) in knots):
-            return last
-        set low to degree
-        set high to last + 1
-        loop while high - low > 1:
-            set middle to (low + high) / 2
-            if u < (the item at middle in knots):
-                set high to middle
-            else:
-                set low to middle
-        return low
+to get the cad span of degree {integer:degree} with knots {a pointer to a list:knots} and last {integer:last} at {a number:parameter}:
+    set u to parameter as a 64 bit floating-point number
+    if u >= (the item at (last + 1) in knots):
+        return last
+    set low to degree
+    set high to last + 1
+    loop while high - low > 1:
+        set middle to (low + high) / 2
+        if u < (the item at middle in knots):
+            set high to middle
+        else:
+            set low to middle
+    return low
 
 local function the cad spline blend of degree {integer:degree} with knots knots and span {integer:span} at {64 bit floating-point number:u} using working:
     execute:
@@ -118,62 +111,59 @@ local function the cad spline blend of degree {integer:degree} with knots knots 
                 decrement step
         return the item at degree in working
 
-function the cad de Boor value of degree {integer:degree} with knots {a pointer to a list:knots} and {integer:count} points from source at {a number:parameter}:
-    execute:
-        set prototype to a new (the type of (the cad spline point at 0 from source))
-        check cad spline coordinates prototype
-        set u to parameter as a 64 bit floating-point number
-        if count = 0:
-            return prototype
-        if degree = 0:
-            set index to (the length of knots) - 1
-            set found to false
-            loop while index >= 0 and (the inverse of found):
-                if (the item at index in knots) <= u:
-                    set found to true
-                else:
-                    decrement index
-            if index < 0:
-                set index to 0
-            if index > count - 1:
-                set index to count - 1
-            return the cad spline point at index from source
-        set span to the cad span of degree degree with knots knots and last (count - 1) at u
-        if degree < 16:
-            set stack to a new ((the type of prototype) array of 16 items)
-            loop step from 0 to degree + 1:
-                store (the cad spline point at ((span + step) - degree) from source) at stack + step
-            return the cad spline blend of degree degree with knots knots and span span at u using (stack + 0)
-        # A zero-dimensional coordinate array still needs no payload bytes.
-        set bytes to (degree + 1) * (the size of the type of prototype)
-        if bytes = 0:
-            set bytes to 1
-        allocate bytes bytes as a pointer to (the type of prototype) and set working to it
-        if working = (0 as a pointer to (the type of prototype)):
-            @intrinsic("call", "libc", "abort", nothing)
+to get the cad de Boor value of degree {integer:degree} with knots {a pointer to a list:knots} and {integer:count} points from source at {a number:parameter}:
+    set prototype to a new (the type of (the cad spline point at 0 from source))
+    check cad spline coordinates prototype
+    set u to parameter as a 64 bit floating-point number
+    if count = 0:
+        return prototype
+    if degree = 0:
+        set index to (the length of knots) - 1
+        set found to false
+        loop while index >= 0 and (not found):
+            if (the item at index in knots) <= u:
+                set found to true
+            else:
+                decrement index
+        if index < 0:
+            set index to 0
+        if index > count - 1:
+            set index to count - 1
+        return the cad spline point at index from source
+    set span to the cad span of degree degree with knots knots and last (count - 1) at u
+    if degree < 16:
+        set stack to a new ((the type of prototype) array of 16 items)
         loop step from 0 to degree + 1:
-            store (the cad spline point at ((span + step) - degree) from source) into working at step
-        set result to the cad spline blend of degree degree with knots knots and span span at u using working
-        @intrinsic("call", "libc", "free", nothing, working)
-        return result
+            store (the cad spline point at ((span + step) - degree) from source) at stack + step
+        return the cad spline blend of degree degree with knots knots and span span at u using (stack + 0)
+    # A zero-dimensional coordinate array still needs no payload bytes.
+    set bytes to (degree + 1) * (the size of the type of prototype)
+    if bytes = 0:
+        set bytes to 1
+    allocate bytes bytes as a pointer to (the type of prototype) and set working to it
+    if working = (0 as a pointer to (the type of prototype)):
+        @intrinsic("call", "libc", "abort", nothing)
+    loop step from 0 to degree + 1:
+        store (the cad spline point at ((span + step) - degree) from source) into working at step
+    set result to the cad spline blend of degree degree with knots knots and span span at u using working
+    @intrinsic("call", "libc", "free", nothing, working)
+    return result
 
-function the cad de Boor value of degree {integer:degree} with knots {a pointer to a list:knots} and points {a pointer to a list:points} at {a number:parameter}:
-    execute:
-        return the cad de Boor value of degree degree with knots knots and (the length of points) points from points at parameter
+to get the cad de Boor value of degree {integer:degree} with knots {a pointer to a list:knots} and points {a pointer to a list:points} at {a number:parameter}:
+    return the cad de Boor value of degree degree with knots knots and (the length of points) points from points at parameter
 
-function the cad clamped uniform knots of degree {integer:degree} for {integer:count} points:
-    execute:
-        set result to an empty list of a 64 bit floating-point number
-        set spans to count - degree
-        if spans < 0:
-            set spans to 0
-        loop index from 0 to degree + 1:
-            append 0.0 to result
-        loop step from 1 to spans:
-            append ((step as a 64 bit floating-point number) / (spans as a 64 bit floating-point number)) to result
-        loop index from 0 to degree + 1:
-            append 1.0 to result
-        return result
+to get the cad clamped uniform knots of degree {integer:degree} for {integer:count} points:
+    set result to an empty list of a 64 bit floating-point number
+    set spans to count - degree
+    if spans < 0:
+        set spans to 0
+    loop index from 0 to degree + 1:
+        append 0.0 to result
+    loop step from 1 to spans:
+        append ((step as a 64 bit floating-point number) / (spans as a 64 bit floating-point number)) to result
+    loop index from 0 to degree + 1:
+        append 1.0 to result
+    return result
 
 local function cad spline scalar {64 bit floating-point number:value} is finite:
     execute:
@@ -182,22 +172,21 @@ local function cad spline scalar {64 bit floating-point number:value} is finite:
 local function cad spline point {cad spline coordinates:point} is finite:
     execute:
         loop axis from 0 to the length of point:
-            if the inverse of (cad spline scalar (the item at axis in point) is finite):
+            if not (cad spline scalar (the item at axis in point) is finite):
                 return false
         return true
 
 local function cad spline points {a pointer to a list:points} are finite:
     execute:
         loop index from 0 to the length of points:
-            if the inverse of (cad spline point (the item at index in points) is finite):
+            if not (cad spline point (the item at index in points) is finite):
                 return false
         return true
 
 local function the cad spline squared norm of {cad spline coordinates:point}:
     execute:
         set result to 0.0 as a 64 bit floating-point number
-        loop axis from 0 to the length of point:
-            set value to the item at axis in point
+        for each value in point:
             set result to result + value * value
         return result
 
@@ -236,7 +225,7 @@ local function the cad spline [spans] through {points} using {cad spline paramet
                 set next to 0
             set distance to the square root of (the cad spline squared distance from (the item at index in points) to (the item at next in points))
             # f64::max chooses 1e-9 when the other operand is NaN.
-            if the inverse of (distance >= 1e-9):
+            if not (distance >= 1e-9):
                 set distance to 1e-9
             set span to distance
             if (the code of parameterization) = 0:
@@ -256,10 +245,9 @@ local function the failed cad spline matching prototype:
         set knots to an empty list of a 64 bit floating-point number
         return @intrinsic("construct", a cad spline interpolation, false, controls, knots)
 
-function free cad spline interpolation {cad spline interpolation:result}:
-    execute:
-        free (the controls of result)
-        free (the knots of result)
+to free cad spline interpolation {cad spline interpolation:result}:
+    free (the controls of result)
+    free (the knots of result)
 
 # Solver status values describe success; right is borrowed mutable scratch.
 local function the cad spline tridiagonal solve status with {lower} and {diagonal} and {upper} into {right}:
@@ -307,19 +295,18 @@ local function the cad spline cyclic solve status with {lower} and {diagonal} an
         set adjusted to the cad spline copy of diagonal
         replace item at index 0 in adjusted with ((the item at 0 in adjusted) - gamma)
         replace item at index (count - 1) in adjusted with ((the item at (count - 1) in adjusted) - ((alpha * beta) / gamma))
-        if the inverse of (the cad spline tridiagonal solve status with lower and adjusted and upper into right):
+        if not (the cad spline tridiagonal solve status with lower and adjusted and upper into right):
             free adjusted
             return false
         set prototype to a new (the type of the item at 0 in right)
         set correction to a cad spline list of count copies of prototype
-        set first to prototype
-        set last to prototype
+        set first and last to prototype
         loop axis from 0 to the length of prototype:
             store gamma at first + axis
             store alpha at last + axis
         replace item at index 0 in correction with first
         replace item at index (count - 1) in correction with last
-        if the inverse of (the cad spline tridiagonal solve status with lower and adjusted and upper into correction):
+        if not (the cad spline tridiagonal solve status with lower and adjusted and upper into correction):
             free adjusted
             free correction
             return false
@@ -364,9 +351,7 @@ local function the cad spline assembled through {points} with derivatives {slope
             loop axis from 0 to the length of after:
                 store ((the item at axis in after) + (((the item at axis in firstSlope) * span) / 3.0)) at after + axis
                 store ((the item at axis in before) - (((the item at axis in lastSlope) * span) / 3.0)) at before + axis
-            append after to controls
-            append before to controls
-            append (the item at next in points) to controls
+            append after, before and (the item at next in points) to controls
             set parameter to parameter + span
             if index + 1 < segments:
                 loop copy from 0 to 3:
@@ -375,149 +360,146 @@ local function the cad spline assembled through {points} with derivatives {slope
             append parameter to knots
         return @intrinsic("construct", a cad spline interpolation, true, controls, knots)
 
-function the cad open spline through {a pointer to a list:points} with start tangent {cad spline tangent:start} and end tangent {cad spline tangent:end} using {cad spline parameterization:parameterization}:
-    execute:
-        set prototype to a new (the type of the item at 0 in points)
-        check cad spline coordinates prototype
-        check cad spline shape prototype against (the value of start)
-        check cad spline shape prototype against (the value of end)
-        set count to the length of points
-        if count < 2:
+to get the cad open spline through {a pointer to a list:points} with start tangent {cad spline tangent:start} and end tangent {cad spline tangent:end} using {cad spline parameterization:parameterization}:
+    set prototype to a new (the type of the item at 0 in points)
+    check cad spline coordinates prototype
+    check cad spline shape prototype against (the value of start)
+    check cad spline shape prototype against (the value of end)
+    set count to the length of points
+    if count < 2:
+        return the failed cad spline matching prototype
+    if not (cad spline points points are finite):
+        return the failed cad spline matching prototype
+    if the valid of start:
+        if not (cad spline point (the value of start) is finite):
             return the failed cad spline matching prototype
-        if the inverse of (cad spline points points are finite):
+    if the valid of end:
+        if not (cad spline point (the value of end) is finite):
             return the failed cad spline matching prototype
-        if the valid of start:
-            if the inverse of (cad spline point (the value of start) is finite):
-                return the failed cad spline matching prototype
-        if the valid of end:
-            if the inverse of (cad spline point (the value of end) is finite):
-                return the failed cad spline matching prototype
-        set spans to the cad spline spans through points using parameterization with periodic false
-        loop index from 0 to the length of spans:
-            if the inverse of (cad spline scalar (the item at index in spans) is finite):
-                free spans
-                return the failed cad spline matching prototype
-        set lower to a cad spline list of count copies of 0.0
-        set diagonal to a cad spline list of count copies of 0.0
-        set upper to a cad spline list of count copies of 0.0
-        set slopes to a cad spline list of count copies of prototype
-        set startUsable to (the valid of start) and ((the cad spline squared norm of (the value of start)) > 1e-18)
-        if startUsable:
-            replace item at index 0 in diagonal with 1.0
-            replace item at index 0 in slopes with (the value of start)
-        else:
-            replace item at index 0 in diagonal with 2.0
-            replace item at index 0 in upper with 1.0
-            set first to the item at 0 in points
-            set second to the item at 1 in points
-            set current to prototype
-            loop axis from 0 to the length of prototype:
-                store ((3.0 * ((the item at axis in second) - (the item at axis in first))) / (the item at 0 in spans)) at current + axis
-            replace item at index 0 in slopes with current
-        loop index from 1 to count - 1:
-            set before to the item at (index - 1) in spans
-            set after to the item at index in spans
-            replace item at index index in lower with after
-            replace item at index index in diagonal with (2.0 * (before + after))
-            replace item at index index in upper with before
-            set previous to the item at (index - 1) in points
-            set current to the item at index in points
-            set next to the item at (index + 1) in points
-            set slope to prototype
-            loop axis from 0 to the length of prototype:
-                set incoming to ((the item at axis in current) - (the item at axis in previous)) / before
-                set outgoing to ((the item at axis in next) - (the item at axis in current)) / after
-                store (3.0 * (after * incoming + before * outgoing)) at slope + axis
-            replace item at index index in slopes with slope
-        set endUsable to (the valid of end) and ((the cad spline squared norm of (the value of end)) > 1e-18)
-        if endUsable:
-            replace item at index (count - 1) in diagonal with 1.0
-            replace item at index (count - 1) in slopes with (the value of end)
-        else:
-            replace item at index (count - 1) in lower with 1.0
-            replace item at index (count - 1) in diagonal with 2.0
-            set last to the item at (count - 1) in points
-            set previous to the item at (count - 2) in points
-            set current to prototype
-            loop axis from 0 to the length of prototype:
-                store ((3.0 * ((the item at axis in last) - (the item at axis in previous))) / (the item at (count - 2) in spans)) at current + axis
-            replace item at index (count - 1) in slopes with current
-        set solved to the cad spline tridiagonal solve status with lower and diagonal and upper into slopes
-        free lower
-        free diagonal
-        free upper
-        if the inverse of solved:
+    set spans to the cad spline spans through points using parameterization with periodic false
+    loop index from 0 to the length of spans:
+        if not (cad spline scalar (the item at index in spans) is finite):
             free spans
-            free slopes
             return the failed cad spline matching prototype
-        set result to the cad spline assembled through points with derivatives slopes and intervals spans periodic false
+    set lower to a cad spline list of count copies of 0.0
+    set diagonal to a cad spline list of count copies of 0.0
+    set upper to a cad spline list of count copies of 0.0
+    set slopes to a cad spline list of count copies of prototype
+    set startUsable to (the valid of start) and ((the cad spline squared norm of (the value of start)) > 1e-18)
+    if startUsable:
+        replace item at index 0 in diagonal with 1.0
+        replace item at index 0 in slopes with (the value of start)
+    else:
+        replace item at index 0 in diagonal with 2.0
+        replace item at index 0 in upper with 1.0
+        set first to the item at 0 in points
+        set second to the item at 1 in points
+        set current to prototype
+        loop axis from 0 to the length of prototype:
+            store ((3.0 * ((the item at axis in second) - (the item at axis in first))) / (the item at 0 in spans)) at current + axis
+        replace item at index 0 in slopes with current
+    loop index from 1 to count - 1:
+        set before to the item at (index - 1) in spans
+        set after to the item at index in spans
+        replace item at index index in lower with after
+        replace item at index index in diagonal with (2.0 * (before + after))
+        replace item at index index in upper with before
+        set previous to the item at (index - 1) in points
+        set current to the item at index in points
+        set next to the item at (index + 1) in points
+        set slope to prototype
+        loop axis from 0 to the length of prototype:
+            set incoming to ((the item at axis in current) - (the item at axis in previous)) / before
+            set outgoing to ((the item at axis in next) - (the item at axis in current)) / after
+            store (3.0 * (after * incoming + before * outgoing)) at slope + axis
+        replace item at index index in slopes with slope
+    set endUsable to (the valid of end) and ((the cad spline squared norm of (the value of end)) > 1e-18)
+    if endUsable:
+        replace item at index (count - 1) in diagonal with 1.0
+        replace item at index (count - 1) in slopes with (the value of end)
+    else:
+        replace item at index (count - 1) in lower with 1.0
+        replace item at index (count - 1) in diagonal with 2.0
+        set last to the item at (count - 1) in points
+        set previous to the item at (count - 2) in points
+        set current to prototype
+        loop axis from 0 to the length of prototype:
+            store ((3.0 * ((the item at axis in last) - (the item at axis in previous))) / (the item at (count - 2) in spans)) at current + axis
+        replace item at index (count - 1) in slopes with current
+    set solved to the cad spline tridiagonal solve status with lower and diagonal and upper into slopes
+    free lower
+    free diagonal
+    free upper
+    if not solved:
         free spans
         free slopes
-        if (cad spline points (the controls of result) are finite) and (cad spline scalar (the last item of the knots of result) is finite):
-            return result
-        free cad spline interpolation result
         return the failed cad spline matching prototype
+    set result to the cad spline assembled through points with derivatives slopes and intervals spans periodic false
+    free spans
+    free slopes
+    if (cad spline points (the controls of result) are finite) and (cad spline scalar (the last item of the knots of result) is finite):
+        return result
+    free cad spline interpolation result
+    return the failed cad spline matching prototype
 
-function the cad open spline through {a pointer to a list:points} using {cad spline parameterization:parameterization}:
-    execute:
-        set prototype to a new (the type of the item at 0 in points)
-        set absent to no cad spline tangent matching prototype
-        return the cad open spline through points with start tangent absent and end tangent absent using parameterization
+to get the cad open spline through {a pointer to a list:points} using {cad spline parameterization:parameterization}:
+    set prototype to a new (the type of the item at 0 in points)
+    set absent to no cad spline tangent matching prototype
+    return the cad open spline through points with start tangent absent and end tangent absent using parameterization
 
-function the cad periodic spline through {a pointer to a list:original} using {cad spline parameterization:parameterization}:
-    execute:
-        set prototype to a new (the type of the item at 0 in original)
-        check cad spline coordinates prototype
-        set points to the cad spline copy of original
-        if (the length of points) > 1:
-            set distance to the cad spline squared distance from (the item at 0 in points) to (the last item of points)
-            if distance <= 1e-18:
-                remove item ((the length of points) - 1) from points
-        set count to the length of points
-        if count < 3:
-            free points
-            return the failed cad spline matching prototype
-        set spans to the cad spline spans through points using parameterization with periodic true
-        set lower to a cad spline list of count copies of 0.0
-        set diagonal to a cad spline list of count copies of 0.0
-        set upper to a cad spline list of count copies of 0.0
-        set right to a cad spline list of count copies of prototype
-        loop index from 0 to count:
-            set previous to index - 1
-            if previous < 0:
-                set previous to count - 1
-            set next to index + 1
-            if next = count:
-                set next to 0
-            set before to the item at previous in spans
-            set after to the item at index in spans
-            replace item at index index in lower with after
-            replace item at index index in diagonal with (2.0 * (before + after))
-            replace item at index index in upper with before
-            set previousPoint to the item at previous in points
-            set current to the item at index in points
-            set nextPoint to the item at next in points
-            set slope to prototype
-            loop axis from 0 to the length of prototype:
-                set previousSlope to ((the item at axis in current) - (the item at axis in previousPoint)) / before
-                set nextSlope to ((the item at axis in nextPoint) - (the item at axis in current)) / after
-                store (3.0 * (after * previousSlope + before * nextSlope)) at slope + axis
-            replace item at index index in right with slope
-        set alpha to the item at 0 in lower
-        set beta to the item at (count - 1) in upper
-        replace item at index 0 in lower with 0.0
-        replace item at index (count - 1) in upper with 0.0
-        set solved to the cad spline cyclic solve status with lower and diagonal and upper and alpha alpha and beta beta into right
-        free lower
-        free diagonal
-        free upper
-        if the inverse of solved:
-            free points
-            free spans
-            free right
-            return the failed cad spline matching prototype
-        set result to the cad spline assembled through points with derivatives right and intervals spans periodic true
+to get the cad periodic spline through {a pointer to a list:original} using {cad spline parameterization:parameterization}:
+    set prototype to a new (the type of the item at 0 in original)
+    check cad spline coordinates prototype
+    set points to the cad spline copy of original
+    if (the length of points) > 1:
+        set distance to the cad spline squared distance from (the item at 0 in points) to (the last item of points)
+        if distance <= 1e-18:
+            remove item ((the length of points) - 1) from points
+    set count to the length of points
+    if count < 3:
+        free points
+        return the failed cad spline matching prototype
+    set spans to the cad spline spans through points using parameterization with periodic true
+    set lower to a cad spline list of count copies of 0.0
+    set diagonal to a cad spline list of count copies of 0.0
+    set upper to a cad spline list of count copies of 0.0
+    set right to a cad spline list of count copies of prototype
+    loop index from 0 to count:
+        set previous to index - 1
+        if previous < 0:
+            set previous to count - 1
+        set next to index + 1
+        if next = count:
+            set next to 0
+        set before to the item at previous in spans
+        set after to the item at index in spans
+        replace item at index index in lower with after
+        replace item at index index in diagonal with (2.0 * (before + after))
+        replace item at index index in upper with before
+        set previousPoint to the item at previous in points
+        set current to the item at index in points
+        set nextPoint to the item at next in points
+        set slope to prototype
+        loop axis from 0 to the length of prototype:
+            set previousSlope to ((the item at axis in current) - (the item at axis in previousPoint)) / before
+            set nextSlope to ((the item at axis in nextPoint) - (the item at axis in current)) / after
+            store (3.0 * (after * previousSlope + before * nextSlope)) at slope + axis
+        replace item at index index in right with slope
+    set alpha to the item at 0 in lower
+    set beta to the item at (count - 1) in upper
+    replace item at index 0 in lower with 0.0
+    replace item at index (count - 1) in upper with 0.0
+    set solved to the cad spline cyclic solve status with lower and diagonal and upper and alpha alpha and beta beta into right
+    free lower
+    free diagonal
+    free upper
+    if not solved:
         free points
         free spans
         free right
-        return result
+        return the failed cad spline matching prototype
+    set result to the cad spline assembled through points with derivatives right and intervals spans periodic true
+    free points
+    free spans
+    free right
+    return result

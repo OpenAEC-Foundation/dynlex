@@ -123,7 +123,7 @@ to get a new string buffer containing {integer:count} [byte|bytes]:
     return a new string from address containing count bytes and owned by owner
 
 to get value is an ASCII whitespace character:
-    return (value = 32) or ((value = 9) or ((value = 10) or (value = 13)))
+    return value is one of 32, 9, 10 and 13
 
 to get the substring of {string:text} from {integer:start} spanning {integer:count} [byte|bytes]:
     if (start < 0) or ((count < 0) or (start + count > the length of text)):
@@ -178,7 +178,7 @@ to get {integer:value} padded to {integer:width} digits:
     set index to width - 1
     set writing to true
     loop while writing:
-        set digit to the remainder of remaining divided by 10
+        set digit to remaining mod 10
         if digit < 0:
             set digit to -digit
         set character to ((digit + 48) as a byte)
@@ -202,7 +202,7 @@ to get the string form of {integer:value}:
     set index to length - 1
     set writing to true
     loop while writing:
-        set digit to the remainder of remaining divided by 10
+        set digit to remaining mod 10
         if digit < 0:
             set digit to -digit
         set character to ((digit + 48) as a byte)
@@ -228,7 +228,7 @@ to get the string form of {unsigned integer:value}:
     set index to (digits - 1)
     set writing to true
     loop while writing:
-        set digit to the remainder of remaining divided by (10 as (the type of remaining))
+        set digit to remaining mod (10 as (the type of remaining))
         set character to ((digit + 48) as a byte)
         store character into data at index
         set remaining to (remaining / (10 as (the type of remaining)))
@@ -253,7 +253,7 @@ to get the string form of {floating-point number:value}:
         increment index
     set rounded to (the floor of ((magnitude * scale) as a floating-point number + 0.5)) as a word sized integer
     set whole to rounded / scale
-    set fraction to the remainder of rounded divided by scale
+    set fraction to rounded mod scale
     set integral to the string form of whole
     if fraction = 0:
         if negative:
@@ -262,7 +262,7 @@ to get the string form of {floating-point number:value}:
         return integral
     set trimming to decimals > 0
     loop while trimming:
-        set digit to the remainder of fraction divided by 10
+        set digit to fraction mod 10
         if digit = 0:
             set fraction to fraction / 10
             decrement decimals
@@ -293,13 +293,6 @@ implicitly convert {C string:value}:
     execute:
         return the string form of value
 
-# --- Line suffix ---
-
-to get value as a line:
-    set result to the string form of value
-    set newline to a new string from "\n" containing 1 byte
-    return result + newline
-
 # --- Output ---
 
 to write {string:message}:
@@ -312,31 +305,43 @@ to print message:
     set text to the string form of message
     write text
 
-to print whether condition:
-    print condition
+to print line message: write (the string form of message) + "\n"
 
-to print whether condition as a line:
-    print condition as a line
+function print lines [{arguments:messages}|{an argument pack:messages}]:
+    replacement:
+        for each {message} in messages:
+            print line message
+
+formatted part means: the string form of part
+
+function formatted [{arguments:parts}|{an argument pack:parts}]:
+    replacement:
+        @intrinsic("store", {first}, the item at 0 in parts)
+        @intrinsic("store", {text}, the string form of first)
+        for each {part} at {index} in parts:
+            if index > 0:
+                @intrinsic("store", text, text + the string form of part)
+        the string form of text
 
 # --- Concatenation ---
 
 function {string:left} + {string:right}:
-    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         the concatenation of left and right
 
 function {string:left} + {C string:right}:
-    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         the concatenation of left and right
 
 function {C string:left} + {string:right}:
-    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         the concatenation of left and right
 
 function {C string:left} + {C string:right}:
-    before: $ or $, $ and $, the inverse of $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     replacement:
         the concatenation of left and right
 

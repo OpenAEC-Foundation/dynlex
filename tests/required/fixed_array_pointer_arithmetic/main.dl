@@ -9,4 +9,4 @@ print the value at forward
 print " "
 print the value at commuted
 print " "
-print the value at restored as a line
+print line the value at restored

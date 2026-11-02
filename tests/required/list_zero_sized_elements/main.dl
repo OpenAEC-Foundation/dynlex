@@ -1,9 +1,8 @@
 import lib/list.dl
 
-function verify empty item {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to verify empty item {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set item to a new (a 64 bit floating-point number array of 0 items)
 set values to a list containing item
@@ -30,4 +29,4 @@ append item to reserved
 verify empty item ((the length of reserved) = 1)
 free reserved
 
-print "zero-sized list storage and lifecycle passed" as a line
+print line "zero-sized list storage and lifecycle passed"

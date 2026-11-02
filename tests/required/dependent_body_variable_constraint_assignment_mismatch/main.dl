@@ -1,8 +1,7 @@
 import lib/std.dl
 
-function accept {fixed integer:count} values {values}:
-    execute:
-        set values to [1, 2, 3]
-        return {an array of count items:values}
+to get accept {fixed integer:count} values {values}:
+    set values to [1, 2, 3]
+    return {an array of count items:values}
 
 ignore accept 2 values [1, 2]

@@ -1,7 +1,6 @@
 import lib/std.dl
 
-function the constrained identity of {integer:value}:
-    execute:
-        return {a floating-point number:value}
+to get the constrained identity of {integer:value}:
+    return {a floating-point number:value}
 
-print the constrained identity of 1 as a line
+print line the constrained identity of 1

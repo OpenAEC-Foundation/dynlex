@@ -87,14 +87,14 @@ the LSP server cancelled code means: -32802
 the LSP content modified code means: -32801
 the LSP request cancelled code means: -32800
 {LSP client result:outcome} succeeded means: outcome's success
-{LSP client result:outcome} failed means: the inverse of outcome's success
+{LSP client result:outcome} failed means: not outcome's success
 {LSP document result:outcome} was found means: outcome's availability
-{LSP document result:outcome} is missing means: the inverse of outcome's availability
+{LSP document result:outcome} is missing means: not outcome's availability
 {LSP diagnostics result:outcome} was found means: outcome's availability
 {LSP diagnostics result:outcome} has a version means: outcome's version presence
 {LSP synchronization:settings} sends open and close notifications means: settings's open and close notifications
-{LSP synchronization:settings} does not send open and close notifications means: the inverse of settings's open and close notifications
+{LSP synchronization:settings} does not send open and close notifications means: not settings's open and close notifications
 {LSP synchronization:settings} sends save notifications means: settings's save notifications
-{LSP synchronization:settings} does not send save notifications means: the inverse of settings's save notifications
+{LSP synchronization:settings} does not send save notifications means: not settings's save notifications
 {LSP synchronization:settings} includes text in save notifications means: settings's saved text inclusion
-{LSP synchronization:settings} does not include text in save notifications means: the inverse of settings's saved text inclusion
+{LSP synchronization:settings} does not include text in save notifications means: not settings's saved text inclusion

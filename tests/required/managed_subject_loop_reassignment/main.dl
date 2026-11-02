@@ -6,17 +6,11 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function left < right:
-    replacement:
-        @intrinsic("less than", left, right)
+left < right means: @intrinsic("less than", left, right)
 
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
 flex section loop while condition:
     replacement:

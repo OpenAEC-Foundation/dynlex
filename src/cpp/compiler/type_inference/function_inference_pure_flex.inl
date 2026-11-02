@@ -96,6 +96,8 @@ executePureSectionFlexCallerBody(Expression *executeBodyExpression, PureExecutio
 	);
 	Section *bodySection = targetFrame->bodySection;
 	InstantiatedSectionBody *instantiatedBody = targetFrame->instantiatedBody;
+	if (executeBodyExpression->inferredCallerBody)
+		instantiatedBody = executeBodyExpression->inferredCallerBody.get();
 	BindingFrameStack callerBindings = targetFrame->callerBindings;
 	pushSectionFlexCallerVariableBindings(
 		callerBindings, targetFrame->definitionSection, targetFrame->definitionBody, executionSection, bodySection

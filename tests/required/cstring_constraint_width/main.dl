@@ -1,12 +1,10 @@
 import lib/std.dl
 
-function the selected overload for {C string:value}:
-    execute:
-        return 1
+to get the selected overload for {C string:value}:
+    return 1
 
-function the selected overload for {a value:value}:
-    execute:
-        return 2
+to get the selected overload for {a value:value}:
+    return 2
 
 set first to 0 as a pointer to an integer
 set second to 0 as a pointer to an integer
@@ -14,6 +12,4 @@ set textual to the selected overload for "text"
 set numeric to the selected overload for first
 set equality to (first = second)
 
-print textual as a line
-print numeric as a line
-print equality as a line
+print lines textual, numeric and equality

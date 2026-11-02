@@ -6,17 +6,11 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function [an|] array of {fixed integer:length} items:
-    replacement:
-        @intrinsic("array", length)
+[an|] array of {fixed integer:length} items means: @intrinsic("array", length)
 
 class:
     patterns:
@@ -24,9 +18,7 @@ class:
     members:
         values as an array of length items
 
-function a box with {fixed integer:length} items initialized from value:
-    replacement:
-        @intrinsic("construct", a box with length items, value)
+a box with {fixed integer:length} items initialized from value means: @intrinsic("construct", a box with length items, value)
 
 function consume {integer:value}:
     replacement:

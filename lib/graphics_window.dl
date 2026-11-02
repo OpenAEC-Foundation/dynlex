@@ -41,9 +41,9 @@ local function [report GLFW failure during] {C string:operation}:
         set code to @intrinsic("call", "glfw", "glfwGetError", an integer, the address of description)
         print operation
         print " failed with GLFW error "
-        print code as a line
+        print line code
         if description != (0 as a C string):
-            print description as a line
+            print line description
         require condition false reporting "The graphics window operation failed"
 
 local function [configure the bundled Vulkan driver]:
@@ -68,9 +68,7 @@ exposed function [look up the graphics Vulkan procedure in] {pointer:instance} [
 
 local function [configure the GLFW Vulkan loader]:
     execute:
-        set major to 0
-        set minor to 0
-        set revision to 0
+        set major, minor and revision to 0
         @intrinsic("call", "glfw", "glfwGetVersion", nothing, the address of major, the address of minor, the address of revision)
         # GLFW added explicit loader selection in 3.4. Resolve this entry
         # point only when the installed library provides that interface.
@@ -120,35 +118,33 @@ exposed function [handle the graphics scroll of] {pointer:window} [by x] {floati
         if state's scroll_callback != (0 as a pointer):
             @intrinsic("call pointer", state's scroll_callback, nothing, state as a pointer, x, y)
 
-function [a graphics window resource with width] {integer:width} [height] {integer:height} [visible] {boolean:visible} [fullscreen] {boolean:fullscreen}:
-    execute:
-        require condition ((fullscreen and (width = 0 and height = 0)) or (fullscreen = false and (width > 0 and height > 0))) reporting "Graphics windows require positive dimensions; fullscreen windows use monitor dimensions"
-        retain the graphics library
-        @intrinsic("call", "glfw", "glfwDefaultWindowHints", nothing)
-        @intrinsic("call", "glfw", "glfwWindowHint", nothing, 139265, 0)
-        @intrinsic("call", "glfw", "glfwWindowHint", nothing, 131076, visible as an integer)
-        set monitor to 0 as a pointer
-        if fullscreen:
-            set monitor to @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer)
-            if monitor = (0 as a pointer):
-                report GLFW failure during "Querying the primary monitor"
-            set mode to @intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to GLFWvidmode, monitor)
-            if mode = (0 as a pointer to GLFWvidmode):
-                report GLFW failure during "Querying the primary monitor video mode"
-            set width to mode's width
-            set height to mode's height
-        set state to @intrinsic("call", "libc", "calloc", a pointer to DynlexGraphics, 1 as a word sized integer, the size of DynlexGraphics)
-        require condition (state != (0 as a pointer to DynlexGraphics)) reporting "Could not allocate the graphics context"
-        set state's window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer, width, height, "DynLex", monitor, 0 as a pointer)
-        if state's window = (0 as a pointer):
-            report GLFW failure during "Creating the graphics window"
-        @intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, state's window, state)
-        ignore @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer, state's window, the function named "handle the graphics framebuffer resize of $ to width $ height $")
-        ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, the function named "handle the graphics scroll of $ by x $ y $")
-        return state
+to get [a graphics window resource with width] {integer:width} [height] {integer:height} [visible] {boolean:visible} [fullscreen] {boolean:fullscreen}:
+    require condition ((fullscreen and (width = 0 and height = 0)) or (fullscreen = false and (width > 0 and height > 0))) reporting "Graphics windows require positive dimensions; fullscreen windows use monitor dimensions"
+    retain the graphics library
+    @intrinsic("call", "glfw", "glfwDefaultWindowHints", nothing)
+    @intrinsic("call", "glfw", "glfwWindowHint", nothing, 139265, 0)
+    @intrinsic("call", "glfw", "glfwWindowHint", nothing, 131076, visible as an integer)
+    set monitor to 0 as a pointer
+    if fullscreen:
+        set monitor to @intrinsic("call", "glfw", "glfwGetPrimaryMonitor", a pointer)
+        if monitor = (0 as a pointer):
+            report GLFW failure during "Querying the primary monitor"
+        set mode to @intrinsic("call", "glfw", "glfwGetVideoMode", a pointer to GLFWvidmode, monitor)
+        if mode = (0 as a pointer to GLFWvidmode):
+            report GLFW failure during "Querying the primary monitor video mode"
+        set width to mode's width
+        set height to mode's height
+    set state to @intrinsic("call", "libc", "calloc", a pointer to DynlexGraphics, 1 as a word sized integer, the size of DynlexGraphics)
+    require condition (state != (0 as a pointer to DynlexGraphics)) reporting "Could not allocate the graphics context"
+    set state's window to @intrinsic("call", "glfw", "glfwCreateWindow", a pointer, width, height, "DynLex", monitor, 0 as a pointer)
+    if state's window = (0 as a pointer):
+        report GLFW failure during "Creating the graphics window"
+    @intrinsic("call", "glfw", "glfwSetWindowUserPointer", nothing, state's window, state)
+    ignore @intrinsic("call", "glfw", "glfwSetFramebufferSizeCallback", a pointer, state's window, the function named "handle the graphics framebuffer resize of $ to width $ height $")
+    ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, the function named "handle the graphics scroll of $ by x $ y $")
+    return state
 
-function [destroy graphics window resource] {a pointer to DynlexGraphics:state}:
-    execute:
-        @intrinsic("call", "glfw", "glfwDestroyWindow", nothing, state's window)
-        deallocate state
-        release the graphics library
+to [destroy graphics window resource] {a pointer to DynlexGraphics:state}:
+    @intrinsic("call", "glfw", "glfwDestroyWindow", nothing, state's window)
+    deallocate state
+    release the graphics library

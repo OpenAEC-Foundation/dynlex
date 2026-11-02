@@ -214,6 +214,12 @@ std::string typeToUserName(const DataType &type) {
 	case DataType::Kind::Type:
 		result = "a type";
 		break;
+	case DataType::Kind::ArgumentPack:
+		result = "an argument pack";
+		break;
+	case DataType::Kind::ArgumentReference:
+		result = "an argument reference";
+		break;
 	case DataType::Kind::Constraint:
 		result = "a type constraint";
 		break;
@@ -295,6 +301,12 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 		case DataType::Kind::Type:
 			result = "a type";
 			break;
+		case DataType::Kind::ArgumentPack:
+			result = "an argument pack";
+			break;
+		case DataType::Kind::ArgumentReference:
+			result = "an argument reference";
+			break;
 		case DataType::Kind::Constraint:
 			result = "a type constraint";
 			break;
@@ -346,6 +358,12 @@ std::string DataType::toString() const {
 		break;
 	case Kind::Type:
 		result += "type";
+		break;
+	case Kind::ArgumentPack:
+		result += "arguments[" + std::to_string(arraySize) + "]";
+		break;
+	case Kind::ArgumentReference:
+		result += "argument reference";
 		break;
 	case Kind::Constraint:
 		result += "constraint";
@@ -461,6 +479,8 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 	}
 	case Kind::Type:
 		crashCompilerBug("Type is compile-time only, cannot be converted to LLVM type");
+	case Kind::ArgumentPack:
+	case Kind::ArgumentReference:
 	case Kind::Constraint:
 		crashCompilerBug("Constraint is compile-time only, cannot be converted to LLVM type");
 	case Kind::Unresolved:

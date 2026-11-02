@@ -1,0 +1,6 @@
+import lib/std.dl
+
+set number to 1
+set address to @intrinsic("address of", number)
+set @intrinsic("dereference", address) to 4
+print lines number and it

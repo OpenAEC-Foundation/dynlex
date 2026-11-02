@@ -2,45 +2,39 @@
 import lib/bim/brep_split.dl
 import lib/bim/brep_make.dl
 
-function check cad split {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to check cad split {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 
-function the cad split test location of {cad coedge key:key} in {cad topology list:keys}:
-    execute:
-        loop cursor from 0 to the length of (keys's values):
-            if (the item at cursor in (keys's values)) = key:
-                return cursor
-        return -1
+to get the cad split test location of {cad coedge key:key} in {cad topology list:keys}:
+    loop cursor from 0 to the length of (keys's values):
+        if (the item at cursor in (keys's values)) = key:
+            return cursor
+    return -1
 
-function the cad split test circular edge in {cad body:body}:
-    execute:
-        set edgeKeys to the cad edge keys of body
-        loop index from 0 to the length of edgeKeys:
-            set edgeKey to the item at index in edgeKeys
-            set edgeNode to the cad node pointer for edgeKey in body
-            set curveNode to the cad node pointer for edgeNode's curve in body
-            if (curveNode's kind = 1) and (edgeNode's start = edgeNode's end):
-                free edgeKeys
-                return @intrinsic("construct", a cad split edge result, true, edgeKey, edgeKey)
-        free edgeKeys
-        return @intrinsic("construct", a cad split edge result, false, a new cad edge key, a new cad edge key)
+to get the cad split test circular edge in {cad body:body}:
+    set edgeKeys to the cad edge keys of body
+    for each edgeKey in edgeKeys:
+        set edgeNode to the cad node pointer for edgeKey in body
+        set curveNode to the cad node pointer for edgeNode's curve in body
+        if (curveNode's kind = 1) and (edgeNode's start = edgeNode's end):
+            free edgeKeys
+            return @intrinsic("construct", a cad split edge result, true, edgeKey, edgeKey)
+    free edgeKeys
+    return @intrinsic("construct", a cad split edge result, false, a new cad edge key, a new cad edge key)
 
-function the cad split test horizontal face in {cad body:body} at height {a 64 bit floating-point number:zValue} within {a 64 bit floating-point number:tolerance}:
-    execute:
-        set faceKeys to the cad face keys of body
-        set answer to a new cad face key
-        loop cursor from 0 to the length of faceKeys:
-            set faceKey to the item at cursor in faceKeys
-            set faceNode to the cad node pointer for faceKey in body
-            set surfaceNode to the cad node pointer for faceNode's surface in body
-            if surfaceNode's kind = 0:
-                set normal to the cad normal of surfaceNode's plane
-                if normal's valid and (((the absolute value of (normal's value's z)) > 0.9) and ((the absolute value of (surfaceNode's plane's origin's z - zValue)) <= tolerance)):
-                    set answer to faceKey
-        free faceKeys
-        return answer
+to get the cad split test horizontal face in {cad body:body} at height {a 64 bit floating-point number:zValue} within {a 64 bit floating-point number:tolerance}:
+    set faceKeys to the cad face keys of body
+    set answer to a new cad face key
+    for each faceKey in faceKeys:
+        set faceNode to the cad node pointer for faceKey in body
+        set surfaceNode to the cad node pointer for faceNode's surface in body
+        if surfaceNode's kind = 0:
+            set normal to the cad normal of surfaceNode's plane
+            if normal's valid and (((the absolute value of (normal's value's z)) > 0.9) and ((the absolute value of (surfaceNode's plane's origin's z - zValue)) <= tolerance)):
+                set answer to faceKey
+    free faceKeys
+    return answer
 
 set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 check cad split made's valid
@@ -69,7 +63,7 @@ check cad split (nearNode's end = farNode's start)
 check cad split ((the cad distance from sharedNode's point to (the cad point on (@intrinsic("dereference", selectedCurve)) at splitParameter)) < 1e-12)
 check cad split (nearNode's endParameter = splitParameter)
 check cad split (farNode's startParameter = splitParameter)
-print "splitting_an_edge_updates_every_shared_topology_record" as a line
+print line "splitting_an_edge_updates_every_shared_topology_record"
 
 set endpointMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 set endpointBody to endpointMade's value
@@ -84,7 +78,7 @@ check cad split (refusedEnd's valid = false)
 check cad split (refusedNonfinite's valid = false)
 check cad split ((the cad count of endpointBody's vertices) = 8)
 check cad split ((the cad count of endpointBody's edges) = 12)
-print "a_split_at_an_end_is_refused_without_mutation" as a line
+print line "a_split_at_an_end_is_refused_without_mutation"
 
 set pointMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 set pointBody to pointMade's value
@@ -100,7 +94,7 @@ set pointShared to the cad shared vertex of pointSplit's near and pointSplit's f
 check cad split pointShared's valid
 set pointSharedNode to the cad node pointer for pointShared's value in pointBody
 check cad split ((the cad distance from pointSharedNode's point to pickedPoint) < 1e-12)
-print "splitting_by_a_point_lands_on_the_nearest_curve_parameter" as a line
+print line "splitting_by_a_point_lands_on_the_nearest_curve_parameter"
 
 set cylinderMade to the cad cylinder body at (the cad zero vector3) with radius 3.0 and height 5.0
 check cad split cylinderMade's valid
@@ -122,10 +116,9 @@ set circularFar to the cad node pointer for circularSplit's far in cylinderBody
 check cad split (circularNear's start != circularNear's end)
 check cad split (circularNear's end = circularFar's start)
 check cad split (circularFar's end = circularNear's start)
-print "splitting_a_closed_edge_reports_the_new_vertex_and_two_arcs" as a line
+print line "splitting_a_closed_edge_reports_the_new_vertex_and_two_arcs"
 
-loop useIndex from 0 to the length of (originalUses's values):
-    set useKey to the item at useIndex in (originalUses's values)
+for each useKey at useIndex in (originalUses's values):
     set useNode to the cad node pointer for useKey in cylinderBody
     set ringNode to the cad node pointer for useNode's owner in cylinderBody
     set twinKey to the item at useIndex in (circularFar's coedges's values)
@@ -144,7 +137,7 @@ loop useIndex from 0 to the length of (originalUses's values):
             set nearEnd to the cad point on useNode's pcurve's value at 0.0
             set farStart to the cad point on twinNode's pcurve's value at 1.0
         check cad split ((the cad distance from nearEnd to farStart) < 1e-12)
-print "forward_and_backward_coedges_keep_their_loop_order_and_pcurves" as a line
+print line "forward_and_backward_coedges_keep_their_loop_order_and_pcurves"
 
 set faceMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 check cad split faceMade's valid
@@ -152,8 +145,7 @@ set faceBody to faceMade's value
 set faceKeys to the cad face keys of faceBody
 set bottomFound to false
 set bottomFace to a new cad face key
-loop faceIndex from 0 to the length of faceKeys:
-    set faceKey to the item at faceIndex in faceKeys
+for each faceKey in faceKeys:
     set faceNode to the cad node pointer for faceKey in faceBody
     set surfaceNode to the cad node pointer for faceNode's surface in faceBody
     if surfaceNode's kind = 0:
@@ -175,7 +167,7 @@ check cad split ((the cad euler characteristic of faceBody) = beforeEuler)
 set faceFlaws to the cad flaws of faceBody
 check cad split ((the length of faceFlaws) = 0)
 free faceFlaws
-print "cutting_a_face_leaves_two_and_the_body_consistent" as a line
+print line "cutting_a_face_leaves_two_and_the_body_consistent"
 
 set diagonalMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 4.0, y 4.0 and z 4.0)
 set diagonalBody to diagonalMade's value
@@ -190,7 +182,7 @@ check cad split ((the cad count of diagonalBody's faces) = 7)
 set diagonalFlaws to the cad flaws of diagonalBody
 check cad split ((the length of diagonalFlaws) = 0)
 free diagonalFlaws
-print "a_corner_to_corner_cut_reuses_the_existing_vertices" as a line
+print line "a_corner_to_corner_cut_reuses_the_existing_vertices"
 
 set refusalMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 set refusalBody to refusalMade's value
@@ -209,7 +201,7 @@ check cad split ((the cad count of refusalBody's faces) = 6)
 set refusalFlaws to the cad flaws of refusalBody
 check cad split ((the length of refusalFlaws) = 0)
 free refusalFlaws
-print "missed_and_off_surface_cuts_leave_the_body_unchanged" as a line
+print line "missed_and_off_surface_cuts_leave_the_body_unchanged"
 
 set twiceMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 9.0, y 9.0 and z 9.0)
 set twiceBody to twiceMade's value
@@ -227,7 +219,7 @@ check cad split ((the cad euler characteristic of twiceBody) = 2)
 set twiceFlaws to the cad flaws of twiceBody
 check cad split ((the length of twiceFlaws) = 0)
 free twiceFlaws
-print "cutting_a_planar_face_twice_makes_three_regions" as a line
+print line "cutting_a_planar_face_twice_makes_three_regions"
 
 set surveyOrigin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
 set surveyMade to the cad cuboid at surveyOrigin with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
@@ -240,7 +232,7 @@ check cad split ((the cad worst vertex gap of surveyBody) < 1e-6)
 set surveyFlaws to the cad flaws of surveyBody
 check cad split ((the length of surveyFlaws) = 0)
 free surveyFlaws
-print "a_face_cut_remains_stable_at_survey_coordinates" as a line
+print line "a_face_cut_remains_stable_at_survey_coordinates"
 
 set holeMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 4.0 and z 6.0)
 set holeBody to holeMade's value
@@ -254,7 +246,7 @@ set holeSplit to the cad split of holeFace in holeBody along holeCutter within 1
 check cad split (holeSplit's valid = false)
 check cad split ((the cad count of holeBody's loops) = holeLoopCount)
 check cad split ((the cad count of holeBody's faces) = 6)
-print "a_face_with_multiple_loops_is_refused_atomically" as a line
+print line "a_face_with_multiple_loops_is_refused_atomically"
 
 free pointEdges
 free endpointEdges

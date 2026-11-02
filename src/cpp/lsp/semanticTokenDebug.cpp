@@ -397,7 +397,16 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 		std::optional<MappedRange> mappedRange = mappedRangeForUri(range);
 		if (!mappedRange)
 			return;
-		addMappedTokenWithModifiers(*mappedRange, type, modifiers);
+		// A normalized token can comprise disjoint authored spans. Bounding its
+		// endpoints would colour intervening expressions as literal text.
+		std::vector<SourceSlice> slices;
+		range.line->appendSourceSlices(slices, range.start(), range.end(), 0);
+		for (const SourceSlice &slice : slices) {
+			int length = slice.transformedEnd - slice.transformedStart;
+			SourceLocation start{slice.sourceFile, slice.sourceFileLineIndex, slice.sourceColumnStart};
+			SourceLocation end{slice.sourceFile, slice.sourceFileLineIndex, slice.sourceColumnStart + length};
+			addMappedTokenWithModifiers({start, end}, type, modifiers);
+		}
 	};
 	auto addToken = [&addTokenWithModifiers](const ::Range &range, SemanticTokenType type, bool isDefinition) {
 		addTokenWithModifiers(range, type, semanticTokenModifiers(isDefinition, false));
@@ -442,6 +451,9 @@ collectSemanticTokens(ParseContext &context, const std::string &uri, int lineCou
 			break;
 		case ParseContext::SourceTokenKind::Number:
 			addToken(annotation.range, SemanticTokenType::Number, false);
+			break;
+		case ParseContext::SourceTokenKind::String:
+			addToken(annotation.range, SemanticTokenType::String, false);
 			break;
 		case ParseContext::SourceTokenKind::PatternReference:
 			addPatternReferenceSignatureTokens(context, annotation.range, annotation.referencedPatternType, addToken);

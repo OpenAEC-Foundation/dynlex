@@ -2,8 +2,6 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
 ignore [1, 2] + 1

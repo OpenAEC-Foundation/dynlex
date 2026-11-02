@@ -32,6 +32,19 @@ InstantiatedSectionBody *InstantiatedSectionBody::bodyForChild(Section *child) c
 	return nullptr;
 }
 
+Expression *InstantiatedSectionBody::expressionForLine(const CodeLine *sourceLine) const {
+	const auto &lines = sourceSection->codeLines;
+	auto position = std::ranges::find(lines, sourceLine);
+	if (position != lines.end())
+		return lineExpressions.at(position - lines.begin());
+	for (const auto &child : childBodies) {
+		Expression *result = child->expressionForLine(sourceLine);
+		if (result)
+			return result;
+	}
+	return nullptr;
+}
+
 Expression *InstantiatedSectionBody::findCloneOf(const Expression *templateExpression) const {
 	Expression *result = nullptr;
 	for (Expression *root : lineExpressions) {

@@ -6,16 +6,14 @@ section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the first recursive result for value:
-    execute:
-        if @intrinsic("greater than", value, 0):
-            @intrinsic("return", the second recursive result for @intrinsic("subtract", value, 1))
-        @intrinsic("return", @intrinsic("equal", 1, 2))
+to get the first recursive result for value:
+    if @intrinsic("greater than", value, 0):
+        @intrinsic("return", the second recursive result for @intrinsic("subtract", value, 1))
+    @intrinsic("return", @intrinsic("equal", 1, 2))
 
-function the second recursive result for value:
-    execute:
-        if @intrinsic("greater than", value, 0):
-            @intrinsic("return", the first recursive result for @intrinsic("subtract", value, 1))
-        @intrinsic("return", @intrinsic("equal", 1, 2))
+to get the second recursive result for value:
+    if @intrinsic("greater than", value, 0):
+        @intrinsic("return", the first recursive result for @intrinsic("subtract", value, 1))
+    @intrinsic("return", @intrinsic("equal", 1, 2))
 
 ignore (the first recursive result for 2)

@@ -32,7 +32,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
             # A project directory called lib is still project code. A symlink
             # into the compiler library must retain the builtin syntax instead.
             (root / "lib" / "helper.dl").write_text(
-                'functie say hello:\n    doe:\n        print "ok" as a line\n', encoding="utf-8"
+                'functie say hello:\n    doe:\n        print line "ok"\n', encoding="utf-8"
             )
             try:
                 library = Path(__file__).resolve().parent.parent / "lib"
@@ -58,7 +58,7 @@ class ImportRootConsistencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="dynlex-import-roots-") as temporary_directory:
             root = Path(temporary_directory)
             main = root / "main.dl"
-            main.write_text('import std.dl\nprint "ok" as a line\n', encoding="utf-8")
+            main.write_text('import std.dl\nprint line "ok"\n', encoding="utf-8")
 
             # A working directory whose lib/string.dl would break the build if
             # the standard library's nested `import lib/string.dl` fell back to

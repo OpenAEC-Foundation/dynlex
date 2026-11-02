@@ -2,21 +2,13 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function an array:
-    replacement:
-        @intrinsic("array")
+an array means: @intrinsic("array")
 
-flex function [an|] array as long as value:
-    replacement:
-        @intrinsic("array", @intrinsic("type extent", value, 0))
+[an|] array as long as value means: @intrinsic("array", @intrinsic("type extent", value, 0))
 
 function left[ |]+[ |]right:
     before: $ = $
@@ -28,14 +20,11 @@ function {an array:left}[ |]+[ |]{an array as long as left:right}:
     execute:
         return left
 
-function left[ |]=[ |]right:
-    execute:
-        return @intrinsic("equal", left, right)
+to get left[ |]=[ |]right:
+    return @intrinsic("equal", left, right)
 
 function store value into array at index:
     replacement:
         @intrinsic("store at", array + index, value)
 
-function copy value into target at offset:
-    execute:
-        store value into target at offset + 1
+to copy value into target at offset: store value into target at offset + 1

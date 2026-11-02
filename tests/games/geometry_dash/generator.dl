@@ -23,16 +23,15 @@ to get a route plan with {integer:count} steps:
 
 to fill {route plan:plan} using seed {integer:seed}:
 	seed the random number generator with seed
-	set index to 0
-	set level to 0
+	set index and level to 0
 	loop while index < plan's count:
-		set jump to (420 + the remainder of (a random number) divided by 180)
-		set slide to (100 + the remainder of (a random number) divided by 180)
-		if the remainder of index divided by 4 = 0:
-			set jump to (340 + the remainder of (a random number) divided by 120)
-		if the remainder of index divided by 3 = 0 and level < 4:
+		set jump to (420 + (a random number) mod 180)
+		set slide to (100 + (a random number) mod 180)
+		if index mod 4 = 0:
+			set jump to (340 + (a random number) mod 120)
+		if index mod 3 = 0 and level < 4:
 			increment level
-		else if the remainder of index divided by 5 = 0 and level > 0:
+		else if index mod 5 = 0 and level > 0:
 			decrement level
 		store (a route step at level level with jump duration jump and slide duration slide) into plan's steps at index
 		increment index

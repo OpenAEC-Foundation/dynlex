@@ -2,18 +2,16 @@
 import lib/bim/brep_append.dl
 import lib/bim/brep_sweep.dl
 
-function check append {boolean:condition} named {string:label}:
-    execute:
-        if condition = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check append {boolean:condition} named {string:label}:
+    if condition = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function an append sheet starting at {a 64 bit floating-point number:x}:
-    execute:
-        set profile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x x and y 0.0) to (a cad vector2 with x (x + 2.0) and y 0.0)))
-        set made to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
-        free profile
-        return made
+to get an append sheet starting at {a 64 bit floating-point number:x}:
+    set profile to a list containing (the cad curve2 of (a cad line2 from (a cad vector2 with x x and y 0.0) to (a cad vector2 with x (x + 2.0) and y 0.0)))
+    set made to the cad extrusion sheet of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 3.0)
+    free profile
+    return made
 
 set firstResult to an append sheet starting at 0.0
 set secondResult to an append sheet starting at 7.0
@@ -40,7 +38,7 @@ check append ((the length of target's roots) = 2) named "roots after append"
 set flaws to the cad flaws of target
 check append ((the length of flaws) = 0) named "first append topology"
 free flaws
-print "two_independent_open_sheets_append_with_valid_topology" as a line
+print line "two_independent_open_sheets_append_with_valid_topology"
 
 set targetVertexKeys to the cad keys of target's vertices
 set copiedVertex to the cad node pointer for (the item at 4 in targetVertexKeys) in target's vertices
@@ -66,7 +64,7 @@ free flaws
 set flaws to the cad flaws of source
 check append ((the length of flaws) = 0) named "source topology retained"
 free flaws
-print "repeated_append_remaps_keys_and_preserves_source" as a line
+print line "repeated_append_remaps_keys_and_preserves_source"
 
 set targetEdgeKeys to the cad keys of target's edges
 set copiedEdge to the cad node pointer for (the item at 4 in targetEdgeKeys) in target's edges
@@ -76,7 +74,7 @@ set originalEdge to the cad node pointer for (the item at 0 in sourceEdgeKeys) i
 check append ((the length of originalEdge's coedges's values) = 1) named "deep adjacency ownership"
 free sourceEdgeKeys
 free targetEdgeKeys
-print "appended_nodes_own_their_adjacency" as a line
+print line "appended_nodes_own_their_adjacency"
 
 set invalidResult to an append sheet starting at 20.0
 check append invalidResult's valid named "invalid fixture built"
@@ -87,7 +85,7 @@ set invalidShell's owner to @intrinsic("construct", a cad lump key, 999 as a 32 
 free invalidShellKeys
 check append ((append cad body invalid into target) = false) named "missing owner rejected"
 check append ((the cad count of target's lumps) = 3) named "rejection leaves target intact"
-print "dangling_source_references_are_rejected" as a line
+print line "dangling_source_references_are_rejected"
 
 set controls to a list containing (the cad zero vector3)
 append (the cad x axis) to controls
@@ -122,7 +120,7 @@ free row
 free net
 free knots
 free weights
-print "nested_geometry_is_deeply_owned" as a line
+print line "nested_geometry_is_deeply_owned"
 
 set largeSource to an empty cad body
 loop sheetIndex from 0 to 512:
@@ -138,7 +136,7 @@ check append ((the length of largeTarget's roots) = 512) named "large root remap
 set flaws to the cad flaws of largeTarget
 check append ((the length of flaws) = 0) named "large body topology"
 free flaws
-print "thousands_of_linked_nodes_append_with_valid_topology" as a line
+print line "thousands_of_linked_nodes_append_with_valid_topology"
 
 set sparseSource to an empty cad body
 set disposableKeys to an empty list of a cad vertex key
@@ -159,4 +157,4 @@ check append ((the cad count of sparseTarget's edges) = 4) named "sparse edge re
 set flaws to the cad flaws of sparseTarget
 check append ((the length of flaws) = 0) named "sparse body topology"
 free flaws
-print "sparse_arena_slots_remap_without_dense_tables" as a line
+print line "sparse_arena_slots_remap_without_dense_tables"

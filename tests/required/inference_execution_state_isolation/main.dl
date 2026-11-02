@@ -1,22 +1,20 @@
 import lib/std.dl
 
-function the branch value for condition:
-    execute:
-        set answer to 1
-        if condition:
-            set answer to 2
-        else:
-            set answer to 3
-        return answer
+to get the branch value for condition:
+    set answer to 1
+    if condition:
+        set answer to 2
+    else:
+        set answer to 3
+    return answer
 
-function value after one loop:
-    execute:
-        set ongoing to true
-        set result to 0
-        loop while ongoing:
-            set result to 1
-            set ongoing to false
-        return result
+to get value after one loop:
+    set ongoing to true
+    set result to 0
+    loop while ongoing:
+        set result to 1
+        set ongoing to false
+    return result
 
 class:
     patterns:
@@ -24,19 +22,15 @@ class:
     members:
         target
 
-function write value through holder:
-    execute:
-        @intrinsic("store at", @intrinsic("property", holder, "target"), value)
+to write value through holder: @intrinsic("store at", @intrinsic("property", holder, "target"), value)
 
-print the branch value for true as a line
-print the branch value for false as a line
-print value after one loop as a line
+print lines (the branch value for true), (the branch value for false) and (value after one loop)
 
 set target to 0
 set holder to @intrinsic("construct", a state pointer holder, @intrinsic("address of", target))
 write 7 through holder
-print target as a line
+print line target
 
 set external to 0
 ignore @intrinsic("variadic call", "libc", "sscanf", a 32 bit integer, 2, "17", "%d", @intrinsic("address of", external))
-print external as a line
+print line external

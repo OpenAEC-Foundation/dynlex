@@ -25,10 +25,8 @@ while index < 2049:
 ignore @intrinsic("call", "libc", "fclose", an integer, model file)
 
 set mesh to a loaded OBJ mesh from model path for 0 as a pointer to a byte
-print mesh's vertex count as a line
-print mesh's texture coordinate count as a line
-print mesh's triangle count as a line
-print mesh's material count as a line
+print lines (mesh's vertex count), (mesh's texture coordinate count) and (mesh's triangle count)
+print line mesh's material count
 free mesh
 
 ignore @intrinsic("call", "libc", "remove", an integer, model path)

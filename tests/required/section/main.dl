@@ -2,19 +2,19 @@ import std.dl
 set variable to 3
 
 if variable < 2:
-	print "variable is less than 4" as a line
+	print line "variable is less than 4"
 else if variable < 4:
-	print "variable is less than 4" as a line
+	print line "variable is less than 4"
 else:
-	print "variable is not less than 4" as a line
+	print line "variable is not less than 4"
 
 match based on variable:
 	case 1:
-		print "variable is 1" as a line
+		print line "variable is 1"
 	case 2:
-		print "variable is 2" as a line
+		print line "variable is 2"
 	case 3:
-		print "variable is 3" as a line
+		print line "variable is 3"
 	case 4:
-		print "variable is 4" as a line
+		print line "variable is 4"
 

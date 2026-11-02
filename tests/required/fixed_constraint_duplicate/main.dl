@@ -2,20 +2,14 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function the duplicate of {integer:value}:
-    execute:
-        return value
+to get the duplicate of {integer:value}:
+    return value
 
-function the duplicate of {fixed integer:value}:
-    execute:
-        return value
+to get the duplicate of {fixed integer:value}:
+    return value
 
 the duplicate of 1

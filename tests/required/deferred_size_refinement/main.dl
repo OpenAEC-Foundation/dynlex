@@ -18,11 +18,10 @@ class:
     members:
         data
 
-function the [width] after refining {storage:values} with item:
-    execute:
-        set width to @intrinsic("size of", @intrinsic("type of", @intrinsic("dereference", the data of values)))
-        @intrinsic("initialize at", the data of values, item)
-        return width
+to get the [width] after refining {storage:values} with item:
+    set width to @intrinsic("size of", @intrinsic("type of", @intrinsic("dereference", the data of values)))
+    @intrinsic("initialize at", the data of values, item)
+    return width
 
 set data to @intrinsic("call", "libc", "calloc", @intrinsic("add pointer depth", box), 1, 8)
 set values to @intrinsic("construct", storage, data)

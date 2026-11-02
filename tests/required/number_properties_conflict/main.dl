@@ -1,7 +1,6 @@
 import lib/std.dl
 
-function the impossible of {signed and floating-point:value}:
-    execute:
-        return value
+to get the impossible of {signed and floating-point:value}:
+    return value
 
-print the impossible of 1.5 as a line
+print line the impossible of 1.5

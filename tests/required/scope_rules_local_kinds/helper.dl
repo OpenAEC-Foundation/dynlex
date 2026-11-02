@@ -9,6 +9,5 @@ class:
     members:
         amount as an integer
 
-function the visible value:
-    execute:
-        return 3
+to get the visible value:
+    return 3

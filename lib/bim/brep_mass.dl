@@ -90,20 +90,19 @@ local function cad mass assembled with volume {a 64 bit floating-point number:vo
         set value to @intrinsic("construct", a cad mass properties, volume, centroid, moment, xAxis, yAxis, zAxis, principal, product, radii)
         return the cad mass result of value
 
-function {cad mass properties:value} translated by {cad vector3:delta}:
-    execute:
-        set old to value's centroid
-        set centroid to the cad sum of old and delta
-        set xChange to (delta's x) * ((2.0 * (old's x)) + (delta's x))
-        set yChange to (delta's y) * ((2.0 * (old's y)) + (delta's y))
-        set zChange to (delta's z) * ((2.0 * (old's z)) + (delta's z))
-        set moment to a cad vector3 with x ((value's momentOfInertia's x) + ((value's volume) * (yChange + zChange))), y ((value's momentOfInertia's y) + ((value's volume) * (xChange + zChange))) and z ((value's momentOfInertia's z) + ((value's volume) * (xChange + yChange)))
-        set xyChange to (((old's x) * (delta's y)) + ((old's y) * (delta's x))) + ((delta's x) * (delta's y))
-        set yzChange to (((old's y) * (delta's z)) + ((old's z) * (delta's y))) + ((delta's y) * (delta's z))
-        set zxChange to (((old's z) * (delta's x)) + ((old's x) * (delta's z))) + ((delta's z) * (delta's x))
-        set product to a cad vector3 with x ((value's productOfInertia's x) - ((value's volume) * xyChange)), y ((value's productOfInertia's y) - ((value's volume) * yzChange)) and z ((value's productOfInertia's z) - ((value's volume) * zxChange))
-        set radii to the cad mass radii for moment with volume (value's volume)
-        return @intrinsic("construct", a cad mass properties, value's volume, centroid, moment, value's principalDirectionX, value's principalDirectionY, value's principalDirectionZ, value's principalMoments, product, radii)
+to get {cad mass properties:value} translated by {cad vector3:delta}:
+    set old to value's centroid
+    set centroid to the cad sum of old and delta
+    set xChange to (delta's x) * ((2.0 * (old's x)) + (delta's x))
+    set yChange to (delta's y) * ((2.0 * (old's y)) + (delta's y))
+    set zChange to (delta's z) * ((2.0 * (old's z)) + (delta's z))
+    set moment to a cad vector3 with x ((value's momentOfInertia's x) + ((value's volume) * (yChange + zChange))), y ((value's momentOfInertia's y) + ((value's volume) * (xChange + zChange))) and z ((value's momentOfInertia's z) + ((value's volume) * (xChange + yChange)))
+    set xyChange to (((old's x) * (delta's y)) + ((old's y) * (delta's x))) + ((delta's x) * (delta's y))
+    set yzChange to (((old's y) * (delta's z)) + ((old's z) * (delta's y))) + ((delta's y) * (delta's z))
+    set zxChange to (((old's z) * (delta's x)) + ((old's x) * (delta's z))) + ((delta's z) * (delta's x))
+    set product to a cad vector3 with x ((value's productOfInertia's x) - ((value's volume) * xyChange)), y ((value's productOfInertia's y) - ((value's volume) * yzChange)) and z ((value's productOfInertia's z) - ((value's volume) * zxChange))
+    set radii to the cad mass radii for moment with volume (value's volume)
+    return @intrinsic("construct", a cad mass properties, value's volume, centroid, moment, value's principalDirectionX, value's principalDirectionY, value's principalDirectionZ, value's principalMoments, product, radii)
 
 local function sort cad mass cylinders by descending radius {cad topology list:values}:
     execute:
@@ -152,7 +151,7 @@ local function the cad mass rectangular patch of {cad face key:faceKey} in {cad 
         set highV to the negative of lowV
         loop index from 0 to 4:
             set curve to the item at index in (boundary's curves's values)
-            set next to the item at (the remainder of (index + 1) divided by 4) in (boundary's curves's values)
+            set next to the item at ((index + 1) mod 4) in (boundary's curves's values)
             if ((curve's kind) != 0) or ((next's kind) != 0):
                 return no cad mass patch
             set line to curve's line
@@ -346,8 +345,7 @@ local function the cad spherical mass properties of {cad body:body}:
         set outerSphere to the item at 0 in (spheres's values)
         set centre to outerSphere's frame's origin
         set scale to the maximum of (the absolute value of (outerSphere's radius)) and 1.0
-        loop index from 0 to the length of (spheres's values):
-            set sphere to the item at index in (spheres's values)
+        for each sphere in (spheres's values):
             if ((cad mass scalar (sphere's radius) is finite) and ((sphere's radius) > 0.0)) = false:
                 return no cad mass properties
             if (the cad distance from centre to (sphere's frame's origin)) > (scale * 1e-8):
@@ -458,8 +456,7 @@ local function the cad cylindrical mass properties of {cad body:body}:
             set positionTolerance to the maximum of positionTolerance and (the absolute value of (the item at index in (positions's values)))
         set positionTolerance to positionTolerance * 1e-8
         set uniquePositions to a cad topology list of a 64 bit floating-point number
-        loop index from 0 to the length of (positions's values):
-            set position to the item at index in (positions's values)
+        for each position in (positions's values):
             if (the length of (uniquePositions's values)) = 0:
                 append position to (uniquePositions's values)
             else if (the absolute value of ((the last item of (uniquePositions's values)) - position)) > positionTolerance:
@@ -476,9 +473,7 @@ local function the cad cylindrical mass properties of {cad body:body}:
         set outerRadiusSquared to (outerCylinder's radius) * (outerCylinder's radius)
         set outerVolume to (3.141592653589793 * outerRadiusSquared) * outerHeight
         set outerCentre to (outerMinimum + outerMaximum) * 0.5
-        set innerRadius to 0.0
-        set innerHeight to 0.0
-        set innerVolume to 0.0
+        set innerRadius, innerHeight and innerVolume to 0.0
         set innerCentre to outerCentre
         if (the length of (uniqueCylinders's values)) = 2:
             set innerCylinder to the item at 1 in (uniqueCylinders's values)
@@ -504,12 +499,11 @@ local function the cad cylindrical mass properties of {cad body:body}:
         set principal to a cad vector3 with x transverse, y transverse and z axial
         return cad mass assembled with volume volume, centroid centroid, principal moments principal and axes xAxis yAxis axis
 
-function the cad analytic mass properties of {cad body:body}:
-    execute:
-        set sphere to the cad spherical mass properties of body
-        if sphere's valid:
-            return sphere
-        set sector to the cad cylindrical sector mass properties of body
-        if sector's valid:
-            return sector
-        return the cad cylindrical mass properties of body
+to get the cad analytic mass properties of {cad body:body}:
+    set sphere to the cad spherical mass properties of body
+    if sphere's valid:
+        return sphere
+    set sector to the cad cylindrical sector mass properties of body
+    if sector's valid:
+        return sector
+    return the cad cylindrical mass properties of body

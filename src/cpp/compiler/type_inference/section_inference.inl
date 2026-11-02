@@ -6,6 +6,11 @@
 #include "section_inference_helpers.inl"
 #include <unordered_set>
 
+static bool inferStaticLoopIterations(
+	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
+	const BindingFrameStack &bindings, size_t startLineIndex, bool &fallsThrough
+);
+
 static bool inferSectionLineRange(
 	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
 	const BindingFrameStack &bindingFrameStack, size_t startLineIndex, bool initializeSection, bool *fallsThrough,
@@ -62,6 +67,18 @@ static bool inferSectionLineRange(
 	}
 
 	bool loopSection = stabilizeLoop && sectionOutcomeIsLoop(openingExpression);
+	struct StaticLoopScope {
+		InferenceContext &context;
+		bool active;
+		StaticLoopScope(InferenceContext &context, bool active) : context(context), active(active) {
+			if (active)
+				context.staticLoopFrames.emplace_back();
+		}
+		~StaticLoopScope() {
+			if (active)
+				context.staticLoopFrames.pop_back();
+		}
+	} staticLoopScope(context, loopSection);
 	KnownConstantState constantsAtLoopEntry;
 	AddressInferenceState addressesAtLoopEntry;
 	InferenceContext::SubjectState subjectAtLoopEntry;
@@ -75,8 +92,7 @@ static bool inferSectionLineRange(
 		if (!line || !line->sectionOpening || !line->sectionOpening->runsInEnclosingBody())
 			return true;
 		InstantiatedSectionBody *openedBody = body ? body->bodyForChild(line->sectionOpening) : nullptr;
-		Expression *activeOpeningExpression =
-			body && line->sectionOpening ? body->findCloneOf(line->expression) : line->expression;
+		Expression *activeOpeningExpression = body && line->sectionOpening ? body->expressionForLine(line) : line->expression;
 		if (activeOpeningExpression &&
 			activeOpeningExpression->sectionBodyExecution != Expression::SectionBodyExecution::None) {
 			if (openedSectionFallsThrough)
@@ -161,8 +177,7 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(
-					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
@@ -224,7 +239,7 @@ static bool inferSectionLineRange(
 		};
 		openingExpression->executionFallsThrough = sectionFallsThrough;
 		if (sectionFallsThrough)
-			mergeSectionExecutionStates(context, fallthroughConstantStates, fallthroughAddressStates, fallthroughSubjectStates);
+			mergeExecutionStates(context, fallthroughConstantStates, fallthroughAddressStates, fallthroughSubjectStates);
 		if (fallsThrough)
 			*fallsThrough = sectionFallsThrough;
 		context.typesValid = true;
@@ -355,7 +370,7 @@ static bool inferSectionLineRange(
 				i = chainEnd;
 				break;
 			}
-			mergeSectionExecutionStates(context, branchConstantStates, branchAddressStates, branchSubjectStates);
+			mergeExecutionStates(context, branchConstantStates, branchAddressStates, branchSubjectStates);
 
 			i = chainEnd;
 			continue;
@@ -399,7 +414,12 @@ static bool inferSectionLineRange(
 			break;
 		}
 	}
-	if (loopSection) {
+	if (loopSection && context.staticLoopFrames.back().required) {
+		if (!inferStaticLoopIterations(
+				section, body, openingExpression, context, bindingFrameStack, startLineIndex, sectionFallsThrough
+			))
+			return false;
+	} else if (loopSection) {
 		const bool *entryCondition = std::get_if<bool>(&openingExpression->sectionOutcome.read().conditionValue);
 		bool firstIterationGuaranteed = entryCondition && *entryCondition;
 		if (!sectionFallsThrough) {
@@ -417,7 +437,7 @@ static bool inferSectionLineRange(
 			const auto &baseAddresses = firstIterationGuaranteed ? addressesAfterFirstIteration : addressesAtLoopEntry;
 			const auto &baseSubject = firstIterationGuaranteed ? subjectAfterFirstIteration : subjectAtLoopEntry;
 			if (!firstIterationGuaranteed) {
-				mergeSectionExecutionStates(
+				mergeExecutionStates(
 					context, {constantsAtLoopEntry, constantsAfterFirstIteration},
 					{addressesAtLoopEntry, addressesAfterFirstIteration}, {subjectAtLoopEntry, subjectAfterFirstIteration}
 				);
@@ -453,7 +473,7 @@ static bool inferSectionLineRange(
 					break;
 				}
 
-				mergeSectionExecutionStates(
+				mergeExecutionStates(
 					context, {baseConstants, context.currentVariableValues}, {baseAddresses, context.currentAddressState},
 					{baseSubject, context.currentSubject}
 				);
@@ -474,6 +494,8 @@ static bool inferSectionLineRange(
 	return true;
 }
 
+#include "static_loop_inference.inl"
+
 static bool inferSection(
 	Section *section, InstantiatedSectionBody *body, Expression *openingExpression, InferenceContext &context,
 	const BindingFrameStack &bindingFrameStack, bool *fallsThrough
@@ -484,6 +506,8 @@ static bool inferSection(
 #include "declared_type_constraint_work_item.inl"
 
 #include "declared_constraint_inference.inl"
+
+#include "runtime_lifecycle_uses.inl"
 
 static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceContext &callerContext) {
 	std::vector<ClassSection *> classes;
@@ -509,58 +533,43 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 		}
 	}
 
-	std::vector<size_t> inferredInstantiationCounts(classes.size(), 0);
-	while (true) {
-		bool madeProgress = false;
-		for (size_t classIndex = 0; classIndex < classes.size(); classIndex++) {
-			ClassSection *classSection = classes[classIndex];
-			ClassDefinition *definition = classSection->classDefinition;
-			if (!definition->retainSection)
-				continue;
-			while (inferredInstantiationCounts[classIndex] < definition->instantiations.size()) {
-				size_t index = inferredInstantiationCounts[classIndex];
-				DataType classType{DataType::Kind::Class};
-				classType.classDefinition = definition;
-				classType.classInstIndex = static_cast<int>(index);
-				Expression placeholder;
-				placeholder.kind = Expression::Kind::TypedPlaceholder;
-				placeholder.type = classType;
-				placeholder.range = classSection->openingLine
-										? Range(classSection->openingLine, classSection->openingLine->patternText)
-										: Range();
-				std::vector<std::pair<std::string, Expression *>> bindings = {
-					{std::string(managedLifecycleParameterName), &placeholder}
-				};
-				std::vector<DataType> argumentTypes = {classType};
-				for (Section *lifecycleSection : {definition->retainSection, definition->releaseSection}) {
-					if (!ensureSectionInstantiationInferred(
-							parseContext, lifecycleSection, nullptr, bindings, argumentTypes, {},
-							callerContext.currentInstantiation, &callerContext
-						)) {
-						return false;
-					}
-					InstantiationKey key{.argumentTypes = argumentTypes, .compileTimeParameters = {}};
-					auto instantiation = lifecycleSection->instantiations.find(key);
-					requireCompilerInvariant(
-						instantiation != lifecycleSection->instantiations.end(),
-						"managed lifecycle inference did not retain its instantiation"
-					);
-					if (instantiation->second.returnType.kind != DataType::Kind::Void) {
-						parseContext.diagnostics.push_back(Diagnostic(
-							parseContext, Diagnostic::Level::Error, "retain and release sections cannot return a value",
-							lifecycleSection->openingLine
-								? Range(lifecycleSection->openingLine, lifecycleSection->openingLine->patternText)
-								: Range()
-						));
-						return false;
-					}
-				}
-				inferredInstantiationCounts[classIndex]++;
-				madeProgress = true;
+	RuntimeLifecycleUses uses;
+	uses.collectSection(parseContext.mainSection);
+	uses.collectExposedFunctions(parseContext.mainSection);
+	for (size_t index = 0; index < uses.customTypes.size(); index++) {
+		DataType classType = uses.customTypes[index];
+		ClassDefinition &definition = *classType.classDefinition;
+		Expression placeholder;
+		placeholder.kind = Expression::Kind::TypedPlaceholder;
+		placeholder.type = classType;
+		placeholder.range = definition.range;
+		std::vector<std::pair<std::string, Expression *>> bindings = {
+			{std::string(managedLifecycleParameterName), &placeholder}
+		};
+		std::vector<DataType> argumentTypes = {classType};
+		for (Section *lifecycleSection : {definition.retainSection, definition.releaseSection}) {
+			if (!ensureSectionInstantiationInferred(
+					parseContext, lifecycleSection, nullptr, bindings, argumentTypes, {}, callerContext.currentInstantiation,
+					&callerContext
+				))
+				return false;
+			InstantiationKey key{.argumentTypes = argumentTypes, .compileTimeParameters = {}};
+			auto instantiation = lifecycleSection->instantiations.find(key);
+			requireCompilerInvariant(
+				instantiation != lifecycleSection->instantiations.end(),
+				"managed lifecycle inference did not retain its instantiation"
+			);
+			if (instantiation->second.returnType.kind != DataType::Kind::Void) {
+				parseContext.diagnostics.push_back(Diagnostic(
+					parseContext, Diagnostic::Level::Error, "retain and release sections cannot return a value",
+					lifecycleSection->openingLine
+						? Range(lifecycleSection->openingLine, lifecycleSection->openingLine->patternText)
+						: Range()
+				));
+				return false;
 			}
+			uses.collectInstantiation(instantiation->second);
 		}
-		if (!madeProgress)
-			break;
 	}
 	return true;
 }
@@ -579,6 +588,9 @@ static void materializeInferredConversionCalls(ParseContext &parseContext) {
 		argument->inferredConversion = nullptr;
 		argument->inferredConversionStorage.reset();
 		*source = std::move(*call);
+		source->executionFallsThrough = argument->executionFallsThrough;
+		source->reusableTemplateExpression = argument->reusableTemplateExpression;
+		source->isExplicitGroup = argument->isExplicitGroup;
 		source->arguments = {argument.get()};
 		source->materializedConversionArgument = std::move(argument);
 	}

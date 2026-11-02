@@ -17,7 +17,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <string_view>
 #include <system_error>
 #include <thread>
@@ -39,7 +41,7 @@ void printUsage(std::ostream &output) {
 		   << "  dynlex -- <source...>\n\n"
 		   << "Compiler options:\n"
 		   << "  --emit-llvm | --emit-object | --emit-wasm | --emit-spirv  --no-main\n"
-		   << "  --emit-completions line:column  --dump-purity\n"
+		   << "  --emit-completions line:column  --dump-purity  --dump-dependencies\n"
 		   << "  --shader-stage=vertex|fragment|compute  -O0|-O1|-O2|-O3|-Os|-Oz|-Ofast\n"
 		   << "  -ffast-math|-fno-fast-math  -ffp-contract=fast|off\n"
 		   << "  -march=native|<cpu>  -mcpu=<cpu>  -mtune=<cpu>  -mattr=<features>\n"
@@ -55,6 +57,22 @@ bool hasErrors(const ParseContext &context) {
 	return std::any_of(context.diagnostics.begin(), context.diagnostics.end(), [](const Diagnostic &diagnostic) {
 		return diagnostic.level == Diagnostic::Level::Error;
 	});
+}
+
+void printDependencies(const ParseContext &context, bool complete) {
+	std::vector<std::string> sources;
+	for (const auto &[path, source] : context.importedFiles) {
+		(void)source;
+		sources.push_back(path);
+	}
+	std::sort(sources.begin(), sources.end());
+	std::set<std::string> configurations;
+	for (const std::string &path : {context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) {
+		if (!path.empty())
+			configurations.insert(std::filesystem::weakly_canonical(path).string());
+	}
+	std::cout << nlohmann::json({{"complete", complete}, {"sources", sources}, {"configurations", configurations}}).dump(2)
+			  << '\n';
 }
 
 bool isFileArgument(const std::string &argument) {
@@ -175,6 +193,7 @@ int main(int argumentCount, char *argumentValues[]) {
 	bool waitDebugger = false;
 	bool emitCompletions = false;
 	bool dumpPurity = false;
+	bool dumpDependencies = false;
 	bool incrementalStatistics = false;
 	std::string incrementalDirectory;
 	bool enableLspTrace = false;
@@ -253,6 +272,8 @@ int main(int argumentCount, char *argumentValues[]) {
 			emitCompletions = true;
 		} else if (arg == "--dump-purity") {
 			dumpPurity = true;
+		} else if (arg == "--dump-dependencies") {
+			dumpDependencies = true;
 		} else if (arg == "--emit-llvm") {
 			context.options.emitLLVM = true;
 		} else if (arg == "--emit-object") {
@@ -409,6 +430,13 @@ int main(int argumentCount, char *argumentValues[]) {
 				  << std::endl;
 		return 1;
 	}
+	if (dumpDependencies &&
+		(inputFile.empty() || explicitOutputModes != 0 || context.options.noMain || emitCompletions || dumpPurity ||
+		 explicitShaderStage || !context.options.outputPath.empty() || !incrementalDirectory.empty() || incrementalStatistics ||
+		 runLSP || runDAP || useStdio || enableLspTrace || commandSourceStart)) {
+		std::cerr << "--dump-dependencies requires a .dl file and cannot be combined with output or server modes" << std::endl;
+		return 1;
+	}
 	if (context.options.noMain && !context.options.emitLLVM && !context.options.emitObject) {
 		std::cerr << "--no-main requires --emit-llvm or --emit-object" << std::endl;
 		return 1;
@@ -497,6 +525,13 @@ int main(int argumentCount, char *argumentValues[]) {
 			return succeeded && !hasErrors(context) ? 0 : 1;
 		}
 		context.fileSystem = std::make_unique<lsp::LocalFileSystem>();
+		if (dumpDependencies) {
+			bool loaded = loadSourceFiles(inputFile, context, SourceLoadPurpose::Dependencies);
+			context.printDiagnostics();
+			bool complete = loaded && !hasErrors(context);
+			printDependencies(context, complete);
+			return complete ? 0 : 1;
+		}
 		bool compileSucceeded = compile(inputFile, context);
 		if (emitCompletions) {
 			std::cout << lsp::renderCompletionDebugReport(
