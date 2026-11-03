@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import {
   matchingProjectVersion,
   nextCalendarVersion,
@@ -19,6 +20,13 @@ assert.equal(nextCalendarVersion("2026.45.0", new Date("2026-11-02T12:00:00Z")),
 assert.equal(nextCalendarVersion("2026.52.2", new Date("2027-01-01T12:00:00Z")), "2026.53.0");
 assert.equal(nextCalendarVersion("2026.53.3", new Date("2027-01-04T12:00:00Z")), "2027.1.0");
 assert.throws(() => nextCalendarVersion("2026.46.0", new Date("2026-11-02T12:00:00Z")), /future/i);
+const moduleUrl = new URL("../../scripts/update-version.mjs", import.meta.url).href;
+const imported = spawnSync(process.execPath, ["--input-type=module", "-"], {
+  input: `import { parseCalendarVersion } from ${JSON.stringify(moduleUrl)}; console.log(parseCalendarVersion("2026.45.1").week);`,
+  encoding: "utf8",
+});
+assert.equal(imported.status, 0, imported.stderr);
+assert.equal(imported.stdout.trim(), "45");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "dynlex-calendar-version-"));
 try {
@@ -55,6 +63,13 @@ try {
   }
   assert.match(fs.readFileSync(path.join(root, "tools/wgsl-translator/Cargo.lock"), "utf8"),
     /name = "naga"\r\nversion = "30\.0\.1"/);
+  fs.mkdirSync(path.join(root, "scripts"));
+  fs.copyFileSync(new URL("../../scripts/update-version.mjs", import.meta.url), path.join(root, "scripts/update-version.mjs"));
+  const alias = path.join(root, "alias");
+  fs.symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
+  const command = spawnSync(process.execPath, [path.join(alias, "scripts/update-version.mjs"), "--check"], { encoding: "utf8" });
+  assert.equal(command.status, 0, command.stderr);
+  assert.equal(command.stdout.trim(), "2026.45.1");
   fs.writeFileSync(path.join(root, "vscode-extension/package.json"), JSON.stringify({ version: "2026.45.2" }));
   assert.throws(() => matchingProjectVersion(root), /do not match/i);
 } finally {

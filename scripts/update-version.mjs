@@ -139,7 +139,8 @@ export function updateProjectVersion(projectDirectory, version) {
 }
 
 const invokedAsScript = process.argv[1]
-  && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+  && fs.existsSync(process.argv[1])
+  && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
 if (invokedAsScript) {
   const arguments_ = process.argv.slice(2);
   if (arguments_.length !== 1 && !(arguments_.length === 2 && arguments_[0] === "--validate")) {
