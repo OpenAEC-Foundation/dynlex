@@ -31,7 +31,7 @@ class ReleaseScriptTests(unittest.TestCase):
             scripts.mkdir()
             for name in ("release.sh", "update-version.mjs"):
                 shutil.copyfile(PROJECT / "scripts" / name, scripts / name)
-            (scripts / "test.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            (scripts / "test.sh").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8", newline="\n")
             (scripts / "test.sh").chmod(0o755)
             (checkout / "metadata").mkdir()
             (checkout / "metadata/VERSION").write_text("2026.45.0\n", encoding="utf-8")
@@ -73,7 +73,7 @@ case "$1 $2" in
     ;;
   *) echo "Unexpected GitHub command" >&2; exit 1 ;;
 esac
-''', encoding="utf-8")
+''', encoding="utf-8", newline="\n")
             gh.chmod(0o755)
             log = root / "github.log"
             environment = {
