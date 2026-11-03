@@ -435,7 +435,10 @@ Unary arithmetic intrinsics require numeric scalar or vector values. Classes, po
 Binary infix patterns may declare `associativity: left` or `associativity: right`.
 This is a syntax-family rule shared by typed overloads and choice spellings;
 contradictory declarations are errors. It determines grouping, not algebraic
-equivalence or reassociation by an optimizer. Explicit operand parentheses take
+equivalence or reassociation by an optimizer. The rule applies to directly
+connected parent and operand operators: an intervening function starts another
+chain. Only binary infix uses of a family participate in its chains; prefix
+choice spellings remain capture boundaries. Explicit operand parentheses take
 precedence. The standard `+`, `*`, `and` and `or` families group to the left.
 Unspecified families retain ambiguity checking. The grouping complexity limit
 counts operators with unconstrained relative order, so declared chains can be

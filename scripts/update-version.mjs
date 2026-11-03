@@ -44,22 +44,23 @@ export function nextCalendarVersion(currentVersion, date = new Date()) {
 
 function rustPackage(contents, header) {
   const sections = contents.split(/(?=^\[)/m);
-  const indices = sections.flatMap((section, index) => (
-    section.startsWith(`${header}\n`)
-      && section.split("\n").includes(`name = "${translatorPackageName}"`) ? [index] : []
-  ));
+  const indices = sections.flatMap((section, index) => {
+    const lines = section.split(/\r?\n/);
+    return lines[0] === header && lines.includes(`name = "${translatorPackageName}"`) ? [index] : [];
+  });
   if (indices.length !== 1) {
     throw new Error(`expected one ${translatorPackageName} package in ${header} metadata`);
   }
   const index = indices[0];
-  const match = /^version = "([^"]+)"$/m.exec(sections[index]);
+  const match = /^version = "([^"]+)"\r?$/m.exec(sections[index]);
   if (!match) {
     throw new Error(`${translatorPackageName} has no package version`);
   }
   return {
     version: match[1],
     withVersion(version) {
-      sections[index] = sections[index].replace(/^version = "[^"]+"$/m, `version = "${version}"`);
+      sections[index] = sections[index].replace(/^version = "[^"]+"(\r?)$/m,
+        (_line, carriageReturn) => `version = "${version}"${carriageReturn}`);
       return sections.join("");
     },
   };

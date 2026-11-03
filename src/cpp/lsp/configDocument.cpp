@@ -413,6 +413,41 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 			}
 			continue;
 		}
+		if (node.entry.key == "associativity") {
+			if (!node.entry.value.empty()) {
+				addDiagnostic(
+					diagnostics, node.entry.line, node.entry.valueStart, node.entry.valueEnd,
+					"config entry 'associativity' cannot define a value"
+				);
+				return false;
+			}
+			for (const auto &grandChild : node.children) {
+				std::string *target = nullptr;
+				if (grandChild->entry.key == "left")
+					target = &syntax.leftAssociativityName;
+				else if (grandChild->entry.key == "right")
+					target = &syntax.rightAssociativityName;
+				else {
+					addDiagnostic(
+						diagnostics, grandChild->entry.line, grandChild->entry.keyStart, grandChild->entry.keyEnd,
+						"unknown associativity config key '" + grandChild->entry.key + "'"
+					);
+					return false;
+				}
+				if (!validateNameNode(*grandChild, diagnostics))
+					return false;
+				const ConfigNode *nameChild = findChild(*grandChild, "name");
+				*target = !grandChild->entry.value.empty() ? grandChild->entry.value : nameChild->entry.value;
+			}
+			if (syntax.leftAssociativityName == syntax.rightAssociativityName) {
+				addDiagnostic(
+					diagnostics, node.entry.line, node.entry.keyStart, node.entry.keyEnd,
+					"associativity directions must be distinct"
+				);
+				return false;
+			}
+			continue;
+		}
 		if (node.entry.key == "shorthand definitions") {
 			shorthandNode = &node;
 			if (!node.entry.value.empty()) {
@@ -460,6 +495,10 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 				"action shorthand returns value",
 				"value shorthand returns nothing",
 				"replacement shorthand returns nothing",
+				"invalid associativity",
+				"associativity requires binary infix",
+				"conflicting associativity",
+				"conflicting associativity related",
 			};
 			for (const auto &grandChild : node.children) {
 				if (!allowed.contains(grandChild->entry.key)) {
@@ -480,8 +519,8 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 			continue;
 		}
 		if (node.entry.key == "child sections") {
-			static const std::unordered_set<std::string> allowed = {"execute", "replacement", "patterns",
-																	"globals", "before",	  "after"};
+			static const std::unordered_set<std::string> allowed = {"execute", "replacement", "patterns",	  "globals",
+																	"before",  "after",		  "associativity"};
 			for (const auto &grandChild : node.children) {
 				if (!allowed.contains(grandChild->entry.key)) {
 					addDiagnostic(
@@ -507,6 +546,8 @@ bool validateConfigTree(const std::vector<std::unique_ptr<ConfigNode>> &roots, s
 					syntax.beforeSectionName = std::move(configuredName);
 				else if (grandChild->entry.key == "after")
 					syntax.afterSectionName = std::move(configuredName);
+				else if (grandChild->entry.key == "associativity")
+					syntax.associativitySectionName = std::move(configuredName);
 			}
 			continue;
 		}
@@ -633,6 +674,7 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			{"flex: \"flex\"", "flex keyword"},
 			{"local: \"local\"", "local keyword"},
 			{"shorthand definitions:", "function declaration shorthands"},
+			{"associativity:", "operator associativity directions"},
 			{"child sections:", "child section keywords"},
 			{"messages:", "message overrides"},
 		};
@@ -659,6 +701,13 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			if (startsLike(replacement))
 				addItem(replacement, detail, indent + replacement);
 		}
+	} else if (parent == "associativity") {
+		for (const auto &[replacement, detail] : std::vector<std::pair<std::string, std::string>>{
+				 {"left: \"left\"", "left associativity spelling"}, {"right: \"right\"", "right associativity spelling"}
+			 }) {
+			if (startsLike(replacement))
+				addItem(replacement, detail, indent + replacement);
+		}
 	} else if (parent == "child sections") {
 		const std::vector<std::pair<std::string, std::string>> suggestions = {
 			{"execute: \"execute\"", "execute section keyword"},
@@ -667,6 +716,7 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			{"globals: \"globals\"", "globals section keyword"},
 			{"before: \"before\"", "before section keyword"},
 			{"after: \"after\"", "after section keyword"},
+			{"associativity: \"associativity\"", "associativity section keyword"},
 		};
 		for (const auto &[replacement, detail] : suggestions) {
 			if (startsLike(replacement))
@@ -696,6 +746,14 @@ CompletionList collectConfigCompletions(const TextDocument &document, int line, 
 			 "value return contract message"},
 			{"replacement shorthand returns nothing: \"Replacement '{function}' must return a value\"",
 			 "replacement return contract message"},
+			{"invalid associativity: \"An associativity declaration requires exactly one direction\"",
+			 "invalid associativity message"},
+			{"associativity requires binary infix: \"Associativity requires a binary infix pattern\"",
+			 "associativity pattern shape message"},
+			{"conflicting associativity: \"Conflicting associativity declarations in one syntax family\"",
+			 "associativity conflict message"},
+			{"conflicting associativity related: \"The other associativity is declared by this pattern\"",
+			 "associativity conflict origin message"},
 			{"class size unknown member type: \"Cannot determine the size of {type} because the type of member '{member}' is "
 			 "unknown; it is 'a value'\"",
 			 "unknown class member size message"},

@@ -207,17 +207,6 @@ canClaimGroupingSpan(int start, int end, int rootIndex, Expression *rootExpressi
 	return true;
 }
 
-static bool groupingOperatorPrecedes(const GroupingGenerationState &state, size_t leftIndex, size_t rightIndex) {
-	Expression *left = state.flatNodes[leftIndex];
-	Expression *right = state.flatNodes[rightIndex];
-	if (expressionMustEvaluateBefore(left, right))
-		return true;
-	const PatternFamily *family = expressionPrecedenceFamily(left);
-	return family && family == expressionPrecedenceFamily(right) &&
-		   ((family->associativity == PatternAssociativity::Left && leftIndex < rightIndex) ||
-			(family->associativity == PatternAssociativity::Right && leftIndex > rightIndex));
-}
-
 static bool
 isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpression, GroupingGenerationState &state) {
 	if (!canClaimGroupingSpan(start, end, rootIndex, rootExpression, state))
@@ -228,13 +217,41 @@ isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpres
 		Expression *otherExpression = state.flatNodes[otherIndex];
 		if (!canClaimGroupingSpan(start, end, otherIndex, otherExpression, state))
 			continue;
-		if (groupingOperatorPrecedes(state, rootIndex, otherIndex))
+		if (expressionMustEvaluateBefore(rootExpression, otherExpression))
 			return false;
 	}
 	return true;
 }
 
-static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start, int end, GroupingGenerationState &state);
+struct GroupingParentOperand {
+	Expression *parent;
+	bool left;
+};
+
+static bool isBinaryInfixGroupingOperator(Expression *expression) {
+	return startsWithArgument(expression) && endsWithArgument(expression) && groupingArgumentCount(expression) == 2;
+}
+
+static bool permitsGroupingOperand(const std::optional<GroupingParentOperand> &parentOperand, Expression *operand) {
+	if (!parentOperand || !isBinaryInfixGroupingOperator(parentOperand->parent) || !isBinaryInfixGroupingOperator(operand))
+		return true;
+	const PatternFamily *family = expressionPrecedenceFamily(parentOperand->parent);
+	if (!family || family != expressionPrecedenceFamily(operand))
+		return true;
+	switch (family->associativity) {
+	case PatternAssociativity::Left:
+		return parentOperand->left;
+	case PatternAssociativity::Right:
+		return !parentOperand->left;
+	case PatternAssociativity::Unspecified:
+		return true;
+	}
+	crashCompilerBug("unknown pattern associativity");
+}
+
+static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
+	int start, int end, GroupingGenerationState &state, std::optional<GroupingParentOperand> parentOperand = std::nullopt
+);
 
 static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 	Expression *rootExpression, int rootIndex, int end, bool hasRightEdge, int rightArgumentIndex, Expression *savedRight,
@@ -248,7 +265,8 @@ static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 		co_return;
 	}
 
-	auto rightGroupings = generateFlatExpressionGroupings(rootIndex + 1, end, state);
+	auto rightGroupings =
+		generateFlatExpressionGroupings(rootIndex + 1, end, state, GroupingParentOperand{rootExpression, false});
 	while (rightGroupings.next()) {
 		Expression *rightResult = rightGroupings.current();
 		if (expressionContains(rightResult, rootExpression))
@@ -262,7 +280,9 @@ static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 	rootExpression->arguments[rightArgumentIndex] = savedRight;
 }
 
-static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start, int end, GroupingGenerationState &state) {
+static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
+	int start, int end, GroupingGenerationState &state, std::optional<GroupingParentOperand> parentOperand
+) {
 	if (start > end)
 		co_return;
 	if (start == end) {
@@ -271,6 +291,8 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 			auto opaqueChoices = generateOpaqueGroupingChoices(singleExpression, state);
 			while (opaqueChoices.next()) {
 				auto completedChoices = generateCompletedGroupingChoices(singleExpression, state);
+				// The entire authored operand is opaque to this parent.
+				// Its internal chain was grouped at its own boundary.
 				while (completedChoices.next())
 					co_yield singleExpression;
 			}
@@ -278,13 +300,15 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 		}
 		auto completedChoices = generateCompletedGroupingChoices(singleExpression, state);
 		while (completedChoices.next())
-			co_yield singleExpression;
+			if (permitsGroupingOperand(parentOperand, singleExpression))
+				co_yield singleExpression;
 		co_return;
 	}
 
 	for (int rootIndex = end; rootIndex >= start; rootIndex--) {
 		Expression *rootExpression = state.flatNodes[rootIndex];
-		if (!isEligibleGroupingRoot(start, end, rootIndex, rootExpression, state))
+		if (!isEligibleGroupingRoot(start, end, rootIndex, rootExpression, state) ||
+			!permitsGroupingOperand(parentOperand, rootExpression))
 			continue;
 
 		bool hasLeftEdge = startsWithArgument(rootExpression);
@@ -297,7 +321,8 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 		bool inserted = state.fixedGroupingRoots.insert(rootExpression).second;
 
 		if (hasLeftEdge) {
-			auto leftGroupings = generateFlatExpressionGroupings(start, rootIndex - 1, state);
+			auto leftGroupings =
+				generateFlatExpressionGroupings(start, rootIndex - 1, state, GroupingParentOperand{rootExpression, true});
 			while (leftGroupings.next()) {
 				Expression *leftResult = leftGroupings.current();
 				if (expressionContains(leftResult, rootExpression))
@@ -382,10 +407,19 @@ static size_t ambiguousGroupingOperatorCount(const GroupingGenerationState &stat
 			Expression *right = state.flatNodes[j];
 			if (!expressionHasGroupingShape(right) || state.opaqueNodes.contains(right))
 				continue;
-			if (!groupingOperatorPrecedes(state, i, j) && !groupingOperatorPrecedes(state, j, i)) {
+			const PatternFamily *family = expressionPrecedenceFamily(left);
+			if (expressionMustEvaluateBefore(left, right) || expressionMustEvaluateBefore(right, left) ||
+				(family && family == expressionPrecedenceFamily(right) && isBinaryInfixGroupingOperator(left) &&
+				 isBinaryInfixGroupingOperator(right) && family->associativity != PatternAssociativity::Unspecified))
+				continue;
+			bool leftInfix = startsWithArgument(left) && endsWithArgument(left);
+			bool rightInfix = startsWithArgument(right) && endsWithArgument(right);
+			// A prefix/suffix boundary is one unresolved capture, regardless
+			// of how many associated infix operators it can enclose.
+			if (leftInfix == rightInfix || !leftInfix)
 				ambiguous.insert(left);
+			if (leftInfix == rightInfix || !rightInfix)
 				ambiguous.insert(right);
-			}
 		}
 	}
 	return ambiguous.size();

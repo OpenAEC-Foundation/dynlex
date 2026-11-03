@@ -42,7 +42,20 @@ try {
   assert.match(manifest, /version = "2026\.45\.0"/);
   assert.match(manifest, /naga = "30\.0\.1"/);
   assert.match(lock, /name = "naga"\nversion = "30\.0\.1"/);
-  fs.writeFileSync(path.join(root, "vscode-extension/package.json"), JSON.stringify({ version: "2026.45.1" }));
+  for (const filename of ["Cargo.toml", "Cargo.lock"]) {
+    const file = path.join(root, "tools/wgsl-translator", filename);
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/\n/g, "\r\n"));
+  }
+  updateProjectVersion(root, "2026.45.1");
+  assert.equal(matchingProjectVersion(root), "2026.45.1");
+  for (const filename of ["Cargo.toml", "Cargo.lock"]) {
+    const contents = fs.readFileSync(path.join(root, "tools/wgsl-translator", filename), "utf8");
+    assert.match(contents, /version = "2026\.45\.1"\r\n/);
+    assert.doesNotMatch(contents, /(?<!\r)\n/);
+  }
+  assert.match(fs.readFileSync(path.join(root, "tools/wgsl-translator/Cargo.lock"), "utf8"),
+    /name = "naga"\r\nversion = "30\.0\.1"/);
+  fs.writeFileSync(path.join(root, "vscode-extension/package.json"), JSON.stringify({ version: "2026.45.2" }));
   assert.throws(() => matchingProjectVersion(root), /do not match/i);
 } finally {
   fs.rmSync(root, { recursive: true });
