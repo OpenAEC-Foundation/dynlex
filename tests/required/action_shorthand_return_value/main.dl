@@ -1,6 +1,5 @@
 import lib/std.dl
 
-to expose value:
-    return value
+to expose value: return value
 
 expose 1

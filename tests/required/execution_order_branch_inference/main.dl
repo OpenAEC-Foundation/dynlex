@@ -1,15 +1,13 @@
 import lib/std.dl
 
-function the branch value for condition:
-    execute:
-        set result to 1
-        if condition:
-            set result to 2
-        else if result = 1:
-            set result to 3
-        else:
-            set result to 4
-        return result
+to get the branch value for condition:
+    set result to 1
+    if condition:
+        set result to 2
+    else if result = 1:
+        set result to 3
+    else:
+        set result to 4
+    return result
 
-print the branch value for true as a line
-print the branch value for false as a line
+print lines (the branch value for true) and (the branch value for false)

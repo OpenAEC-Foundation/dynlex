@@ -25,31 +25,27 @@ class:
         valid as a boolean
         value as a 64 bit floating-point number
 
-function a cad planar curve3 of {cad curve2:curve} on {cad plane:plane}:
-    execute:
-        return @intrinsic("construct", a cad planar curve3, plane, curve)
+to get a cad planar curve3 of {cad curve2:curve} on {cad plane:plane}:
+    return @intrinsic("construct", a cad planar curve3, plane, curve)
 
-function a flat cad planar curve3 of {cad curve2:curve}:
-    execute:
-        return a cad planar curve3 of curve on (the cad xy plane)
+to get a flat cad planar curve3 of {cad curve2:curve}:
+    return a cad planar curve3 of curve on (the cad xy plane)
 
 function free cad planar curve {cad planar curve3:shape}:
     replacement:
         set shape to a new (the type of shape)
 
-function the cad clone of {cad planar curve3:shape}:
-    execute:
-        return a cad planar curve3 of (the cad clone of the curve of shape) on (the plane of shape)
+to get the cad clone of {cad planar curve3:shape}:
+    return a cad planar curve3 of (the cad clone of the curve of shape) on (the plane of shape)
 
 local function cad planar vector {cad vector3:left} equals {cad vector3:right}:
     execute:
         return ((the x of left) = (the x of right)) and (((the y of left) = (the y of right)) and ((the z of left) = (the z of right)))
 
-function {cad planar curve3:left} = {cad planar curve3:right}:
-    execute:
-        set a to the plane of left
-        set b to the plane of right
-        return ((cad planar vector (the origin of a) equals (the origin of b)) and ((cad planar vector (the xAxis of a) equals (the xAxis of b)) and (cad planar vector (the yAxis of a) equals (the yAxis of b)))) and ((the curve of left) = (the curve of right))
+to get {cad planar curve3:left} = {cad planar curve3:right}:
+    set a to the plane of left
+    set b to the plane of right
+    return ((cad planar vector (the origin of a) equals (the origin of b)) and ((cad planar vector (the xAxis of a) equals (the xAxis of b)) and (cad planar vector (the yAxis of a) equals (the yAxis of b)))) and ((the curve of left) = (the curve of right))
 
 local function the cad lowered point {cad vector2:uv} on {cad plane:plane}:
     execute:
@@ -66,16 +62,14 @@ local function the cad lifted point {cad vector3:point} on {cad plane:plane}:
             return @intrinsic("construct", a cad plane coordinates result, true, uv)
         return the cad projection of point onto plane
 
-function the cad point on {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
-    execute:
-        return the cad lowered point (the cad point on (the curve of shape) at parameter) on (the plane of shape)
+to get the cad point on {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
+    return the cad lowered point (the cad point on (the curve of shape) at parameter) on (the plane of shape)
 
-function the cad [parameter] on {cad planar curve3:shape} nearest {cad vector3:point}:
-    execute:
-        set uv to the cad lifted point point on (the plane of shape)
-        if (the valid of uv) = false:
-            return @intrinsic("construct", a cad planar parameter result, false, 0.0)
-        return @intrinsic("construct", a cad planar parameter result, true, the cad parameter on (the curve of shape) nearest (the value of uv))
+to get the cad [parameter] on {cad planar curve3:shape} nearest {cad vector3:point}:
+    set uv to the cad lifted point point on (the plane of shape)
+    if (the valid of uv) = false:
+        return @intrinsic("construct", a cad planar parameter result, false, 0.0)
+    return @intrinsic("construct", a cad planar parameter result, true, the cad parameter on (the curve of shape) nearest (the value of uv))
 
 local function the cad lowered samples of {a pointer to a list:points} on {cad plane:plane}:
     execute:
@@ -84,62 +78,50 @@ local function the cad lowered samples of {a pointer to a list:points} on {cad p
             append (the cad lowered point (the item at index in points) on plane) to result
         return result
 
-function the cad samples of {cad planar curve3:shape} with density {a 64 bit floating-point number:density}:
-    execute:
-        set flat to the cad samples of (the curve of shape) with density density
-        set result to the cad lowered samples of flat on (the plane of shape)
-        free flat
-        return result
+to get the cad samples of {cad planar curve3:shape} with density {a 64 bit floating-point number:density}:
+    set flat to the cad samples of (the curve of shape) with density density
+    set result to the cad lowered samples of flat on (the plane of shape)
+    free flat
+    return result
 
-function the cad angular samples of {cad planar curve3:shape} within {a 64 bit floating-point number:angle}:
-    execute:
-        set flat to the cad angular samples of (the curve of shape) within angle
-        set result to the cad lowered samples of flat on (the plane of shape)
-        free flat
-        return result
+to get the cad angular samples of {cad planar curve3:shape} within {a 64 bit floating-point number:angle}:
+    set flat to the cad angular samples of (the curve of shape) within angle
+    set result to the cad lowered samples of flat on (the plane of shape)
+    free flat
+    return result
 
-function the cad samples of {cad planar curve3:shape} within {a 64 bit floating-point number:tolerance}:
-    execute:
-        set flat to the cad samples of (the curve of shape) within deviation tolerance
-        set result to the cad lowered samples of flat on (the plane of shape)
-        free flat
-        return result
+to get the cad samples of {cad planar curve3:shape} within {a 64 bit floating-point number:tolerance}:
+    set flat to the cad samples of (the curve of shape) within deviation tolerance
+    set result to the cad lowered samples of flat on (the plane of shape)
+    free flat
+    return result
 
-function the cad length of {cad planar curve3:shape}:
-    execute:
-        return the cad length of (the curve of shape)
+to get the cad length of {cad planar curve3:shape}:
+    return the cad length of (the curve of shape)
 
-function the cad point on {cad planar curve3:shape} at distance {a 64 bit floating-point number:distance}:
-    execute:
-        return the cad lowered point (the cad point on (the curve of shape) at distance distance) on (the plane of shape)
+to get the cad point on {cad planar curve3:shape} at distance {a 64 bit floating-point number:distance}:
+    return the cad lowered point (the cad point on (the curve of shape) at distance distance) on (the plane of shape)
 
-function the cad [parameter] on {cad planar curve3:shape} at distance {a 64 bit floating-point number:distance}:
-    execute:
-        return the cad parameter on (the curve of shape) at distance distance
+to get the cad [parameter] on {cad planar curve3:shape} at distance {a 64 bit floating-point number:distance}:
+    return the cad parameter on (the curve of shape) at distance distance
 
-function the cad [tangent] of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
-    execute:
-        return the cad vector at (the cad tangent of (the curve of shape) at parameter) on (the plane of shape)
+to get the cad [tangent] of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
+    return the cad vector at (the cad tangent of (the curve of shape) at parameter) on (the plane of shape)
 
-function the cad normal of {cad planar curve3:shape}:
-    execute:
-        return the cad normal of (the plane of shape)
+to get the cad normal of {cad planar curve3:shape}:
+    return the cad normal of (the plane of shape)
 
-function the cad extent of {cad planar curve3:shape}:
-    execute:
-        return the cad extent of (the curve of shape)
+to get the cad extent of {cad planar curve3:shape}:
+    return the cad extent of (the curve of shape)
 
-function {cad planar curve3:shape} is cad closed:
-    execute:
-        return (the curve of shape) is cad closed
+to get {cad planar curve3:shape} is cad closed:
+    return (the curve of shape) is cad closed
 
-function the cad curve point of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
-    execute:
-        return the cad point on shape at parameter
+to get the cad curve point of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
+    return the cad point on shape at parameter
 
-function the cad curve tangent of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
-    execute:
-        return the cad tangent of shape at parameter
+to get the cad curve tangent of {cad planar curve3:shape} at {a 64 bit floating-point number:parameter}:
+    return the cad tangent of shape at parameter
 
 # Rust f64::total_cmp keys, preserving NaN ordering and last-wins max_by ties.
 local function the cad planar total order key of {a 64 bit floating-point number:value}:
@@ -202,42 +184,37 @@ local function the cad plane inferred from support {a pointer to a list:points} 
                 return the absent cad common plane
         return the cad orthonormal plane with origin origin, x axis x and normal normal
 
-function the cad common [plane] of {a pointer to a list:curves} within {a 64 bit floating-point number:tolerance}:
-    execute:
-        if ((the absolute value of tolerance) <= 1.7976931348623157e308) = false:
-            return the absent cad common plane
-        if tolerance <= 0.0:
-            return the absent cad common plane
-        set points to an empty list of a cad vector3
-        loop index from 0 to the length of curves:
-            set {cad planar curve3:planar} to the item at index in curves
-            set shape to the curve of planar
-            set plane to the plane of planar
-            set kind to the kind of shape
-            if kind < 0 or kind > 7:
-                @intrinsic("call", "libc", "abort", nothing)
-            if (kind = 0 or kind = 6) or kind = 7:
-                append (the cad point on planar at 0.0) to points
-                append (the cad point on planar at 1.0) to points
+to get the cad common [plane] of {a pointer to a list:curves} within {a 64 bit floating-point number:tolerance}:
+    if ((the absolute value of tolerance) <= 1.7976931348623157e308) = false:
+        return the absent cad common plane
+    if tolerance <= 0.0:
+        return the absent cad common plane
+    set points to an empty list of a cad vector3
+    for each {cad planar curve3:planar} in curves:
+        set shape to the curve of planar
+        set plane to the plane of planar
+        set kind to the kind of shape
+        if kind < 0 or kind > 7:
+            @intrinsic("call", "libc", "abort", nothing)
+        if kind is one of 0, 6 and 7:
+            append (the cad point on planar at 0.0) and (the cad point on planar at 1.0) to points
+        else:
+            set straightPolyline to kind = 4
+            if straightPolyline:
+                set vertices to the vertices of the polyline of shape
+                loop vertexIndex from 0 to the length of vertices:
+                    if (the bulge of (the item at vertexIndex in vertices)) != 0.0:
+                        set straightPolyline to false
+            if straightPolyline:
+                set vertices to the vertices of the polyline of shape
+                loop vertexIndex from 0 to the length of vertices:
+                    append (the cad point at (the position of (the item at vertexIndex in vertices)) on plane) to points
+            else if kind = 5:
+                set controls to the cad control points of the nurbs of shape
+                loop controlIndex from 0 to the length of controls:
+                    append (the cad point at (the item at controlIndex in controls) on plane) to points
             else:
-                set straightPolyline to kind = 4
-                if straightPolyline:
-                    set vertices to the vertices of the polyline of shape
-                    loop vertexIndex from 0 to the length of vertices:
-                        if (the bulge of (the item at vertexIndex in vertices)) != 0.0:
-                            set straightPolyline to false
-                if straightPolyline:
-                    set vertices to the vertices of the polyline of shape
-                    loop vertexIndex from 0 to the length of vertices:
-                        append (the cad point at (the position of (the item at vertexIndex in vertices)) on plane) to points
-                else if kind = 5:
-                    set controls to the cad control points of the nurbs of shape
-                    loop controlIndex from 0 to the length of controls:
-                        append (the cad point at (the item at controlIndex in controls) on plane) to points
-                else:
-                    append (the cad point at (the cad zero vector2) on plane) to points
-                    append (the cad point at (a cad vector2 with x 1.0 and y 0.0) on plane) to points
-                    append (the cad point at (a cad vector2 with x 0.0 and y 1.0) on plane) to points
-        set result to the cad plane inferred from support points within tolerance
-        free points
-        return result
+                append (the cad point at (the cad zero vector2) on plane), (the cad point at (a cad vector2 with x 1.0 and y 0.0) on plane) and (the cad point at (a cad vector2 with x 0.0 and y 1.0) on plane) to points
+    set result to the cad plane inferred from support points within tolerance
+    free points
+    return result

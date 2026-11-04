@@ -10,13 +10,10 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function left / right:
-    execute:
-        return @intrinsic("divide", left, right)
+to get left / right:
+    return @intrinsic("divide", left, right)
 
 function the ceiling of value:
     after: default
@@ -28,9 +25,7 @@ function the maximum of left and right:
     execute:
         return @intrinsic("max", left, right)
 
-function show value:
-    execute:
-        ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.0f\n", value)
+to show value: ignore @intrinsic("variadic call", "libc", "printf", integer, 1, "%.0f\n", value)
 
 set numerator to 1.5
 set first to 3.0

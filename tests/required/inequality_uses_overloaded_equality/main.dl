@@ -6,13 +6,6 @@ set alternative to the string form of "beta"
 set literal to "alpha"
 set distinct to "beta"
 
-print whether (original != duplicate) as a line
-print whether (original is not alternative) as a line
-print whether (original != literal) as a line
-print whether (original is not distinct) as a line
-print whether (literal != original) as a line
-print whether (distinct is not original) as a line
-print whether (literal != "alpha") as a line
-print whether (literal is not "beta") as a line
-print whether (7 != 7) as a line
-print whether (7 is not 8) as a line
+print lines (original != duplicate), (original is not alternative), (original != literal) and (original is not distinct)
+print lines (literal != original), (distinct is not original), (literal != "alpha") and (literal is not "beta")
+print lines (7 != 7) and (7 is not 8)

@@ -21,11 +21,11 @@ settings example:
         10
         20
 
-print example's title as a line
-print the length of example's values as a line
-print the item at 1 in example's values as a line
+print line example's title
+print line the length of example's values
+print line the item at 1 in example's values
 
 settings empty:
     title: "Empty"
 
-print the length of empty's values as a line
+print line the length of empty's values

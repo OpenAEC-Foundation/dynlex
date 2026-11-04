@@ -250,6 +250,9 @@ createSourceLine(ParseContext &context, lsp::SourceFile *sourceFile, int sourceF
 		{{0, static_cast<int>(text.size()), sourceFile, sourceFileLineIndex, 0}}
 	);
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, sourceFile);
+	line = expandFormattedStringLine(context, *line);
+	if (!line)
+		return nullptr;
 	updateLineTrimming(line, syntax);
 	return line;
 }
@@ -587,10 +590,7 @@ void destroyTypeConstraintExpression(Expression *root) {
 
 bool compile(const std::string &path, ParseContext &context) {
 	context.compilationStage = ParseContext::CompilationStage::NotStarted;
-	if (!initializeSyntaxConfigs(context, path))
-		return false;
-
-	if (!importSourceFile(path, context))
+	if (!loadSourceFiles(path, context))
 		return false;
 	applyBracketContinuations(context);
 	expandOneLineSections(context);
@@ -622,7 +622,9 @@ bool compile(const std::string &path, ParseContext &context) {
 	return true;
 }
 
-bool importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot) {
+// resolutionRoot keeps nested imports in the tree selected by their importer.
+static bool
+importSourceFile(const std::string &path, ParseContext &context, const std::string &resolutionRoot, SourceLoadPurpose purpose) {
 	lsp::SourceFile *sourceFile = context.fileSystem->getFile(path);
 	if (!sourceFile) {
 		if (context.importedFiles.empty()) {
@@ -672,7 +674,11 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 
 		std::string_view lineString = fileView.substr(lineStart, lineEnd - lineStart);
 		CodeLine *line = createSourceLine(context, sourceFile, sourceFileLineIndex, lineString);
-		if (!validateSourceCharacters(context, line, syntax))
+		if (!line)
+			return false;
+		// Dependency inspection reads the complete import graph even for programs
+		// intentionally containing lexical errors, such as diagnostic fixtures.
+		if (purpose == SourceLoadPurpose::Compilation && !validateSourceCharacters(context, line, syntax))
 			return false;
 
 		// check if the line is an import statement
@@ -686,7 +692,7 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 			ResolvedImport resolvedImport =
 				resolveImportPath(std::string(*importPathView), importingDir, activeResolutionRoot, context.fileSystem.get());
 			const std::string &importPath = resolvedImport.path;
-			if (!importSourceFile(importPath, context, resolvedImport.root)) {
+			if (!importSourceFile(importPath, context, resolvedImport.root, purpose)) {
 				context.addDiagnostic(Diagnostic(
 					context, Diagnostic::Level::Error, "failed to import source file",
 					Range(line, static_cast<int>(syntax.importKeyword.length()), line->rightTrimmedText.length()), "path",
@@ -702,6 +708,10 @@ bool importSourceFile(const std::string &path, ParseContext &context, const std:
 		sourceFileLineIndex++;
 	}
 	return true;
+}
+
+bool loadSourceFiles(const std::string &path, ParseContext &context, SourceLoadPurpose purpose) {
+	return initializeSyntaxConfigs(context, path) && importSourceFile(path, context, "", purpose);
 }
 
 // step 2: analyze sections

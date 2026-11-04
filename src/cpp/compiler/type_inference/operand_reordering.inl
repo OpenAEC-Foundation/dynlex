@@ -100,6 +100,9 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->selectedCallablePathIndex = std::nullopt;
 	expr->selectedInstantiation = nullptr;
 	expr->subjectSetter = nullptr;
+	expr->inferredArgumentReference.reset();
+	expr->inferredCallerBody.reset();
+	expr->staticLoopBodies.reset();
 	expr->sectionOutcome.reset();
 	expr->executionFallsThrough.reset();
 	expr->sectionBodyReachable = true;
@@ -153,6 +156,8 @@ static std::string renderResolvedExpression(Expression *expr) {
 		if (const auto *text = std::get_if<std::string>(&expr->literalValue))
 			return "\"" + *text + "\"";
 		return "<literal>";
+	case Expression::Kind::ArgumentPack:
+		return std::string(expr->range.subString);
 	case Expression::Kind::ArrayLiteral: {
 		std::string rendered = "[";
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
@@ -603,12 +608,13 @@ class GroupingInferenceTransaction {
 		  originalGrouping(captureGroupingSnapshot(expression)), savedTrial(context.trial),
 		  savedCurrentInstantiation(context.currentInstantiation),
 		  savedCurrentInstantiatedSectionBody(context.currentInstantiatedSectionBody),
-		  savedSectionFlexBodyFrames(context.sectionFlexBodyFrames),
+		  savedSectionFlexBodyFrames(context.sectionFlexBodyFrames), savedStaticLoopFrames(context.staticLoopFrames),
 		  savedActiveFlexDefinitionStack(context.activeFlexDefinitionStack),
 		  savedActiveFlexExpansionKeys(context.activeFlexExpansionKeys), savedActiveFlexCallStack(context.activeFlexCallStack),
 		  savedFlexCallSiteSectionStack(context.flexCallSiteSectionStack), savedKnownConstants(context.currentVariableValues),
-		  savedAddressState(context.currentAddressState), savedSubject(context.currentSubject),
-		  savedTypesValid(context.typesValid), savedSuppressDiagnostics(context.suppressDiagnostics),
+		  savedAddressState(context.currentAddressState), savedTypeRefinements(context.typeRefinements),
+		  savedSubject(context.currentSubject), savedTypesValid(context.typesValid),
+		  savedSuppressDiagnostics(context.suppressDiagnostics),
 		  savedSuppressReinferPassDiagnostics(context.suppressReinferPassDiagnostics),
 		  savedTypeFailureDetail(context.typeFailureDetail), savedTypeFailureRelatedInfo(context.typeFailureRelatedInfo),
 		  savedTypeFailureSnapshot(context.typeFailureSnapshot), savedTypeFailureDiagnostic(context.typeFailureDiagnostic),
@@ -706,12 +712,14 @@ class GroupingInferenceTransaction {
 	Instantiation *savedCurrentInstantiation;
 	InstantiatedSectionBody *savedCurrentInstantiatedSectionBody;
 	std::vector<InferenceContext::SectionFlexBodyInferenceFrame> savedSectionFlexBodyFrames;
+	std::vector<InferenceContext::StaticLoopFrame> savedStaticLoopFrames;
 	std::vector<Section *> savedActiveFlexDefinitionStack;
 	std::vector<std::optional<FlexExpansionKey>> savedActiveFlexExpansionKeys;
 	std::vector<Expression *> savedActiveFlexCallStack;
 	std::vector<Section *> savedFlexCallSiteSectionStack;
 	KnownConstantState savedKnownConstants;
 	AddressInferenceState savedAddressState;
+	TypeRefinementState savedTypeRefinements;
 	InferenceContext::SubjectState savedSubject;
 	bool savedTypesValid;
 	bool savedSuppressDiagnostics;
@@ -750,12 +758,14 @@ class GroupingInferenceTransaction {
 	void restoreSavedState() {
 		context.currentInstantiatedSectionBody = savedCurrentInstantiatedSectionBody;
 		context.sectionFlexBodyFrames = std::move(savedSectionFlexBodyFrames);
+		context.staticLoopFrames = std::move(savedStaticLoopFrames);
 		context.activeFlexDefinitionStack = std::move(savedActiveFlexDefinitionStack);
 		context.activeFlexExpansionKeys = std::move(savedActiveFlexExpansionKeys);
 		context.activeFlexCallStack = std::move(savedActiveFlexCallStack);
 		context.flexCallSiteSectionStack = std::move(savedFlexCallSiteSectionStack);
 		context.currentVariableValues = std::move(savedKnownConstants);
 		context.currentAddressState = std::move(savedAddressState);
+		context.typeRefinements = std::move(savedTypeRefinements);
 		context.currentSubject = savedSubject;
 		context.typesValid = savedTypesValid;
 		context.suppressDiagnostics = savedSuppressDiagnostics;

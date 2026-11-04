@@ -6,35 +6,22 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function an array:
-    replacement:
-        @intrinsic("array")
+an array means: @intrinsic("array")
 
-function [an|] array of {fixed integer:length} items:
-    replacement:
-        @intrinsic("array", length)
+[an|] array of {fixed integer:length} items means: @intrinsic("array", length)
 
-flex function [an|] array as long as value:
-    replacement:
-        @intrinsic("array", @intrinsic("type extent", value, 0))
+[an|] array as long as value means: @intrinsic("array", @intrinsic("type extent", value, 0))
 
-function the arrays {an array:left} and {an array as long as left:right} have equal length:
-    replacement:
-        1
+the arrays {an array:left} and {an array as long as left:right} have equal length means: 1
 
-function the arrays left and right have equal length:
-    execute:
-        ignore left
-        ignore right
-        return 0
+to get the arrays left and right have equal length:
+    ignore left
+    ignore right
+    return 0
 
 ignore @intrinsic(
     "variadic call",

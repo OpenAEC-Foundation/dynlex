@@ -1,8 +1,7 @@
 import lib/process.dl
 
-function the process test interpreter:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the process test interpreter:
+    return "python" if the process platform is Windows, else "python3"
 
 set discovery to a process command for the process test interpreter
 add "-c" as an argument to discovery
@@ -10,7 +9,7 @@ add "import sys; sys.stdout.write(sys.executable)" as an argument to discovery
 run discovery and set found to it
 set interpreter to found's standard output
 
-print whether found succeeded as a line
+print line found succeeded
 
 set command to a process command for interpreter
 add "-c" as an argument to command
@@ -34,12 +33,9 @@ set environment variable "DYNLEX_REMOVED" of command to "temporary"
 unset environment variable "DYNLEX_REMOVED" of command
 run command using (the string form of "standard input") and set result to it
 
-print whether result was launched as a line
-print whether result succeeded as a line
-print result's exit code as a line
-print whether (result's standard output = "literal $HOME ; * \"quoted\"|standard input|process_run|overridden|True|False|True|True|True|True\n") as a line
-print whether (result's standard error = "separate error\n") as a line
-print whether (result's error message = "") as a line
+print lines (result was launched), (result succeeded) and (result's exit code)
+print line (result's standard output = "literal $HOME ; * \"quoted\"|standard input|process_run|overridden|True|False|True|True|True|True\n")
+print lines (result's standard error = "separate error\n") and (result's error message = "")
 
 set unset to a process command for interpreter
 add "-c" as an argument to unset
@@ -47,8 +43,7 @@ add "import os,sys; sys.stdout.buffer.write(b'True\\n' if 'PATH' in os.environ e
 unset environment variable "PATH" of unset
 run unset and set cleared to it
 
-print whether cleared succeeded as a line
-print whether (cleared's standard output = "False\n") as a line
+print lines (cleared succeeded) and (cleared's standard output = "False\n")
 
 set isolated to a process command for interpreter
 add "-c" as an argument to isolated
@@ -57,5 +52,4 @@ do not inherit the environment in isolated
 set environment variable "DYNLEX_ONLY" of isolated to "present"
 run isolated and set separation to it
 
-print whether separation succeeded as a line
-print whether (separation's standard output = "present|False\n") as a line
+print lines (separation succeeded) and (separation's standard output = "present|False\n")

@@ -7,22 +7,19 @@ set missing to "tests/required/filesystem_metadata/missing.tmp"
 delete the filesystem entry at file
 delete the filesystem entry at directory
 
-create a directory at directory and print whether it succeeded as a line
-print (the length of (the error message of it)) as a line
-print whether directory is a regular file as a line
-print whether directory is readable as a line
+create a directory at directory and print line it succeeded
+print lines (the length of (the error message of it)), (directory is a regular file) and (directory is readable)
 
-write the string form of "metadata" to the file at file and print whether it succeeded as a line
-print (the length of (the error message of it)) as a line
-print whether file is a regular file as a line
+write the string form of "metadata" to the file at file and print line it succeeded
+print lines (the length of (the error message of it)) and (file is a regular file)
 set entry to the file system entry at file
-print whether (entry's modification time)'s seconds > 0 as a line
+print line (entry's modification time)'s seconds > 0
 
-read the file at missing and print whether it succeeded as a line
-print whether (the length of the error message of it) > 0 as a line
+read the file at missing and print line it succeeded
+print line (the length of the error message of it) > 0
 
-create a directory at directory and print whether it succeeded as a line
-print whether (the length of the error message of it) > 0 as a line
+create a directory at directory and print line it succeeded
+print line (the length of the error message of it) > 0
 
-delete the filesystem entry at file and print whether it succeeded as a line
-delete the filesystem entry at directory and print whether it succeeded as a line
+delete the filesystem entry at file and print line it succeeded
+delete the filesystem entry at directory and print line it succeeded

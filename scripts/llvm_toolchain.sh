@@ -157,7 +157,7 @@ dynlex_host_llvm_target() {
 
 dynlex_validate_llvm_source_layout() {
 	local source_component
-	for source_component in llvm cmake libc third-party; do
+	for source_component in llvm cmake libc third-party lld; do
 		if [ ! -d "$DYNLEX_LLVM_SOURCE_DIR/$source_component" ]; then
 			echo "Error: LLVM source snapshot is missing $source_component." >&2
 			return 1
@@ -178,7 +178,7 @@ dynlex_prepare_llvm_source() {
 			git init --quiet "$clone_directory"
 			git -C "$clone_directory" remote add origin "$DYNLEX_LLVM_REPOSITORY"
 			git -C "$clone_directory" sparse-checkout init --cone
-			git -C "$clone_directory" sparse-checkout set llvm cmake libc third-party
+			git -C "$clone_directory" sparse-checkout set llvm cmake libc third-party lld
 			git -C "$clone_directory" fetch --depth 1 origin "$DYNLEX_LLVM_REVISION"
 			git -C "$clone_directory" -c advice.detachedHead=false checkout --detach FETCH_HEAD
 			mv "$clone_directory" "$DYNLEX_LLVM_SOURCE_DIR"
@@ -217,6 +217,7 @@ dynlex_prepare_llvm_source() {
 		echo "Error: cached LLVM source has local changes: $DYNLEX_LLVM_SOURCE_DIR" >&2
 		return 1
 	fi
+	git -C "$DYNLEX_LLVM_SOURCE_DIR" sparse-checkout add lld
 	dynlex_validate_llvm_source_layout
 }
 
@@ -391,4 +392,51 @@ dynlex_ensure_llvm_toolchain() {
 		return 1
 		;;
 	esac
+	dynlex_build_lld "$profile"
+}
+
+# LLD uses the same pinned LLVM libraries. Build its WebAssembly driver as a
+# standalone library so adding the linker does not rebuild the LLVM backends.
+dynlex_build_lld() {
+	local profile="$1"
+	local install_directory="$DYNLEX_LLVM_CACHE_DIR/$profile/install"
+	local build_directory="$DYNLEX_LLVM_CACHE_DIR/$profile/lld-build"
+	local marker="$install_directory/.dynlex-lld-toolchain"
+	if [ -f "$marker" ] && [ "$(cat "$marker")" = "$(dynlex_llvm_marker_contents "$profile")" ] &&
+		[ -f "$install_directory/lib/cmake/lld/LLDConfig.cmake" ]; then
+		return
+	fi
+
+	dynlex_prepare_llvm_source
+	dynlex_resolve_bootstrap_compilers
+	dynlex_require_command ninja
+	local cmake_command=(cmake)
+	local compiler_arguments=()
+	if [ "$profile" = web ]; then
+		dynlex_require_command emcmake
+		cmake_command=(emcmake cmake)
+	else
+		compiler_arguments=(
+			"-DCMAKE_C_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CC"
+			"-DCMAKE_CXX_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CXX"
+		)
+		while IFS= read -r argument; do
+			compiler_arguments+=("$argument")
+		done < <(dynlex_native_llvm_cmake_arguments)
+	fi
+	"${cmake_command[@]}" -S "$DYNLEX_LLVM_SOURCE_DIR/lld" -B "$build_directory" -G Ninja \
+		"${compiler_arguments[@]}" \
+		-DCMAKE_BUILD_TYPE=Release \
+		"-DCMAKE_INSTALL_PREFIX=$install_directory" \
+		-DCMAKE_INSTALL_LIBDIR=lib \
+		"-DLLVM_DIR=$install_directory/lib/cmake/llvm" \
+		"-DLLVM_TABLEGEN_EXE=$DYNLEX_LLVM_NATIVE_INSTALL_DIR/bin/llvm-tblgen$DYNLEX_LLVM_HOST_EXECUTABLE_SUFFIX" \
+		-DLLVM_TARGETS_TO_BUILD=WebAssembly \
+		-DLLVM_INCLUDE_TESTS=OFF \
+		-DLLD_BUILD_TOOLS=OFF \
+		"-DLLVM_DISTRIBUTION_COMPONENTS=lldWasm;lldCommon;lld-headers;lld-cmake-exports"
+	cmake --build "$build_directory" \
+		--target install-lldWasm install-lldCommon install-lld-headers install-lld-cmake-exports \
+		--parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-$(dynlex_parallel_jobs)}"
+	dynlex_llvm_marker_contents "$profile" >"$marker"
 }

@@ -1,1 +1,1 @@
-tests/required/type_query_evaluated_effect/main.dl:10-33: Error: Type constraint 'bad type' must be pure
+tests/required/type_query_evaluated_effect/main.dl:4-27: Error: Type constraint 'bad type' must be pure

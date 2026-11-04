@@ -68,5 +68,5 @@ to send {C string:event} to {a pointer to machine instance:instance}:
             set instance's current to transition's target
             return nothing
         increment index
-    print "No transition for this event" as a line
+    print line "No transition for this event"
     abort the program

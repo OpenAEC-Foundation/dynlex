@@ -1,0 +1,30 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        pair
+    members:
+        x as integer
+        y as integer
+class:
+    patterns:
+        bounds
+    members:
+        low as pair
+        high as pair
+a [pair] with x horizontal and y vertical means: @intrinsic("construct", pair, horizontal, vertical)
+instance's field means: @intrinsic("property", instance, field)
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+function visit {arguments:items}:
+    replacement:
+        set {index} to 0
+        while @intrinsic("less than", index, @intrinsic("type extent", items, 0)):
+            set {item} to @intrinsic("extract element", items, index)
+            @intrinsic("discard", item)
+            set index to @intrinsic("add", index, 1)
+set box to @intrinsic("construct", bounds, (a pair with x 1 and y 2), (a pair with x 3 and y 4))
+visit box's low, (a pair with x box's high's x and y box's low's y), box's high and (a pair with x box's low's x and y box's high's y)

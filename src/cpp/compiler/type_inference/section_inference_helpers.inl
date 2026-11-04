@@ -61,46 +61,6 @@ static void emitPendingInferenceFailure(InferenceContext &context) {
 	));
 }
 
-static void mergeSectionExecutionStates(
-	InferenceContext &context, const std::vector<KnownConstantState> &constantStates,
-	const std::vector<AddressInferenceState> &addressStates, const std::vector<InferenceContext::SubjectState> &subjectStates
-) {
-	requireCompilerInvariant(!constantStates.empty(), "section state merge requires a reachable path");
-	requireCompilerInvariant(
-		constantStates.size() == addressStates.size() && constantStates.size() == subjectStates.size(),
-		"section execution state counts diverged"
-	);
-	KnownConstantStorage mergedConstants;
-	for (const auto &state : constantStates) {
-		for (const auto &[reference, value] : state.read()) {
-			(void)value;
-			mergedConstants.try_emplace(reference, CompileTimeValue{});
-		}
-	}
-	for (auto &[reference, mergedValue] : mergedConstants) {
-		const KnownConstantStorage &firstState = constantStates.front().read();
-		auto first = firstState.find(reference);
-		if (first == firstState.end())
-			continue;
-		bool sameValueOnEveryPath = std::ranges::all_of(constantStates, [&](const auto &state) {
-			const KnownConstantStorage &values = state.read();
-			auto value = values.find(reference);
-			return value != values.end() && value->second == first->second;
-		});
-		if (sameValueOnEveryPath)
-			mergedValue = first->second;
-	}
-	context.currentVariableValues = KnownConstantState(std::move(mergedConstants));
-	context.currentAddressState = mergeAddressInferenceStates(addressStates);
-	context.currentSubject = subjectStates.front();
-	for (size_t index = 1; index < subjectStates.size(); index++) {
-		if (subjectStates[index] != context.currentSubject) {
-			context.currentSubject = {.setter = nullptr, .ambiguous = true};
-			break;
-		}
-	}
-}
-
 static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOutcomeInTrial(
 	Expression *expression, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &bindingFrameStack
 ) {
@@ -133,7 +93,7 @@ static std::optional<Expression::SectionOutcome::Kind> inferExpressionSectionOut
 
 static bool inferNextLoopHeaderOutcomeInTrial(
 	Expression *openingExpression, InferenceContext &context, const BindingFrameStack &bindingFrameStack,
-	Expression::SectionOutcome &outcome
+	Expression::SectionOutcome &outcome, bool execute = false
 ) {
 	requireCompilerInvariant(sectionOutcomeIsLoop(openingExpression), "loop reinference has no loop header outcome");
 	InferenceContext::TrialJournal journal;
@@ -161,6 +121,11 @@ static bool inferNextLoopHeaderOutcomeInTrial(
 		context.inheritTypeFailureFrom(trialContext);
 		context.typesValid = false;
 	}
+	std::optional<InferenceExecutionSnapshot> execution;
+	if (inferred && execute)
+		execution.emplace(trialContext);
 	rollbackTrialJournal(journal);
+	if (execution)
+		execution->restore(context);
 	return inferred;
 }

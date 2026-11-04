@@ -1,0 +1,12 @@
+function left right:
+    before: x plus
+    replacement:
+        @intrinsic("add", left, right)
+
+x plus means: 1
+
+left plus right means: @intrinsic("add", left, right)
+
+x wrapped means: x plus 2
+
+@intrinsic("return", @intrinsic("subtract", x wrapped, 3))

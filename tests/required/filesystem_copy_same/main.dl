@@ -8,7 +8,7 @@ ignore @intrinsic("call", "libc", "fputs", an integer, "payload", stream)
 ignore @intrinsic("call", "libc", "fclose", an integer, stream)
 
 copy the filesystem entry at path to path
-print whether it succeeded as a line
+print line it succeeded
 
 allocate 8 bytes and set contents to it
 set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, path, "rb")

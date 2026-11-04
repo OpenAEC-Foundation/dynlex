@@ -6,17 +6,13 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function left = right:
-    replacement:
-        @intrinsic("equal", left, right)
+left = right means: @intrinsic("equal", left, right)
 
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
 class:
     patterns:
@@ -38,17 +34,14 @@ flex function append item to {list:values}:
     replacement:
         ensure values using item
 
-function {list:values} contains item:
-    execute:
-        return the capacity of values = item
+to get {list:values} contains item:
+    return the capacity of values = item
 
-function {wrapper:items} contains item:
-    execute:
-        return the values of items contains item
+to get {wrapper:items} contains item:
+    return the values of items contains item
 
-function {wrapper:items} does not contain item:
-    execute:
-        return @intrinsic("not", items contains item)
+to get {wrapper:items} does not contain item:
+    return @intrinsic("not", items contains item)
 
 flex function add item to {wrapper:items}:
     replacement:

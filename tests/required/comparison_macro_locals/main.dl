@@ -1,0 +1,3 @@
+import lib/std.dl
+set first and center to 99
+print lines (1 < 2 < 3) and (first + center)

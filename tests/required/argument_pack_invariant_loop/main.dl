@@ -1,0 +1,6 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+first {arguments:items} means: @intrinsic("extract element", items, 0)
+while @intrinsic("equal", @intrinsic("call", "libc", "getchar", @intrinsic("type", "int", 32)), 0):
+    @intrinsic("discard", first 1 and 2)

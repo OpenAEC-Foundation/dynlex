@@ -1,0 +1,27 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+flex section for each item in values:
+    replacement:
+        set index to 0
+        while @intrinsic("less than", index, @intrinsic("type extent", @intrinsic("type of", values), 0)):
+            set item to @intrinsic("extract element", values, index)
+            @intrinsic("execute body")
+            set index to @intrinsic("add", index, 1)
+function assign {arguments:variables} to value:
+    replacement:
+        set assigned to value
+        for each variable in variables:
+            set variable to assigned
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        holder
+    members:
+        number as integer
+set record to @intrinsic("construct", holder, 0)
+assign x, @intrinsic("property", record, "number") and z to 8
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", @intrinsic("add", x, @intrinsic("property", record, "number")), z), 24))

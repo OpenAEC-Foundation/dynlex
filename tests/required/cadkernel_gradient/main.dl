@@ -3,24 +3,19 @@
 # Source: https://github.com/HakanSeven12/cadkernel/blob/953d546b68aef4b6692566a1a9b077fc5bd9fb4f/src/geom2d/gradient.rs
 import lib/bim/gradient.dl
 
-function check cad gradient {boolean:passed} named {C string:label}:
-    execute:
-        if the inverse of passed:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check cad gradient {boolean:passed} named {C string:label}:
+    if not passed:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function check cad gradient scalar {a 64 bit floating-point number:actual} against {a 64 bit floating-point number:expected}:
-    execute:
-        check cad gradient ((the absolute value of (actual - expected)) < 1e-12) named "gradient scalar mismatch"
+to check cad gradient scalar {a 64 bit floating-point number:actual} against {a 64 bit floating-point number:expected}:
+    check cad gradient ((the absolute value of (actual - expected)) < 1e-12) named "gradient scalar mismatch"
 
 set tolerance to the default cad tolerance
 set boundary to an empty list of a cad vector2
 set missing to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance
 check cad gradient ((the valid of missing) = false) named "empty boundary rejected"
-append (a cad vector2 with x 0.0 and y 0.0) to boundary
-append (a cad vector2 with x 4.0 and y 0.0) to boundary
-append (a cad vector2 with x 4.0 and y 2.0) to boundary
-append (a cad vector2 with x 0.0 and y 2.0) to boundary
+append (a cad vector2 with x 0.0 and y 0.0), (a cad vector2 with x 4.0 and y 0.0), (a cad vector2 with x 4.0 and y 2.0) and (a cad vector2 with x 0.0 and y 2.0) to boundary
 set result to the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance
 check cad gradient (the valid of result) named "rectangle accepted"
 set frame to the value of result
@@ -55,9 +50,7 @@ loop invalidIndex from 0 to 3:
     set badShift to the cad gradient frame of boundary at angle 0.0 with shift invalid within tolerance
     check cad gradient ((the valid of badAngle) = false) named "nonfinite angle rejected"
     check cad gradient ((the valid of badShift) = false) named "nonfinite shift rejected"
-append (a cad vector2 with x notANumber and y 100.0) to boundary
-append (a cad vector2 with x infinity and y 100.0) to boundary
-append (a cad vector2 with x 100.0 and y notANumber) to boundary
+append (a cad vector2 with x notANumber and y 100.0), (a cad vector2 with x infinity and y 100.0) and (a cad vector2 with x 100.0 and y notANumber) to boundary
 set filtered to the value of (the cad gradient frame of boundary at angle 0.0 with shift 0.0 within tolerance)
 check cad gradient (cad filtered equals frame) named "nonfinite boundary points skipped"
 check cad gradient ((the length of boundary) = 7) named "boundary is borrowed without mutation"
@@ -96,4 +89,4 @@ set copy to frame
 set the radius of copy to 10.0
 check cad gradient ((cad copy equals frame) = false) named "record equality includes radius"
 check cad gradient scalar (the radius of frame) against 2.23606797749979
-print "cadkernel gradient: PASS" as a line
+print line "cadkernel gradient: PASS"

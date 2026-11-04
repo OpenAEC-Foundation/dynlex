@@ -67,39 +67,26 @@ answer example:
 
 static void checkInferenceOwnership() {
 	std::string source = R"(
-function integer:
-    replacement:
-        @intrinsic("type", "int")
+integer means: @intrinsic("type", "int")
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 function return value:
     replacement:
         @intrinsic("return", value)
-function value + other:
-    replacement:
-        @intrinsic("add", value, other)
-function the inner value of operand:
-    replacement:
-        operand + 1
-function the outer value of operand:
-    replacement:
-        the inner value of (the inner value of operand)
+value + other means: @intrinsic("add", value, other)
+the inner value of operand means: operand + 1
+the outer value of operand means: the inner value of (the inner value of operand)
 function discard value:
     replacement:
         @intrinsic("discard", value)
-function the result for {integer:value}:
-    execute:
-        return the outer value of value
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
+to get the result for {integer:value}:
+    return the outer value of value
+nothing means: @intrinsic("type", "nothing")
 function publish value:
     replacement:
         @intrinsic("set subject", value)
-function it:
-    replacement:
-        @intrinsic("subject")
+it means: @intrinsic("subject")
 flex function {nothing:first} and {nothing:second}:
     replacement:
         @intrinsic("discard", first)
@@ -107,9 +94,7 @@ flex function {nothing:first} and {nothing:second}:
 flex section while condition:
     replacement:
         @intrinsic("loop while", condition)
-function value < other:
-    replacement:
-        @intrinsic("less than", value, other)
+value < other means: @intrinsic("less than", value, other)
 class:
     patterns:
         a number box
@@ -118,9 +103,8 @@ class:
 implicitly convert {integer:number}:
     replacement:
         @intrinsic("construct", a number box, number)
-function the boxed payload of {a number box:container}:
-    execute:
-        return @intrinsic("property", container, "payload")
+to get the boxed payload of {a number box:container}:
+    return @intrinsic("property", container, "payload")
 )";
 	// Every call enters grouping trials, instantiation reuse, and nested flex
 	// replacement. Separate numeric widths also exercise distinct bodies.

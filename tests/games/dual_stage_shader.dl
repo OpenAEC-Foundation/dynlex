@@ -1,5 +1,3 @@
-# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
-
 import lib/shader.dl
 
 if this is a vertex shader:

@@ -2,9 +2,7 @@ function set destination to source:
     replacement:
         @intrinsic("store", destination, source)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 class:
     patterns:

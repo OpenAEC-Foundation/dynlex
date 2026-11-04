@@ -18,18 +18,15 @@ class:
     members:
         value as a tracked value
 
-set previous to 0
-set current to 0
+set previous and current to 0
 set container to @intrinsic("construct", a managed container, @intrinsic("construct", a tracked value, the address of previous))
 set link to the address of container
 set indirect to the address of link
 set triple to the address of indirect
 set address to the address of (the value of triple)
 @intrinsic("store at", address, @intrinsic("construct", a tracked value, the address of current))
-print previous as a line
-print current as a line
+print lines previous and current
 set copy to triple's value
-print current as a line
+print line current
 set indirect's value to @intrinsic("construct", a tracked value, the address of previous)
-print previous as a line
-print current as a line
+print lines previous and current

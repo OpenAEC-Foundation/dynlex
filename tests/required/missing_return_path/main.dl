@@ -1,8 +1,7 @@
 import lib/std.dl
 
-function the value for condition:
-    execute:
-        if condition:
-            return 1
+to get the value for condition:
+    if condition:
+        return 1
 
-print the value for true as a line
+print line the value for true

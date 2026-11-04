@@ -36,21 +36,22 @@ def main() -> int:
         invalid_source = temporary / "invalid_main.dl"
         invalid_output = temporary / "invalid_main.spv"
         invalid_source.write_text(
-            "function return value:\n"
-            "    replacement:\n"
-            "        @intrinsic(\"return\", value)\n\n"
-            "flex function [an|] integer:\n"
-            "    replacement:\n"
-            "        @intrinsic(\"type\", \"int\")\n\n"
-            "class:\n"
-            "    patterns:\n"
-            "        [a|] box\n"
-            "    members:\n"
-            "        value as an integer\n\n"
-            "function a box containing {integer:value}:\n"
-            "    replacement:\n"
-            "        @intrinsic(\"construct\", a box, value)\n\n"
-            "return a box containing 1\n",
+            '''function return value:
+    replacement:
+        @intrinsic("return", value)
+
+[an|] integer means: @intrinsic("type", "int")
+
+class:
+    patterns:
+        [a|] box
+    members:
+        value as an integer
+
+a box containing {integer:value} means: @intrinsic("construct", a box, value)
+
+return a box containing 1
+''',
             encoding="utf-8",
         )
         invalid_result = subprocess.run(

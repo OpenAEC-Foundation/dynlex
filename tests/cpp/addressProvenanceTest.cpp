@@ -77,6 +77,44 @@ void checkBindingScopeSnapshots() {
 	);
 }
 
+void checkBindingDeclarationBoundaries() {
+	Expression outerValue, forwardedValue;
+	VariableReference parameter({}, "slot"), unrelated({}, "other");
+	VariableReference use({}, "slot");
+	use.definition = &parameter;
+	BindingFrame outer;
+	outer.bindings["slot"] = &outerValue;
+	outer.parameterBindings[&parameter] = &outerValue;
+	outer.parameterConstraints[&parameter].parameterName = "outer";
+	outer.bindings["other"] = &forwardedValue;
+	outer.parameterBindings[&unrelated] = &forwardedValue;
+	BindingFrameStack scopes;
+	scopes.pushFrame(std::move(outer));
+	BindingFrame local;
+	local.declarations["slot"] = &parameter;
+	scopes.pushFrame(std::move(local));
+	BindingFrameStack caller = scopes;
+	expect(!scopes.lookupWithCallerScope(&use, nullptr, caller), "omitted parameter inherited outer binding");
+	expect(!scopes.lookupWithCallerScope("slot", nullptr, caller), "omitted name inherited outer binding");
+	expect(!scopes.lookupParameterConstraint(&use), "omitted parameter inherited outer constraint");
+	expect(caller.depth() == 2, "local lookup changed caller scope");
+	expect(scopes.hasBindings(), "local declaration scope lost binding presence");
+	expect(scopes.lookupWithCallerScope(&unrelated, nullptr, caller) == &forwardedValue, "local scope hid unrelated binding");
+	BindingFrame supplied;
+	supplied.declarations["slot"] = &parameter;
+	supplied.bindings["slot"] = &forwardedValue;
+	supplied.parameterBindings[&parameter] = &forwardedValue;
+	scopes.pushFrame(std::move(supplied));
+	expect(scopes.lookupWithCallerScope(&use, nullptr, caller) == &forwardedValue, "supplied parameter did not bind");
+	expect(caller.depth() == 2 && !caller.lookupWithCallerScope(&use, nullptr, caller), "forwarding skipped local boundary");
+	expect(!scopes.lookupParameterConstraint(&use), "unconstrained argument inherited outer constraint");
+	BindingFrameStack declarationsOnly;
+	BindingFrame declaration;
+	declaration.declarations["slot"] = &parameter;
+	declarationsOnly.pushFrame(std::move(declaration));
+	expect(declarationsOnly.hasBindings(), "declaration-only frame was treated as empty");
+}
+
 void checkSectionOutcomeIsolation() {
 	ParseContext context;
 	Expression source;
@@ -139,9 +177,8 @@ function return value:
 function discard value:
     replacement:
         @intrinsic("discard", value)
-function the pointer from {fixed integer:value}:
-    execute:
-        return @intrinsic("cast", value, pointer type)
+to get the pointer from {fixed integer:value}:
+    return @intrinsic("cast", value, pointer type)
 class:
     patterns:
         slot holder
@@ -156,9 +193,8 @@ flex section else:
 flex section loop while condition:
     replacement:
         @intrinsic("loop while", condition)
-function probe condition:
-    execute:
-        discard condition
+to get probe condition:
+    discard condition
 )";
 	source += body;
 	source += "\ndiscard probe @intrinsic(\"equal\", 1, 1)\n";
@@ -191,8 +227,8 @@ function probe condition:
 	);
 	expect(facts.unknown == unknown, std::string("wrong unknown-origin possibility in fixture:\n") + std::string(body));
 	std::unordered_set<std::string> actualTargets;
-	for (VariableReference *target : facts.mayTargets)
-		actualTargets.insert(target->name);
+	for (const VariableStorageKey &target : facts.mayTargets)
+		actualTargets.insert(target.definition->name);
 	expect(actualTargets == targets, std::string("wrong storage targets in fixture:\n") + std::string(body));
 }
 
@@ -200,6 +236,7 @@ function probe condition:
 
 int main() {
 	checkBindingScopeSnapshots();
+	checkBindingDeclarationBoundaries();
 	checkSectionOutcomeIsolation();
 	constexpr std::string_view nullDiagnostic = "cannot dereference a null pointer";
 	checkCompilation("@intrinsic(\"discard\", @intrinsic(\"dereference\", null pointer))\n", nullDiagnostic);
@@ -232,10 +269,9 @@ class:
 	);
 	checkCompilation(
 		R"(
-function exercise:
-    execute:
-        @intrinsic("store", value, 0)
-        @intrinsic("check deallocation", @intrinsic("address of", value))
+to exercise:
+    @intrinsic("store", value, 0)
+    @intrinsic("check deallocation", @intrinsic("address of", value))
 exercise
 )",
 		"cannot deallocate stack storage"
@@ -250,12 +286,11 @@ exercise
 @intrinsic("discard", @intrinsic("dereference", pointer))
 )");
 	checkCompilation(R"(
-function exercise condition:
-    execute:
-        @intrinsic("store", value, 1)
-        @intrinsic("store", pointer, @intrinsic("select", condition, null pointer, @intrinsic("address of", value)))
-        @intrinsic("check deallocation", pointer)
-        @intrinsic("discard", @intrinsic("dereference", pointer))
+to exercise condition:
+    @intrinsic("store", value, 1)
+    @intrinsic("store", pointer, @intrinsic("select", condition, null pointer, @intrinsic("address of", value)))
+    @intrinsic("check deallocation", pointer)
+    @intrinsic("discard", @intrinsic("dereference", pointer))
 exercise @intrinsic("equal", 1, 1)
 )");
 	checkCompilation(R"(
@@ -283,16 +318,14 @@ consume the value at null pointer
 		nullDiagnostic
 	);
 	checkCompilation(R"(
-function invalid value:
-    execute:
-        @intrinsic("return", @intrinsic("dereference", null pointer))
+to get invalid value:
+    @intrinsic("return", @intrinsic("dereference", null pointer))
 @intrinsic("discard", @intrinsic("type of", invalid value))
 )");
 	checkCompilation(
 		R"(
-function invalid value:
-    execute:
-        @intrinsic("return", @intrinsic("dereference", null pointer))
+to get invalid value:
+    @intrinsic("return", @intrinsic("dereference", null pointer))
 @intrinsic("discard", @intrinsic("type of", invalid value))
 @intrinsic("discard", invalid value)
 )",
@@ -321,9 +354,7 @@ flex function invalid value:
 		nullDiagnostic
 	);
 	checkCompilation(R"(
-function exercise value:
-    execute:
-        @intrinsic("check deallocation", @intrinsic("address of", value))
+to exercise value: @intrinsic("check deallocation", @intrinsic("address of", value))
 @intrinsic("store", pointer, @intrinsic("call", "libc", "malloc", pointer type, 4))
 exercise @intrinsic("dereference", pointer)
 )");
@@ -351,16 +382,14 @@ narrow integer means: @intrinsic("type", "int", 8)
 @intrinsic("check deallocation", @intrinsic("cast", narrowed, pointer type))
 )");
 	checkCompilation(R"(
-function the address of value:
-    execute:
-        @intrinsic("return", @intrinsic("address of", value))
+to get the address of value:
+    @intrinsic("return", @intrinsic("address of", value))
 @intrinsic("store", pointer, @intrinsic("call", "libc", "malloc", pointer type, 4))
 @intrinsic("check deallocation", the address of @intrinsic("dereference", pointer))
 )");
 	checkCompilation(R"(
-function the address of value:
-    execute:
-        @intrinsic("return", @intrinsic("address of", value))
+to get the address of value:
+    @intrinsic("return", @intrinsic("address of", value))
 @intrinsic("check deallocation", the address of @intrinsic("dereference", null pointer))
 )");
 	checkCompilation(R"(
@@ -378,98 +407,98 @@ class:
 @intrinsic("store", value, 1)
 @intrinsic("discard", @intrinsic("dereference", @intrinsic("address of", value)))
 )");
-	checkFacts("        set pointer to null pointer\n        return pointer\n", true, false, {});
-	checkFacts("        set value to 0\n        return @intrinsic(\"address of\", value)\n", false, false, {"value"});
+	checkFacts("    set pointer to null pointer\n    return pointer\n", true, false, {});
+	checkFacts("    set value to 0\n    return @intrinsic(\"address of\", value)\n", false, false, {"value"});
 	checkFacts(
-		R"(        set value to 0
-        set pointer to null pointer
-        if condition:
-            set pointer to @intrinsic("address of", value)
-        return pointer
+		R"(    set value to 0
+    set pointer to null pointer
+    if condition:
+        set pointer to @intrinsic("address of", value)
+    return pointer
 )",
 		true, false, {"value"}
 	);
 	checkFacts(
-		R"(        set value to 0
-        set pointer to @intrinsic("select", condition, null pointer, @intrinsic("address of", value))
-        set alias to pointer
-        return alias
+		R"(    set value to 0
+    set pointer to @intrinsic("select", condition, null pointer, @intrinsic("address of", value))
+    set alias to pointer
+    return alias
 )",
 		true, false, {"value"}
 	);
 	checkFacts(
-		R"(        set first to 0
-        set second to 0
-        set pointer to null pointer
-        if condition:
-            set pointer to @intrinsic("address of", first)
-        else:
-            set pointer to @intrinsic("address of", second)
-        return pointer
+		R"(    set first to 0
+    set second to 0
+    set pointer to null pointer
+    if condition:
+        set pointer to @intrinsic("address of", first)
+    else:
+        set pointer to @intrinsic("address of", second)
+    return pointer
 )",
 		false, false, {"first", "second"}
 	);
 	checkFacts(
-		R"(        set value to 0
+		R"(    set value to 0
+    set pointer to @intrinsic("address of", value)
+    set pointer to null pointer
+    return pointer
+)",
+		true, false, {}
+	);
+	checkFacts(
+		R"(    set pointer to null pointer
+    set link to @intrinsic("address of", pointer)
+    return @intrinsic("dereference", link)
+)",
+		true, false, {}
+	);
+	checkFacts(
+		R"(    set value to 0
+    set pointer to null pointer
+    loop while condition:
         set pointer to @intrinsic("address of", value)
-        set pointer to null pointer
-        return pointer
-)",
-		true, false, {}
-	);
-	checkFacts(
-		R"(        set pointer to null pointer
-        set link to @intrinsic("address of", pointer)
-        return @intrinsic("dereference", link)
-)",
-		true, false, {}
-	);
-	checkFacts(
-		R"(        set value to 0
-        set pointer to null pointer
-        loop while condition:
-            set pointer to @intrinsic("address of", value)
-            set condition to @intrinsic("equal", 0, 1)
-        return pointer
+        set condition to @intrinsic("equal", 0, 1)
+    return pointer
 )",
 		true, false, {"value"}
 	);
 	checkFacts(
-		R"(        set pointer to @intrinsic("call", "libc", "malloc", pointer type, 4)
-        return pointer
+		R"(    set pointer to @intrinsic("call", "libc", "malloc", pointer type, 4)
+    return pointer
 )",
 		false, true, {}
 	);
 	checkFacts(
-		R"(        set pointer to null pointer
-        discard @intrinsic("call", "libc", "opaque", integer, @intrinsic("address of", pointer))
-        return pointer
+		R"(    set pointer to null pointer
+    discard @intrinsic("call", "libc", "opaque", integer, @intrinsic("address of", pointer))
+    return pointer
 )",
 		false, true, {}
 	);
-	checkFacts("        return @intrinsic(\"construct\", pointer type)\n", true, false, {});
-	checkFacts("        return the pointer from 0\n", true, false, {});
-	checkFacts("        return the pointer from 1\n", false, true, {});
+	checkFacts("    return @intrinsic(\"construct\", pointer type)\n", true, false, {});
+	checkFacts("    return the pointer from 0\n", true, false, {});
+	checkFacts("    return the pointer from 1\n", false, true, {});
 	checkFacts(
-		R"(        set holder to @intrinsic("construct", slot holder)
-        return @intrinsic("property", holder, "slot")
+		R"(    set holder to @intrinsic("construct", slot holder)
+    return @intrinsic("property", holder, "slot")
 )",
 		true, false, {}
 	);
 	checkFacts(
-		R"(        set value to 0
-        set pointer to null pointer
-        set destination to @intrinsic("select", condition, @intrinsic("cast", 0, @intrinsic("add pointer depth", pointer type)), @intrinsic("address of", pointer))
-        @intrinsic("store at", destination, @intrinsic("address of", value))
-        return pointer
+		R"(    set value to 0
+    set pointer to null pointer
+    set destination to @intrinsic("select", condition, @intrinsic("cast", 0, @intrinsic("add pointer depth", pointer type)), @intrinsic("address of", pointer))
+    @intrinsic("store at", destination, @intrinsic("address of", value))
+    return pointer
 )",
 		true, false, {"value"}
 	);
-	checkFacts("        return @intrinsic(\"add\", null pointer, 0)\n", true, false, {});
-	checkFacts("        return @intrinsic(\"add\", null pointer, 1)\n", false, true, {});
-	checkFacts("        return \"literal\"\n", false, false, {}, true);
+	checkFacts("    return @intrinsic(\"add\", null pointer, 0)\n", true, false, {});
+	checkFacts("    return @intrinsic(\"add\", null pointer, 1)\n", false, true, {});
+	checkFacts("    return \"literal\"\n", false, false, {}, true);
 	checkFacts(
-		R"(        return @intrinsic("select", condition, @intrinsic("cast", 0, @intrinsic("type", "string")), "literal")
+		R"(    return @intrinsic("select", condition, @intrinsic("cast", 0, @intrinsic("type", "string")), "literal")
 )",
 		true, false, {}, true
 	);

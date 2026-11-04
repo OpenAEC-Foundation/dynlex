@@ -1,9 +1,8 @@
 import lib/process.dl
 import lib/text.dl
 
-function the test interpreter for termination handlers:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the test interpreter for termination handlers:
+    return "python" if the process platform is Windows, else "python3"
 
 class:
     patterns:
@@ -13,25 +12,15 @@ class:
         completion as a boolean
         stream ending as a boolean
 
-function {reading state:state} succeeded:
-    replacement:
-        state's success
+{reading state:state} succeeded means: state's success
 
-function {reading state:state} is complete:
-    replacement:
-        state's completion
+{reading state:state} is complete means: state's completion
 
-function {reading state:state} is incomplete:
-    replacement:
-        the inverse of state's completion
+{reading state:state} is incomplete means: not state's completion
 
-function {reading state:state} awaits the stream ending:
-    replacement:
-        the inverse of state's stream ending
+{reading state:state} awaits the stream ending means: not state's stream ending
 
-function {reading state:state} should continue:
-    replacement:
-        (state succeeded) and ((state is incomplete) and (state awaits the stream ending))
+{reading state:state} should continue means: (state succeeded) and ((state is incomplete) and (state awaits the stream ending))
 
 set command to a process command for the test interpreter for termination handlers
 add "-u" as an argument to command
@@ -54,12 +43,6 @@ set expected to 0 as a 64 bit integer
 if the process platform is Windows:
     set expected to 1 as a 64 bit integer
 
-print whether child was launched as a line
-print whether (reading succeeded) and (reading is complete) as a line
-print whether (contents = "ready\n") as a line
-print whether termination succeeded as a line
-print whether status succeeded as a line
-print whether status reports completion as a line
-print whether status reports termination as a line
-print whether (status's exit code = expected) as a line
-print whether (status's termination signal = (0 as a 32 bit integer)) as a line
+print lines (child was launched), ((reading succeeded) and (reading is complete)) and (contents = "ready\n")
+print lines (termination succeeded), (status succeeded), (status reports completion) and (status reports termination)
+print lines (status's exit code = expected) and (status's termination signal = (0 as a 32 bit integer))

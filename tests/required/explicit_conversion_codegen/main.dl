@@ -6,13 +6,10 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function value as destination:
-    execute:
-        return @intrinsic("cast", value, destination)
+to get value as destination:
+    return @intrinsic("cast", value, destination)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 class:
     patterns:

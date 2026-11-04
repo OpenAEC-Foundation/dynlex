@@ -1,10 +1,10 @@
 # The actual application, driven externally through its native window.
 import tests/games/snake.dl
-print interface's page's text as a line
-print match's phase as a line
-print match's pace as a line
-print match's wrap edges as a line
-print match's show grid as a line
-print match's reduced motion as a line
-print match's palette as a line
-print (match's steps > 0) as a line
+print line interface's page's text
+print line match's phase
+print line match's pace
+print line match's wrap edges
+print line match's show grid
+print line match's reduced motion
+print line match's palette
+print line (match's steps > 0)

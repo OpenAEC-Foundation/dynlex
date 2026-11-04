@@ -1,22 +1,22 @@
 import lib/std.dl
 
-if true: to announce: print "inline action" as a line
-    print "outer action sibling" as a line
+if true: to announce: print line "inline action"
+    print line "outer action sibling"
 
 if true: value doubled means: value * 2
-    print 3 doubled as a line
+    print line 3 doubled
 
 function wrapper: execute: value tripled means: value * 3
 
-to outer: to inner: print "inner" as a line
+to outer: to inner: print line "inner"
     inner
 
 outer
 
 if true:
-  print "prefix" as a line
+  print line "prefix"
 
-to reset outer: to reset inner: print "reset inner" as a line
+to reset outer: to reset inner: print line "reset inner"
         reset inner
 
 reset outer

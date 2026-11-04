@@ -6,7 +6,7 @@ functie verdubbel waarde:
 
 waarde verdrievoudigd betekent: (waarde + waarde) + waarde
 
-om toon waarde: print waarde as a line
+om toon waarde: print line waarde
 
 om te krijgen verviervoudig waarde:
     return (waarde + waarde) + (waarde + waarde)

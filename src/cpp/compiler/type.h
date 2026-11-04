@@ -47,7 +47,9 @@ struct DataType {
 		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
 		Type,
 		// a compile-time value describing which argument types and values a pattern accepts.
-		Constraint
+		Constraint,
+		ArgumentPack,
+		ArgumentReference
 	};
 
 	Kind kind = Kind::Unresolved;
@@ -151,7 +153,8 @@ struct DataType {
 			valueType = valueType.toReferencedType();
 		if (valueType.pointerDepth != 0 || dimension < 0)
 			return std::nullopt;
-		if ((valueType.kind == Kind::Array || valueType.kind == Kind::Vector) && dimension == 0)
+		if ((valueType.kind == Kind::Array || valueType.kind == Kind::Vector || valueType.kind == Kind::ArgumentPack) &&
+			dimension == 0)
 			return valueType.arraySize;
 		if (valueType.kind == Kind::Matrix) {
 			if (dimension == 0)
@@ -187,7 +190,10 @@ struct DataType {
 	bool isPointer() const { return pointerDepth > 0; }
 	bool isFunction() const { return kind == Kind::Function && pointerDepth == 0; }
 	bool isAddress() const { return isPointer() || isFunction(); }
-	bool isMetaType() const { return kind == Kind::Type || kind == Kind::Constraint; }
+	bool isMetaType() const {
+		return kind == Kind::Type || kind == Kind::Constraint || kind == Kind::ArgumentPack || kind == Kind::ArgumentReference;
+	}
+
 	bool isRuntimeValueType() const { return isDeduced() && kind != Kind::Void && !isMetaType(); }
 	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
 	// wether this type is a specific type and the type pattern has been resolved
@@ -515,6 +521,10 @@ makeBuiltinTypeReference(std::string_view kindName, bool emitSPIRV, std::optiona
 		if (numericByteSize)
 			return std::nullopt;
 		result.referencedKind = DataType::Kind::Constraint;
+	} else if (kindName == "arguments") {
+		if (numericByteSize)
+			return std::nullopt;
+		result.referencedKind = DataType::Kind::ArgumentPack;
 	} else if (kindName == "any") {
 		result.referencedKind = DataType::Kind::Any;
 		result.numericSize = numericByteSize.value_or(0);

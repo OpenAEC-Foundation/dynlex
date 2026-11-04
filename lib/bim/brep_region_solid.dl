@@ -55,11 +55,9 @@ local function region rings are valid {cad topology list:profiles}:
                 return false
             loop previousIndex from 0 to holeIndex:
                 set previous to the item at previousIndex in (profiles's values)
-                loop curveIndex from 0 to the length of (hole's values's values):
-                    set curve to the item at curveIndex in (hole's values's values)
+                for each curve in (hole's values's values):
                     set middle to the cad point on curve at 0.5
-                    loop otherIndex from 0 to the length of (previous's values's values):
-                        set other to the item at otherIndex in (previous's values's values)
+                    for each other in (previous's values's values):
                         set crossings to the cad crossings of curve and other within tolerance
                         set touching to ((the length of crossings) != 0) or ((the cad distance to other from middle) <= (tolerance's linear))
                         free crossings
@@ -79,8 +77,7 @@ local function cad region solid cap of {cad body:body} on {cad plane:plane} with
         if normal's valid = false:
             return absent
         set keys to the cad face keys of body
-        loop index from 0 to the length of keys:
-            set faceKey to the item at index in keys
+        for each faceKey in keys:
             set faceNode to the cad node pointer for faceKey in body
             if faceNode != (0 as the type of faceNode):
                 set surfaceNode to the cad node pointer for faceNode's surface in body
@@ -102,8 +99,7 @@ local function cad region solid copied cap {cad face key:copied} into {cad face 
         set shellNode to the cad node pointer for shellKey in body
         if ((faceNode = (0 as the type of faceNode)) or (destinationNode = (0 as the type of destinationNode))) or (shellNode = (0 as the type of shellNode)):
             return false
-        loop ringIndex from 0 to the length of (faceNode's loops's values):
-            set ringKey to the item at ringIndex in (faceNode's loops's values)
+        for each ringKey in (faceNode's loops's values):
             set ringNode to the cad node pointer for ringKey in body
             if ringNode = (0 as the type of ringNode):
                 return false
@@ -115,8 +111,7 @@ local function cad region solid copied cap {cad face key:copied} into {cad face 
                 set useNode's pcurve to no cad pcurve
             append ringKey to (destinationNode's loops's values)
         set remaining to a cad topology list of a cad face key
-        loop index from 0 to the length of (shellNode's faces's values):
-            set key to the item at index in (shellNode's faces's values)
+        for each key in (shellNode's faces's values):
             if key != copied:
                 append key to (remaining's values)
         set shellNode's faces to remaining
@@ -129,8 +124,7 @@ local function cad region solid cap loops are valid {cad face key:cap} in {cad b
         if extracted's valid = false:
             return false
         set loops to a cad topology list of a cad region solid loop
-        loop index from 0 to the length of (extracted's value's loops's values):
-            set ring to the item at index in (extracted's value's loops's values)
+        for each ring in (extracted's value's loops's values):
             append (copy region ring from (ring's values's values)) to (loops's values)
         return region rings are valid loops
 
@@ -170,8 +164,7 @@ local function build region solid from {a pointer to a list:profiles} on {cad pl
             if (holeBaseCap's valid = false) or (holeTopCap's valid = false):
                 return no cad body
             set holeFaces to the cad face keys of cutter's value
-            loop faceIndex from 0 to the length of holeFaces:
-                set holeFace to the item at faceIndex in holeFaces
+            for each holeFace in holeFaces:
                 if (copy cad boolean face holeFace from cutter's value into body owned by shellKey flipped true within tolerance) = false:
                     free holeFaces
                     return no cad body
@@ -208,11 +201,9 @@ local function build region solid from {a pointer to a list:profiles} on {cad pl
         free edges
         return the validated cad body result of body
 
-function the cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
-    execute:
-        return build region solid from profiles on plane along direction with draft 0.0
+to get the cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction}:
+    return build region solid from profiles on plane along direction with draft 0.0
 
-function the tapered cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
-    execute:
-        set angle to givenAngle as a 64 bit floating-point number
-        return build region solid from profiles on plane along direction with draft angle
+to get the tapered cad extrusion region of {a pointer to a list:profiles} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
+    set angle to givenAngle as a 64 bit floating-point number
+    return build region solid from profiles on plane along direction with draft angle

@@ -1,6 +1,6 @@
 import lib/std.dl
 
-print 1 as a line
+print line 1
 
 in this file, by default:
     functions are local

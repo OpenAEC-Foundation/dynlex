@@ -13,9 +13,8 @@ class:
         tA as a 64 bit floating-point number
         tB as a 64 bit floating-point number
 
-function {cad crossing2:left} = {cad crossing2:right}:
-    execute:
-        return ((left's point's x = right's point's x) and (left's point's y = right's point's y)) and ((left's tA = right's tA) and (left's tB = right's tB))
+to get {cad crossing2:left} = {cad crossing2:right}:
+    return ((left's point's x = right's point's x) and (left's point's y = right's point's y)) and ((left's tA = right's tA) and (left's tB = right's tB))
 
 class:
     patterns:
@@ -92,12 +91,11 @@ local function the cad cross2 refinement of {cad curve2:first} and {cad curve2:s
 
 local function collect cad cross2 against straight {cad curve2:straight} from {cad vector2:origin} along {cad vector2:direction} on {cad curve2:shape} over {cad cross2 piece:piece} within {cad tolerance:tolerance} at depth {integer:depth} into {a pointer to a list:output}:
     execute:
-        set positive to true
-        set negative to true
+        set positive and negative to true
         loop corner from 0 to 4:
             set x to piece's low's x
             set y to piece's low's y
-            if (corner = 1) or (corner = 3):
+            if corner is one of 1 and 3:
                 set x to piece's high's x
             if corner >= 2:
                 set y to piece's high's y
@@ -177,7 +175,7 @@ local function collect cad cross2 subdivision of {cad curve2:first} and {cad cur
 
 local function {cad curve2:shape} is cad cross2 round:
     execute:
-        return (shape's kind = 1) or (shape's kind = 2)
+        return shape's kind is one of 1 and 2
 
 local function the cad cross2 circle of {cad curve2:shape}:
     execute:
@@ -229,8 +227,7 @@ local function collect cad cross2 candidates of {cad curve2:first} and {cad curv
             return nothing
         if first's kind = 4:
             set pieces to the cad segments of first
-            loop index from 0 to the length of pieces:
-                set piece to the item at index in pieces
+            for each piece in pieces:
                 collect cad cross2 candidates of piece and second within tolerance into output
             free pieces
             return nothing
@@ -256,29 +253,26 @@ local function order cad cross2 crossings in {a pointer to a list:values}:
                     set searching to false
             replace item at index position in values with current
 
-function the cad [crossings] of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance}:
-    execute:
-        set candidates to an empty list of a cad vector2
-        collect cad cross2 candidates of first and second within tolerance into candidates
-        set crossings to an empty list of a cad crossing2
-        loop index from 0 to the length of candidates:
-            set point to the item at index in candidates
-            set onFirst to the cad cross2 parameter on first at point within tolerance
-            if onFirst's valid:
-                set onSecond to the cad cross2 parameter on second at point within tolerance
-                if onSecond's valid:
-                    append (@intrinsic("construct", a cad crossing2, point, onFirst's value, onSecond's value)) to crossings
-        free candidates
-        order cad cross2 crossings in crossings
-        set unique to an empty list of a cad crossing2
-        loop index from 0 to the length of crossings:
-            set crossing to the item at index in crossings
-            set keep to true
-            if (the length of unique) > 0:
-                set previous to the last item of unique
-                if (the cad distance from crossing's point to previous's point) <= tolerance's linear:
-                    set keep to false
-            if keep:
-                append crossing to unique
-        free crossings
-        return unique
+to get the cad [crossings] of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance}:
+    set candidates to an empty list of a cad vector2
+    collect cad cross2 candidates of first and second within tolerance into candidates
+    set crossings to an empty list of a cad crossing2
+    for each point in candidates:
+        set onFirst to the cad cross2 parameter on first at point within tolerance
+        if onFirst's valid:
+            set onSecond to the cad cross2 parameter on second at point within tolerance
+            if onSecond's valid:
+                append (@intrinsic("construct", a cad crossing2, point, onFirst's value, onSecond's value)) to crossings
+    free candidates
+    order cad cross2 crossings in crossings
+    set unique to an empty list of a cad crossing2
+    for each crossing in crossings:
+        set keep to true
+        if (the length of unique) > 0:
+            set previous to the last item of unique
+            if (the cad distance from crossing's point to previous's point) <= tolerance's linear:
+                set keep to false
+        if keep:
+            append crossing to unique
+    free crossings
+    return unique

@@ -1,4 +1,4 @@
 import examples/sections/project.dl
 
-print state's count as a line
-print instance's status as a line
+print line state's count
+print line instance's status

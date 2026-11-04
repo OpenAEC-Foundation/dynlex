@@ -20,19 +20,17 @@ flex section while truth satisfies the nested loop condition:
     replacement:
         the nested loop condition for truth
 
-function publish a branch for condition:
-    execute:
-        when condition satisfies the nested branch condition:
-            set the subject to 1
-        else:
-            set the subject to 2
-        ignore it
+to publish a branch for condition:
+    when condition satisfies the nested branch condition:
+        set the subject to 1
+    else:
+        set the subject to 2
+    ignore it
 
-function publish a loop for condition:
-    execute:
-        while condition satisfies the nested loop condition:
-            set the subject to 3
-        ignore it
+to publish a loop for condition:
+    while condition satisfies the nested loop condition:
+        set the subject to 3
+    ignore it
 
 publish a branch for true
 publish a loop for false

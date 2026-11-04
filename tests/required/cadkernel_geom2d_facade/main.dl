@@ -13,9 +13,7 @@ set second to a cad polyline vertex2 at (a cad vector2 with x 4.0 and y 0.0) wit
 set third to a cad polyline vertex2 at (a cad vector2 with x 4.0 and y 4.0) with bulge 0.0
 set fourth to a cad polyline vertex2 at (a cad vector2 with x 0.0 and y 4.0) with bulge 0.0
 set vertices to a list containing first
-append second to vertices
-append third to vertices
-append fourth to vertices
+append second, third and fourth to vertices
 set source to the cad polyline2 with vertices vertices and closure true
 set side to a cad vector2 with x 2.0 and y 2.0
 set outlines to the cad offset polylines of source by 0.5 toward side
@@ -24,4 +22,4 @@ if the length of outlines < 1:
 free outlines
 free cad polyline source
 free vertices
-print "geom2d public facade passed" as a line
+print line "geom2d public facade passed"

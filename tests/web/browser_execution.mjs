@@ -466,9 +466,9 @@ assertRiverChallengeLoadingBoundary(requestedUrls);
 
 const heroEdit = await evaluate(sourceEditExpression(0, `import lib/std.dl
 
-print 81 as a line`));
+print line 81`));
 assert.equal(heroEdit.state, "edited");
-assert.match(heroEdit.value, /print 81 as a line/);
+assert.match(heroEdit.value, /print line 81/);
 await waitFor(
   "document.querySelector('[data-snippet-source]').dataset.languageReady === 'true'",
   "semantic highlighting for the edited hero sketch"
@@ -508,7 +508,7 @@ assert.ok(
 await evaluate("document.querySelector('[data-lab-tab=\"reuse\"]').click()");
 await evaluate(sourceEditExpression(1, `import lib/std.dl
 
-print "Words become tools." as a line`));
+print line "Words become tools."`));
 await evaluate("document.querySelectorAll('[data-snippet-run]')[1].click()");
 await waitFor(
   "document.querySelectorAll('[data-runnable-sketch]')[1].dataset.runState === 'done'",
@@ -526,7 +526,7 @@ assert.equal(
 
 await evaluate(sourceEditExpression(2, `import lib/std.dl
 
-print 27 as a line`));
+print line 27`));
 await evaluate("document.querySelectorAll('[data-snippet-run]')[2].click()");
 await waitFor(
   "document.querySelectorAll('[data-runnable-sketch]')[2].dataset.runState === 'done'",
@@ -741,7 +741,7 @@ await waitFor(
   "the editable file to reopen from the project list"
 );
 await waitFor(
-  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print 8 squared as a line')",
+  "document.querySelector('.view-lines').textContent.replace(/\\u00a0/g, ' ').includes('print line 8 squared')",
   "returning from a definition to render the preserved editable source model"
 );
 await dispatchKey(" ", "Space", 32, 2);
@@ -760,9 +760,9 @@ async function replaceActiveLine(text) {
 
 await replaceMonacoSource(`import lib/std.dl
 
-print 1 as a line`);
+print line 1`);
 await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the diagnostic regression source");
-await findMonacoText("print 1 as a line");
+await findMonacoText("print line 1");
 await replaceActiveLine("add 2 to x");
 await waitFor("document.querySelector('#status-text')?.textContent === 'Build failed'", "the active invalid line build");
 assert.equal(await evaluate("document.querySelector('#diagnostics-count').textContent"), "0");
@@ -777,9 +777,9 @@ await navigate("/ide/");
 await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the IDE to reinitialize");
 await replaceMonacoSource(`import lib/std.dl
 
-print 1 as a line`);
+print line 1`);
 await waitFor("document.querySelector('#status-text')?.textContent === 'Ready'", "the explicit-run regression source");
-await findMonacoText("print 1 as a line");
+await findMonacoText("print line 1");
 await replaceActiveLine("add 2 to x");
 await waitFor("!document.querySelector('#run-button').disabled", "Run to remain available after the invalid background build");
 await clickElement("#run-button");

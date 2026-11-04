@@ -19,5 +19,4 @@ if arguments' length > 0:
     if selected = "nan":
         set linear to the square root of (-1.0)
 set refused to a cad tolerance of linear
-print "invalid tolerance was accepted" as a line
-print the cad linear tolerance of refused as a line
+print lines "invalid tolerance was accepted" and (the cad linear tolerance of refused)

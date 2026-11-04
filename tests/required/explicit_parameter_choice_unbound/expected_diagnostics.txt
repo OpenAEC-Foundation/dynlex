@@ -1,5 +1,5 @@
-tests/required/explicit_parameter_choice_unbound/main.dl:31-42: Error: No overload matches call 'support + 1' for argument types [an unresolved value, a 32-bit integer]. Available overloads: '{integer:left} + {integer:right}'
-  note: parameter 'support' is not bound by this call: the matched alternative does not include it tests/required/explicit_parameter_choice_unbound/main.dl:35-42
-  note: while inferring call 'support + 1' with arguments [an unresolved value, a 32-bit integer] -> an unresolved value tests/required/explicit_parameter_choice_unbound/main.dl:31-42
-  note: while inferring intrinsic 'discard' in '@intrinsic("discard", support + 1)' with arguments [an unresolved value] -> an unresolved value tests/required/explicit_parameter_choice_unbound/main.dl:9-43
+tests/required/explicit_parameter_choice_unbound/main.dl:62-73: Error: No overload matches call 'support + 1' for argument types [an unresolved value, a 32-bit integer]. Available overloads: '{integer:left} + {integer:right}'
+  note: parameter 'support' is not bound by this call: the matched alternative does not include it tests/required/explicit_parameter_choice_unbound/main.dl:29-36
+  note: while inferring call 'support + 1' with arguments [an unresolved value, a 32-bit integer] -> an unresolved value tests/required/explicit_parameter_choice_unbound/main.dl:62-73
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", support + 1)' with arguments [an unresolved value] -> an unresolved value tests/required/explicit_parameter_choice_unbound/main.dl:40-74
   note: while inferring call 'choose support' -> an unresolved value tests/required/explicit_parameter_choice_unbound/main.dl:1-15

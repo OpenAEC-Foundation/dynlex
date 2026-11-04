@@ -3,21 +3,18 @@
 # All five upstream tests, plus independently calculated interpolation fixtures.
 import lib/bim/spline.dl
 
-function spline check {boolean:condition} named {string:label}:
-    execute:
-        if the inverse of condition:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to spline check {boolean:condition} named {string:label}:
+    if not condition:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function spline near {a number:actual} to {a number:expected} within {a number:tolerance} named {string:label}:
-    execute:
-        spline check ((the absolute value of (actual - expected)) <= tolerance) named label
+to spline near {a number:actual} to {a number:expected} within {a number:tolerance} named {string:label}:
+    spline check ((the absolute value of (actual - expected)) <= tolerance) named label
 
-function spline point {an array of numbers:actual} near {an array of numbers:expected} named {string:label}:
-    execute:
-        spline check ((the length of actual) = (the length of expected)) named label
-        loop axis from 0 to the length of actual:
-            spline near (the item at axis in actual) to (the item at axis in expected) within 1e-12 named label
+to spline point {an array of numbers:actual} near {an array of numbers:expected} named {string:label}:
+    spline check ((the length of actual) = (the length of expected)) named label
+    loop axis from 0 to the length of actual:
+        spline near (the item at axis in actual) to (the item at axis in expected) within 1e-12 named label
 
 class:
     patterns:
@@ -27,11 +24,10 @@ class:
         reads as an integer
         indices
 
-function the cad spline point at {integer:index} from {a pointer to a spline fixture source:source}:
-    execute:
-        increment the reads of source
-        append index to the indices of source
-        return the item at index in the points of source
+to get the cad spline point at {integer:index} from {a pointer to a spline fixture source:source}:
+    increment the reads of source
+    append index to the indices of source
+    return the item at index in the points of source
 
 set cubic to a list containing [0.0, 0.0, 1.0]
 append [1.0, 4.0, 1.0] to cubic
@@ -98,7 +94,7 @@ loop degree from 15 to 17:
     spline point (the cad de Boor value of degree degree with knots highKnots and points high at 0.5) near [x, 2.0 * x] named "stack and heap degree boundary"
     free high
     free highKnots
-print "cadkernel spline de Boor fixtures passed" as a line
+print line "cadkernel spline de Boor fixtures passed"
 
 set uniform to the cad uniform parameterization
 set chord to the cad chord parameterization
@@ -141,7 +137,7 @@ set fit5 to the cad open spline through space using centripetal
 spline near (the item at 4 in the knots of fit5) to 2.23606797749979 within 1e-12 named "centripetal square root chord"
 spline near (the last item of the knots of fit5) to 5.39834563766817 within 1e-12 named "centripetal domain"
 free cad spline interpolation fit5
-print "cadkernel spline open interpolation fixtures passed" as a line
+print line "cadkernel spline open interpolation fixtures passed"
 
 set square to a list containing [0.0, 0.0]
 append [1.0, 0.0] to square
@@ -164,7 +160,7 @@ replace item at index 4 in square with [2e-9, 0.0]
 set loopFit to the cad periodic spline through square using uniform
 spline check ((the length of the controls of loopFit) = 16) named "distinct closing fit point retained"
 free cad spline interpolation loopFit
-print "cadkernel spline periodic interpolation fixtures passed" as a line
+print line "cadkernel spline periodic interpolation fixtures passed"
 
 set singleton to a list containing [1.0]
 set failed1 to the cad open spline through singleton using uniform
@@ -193,8 +189,7 @@ free cad spline interpolation fit1
 set constant to a list containing [2.0]
 append [9.0] to constant
 set constantKnots to a list containing 0.0
-append 0.5 to constantKnots
-append 1.0 to constantKnots
+append 0.5 and 1.0 to constantKnots
 spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at (-1.0)) near [2.0] named "degree zero before domain"
 spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at 0.5) near [9.0] named "degree zero inclusive knot"
 spline point (the cad de Boor value of degree 0 with knots constantKnots and points constant at nan) near [2.0] named "degree zero NaN selects first"
@@ -206,7 +201,7 @@ spline point (the cad de Boor value of degree 1 with knots narrow and points con
 replace item at index 2 in narrow with 1e-15
 replace item at index 3 in narrow with 1e-15
 spline point (the cad de Boor value of degree 1 with knots narrow and points constant at 1e-15) near [9.0] named "exact knot denominator threshold"
-print "cadkernel spline degenerate fixtures passed" as a line
+print line "cadkernel spline degenerate fixtures passed"
 
 free cubic
 free knots

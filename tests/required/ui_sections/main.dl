@@ -4,16 +4,16 @@ set firstState to a new project state
 set secondState to a new project state
 set first to an instance of project window with state (the address of firstState)
 set second to an instance of project window with state (the address of secondState)
-print the width of (the "blue" row of (project window's table)) as a line
+print line the width of (the "blue" row of (project window's table))
 click the "New Project" button in the address of first
 click the "New Project" button in the address of first
 click the "New Project" button in the address of second
-print firstState's count as a line
-print secondState's count as a line
-print first's status as a line
-print second's status as a line
+print line firstState's count
+print line secondState's count
+print line first's status
+print line second's status
 click the "Draw" button in the address of first
-print first's status as a line
+print line first's status
 close the address of first
 close the address of second
 
@@ -31,10 +31,10 @@ window extended window:
             button "Nested"
 
 set group to the UI child at 0 in extended window
-print group's kind as a line
-print group's count as a line
+print line group's kind
+print line group's count
 set bar to the UI child at 1 in group
-print (the UI child at 0 in bar)'s text as a line
+print line (the UI child at 0 in bar)'s text
 
 window unstyled window:
     2 x 1 table:
@@ -42,4 +42,4 @@ window unstyled window:
             "name"
             "amount"
 
-print the width of (the "blue" row of (unstyled window's table)) as a line
+print line the width of (the "blue" row of (unstyled window's table))

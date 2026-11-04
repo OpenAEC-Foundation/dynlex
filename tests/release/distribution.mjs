@@ -427,8 +427,12 @@ assert.equal(
   "56bb2411609227288b70117ead2c47585ba07713",
 );
 assert.deepEqual(
-  [...vcpkgManifest.dependencies].sort(),
-  ["freetype", "glfw3", "nlohmann-json", "vulkan"],
+  vcpkgManifest.dependencies.map((dependency) => typeof dependency === "string" ? dependency : dependency.name).sort(),
+  ["freetype", "glfw3", "nlohmann-json", "spirv-tools", "vulkan"],
+);
+assert.deepEqual(
+  vcpkgManifest.dependencies.find((dependency) => dependency.name === "spirv-tools").features,
+  ["tools"],
 );
 assert.match(windowsDependencyInstaller, /metadata\\VCPKG_TOOLCHAIN/);
 assert.match(windowsDependencyInstaller, /--branch \$metadata\.release/);

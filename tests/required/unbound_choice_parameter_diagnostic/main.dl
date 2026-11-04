@@ -1,7 +1,6 @@
 import std.dl
 
-function the combination of alpha [and beta|alone]:
-	execute:
-		return alpha + beta
+to get the combination of alpha [and beta|alone]:
+	return alpha + beta
 
-print (the combination of 1 alone) as a line
+print line (the combination of 1 alone)

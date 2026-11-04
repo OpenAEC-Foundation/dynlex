@@ -409,7 +409,7 @@ to get the result of drawing {a value:value} as a number at x {a value:horizonta
         if rendering failed:
             return rendering
         set cursor to rendering's horizontal position
-        render ((the remainder of value divided by 10) + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
+        render ((value mod 10) + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
         if rendering failed:
             return rendering
         set cursor to rendering's horizontal position
@@ -418,12 +418,12 @@ to get the result of drawing {a value:value} as a number at x {a value:horizonta
         if rendering failed:
             return rendering
         set cursor to rendering's horizontal position
-        set remaining to the remainder of value divided by 100
+        set remaining to value mod 100
         render (remaining / 10 + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
         if rendering failed:
             return rendering
         set cursor to rendering's horizontal position
-        render ((the remainder of remaining divided by 10) + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
+        render ((remaining mod 10) + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
         if rendering failed:
             return rendering
         set cursor to rendering's horizontal position

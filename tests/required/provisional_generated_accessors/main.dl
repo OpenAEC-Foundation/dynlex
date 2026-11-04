@@ -1,9 +1,5 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
-function the type of value:
-    replacement:
-        @intrinsic("type of", value)
+integer means: @intrinsic("type", "int")
+the type of value means: @intrinsic("type of", value)
 section if condition:
     replacement:
         @intrinsic("if", condition)
@@ -17,19 +13,17 @@ class:
         other
     members:
         length as integer
-function sample:
-    execute:
-        @intrinsic("store", value, @intrinsic("construct", holder))
-        @intrinsic("store", the length of value, 17)
-        @intrinsic("return", the length of value)
+to get sample:
+    @intrinsic("store", value, @intrinsic("construct", holder))
+    @intrinsic("store", the length of value, 17)
+    @intrinsic("return", the length of value)
 class:
     patterns:
         container
     members:
         value as the type of sample
-function consume {container:item}:
-    execute:
-        @intrinsic("return", item's value)
+to get consume {container:item}:
+    @intrinsic("return", item's value)
 @intrinsic("store", item, @intrinsic("construct", container))
 @intrinsic("store", item's value, sample)
 if @intrinsic("not equal", consume item, 17):

@@ -139,24 +139,21 @@ local function the cad owned polygon frame at {cad vector2:origin} sized {cad ve
         allocate one slot of 0 and set owner to it
         return @intrinsic("construct", a cad polygon frame, origin, extent, vertices, owner)
 
-function the cad clone of {cad triangulation2:mesh}:
-    execute:
-        set vertices to the cad triangulation copy of (the points of mesh)
-        set faces to the cad triangulation copy of (the triangles of mesh)
-        return the cad owned triangulation with points vertices and triangles faces
+to get the cad clone of {cad triangulation2:mesh}:
+    set vertices to the cad triangulation copy of (the points of mesh)
+    set faces to the cad triangulation copy of (the triangles of mesh)
+    return the cad owned triangulation with points vertices and triangles faces
 
 function free cad triangulation {cad triangulation2:mesh}:
     replacement:
         set mesh to a new (the type of mesh)
 
-function the cad clone of {cad polygon frame:frameValue}:
-    execute:
-        set vertices to the cad triangulation copy of (the points of frameValue)
-        return the cad owned polygon frame at (the origin of frameValue) sized (the size of frameValue) with points vertices
+to get the cad clone of {cad polygon frame:frameValue}:
+    set vertices to the cad triangulation copy of (the points of frameValue)
+    return the cad owned polygon frame at (the origin of frameValue) sized (the size of frameValue) with points vertices
 
-function the cad clone of {cad polygon frame result:resultValue}:
-    execute:
-        return @intrinsic("construct", a cad polygon frame result, the valid of resultValue, the cad clone of (the value of resultValue))
+to get the cad clone of {cad polygon frame result:resultValue}:
+    return @intrinsic("construct", a cad polygon frame result, the valid of resultValue, the cad clone of (the value of resultValue))
 
 function free cad polygon frame {cad polygon frame:frameValue}:
     replacement:
@@ -166,18 +163,17 @@ function free cad polygon frame result {cad polygon frame result:resultValue}:
     replacement:
         set resultValue to a new (the type of resultValue)
 
-function cad {cad polygon frame:left} equals {cad polygon frame:right}:
-    execute:
-        if ((cad triangulation point (the origin of left) equals (the origin of right)) = false) or ((cad triangulation point (the size of left) equals (the size of right)) = false):
+to get cad {cad polygon frame:left} equals {cad polygon frame:right}:
+    if ((cad triangulation point (the origin of left) equals (the origin of right)) = false) or ((cad triangulation point (the size of left) equals (the size of right)) = false):
+        return false
+    set a to the points of left
+    set b to the points of right
+    if (the length of a) != (the length of b):
+        return false
+    loop index from 0 to the length of a:
+        if (cad triangulation point (the item at index in a) equals (the item at index in b)) = false:
             return false
-        set a to the points of left
-        set b to the points of right
-        if (the length of a) != (the length of b):
-            return false
-        loop index from 0 to the length of a:
-            if (cad triangulation point (the item at index in a) equals (the item at index in b)) = false:
-                return false
-        return true
+    return true
 
 local function no cad polygon frame:
     execute:
@@ -216,8 +212,7 @@ local function the cad triangulation signed area of {a pointer to a list:vertice
 
 local function cad triangulation ring {a pointer to a list:vertices} is finite:
     execute:
-        loop index from 0 to the length of vertices:
-            set pointValue to the item at index in vertices
+        for each pointValue in vertices:
             if ((cad triangulation scalar (the x of pointValue) is finite) = false) or ((cad triangulation scalar (the y of pointValue) is finite) = false):
                 return false
         return true
@@ -228,8 +223,7 @@ local function the cad triangulation sanitized ring of {a pointer to a list:vert
         set cleaned to an empty list of a cad vector2
         if (cad triangulation ring vertices is finite) = false:
             return cleaned
-        loop index from 0 to the length of vertices:
-            set pointValue to the item at index in vertices
+        for each pointValue in vertices:
             if (the length of cleaned) = 0:
                 append pointValue to cleaned
             else:
@@ -305,9 +299,9 @@ local function cad triangulation ring {a pointer to a list:vertices} is simple w
                 if (the cad distance from (the item at firstIndex in vertices) to (the item at secondIndex in vertices)) <= limit:
                     return false
         loop index from 0 to count:
-            set before to the item at (the remainder of ((index + count) - 1) divided by count) in vertices
+            set before to the item at (((index + count) - 1) mod count) in vertices
             set here to the item at index in vertices
-            set after to the item at (the remainder of (index + 1) divided by count) in vertices
+            set after to the item at ((index + 1) mod count) in vertices
             set incoming to the cad difference of before and here
             set outgoing to the cad difference of after and here
             set span to the maximum of (the maximum of (the cad length of incoming) and (the cad length of outgoing)) and 1.0
@@ -315,9 +309,9 @@ local function cad triangulation ring {a pointer to a list:vertices} is simple w
             if ((the absolute value of (the cad cross of incoming and outgoing)) <= epsilon) and ((the cad dot of incoming and outgoing) > 0.0):
                 return false
         loop firstIndex from 0 to count:
-            set firstNext to the remainder of (firstIndex + 1) divided by count
+            set firstNext to (firstIndex + 1) mod count
             loop secondIndex from (firstIndex + 1) to count:
-                set secondNext to the remainder of (secondIndex + 1) divided by count
+                set secondNext to (secondIndex + 1) mod count
                 if (firstNext != secondIndex) and (secondNext != firstIndex):
                     if cad triangulation segments from (the item at firstIndex in vertices) to (the item at firstNext in vertices) and from (the item at secondIndex in vertices) to (the item at secondNext in vertices) intersect within limit:
                         return false
@@ -327,7 +321,7 @@ local function cad triangulation boundaries {a pointer to a list:left} and {a po
     execute:
         loop a from 0 to the length of left:
             loop b from 0 to the length of right:
-                if cad triangulation segments from (the item at a in left) to (the item at (the remainder of (a + 1) divided by (the length of left)) in left) and from (the item at b in right) to (the item at (the remainder of (b + 1) divided by (the length of right)) in right) intersect within 0.0:
+                if cad triangulation segments from (the item at a in left) to (the item at ((a + 1) mod (the length of left)) in left) and from (the item at b in right) to (the item at ((b + 1) mod (the length of right)) in right) intersect within 0.0:
                     return true
         return false
 
@@ -335,7 +329,7 @@ local function cad triangulation boundaries {a pointer to a list:left} and {a po
     execute:
         loop a from 0 to the length of left:
             loop b from 0 to the length of right:
-                if cad triangulation segments from (the item at a in left) to (the item at (the remainder of (a + 1) divided by (the length of left)) in left) and from (the item at b in right) to (the item at (the remainder of (b + 1) divided by (the length of right)) in right) properly cross:
+                if cad triangulation segments from (the item at a in left) to (the item at ((a + 1) mod (the length of left)) in left) and from (the item at b in right) to (the item at ((b + 1) mod (the length of right)) in right) properly cross:
                     return true
         return false
 
@@ -349,80 +343,75 @@ local function cad triangulation point {cad vector2:p} lies on the segment from 
 local function cad triangulation point {cad vector2:p} lies on boundary {a pointer to a list:vertices}:
     execute:
         loop index from 0 to the length of vertices:
-            if cad triangulation point p lies on the segment from (the item at index in vertices) to (the item at (the remainder of (index + 1) divided by (the length of vertices)) in vertices):
+            if cad triangulation point p lies on the segment from (the item at index in vertices) to (the item at ((index + 1) mod (the length of vertices)) in vertices):
                 return true
         return false
 
 local function cad triangulation ring {a pointer to a list:vertices} contains point {cad vector2:p}:
     execute:
         set included to false
-        loop index from 0 to the length of vertices:
-            set a to the item at index in vertices
-            set b to the item at (the remainder of (index + 1) divided by (the length of vertices)) in vertices
+        for each a at index in vertices:
+            set b to the item at ((index + 1) mod (the length of vertices)) in vertices
             if ((the y of a) > (the y of p)) != ((the y of b) > (the y of p)):
                 set crossing to ((((the x of b) - (the x of a)) * ((the y of p) - (the y of a))) / ((the y of b) - (the y of a))) + (the x of a)
                 if (the x of p) < crossing:
-                    set included to the inverse of included
+                    set included to not included
         return included
 
 local function cad triangulation ring {a pointer to a list:outer} strictly contains {a pointer to a list:inner}:
     execute:
-        loop index from 0 to the length of inner:
-            set pointValue to the item at index in inner
+        for each pointValue in inner:
             if (cad triangulation point pointValue lies on boundary outer) = false:
                 return cad triangulation ring outer contains point pointValue
         return false
 
-function the cad polygon frame of {a pointer to a list:input} within {cad tolerance:tolerance}:
-    execute:
-        check cad triangulation ring input
-        if (cad triangulation ring input is finite) = false:
-            return no cad polygon frame
-        set limit to the cad linear tolerance of tolerance
-        set vertices to an empty list of a cad vector2
-        loop index from 0 to the length of input:
-            set pointValue to the item at index in input
-            if (the length of vertices) = 0:
-                append pointValue to vertices
-            else:
-                if (the cad distance from (the last item of vertices) to pointValue) > limit:
-                    append pointValue to vertices
-        loop while cad triangulation ring vertices closes within limit:
-            remove item ((the length of vertices) - 1) from vertices
+to get the cad polygon frame of {a pointer to a list:input} within {cad tolerance:tolerance}:
+    check cad triangulation ring input
+    if (cad triangulation ring input is finite) = false:
+        return no cad polygon frame
+    set limit to the cad linear tolerance of tolerance
+    set vertices to an empty list of a cad vector2
+    for each pointValue in input:
         if (the length of vertices) = 0:
-            free vertices
-            return no cad polygon frame
-        set bounds to the cad triangulation bounds of vertices
-        set extent to the cad difference of (the maxPoint of bounds) and (the minPoint of bounds)
-        set scale to the maximum of (the x of extent) and (the y of extent)
-        set area to the absolute value of (the cad triangulation signed area of vertices)
-        if (((the x of extent) <= limit) or ((the y of extent) <= limit)) or ((area <= (limit * (the maximum of scale and limit))) or ((cad triangulation ring vertices is simple within limit) = false)):
-            free vertices
-            return no cad polygon frame
-        set frameValue to the cad owned polygon frame at (the minPoint of bounds) sized extent with points vertices
-        return @intrinsic("construct", a cad polygon frame result, true, frameValue)
+            append pointValue to vertices
+        else:
+            if (the cad distance from (the last item of vertices) to pointValue) > limit:
+                append pointValue to vertices
+    loop while cad triangulation ring vertices closes within limit:
+        remove item ((the length of vertices) - 1) from vertices
+    if (the length of vertices) = 0:
+        free vertices
+        return no cad polygon frame
+    set bounds to the cad triangulation bounds of vertices
+    set extent to the cad difference of (the maxPoint of bounds) and (the minPoint of bounds)
+    set scale to the maximum of (the x of extent) and (the y of extent)
+    set area to the absolute value of (the cad triangulation signed area of vertices)
+    if (((the x of extent) <= limit) or ((the y of extent) <= limit)) or ((area <= (limit * (the maximum of scale and limit))) or ((cad triangulation ring vertices is simple within limit) = false)):
+        free vertices
+        return no cad polygon frame
+    set frameValue to the cad owned polygon frame at (the minPoint of bounds) sized extent with points vertices
+    return @intrinsic("construct", a cad polygon frame result, true, frameValue)
 
-function the cad ring nesting [depths] of {a pointer to a list:boundaries}:
-    execute:
-        check cad triangulation rings boundaries
-        set areas to an empty list of a 64 bit floating-point number
-        set sanitized to an empty list of (the type of (the item at 0 in boundaries))
-        loop index from 0 to the length of boundaries:
-            set vertices to the cad triangulation sanitized ring of (the item at index in boundaries)
-            append vertices to sanitized
-            append (the absolute value of (the cad triangulation signed area of vertices)) to areas
-        set depths to an empty list of an integer
-        loop index from 0 to the length of sanitized:
-            set depth to 0
-            loop other from 0 to the length of sanitized:
-                if ((other != index) and ((the item at other in areas) > (the item at index in areas))) and (cad triangulation ring (the item at other in sanitized) strictly contains (the item at index in sanitized)):
-                    set depth to depth + 1
-            append depth to depths
-        loop index from 0 to the length of sanitized:
-            free (the item at index in sanitized)
-        free sanitized
-        free areas
-        return depths
+to get the cad ring nesting [depths] of {a pointer to a list:boundaries}:
+    check cad triangulation rings boundaries
+    set areas to an empty list of a 64 bit floating-point number
+    set sanitized to an empty list of (the type of (the item at 0 in boundaries))
+    loop index from 0 to the length of boundaries:
+        set vertices to the cad triangulation sanitized ring of (the item at index in boundaries)
+        append vertices to sanitized
+        append (the absolute value of (the cad triangulation signed area of vertices)) to areas
+    set depths to an empty list of an integer
+    loop index from 0 to the length of sanitized:
+        set depth to 0
+        loop other from 0 to the length of sanitized:
+            if ((other != index) and ((the item at other in areas) > (the item at index in areas))) and (cad triangulation ring (the item at other in sanitized) strictly contains (the item at index in sanitized)):
+                set depth to depth + 1
+        append depth to depths
+    loop index from 0 to the length of sanitized:
+        free (the item at index in sanitized)
+    free sanitized
+    free areas
+    return depths
 
 local function the cad triangulation [oriented] ring of {a pointer to a list:vertices} counterclockwise {boolean:counterclockwise}:
     execute:
@@ -452,10 +441,9 @@ local function the cad triangulation bridge target in {a pointer to a list:verti
     execute:
         set count to the length of indices
         set nearest to 1.0 / 0.0
-        set firstIndex to -1
-        set secondIndex to -1
+        set firstIndex and secondIndex to -1
         loop index from 0 to count:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set a to the item at (the item at index in indices) in vertices
             set b to the item at (the item at next in indices) in vertices
             if ((the y of a) > (the y of pointValue)) != ((the y of b) > (the y of pointValue)):
@@ -490,9 +478,8 @@ local function bridge cad triangulation hole {a pointer to a list:hole} into {a 
             loop index from 0 to (at + 1):
                 append (the item at index in indices) to spliced
             loop step from 0 to the length of hole:
-                append (base + (the remainder of (start + step) divided by (the length of hole))) to spliced
-            append (base + start) to spliced
-            append (the item at at in indices) to spliced
+                append (base + ((start + step) mod (the length of hole))) to spliced
+            append (base + start) and (the item at at in indices) to spliced
             loop index from (at + 1) to the length of indices:
                 append (the item at index in indices) to spliced
             clear indices
@@ -507,15 +494,15 @@ local function cad triangulation triangle from {cad vector2:a} through {cad vect
 local function cad triangulation corner {integer:at} in {a pointer to a list:indices} of {a pointer to a list:vertices} is an ear:
     execute:
         set count to the length of indices
-        set previous to the remainder of ((at + count) - 1) divided by count
-        set next to the remainder of (at + 1) divided by count
+        set previous to ((at + count) - 1) mod count
+        set next to (at + 1) mod count
         set a to the item at (the item at previous in indices) in vertices
         set b to the item at (the item at at in indices) in vertices
         set c to the item at (the item at next in indices) in vertices
         if (the cad cross of (the cad difference of b and a) and (the cad difference of c and b)) <= 0.0:
             return false
         loop other from 0 to count:
-            if (other != at) and ((other != previous) and (other != next)):
+            if (other != at) and (previous != other != next):
                 set p to the item at (the item at other in indices) in vertices
                 if ((cad triangulation point p equals a) = false) and (((cad triangulation point p equals b) = false) and ((cad triangulation point p equals c) = false)):
                     if cad triangulation triangle from a through b to c includes p:
@@ -525,14 +512,14 @@ local function cad triangulation corner {integer:at} in {a pointer to a list:ind
 local function the cad triangulation ear [score] at {integer:at} in {a pointer to a list:indices} of {a pointer to a list:vertices} scaled by {cad vector2:scale}:
     execute:
         set count to the length of indices
-        set a to the item at (the item at (the remainder of ((at + count) - 1) divided by count) in indices) in vertices
+        set a to the item at (the item at (((at + count) - 1) mod count) in indices) in vertices
         set b to the item at (the item at at in indices) in vertices
-        set c to the item at (the item at (the remainder of (at + 1) divided by count) in indices) in vertices
+        set c to the item at (the item at ((at + 1) mod count) in indices) in vertices
         set corners to [a, b, c]
         set score to 0.0
         loop index from 0 to 3:
             set p to the item at index in corners
-            set q to the item at (the remainder of (index + 1) divided by 3) in corners
+            set q to the item at ((index + 1) mod 3) in corners
             set dx to ((the x of q) - (the x of p)) / (the x of scale)
             set dy to ((the y of q) - (the y of p)) / (the y of scale)
             set score to the maximum of score and ((dx * dx) + (dy * dy))
@@ -548,8 +535,7 @@ local function the cad triangulation ears of {a pointer to a list:vertices} arou
                 return faces
             set count to the length of indices
             set infinity to 1.0 / 0.0
-            set lowerX to infinity
-            set lowerY to infinity
+            set lowerX and lowerY to infinity
             set upperX to the negative of infinity
             set upperY to the negative of infinity
             loop index from 0 to count:
@@ -569,9 +555,9 @@ local function the cad triangulation ears of {a pointer to a list:vertices} arou
                         set cut to at
                         set bestKey to key
             if cut >= 0:
-                set firstIndex to the item at (the remainder of ((cut + count) - 1) divided by count) in indices
+                set firstIndex to the item at (((cut + count) - 1) mod count) in indices
                 set secondIndex to the item at cut in indices
-                set thirdIndex to the item at (the remainder of (cut + 1) divided by count) in indices
+                set thirdIndex to the item at ((cut + 1) mod count) in indices
                 append (@intrinsic("construct", a cad triangle indices, firstIndex, secondIndex, thirdIndex)) to faces
                 remove item cut from indices
                 set failures to 0
@@ -581,43 +567,41 @@ local function the cad triangulation ears of {a pointer to a list:vertices} arou
             append (@intrinsic("construct", a cad triangle indices, the item at 0 in indices, the item at 1 in indices, the item at 2 in indices)) to faces
         return faces
 
-function the cad triangulation of {a pointer to a list:outer} with holes {a pointer to a list:holes}:
-    execute:
-        check cad triangulation ring outer
-        check cad triangulation rings holes
-        set vertices to the cad triangulation oriented ring of outer counterclockwise true
-        if (the length of vertices) < 3:
-            free vertices
-            return an empty cad triangulation
-        set indices to an empty list of an integer
-        loop index from 0 to the length of vertices:
-            append index to indices
-        set pending to an empty list of (the type of vertices)
-        loop index from 0 to the length of holes:
-            set hole to the cad triangulation oriented ring of (the item at index in holes) counterclockwise false
-            if (the length of hole) >= 3:
-                # Stable descending sort by the rightmost x total order.
-                set key to the cad triangulation total order key of (the x of (the item at (the cad triangulation rightmost index of hole) in hole))
-                set at to the length of pending
-                set searching to true
-                loop while (at > 0) and searching:
-                    set previous to the item at (at - 1) in pending
-                    set previousKey to the cad triangulation total order key of (the x of (the item at (the cad triangulation rightmost index of previous) in previous))
-                    if previousKey < key:
-                        set at to at - 1
-                    else:
-                        set searching to false
-                insert hole into pending at index at
-            else:
-                free hole
-        loop index from 0 to the length of pending:
-            set hole to the item at index in pending
-            bridge cad triangulation hole hole into vertices around indices
+to get the cad triangulation of {a pointer to a list:outer} with holes {a pointer to a list:holes}:
+    check cad triangulation ring outer
+    check cad triangulation rings holes
+    set vertices to the cad triangulation oriented ring of outer counterclockwise true
+    if (the length of vertices) < 3:
+        free vertices
+        return an empty cad triangulation
+    set indices to an empty list of an integer
+    loop index from 0 to the length of vertices:
+        append index to indices
+    set pending to an empty list of (the type of vertices)
+    loop index from 0 to the length of holes:
+        set hole to the cad triangulation oriented ring of (the item at index in holes) counterclockwise false
+        if (the length of hole) >= 3:
+            # Stable descending sort by the rightmost x total order.
+            set key to the cad triangulation total order key of (the x of (the item at (the cad triangulation rightmost index of hole) in hole))
+            set at to the length of pending
+            set searching to true
+            loop while (at > 0) and searching:
+                set previous to the item at (at - 1) in pending
+                set previousKey to the cad triangulation total order key of (the x of (the item at (the cad triangulation rightmost index of previous) in previous))
+                if previousKey < key:
+                    set at to at - 1
+                else:
+                    set searching to false
+            insert hole into pending at index at
+        else:
             free hole
-        free pending
-        set faces to the cad triangulation ears of vertices around indices
-        free indices
-        return the cad owned triangulation with points vertices and triangles faces
+    for each hole in pending:
+        bridge cad triangulation hole hole into vertices around indices
+        free hole
+    free pending
+    set faces to the cad triangulation ears of vertices around indices
+    free indices
+    return the cad owned triangulation with points vertices and triangles faces
 
 local function cad triangulation checked ring {cad triangulation checked ring:left} interacts with {cad triangulation checked ring:right}:
     execute:
@@ -637,8 +621,7 @@ local function cad triangulation {cad triangulation2:mesh} matches [area] {a 64 
         if ((the length of faces) = 0) or (((cad triangulation scalar expected is finite) = false) or (expected <= 0.0)):
             return false
         set area to 0.0
-        loop index from 0 to the length of faces:
-            set face to the item at index in faces
+        for each face in faces:
             if (vertices lacks an item at (the first of face)) or ((vertices lacks an item at (the second of face)) or (vertices lacks an item at (the third of face))):
                 return false
             set a to the item at (the first of face) in vertices
@@ -659,123 +642,120 @@ local function append cad triangulation {cad triangulation2:source} to {cad tria
             set face to the item at index in the triangles of source
             append (@intrinsic("construct", a cad triangle indices, (the first of face) + base, (the second of face) + base, (the third of face) + base)) to (the triangles of destination)
 
-function the cad triangulation of rings {a pointer to a list:boundaries}:
-    execute:
-        check cad triangulation rings boundaries
-        set prototype to @intrinsic("construct", a cad triangulation checked ring, a new (the type of (the item at 0 in boundaries)), 0.0, a new cad triangulation ring bounds)
-        set checked to an empty list of (the type of prototype)
-        set invalid to an empty list of (the type of prototype)
-        loop index from 0 to the length of boundaries:
-            set vertices to the cad triangulation sanitized ring of (the item at index in boundaries)
-            if (the length of vertices) > 0:
-                set bounds to the cad triangulation bounds of vertices
-                set area to the cad triangulation signed area of vertices
-                set candidate to @intrinsic("construct", a cad triangulation checked ring, vertices, the absolute value of area, bounds)
-                if ((cad triangulation ring vertices is simple within 0.0) = false) or (((cad triangulation scalar area is finite) = false) or (area = 0.0)):
-                    append candidate to invalid
-                else:
-                    append candidate to checked
+to get the cad triangulation of rings {a pointer to a list:boundaries}:
+    check cad triangulation rings boundaries
+    set prototype to @intrinsic("construct", a cad triangulation checked ring, a new (the type of (the item at 0 in boundaries)), 0.0, a new cad triangulation ring bounds)
+    set checked to an empty list of (the type of prototype)
+    set invalid to an empty list of (the type of prototype)
+    loop index from 0 to the length of boundaries:
+        set vertices to the cad triangulation sanitized ring of (the item at index in boundaries)
+        if (the length of vertices) > 0:
+            set bounds to the cad triangulation bounds of vertices
+            set area to the cad triangulation signed area of vertices
+            set candidate to @intrinsic("construct", a cad triangulation checked ring, vertices, the absolute value of area, bounds)
+            if ((cad triangulation ring vertices is simple within 0.0) = false) or (((cad triangulation scalar area is finite) = false) or (area = 0.0)):
+                append candidate to invalid
             else:
-                free vertices
-        set bad to an empty list of a boolean
-        loop index from 0 to the length of checked:
-            append false to bad
-        loop firstIndex from 0 to the length of checked:
-            set firstRing to the item at firstIndex in checked
-            loop secondIndex from (firstIndex + 1) to the length of checked:
-                set secondRing to the item at secondIndex in checked
-                if (cad triangulation bounds (the bounds of firstRing) overlap (the bounds of secondRing)) and (cad triangulation boundaries (the points of firstRing) and (the points of secondRing) properly cross):
-                    replace item at index firstIndex in bad with true
-                    replace item at index secondIndex in bad with true
-        loop index from 0 to the length of checked:
-            loop other from 0 to the length of invalid:
-                if cad triangulation checked ring (the item at index in checked) interacts with (the item at other in invalid):
-                    replace item at index index in bad with true
-        set changed to true
-        loop while changed:
-            set activeBad to an empty list of an integer
-            loop index from 0 to the length of bad:
-                if the item at index in bad:
-                    append index to activeBad
-            set changed to false
-            loop index from 0 to the length of checked:
-                if (the item at index in bad) = false:
-                    set found to false
-                    set other to 0
-                    loop while (other < (the length of activeBad)) and (found = false):
-                        set found to cad triangulation checked ring (the item at index in checked) interacts with (the item at (the item at other in activeBad) in checked)
-                        set other to other + 1
-                    if found:
-                        replace item at index index in bad with true
-                        set changed to true
-            free activeBad
-        set validRings to an empty list of (the type of prototype)
+                append candidate to checked
+        else:
+            free vertices
+    set bad to an empty list of a boolean
+    loop index from 0 to the length of checked:
+        append false to bad
+    for each firstRing at firstIndex in checked:
+        loop secondIndex from (firstIndex + 1) to the length of checked:
+            set secondRing to the item at secondIndex in checked
+            if (cad triangulation bounds (the bounds of firstRing) overlap (the bounds of secondRing)) and (cad triangulation boundaries (the points of firstRing) and (the points of secondRing) properly cross):
+                replace item at index firstIndex in bad with true
+                replace item at index secondIndex in bad with true
+    loop index from 0 to the length of checked:
+        loop other from 0 to the length of invalid:
+            if cad triangulation checked ring (the item at index in checked) interacts with (the item at other in invalid):
+                replace item at index index in bad with true
+    set changed to true
+    loop while changed:
+        set activeBad to an empty list of an integer
+        loop index from 0 to the length of bad:
+            if the item at index in bad:
+                append index to activeBad
+        set changed to false
         loop index from 0 to the length of checked:
             if (the item at index in bad) = false:
-                append (the item at index in checked) to validRings
-        # validRings borrows children owned by checked until the final cleanup.
-        set parents to an empty list of an integer
-        loop index from 0 to the length of validRings:
-            set parent to -1
-            set bestArea to 0.0
-            set inner to the item at index in validRings
-            loop other from 0 to the length of validRings:
-                set outer to the item at other in validRings
-                if ((other != index) and ((the area of outer) > (the area of inner))) and (cad triangulation ring (the points of outer) strictly contains (the points of inner)):
-                    if (parent < 0) or ((the area of outer) < bestArea):
-                        set parent to other
-                        set bestArea to the area of outer
-            append parent to parents
-        set depths to an empty list of an integer
-        loop index from 0 to the length of parents:
-            set depth to 0
-            set next to the item at index in parents
-            loop while next >= 0:
-                set depth to depth + 1
-                set next to the item at next in parents
-            append depth to depths
-        set result to an empty cad triangulation
-        loop rootIndex from 0 to the length of parents:
-            if (the item at rootIndex in parents) < 0:
-                set members to an empty list of an integer
-                loop index from 0 to the length of parents:
-                    if (the cad triangulation root of index with parents parents) = rootIndex:
-                        append index to members
-                set component to an empty cad triangulation
-                set complete to true
-                set cursor to 0
-                loop while (cursor < (the length of members)) and complete:
-                    set outerIndex to the item at cursor in members
-                    if (the remainder of (the item at outerIndex in depths) divided by 2) = 0:
-                        set holes to an empty list of (the type of (the item at 0 in boundaries))
-                        set holeArea to -0.0
-                        loop index from 0 to the length of members:
-                            set childIndex to the item at index in members
-                            if ((the item at childIndex in parents) = outerIndex) and ((the remainder of (the item at childIndex in depths) divided by 2) = 1):
-                                set hole to the points of (the item at childIndex in validRings)
-                                append hole to holes
-                                set holeArea to holeArea + (the absolute value of (the cad triangulation signed area of hole))
-                        set outer to the item at outerIndex in validRings
-                        set expected to (the area of outer) - holeArea
-                        set localMesh to the cad triangulation of (the points of outer) with holes holes
-                        set complete to cad triangulation localMesh matches area expected
-                        if complete:
-                            append cad triangulation localMesh to component
-                        free cad triangulation localMesh
-                        free holes
-                    set cursor to cursor + 1
-                if complete:
-                    append cad triangulation component to result
-                free cad triangulation component
-                free members
-        free parents
-        free depths
-        free validRings
-        free bad
-        loop index from 0 to the length of checked:
-            free (the points of (the item at index in checked))
-        loop index from 0 to the length of invalid:
-            free (the points of (the item at index in invalid))
-        free checked
-        free invalid
-        return result
+                set found to false
+                set other to 0
+                loop while (other < (the length of activeBad)) and (found = false):
+                    set found to cad triangulation checked ring (the item at index in checked) interacts with (the item at (the item at other in activeBad) in checked)
+                    set other to other + 1
+                if found:
+                    replace item at index index in bad with true
+                    set changed to true
+        free activeBad
+    set validRings to an empty list of (the type of prototype)
+    loop index from 0 to the length of checked:
+        if (the item at index in bad) = false:
+            append (the item at index in checked) to validRings
+    # validRings borrows children owned by checked until the final cleanup.
+    set parents to an empty list of an integer
+    loop index from 0 to the length of validRings:
+        set parent to -1
+        set bestArea to 0.0
+        set inner to the item at index in validRings
+        for each outer at other in validRings:
+            if ((other != index) and ((the area of outer) > (the area of inner))) and (cad triangulation ring (the points of outer) strictly contains (the points of inner)):
+                if (parent < 0) or ((the area of outer) < bestArea):
+                    set parent to other
+                    set bestArea to the area of outer
+        append parent to parents
+    set depths to an empty list of an integer
+    loop index from 0 to the length of parents:
+        set depth to 0
+        set next to the item at index in parents
+        loop while next >= 0:
+            set depth to depth + 1
+            set next to the item at next in parents
+        append depth to depths
+    set result to an empty cad triangulation
+    loop rootIndex from 0 to the length of parents:
+        if (the item at rootIndex in parents) < 0:
+            set members to an empty list of an integer
+            loop index from 0 to the length of parents:
+                if (the cad triangulation root of index with parents parents) = rootIndex:
+                    append index to members
+            set component to an empty cad triangulation
+            set complete to true
+            set cursor to 0
+            loop while (cursor < (the length of members)) and complete:
+                set outerIndex to the item at cursor in members
+                if ((the item at outerIndex in depths) mod 2) = 0:
+                    set holes to an empty list of (the type of (the item at 0 in boundaries))
+                    set holeArea to -0.0
+                    loop index from 0 to the length of members:
+                        set childIndex to the item at index in members
+                        if ((the item at childIndex in parents) = outerIndex) and (((the item at childIndex in depths) mod 2) = 1):
+                            set hole to the points of (the item at childIndex in validRings)
+                            append hole to holes
+                            set holeArea to holeArea + (the absolute value of (the cad triangulation signed area of hole))
+                    set outer to the item at outerIndex in validRings
+                    set expected to (the area of outer) - holeArea
+                    set localMesh to the cad triangulation of (the points of outer) with holes holes
+                    set complete to cad triangulation localMesh matches area expected
+                    if complete:
+                        append cad triangulation localMesh to component
+                    free cad triangulation localMesh
+                    free holes
+                set cursor to cursor + 1
+            if complete:
+                append cad triangulation component to result
+            free cad triangulation component
+            free members
+    free parents
+    free depths
+    free validRings
+    free bad
+    loop index from 0 to the length of checked:
+        free (the points of (the item at index in checked))
+    loop index from 0 to the length of invalid:
+        free (the points of (the item at index in invalid))
+    free checked
+    free invalid
+    return result

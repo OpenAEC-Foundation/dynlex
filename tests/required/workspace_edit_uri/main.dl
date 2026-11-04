@@ -3,7 +3,7 @@ import lib/process.dl
 
 create a temporary directory and set temporary to it
 if temporary failed:
-    print temporary's error message as a line
+    print line temporary's error message
     @intrinsic("call", "libc", "abort", nothing)
 
 set root to temporary's directory path
@@ -11,35 +11,28 @@ set native to the native path style
 set child to root joined with "a b.txt" using native's value
 set uri to the file URI for child's value interpreted as a native path
 set normalized to the normalized workspace file URI for uri's value inside root
-print whether normalized succeeded as a line
-print (normalized's path = child's value) as a line
-print (normalized's relative path = "a b.txt") as a line
+print lines (normalized succeeded), (normalized's path = child's value) and (normalized's relative path = "a b.txt")
 
 set uri to the file URI for root interpreted as a native path
-set text to (uri's value + the string form of "/%2e%2e/outside.txt")
+set text to formatted "{uri's value}/%2e%2e/outside.txt"
 set escaped to the normalized workspace file URI for text inside root
-print whether escaped succeeded as a line
-print escaped's failure reason as a line
+print lines (escaped succeeded) and (escaped's failure reason)
 
-set text to (uri's value + the string form of "/folder/")
+set text to formatted "{uri's value}/folder/"
 set directory to the normalized workspace file URI for text inside root
-print whether directory succeeded as a line
-print directory's directory hint as a line
+print lines (directory succeeded) and (directory's directory hint)
 
 set invalid to the normalized workspace file URI for "https://example.com/file" inside root
-print whether invalid succeeded as a line
+print line invalid succeeded
 
 set invalid to the normalized workspace file URI for "file:///tmp/a%2Fb" using the POSIX path style
-print whether invalid succeeded as a line
+print line invalid succeeded
 
 set drive to the normalized workspace file URI for "file:///C:/Folder/%41.txt" using the Windows path style
-print whether drive succeeded as a line
-print drive's path as a line
-print drive's identity as a line
+print lines (drive succeeded), drive's path and drive's identity
 
 set network to the normalized workspace file URI for "file://server/share/a%20b" using the Windows path style
-print whether network succeeded as a line
-print network's path as a line
+print lines (network succeeded) and network's path
 
 set target to root joined with "target" using native's value
 set link to root joined with "alias" using native's value
@@ -60,12 +53,11 @@ else:
     add link's value as an argument to command
 run command and set creation to it
 if creation failed:
-    print creation's standard error as a line
-print creation's exit code as a line
+    print line creation's standard error
+print line creation's exit code
 set uri to the file URI for link's value interpreted as a native path
 set linked to the normalized workspace file URI for uri's value inside root
-print whether linked succeeded as a line
-print linked's failure reason as a line
+print lines (linked succeeded) and (linked's failure reason)
 
 remove the filesystem tree at root and set cleanup to it
-print whether cleanup succeeded as a line
+print line cleanup succeeded

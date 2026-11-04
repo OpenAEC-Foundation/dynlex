@@ -13,7 +13,7 @@ self.onmessage = async ({ data }) => {
       const module = await WebAssembly.compile(data.wasm);
       const imports = WebAssembly.Module.imports(module);
       if (!imports.every(isSupportedRuntimeImport)) throw new Error("A role used an unsupported browser operation.");
-      instance = await WebAssembly.instantiate(module, buildRuntimeImports(imports, output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(data.wasm)));
+      instance = await WebAssembly.instantiate(module, buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(data.wasm)));
       self.postMessage({ type: "ready" });
     } else if (data.type === "run") {
       self.postMessage({ type: "started" });

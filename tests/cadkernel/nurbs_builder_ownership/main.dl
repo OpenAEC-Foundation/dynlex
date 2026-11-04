@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: MPL-2.0
 import tests/cadkernel/nurbs_builder/main.dl
 
-function rational builder local:
-    execute:
-        set source to cross2 circle [3.0,5.0] with radius 2.0
-        set result to the cad rational builder of source
-        return result's value
+to get rational builder local:
+    set source to cross2 circle [3.0,5.0] with radius 2.0
+    set result to the cad rational builder of source
+    return result's value
 
 loop repetition from 0 to 24:
     set original to rational builder local
@@ -37,7 +36,7 @@ loop repetition from 0 to 24:
     rational builder scalar corner's x near 5.0
     rational builder scalar corner's y near 5.0
     rational builder scalar corner's z near 0.0
-print "managed_builders_survive_local_returns_copies_and_resets" as a line
+print line "managed_builders_survive_local_returns_copies_and_resets"
 set empty2 to an empty cad rational curve2
 set empty2Copy to the cad clone of empty2
 set empty3 to an empty cad rational curve3
@@ -50,4 +49,4 @@ set absentCurve to the cad curve of empty2Copy
 set absentSurface to the cad ruled surface from empty3Copy to empty3Copy
 check rational builder (absentCurve's valid = false)
 check rational builder (absentSurface's valid = false)
-print "empty_builders_clone_and_fail_safely" as a line
+print line "empty_builders_clone_and_fail_safely"

@@ -2,26 +2,20 @@
 
 #include "bindingResolution.h"
 #include "section.h"
-#include <compare>
-
-// A declaration can occur in several simultaneously active flex expansions.
-// References retain the body that owns their lexical storage even after binding
-// resolution transfers them into a nested expansion.
-struct VariableStorageKey {
-	VariableReference *definition{};
-	const InstantiatedSectionBody *body{};
-
-	auto operator<=>(const VariableStorageKey &) const = default;
-};
+#include "variable.h"
+#include "variableStorageKey.h"
 
 inline VariableStorageKey variableStorageKey(VariableReference *reference, const InstantiatedSectionBody *body) {
 	VariableReference *definition = normalizeBindingReference(reference);
 	requireCompilerInvariant(definition != nullptr, "variable storage requires a declaration");
+	Variable *variable = definition->range.line->section->findVariable(definition);
+	if (variable && variable->isGlobal)
+		return {definition, nullptr};
 	for (const InstantiatedSectionBody *scope = body; scope; scope = scope->parentBody) {
 		auto declared = scope->sourceSection->variableDefinitions.find(definition->name);
 		if (declared != scope->sourceSection->variableDefinitions.end() &&
 			normalizeBindingReference(declared->second) == definition)
-			return {definition, scope};
+			return {definition, scope->storageScope};
 	}
 	return {definition, nullptr};
 }

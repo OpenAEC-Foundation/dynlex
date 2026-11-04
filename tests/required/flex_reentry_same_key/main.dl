@@ -1,7 +1,5 @@
 import lib/std.dl
 
-function the repetition of {integer:value}:
-    replacement:
-        the repetition of value
+the repetition of {integer:value} means: the repetition of value
 
 ignore the repetition of 1

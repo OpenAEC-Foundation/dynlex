@@ -27,11 +27,13 @@ struct PatternTreeNode : public PatternElement {
 	std::unordered_map<std::string, PatternTreeNode *, PatternLiteralHash, std::equal_to<>> literalChildren{};
 	// this child node accepts a variable or the result of an expression
 	PatternTreeNode *argumentChild{};
+	PatternTreeNode *argumentPackChild{};
 	// Every canonical-path occurrence that reaches this node. A definition can
 	// reach the same trie node more than once through converging choice
 	// alternatives, so source metadata is necessarily one-to-many.
 	std::unordered_map<PatternDefinition *, std::vector<PatternDefinitionOccurrence>> definitionOccurrences{};
 	using PatternElement::PatternElement;
+	explicit PatternTreeNode(const PatternElement &element) : PatternElement(element) {}
 	// Add a definition to the tree and record the endpoint nodes on the definition itself.
 	void addPatternDefinition(PatternDefinition *definition, SectionType treeType);
 	// Remove a definition through its immutable indexed-path snapshot.

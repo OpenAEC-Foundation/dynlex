@@ -1,6 +1,6 @@
 import lib/graphics.dl
 
-print "graphics window visibility is available" as a line
+print line "graphics window visibility is available"
 
 # The creation call is intentionally unreachable: required API tests must not
 # need a display server, while still compiling the public hidden-window API.

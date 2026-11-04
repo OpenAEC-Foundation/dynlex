@@ -14,10 +14,9 @@ local flex section when shared condition:
     replacement:
         @intrinsic("if", condition)
 
-function the result from second module:
-    execute:
-        set record to @intrinsic("construct", a shared record, secret)
-        set output to 0
-        when shared true:
-            set output to record's number
-        return output
+to get the result from second module:
+    set record to @intrinsic("construct", a shared record, secret)
+    set output to 0
+    when shared true:
+        set output to record's number
+    return output

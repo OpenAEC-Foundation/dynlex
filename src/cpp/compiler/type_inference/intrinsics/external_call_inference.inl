@@ -1,9 +1,5 @@
 DataType calleeType;
 if (kind == IntrinsicKind::CallPointer || kind == IntrinsicKind::Invoke) {
-	if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
-		failWithDetail(expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0);
-		break;
-	}
 	calleeType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 	if (calleeType.isDeduced() && !calleeType.isAddress()) {
 		setConfiguredTypeFailure(expr->range, "call pointer callee must be a native pointer");

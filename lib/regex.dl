@@ -46,8 +46,7 @@ to get the regular expression closing parenthesis in {string:pattern} from {inte
     return the negative of 1
 
 to get the regular expression error position in {string:pattern}:
-    set depth to 0
-    set cursor to 0
+    set depth and cursor to 0
     set repeatable to false
     set incomplete to true
     loop while cursor < the length of pattern:
@@ -88,16 +87,15 @@ to get the regular expression error position in {string:pattern}:
             increment cursor
             set repeatable to false
             set incomplete to true
-        else if (token = 42) or ((token = 43) or (token = 63)):
-            if the inverse of repeatable:
+        else if token is one of 42, 43 and 63:
+            if not repeatable:
                 return cursor
             increment cursor
-            set repeatable to false
-            set incomplete to false
+            set repeatable and incomplete to false
         else:
             increment cursor
             set repeatable to true
-            if (token = 94) or (token = 36):
+            if token is one of 94 and 36:
                 set repeatable to false
             set incomplete to false
     if (depth != 0) or (incomplete and (the length of pattern > 0)):
@@ -124,7 +122,7 @@ flex function compile {C string:pattern} as a regular expression:
 to get {regular expression:expression} is valid:
     return expression's error position < 0
 
-{regular expression:expression} is invalid means: the inverse of expression is valid
+{regular expression:expression} is invalid means: not expression is valid
 to get the error position of {regular expression:expression}:
     return expression's error position
 
@@ -151,27 +149,27 @@ to get the first top-level regular expression alternative in {string:pattern} fr
     return the negative of 1
 
 to get value matches the regular expression shorthand represented by code:
-    set digit to (value >= 48) and (value <= 57)
-    set lowercase to (value >= 97) and (value <= 122)
-    set uppercase to (value >= 65) and (value <= 90)
+    set digit to 48 <= value <= 57
+    set lowercase to 97 <= value <= 122
+    set uppercase to 65 <= value <= 90
     set word to digit or (lowercase or (uppercase or (value = 95)))
-    set space to (value = 32) or ((value >= 9) and (value <= 13))
+    set space to (value = 32) or (9 <= value <= 13)
     if code = 100:
         return digit
     if code = 68:
-        return the inverse of digit
+        return not digit
     if code = 119:
         return word
     if code = 87:
-        return the inverse of word
+        return not word
     if code = 115:
         return space
     if code = 83:
-        return the inverse of space
+        return not space
     return code = value
 
 to get code is a regular expression shorthand class:
-    return (code = 100) or ((code = 68) or ((code = 119) or ((code = 87) or ((code = 115) or (code = 83)))))
+    return code is one of 100, 68, 119, 87, 115 and 83
 
 to get value matches the regular expression character class in {string:pattern} from {integer:opening} to {integer:closing}:
     set cursor to opening + 1
@@ -202,10 +200,10 @@ to get value matches the regular expression character class in {string:pattern} 
                     increment cursor
                     set upper to the character at cursor in pattern
                 increment cursor
-            if (value >= lower) and (value <= upper):
+            if lower <= value <= upper:
                 set found to true
     if negated:
-        return the inverse of found
+        return not found
     return found
 
 to get the regular expression pattern in {string:syntax} from {integer:beginning} to {integer:ending} matches {string:input} from {integer:start} to {integer:finish}:
@@ -230,11 +228,11 @@ to get the regular expression pattern in {string:syntax} from {integer:beginning
     set remainder to boundary
     if remainder < ending:
         set candidate to the character at remainder in syntax
-        if (candidate = 42) or ((candidate = 43) or (candidate = 63)):
+        if candidate is one of 42, 43 and 63:
             set quantifier to candidate
             increment remainder
 
-    if (quantifier = 42) or (quantifier = 63):
+    if quantifier is one of 42 and 63:
         if (the regular expression pattern in syntax from remainder to ending matches input from start to finish):
             return true
 
@@ -272,7 +270,7 @@ to get the regular expression pattern in {string:syntax} from {integer:beginning
         if matching:
             if (the regular expression pattern in syntax from remainder to ending matches input from endpoint to finish):
                 return true
-            if (endpoint > start) and ((quantifier = 42) or (quantifier = 43)):
+            if (endpoint > start) and (quantifier is one of 42 and 43):
                 if (the regular expression pattern in syntax from beginning to ending matches input from endpoint to finish):
                     return true
         increment endpoint

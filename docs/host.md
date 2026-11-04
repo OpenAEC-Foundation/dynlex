@@ -11,12 +11,12 @@ Environment lookup distinguishes an absent variable from an empty value:
 ```dynlex
 set home to the environment variable named "HOME"
 if home failed:
-    print home's error message as a line
+    print line home's error message
 else:
     if home was absent:
-        print "HOME is not set" as a line
+        print line "HOME is not set"
     else:
-        print home's value as a line
+        print line home's value
 ```
 
 Executable discovery searches the current process's `PATH` without launching
@@ -25,7 +25,7 @@ absent:
 
 ```dynlex
 set tool to the executable named "rg"
-print tool was found as a line
+print line tool was found
 ```
 
 The module also exposes `the host platform name`,
@@ -35,7 +35,7 @@ termination operations:
 ```dynlex
 write "warning\n" to standard error
 if it failed:
-    print it's error message as a line
+    print line it's error message
 exit the program with status 1
 ```
 

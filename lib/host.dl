@@ -41,25 +41,25 @@ class:
         error message as a string
 
 {host text result:result} succeeded means: result's success
-{host text result:result} failed means: the inverse of result's success
+{host text result:result} failed means: not result's success
 {host text result:result} is supported means: result's support
-{host text result:result} is unsupported means: the inverse of result's support
+{host text result:result} is unsupported means: not result's support
 {host truth result:result} succeeded means: result's success
-{host truth result:result} failed means: the inverse of result's success
+{host truth result:result} failed means: not result's success
 {host truth result:result} is supported means: result's support
-{host truth result:result} is unsupported means: the inverse of result's support
+{host truth result:result} is unsupported means: not result's support
 {host lookup result:result} succeeded means: result's success
-{host lookup result:result} failed means: the inverse of result's success
+{host lookup result:result} failed means: not result's success
 {host lookup result:result} is supported means: result's support
-{host lookup result:result} is unsupported means: the inverse of result's support
+{host lookup result:result} is unsupported means: not result's support
 {host lookup result:result} was found means: result's found
-{host lookup result:result} was absent means: the inverse of result's found
+{host lookup result:result} was absent means: not result's found
 {standard input chunk result:reading} succeeded means: reading's success
-{standard input chunk result:reading} failed means: the inverse of reading's success
+{standard input chunk result:reading} failed means: not reading's success
 {standard input chunk result:reading} is supported means: reading's support
-{standard input chunk result:reading} is unsupported means: the inverse of reading's support
+{standard input chunk result:reading} is unsupported means: not reading's support
 {standard input chunk result:reading} reached the end of file means: reading's end of file
-{standard input chunk result:reading} has not reached the end of file means: the inverse of reading's end of file
+{standard input chunk result:reading} has not reached the end of file means: not reading's end of file
 local function an empty host string:
     execute:
         return the string form of ""
@@ -87,8 +87,7 @@ local function the current host error message:
         return text
 
 to get whether the host platform is Windows:
-    set windows to 0 as an integer
-    set supported to 0 as an integer
+    set windows and supported to 0 as an integer
     set outcome to @intrinsic(
         "call",
         "dynlex_runtime",
@@ -247,8 +246,7 @@ to get the user cache directory:
 local function the host lookup for {string:name} of kind {integer:kind}:
     execute:
         set length to 0 as a word sized integer
-        set found to 0 as an integer
-        set supported to 0 as an integer
+        set found and supported to 0 as an integer
         set outcome to 0
         if kind = 1:
             set outcome to @intrinsic(
@@ -318,8 +316,7 @@ to get the host platform name:
     return @intrinsic("construct", a host text result, true, true, value, an empty host string)
 
 to get whether the process has administrator privileges:
-    set flag to 0 as an integer
-    set supported to 0 as an integer
+    set flag and supported to 0 as an integer
     set outcome to @intrinsic("call", "dynlex_runtime", "dynlex_host_is_administrator", an integer, the address of flag, the address of supported)
     if outcome != 0:
         return @intrinsic("construct", a host truth result, false, supported != 0, false, the current host error message)
@@ -347,8 +344,7 @@ local function the chunk read from the standard input:
     execute:
         set data to 0 as a pointer to a byte
         set length to 0 as a word sized integer
-        set ending to 0 as an integer
-        set supported to 0 as an integer
+        set ending and supported to 0 as an integer
         set outcome to @intrinsic(
             "call",
             "dynlex_runtime",

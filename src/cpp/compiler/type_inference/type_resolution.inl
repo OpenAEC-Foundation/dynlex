@@ -98,30 +98,35 @@ static Expression *resolveCompileTimeSelectBranch(
 }
 
 static BindingContext buildBindingContext(const BindingFrameStack &bindingFrameStack) {
-	BindingContext bindingContext;
-	if constexpr (sizeof(size_t) == 8)
-		bindingContext.fingerprint = 1469598103934665603ull;
-	else
-		bindingContext.fingerprint = 2166136261u;
+	BindingContext context;
+	auto combine = [](size_t &hash, size_t value) {
+		hash ^= value + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+	};
 	bindingFrameStack.forEachFrame([&](const BindingFrame &frame) {
-		for (const auto &[bindingName, expression] : frame.bindings) {
-			bindingContext.bindingEntries[bindingName] = expression;
-			size_t nameHash = std::hash<std::string>{}(bindingName);
-			size_t expressionHash = std::hash<const Expression *>{}(expression);
-			size_t entryHash = nameHash;
-			entryHash ^= expressionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
-			bindingContext.fingerprint ^= entryHash;
+		size_t bindingsHash = 0;
+		for (const auto &[name, expression] : frame.bindings) {
+			size_t entryHash = std::hash<std::string>{}(name);
+			combine(entryHash, std::hash<Expression *>{}(expression));
+			bindingsHash ^= entryHash;
 		}
-		for (const auto &[parameterDefinition, expression] : frame.parameterBindings) {
-			bindingContext.parameterBindingEntries[parameterDefinition] = expression;
-			size_t definitionHash = std::hash<const VariableReference *>{}(parameterDefinition);
-			size_t expressionHash = std::hash<const Expression *>{}(expression);
-			size_t entryHash = definitionHash;
-			entryHash ^= expressionHash + 0x9e3779b9 + (entryHash << 6) + (entryHash >> 2);
-			bindingContext.fingerprint ^= entryHash;
+		size_t parametersHash = 0;
+		for (const auto &[definition, expression] : frame.parameterBindings) {
+			size_t entryHash = std::hash<VariableReference *>{}(definition);
+			combine(entryHash, std::hash<Expression *>{}(expression));
+			parametersHash ^= entryHash;
 		}
+		size_t declarationsHash = 0;
+		for (const auto &[name, definition] : frame.declarations) {
+			size_t entryHash = std::hash<std::string>{}(name);
+			combine(entryHash, std::hash<VariableReference *>{}(definition));
+			declarationsHash ^= entryHash;
+		}
+		combine(context.fingerprint, bindingsHash);
+		combine(context.fingerprint, parametersHash);
+		combine(context.fingerprint, declarationsHash);
+		context.frames.push_back({frame.bindings, frame.parameterBindings, frame.declarations});
 	});
-	return bindingContext;
+	return context;
 }
 
 #include "class_instantiation_transaction.inl"

@@ -2,9 +2,7 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 class:
     patterns:

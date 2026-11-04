@@ -1,0 +1,30 @@
+import lib/std.dl
+
+function the next value from counter:
+    replacement:
+        set {updated} to counter + 1
+        set counter to updated
+        {updated}
+
+function the total of {arguments:values}:
+    replacement:
+        set sum to 0
+        for each value in values:
+            add value to sum
+        {sum}
+
+set visits to 0
+set result to the total of (the next value from visits), (the next value from visits) and (the next value from visits)
+set measured to @intrinsic("construct", @intrinsic("array", visits, an integer))
+print lines (the length of measured), result, visits and (result = 6 and visits = 3)
+
+set visits to 0
+set first, second and third to the next value from visits
+set assignmentMeasure to @intrinsic("construct", @intrinsic("array", visits, an integer))
+print lines (the length of assignmentMeasure), ((first + second) + third) and visits
+
+set visits to 0
+set found to 1 is one of (the next value from visits), (the next value from visits) and (the next value from visits)
+print lines found and visits
+set membershipMeasure to @intrinsic("construct", @intrinsic("array", visits, an integer))
+print line the length of membershipMeasure

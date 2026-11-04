@@ -3,15 +3,15 @@ import lib/std.dl
 to get bits of {fixed a pointer to an integer:value}:
     return value as a 64 bit unsigned integer
 
-print ((a new pointer to an integer) = (0 as a pointer to an integer)) as a line
-print ((a new pointer to a boolean) = (0 as a pointer to a boolean)) as a line
-print ((a new pointer to an integer) != (16 as a pointer to an integer)) as a line
-print (bits of (16 as a pointer to an integer)) as a line
-print (bits of (32 as a pointer to an integer)) as a line
-print (bits of ((16 as a pointer to an integer) + 2)) as a line
-print (bits of (2 + (16 as a pointer to an integer))) as a line
-print (bits of ((16 as a pointer to an integer) - 2)) as a line
-print (((16 as a pointer to a byte) as a pointer to an integer) as a 64 bit unsigned integer) as a line
-print (bits of (((-1) as an 8 bit signed integer) as a pointer to an integer)) as a line
-print (bits of (((-1) as a 16 bit signed integer) as a pointer to an integer)) as a line
-print (bits of (((-1) as a 32 bit signed integer) as a pointer to an integer)) as a line
+print line ((a new pointer to an integer) = (0 as a pointer to an integer))
+print line ((a new pointer to a boolean) = (0 as a pointer to a boolean))
+print line ((a new pointer to an integer) != (16 as a pointer to an integer))
+print line (bits of (16 as a pointer to an integer))
+print line (bits of (32 as a pointer to an integer))
+print line (bits of ((16 as a pointer to an integer) + 2))
+print line (bits of (2 + (16 as a pointer to an integer)))
+print line (bits of ((16 as a pointer to an integer) - 2))
+print line (((16 as a pointer to a byte) as a pointer to an integer) as a 64 bit unsigned integer)
+print line (bits of (((-1) as an 8 bit signed integer) as a pointer to an integer))
+print line (bits of (((-1) as a 16 bit signed integer) as a pointer to an integer))
+print line (bits of (((-1) as a 32 bit signed integer) as a pointer to an integer))

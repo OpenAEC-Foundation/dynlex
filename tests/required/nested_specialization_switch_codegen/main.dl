@@ -1,18 +1,16 @@
 import lib/std.dl
 
-function the value chosen for choice:
-    execute:
-        set result to 20
-        match on choice:
-            case 1:
-                ignore (the wider specialization)
-                set result to 10
-            otherwise:
-                ignore result
-        return result
+to get the value chosen for choice:
+    set result to 20
+    match on choice:
+        case 1:
+            ignore (the wider specialization)
+            set result to 10
+        otherwise:
+            ignore result
+    return result
 
-function the wider specialization:
-    execute:
-        return the value chosen for (2 as a 64 bit integer)
+to get the wider specialization:
+    return the value chosen for (2 as a 64 bit integer)
 
 ignore (the value chosen for 1)

@@ -1,7 +1,5 @@
 import lib/std.dl
 
-function the identity of {multi word}:
-    replacement:
-        multi word
+the identity of {multi word} means: multi word
 
-print (the identity of 7) as a line
+print line (the identity of 7)

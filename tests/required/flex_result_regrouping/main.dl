@@ -1,0 +1,15 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+        @intrinsic("set subject", variable)
+it means: @intrinsic("subject")
+left + right means: @intrinsic("add", left, right)
+function publish value:
+    replacement:
+        @intrinsic("set subject", value)
+function add value:
+    replacement:
+        publish it + value
+set x to 1
+add 5
+@intrinsic("return", @intrinsic("subtract", it, 6))

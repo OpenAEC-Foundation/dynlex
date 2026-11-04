@@ -7,21 +7,18 @@ class:
         name as a string
         sequence as a 32 bit integer
 
-function a new sortable record named {string:name} at index {integer:ordinal}:
-    replacement:
-        @intrinsic("construct", a sortable record, name, ordinal)
+a new sortable record named {string:name} at index {integer:ordinal} means: @intrinsic("construct", a sortable record, name, ordinal)
 
-print (the bytewise comparison of "a" with "a") as a line
-print (the bytewise comparison of "a" with "aa") as a line
-print (the bytewise comparison of "b" with "aa") as a line
+print lines (the bytewise comparison of "a" with "a") and (the bytewise comparison of "a" with "aa")
+print line (the bytewise comparison of "b" with "aa")
 
 set extended to a new string buffer containing 1 byte
 store 255 as a byte into the data of extended at 0
-print (the bytewise comparison of extended with "z") as a line
+print line (the bytewise comparison of extended with "z")
 
 set empty to an empty list of a string
 sort empty stably in bytewise order
-print the length of empty as a line
+print line the length of empty
 free empty
 
 set strings to an empty list of a string
@@ -35,7 +32,7 @@ loop while position < the length of strings:
     print the item at position in strings
     print "|"
     set position to (position + 1)
-print "" as a line
+print line ""
 
 set keys to an empty list of a string
 append the string form of "b" to keys
@@ -56,7 +53,7 @@ loop while position < the length of order:
         print " "
     print the item at position in order
     set position to (position + 1)
-print "" as a line
+print line ""
 
 sort records stably in the bytewise order of keys
 set ordinal to 0
@@ -67,7 +64,7 @@ loop while ordinal < the length of records:
     print the sequence of record
     print "|"
     set ordinal to (ordinal + 1)
-print "" as a line
+print line ""
 
 free order
 free records

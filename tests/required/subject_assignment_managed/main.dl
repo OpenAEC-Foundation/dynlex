@@ -1,0 +1,4 @@
+import lib/std.dl
+
+set original to the string form of 1001. add "!"
+print lines original and it

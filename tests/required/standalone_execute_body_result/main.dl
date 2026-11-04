@@ -1,5 +1,4 @@
-function number:
-	execute:
-		@intrinsic("return", 1)
+to get number:
+	@intrinsic("return", 1)
 
 number

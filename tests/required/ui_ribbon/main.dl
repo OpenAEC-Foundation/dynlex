@@ -15,12 +15,12 @@ window ribbon lab:
 set state to 0
 set instance to an instance of ribbon lab with state (the address of state)
 set ribbon to the control labeled "Commands" in (the address of instance)
-print (the selected tab of ribbon in (the address of instance))'s text as a line
+print line (the selected tab of ribbon in (the address of instance))'s text
 activate (the UI child at 1 in ribbon) belonging to ribbon in (the address of instance)
-print (the selected tab of ribbon in (the address of instance))'s text as a line
+print line (the selected tab of ribbon in (the address of instance))'s text
 activate (the control labeled "Picture" in (the address of instance)) belonging to ribbon in (the address of instance)
-print (the selected tab of ribbon in (the address of instance))'s text as a line
+print line (the selected tab of ribbon in (the address of instance))'s text
 set other to an instance of ribbon lab with state (the address of state)
-print (the selected tab of ribbon in (the address of other))'s text as a line
+print line (the selected tab of ribbon in (the address of other))'s text
 close the address of other
 close the address of instance

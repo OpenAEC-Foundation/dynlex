@@ -3,4 +3,4 @@ import lib/filesystem.dl
 set empty to 0 as a pointer to a byte
 set path to a new string from empty containing -1 bytes
 delete the filesystem entry at path
-print whether it succeeded as a line
+print line it succeeded

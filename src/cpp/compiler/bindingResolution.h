@@ -25,6 +25,7 @@ struct BindingFrame {
 	};
 
 	BindingMap bindings;
+	std::unordered_map<std::string, VariableReference *> declarations;
 	ParameterBindingMap parameterBindings;
 	std::unordered_map<VariableReference *, ParameterConstraint> parameterConstraints;
 
@@ -34,7 +35,14 @@ struct BindingFrame {
 	BindingFrame(BindingMap frameBindings, ParameterBindingMap frameParameterBindings)
 		: bindings(std::move(frameBindings)), parameterBindings(std::move(frameParameterBindings)) {}
 
-	bool empty() const { return bindings.empty() && parameterBindings.empty() && parameterConstraints.empty(); }
+	bool declares(VariableReference *definition) const {
+		auto declaration = declarations.find(definition->name);
+		return declaration != declarations.end() && declaration->second == definition;
+	}
+
+	bool empty() const {
+		return bindings.empty() && declarations.empty() && parameterBindings.empty() && parameterConstraints.empty();
+	}
 };
 
 struct BindingFrameStack {
@@ -50,13 +58,18 @@ struct BindingFrameStack {
 
 	std::shared_ptr<const FrameNode> top;
 
-	template <typename FindBindingFn>
+	template <typename FindBindingFn, typename DeclaresFn>
 	Expression *lookupWithCallerScopeImpl(
-		const Expression *ignoredExpression, BindingFrameStack &callerScope, FindBindingFn findBinding
+		const Expression *ignoredExpression, BindingFrameStack &callerScope, FindBindingFn findBinding, DeclaresFn declares
 	) const {
 		for (const FrameNode *node = top.get(); node; node = node->caller.get()) {
 			Expression *boundExpression = findBinding(node->frame);
-			if (!boundExpression || boundExpression == ignoredExpression)
+			if (!boundExpression) {
+				if (declares(node->frame))
+					return nullptr;
+				continue;
+			}
+			if (boundExpression == ignoredExpression)
 				continue;
 			callerScope.top = node->caller;
 			return boundExpression;
@@ -90,6 +103,8 @@ struct BindingFrameStack {
 		return lookupWithCallerScopeImpl(ignoredExpression, callerScope, [&](const BindingFrame &frame) -> Expression * {
 			auto binding = frame.parameterBindings.find(bindingKey);
 			return binding == frame.parameterBindings.end() ? nullptr : binding->second;
+		}, [&](const BindingFrame &frame) {
+			return frame.declares(bindingKey);
 		});
 	}
 
@@ -101,6 +116,8 @@ struct BindingFrameStack {
 			auto constraint = node->frame.parameterConstraints.find(bindingKey);
 			if (constraint != node->frame.parameterConstraints.end())
 				return &constraint->second;
+			if (node->frame.declares(bindingKey))
+				return nullptr;
 		}
 		return nullptr;
 	}
@@ -111,6 +128,8 @@ struct BindingFrameStack {
 		return lookupWithCallerScopeImpl(ignoredExpression, callerScope, [&](const BindingFrame &frame) -> Expression * {
 			auto binding = frame.bindings.find(bindingName);
 			return binding == frame.bindings.end() ? nullptr : binding->second;
+		}, [&](const BindingFrame &frame) {
+			return frame.declarations.contains(bindingName);
 		});
 	}
 
@@ -136,6 +155,16 @@ inline BindingFrameStack makeBindingFrameStack(const BindingMap &bindings) {
 	bindingFrameStack.pushFrame(bindings);
 	return bindingFrameStack;
 }
+
+struct ExpressionCaptureData {
+	Expression *pack;
+	size_t index;
+	BindingFrameStack bindings;
+
+	// Regrouping can replace an element's root. The owning pack keeps its arity,
+	// while lookup by index remains valid when its argument vector is restored.
+	Expression *&expression() const { return pack->arguments[index]; }
+};
 
 inline BindingFrameStack makeBindingFrameStack(const BindingFrame &bindingFrame) {
 	BindingFrameStack bindingFrameStack;
@@ -204,8 +233,14 @@ inline ResolvedBindingLayers resolveBindingReferenceWithCallerScope(
 						   : ResolvedBindingLayers{ignoredExpression, bindingFrameStack};
 }
 
-inline ResolvedBindingLayers
-resolveVariableBindingWithCallerScope(Expression *expression, const BindingFrameStack &bindingFrameStack) {
+inline ResolvedBindingLayers resolveVariableBindingWithCallerScope(
+	Expression *expression, const BindingFrameStack &bindingFrameStack, bool followReferences = true
+) {
+	if (followReferences && expression && expression->inferredArgumentReference) {
+		const auto &capture = *expression->inferredArgumentReference;
+		requireCompilerInvariant(capture.data != nullptr, "argument reference has no captured expression");
+		return {capture.data->expression(), capture.data->bindings};
+	}
 	if (!expression || expression->kind != Expression::Kind::Variable || !expression->variable)
 		return {expression, bindingFrameStack};
 	return resolveBindingReferenceWithCallerScope(expression->variable, expression, bindingFrameStack);

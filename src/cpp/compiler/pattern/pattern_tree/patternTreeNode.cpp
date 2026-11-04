@@ -7,7 +7,7 @@
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {
 	PatternTreeNode *child = nullptr;
 	if (element.type == PatternElement::Type::Variable) {
-		child = parent->argumentChild;
+		child = element.isArgumentPack ? parent->argumentPackChild : parent->argumentChild;
 	} else {
 		auto existing = parent->literalChildren.find(element.text);
 		if (existing != parent->literalChildren.end())
@@ -15,9 +15,9 @@ static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &
 	}
 
 	if (!child) {
-		child = new PatternTreeNode(element.type, element.text);
+		child = new PatternTreeNode(element);
 		if (element.type == PatternElement::Type::Variable)
-			parent->argumentChild = child;
+			(element.isArgumentPack ? parent->argumentPackChild : parent->argumentChild) = child;
 		else
 			parent->literalChildren[element.text] = child;
 	}
@@ -46,7 +46,7 @@ snapshotCanonicalPatternPaths(const std::vector<DefinitionPatternElement> &eleme
 		std::vector<PatternElement> snapshot;
 		snapshot.reserve(path.size());
 		for (const DefinitionPatternElement &element : path)
-			snapshot.emplace_back(element.type, element.text, element.startPos);
+			snapshot.emplace_back(static_cast<const PatternElement &>(element));
 		result.push_back(std::move(snapshot));
 	}
 	return result;
@@ -54,7 +54,7 @@ snapshotCanonicalPatternPaths(const std::vector<DefinitionPatternElement> &eleme
 
 static PatternTreeNode *findChild(PatternTreeNode *current, const PatternElement &element) {
 	if (element.type == PatternElement::Type::Variable)
-		return current->argumentChild;
+		return element.isArgumentPack ? current->argumentPackChild : current->argumentChild;
 	auto existing = current->literalChildren.find(element.text);
 	return existing == current->literalChildren.end() ? nullptr : existing->second;
 }
@@ -70,7 +70,7 @@ pathsEqual(const std::vector<std::vector<PatternElement>> &left, const std::vect
 			const PatternElement &leftElement = left[pathIndex][elementIndex];
 			const PatternElement &rightElement = right[pathIndex][elementIndex];
 			if (leftElement.type != rightElement.type || leftElement.text != rightElement.text ||
-				leftElement.startPos != rightElement.startPos)
+				leftElement.startPos != rightElement.startPos || leftElement.isArgumentPack != rightElement.isArgumentPack)
 				return false;
 		}
 	}
@@ -125,11 +125,11 @@ static void walkForLessSpecific(
 
 			if (elem.type == PatternElement::Type::Variable) {
 				// Variable (argument slot): both paths follow argumentChild — same specificity
-				if (node->argumentChild) {
+				if (PatternTreeNode *child = findChild(node, elem)) {
 					if (isMainPath)
-						nextMain.push_back(node->argumentChild);
+						nextMain.push_back(child);
 					else
-						nextLess.push_back(node->argumentChild);
+						nextLess.push_back(child);
 				}
 			} else {
 				// Literal (Other/VariableLike text): main follows literalChildren;

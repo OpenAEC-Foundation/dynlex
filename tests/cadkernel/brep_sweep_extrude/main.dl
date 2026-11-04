@@ -2,22 +2,19 @@
 import lib/bim/brep_sweep.dl
 import lib/bim/brep_bounds.dl
 
-function check extrusion {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
-function extrusion point {a 64 bit floating-point number array of 2 items:values}:
-    execute:
-        return a cad vector2 with x (the item at 0 in values) and y (the item at 1 in values)
-function extrusion square of size {a 64 bit floating-point number:size}:
-    execute:
-        set corners to [[0.0,0.0],[size,0.0],[size,size],[0.0,size]]
-        set pieces to an empty list of a cad curve2
-        loop index from 0 to 4:
-            set start to extrusion point (the item at index in corners)
-            set end to extrusion point (the item at (the remainder of (index + 1) divided by 4) in corners)
-            append (the cad curve2 of (a cad line2 from start to end)) to pieces
-        return pieces
+to check extrusion {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
+to get extrusion point {a 64 bit floating-point number array of 2 items:values}:
+    return a cad vector2 with x (the item at 0 in values) and y (the item at 1 in values)
+to get extrusion square of size {a 64 bit floating-point number:size}:
+    set corners to [[0.0,0.0],[size,0.0],[size,size],[0.0,size]]
+    set pieces to an empty list of a cad curve2
+    loop index from 0 to 4:
+        set start to extrusion point (the item at index in corners)
+        set end to extrusion point (the item at ((index + 1) mod 4) in corners)
+        append (the cad curve2 of (a cad line2 from start to end)) to pieces
+    return pieces
 
 set profile to extrusion square of size 10.0
 set result to the cad extrusion of profile on (the cad xy plane) along (a cad vector3 with x 0.0, y 0.0 and z 4.0)
@@ -30,7 +27,7 @@ check extrusion ((the cad euler characteristic of solid) = 2)
 set flaws to the cad flaws of solid
 check extrusion ((the length of flaws) = 0)
 free flaws
-print "a_square_extruded_is_a_box" as a line
+print line "a_square_extruded_is_a_box"
 set edges to the cad edge keys of solid
 loop index from 0 to the length of edges:
     set edge to the cad node pointer for (the item at index in edges) in solid
@@ -39,10 +36,10 @@ loop index from 0 to the length of edges:
     set two to the cad node pointer for (the item at 1 in (edge's coedges's values)) in solid
     check extrusion ((one's forward) != (two's forward))
 free edges
-print "every_edge_of_an_extrusion_is_shared_the_two_ways" as a line
+print line "every_edge_of_an_extrusion_is_shared_the_two_ways"
 set bounds to the cad bounds of solid
 check extrusion (bounds's valid)
 check extrusion ((the cad distance from (bounds's value's low) to (the cad zero vector3)) = 0.0)
 check extrusion ((the cad distance from (bounds's value's high) to (a cad vector3 with x 10.0, y 10.0 and z 4.0)) = 0.0)
-print "an_extrusion_reaches_from_its_profile_to_the_far_end" as a line
+print line "an_extrusion_reaches_from_its_profile_to_the_far_end"
 free profile

@@ -1,10 +1,6 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+[a|] floating-point number means: @intrinsic("type", "float")
 
 function ignore value:
     replacement:
@@ -14,8 +10,6 @@ implicitly convert {integer:value}:
     replacement:
         2.0
 
-function the required floating value from {a floating-point number:value}:
-    replacement:
-        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
+the required floating value from {a floating-point number:value} means: @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore (the required floating value from 1)

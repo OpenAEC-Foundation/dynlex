@@ -1,3 +1,3 @@
 import lib/std.dl
 
-print (the negative of 9223372036854775808 + 1) as a line
+print line (the negative of 9223372036854775808 + 1)

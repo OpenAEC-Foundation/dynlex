@@ -10,12 +10,10 @@ implicitly convert {integer:number}:
     replacement:
         @intrinsic("construct", a number box, number)
 
-function the description of {integer:value}:
-    execute:
-        return 1
+to get the description of {integer:value}:
+    return 1
 
-function the description of {a number box:value}:
-    execute:
-        return 2
+to get the description of {a number box:value}:
+    return 2
 
-print (the description of 9) as a line
+print line (the description of 9)

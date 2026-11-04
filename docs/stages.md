@@ -17,6 +17,14 @@ Content edits preserve that identity. Syntax lookup selects the current compilat
 builtin or project configuration from that classification without repeating filesystem
 canonicalization for each source range.
 
+`--dump-dependencies` exposes the importer's loaded source files and selected syntax
+configuration paths as JSON. It uses the normal configured import resolution and
+does not parse executable syntax or generate code. Dependency inspection completes
+the import graph even for diagnostic fixtures with invalid executable characters;
+ordinary compilation still validates those characters while loading sources.
+An import or configuration failure returns a nonzero status and marks the dependency
+report incomplete; selected configuration paths remain available for diagnosing it.
+
 # Parse Stage
 
 Sections are analyzed. We do basic parsing **WITHOUT hardcoding**.
@@ -95,13 +103,21 @@ After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice
 alternatives. Precedence is a partial order between these families. Each family's
 membership and successor reachability are computed once; typed overloads share
-that order. Operand grouping consumes the family order during type inference.
+that order. Matching then repeats with that order before committing expression
+trees. An unparenthesized operand cannot contain an operator declared to bind
+later than its parent, including operands inside variadic captures. If implicit
+parameter discovery changes a declaration during this pass, resolution rebuilds
+the families and repeats to a fixed point. Operand grouping also consumes that
+same family order during type inference.
 
 All pattern definitions are stored in a pattern tree, a trie structure containing pattern elements.
 
 Matcher lookup tables deduplicate complete control and continuation states. Search priority
 comes from the ordered work queue and parent/completion vectors, independently of hash-table
-layout. Inline storage grows when needed and never limits the number of matching alternatives.
+layout. Continuation groups for equivalent states share a canonical parent and
+completion set. Both existing results and later additions propagate through that
+shared group, so revisiting a memoized state cannot lose a subsequently discovered
+parent. Inline storage grows when needed and never limits matching alternatives.
 
 We match with multiple iterations. This makes sure that patterns earlier in the file can call functions later in the file.
 
@@ -118,6 +134,14 @@ We discover what is a variable based on these principles:
 
 A square-bracket group without a top-level `|` is an explicit literal and is flattened into its ordinary literal elements.
 `{literal:text}` produces the same representation. Square-bracket groups with alternatives remain choice elements.
+
+`{arguments:name}` captures a non-empty sequence of source expressions, joined
+with the configured comma separator and final conjunction. A normal capture wins
+for a single argument when both spellings exist; a variadic capture also accepts
+one argument when no ordinary spelling matches. Parentheses delimit an element's
+expression normally. There is one trie path for a variadic declaration, independent
+of argument count. Each matched element retains its caller-owned pack, element index and caller bindings;
+resolution does not generate declarations for different arities. Captures resolve the current element root, so operand regrouping updates the original argument tree. The compilation context retains captured source bodies for its arena lifetime.
 
 Capture names are type-agnostic unless a type expression appears before the colon. There is no lexical word-capture type; finite concepts such as shader stages are represented by literal patterns, and text values use an ordinary string type constraint.
 
@@ -138,15 +162,15 @@ The consequence: we cannot know what order nested expressions should have.
 Example:
 
 ```text
-print value as a line
+print line value + other
 ```
 
-We do not know that `print value` returns `nothing` and cannot be used as an argument for `as a line`.
+Without type inference, a match cannot establish whether `print line value` produces a value usable by `+`.
 
 Since we are fully agnostic, we will make all left expressions subexpressions:
 
 ```text
-(print value) as a line
+(print line value) + other
 ((value + value) + value) + value
 ```
 
@@ -259,10 +283,39 @@ selection, including return wrappers that must record the return observation.
 
 Binding scopes are immutable frames linked to their caller scope. Copying a scope or resolving a binding retains
 that existing chain without copying its maps. Pushing and popping change only the active stack; snapshots and returned
-caller scopes retain their original frames. Lookup still searches from the innermost frame outward, and frame visitation
-runs from the outermost frame inward so shadowing and cache-key construction preserve their original order.
+caller scopes retain their original frames. Each invocation introduces all declarations from its definition scope,
+including captures omitted by the selected choice path. Lookup searches from the innermost frame outward and stops at the
+invocation that declares the requested variable; an omitted capture is that invocation's local variable. An actual argument
+resolves in the binding frame's caller scope, so forwarding preserves its caller's identity. Constraints follow the same
+scope boundaries. Type-resolution cache keys retain the ordered frames and declarations. Frame visitation runs from the
+outermost frame inward.
 
-Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. When replacement inference transfers caller-body control, the outcome is recorded on the exact replacement expression that performed the transfer and enclosing flex calls forward it normally. A direct outcome already recorded on an active flex call takes precedence over the replacement expression's forwarded outcome. Transfer identity is the complete active flex-invocation path plus the transfer expression, with reusable clones normalized to their template nodes. This lets retries of one logical invocation share the inferred caller body while distinct direct, helper, and nested-helper call sites produce the required duplicate-transfer diagnostic. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Flex sections cannot be overloaded, so selecting an overload cannot create a control-flow classification dependency.
+Inference constants, pointer provenance, pure evaluation and native storage use the same lexical storage keys.
+Each macro call site has its own storage scope. Recreating a body during inference preserves that call site's scope,
+while separately elaborated argument-pack iterations have distinct scopes. Thus omitted captures cannot inherit
+another invocation's values, and repeated inference of one runtime loop converges on the same storage slots.
+
+Flex inference resets local variable types in the declaration scope before inferring its replacement bodies, including
+parameters omitted by a choice path. Tracked local values and pointer facts reset when a macro invocation begins. Each invocation saves and restores local types in the declaration and its descendants,
+so a nested invocation cannot replace its caller's inferred local types. Explicit declared type constraints remain in force.
+
+Argument packs are compile-time source captures passed between replacement
+definitions, rather than runtime array values. Ordinary `type extent` reads their
+length and `extract element` selects a captured expression at a compile-time index.
+Storing that reference binds the loop variable to the original expression; reading
+it or assigning through it resolves in its captured caller scope. Inferring a
+reference assignment target does not execute the expression previously bound there.
+Thus the same `for each` replacement handles arrays, lists and heterogeneous packs.
+No separate pack-iteration intrinsic exists.
+
+A loop that selects argument references retains a separately inferred body for
+each compile-time iteration, with fresh local types for that iteration. Every caller-body transfer inside those iterations
+also owns its corresponding inferred caller body. Native generation emits those
+bodies in order; pure evaluation consumes the same bodies. Conditions must remain
+compile-time-known while elaborating such a loop. Ordinary runtime loops keep
+their existing fixed-point inference and runtime branches.
+
+Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. When replacement inference transfers caller-body control, the outcome is recorded on the exact replacement expression that performed the transfer and enclosing flex calls forward it normally. A direct outcome already recorded on an active flex call takes precedence over the replacement expression's forwarded outcome. Transfer identity is the complete active flex-invocation path plus the transfer expression, with reusable clones normalized to their template nodes. This lets retries of one logical invocation share the inferred caller body while distinct direct, helper, and nested-helper call sites produce the required duplicate-transfer diagnostic. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Section overloads use the same type constraints and ambiguity checks as function overloads. Header inference selects the overload before its produced control-flow outcome is consumed. Parameters introduced by the section may remain unresolved until the selected replacement binds them; overload selection must be determined by the other header arguments, without depending on inference of the caller body.
 
 The section walker records finalized fallthrough metadata on every top-level expression it reaches. An expression without that metadata is outside the inferred execution paths and remains intentionally uninferred. Code generation consumes this metadata before inspecting an expression, so it emits only paths whose overloads, types, and control flow were finalized by inference.
 
@@ -279,7 +332,7 @@ Section outcomes are value state stored through copy-on-write ownership. Ordinar
 share the empty outcome; a mutation detaches the complete outcome before writing. Clones and
 retained inference snapshots therefore preserve independent conditions and condition types.
 
-A section flex replacement is executed line by line in source order during inference, compile-time execution, and code generation. `execute body` transfers execution to the caller body at that exact point; if neither an outcome nor an executed `execute body` consumes it, the caller body executes after the replacement. Variables introduced by the active replacement scopes are bound structurally while the caller body runs, then those bindings end when control returns to the replacement. These rules use the already-selected flex definition, inferred replacement body, and section ownership stacks. They do not rediscover behavior from pattern text.
+A section flex replacement is executed line by line in source order during inference, compile-time execution, and code generation. `execute body` transfers execution to the caller body at that exact point; if neither an outcome nor an executed `execute body` consumes it, the caller body executes after the replacement. Variables introduced by the active replacement scopes are bound structurally while the caller body runs, then those bindings end when control returns to the replacement. Every flex invocation allocates unbound runtime locals in its declaration scope as well as its replacement scopes. An optional parameter absent from the selected pattern path has local storage when the replacement assigns it; allocation supplies no initial value. Bound parameters continue to refer to caller arguments. Managed locals are released when their owning invocation ends. These rules use the already-selected flex definition, inferred replacement body, and section ownership stacks. They do not rediscover behavior from pattern text.
 
 We track each variable that could possibly be a constant. A variable reference can be constant. Constant means compile-time-known here. It does not guarantee that the value does not change later. Execution-state maps retain an explicit unknown entry after a write or control-flow merge invalidates a previously known value, so an older expression value cannot reappear as the current variable value.
 
@@ -302,6 +355,14 @@ function names. Known variable or literal storage cannot be deallocated, while n
 accepted. Parameter storage can alias heap storage and is therefore unknown. Library deallocations use these patterns rather than bypassing the check with raw external calls.
 
 Writing a concrete value through storage whose nested class subtype is still unspecified refines that storage type. Function instantiations record refinements to parameter storage and apply them to the caller, so a generic container can bind its element subtype on its first write without losing it at the function boundary. This only completes unspecified structure; it never changes an already concrete member type.
+
+Assignments involving unfinished structure record type equations between lexical storage views. Fully determined types need no new equations; writes to existing roots still propagate through their earlier equations. Views project fields, aggregate elements and
+pointer depth, so refinement through a copied pointer also completes the corresponding subtype in its source. These are
+static type requirements, separate from runtime pointer provenance. Their state survives execution-only restoration,
+including skipped conditional operands, and rolls back with a rejected grouping candidate. Macro invocations keep distinct
+storage roots; equations from a completed invocation cannot overwrite another invocation's reusable variable metadata.
+Subject values retain the source expression and its caller bindings for structural type refinement. Implicit conversions
+contribute their result type rather than equating that result with the unconverted source storage.
 
 We can reorder expressions based on types if this is the first valid instantiation, but we cannot change what is a variable and what is not.
 
@@ -350,6 +411,15 @@ bindings are used. An already inferred binding is reusable only when its inferen
 state still holds. This state includes constants, address provenance, the subject and the owning instantiation's effect summary;
 restoration retains inferred types, grouping selections and recursive inference dependencies.
 
+Subject values belong to their function invocation during pure evaluation, just like local variable values. Publishing an unmanaged value is a local effect; publishing a managed value retains lifecycle effects and cannot make an effectful type function pure. A subject whose assignment depends on recursive inference stays pending with that dependency until a body pass resolves its value.
+
+A replacement's result is the current root expression of its selected source line. Regrouping can move the original
+template node beneath another expression, so template-node identity does not determine the replacement's result.
+
+Boolean `and`, `or`, and `select` infer every operand for typing, while execution effects come only from selected paths.
+Native code branches on the generated condition value; values known on one inference pass do not establish a constant
+runtime condition across loop iterations. LLVM may simplify branches whose generated conditions are constant.
+
 `type of` and `type extent` inspect an operand's inferred type without executing that operand. Their argument inference must
 therefore leave the caller's execution state unchanged, and pure evaluation returns their stored result without walking the
 operand. This also applies through ordinary replacement patterns. A type-producing function that actually performs I/O remains
@@ -390,9 +460,9 @@ flex invocation resets and restores only its own local keys.
 
 Type phrases describe types. Direct value construction is explicit: `a new {type}` value-initializes a concrete runtime type, while `a new {type} from ...` supplies constructor values. `nothing` is not constructible. `return nothing` is the sole natural-language exception: it is a valueless return, whereas `return the type nothing` returns the compile-time type value.
 
-`(print value) as a line` is incorrect, since `nothing` as an argument is not allowed unless explicitly specified in the pattern, and `print value` returns `nothing`.
+`(print line value) + other` is incorrect because printing produces `nothing`, which numeric `+` does not accept.
 
-We know this because we instantiate `print value` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
+We know this because we instantiate `print line value` and walk over the code just like we do with the code in the main section. We store the return type so we do not have to instantiate functions with the same (possibly incorrect) combinations again and again. We assume functions always return the same type for the same argument types and constants.
 
 All instantiations of a function have the same operand reordering for each code line, but can use different overloads. The first valid instantiation determines reordering.
 
@@ -518,7 +588,7 @@ All other arguments are **IRRELEVANT**. We can never start or end with 2 argumen
 Prefix operator:
 
 ```text
-the inverse of $
+not $
 set $ to $
 vector of $ $ #
 ```
@@ -569,8 +639,15 @@ Raw pointers are non-owning, regardless of their pointee type or pointer depth. 
 the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward
 order and release them in reverse order; pointer copies, arguments, returns, and fields do not retain or release their pointees.
 
+Lifecycle inference follows runtime expressions from main, exposed functions and their selected callees. Type-only
+operands do not make their class lifecycle bodies reachable. Runtime owning values, nested owning fields and explicit
+destruction do; lifecycle bodies can in turn require more runtime types. Retain/release declaration pairing is validated
+independently of runtime use. Intrinsic type-only operand classification is shared with memory diagnostics.
+
 External call signatures come entirely from their inferred DynLex operands; code generation does not identify or special-case
 library function names. `@intrinsic("call", library, function, return type, arguments...)` emits a fixed signature.
+These C-ABI calls are available for native CPU and WebAssembly output. Intrinsic target metadata rejects them during
+SPIR-V inference, before code generation.
 `@intrinsic("variadic call", library, function, return type, fixed argument count, arguments...)` emits the first
 `fixed argument count` argument types as the fixed prefix and marks the remaining parameters variadic. Only the variadic suffix
 receives C's default argument promotions: booleans and integers narrower than 32 bits become 32-bit integers, 32-bit floats become
@@ -606,12 +683,25 @@ they are not an integer interchange API.
 Native callable definitions and external-call declarations and call sites apply the same narrow-scalar ABI extension attributes.
 Booleans use `zeroext`, and 8/16-bit integers extend according to signedness. Non-Darwin AArch64 (AAPCS64) leaves these scalars
 unextended; Win64 extends only Booleans. Internal pattern calls keep their separate by-reference calling convention.
+Internal function generation preserves each runtime argument's storage address space and caches the resulting ABI on
+the inferred instantiation. Forwarding a global reference retains its original storage; local and global references can
+therefore select distinct LLVM functions for the same inferred argument types.
 A Boolean's LLVM `i1` type alone does not guarantee a canonical C Boolean.
+
+WebAssembly object emission is followed by the pinned LLD WebAssembly driver, embedded in both native and browser
+compilers. Each link consumes one compiler object and uses one thread, including in single-threaded Web Workers.
+The linker resolves all code and data relocations, exports `main`, and reserves the first 16 bytes for null.
+Static data precedes the aligned 8 MiB stack, and the immutable `__heap_base` export identifies the first heap address,
+including any BSS that has no active data segment. The module defines its own stack pointer and function table. The
+browser runtime supplies linear memory and host functions, reads that linked heap boundary, and allocates from it;
+it does not compute another stack or static-data layout. Relocatable objects are never treated as executable modules.
 
 SPIR-V vertex-to-fragment interpolants are identified by arbitrary non-empty semantic names. Each independently compiled shader
 stage encodes those names into valid interface identifiers and assigns locations in lexical semantic-name order, so matching
 vertex outputs and fragment inputs receive identical locations regardless of source order. The standard shader library exposes
 the four floating-point components while the intrinsic layer owns the stage restrictions and interface storage classes.
+The SPIR-V 1.4+ entry-point interface contains all emitted module globals, including private variables, while excluding
+function-local storage. The entry-point checker validates emitted shader modules with `spirv-val --target-env vulkan1.3`.
 
 # Incremental Native Builds
 
@@ -644,6 +734,7 @@ When hovering over an expression, the already-evaluated compile-time value and t
 Compiler ranges and source slices use UTF-8 byte offsets. Editor-facing APIs use
 UTF-16 columns: incoming edits and cursor positions convert to bytes, and outgoing
 ranges, semantic tokens, web diagnostics, and execution traces convert back.
+Normalized semantic tokens map each authored source slice separately. Formatted literal text and braces receive string annotations, while embedded expressions keep their own tokens.
 Source files share line indexing; the semantic token encoder is shared by the
 language server and tagged-token inspection tools.
 

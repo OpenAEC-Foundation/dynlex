@@ -92,11 +92,6 @@ bool ensureSectionInstantiationInferred(
 		context.currentVariableValues.clear();
 		context.currentAddressState = {};
 		context.currentSubject = {};
-		for (const auto &[name, value] : inst.constantParameterValues) {
-			Variable *var = findOwnSectionVariable(section, name);
-			if (var)
-				context.setKnownConstant(var->definition, value);
-		}
 		if (context.trial)
 			inst.body = context.cloneSectionBody(section);
 		bool passSucceeded = inferSection(section, inst.body.get(), nullptr, context, {}, &instantiationFallsThrough);
@@ -105,20 +100,20 @@ bool ensureSectionInstantiationInferred(
 		inst.finalGlobalConstantValues.clear();
 		for (VariableReference *reference : inst.writtenGlobalReferences) {
 			const KnownConstantStorage &knownConstants = context.currentVariableValues.read();
-			auto knownIt = knownConstants.find(reference);
+			auto knownIt = knownConstants.find({reference, nullptr});
 			if (knownIt != knownConstants.end() && isCompileTimeKnown(knownIt->second))
 				inst.finalGlobalConstantValues[reference] = knownIt->second;
 			const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
-			auto provenance = variables.find(reference);
+			auto provenance = variables.find({reference, nullptr});
 			inst.finalGlobalAddressProvenance[reference] =
 				provenance != variables.end() ? provenance->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 		}
-		for (VariableReference *reference : context.currentAddressState.read().addressTakenVariables) {
+		for (const VariableStorageKey &reference : context.currentAddressState.read().addressTakenVariables) {
 			Variable *variable = variableForAddressTarget(reference);
 			if (variable && variable->isGlobal)
-				inst.addressTakenGlobalReferences.insert(reference);
+				inst.addressTakenGlobalReferences.insert(reference.definition);
 		}
-		for (VariableReference *reference : context.currentAddressState.read().externallyEscaped.mayTargets) {
+		for (const VariableStorageKey &reference : context.currentAddressState.read().externallyEscaped.mayTargets) {
 			Variable *variable = variableForAddressTarget(reference);
 			if (variable && variable->isGlobal)
 				inst.externallyEscapedGlobalProvenance.mayTargets.insert(reference);

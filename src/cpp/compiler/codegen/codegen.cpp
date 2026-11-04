@@ -144,11 +144,18 @@ struct ScopedFlexCallSiteRange {
 } // namespace
 
 // Generate a monomorphized LLVM function for a pattern definition with specific argument types.
-// The Instantiation's llvmFunction is set before generating the body, enabling recursive calls.
-bool generateSpecializedFunction(
+// Cache each storage ABI before generating its body, enabling recursive calls.
+llvm::Function *generateSpecializedFunction(
 	ParseContext &context, Section *section, const std::vector<std::pair<std::string, Expression *>> &paramBindings,
-	Instantiation &instantiation
+	Instantiation &instantiation, const std::vector<llvm::Value *> &arguments
 ) {
+	std::vector<unsigned> parameterAddressSpaces;
+	parameterAddressSpaces.reserve(arguments.size());
+	for (llvm::Value *argument : arguments)
+		parameterAddressSpaces.push_back(argument->getType()->getPointerAddressSpace());
+	auto generated = instantiation.llvmFunctionsByParameterAddressSpaces.find(parameterAddressSpaces);
+	if (generated != instantiation.llvmFunctionsByParameterAddressSpaces.end())
+		return generated->second;
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	auto instIt = std::find_if(section->instantiations.begin(), section->instantiations.end(), [&](const auto &entry) {
 		return &entry.second == &instantiation;
@@ -170,7 +177,11 @@ bool generateSpecializedFunction(
 	for (size_t runtimeParameterIndex : runtimeParameterIndices)
 		runtimeParameterNames.push_back(paramBindings[runtimeParameterIndex].first);
 
-	std::vector<llvm::Type *> paramTypes(runtimeParameterNames.size(), llvm::PointerType::getUnqual(*context.llvmContext));
+	requireCompilerInvariant(arguments.size() == runtimeParameterIndices.size(), "function storage ABI argument count changed");
+	std::vector<llvm::Type *> paramTypes;
+	paramTypes.reserve(parameterAddressSpaces.size());
+	for (unsigned addressSpace : parameterAddressSpaces)
+		paramTypes.push_back(llvm::PointerType::get(*context.llvmContext, addressSpace));
 	llvm::Type *returnType = getLLVMType(context, activeInst.returnType);
 
 	llvm::FunctionType *funcType = llvm::FunctionType::get(returnType, paramTypes, false);
@@ -181,9 +192,16 @@ bool generateSpecializedFunction(
 		funcName += "_" + encodeLLVMNameComponent(t.toString());
 	}
 	funcName += encodeInstantiationKeyForFunctionName(instantiationKey);
+	if (std::ranges::any_of(parameterAddressSpaces, [](unsigned addressSpace) {
+		return addressSpace != 0;
+	})) {
+		funcName += "_as";
+		for (unsigned addressSpace : parameterAddressSpaces)
+			funcName += "_" + std::to_string(addressSpace);
+	}
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
-	activeInst.llvmFunction = func;
+	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {
@@ -215,6 +233,11 @@ bool generateSpecializedFunction(
 	llvm::DebugLoc savedDebugLoc = builder.getCurrentDebugLocation();
 	auto savedCodegenParameterBindings = context.codegenParameterBindings;
 	auto savedCodegenParameterDefinitions = context.codegenParameterDefinitions;
+	// Another storage ABI can recursively generate this same inferred body.
+	// Its local addresses and subjects belong to its own LLVM function.
+	auto savedVariableStorage = context.variableStorage;
+	auto savedSubjectStorage = std::move(context.subjectStorage);
+	context.subjectStorage.clear();
 	llvm::Value *savedManagedLifecycleValueBinding = context.managedLifecycleValueBinding;
 	const Instantiation *savedCodegenInstantiation = context.currentCodegenInstantiation;
 	BindingFrameStack savedFlexBindingFrames = context.flexBindingFrames;
@@ -298,6 +321,8 @@ bool generateSpecializedFunction(
 	context.flexCallSiteRangeStack = std::move(savedFlexCallSiteRanges);
 	context.codegenParameterBindings = std::move(savedCodegenParameterBindings);
 	context.codegenParameterDefinitions = std::move(savedCodegenParameterDefinitions);
+	context.variableStorage = std::move(savedVariableStorage);
+	context.subjectStorage = std::move(savedSubjectStorage);
 	context.managedLifecycleValueBinding = savedManagedLifecycleValueBinding;
 	context.currentCodegenInstantiation = savedCodegenInstantiation;
 	context.currentDebugScope = savedDebugScope;
@@ -307,7 +332,7 @@ bool generateSpecializedFunction(
 		builder.SetInsertPoint(savedBlock, savedPoint);
 		builder.SetCurrentDebugLocation(savedDebugLoc);
 	}
-	return bodySucceeded;
+	return bodySucceeded ? func : nullptr;
 }
 
 #include "callableCodegen.inl"
@@ -409,7 +434,18 @@ bool emitSectionFlexCallerBody(
 	InstantiatedSectionBody *instantiatedBody = frame.instantiatedBody;
 	Section *definitionSection = frame.definitionSection;
 	frame.bodyEmitted = true;
-	bool succeeded = generateSectionCode(context, bodySection, instantiatedBody);
+	bool succeeded = true;
+	if (frame.openingExpression->staticLoopBodies) {
+		const auto iterations = *frame.openingExpression->staticLoopBodies;
+		for (const auto &iteration : iterations) {
+			if (!generateSectionCode(context, bodySection, iteration.get())) {
+				succeeded = false;
+				break;
+			}
+		}
+	} else {
+		succeeded = generateSectionCode(context, bodySection, instantiatedBody);
+	}
 	if (succeeded) {
 		requireCompilerInvariant(
 			frameIndex < context.sectionFlexBodyFrames.size() &&
@@ -471,6 +507,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		crashCompilerBug("Unknown literal type in codegen");
 	}
 
+	case Expression::Kind::ArgumentPack:
+		return nullptr;
 	case Expression::Kind::ArrayLiteral: {
 		DataType arrayType = finalizedExpressionType(context, expr);
 		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
@@ -622,6 +660,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			requireCompilerInvariant(
 				static_cast<bool>(expr->inferredFlexBody), "section flex reached codegen without its inferred replacement body"
 			);
+			// The declaration scope owns parameters omitted by a choice path.
+			// Allocate its unbound locals as well as the replacement scopes.
+			allocateSectionVariables(context, matchedSection, expr->inferredFlexBody.get());
 			bool succeeded = true;
 			matchedSection->forEachDefinitionBodySection([&](Section *definitionBodySection) {
 				InstantiatedSectionBody *definitionBody = definitionBodySection == matchedSection
@@ -662,6 +703,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 				context.sectionFlexBodyFrames.pop_back();
 			}
 
+			if (succeeded && !releaseManagedStorageForSection(context, matchedSection))
+				succeeded = false;
+
 			popBindingScopeOrFail(context.flexBindingFrames, "Missing flex binding scope after flex pattern call");
 			context.currentBodySection = savedBodySection;
 			context.currentBodyInstantiation = savedBodyInstantiation;
@@ -690,10 +734,6 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		requireCompilerInvariant(
 			argTypes.size() == paramBindings.size(), "selected instantiation argument count diverged from the call"
 		);
-		if (!inst->llvmFunction && !generateSpecializedFunction(context, matchedSection, paramBindings, *inst))
-			return CodegenResult::failure();
-		llvm::Function *func = inst->llvmFunction;
-
 		// Build call arguments: pass variable pointers or temp allocas
 		std::vector<size_t> runtimeParameterIndices = collectRuntimeParameterIndices(*inst, paramBindings);
 		std::vector<llvm::Value *> args;
@@ -730,6 +770,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 		}
 
+		llvm::Function *func = generateSpecializedFunction(context, matchedSection, paramBindings, *inst, args);
+		if (!func)
+			return CodegenResult::failure();
 		if (finalizedExpressionType(context, expr).kind == DataType::Kind::Void)
 			emitExecutionTrace(context, expr->range);
 		llvm::CallInst *call = builder.CreateCall(func, args);

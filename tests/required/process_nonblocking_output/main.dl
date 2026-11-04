@@ -1,8 +1,7 @@
 import lib/process.dl
 
-function the nonblocking process test interpreter:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the nonblocking process test interpreter:
+    return "python" if the process platform is Windows, else "python3"
 
 set command to a process command for the nonblocking process test interpreter
 add "-u" as an argument to command
@@ -15,11 +14,6 @@ read the standard error of child and set error to it
 poll child and set status to it
 clean up child and set cleanup to it
 
-print whether child was launched as a line
-print whether output succeeded as a line
-print whether (output's contents's length > 0) as a line
-print whether error succeeded as a line
-print whether (error's contents's length > 0) as a line
-print whether status succeeded as a line
-print whether status does not report completion as a line
-print whether cleanup succeeded as a line
+print lines (child was launched), (output succeeded), (output's contents's length > 0) and (error succeeded)
+print lines (error's contents's length > 0), (status succeeded) and (status does not report completion)
+print line cleanup succeeded

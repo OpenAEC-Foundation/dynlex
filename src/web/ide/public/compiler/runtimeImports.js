@@ -17,11 +17,7 @@ const { createHostImports } = hostModule;
 const { inspectRuntimeWasmLayout } = layoutModule;
 
 const supportedEnvImports = new Set([
-  "__indirect_function_table",
   "__linear_memory",
-  "__memory_base",
-  "__stack_pointer",
-  "__table_base",
   "abort",
   "calloc",
   "dynlex_filesystem_clear_error",
@@ -120,7 +116,7 @@ export function isSupportedRuntimeImport(importSpec) {
   if (importSpec.module !== "env") {
     return false;
   }
-  return supportedEnvImports.has(importSpec.name) || importSpec.name.startsWith("GOT.");
+  return supportedEnvImports.has(importSpec.name);
 }
 
 function cStringBytes(memory, pointer) {
@@ -325,7 +321,7 @@ function buildFormatStringOutput(memory, formatText, varargsPointer) {
   return output;
 }
 
-export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layout) {
+export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
   if (
     !filesystem ||
     !(filesystem.files instanceof Map) ||
@@ -337,27 +333,20 @@ export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layou
   ) {
     throw new TypeError("DynLex runtime requires a filesystem");
   }
-  if (!layout || !Number.isSafeInteger(layout.staticDataEnd) || layout.staticDataEnd < 0) {
+  if (!layout || !Number.isSafeInteger(layout.heapBase) || layout.heapBase <= 0 || layout.heapBase % 16 !== 0) {
     throw new TypeError("DynLex runtime requires a valid WebAssembly memory layout");
   }
   const pageSize = 65536;
   const maximumPages = 2048;
-  const stackSize = 8 * 1024 * 1024;
   const allocationAlignment = 16;
-  const stackBase = Math.ceil(layout.staticDataEnd / 16) * 16;
-  const stackEnd = stackBase + stackSize;
-  const initialPages = Math.max(256, Math.ceil(stackEnd / pageSize));
-  if (!Number.isSafeInteger(stackEnd) || initialPages > maximumPages) {
-    throw new WebAssembly.LinkError("DynLex program static data leaves no room for its runtime stack");
+  const initialPages = Math.max(256, Math.ceil(layout.heapBase / pageSize));
+  if (initialPages > maximumPages) {
+    throw new WebAssembly.LinkError("DynLex linked memory layout exceeds the runtime memory limit");
   }
   const memory = new WebAssembly.Memory({ initial: initialPages, maximum: maximumPages });
-  const indirectFunctionTable = new WebAssembly.Table({ initial: 64, maximum: 2048, element: "anyfunc" });
-  const stackPointer = new WebAssembly.Global({ value: "i32", mutable: true }, stackEnd);
-  const memoryBase = new WebAssembly.Global({ value: "i32", mutable: false }, 0);
-  const tableBase = new WebAssembly.Global({ value: "i32", mutable: false }, 0);
   const allocationSizes = new Map();
   const freeBlocks = [];
-  let heapPointer = stackEnd;
+  let heapPointer = layout.heapBase;
   let randomState = 0x12345678;
 
   function byteCountValue(value) {
@@ -457,11 +446,7 @@ export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layou
   }
 
   const env = {
-    __indirect_function_table: indirectFunctionTable,
     __linear_memory: memory,
-    __memory_base: memoryBase,
-    __stack_pointer: stackPointer,
-    __table_base: tableBase,
     abort() {
       throw new WebAssembly.RuntimeError("Program aborted");
     },
@@ -641,12 +626,6 @@ export function buildRuntimeImports(importSpecs, stdoutChunks, filesystem, layou
     ...createFileImports(memory, filesystem),
     ...createHostImports(memory)
   };
-
-  for (const importSpec of importSpecs) {
-    if (importSpec.module === "env" && importSpec.name.startsWith("GOT.") && !(importSpec.name in env)) {
-      env[importSpec.name] = new WebAssembly.Global({ value: "i32", mutable: false }, 0);
-    }
-  }
 
   return { env };
 }

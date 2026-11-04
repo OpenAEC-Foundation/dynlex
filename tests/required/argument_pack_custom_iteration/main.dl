@@ -1,0 +1,28 @@
+# Argument packs support user-defined iteration order.
+flex section backward item in values:
+    replacement:
+        @intrinsic("store", position, @intrinsic("subtract", @intrinsic("type extent", values, 0), 1))
+        while @intrinsic("greater than or equal", position, 0):
+            @intrinsic("store", item, @intrinsic("extract element", values, position))
+            @intrinsic("execute body")
+            @intrinsic("store", position, @intrinsic("subtract", position, 1))
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+function add each {arguments:numbers} to total:
+    replacement:
+        backward number in numbers:
+            @intrinsic("store", total, @intrinsic("add", total, number))
+
+@intrinsic("store", total, 0)
+add each 1 and 2 to total
+add each 3, 4 and 5 to total
+add each 6, 7, 8, 9, 10, 11, 12 and 13 to total
+function decimal backward {arguments:digits}:
+    replacement:
+        @intrinsic("store", result, 0)
+        backward digit in digits:
+            @intrinsic("store", result, @intrinsic("add", @intrinsic("multiply", result, 10), digit))
+        {result}
+@intrinsic("store", order, (decimal backward 1, 2 and 3))
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", total, 91), @intrinsic("subtract", order, 321)))

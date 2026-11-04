@@ -4,17 +4,15 @@
 
 import lib/bim/angle.dl
 
-function cad angle check {a boolean:passed} named {C string:label}:
-    execute:
-        print label
-        print ": "
-        print passed as a line
-        if the inverse of passed:
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to cad angle check {a boolean:passed} named {C string:label}:
+    print label
+    print ": "
+    print line passed
+    if not passed:
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function cad angle near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
-    execute:
-        return (the absolute value of (actual - expected)) < 1e-12
+to get cad angle near {a 64 bit floating-point number:actual} to {a 64 bit floating-point number:expected}:
+    return (the absolute value of (actual - expected)) < 1e-12
 
 # Exposed entry points exercise binary64 arguments at runtime as well as literals.
 exposed function cad angle check normalization of {a 64 bit floating-point number:angle} against {a 64 bit floating-point number:expected} named {C string:label}:

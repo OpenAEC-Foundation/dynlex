@@ -12,11 +12,11 @@ state machine publication:
 
 set first to an instance of publication
 set second to an instance of publication
-print first's current's name as a line
+print line first's current's name
 send "submit" to the address of first
-print first's current's name as a line
+print line first's current's name
 send "approve" to the address of first
-print first's current's name as a line
-print second's current's name as a line
+print line first's current's name
+print line second's current's name
 send "withdraw" to the address of first
-print first's current's name as a line
+print line first's current's name

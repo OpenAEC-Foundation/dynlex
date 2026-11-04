@@ -1,32 +1,23 @@
 import lib/std.dl
 
-function the pointer category of {a pointer to an integer:value}:
-    execute:
-        return 1
+to get the pointer category of {a pointer to an integer:value}:
+    return 1
 
-function the pointer category of {a pointer to (an integer array of 3 items):value}:
-    execute:
-        return 2
+to get the pointer category of {a pointer to (an integer array of 3 items):value}:
+    return 2
 
 set base to 10
 set values to [base, base + 5, 30]
 
-print the item at 0 in values as a line
-print the item at 1 in values as a line
-print the item at 2 in values as a line
-print the value at (1 + values) as a line
-print the value at ((values + 2) - 1) as a line
-print the value at (values - 0) as a line
-print the pointer category of (values + 0) as a line
-print the pointer category of the address of values as a line
+print lines (the item at 0 in values), (the item at 1 in values) and (the item at 2 in values)
+print lines (the value at (1 + values)), (the value at ((values + 2) - 1)) and (the value at (values - 0))
+print lines (the pointer category of (values + 0)) and (the pointer category of the address of values)
 store 99 at (values + 1)
-print the item at 1 in values as a line
+print line the item at 1 in values
 
 set numbers to [1, 2.5, 3]
 
-print the item at 0 in numbers as a line
-print the item at 1 in numbers as a line
-print the item at 2 in numbers as a line
+print lines (the item at 0 in numbers), (the item at 1 in numbers) and (the item at 2 in numbers)
 
 set rows to [
     base,
@@ -34,6 +25,4 @@ set rows to [
     the item at 0 in numbers as an integer
 ]
 
-print the item at 0 in rows as a line
-print the item at 1 in rows as a line
-print the item at 2 in rows as a line
+print lines (the item at 0 in rows), (the item at 1 in rows) and (the item at 2 in rows)

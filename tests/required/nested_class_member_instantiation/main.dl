@@ -6,13 +6,9 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
+nothing means: @intrinsic("type", "nothing")
 
 class:
     patterns:
@@ -32,11 +28,10 @@ class:
     members:
         owner as a pointer to an owner
 
-function the value in {a holder:container}:
-    execute:
-        set owned to container's owner
-        set selected to owned's cell
-        return selected's value
+to get the value in {a holder:container}:
+    set owned to container's owner
+    set selected to owned's cell
+    return selected's value
 
 set sample to @intrinsic("construct", a cell, 41)
 set pointer to @intrinsic("address of", sample)

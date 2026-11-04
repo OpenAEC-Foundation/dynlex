@@ -2,20 +2,18 @@
 import lib/bim/nurbs2.dl
 import lib/bim/nurbs3.dl
 
-function ensure nurbs2 ownership {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "exit", nothing, 92)
+to ensure nurbs2 ownership {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "exit", nothing, 92)
 
-function a detached nurbs2 curve:
-    execute:
-        set points to a list containing (the cad zero vector2)
-        append (a cad vector2 with x 4.0 and y 2.0) to points
-        set empty to an empty list of a 64 bit floating-point number
-        set built to the cad nurbs curve2 of degree 1 with controls points, knots empty and weights empty
-        free points
-        free empty
-        return built's value
+to get a detached nurbs2 curve:
+    set points to a list containing (the cad zero vector2)
+    append (a cad vector2 with x 4.0 and y 2.0) to points
+    set empty to an empty list of a 64 bit floating-point number
+    set built to the cad nurbs curve2 of degree 1 with controls points, knots empty and weights empty
+    free points
+    free empty
+    return built's value
 
 set original to a detached nurbs2 curve
 set copy to original
@@ -70,4 +68,4 @@ free cad nurbs other's value
 free cad nurbs other's value
 free points
 free empty
-print "nurbs2 copied lifetime, detached insertion, nested split and invalid release" as a line
+print line "nurbs2 copied lifetime, detached insertion, nested split and invalid release"

@@ -210,8 +210,7 @@ local function cad offset2 conditioned clone of {cad polyline2:source} from {cad
                     set halfBulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, arcResult's value's sweep / 8.0)
                     set midpoint to the cad difference of (the cad point on arcResult's value at 0.5) and origin
                     set normalizedMidpoint to midpoint scaled by (1.0 / distance)
-                    append (a cad polyline vertex2 at normalized with bulge halfBulge) to vertices
-                    append (a cad polyline vertex2 at normalizedMidpoint with bulge halfBulge) to vertices
+                    append (a cad polyline vertex2 at normalized with bulge halfBulge) and (a cad polyline vertex2 at normalizedMidpoint with bulge halfBulge) to vertices
                     set split to true
             if split = false:
                 append (a cad polyline vertex2 at normalized with bulge bulge) to vertices
@@ -353,27 +352,24 @@ local function cad offset2 raw of {cad polyline2:source} [toward] {cad vector2:s
         free vertices
         return empty
 
-function the cad offset polylines of {cad polyline2:source} [by] {a number:givenDistance} [toward] {cad vector2:side}:
-    execute:
-        set distance to the absolute value of (givenDistance as a 64 bit floating-point number)
-        if (distance < 1e-12) or ((cad offset2 finite distance) = false):
-            return an empty list of a cad polyline2
-        if (the length of source's vertices) < 2:
-            return an empty list of a cad polyline2
-        set origin to (the item at 0 in source's vertices)'s position
-        set workShape to cad offset2 conditioned clone of source from origin over distance
-        set normalizedSide to (the cad difference of side and origin) scaled by (1.0 / distance)
-        set raw to cad offset2 raw of workShape toward normalizedSide
-        set output to an empty list of a cad polyline2
-        loop resultIndex from 0 to the length of raw:
-            set rawShape to the item at resultIndex in raw
-            set vertices to an empty list of a cad polyline vertex2
-            loop vertexIndex from 0 to the length of rawShape's vertices:
-                set vertex to the item at vertexIndex in rawShape's vertices
-                set point to the cad sum of origin and (vertex's position scaled by distance)
-                append (a cad polyline vertex2 at point with bulge vertex's bulge) to vertices
-            append (the cad polyline2 with vertices vertices and closure rawShape's closed) to output
-            free vertices
-        free raw
-        free cad polyline workShape
-        return output
+to get the cad offset polylines of {cad polyline2:source} [by] {a number:givenDistance} [toward] {cad vector2:side}:
+    set distance to the absolute value of (givenDistance as a 64 bit floating-point number)
+    if (distance < 1e-12) or ((cad offset2 finite distance) = false):
+        return an empty list of a cad polyline2
+    if (the length of source's vertices) < 2:
+        return an empty list of a cad polyline2
+    set origin to (the item at 0 in source's vertices)'s position
+    set workShape to cad offset2 conditioned clone of source from origin over distance
+    set normalizedSide to (the cad difference of side and origin) scaled by (1.0 / distance)
+    set raw to cad offset2 raw of workShape toward normalizedSide
+    set output to an empty list of a cad polyline2
+    for each rawShape in raw:
+        set vertices to an empty list of a cad polyline vertex2
+        for each vertex in rawShape's vertices:
+            set point to the cad sum of origin and (vertex's position scaled by distance)
+            append (a cad polyline vertex2 at point with bulge vertex's bulge) to vertices
+        append (the cad polyline2 with vertices vertices and closure rawShape's closed) to output
+        free vertices
+    free raw
+    free cad polyline workShape
+    return output

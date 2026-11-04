@@ -97,7 +97,7 @@ to navigate UI tabs in {a pointer to native UI view:view}:
                 set current to 0
                 loop while (the UI child at current in ribbon) != view's focused's node:
                     increment current
-                set index to the remainder of ((current + direction) + ribbon's count) divided by ribbon's count
+                set index to ((current + direction) + ribbon's count) mod ribbon's count
                 set view's focus order to view's focus order + (index - current)
                 activate (the UI child at index in ribbon) belonging to ribbon in (view's instance)
     set view's was left to left

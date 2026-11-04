@@ -6,18 +6,16 @@ flex section if condition:
 	replacement:
 		@intrinsic("if", condition)
 
-function number has even parity after storage:
-	execute:
-		if @intrinsic("not equal", number, 0):
-			@intrinsic("store", result, @intrinsic("subtract", number, 1) has odd parity after storage)
-			@intrinsic("return", result)
-		@intrinsic("return", @intrinsic("equal", 1, 1))
+to get number has even parity after storage:
+	if @intrinsic("not equal", number, 0):
+		@intrinsic("store", result, @intrinsic("subtract", number, 1) has odd parity after storage)
+		@intrinsic("return", result)
+	@intrinsic("return", @intrinsic("equal", 1, 1))
 
-function number has odd parity after storage:
-	execute:
-		if @intrinsic("not equal", number, 0):
-			@intrinsic("store", result, @intrinsic("subtract", number, 1) has even parity after storage)
-			@intrinsic("return", result)
-		@intrinsic("return", @intrinsic("equal", 1, 0))
+to get number has odd parity after storage:
+	if @intrinsic("not equal", number, 0):
+		@intrinsic("store", result, @intrinsic("subtract", number, 1) has even parity after storage)
+		@intrinsic("return", result)
+	@intrinsic("return", @intrinsic("equal", 1, 0))
 
 ignore 4 has even parity after storage

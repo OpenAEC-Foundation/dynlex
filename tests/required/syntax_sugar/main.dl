@@ -1,0 +1,34 @@
+import lib/list.dl
+
+set first, second and third to 7
+print line (first + second) + third
+set first and second to first + 1
+print line first + second
+
+set values to an empty list of an integer
+append 2, 3 and 5 to values
+set total to 0
+for each value in values:
+    add value to total
+print line total
+for each value at index in [4, 6]:
+    print line value + index
+
+print lines (3 is one of [1, 3, 7]), (3 is one of 1, 3 and 7), (2 is one of 1, 3 and 7) and (2 between 1 and 3)
+print lines (1 between 1 and 3), (3 between 1 and 3), (1 from 1 until 3), (3 from 1 until 3) and (1 after 1 through 3)
+print lines (3 after 1 through 3), (1 from 1 through 3), (3 from 1 through 3), (not false), (not true) and (17 mod 5)
+print lines (17 modulo 5), (17 % 5), (-17 % 5) and (2 + (17 % 5) * 3)
+
+set score to 42
+print lines (formatted "Score: {score}") and (formatted "Next: {score + 1}; braces: {{score}}")
+free values
+
+print lines (1 < 2 < 3), (1 <= 1 < 3), (3 >= 2 < 3), (1 >= 2 < 3), (3 > 2 >= 2) and (2 = 2 != 3)
+
+print lines (formatted ""), (formatted "{score}") and (formatted "Quoted: {"value"}; {{ok}}")
+
+to get numbered value:
+    print line value
+    return value
+
+print lines ((numbered 3) >= (numbered 2) < (numbered 4)) and ((numbered 1) > (numbered 2) < (numbered 4))

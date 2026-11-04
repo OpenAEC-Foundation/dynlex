@@ -102,9 +102,9 @@ import lib/std.dl
 set counter to 1
 ignore @intrinsic("atomic fetch add", the address of counter, 1, "relaxed")
 if counter = 1:
-    print 1 as a line
+    print line 1
 else:
-    print 2 as a line
+    print line 2
 """
 
 NEGATIVE_SOURCES = {

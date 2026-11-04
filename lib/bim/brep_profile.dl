@@ -13,15 +13,12 @@ local function check cad profile expected against {the type of expected:actual}:
     execute:
         ignore expected
         ignore actual
-function {cad vector2:a} cad profile meets {cad vector2:b}:
-    execute:
-        return (@intrinsic("call", "libc", "hypot", a 64 bit floating-point number, (a's x) - (b's x), (a's y) - (b's y))) <= 1e-9
-function the cad profile senses of {a pointer to a list:profile}:
-    execute:
-        return cad chain senses for profile closing true
-function the cad path senses of {a pointer to a list:path}:
-    execute:
-        return cad chain senses for path closing false
+to get {cad vector2:a} cad profile meets {cad vector2:b}:
+    return (@intrinsic("call", "libc", "hypot", a 64 bit floating-point number, (a's x) - (b's x), (a's y) - (b's y))) <= 1e-9
+to get the cad profile senses of {a pointer to a list:profile}:
+    return cad chain senses for profile closing true
+to get the cad path senses of {a pointer to a list:path}:
+    return cad chain senses for path closing false
 local function cad chain [senses] for {a pointer to a list:profile} closing {boolean:closed}:
     execute:
         check cad profile (0 as a pointer to a cad curve2) against (0 as a pointer to the type of (the item at 0 in profile))

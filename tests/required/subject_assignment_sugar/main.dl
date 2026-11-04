@@ -1,0 +1,8 @@
+import lib/std.dl
+
+set x to 1. add 5
+print lines x and it
+set x to 2 and add 7
+print line it
+set x to 3. add 8
+print line it

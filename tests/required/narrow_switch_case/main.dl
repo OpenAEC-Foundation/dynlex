@@ -1,13 +1,12 @@
 import lib/std.dl
 
-function the value for choice:
-    execute:
-        match on choice:
-            case -1:
-                return 7
-            otherwise:
-                return 9
+to get the value for choice:
+    match on choice:
+        case -1:
+            return 7
+        otherwise:
+            return 9
 
 set input to 255 as a byte
 set selected to the value for input
-print selected as a line
+print line selected

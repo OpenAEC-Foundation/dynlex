@@ -23,5 +23,5 @@ set second to @intrinsic("construct", context record, 50)
 @intrinsic("call pointer", incrementer, nothing, the address of first)
 @intrinsic("call pointer", incrementer, nothing, the address of first)
 @intrinsic("call pointer", incrementer, nothing, the address of second)
-print first's count as a line
-print second's count as a line
+print line first's count
+print line second's count

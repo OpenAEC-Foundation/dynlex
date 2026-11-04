@@ -5,6 +5,6 @@ flex function finish with [integer {integer:value}|floating {floating-point numb
         if remaining > 0:
             finish with floating 1.5 and (remaining - 1)
         else:
-            print 1 as a line
+            print line 1
 
 finish with integer 1 and 1

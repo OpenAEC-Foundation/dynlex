@@ -1,22 +1,12 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function floating:
-    replacement:
-        @intrinsic("type", "float")
+floating means: @intrinsic("type", "float")
 
-function fixed quantity:
-    replacement:
-        @intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function accept {the wrapped type of 32:value}:
-    execute:
-        @intrinsic("discard", value)
+to accept {the wrapped type of 32:value}: @intrinsic("discard", value)
 
-function the wrapped type of value:
-    replacement:
-        the type of value
+the wrapped type of value means: the type of value
 
 function the type of {fixed floating:value}:
     replacement:

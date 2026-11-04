@@ -4,32 +4,28 @@ import lib/std.dl
 # Test 1: Basic literal vs argument specificity
 # ==========================================================
 # Generic pattern: "item" resolves as a variable (argument slot)
-function the shutdown code for item and user:
-    execute:
-        return item + 100 + user
+to get the shutdown code for item and user:
+    return item + 100 + user
 
 # Body reference "the shutdown code for lights and 4" exists before the specific
 # pattern.
 # It initially matches the generic pattern (with "lights" captured as argument).
 # When the specific pattern is added later, the compiler must detect the overlap
 # and re-match this reference to the specific pattern.
-function shut down the lights:
-    execute:
-        print the shutdown code for lights and 4
+to shut down the lights: print the shutdown code for lights and 4
 
 shut down the lights
 
 # Specific pattern: "lights" is a literal (not an argument).
 # This is more specific than the generic pattern at the "lights" position.
 # Adding it must invalidate references that matched the generic pattern.
-function the shutdown code for lights and user:
-    execute:
-        # Reference the generic pattern to confirm it still works independently
-        set placeholder to 1
-        set verification to the shutdown code for placeholder and user
-        # Return a value that distinguishes this from the generic pattern
-        set result to 1 + 1 + user
-        return result
+to get the shutdown code for lights and user:
+    # Reference the generic pattern to confirm it still works independently
+    set placeholder to 1
+    set verification to the shutdown code for placeholder and user
+    # Return a value that distinguishes this from the generic pattern
+    set result to 1 + 1 + user
+    return result
 
 # Expected: 6 (specific pattern: 1+1+4=6, not generic: lights+100+4)
 
@@ -39,25 +35,20 @@ function the shutdown code for lights and user:
 # "a new message" is a valid function that returns a value.
 # This means the generic "show message" pattern's argument slot could
 # consume "a new message" as a sub-expression match.
-function a new message:
-    execute:
-        return 77
+to get a new message:
+    return 77
 
 # Generic: "show message" has an argument slot. When matching
 # "show a new message", the argument could consume the sub-expression
 # "a new message" (which evaluates to 77).
-function show message:
-    execute:
-        print message
+to show message: print message
 
 # Body reference uses "show a new message" — initially matches
 # "show message" with message = sub-expression "a new message" (value 77).
 # When the specific function is added later, the overlap detector must
 # recognize that the generic's argument consumed a sub-expression
 # matching the specific's literal words, and re-match.
-function demonstrate:
-    execute:
-        show a new message
+to demonstrate: show a new message
 
 demonstrate
 
@@ -65,9 +56,7 @@ demonstrate
 # more specific than the generic "show message". Its body calls
 # "show 99" (the generic) to confirm both coexist.
 # Defined after the reference above.
-function show a new message:
-    execute:
-        show 99
+to show a new message: show 99
 
 # Expected: 99 (specific "show a new message" calls "show 99",
 # not generic "show message" with message=77)

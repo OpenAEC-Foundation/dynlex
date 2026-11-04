@@ -60,7 +60,7 @@ to get {snake cell:location} is occupied in {a pointer to snake match:match}:
 to get the next choice below {integer:limit} in {a pointer to snake match:match}:
     require condition (limit > 0) reporting "A random choice requires a positive limit"
     set match's seed to (match's seed * (1664525 as a 32 bit unsigned integer)) + (1013904223 as a 32 bit unsigned integer)
-    return (the remainder of (match's seed) divided by (limit as a 32 bit unsigned integer)) as an integer
+    return ((match's seed) mod (limit as a 32 bit unsigned integer)) as an integer
 
 to place food in {a pointer to snake match:match}:
     set {free cells} to the snake board capacity - match's length
@@ -70,7 +70,7 @@ to place food in {a pointer to snake match:match}:
     set {chosen cell} to the next choice below free cells in match
     set index to 0
     loop while index < the snake board capacity:
-        set location to a snake cell at (the remainder of index divided by the snake board width) and (index / the snake board width)
+        set location to a snake cell at (index mod the snake board width) and (index / the snake board width)
         if (location is occupied in match) = false:
             if chosen cell = 0:
                 set match's food to location
@@ -94,8 +94,8 @@ to get the cell after {snake cell:origin} toward {integer:direction}:
 to get the cell after {snake cell:origin} toward {integer:direction} in {a pointer to snake match:match}:
     set target to the cell after origin toward direction
     if match's wrap edges:
-        set target's column to the remainder of (target's column + the snake board width) divided by the snake board width
-        set target's row to the remainder of (target's row + the snake board width) divided by the snake board width
+        set target's column to (target's column + the snake board width) mod the snake board width
+        set target's row to (target's row + the snake board width) mod the snake board width
     return target
 
 to get the next snake cell in {a pointer to snake match:match}:

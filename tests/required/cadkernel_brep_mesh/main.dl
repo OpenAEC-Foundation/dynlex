@@ -3,11 +3,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh fixture {boolean:passed} named {C string:label}:
-    execute:
-        if the inverse of passed:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh fixture {boolean:passed} named {C string:label}:
+    if not passed:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set made to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
 check mesh fixture (the valid of made) named "cuboid construction"
@@ -17,8 +16,7 @@ check mesh fixture ((the length of meshValue's positions) = 36) named "cuboid po
 set areaResult to the cad surface area of meshValue
 check mesh fixture ((the valid of areaResult) and ((the absolute value of ((the value of areaResult) - 52.0)) < 1e-9)) named "cuboid surface area"
 set centre to a cad vector3 with x 1.0, y 1.5 and z 2.0
-loop triangleIndex from 0 to the length of meshValue's triangles:
-    set triangleValue to the item at triangleIndex in meshValue's triangles
+for each triangleValue in meshValue's triangles:
     set corner to the item at triangleValue's first in meshValue's positions
     set normalValue to the item at triangleValue's first in meshValue's normals
     check mesh fixture ((the cad dot of normalValue and (the cad difference of corner and centre)) > 0.0) named "outward normal"
@@ -30,12 +28,11 @@ set coarseMesh to the cad mesh of (the value of cylinderMade) with maximum angle
 set fineMesh to the cad mesh of (the value of cylinderMade) with maximum angle 0.1 within 1e-9
 check mesh fixture ((the cad triangle count of fineMesh) > ((the cad triangle count of coarseMesh) * 4)) named "curved refinement"
 check mesh fixture ((the cad triangle count of fineMesh) > 0) named "cylinder nonempty"
-loop positionIndex from 0 to the length of fineMesh's positions:
-    set cylinderPoint to the item at positionIndex in fineMesh's positions
+for each cylinderPoint in fineMesh's positions:
     set cylinderRadius to the square root of ((cylinderPoint's x * cylinderPoint's x) + (cylinderPoint's y * cylinderPoint's y))
     set onWall to (the absolute value of (cylinderRadius - 5.0)) < 0.05
     set onCap to (cylinderRadius <= 5.000001) and (((the absolute value of cylinderPoint's z) < 1e-9) or ((the absolute value of (cylinderPoint's z - 10.0)) < 1e-9))
     check mesh fixture (onWall or onCap) named "cylinder point on solid"
 free cad mesh coarseMesh
 free cad mesh fineMesh
-print "cadkernel brep mesh: PASS" as a line
+print line "cadkernel brep mesh: PASS"

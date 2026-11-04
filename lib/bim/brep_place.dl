@@ -33,50 +33,41 @@ class:
         valid as a boolean
         value
 
-function a cad placement with axes {cad vector3:x}, {cad vector3:y} and {cad vector3:z} at {cad vector3:origin}:
-    execute:
-        return @intrinsic("construct", a cad placement, x, y, z, origin)
-function the cad identity placement:
-    execute:
-        return a cad placement with axes (the cad x axis), (the cad y axis) and (the cad z axis) at (the cad zero vector3)
-function a cad placement at {cad vector3:origin}:
-    execute:
-        set result to the cad identity placement
-        set result's origin to origin
-        return result
-function the cad clone of {cad placement:value}:
-    execute:
-        return value
+to get a cad placement with axes {cad vector3:x}, {cad vector3:y} and {cad vector3:z} at {cad vector3:origin}:
+    return @intrinsic("construct", a cad placement, x, y, z, origin)
+to get the cad identity placement:
+    return a cad placement with axes (the cad x axis), (the cad y axis) and (the cad z axis) at (the cad zero vector3)
+to get a cad placement at {cad vector3:origin}:
+    set result to the cad identity placement
+    set result's origin to origin
+    return result
+to get the cad clone of {cad placement:value}:
+    return value
 local function cad placed vectors {cad vector3:first} and {cad vector3:second} are equal:
     execute:
         return ((first's x = second's x) and (first's y = second's y)) and (first's z = second's z)
-function {cad placement:first} = {cad placement:second}:
-    execute:
-        set axesXY to (cad placed vectors (first's xAxis) and (second's xAxis) are equal) and (cad placed vectors (first's yAxis) and (second's yAxis) are equal)
-        set axisOrigin to (cad placed vectors (first's zAxis) and (second's zAxis) are equal) and (cad placed vectors (first's origin) and (second's origin) are equal)
-        return axesXY and axisOrigin
-function the cad [scale] of {cad placement:place}:
-    execute:
-        set scale to the cad length of (place's xAxis)
-        set invalid to @intrinsic("construct", a cad placement scale result, false, 0.0 as a 64 bit floating-point number)
-        if (scale <= 0.0) or ((scale - scale) != 0.0):
-            return invalid
-        set square to scale * scale
-        set alike to ((the absolute value of ((the cad length of (place's yAxis)) - scale)) <= (1e-9 * scale)) and ((the absolute value of ((the cad length of (place's zAxis)) - scale)) <= (1e-9 * scale))
-        set squareOn to (((the absolute value of (the cad dot of (place's xAxis) and (place's yAxis))) <= (1e-9 * square)) and ((the absolute value of (the cad dot of (place's yAxis) and (place's zAxis))) <= (1e-9 * square))) and ((the absolute value of (the cad dot of (place's zAxis) and (place's xAxis))) <= (1e-9 * square))
-        if alike and squareOn:
-            return @intrinsic("construct", a cad placement scale result, true, scale)
+to get {cad placement:first} = {cad placement:second}:
+    set axesXY to (cad placed vectors (first's xAxis) and (second's xAxis) are equal) and (cad placed vectors (first's yAxis) and (second's yAxis) are equal)
+    set axisOrigin to (cad placed vectors (first's zAxis) and (second's zAxis) are equal) and (cad placed vectors (first's origin) and (second's origin) are equal)
+    return axesXY and axisOrigin
+to get the cad [scale] of {cad placement:place}:
+    set scale to the cad length of (place's xAxis)
+    set invalid to @intrinsic("construct", a cad placement scale result, false, 0.0 as a 64 bit floating-point number)
+    if (scale <= 0.0) or ((scale - scale) != 0.0):
         return invalid
-function {cad placement:place} reflects cad orientation:
-    execute:
-        return (the cad dot of (the cad cross of (place's xAxis) and (place's yAxis)) and (place's zAxis)) < 0.0
-function the cad [direction] of {cad vector3:direction} under {cad placement:place}:
-    execute:
-        set xy to the cad sum of ((place's xAxis) scaled by (direction's x)) and ((place's yAxis) scaled by (direction's y))
-        return the cad sum of xy and ((place's zAxis) scaled by (direction's z))
-function the cad image of {cad vector3:point} under {cad placement:place}:
-    execute:
-        return the cad sum of (the cad direction of point under place) and (place's origin)
+    set square to scale * scale
+    set alike to ((the absolute value of ((the cad length of (place's yAxis)) - scale)) <= (1e-9 * scale)) and ((the absolute value of ((the cad length of (place's zAxis)) - scale)) <= (1e-9 * scale))
+    set squareOn to (((the absolute value of (the cad dot of (place's xAxis) and (place's yAxis))) <= (1e-9 * square)) and ((the absolute value of (the cad dot of (place's yAxis) and (place's zAxis))) <= (1e-9 * square))) and ((the absolute value of (the cad dot of (place's zAxis) and (place's xAxis))) <= (1e-9 * square))
+    if alike and squareOn:
+        return @intrinsic("construct", a cad placement scale result, true, scale)
+    return invalid
+to get {cad placement:place} reflects cad orientation:
+    return (the cad dot of (the cad cross of (place's xAxis) and (place's yAxis)) and (place's zAxis)) < 0.0
+to get the cad [direction] of {cad vector3:direction} under {cad placement:place}:
+    set xy to the cad sum of ((place's xAxis) scaled by (direction's x)) and ((place's yAxis) scaled by (direction's y))
+    return the cad sum of xy and ((place's zAxis) scaled by (direction's z))
+to get the cad image of {cad vector3:point} under {cad placement:place}:
+    return the cad sum of (the cad direction of point under place) and (place's origin)
 local function the cad placed frame of {cad plane:plane} under {cad placement:place}:
     execute:
         set normal to the cad normal of plane
@@ -183,15 +174,14 @@ local function the cad placed pcurve {cad curve2:curve} on {cad surface:surface}
         set handed to 1.0 as a 64 bit floating-point number
         if reflects:
             set handed to -1.0
-        set x to 1.0 as a 64 bit floating-point number
-        set y to 1.0 as a 64 bit floating-point number
+        set x and y to 1.0 as a 64 bit floating-point number
         if surface's kind = 0:
             set x to scale
             set y to handed * scale
-        else if (surface's kind = 1) or (surface's kind = 2):
+        else if surface's kind is one of 1 and 2:
             set x to handed
             set y to scale
-        else if (surface's kind = 3) or (surface's kind = 4):
+        else if surface's kind is one of 3 and 4:
             set x to handed
         set moved to the cad transformed curve by (a cad scale2 by x and y)
         if moved's valid:
@@ -254,36 +244,32 @@ local function cad place contents of {cad body:out} under {cad placement:place} 
                         set face's forward to face's forward = false
             free faces
         return true
-function the cad [transformed] {cad body:body} by {cad placement:place}:
-    execute:
-        set scale to the cad scale of place
-        if scale's valid = false:
-            return no cad body
-        set out to the cad clone of body
-        if (cad place contents of out under place scaling (scale's value)) = false:
-            return no cad body
-        set original to the cad flaws of body
-        set moved to the cad flaws of out
-        set equal to (the length of original) = (the length of moved)
-        if equal:
-            loop index from 0 to the length of original:
-                if ((the item at index in original) = (the item at index in moved)) = false:
-                    set equal to false
-        free original
-        free moved
-        if equal:
-            return the cad body result of out
+to get the cad [transformed] {cad body:body} by {cad placement:place}:
+    set scale to the cad scale of place
+    if scale's valid = false:
         return no cad body
+    set out to the cad clone of body
+    if (cad place contents of out under place scaling (scale's value)) = false:
+        return no cad body
+    set original to the cad flaws of body
+    set moved to the cad flaws of out
+    set equal to (the length of original) = (the length of moved)
+    if equal:
+        loop index from 0 to the length of original:
+            if ((the item at index in original) = (the item at index in moved)) = false:
+                set equal to false
+    free original
+    free moved
+    if equal:
+        return the cad body result of out
+    return no cad body
 
-function a cad edge sample at {a 64 bit floating-point number:parameter} with position {cad vector3:position}:
-    execute:
-        return @intrinsic("construct", a cad edge sample, parameter, position)
-function the cad clone of {cad edge sample:value}:
-    execute:
-        return value
-function {cad edge sample:first} = {cad edge sample:second}:
-    execute:
-        return (first's parameter = second's parameter) and (cad placed vectors (first's position) and (second's position) are equal)
+to get a cad edge sample at {a 64 bit floating-point number:parameter} with position {cad vector3:position}:
+    return @intrinsic("construct", a cad edge sample, parameter, position)
+to get the cad clone of {cad edge sample:value}:
+    return value
+to get {cad edge sample:first} = {cad edge sample:second}:
+    return (first's parameter = second's parameter) and (cad placed vectors (first's position) and (second's position) are equal)
 local function cad placed chord [count] for radius {a 64 bit floating-point number:radius} sweeping {a 64 bit floating-point number:sweep} within {a 64 bit floating-point number:sag}:
     execute:
         if ((radius <= 0.0) or (sag <= 0.0)) or (sag >= radius):
@@ -311,50 +297,47 @@ local function collect cad placed samples of {cad edge curve3:curve} from {a 64 
             collect cad placed samples of curve from first to middle within sag at depth (depth + 1) into points
             append (a cad edge sample at middle with position curved) to points
             collect cad placed samples of curve from middle to last within sag at depth (depth + 1) into points
-function the cad [edge] samples of {cad edge key:key} in {cad body:body} within {a 64 bit floating-point number:sag}:
-    execute:
-        set points to a cad topology list of a cad edge sample
-        set invalid to @intrinsic("construct", a cad placed list result, false, points)
-        set found to the cad lookup of key in body
-        if found's valid = false:
-            return invalid
-        set edge to the cad value of found
-        set lookup to the cad lookup of (edge's curve) in body
-        if lookup's valid = false:
-            return invalid
-        set curve to the cad value of lookup
-        set first to edge's startParameter
-        set last to edge's endParameter
-        if curve's kind >= 3:
-            append (a cad edge sample at first with position (the cad point on curve at first)) to (points's values)
-            collect cad placed samples of curve from first to last within sag at depth 0 into (points's values)
-            append (a cad edge sample at last with position (the cad point on curve at last)) to (points's values)
-        else:
-            set steps to 1
-            if curve's kind = 1:
-                set steps to cad placed chord count for radius (curve's circle's radius) sweeping (last - first) within sag
-            if curve's kind = 2:
-                set steps to cad placed chord count for radius (curve's ellipse's majorRadius) sweeping (last - first) within sag
-            loop index from 0 to (steps + 1):
-                set parameter to first + ((last - first) * (index as a 64 bit floating-point number)) / (steps as a 64 bit floating-point number)
-                append (a cad edge sample at parameter with position (the cad point on curve at parameter)) to (points's values)
-        return @intrinsic("construct", a cad placed list result, true, points)
-function the cad edge [points] of {cad edge key:key} in {cad body:body} within {a 64 bit floating-point number:sag}:
-    execute:
-        set samples to the cad edge samples of key in body within sag
-        set points to a cad topology list of a cad vector3
-        if samples's valid:
-            loop index from 0 to the length of (samples's value's values):
-                append ((the item at index in (samples's value's values))'s position) to (points's values)
-        return @intrinsic("construct", a cad placed list result, samples's valid, points)
-function the cad edge polylines of {cad body:body} within {a 64 bit floating-point number:sag}:
-    execute:
-        set result to a cad topology list of the type of (a cad topology list of a cad vector3)
-        set keys to the cad edge keys of body
-        loop index from 0 to the length of keys:
-            set points to the cad edge points of (the item at index in keys) in body within sag
-            if points's valid:
-                if (the length of (points's value's values)) >= 2:
-                    append (points's value) to (result's values)
-        free keys
-        return result
+to get the cad [edge] samples of {cad edge key:key} in {cad body:body} within {a 64 bit floating-point number:sag}:
+    set points to a cad topology list of a cad edge sample
+    set invalid to @intrinsic("construct", a cad placed list result, false, points)
+    set found to the cad lookup of key in body
+    if found's valid = false:
+        return invalid
+    set edge to the cad value of found
+    set lookup to the cad lookup of (edge's curve) in body
+    if lookup's valid = false:
+        return invalid
+    set curve to the cad value of lookup
+    set first to edge's startParameter
+    set last to edge's endParameter
+    if curve's kind >= 3:
+        append (a cad edge sample at first with position (the cad point on curve at first)) to (points's values)
+        collect cad placed samples of curve from first to last within sag at depth 0 into (points's values)
+        append (a cad edge sample at last with position (the cad point on curve at last)) to (points's values)
+    else:
+        set steps to 1
+        if curve's kind = 1:
+            set steps to cad placed chord count for radius (curve's circle's radius) sweeping (last - first) within sag
+        if curve's kind = 2:
+            set steps to cad placed chord count for radius (curve's ellipse's majorRadius) sweeping (last - first) within sag
+        loop index from 0 to (steps + 1):
+            set parameter to first + ((last - first) * (index as a 64 bit floating-point number)) / (steps as a 64 bit floating-point number)
+            append (a cad edge sample at parameter with position (the cad point on curve at parameter)) to (points's values)
+    return @intrinsic("construct", a cad placed list result, true, points)
+to get the cad edge [points] of {cad edge key:key} in {cad body:body} within {a 64 bit floating-point number:sag}:
+    set samples to the cad edge samples of key in body within sag
+    set points to a cad topology list of a cad vector3
+    if samples's valid:
+        loop index from 0 to the length of (samples's value's values):
+            append ((the item at index in (samples's value's values))'s position) to (points's values)
+    return @intrinsic("construct", a cad placed list result, samples's valid, points)
+to get the cad edge polylines of {cad body:body} within {a 64 bit floating-point number:sag}:
+    set result to a cad topology list of the type of (a cad topology list of a cad vector3)
+    set keys to the cad edge keys of body
+    loop index from 0 to the length of keys:
+        set points to the cad edge points of (the item at index in keys) in body within sag
+        if points's valid:
+            if (the length of (points's value's values)) >= 2:
+                append (points's value) to (result's values)
+    free keys
+    return result

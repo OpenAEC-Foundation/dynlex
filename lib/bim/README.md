@@ -17,6 +17,19 @@ and ownership dependencies:
 | `lib/bim/brep_mesh.dl` | Tessellation of supported geometry |
 | `lib/bim/geom2d.dl` | 2D curves, profiles, offsets and triangulation |
 
+The larger entry points import these implementation modules. Import an
+individual module when only its operations are needed; each declares its own
+dependencies.
+
+| Entry point | Implementation modules |
+| --- | --- |
+| `brep_topology.dl` | `brep_topology_core.dl`, `brep_topology_validate.dl` |
+| `nurbs3.dl` | `nurbs3_storage.dl`, `nurbs3_curve.dl`, `nurbs3_surface.dl` |
+| `brep_sweep.dl` | `brep_sweep_topology.dl`, `brep_sweep_revolve.dl`, `brep_sweep_extrude.dl` |
+| `brep_presspull.dl` | `brep_presspull_regions.dl`, `brep_presspull_offset.dl` |
+| `brep_split.dl` | `brep_split_edges.dl`, `brep_split_faces.dl` |
+| `brep_mesh.dl` | `brep_mesh_data.dl`, `brep_mesh_faces.dl`, `brep_mesh_mass.dl`, `brep_mesh_wireframe.dl`, `brep_mesh_surfaces.dl`, `brep_mesh_silhouette.dl` |
+
 The existing `cad` pattern names and binary64 numerical behavior are retained.
 For example, `the cad extrusion region of profiles on plane along direction`
 returns a result with `valid` and `value`; inspect `valid` before using `value`.

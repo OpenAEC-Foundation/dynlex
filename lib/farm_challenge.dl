@@ -5,8 +5,7 @@ import lib/subject.dl
 a farm number means: @intrinsic("type", "int", 32)
 a farm text means: @intrinsic("type", "string")
 
-to emit farm text:
-    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "%s\n", text))
+to emit farm text: @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", a farm number, 1, "%s\n", text))
 
 class:
     patterns:
@@ -289,9 +288,7 @@ flex function {farm item:items} [is|are] empty:
         @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
         @intrinsic("construct", farm condition, @intrinsic("cast", 3, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
 
-flex function it's raining:
-    replacement:
-        @intrinsic("construct", farm condition, @intrinsic("cast", 4, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+it's raining means: @intrinsic("construct", farm condition, @intrinsic("cast", 4, a farm number), @intrinsic("cast", 0, a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
 
 flex function {farm target:target} [is|are] dry:
     replacement:
@@ -333,21 +330,13 @@ flex function i am not carrying {farm item:items}:
         @intrinsic("set subject", @intrinsic("construct", farm item, @intrinsic("cast", @intrinsic("negate", 2), a farm number), @intrinsic("cast", @intrinsic("negate", 1), a farm number)))
         @intrinsic("construct", farm condition, @intrinsic("cast", 12, a farm number), items's identifier, items's amount, @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
 
-flex function i am a {farm role:role}:
-    replacement:
-        @intrinsic("construct", farm condition, @intrinsic("cast", 13, a farm number), role's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+i am a {farm role:role} means: @intrinsic("construct", farm condition, @intrinsic("cast", 13, a farm number), role's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
 
-flex function i can step {farm direction:direction}:
-    replacement:
-        @intrinsic("construct", farm condition, @intrinsic("cast", 14, a farm number), direction's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
+i can step {farm direction:direction} means: @intrinsic("construct", farm condition, @intrinsic("cast", 14, a farm number), direction's identifier, @intrinsic("cast", @intrinsic("negate", 1), a farm number), @intrinsic("cast", @intrinsic("negate", 2), a farm number), "")
 
-flex function there are at least {a farm number:count} {farm item:items} in {farm target:target}:
-    replacement:
-        @intrinsic("construct", farm condition, @intrinsic("cast", 15, a farm number), items's identifier, count, target's identifier, target's area)
+there are at least {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, @intrinsic("cast", 15, a farm number), items's identifier, count, target's identifier, target's area)
 
-flex function there are fewer than {a farm number:count} {farm item:items} in {farm target:target}:
-    replacement:
-        @intrinsic("construct", farm condition, @intrinsic("cast", 16, a farm number), items's identifier, count, target's identifier, target's area)
+there are fewer than {a farm number:count} {farm item:items} in {farm target:target} means: @intrinsic("construct", farm condition, @intrinsic("cast", 16, a farm number), items's identifier, count, target's identifier, target's area)
 
 flex section if {farm condition:condition}:
     replacement:

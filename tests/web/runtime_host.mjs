@@ -25,10 +25,9 @@ for (const name of importNames) {
 }
 
 const { env } = buildRuntimeImports(
-  importNames.map((name) => ({ module: "env", name })),
   [],
   createRuntimeFilesystem(),
-  { staticDataEnd: 0 }
+  { heapBase: 8 * 1024 * 1024 + 16 }
 );
 const memory = env.__linear_memory;
 const encoder = new TextEncoder();

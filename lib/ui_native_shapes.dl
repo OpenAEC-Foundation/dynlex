@@ -11,7 +11,7 @@ class:
 
 to get the UI [corner point] {integer:index} of {integer:steps} on {UI bounds:box} rounded by {floating-point number:radius} expanded by {floating-point number:fringe}:
     set corner to index / steps
-    set step to the remainder of index divided by steps
+    set step to index mod steps
     set angle to (((corner * 90) + 180) as a floating-point number) + ((step as a floating-point number) * (90.0 / ((steps - 1) as a floating-point number)))
     set radians to angle * 0.017453292519943295
     set centerX to (box's x as a floating-point number) + radius
@@ -63,7 +63,7 @@ to draw a rounded UI surface {UI bounds:box} with radius {floating-point number:
         start triangles in frame
         set index to 0
         loop while index < count:
-            set next to the remainder of (index + 1) divided by count
+            set next to (index + 1) mod count
             set insideA to the UI corner point index of steps on box rounded by rounding expanded by -0.5
             set insideB to the UI corner point next of steps on box rounded by rounding expanded by -0.5
             set outsideA to the UI corner point index of steps on box rounded by rounding expanded by feather

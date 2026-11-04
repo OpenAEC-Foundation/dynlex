@@ -10,10 +10,9 @@ function the shared counter:
     execute:
         return marker
 
-function the independent counter:
-    execute:
-        set marker to 99
-        return marker
+to get the independent counter:
+    set marker to 99
+    return marker
 
 class:
     patterns:
@@ -25,15 +24,12 @@ class:
     release:
         set marker to 22
 
-function exercise global shadow:
-    execute:
-        set held to @intrinsic("construct", a global name probe, 0)
-        ignore held
+to exercise global shadow:
+    set held to @intrinsic("construct", a global name probe, 0)
+    ignore held
 
 set marker to 40
 exercise global shadow
-print (the shared counter) as a line
+print line (the shared counter)
 advance shared counter
-print (the shared counter) as a line
-print (the independent counter) as a line
-print (the shared counter) as a line
+print lines (the shared counter), (the independent counter) and (the shared counter)

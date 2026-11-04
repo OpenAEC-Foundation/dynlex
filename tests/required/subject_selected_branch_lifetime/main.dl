@@ -1,10 +1,9 @@
 import lib/filesystem.dl
 
-function read and print {fixed integer:choice}:
-    execute:
-        if choice = 1:
-            read the file at "tests/required/subject_selected_branch_lifetime/value.tmp"
-        print (the contents of it) as a line
+to read and print {fixed integer:choice}:
+    if choice = 1:
+        read the file at "tests/required/subject_selected_branch_lifetime/value.tmp"
+    print line (the contents of it)
 
 set path to "tests/required/subject_selected_branch_lifetime/value.tmp"
 delete the filesystem entry at path

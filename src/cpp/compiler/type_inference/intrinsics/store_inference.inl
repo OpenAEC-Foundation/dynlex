@@ -244,6 +244,40 @@ static bool validateBoundParameterStoreConstraints(
 	return true;
 }
 
+static bool inferPointerStoreEffects(
+	Expression *pointer, const BindingFrameStack &pointerBindings, Expression *value, const BindingFrameStack &valueBindings,
+	const Range &range, InferenceContext &context
+) {
+	DataType pointerType = ensureExpressionType(pointer, context, pointerBindings);
+	if (!pointerType.isDeduced() || !pointerType.isPointer()) {
+		context.setTypeFailure(renderConfiguredMessage(
+			syntaxConfigForRange(context.parseContext, range), "store at requires pointer", "message", {}
+		));
+		return false;
+	}
+	DataType elementType = pointerType.dereferenced();
+	DataType valueType = ensureExpressionType(value, context, valueBindings);
+	if (!context.typesValid)
+		return false;
+	DataType refinedElementType;
+	if (mergeVariableAssignmentType(elementType, valueType, refinedElementType)) {
+		refinePointerStoragePointeeType(pointer, valueType, context, pointerBindings);
+		pointerType = effectiveInferredExpressionType(pointer);
+		elementType = pointerType.dereferenced();
+	}
+	if (!isVariableAssignmentCompatible(elementType, valueType) &&
+		!tryApplyUserConversion(value, elementType, true, context, valueBindings)) {
+		if (context.typesValid)
+			context.setTypeFailure(renderConfiguredMessage(
+				syntaxConfigForRange(context.parseContext, range), "store at value incompatible", "message",
+				{{"value_type", typeToUserName(valueType)}, {"element_type", typeToUserName(elementType)}}
+			));
+		return false;
+	}
+	applyStoreThroughAddress(context, inferAddressProvenance(pointer, context, pointerBindings), value, valueBindings);
+	return context.typesValid;
+}
+
 static void inferStoreEffects(Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack) {
 	Expression *destinationSourceExpr =
 		resolveExpressionBindingWithCallerScope(expr->arguments[1], flexBindingFrameStack).expression;
@@ -251,12 +285,43 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		resolveInferenceBindingLayers(expr->arguments[1], flexBindingFrameStack, &context);
 	Expression *destinationExpr = resolvedDestination.expression;
 	BindingFrameStack destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
-	ResolvedBindingLayers resolvedValue = resolveExpressionBindingWithCallerScope(expr->arguments[2], flexBindingFrameStack);
+	// A conversion belongs to the assigned value, not an expression inside
+	// that value's replacement body. Retain the call and resolve only bindings.
+	ResolvedBindingLayers resolvedValue =
+		resolveInferenceBindingLayers(expr->arguments[2], flexBindingFrameStack, &context, [](Expression *) {
+		return true;
+	});
+
 	Expression *valueExpr = resolvedValue.expression;
 	BindingFrameStack valueBindingFrameStack = std::move(resolvedValue.bindingFrameStack);
 	ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
 	DataType valueType = ensureExpressionTypeWithCurrentGrouping(valueExpr, context, valueBindingFrameStack);
 	bool valueDependsOnInProgressInstantiation = valueObservation.observed();
+	if (valueType.kind == DataType::Kind::ArgumentReference) {
+		resolvedDestination = resolveThroughBindingLayers(expr->arguments[1], flexBindingFrameStack, [&](Expression *current) {
+			return selectInferenceFlexBindingExpansion(&context, current);
+		}, [](Expression *) {
+			return false;
+		}, false);
+		destinationExpr = resolvedDestination.expression;
+		destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
+	} else {
+		CompileTimeValue destinationValue =
+			resolveStoredCompileTimeValue(destinationExpr, destinationBindingFrameStack, &context);
+		if (const auto *capture = std::get_if<ExpressionCapture>(&destinationValue)) {
+			requireCompilerInvariant(capture->data != nullptr, "assignment reference has no captured expression");
+			expr->arguments[1]->inferredArgumentReference = *capture;
+			destinationExpr = capture->data->expression();
+			destinationBindingFrameStack = capture->data->bindings;
+			if (!inferExpression(
+					capture->data->expression(), context, destinationExpr->type.isDeduced(), destinationBindingFrameStack
+				))
+				return;
+			resolvedDestination = resolveInferenceBindingLayers(capture->data->expression(), capture->data->bindings, &context);
+			destinationExpr = resolvedDestination.expression;
+			destinationBindingFrameStack = std::move(resolvedDestination.bindingFrameStack);
+		}
+	}
 
 	if (valueType.isMetaType() && (!isCompileTimeKnown(context.lookupExpressionValue(valueExpr)) ||
 								   destinationExpr->kind != Expression::Kind::Variable || !destinationExpr->variable)) {
@@ -357,9 +422,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			CompileTimeValue assignedValue = context.lookupExpressionValue(valueExpr);
 			if (variable->isGlobal)
 				context.noteWrittenGlobalReference(variable->definition);
-			context.setKnownConstant(variable->definition, assignedValue);
+			context.setKnownConstant(variableStorageKey(destinationExpr), assignedValue);
 			context.setAddressProvenance(
-				variable->definition, inferAddressProvenance(valueExpr, context, valueBindingFrameStack)
+				variableStorageKey(destinationExpr), inferAddressProvenance(valueExpr, context, valueBindingFrameStack)
+			);
+			recordStorageTypeAssignment(
+				destinationExpr, destinationBindingFrameStack, valueExpr, valueBindingFrameStack, context
 			);
 			return;
 		}
@@ -374,6 +442,19 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 				buildVariableTypeChangeDiagnostic(variable, valueExpr, valueType, context.parseContext)
 			);
 		}
+		return;
+	}
+
+	if (destinationExpr->kind == Expression::Kind::IntrinsicCall &&
+		intrinsicKind(destinationExpr->intrinsicName) == IntrinsicKind::Dereference) {
+		if (!inferPointerStoreEffects(
+				destinationExpr->arguments[1], destinationBindingFrameStack, valueExpr, valueBindingFrameStack, expr->range,
+				context
+			))
+			return;
+		destinationExpr->type = effectiveInferredExpressionType(destinationExpr->arguments[1]).dereferenced();
+		expr->arguments[1]->type = destinationExpr->type;
+		recordStorageTypeAssignment(destinationExpr, destinationBindingFrameStack, valueExpr, valueBindingFrameStack, context);
 		return;
 	}
 
@@ -422,10 +503,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 					  inferAddressProvenance(ownerExpr, context, ownerBindingFrameStack), instanceType.pointerDepth - 1, context
 				  )
 				: *ownerLValueProvenance;
-		std::unordered_set<VariableReference *> ownerTargets = possibleAddressTargets(context, ownerStorage);
+		VariableStorageSet ownerTargets = possibleAddressTargets(context, ownerStorage);
 		if (ownerStorage.unknown)
 			noteUnknownAddressWrite(context);
-		for (VariableReference *ownerTarget : ownerTargets) {
+		for (const VariableStorageKey &ownerTarget : ownerTargets) {
 			AddressProvenance ownerProvenance = context.lookupAddressProvenance(ownerTarget);
 			joinAddressProvenance(ownerProvenance, assignedProvenance);
 			context.setAddressProvenance(ownerTarget, std::move(ownerProvenance));
@@ -465,6 +546,10 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			}
 			if (mergedFieldType == currentFieldType) {
 				updateOwnerAddressProvenance();
+				destinationExpr->type = mergedFieldType;
+				recordStorageTypeAssignment(
+					destinationExpr, destinationBindingFrameStack, valueExpr, valueBindingFrameStack, context
+				);
 				return;
 			}
 		}
@@ -477,12 +562,15 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 			Variable *ownerVariable = ownerSection ? ownerSection->findVariable(ownerExpr->variable) : nullptr;
 			if (ownerVariable && ownerVariable->type.kind == DataType::Kind::Class &&
 				ownerVariable->type.classDefinition == classDefinition) {
-				if (context.trial && context.trialJournal)
-					context.trialJournal->recordVariableWrite(ownerVariable);
-				ownerVariable->type.classInstIndex = refinedInstIndex;
+				DataType refinedOwner = ownerVariable->type;
+				refinedOwner.classInstIndex = refinedInstIndex;
+				if (!refineStorageRootType(variableStorageKey(ownerExpr), ownerVariable, refinedOwner, context))
+					return;
 			}
 		}
 		updateOwnerAddressProvenance();
+		destinationExpr->type = valueType;
+		recordStorageTypeAssignment(destinationExpr, destinationBindingFrameStack, valueExpr, valueBindingFrameStack, context);
 		return;
 	}
 

@@ -21,7 +21,7 @@ create a directory at path
 Actions return `nothing` and set the subject to an action object. Test an action on the same line or afterward:
 
 ```dynlex
-delete the filesystem entry at "b.txt" and print whether it succeeded as a line
+delete the filesystem entry at "b.txt" and print line it succeeded
 ```
 
 Write, append, copy, rename, delete, and directory creation set a `file action`.
@@ -30,9 +30,8 @@ predicates plus an `error message` property; read actions also provide
 `contents`:
 
 ```dynlex
-read the file at "notes.txt" and print whether it succeeded as a line
-print the contents of it as a line
-print the error message of it as a line
+read the file at "notes.txt" and print line it succeeded
+print lines (the contents of it) and (the error message of it)
 ```
 
 The error message is empty after a successful action and contains the filesystem failure after an unsuccessful action. A failed read has empty contents. Delete accepts regular files and empty directories.
@@ -41,15 +40,13 @@ The module provides regular-file and readability predicates. Detailed metadata
 comes from a file-system entry:
 
 ```dynlex
-print whether "notes.txt" is a regular file as a line
-print whether "notes.txt" is readable as a line
+print lines ("notes.txt" is a regular file) and ("notes.txt" is readable)
 set entry to the file system entry at "notes.txt"
-print whether entry lookup succeeded as a line
+print line entry lookup succeeded
 if entry lookup succeeded:
-    print whether entry's modification time is supported as a line
+    print line entry's modification time is supported
     if entry's modification time is supported:
-        print (entry's modification time)'s seconds as a line
-        print (entry's modification time)'s nanoseconds as a line
+        print lines ((entry's modification time)'s seconds) and ((entry's modification time)'s nanoseconds)
 ```
 
 `path is readable` is true only for a regular file that can be opened for

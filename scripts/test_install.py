@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import shutil
 import subprocess
 import tempfile
@@ -18,6 +19,15 @@ def write_executable(path: Path, contents: str) -> None:
 
 
 class LinuxDependencyInstallerTests(unittest.TestCase):
+    def test_windows_validator_uses_pinned_vcpkg_tools(self) -> None:
+        project = SCRIPT_DIR.parent
+        dependencies = json.loads((project / "vcpkg.json").read_text())["dependencies"]
+        validator = next(dependency for dependency in dependencies if isinstance(dependency, dict) and dependency["name"] == "spirv-tools")
+        self.assertEqual(validator["features"], ["tools"])
+        installer = (SCRIPT_DIR / "install.ps1").read_text()
+        self.assertIn('$spirvToolsDir = Join-Path $windowsRoot "tools\\spirv-tools"', installer)
+        self.assertIn('Add-GitHubPathIfPresent -PathValue $spirvToolsDir', installer)
+
     @unittest.skipIf(os.name == "nt", "Linux installer requires a POSIX host")
     def test_native_dependencies_are_installed_by_every_supported_package_manager(self) -> None:
         expected_packages = {

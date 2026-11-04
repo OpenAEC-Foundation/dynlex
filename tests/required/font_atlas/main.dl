@@ -43,4 +43,4 @@ require condition (prepared succeeded) reporting "Preparing a resized glyph fail
 require condition (cache's first's height < old height) reporting "Resizing retained the old raster dimensions"
 set released to the result of releasing (the address of typeface)
 require condition (released succeeded) reporting "The atlas could not be released"
-print "Font atlas passed" as a line
+print line "Font atlas passed"

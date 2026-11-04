@@ -6,20 +6,16 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function left + right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left + right:
+    return @intrinsic("add", left, right)
 
-function left * right:
-    execute:
-        return @intrinsic("multiply", left, right)
+to get left * right:
+    return @intrinsic("multiply", left, right)
 
-function one more than value:
-    execute:
-        return value + 1
+to get one more than value:
+    return value + 1
 
-function value doubled:
-    execute:
-        return value * one more than value
+to get value doubled:
+    return value * one more than value
 
 ignore @intrinsic("array", 5 doubled)

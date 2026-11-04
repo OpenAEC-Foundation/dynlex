@@ -6,20 +6,14 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed value:
-    replacement:
-        @intrinsic("fix", value)
+fixed value means: @intrinsic("fix", value)
 
-function the required {fixed integer:value}:
-    execute:
-        return value
+to get the required {fixed integer:value}:
+    return value
 
-function the runtime {integer:value}:
-    execute:
-        return the required value
+to get the runtime {integer:value}:
+    return the required value
 
 ignore the runtime 1

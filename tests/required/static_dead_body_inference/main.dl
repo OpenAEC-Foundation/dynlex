@@ -1,11 +1,10 @@
 import lib/std.dl
 
-function run static branch:
-    execute:
-        if true:
-            ignore 1
-        else:
-            set unreachable to 2
-            print unreachable as a line
+to run static branch:
+    if true:
+        ignore 1
+    else:
+        set unreachable to 2
+        print line unreachable
 
 run static branch

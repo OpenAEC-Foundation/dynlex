@@ -4,6 +4,4 @@ class:
     members:
         name
 
-function a user named {C string:name}:
-    replacement:
-        @intrinsic("construct", a user record, name)
+a user named {C string:name} means: @intrinsic("construct", a user record, name)

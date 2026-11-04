@@ -20,55 +20,36 @@ to run {integer:count} [frame|frames]:
 seed the random number generator with 20260713
 build the breakout program
 
-print "program size" as a line
-print the assembled program size as a line
-print "first opcode" as a line
-print (the assembled program byte at 0) as a line
-print (the assembled program byte at 1) as a line
+print lines "program size", (the assembled program size), "first opcode" and (the assembled program byte at 0)
+print line (the assembled program byte at 1)
 
 initialize the machine
 load the assembled program into the machine
 
 # Boot: clear, draw 64 bricks, the paddle and the ball, then block on pacing.
 run 20 frames
-print "pixels after boot" as a line
-print the count of lit machine pixels as a line
-print "bricks, lives, score after boot" as a line
-print (the machine register 9) as a line
-print (the machine register 10) as a line
-print (the machine register 8) as a line
+print lines "pixels after boot", (the count of lit machine pixels) and "bricks, lives, score after boot"
+print lines (the machine register 9), (the machine register 10) and (the machine register 8)
 
 # Hold key 6: the paddle must slide right until it reaches the wall at 58.
 set machine key 6 to 1
 run 60 frames
 set machine key 6 to 0
-print "paddle after holding right" as a line
-print (the machine register 3) as a line
+print lines "paddle after holding right" and (the machine register 3)
 
 # Hold key 4 for ten frames: five game ticks back to the left.
 set machine key 4 to 1
 run 10 frames
 set machine key 4 to 0
-print "paddle after tapping left" as a line
-print (the machine register 3) as a line
+print lines "paddle after tapping left" and (the machine register 3)
 
 # Let the game play itself for a while with the paddle parked.
 run 1800 frames
-print "score, bricks, lives after 1890 frames" as a line
-print (the machine register 8) as a line
-print (the machine register 9) as a line
-print (the machine register 10) as a line
-print "score plus bricks" as a line
-print (the machine register 8) + (the machine register 9) as a line
+print lines "score, bricks, lives after 1890 frames", (the machine register 8) and (the machine register 9)
+print lines (the machine register 10), "score plus bricks" and ((the machine register 8) + (the machine register 9))
 
 # Much later the parked paddle has lost all three balls: the machine must be
 # showing the game over screen (letters and score digits), still not halted.
 run 6000 frames
-print "lives at the end" as a line
-print (the machine register 10) as a line
-print "pixels at the end" as a line
-print the count of lit machine pixels as a line
-print "halted" as a line
-print the machine is halted as a line
-print "cycles" as a line
-print the machine cycle count as a line
+print lines "lives at the end", (the machine register 10), "pixels at the end" and (the count of lit machine pixels)
+print lines "halted", (the machine is halted), "cycles" and (the machine cycle count)

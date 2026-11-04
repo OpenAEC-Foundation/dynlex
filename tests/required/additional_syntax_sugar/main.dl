@@ -1,0 +1,6 @@
+import lib/std.dl
+
+print lines 1, true and "three"
+set total to 0
+add 1, 2 and 3 to total
+print lines total, (2 is not one of 1, 3 and 5) and (3 is not one of 1, 3 and 5)

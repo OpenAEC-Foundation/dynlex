@@ -1,11 +1,5 @@
-function the shutdown code for item and user:
-    replacement:
-        @intrinsic("add", item, user)
+the shutdown code for item and user means: @intrinsic("add", item, user)
 
-function the lights shutdown code:
-    replacement:
-        the shutdown code for lights and 4
+the lights shutdown code means: the shutdown code for lights and 4
 
-function the shutdown code for lights and user:
-    replacement:
-        the shutdown code for placeholder and user
+the shutdown code for lights and user means: the shutdown code for placeholder and user

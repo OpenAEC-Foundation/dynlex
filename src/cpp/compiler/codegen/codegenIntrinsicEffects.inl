@@ -18,14 +18,23 @@ if (kind == IntrinsicKind::ExecuteBody) {
 		return CodegenResult::failure();
 	}
 
+	const bool specializedTransfer = static_cast<bool>(callExpr->inferredCallerBody);
+	InstantiatedSectionBody *originalBody = targetFrame->instantiatedBody;
+	if (specializedTransfer) {
+		targetFrame->instantiatedBody = callExpr->inferredCallerBody.get();
+		targetFrame->bodyEmitted = false;
+	}
 	if (targetFrame->bodyEmitted) {
 		context.addDiagnostic(Diagnostic(
 			context, Diagnostic::Level::Error, "execute body can only run once per section flex call", callExpr->range
 		));
 		return CodegenResult::failure();
 	}
+	const size_t frameIndex = static_cast<size_t>(targetFrame - context.sectionFlexBodyFrames.data());
 	if (!emitSectionFlexCallerBody(context, *targetFrame, executionSection, false))
 		return CodegenResult::failure();
+	if (specializedTransfer)
+		context.sectionFlexBodyFrames[frameIndex].instantiatedBody = originalBody;
 	return nullptr;
 }
 
@@ -37,6 +46,8 @@ if (kind == IntrinsicKind::LoopWhile) {
 		));
 		return CodegenResult::failure();
 	}
+	if (activeSectionFlexBodyFrame(context).openingExpression->staticLoopBodies)
+		return nullptr;
 
 	llvm::Function *func = builder.GetInsertBlock()->getParent();
 
@@ -507,23 +518,8 @@ if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array || kind == Int
 	return nullptr;
 }
 
-if (kind == IntrinsicKind::Select) {
-	if (!args[1])
-		crashCompilerBug("select intrinsic missing condition argument during codegen");
-	CompileTimeValue conditionValue = resolveStoredCompileTimeValue(args[1], context.flexBindingFrames);
-	auto *condition = std::get_if<bool>(&conditionValue);
-	if (condition) {
-		Expression *selectedExpression = args[*condition ? 2 : 3];
-		llvm::Value *selectedValue = nullptr;
-		if (!generateRuntimeValue(selectedExpression, selectedValue))
-			return CodegenResult::failure();
-		if (typeHasManagedLifecycle(resultType) && !managedExpressionResultIsOwned(context, selectedExpression) &&
-			!retainManagedValue(context, resultType, selectedValue))
-			return CodegenResult::failure();
-		return selectedValue;
-	}
-	return buildRuntimeSelect(context, args, resultType);
-}
+if (auto conditional = conditionalOperands(kind))
+	return buildConditionalValue(context, args, resultType, *conditional);
 
 if (kind == IntrinsicKind::AddPointerDepth) {
 	// Compile-time only — modifies TypeReference, no runtime code
@@ -826,10 +822,12 @@ if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpol
 }
 
 if (kind == IntrinsicKind::ExtractElement) {
+	DataType aggregateType = finalizedExpressionType(context, args[1]);
+	if (aggregateType.kind == DataType::Kind::ArgumentPack)
+		return nullptr; // Selecting a captured source expression produces no runtime value.
 	llvm::Value *aggregate = nullptr;
 	if (!generateRuntimeValue(args[1], aggregate))
 		return CodegenResult::failure();
-	DataType aggregateType = finalizedExpressionType(context, args[1]);
 	int constantIndex = 0;
 	if (resolveStoredCompileTimeInteger(args[2], context.flexBindingFrames, constantIndex)) {
 		requireCompilerInvariant(

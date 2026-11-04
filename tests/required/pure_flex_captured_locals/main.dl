@@ -4,21 +4,19 @@ flex section add private seed to target:
         @intrinsic("execute body")
         @intrinsic("store", target, @intrinsic("add", target, saved))
 
-function the captured result for seed:
-    execute:
-        @intrinsic("store", total, 0)
-        add private seed to total:
-            add private saved to total:
-                @intrinsic("discard", 0)
-        @intrinsic("return", total)
+to get the captured result for seed:
+    @intrinsic("store", total, 0)
+    add private seed to total:
+        add private saved to total:
+            @intrinsic("discard", 0)
+    @intrinsic("return", total)
 
-function the updated result for seed:
-    execute:
-        @intrinsic("store", total, 0)
-        add private seed to total:
-            add private 7 to saved:
-                @intrinsic("discard", 0)
-        @intrinsic("return", total)
+to get the updated result for seed:
+    @intrinsic("store", total, 0)
+    add private seed to total:
+        add private 7 to saved:
+            @intrinsic("discard", 0)
+    @intrinsic("return", total)
 
 @intrinsic("store", captured, @intrinsic("construct", @intrinsic("array", the captured result for 5, @intrinsic("type", "int", 32))))
 @intrinsic("store", updated, @intrinsic("construct", @intrinsic("array", the updated result for 5, @intrinsic("type", "int", 32))))

@@ -38,7 +38,7 @@ import json.dl
 
 parse "1.5" as JSON and set parsed to it
 set outcome to the signed 64 bit JSON integer read from the value of parsed
-print the signed 64 bit integer value of outcome as a line
+print line the signed 64 bit integer value of outcome
 """
 
 FAILED_UNSIGNED_GETTER_SOURCE = """\
@@ -46,7 +46,7 @@ import json.dl
 
 parse "1.5" as JSON and set parsed to it
 set outcome to the unsigned 64 bit JSON integer read from the value of parsed
-print the unsigned 64 bit integer value of outcome as a line
+print line the unsigned 64 bit integer value of outcome
 """
 
 

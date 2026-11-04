@@ -1,0 +1,19 @@
+one means: 1
+two means: 2
+three means: 3
+function {arguments:items} counted:
+    before: set $ to $
+    replacement:
+        @intrinsic("type extent", items, 0)
+function left plus right:
+    before: $ counted
+    replacement:
+        @intrinsic("add", left, right)
+count {arguments:items} means: @intrinsic("type extent", items, 0)
+forwarded count of {arguments:items} means: count items
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+set direct to one plus 1, two plus 2 and three plus 3 counted
+set forwarded to forwarded count of one, two and three
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", direct, forwarded), 6))

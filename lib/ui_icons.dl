@@ -107,6 +107,6 @@ to get the UI icon named {C string:name}:
         return a UI icon from [icon line 5.0 8.0 to 12.0 15.0, icon line 12.0 15.0 to 19.0 8.0]
     if name = "check":
         return a UI icon from [icon line 4.0 12.0 to 9.0 17.0, icon line 9.0 17.0 to 20.0 5.0]
-    print ("Unknown UI icon: " + (the string form of name)) as a line
+    print line ("Unknown UI icon: " + (the string form of name))
     abort the program
     return a new UI icon drawing

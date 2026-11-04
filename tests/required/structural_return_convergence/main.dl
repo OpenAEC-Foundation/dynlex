@@ -6,25 +6,15 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
-function true:
-    replacement:
-        @intrinsic("cast", 1, a boolean)
+true means: @intrinsic("cast", 1, a boolean)
 
-function false:
-    replacement:
-        @intrinsic("cast", 0, a boolean)
+false means: @intrinsic("cast", 0, a boolean)
 
-function [a|] pointer to pointee:
-    replacement:
-        @intrinsic("add pointer depth", pointee)
+[a|] pointer to pointee means: @intrinsic("add pointer depth", pointee)
 
-function value as destination:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as destination means: @intrinsic("cast", value, destination)
 
 flex section if condition:
     replacement:
@@ -54,51 +44,34 @@ class:
     members:
         outcome
 
-function a concrete outcome containing {a pointer to an owner:owned}:
-    replacement:
-        @intrinsic("construct", an outcome, owned)
+a concrete outcome containing {a pointer to an owner:owned} means: @intrinsic("construct", an outcome, owned)
 
-function an empty outcome:
-    replacement:
-        @intrinsic("construct", an outcome, 0 as a pointer to an owner)
+an empty outcome means: @intrinsic("construct", an outcome, 0 as a pointer to an owner)
 
-function a concrete envelope containing {a pointer to an owner:owned}:
-    replacement:
-        @intrinsic("construct", an envelope, a concrete outcome containing owned)
+a concrete envelope containing {a pointer to an owner:owned} means: @intrinsic("construct", an envelope, a concrete outcome containing owned)
 
-function an empty envelope:
-    replacement:
-        @intrinsic("construct", an envelope, an empty outcome)
+an empty envelope means: @intrinsic("construct", an envelope, an empty outcome)
 
-function the outcome for {a pointer to an owner:owned} when {boolean:condition}:
-    execute:
-        if condition:
-            return a concrete outcome containing owned
-        return an empty outcome
-
-function the reversed outcome for {a pointer to an owner:owned} when {boolean:condition}:
-    execute:
-        if condition:
-            return an empty outcome
+to get the outcome for {a pointer to an owner:owned} when {boolean:condition}:
+    if condition:
         return a concrete outcome containing owned
+    return an empty outcome
 
-function the selected outcome for {a pointer to an owner:owned} when {boolean:condition}:
-    replacement:
-        @intrinsic("select", condition, a concrete outcome containing owned, an empty outcome)
+to get the reversed outcome for {a pointer to an owner:owned} when {boolean:condition}:
+    if condition:
+        return an empty outcome
+    return a concrete outcome containing owned
 
-function the reversed selected outcome for {a pointer to an owner:owned} when {boolean:condition}:
-    replacement:
-        @intrinsic("select", condition, an empty outcome, a concrete outcome containing owned)
+the selected outcome for {a pointer to an owner:owned} when {boolean:condition} means: @intrinsic("select", condition, a concrete outcome containing owned, an empty outcome)
 
-function the envelope for {a pointer to an owner:owned} when {boolean:condition}:
-    execute:
-        if condition:
-            return an empty envelope
-        return a concrete envelope containing owned
+the reversed selected outcome for {a pointer to an owner:owned} when {boolean:condition} means: @intrinsic("select", condition, an empty outcome, a concrete outcome containing owned)
 
-function the selected outcome array for {a pointer to an owner:owned} when {boolean:condition}:
-    replacement:
-        @intrinsic("select", condition, [an empty outcome], [a concrete outcome containing owned])
+to get the envelope for {a pointer to an owner:owned} when {boolean:condition}:
+    if condition:
+        return an empty envelope
+    return a concrete envelope containing owned
+
+the selected outcome array for {a pointer to an owner:owned} when {boolean:condition} means: @intrinsic("select", condition, [an empty outcome], [a concrete outcome containing owned])
 
 @intrinsic("store", value, @intrinsic("construct", a cell, 41))
 @intrinsic("store", pointer, @intrinsic("address of", value))

@@ -43,6 +43,12 @@ function wasmReader(wasmBytes) {
       }
       throw new WebAssembly.CompileError("Invalid WebAssembly signed LEB128 integer");
     },
+    readName() {
+      const length = this.readUnsignedLeb();
+      const start = this.offset;
+      this.skip(length);
+      return new TextDecoder("utf-8", { fatal: true }).decode(this.bytes.subarray(start, this.offset));
+    },
     skip(length) {
       const end = this.offset + length;
       if (!Number.isSafeInteger(end) || end > this.bytes.length) {
@@ -53,17 +59,8 @@ function wasmReader(wasmBytes) {
   };
 }
 
-function readActiveDataOffset(reader) {
-  if (reader.readByte() !== 0x41) {
-    throw new WebAssembly.CompileError("DynLex data segment has a non-constant offset");
-  }
-  const offset = reader.readSignedI32Leb();
-  if (offset < 0 || reader.readByte() !== 0x0b) {
-    throw new WebAssembly.CompileError("DynLex data segment has an invalid offset expression");
-  }
-  return offset;
-}
-
+// Linked DynLex modules define their globals locally and export LLD's heap
+// boundary. This includes BSS and stack storage, which data segments omit.
 export function inspectRuntimeWasmLayout(wasmBytes) {
   const reader = wasmReader(wasmBytes);
   const expectedHeader = [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
@@ -73,7 +70,8 @@ export function inspectRuntimeWasmLayout(wasmBytes) {
     }
   }
 
-  let staticDataEnd = 0;
+  const globals = [];
+  let heapGlobalIndex = null;
   while (reader.offset < reader.bytes.length) {
     const sectionId = reader.readByte();
     const sectionSize = reader.readUnsignedLeb();
@@ -81,39 +79,43 @@ export function inspectRuntimeWasmLayout(wasmBytes) {
     if (!Number.isSafeInteger(sectionEnd) || sectionEnd > reader.bytes.length) {
       throw new WebAssembly.CompileError("WebAssembly section exceeds module length");
     }
-    if (sectionId !== 11) {
+    if (sectionId === 6) {
+      const count = reader.readUnsignedLeb();
+      for (let index = 0; index < count; index += 1) {
+        const type = reader.readByte();
+        const mutable = reader.readByte();
+        if (type !== 0x7f || reader.readByte() !== 0x41) {
+          throw new WebAssembly.CompileError("DynLex layout globals require constant i32 initializers");
+        }
+        const value = reader.readSignedI32Leb();
+        if (reader.readByte() !== 0x0b) {
+          throw new WebAssembly.CompileError("Invalid DynLex layout global initializer");
+        }
+        globals.push({ mutable, value });
+      }
+    } else if (sectionId === 7) {
+      const count = reader.readUnsignedLeb();
+      for (let index = 0; index < count; index += 1) {
+        const name = reader.readName();
+        const kind = reader.readByte();
+        const globalIndex = reader.readUnsignedLeb();
+        if (name === "__heap_base") {
+          if (kind !== 3) {
+            throw new WebAssembly.CompileError("DynLex heap boundary must be a global export");
+          }
+          heapGlobalIndex = globalIndex;
+        }
+      }
+    } else {
       reader.offset = sectionEnd;
-      continue;
-    }
-
-    const segmentCount = reader.readUnsignedLeb();
-    for (let index = 0; index < segmentCount; index += 1) {
-      const flags = reader.readUnsignedLeb();
-      let offset = null;
-      if (flags === 0) {
-        offset = readActiveDataOffset(reader);
-      } else if (flags === 2) {
-        const memoryIndex = reader.readUnsignedLeb();
-        if (memoryIndex !== 0) {
-          throw new WebAssembly.CompileError("DynLex data segment targets an unsupported memory");
-        }
-        offset = readActiveDataOffset(reader);
-      } else if (flags !== 1) {
-        throw new WebAssembly.CompileError(`Unsupported WebAssembly data segment flags ${flags}`);
-      }
-      const dataLength = reader.readUnsignedLeb();
-      if (offset !== null) {
-        const segmentEnd = offset + dataLength;
-        if (!Number.isSafeInteger(segmentEnd)) {
-          throw new WebAssembly.CompileError("DynLex static data size exceeds JavaScript's safe range");
-        }
-        staticDataEnd = Math.max(staticDataEnd, segmentEnd);
-      }
-      reader.skip(dataLength);
     }
     if (reader.offset !== sectionEnd) {
-      throw new WebAssembly.CompileError("DynLex data section length is inconsistent");
+      throw new WebAssembly.CompileError("DynLex layout section length is inconsistent");
     }
   }
-  return { staticDataEnd };
+  const heap = heapGlobalIndex === null ? undefined : globals[heapGlobalIndex];
+  if (!heap || heap.mutable !== 0 || heap.value <= 0 || heap.value % 16 !== 0) {
+    throw new WebAssembly.CompileError("DynLex module has no valid linked heap boundary");
+  }
+  return { heapBase: heap.value };
 }

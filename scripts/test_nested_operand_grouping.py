@@ -7,21 +7,17 @@ import tempfile
 
 project = Path(sys.argv[1]).resolve()
 compiler = Path(sys.argv[2]).resolve()
-prelude = '''function left - right:
-    execute:
-        @intrinsic("return", @intrinsic("subtract", left, right))
+prelude = '''to get left - right:
+    @intrinsic("return", @intrinsic("subtract", left, right))
 
-function [take] value [done]:
-    execute:
-        @intrinsic("return", value)
+to get [take] value [done]:
+    @intrinsic("return", value)
 
-function [pair] first [with] second [done]:
-    execute:
-        @intrinsic("return", @intrinsic("add", @intrinsic("multiply", first, 10), second))
+to get [pair] first [with] second [done]:
+    @intrinsic("return", @intrinsic("add", @intrinsic("multiply", first, 10), second))
 
-function [show] value:
-    execute:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\\n", value))
+to [show] value:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int"), 1, "%d\\n", value))
 
 '''
 cases = [
@@ -33,17 +29,14 @@ cases = [
     patterns: box
     members: item
 
-function [boxed] value:
-    execute:
-        @intrinsic("return", @intrinsic("construct", box, value))
+to get [boxed] value:
+    @intrinsic("return", @intrinsic("construct", box, value))
 
-function value [negated]:
-    execute:
-        @intrinsic("return", @intrinsic("negate", value))
+to get value [negated]:
+    @intrinsic("return", @intrinsic("negate", value))
 
-function [the content of] value [box]:
-    execute:
-        @intrinsic("return", value's item)
+to get [the content of] value [box]:
+    @intrinsic("return", value's item)
 
 show the content of (boxed 3 negated) box
 ''', "-3\n", 0),

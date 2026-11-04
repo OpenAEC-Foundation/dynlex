@@ -92,7 +92,7 @@ local function cad rational revolution trigonometric bounds with centre {a 64 bi
         set maximum to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, sine, cosine)
         loop index from 0 to 2:
             set parameter to maximum + ((index as a 64 bit floating-point number) * 3.141592653589793)
-            set offset to the remainder of (parameter - start) divided by 6.283185307179586
+            set offset to (parameter - start) mod 6.283185307179586
             if offset < 0.0:
                 set offset to offset + 6.283185307179586
             if (sweep >= (6.283185307179586 - 1e-12)) or (offset <= (sweep + 1e-12)):
@@ -115,8 +115,7 @@ local function cad rational revolution valid nurbs {cad nurbs curve2:shape}:
             if ((cad rational revolution finite knot) = false) or (knot < previous):
                 return false
             set previous to knot
-        loop index from 0 to the length of shape's controls:
-            set point to the item at index in shape's controls
+        for each point at index in shape's controls:
             set weight to the item at index in shape's weights
             if (((cad rational revolution finite point's x) and (cad rational revolution finite point's y)) and ((cad rational revolution finite weight) and (weight > 0.0))) = false:
                 return false
@@ -161,39 +160,37 @@ local function cad rational revolution nurbs bounds of {cad nurbs curve2:shape} 
                 set divided to the cad split of span's shape at 0.5
                 if divided's valid:
                     increment splits
-                    append (@intrinsic("construct", a cad rational revolution span, divided's right, span's depth + 1)) to pending
-                    append (@intrinsic("construct", a cad rational revolution span, divided's left, span's depth + 1)) to pending
+                    append (@intrinsic("construct", a cad rational revolution span, divided's right, span's depth + 1)) and (@intrinsic("construct", a cad rational revolution span, divided's left, span's depth + 1)) to pending
                     set refined to true
             if refined = false:
                 set result to cad rational revolution include hull in result
         free pending
         return result
 
-function the cad rational revolution projection bounds of {cad curve2:piece} on {cad plane:plane} from {cad vector3:origin} along {cad vector3:direction}:
-    execute:
-        if piece's kind = 0:
-            set first to cad rational revolution projection of piece's line's start on plane from origin along direction
-            set last to cad rational revolution projection of piece's line's end on plane from origin along direction
-            return cad rational revolution bounds between first and last
-        if piece's kind = 2:
-            set arc to piece's arc
-            set centre to cad rational revolution projection of arc's centre on plane from origin along direction
-            set cosine to the cad dot of (the cad vector at (a cad vector2 with x arc's radius and y 0.0) on plane) and direction
-            set sine to the cad dot of (the cad vector at (a cad vector2 with x 0.0 and y arc's radius) on plane) and direction
-            return cad rational revolution trigonometric bounds with centre centre, cosine cosine, sine sine, start arc's startAngle and sweep (the cad sweep of arc)
-        if piece's kind = 3:
-            set arc to piece's ellipse
-            set ellipse to arc's ellipse
-            set minor to the cad minor axis of ellipse
-            set cosineVector to ellipse's majorAxis scaled by ellipse's majorRadius
-            set sineVector to minor scaled by ellipse's minorRadius
-            set centre to cad rational revolution projection of ellipse's centre on plane from origin along direction
-            set cosine to the cad dot of (the cad vector at cosineVector on plane) and direction
-            set sine to the cad dot of (the cad vector at sineVector on plane) and direction
-            return cad rational revolution trigonometric bounds with centre centre, cosine cosine, sine sine, start arc's startParameter and sweep (the cad sweep of arc)
-        if piece's kind = 5:
-            return cad rational revolution nurbs bounds of piece's nurbs on plane from origin along direction
-        return cad rational revolution absent bounds
+to get the cad rational revolution projection bounds of {cad curve2:piece} on {cad plane:plane} from {cad vector3:origin} along {cad vector3:direction}:
+    if piece's kind = 0:
+        set first to cad rational revolution projection of piece's line's start on plane from origin along direction
+        set last to cad rational revolution projection of piece's line's end on plane from origin along direction
+        return cad rational revolution bounds between first and last
+    if piece's kind = 2:
+        set arc to piece's arc
+        set centre to cad rational revolution projection of arc's centre on plane from origin along direction
+        set cosine to the cad dot of (the cad vector at (a cad vector2 with x arc's radius and y 0.0) on plane) and direction
+        set sine to the cad dot of (the cad vector at (a cad vector2 with x 0.0 and y arc's radius) on plane) and direction
+        return cad rational revolution trigonometric bounds with centre centre, cosine cosine, sine sine, start arc's startAngle and sweep (the cad sweep of arc)
+    if piece's kind = 3:
+        set arc to piece's ellipse
+        set ellipse to arc's ellipse
+        set minor to the cad minor axis of ellipse
+        set cosineVector to ellipse's majorAxis scaled by ellipse's majorRadius
+        set sineVector to minor scaled by ellipse's minorRadius
+        set centre to cad rational revolution projection of ellipse's centre on plane from origin along direction
+        set cosine to the cad dot of (the cad vector at cosineVector on plane) and direction
+        set sine to the cad dot of (the cad vector at sineVector on plane) and direction
+        return cad rational revolution trigonometric bounds with centre centre, cosine cosine, sine sine, start arc's startParameter and sweep (the cad sweep of arc)
+    if piece's kind = 5:
+        return cad rational revolution nurbs bounds of piece's nurbs on plane from origin along direction
+    return cad rational revolution absent bounds
 
 local function cad rational revolution absent reach:
     execute:
@@ -214,8 +211,7 @@ local function cad rational revolution nurbs reach of {cad nurbs curve2:shape} o
         if (cad rational revolution valid nurbs shape) = false:
             return cad rational revolution absent reach
         set pending to a list containing (@intrinsic("construct", a cad rational revolution span, shape, 0))
-        set negative to false
-        set positive to false
+        set negative and positive to false
         set visited to 0
         loop while (the length of pending) > 0:
             remove the last item from pending and set span to it
@@ -229,8 +225,7 @@ local function cad rational revolution nurbs reach of {cad nurbs curve2:shape} o
                 free pending
                 return possible
             if possible's negative or possible's positive:
-                set provenNegative to false
-                set provenPositive to false
+                set provenNegative and provenPositive to false
                 loop index from 0 to 3:
                     set parameter to (index as a 64 bit floating-point number) * 0.5
                     set point to the cad point on span's shape at parameter
@@ -254,8 +249,7 @@ local function cad rational revolution nurbs reach of {cad nurbs curve2:shape} o
                     if (divided's valid) = false:
                         free pending
                         return cad rational revolution absent reach
-                    append (@intrinsic("construct", a cad rational revolution span, divided's right, span's depth + 1)) to pending
-                    append (@intrinsic("construct", a cad rational revolution span, divided's left, span's depth + 1)) to pending
+                    append (@intrinsic("construct", a cad rational revolution span, divided's right, span's depth + 1)) and (@intrinsic("construct", a cad rational revolution span, divided's left, span's depth + 1)) to pending
         free pending
         return @intrinsic("construct", a cad rational revolution reach, true, negative, positive)
 
@@ -272,73 +266,70 @@ local function cad rational revolution absent turn:
     execute:
         return @intrinsic("construct", a cad rational revolution turn, false, the cad zero vector3, the cad zero vector3, the cad zero vector3, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number, false)
 
-function the cad rational revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
-    execute:
-        set normalResult to the cad normal of plane
-        set directionResult to the cad normalization of axis
-        if ((normalResult's valid) and (directionResult's valid)) = false:
-            return cad rational revolution absent turn
-        set direction to directionResult's value
-        set turnAngle to angle
-        if turnAngle < 0.0:
-            set direction to the cad negative of direction
-            set turnAngle to 0.0 - turnAngle
-        if (((cad rational revolution finite turnAngle) and (turnAngle > 0.0)) and (turnAngle <= (6.283185307179586 + 1e-12))) = false:
-            return cad rational revolution absent turn
-        set planeDistance to the cad distance from pivot to plane
-        if (planeDistance's valid) = false:
-            return cad rational revolution absent turn
-        if ((the absolute value of (the cad dot of direction and normalResult's value)) > 1e-9) or ((the absolute value of planeDistance's value) > 1e-9):
-            return cad rational revolution absent turn
-        set radialResult to the cad normalization of (the cad cross of normalResult's value and direction)
-        if (radialResult's valid) = false:
-            return cad rational revolution absent turn
-        set radial to radialResult's value
-        set spin to (the cad dot of normalResult's value and (the cad cross of direction and radial)) > 0.0
-        set frame to @intrinsic("construct", a cad rational revolution turn, true, pivot, direction, radial, spin, 0.0 as a 64 bit floating-point number, turnAngle, (the absolute value of (6.283185307179586 - turnAngle)) <= 1e-9)
-        set found to false
-        set scaleOrigin to the cad zero vector3
-        loop index from 0 to the length of profile:
-            set piece to the item at index in profile
-            if (((piece's kind = 0) or (piece's kind = 2)) or ((piece's kind = 3) or (piece's kind = 5))) and (found = false):
-                set scaleOrigin to the cad point at (the cad point on piece at 0.0) on plane
-                set found to true
-        if found = false:
-            return cad rational revolution absent turn
-        set radialBounds to cad rational revolution absent bounds
-        set heightBounds to cad rational revolution absent bounds
-        loop index from 0 to the length of profile:
-            set piece to the item at index in profile
-            if ((piece's kind = 0) or (piece's kind = 2)) or ((piece's kind = 3) or (piece's kind = 5)):
-                set pieceRadial to the cad rational revolution projection bounds of piece on plane from pivot along radial
-                set pieceHeight to the cad rational revolution projection bounds of piece on plane from scaleOrigin along direction
-                if ((pieceRadial's valid) and (pieceHeight's valid)) = false:
-                    return cad rational revolution absent turn
-                set radialBounds to cad rational revolution include pieceRadial in radialBounds
-                set heightBounds to cad rational revolution include pieceHeight in heightBounds
-        set radialMagnitude to the maximum of (the absolute value of radialBounds's low) and (the absolute value of radialBounds's high)
-        set profileScale to the maximum of radialMagnitude and (heightBounds's high - heightBounds's low)
-        set frame's tolerance to 1e-9 * (the maximum of profileScale and 1.0)
-        if profileScale <= frame's tolerance:
-            return cad rational revolution absent turn
-        set negative to false
-        set positive to false
-        loop index from 0 to the length of profile:
-            set piece to the item at index in profile
-            if ((piece's kind = 0) or (piece's kind = 2)) or ((piece's kind = 3) or (piece's kind = 5)):
-                set reach to cad rational revolution piece reach of piece on plane for frame
-                if (reach's valid) = false:
-                    return cad rational revolution absent turn
-                set negative to negative or reach's negative
-                set positive to positive or reach's positive
-                if negative and positive:
-                    return cad rational revolution absent turn
-        if (negative or positive) = false:
-            return cad rational revolution absent turn
-        if positive = false:
-            set frame's radial to the cad negative of radial
-            set frame's spin to spin = false
-        return frame
+to get the cad rational revolution turn of {a pointer to a list:profile} on {cad plane:plane} about {cad vector3:pivot} along {cad vector3:axis} by {a 64 bit floating-point number:angle}:
+    set normalResult to the cad normal of plane
+    set directionResult to the cad normalization of axis
+    if ((normalResult's valid) and (directionResult's valid)) = false:
+        return cad rational revolution absent turn
+    set direction to directionResult's value
+    set turnAngle to angle
+    if turnAngle < 0.0:
+        set direction to the cad negative of direction
+        set turnAngle to 0.0 - turnAngle
+    if (((cad rational revolution finite turnAngle) and (turnAngle > 0.0)) and (turnAngle <= (6.283185307179586 + 1e-12))) = false:
+        return cad rational revolution absent turn
+    set planeDistance to the cad distance from pivot to plane
+    if (planeDistance's valid) = false:
+        return cad rational revolution absent turn
+    if ((the absolute value of (the cad dot of direction and normalResult's value)) > 1e-9) or ((the absolute value of planeDistance's value) > 1e-9):
+        return cad rational revolution absent turn
+    set radialResult to the cad normalization of (the cad cross of normalResult's value and direction)
+    if (radialResult's valid) = false:
+        return cad rational revolution absent turn
+    set radial to radialResult's value
+    set spin to (the cad dot of normalResult's value and (the cad cross of direction and radial)) > 0.0
+    set frame to @intrinsic("construct", a cad rational revolution turn, true, pivot, direction, radial, spin, 0.0 as a 64 bit floating-point number, turnAngle, (the absolute value of (6.283185307179586 - turnAngle)) <= 1e-9)
+    set found to false
+    set scaleOrigin to the cad zero vector3
+    loop index from 0 to the length of profile:
+        set piece to the item at index in profile
+        if (piece's kind is one of 0, 2, 3 and 5) and (found = false):
+            set scaleOrigin to the cad point at (the cad point on piece at 0.0) on plane
+            set found to true
+    if found = false:
+        return cad rational revolution absent turn
+    set radialBounds to cad rational revolution absent bounds
+    set heightBounds to cad rational revolution absent bounds
+    loop index from 0 to the length of profile:
+        set piece to the item at index in profile
+        if piece's kind is one of 0, 2, 3 and 5:
+            set pieceRadial to the cad rational revolution projection bounds of piece on plane from pivot along radial
+            set pieceHeight to the cad rational revolution projection bounds of piece on plane from scaleOrigin along direction
+            if ((pieceRadial's valid) and (pieceHeight's valid)) = false:
+                return cad rational revolution absent turn
+            set radialBounds to cad rational revolution include pieceRadial in radialBounds
+            set heightBounds to cad rational revolution include pieceHeight in heightBounds
+    set radialMagnitude to the maximum of (the absolute value of radialBounds's low) and (the absolute value of radialBounds's high)
+    set profileScale to the maximum of radialMagnitude and (heightBounds's high - heightBounds's low)
+    set frame's tolerance to 1e-9 * (the maximum of profileScale and 1.0)
+    if profileScale <= frame's tolerance:
+        return cad rational revolution absent turn
+    set negative and positive to false
+    for each piece in profile:
+        if piece's kind is one of 0, 2, 3 and 5:
+            set reach to cad rational revolution piece reach of piece on plane for frame
+            if (reach's valid) = false:
+                return cad rational revolution absent turn
+            set negative to negative or reach's negative
+            set positive to positive or reach's positive
+            if negative and positive:
+                return cad rational revolution absent turn
+    if (negative or positive) = false:
+        return cad rational revolution absent turn
+    if positive = false:
+        set frame's radial to the cad negative of radial
+        set frame's spin to spin = false
+    return frame
 
 local function cad rational revolution absent surface with collapse {boolean:collapsed}:
     execute:
@@ -350,49 +341,46 @@ local function cad rational revolution absent surface with collapse {boolean:col
         set value to @intrinsic("construct", a cad nurbs surface3, 0, 0, points, uKnots, vKnots, weights, false, false, false, owner)
         return @intrinsic("construct", a cad rational revolution surface result, false, collapsed, value)
 
-function the cad rational revolution surface of {cad curve2:piece} on {cad plane:plane} for {cad rational revolution turn:turn}:
-    execute:
-        if ((turn's valid) = false) or (((piece's kind != 3) and (piece's kind != 5))):
-            return cad rational revolution absent surface with collapse false
-        set reach to cad rational revolution piece reach of piece on plane for turn
-        if (reach's valid) = false:
-            return cad rational revolution absent surface with collapse false
-        if reach's negative:
-            return cad rational revolution absent surface with collapse false
-        if ((reach's negative) or (reach's positive)) = false:
-            return cad rational revolution absent surface with collapse true
-        set profile to the cad rational builder of piece
-        set angular to the cad rational unit arc with sweep turn's angle
-        if ((profile's valid) and (angular's valid)) = false:
-            return cad rational revolution absent surface with collapse false
-        set around to the cad cross of turn's axis and turn's radial
-        set points to an empty list of the type of (an empty list of a cad vector3)
-        set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
-        loop rowIndex from 0 to the length of profile's value's controls:
-            set point to the item at rowIndex in profile's value's controls
-            set height to cad rational revolution projection of point on plane from turn's pivot along turn's axis
-            set radius to cad rational revolution radius of point on plane for turn
-            set row to an empty list of a cad vector3
-            set weightRow to an empty list of a 64 bit floating-point number
-            loop column from 0 to the length of angular's value's controls:
-                set control to the item at column in angular's value's controls
-                set axial to turn's axis scaled by height
-                set radialPart to turn's radial scaled by (radius * control's x)
-                set aroundPart to around scaled by (radius * control's y)
-                set position to the cad sum of (the cad sum of (the cad sum of turn's pivot and axial) and radialPart) and aroundPart
-                append position to row
-                append ((the item at rowIndex in profile's value's weights) * (the item at column in angular's value's weights)) to weightRow
-            append row to points
-            append weightRow to weights
-        set profileCurve to profile's value
-        set angularCurve to angular's value
-        set made to the strict cad nurbs surface3 of degrees profileCurve's degree and angularCurve's degree with controls points, knots profileCurve's knots and angularCurve's knots and weights weights
-        loop index from 0 to the length of points:
-            free (the item at index in points)
-            free (the item at index in weights)
-        free points
-        free weights
-        if (made's valid) = false:
-            return cad rational revolution absent surface with collapse false
-        set the vClosed of made's value to (the vClosed of made's value) or turn's full
-        return @intrinsic("construct", a cad rational revolution surface result, true, false, made's value)
+to get the cad rational revolution surface of {cad curve2:piece} on {cad plane:plane} for {cad rational revolution turn:turn}:
+    if ((turn's valid) = false) or ((3 != piece's kind != 5)):
+        return cad rational revolution absent surface with collapse false
+    set reach to cad rational revolution piece reach of piece on plane for turn
+    if (reach's valid) = false:
+        return cad rational revolution absent surface with collapse false
+    if reach's negative:
+        return cad rational revolution absent surface with collapse false
+    if ((reach's negative) or (reach's positive)) = false:
+        return cad rational revolution absent surface with collapse true
+    set profile to the cad rational builder of piece
+    set angular to the cad rational unit arc with sweep turn's angle
+    if ((profile's valid) and (angular's valid)) = false:
+        return cad rational revolution absent surface with collapse false
+    set around to the cad cross of turn's axis and turn's radial
+    set points to an empty list of the type of (an empty list of a cad vector3)
+    set weights to an empty list of the type of (an empty list of a 64 bit floating-point number)
+    for each point at rowIndex in profile's value's controls:
+        set height to cad rational revolution projection of point on plane from turn's pivot along turn's axis
+        set radius to cad rational revolution radius of point on plane for turn
+        set row to an empty list of a cad vector3
+        set weightRow to an empty list of a 64 bit floating-point number
+        for each control at column in angular's value's controls:
+            set axial to turn's axis scaled by height
+            set radialPart to turn's radial scaled by (radius * control's x)
+            set aroundPart to around scaled by (radius * control's y)
+            set position to the cad sum of (the cad sum of (the cad sum of turn's pivot and axial) and radialPart) and aroundPart
+            append position to row
+            append ((the item at rowIndex in profile's value's weights) * (the item at column in angular's value's weights)) to weightRow
+        append row to points
+        append weightRow to weights
+    set profileCurve to profile's value
+    set angularCurve to angular's value
+    set made to the strict cad nurbs surface3 of degrees profileCurve's degree and angularCurve's degree with controls points, knots profileCurve's knots and angularCurve's knots and weights weights
+    loop index from 0 to the length of points:
+        free (the item at index in points)
+        free (the item at index in weights)
+    free points
+    free weights
+    if (made's valid) = false:
+        return cad rational revolution absent surface with collapse false
+    set the vClosed of made's value to (the vClosed of made's value) or turn's full
+    return @intrinsic("construct", a cad rational revolution surface result, true, false, made's value)

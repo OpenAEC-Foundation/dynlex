@@ -1,0 +1,36 @@
+import lib/std.dl
+
+# Both overloads introduce a previously untyped iteration variable.
+flex section visit item in {an array:values}:
+    replacement:
+        for each item in values:
+            execute the body
+
+flex section visit item in {integer:count}:
+    replacement:
+        loop position from 0 to count:
+            set item to position
+            execute the body
+
+set total to 0
+visit value in [3, 5]:
+    add value to total
+visit index in 3:
+    add index to total
+print line total
+
+# An overload may also refine the behavior of an unconstrained section.
+flex section show {value}:
+    replacement:
+        print line "generic"
+        execute the body
+
+flex section show {integer:value}:
+    replacement:
+        print line value
+        execute the body
+
+show 7:
+    print line "integer body"
+show "word":
+    print line "generic body"

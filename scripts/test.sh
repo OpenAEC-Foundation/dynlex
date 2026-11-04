@@ -650,6 +650,7 @@ else
     run_auxiliary_test "process_posix_write" 10 python3 -B "$SCRIPT_DIR/test_process_posix_write.py"
 fi
 run_auxiliary_test "llvm_toolchain" 10 python3 -B "$SCRIPT_DIR/test_llvm_toolchain.py"
+run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoint_checker.py" "$COMPILER"
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
@@ -681,9 +682,11 @@ run_auxiliary_test \
     "inequality_codegen" 15 python3 -B "$SCRIPT_DIR/test_inequality_codegen.py" "$COMPILER" \
     "$TESTS_DIR/inequality_uses_overloaded_equality/main.dl"
 run_auxiliary_test "spirv_main_return" 15 python3 -B "$SCRIPT_DIR/test_spirv_main_return.py" "$COMPILER"
+run_auxiliary_test "spirv_call_abi" 60 python3 -B "$SCRIPT_DIR/test_spirv_call_abi.py" "$COMPILER"
 run_auxiliary_test "web_runtime_filesystem" 10 node "$PROJECT_DIR/tests/web/runtime_filesystem.mjs"
 run_auxiliary_test "web_runtime_host" 10 node "$PROJECT_DIR/tests/web/runtime_host.mjs"
 run_auxiliary_test "web_path_library" 30 node "$PROJECT_DIR/tests/web/path_library.mjs" "$COMPILER"
+run_auxiliary_test "web_memory_layout" 30 node "$PROJECT_DIR/tests/web/memory_layout.mjs" "$COMPILER"
 run_auxiliary_test "path_host_runtime" 20 python3 -B "$SCRIPT_DIR/test_path_host_runtime.py"
 run_auxiliary_test \
     "filesystem_transaction_runtime" 20 python3 -B "$SCRIPT_DIR/test_filesystem_transaction_runtime.py"

@@ -2,28 +2,20 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-	replacement:
-		@intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] boolean:
-	replacement:
-		@intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
-function fixed quantity:
-	replacement:
-		@intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function the value selected from [a number equal to {integer:value}|a flag equal to {boolean:value}]:
-	execute:
-		@intrinsic("return", value)
+to get the value selected from [a number equal to {integer:value}|a flag equal to {boolean:value}]:
+	@intrinsic("return", value)
 
 ignore the value selected from a number equal to 6
 ignore the value selected from a flag equal to @intrinsic("equal", 1, 1)
 
-function the value selected in [fixed mode from {fixed integer:value}|runtime mode from {integer:value}]:
-	execute:
-		@intrinsic("return", value)
+to get the value selected in [fixed mode from {fixed integer:value}|runtime mode from {integer:value}]:
+	@intrinsic("return", value)
 
 ignore the value selected in fixed mode from 7
 ignore the value selected in runtime mode from 8

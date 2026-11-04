@@ -1,0 +1,15 @@
+flex section assign [using slot|] from value:
+    replacement:
+        @intrinsic("store", slot, value)
+        @intrinsic("execute body")
+
+to get [nested capture result]:
+    @intrinsic("store", destination, 99)
+    assign using destination from 7:
+        assign from 23:
+            @intrinsic("store", result, 1)
+    @intrinsic("return", destination)
+
+# The array's layout forces execution by the compile-time evaluator.
+@intrinsic("store", bytes, @intrinsic("size of", @intrinsic("array", nested capture result, @intrinsic("type", "int"))))
+@intrinsic("return", @intrinsic("subtract", bytes, 28))

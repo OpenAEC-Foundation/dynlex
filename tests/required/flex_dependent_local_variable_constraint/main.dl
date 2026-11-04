@@ -5,4 +5,4 @@ flex function the flex local length for {fixed integer:item count}:
         set {an array of item count items:values} to [1, 2]
         the length of values
 
-print the flex local length for 2 as a line
+print line the flex local length for 2

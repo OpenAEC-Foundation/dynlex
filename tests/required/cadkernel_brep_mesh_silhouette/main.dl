@@ -2,11 +2,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh silhouette {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh silhouette {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set sphereResult to the cad sphere body at the cad zero vector3 with radius 2.0
 check mesh silhouette (sphereResult's valid) named "sphere"
@@ -15,9 +14,8 @@ set bodyMesh to the cad tessellation of sphereResult's value with tolerance tole
 set sourceValue to the cad silhouette source of bodyMesh
 set contourPoints to the cad silhouette of sourceValue viewed along the cad z axis
 check mesh silhouette ((the length of contourPoints) > 16) named "sphere contour"
-check mesh silhouette (((the remainder of (the length of contourPoints) divided by 2)) = 0) named "paired segments"
-loop pointIndex from 0 to the length of contourPoints:
-    set pointValue to the item at pointIndex in contourPoints
+check mesh silhouette ((((the length of contourPoints) mod 2)) = 0) named "paired segments"
+for each pointValue in contourPoints:
     set radialValue to the square root of ((pointValue's x * pointValue's x) + (pointValue's y * pointValue's y))
     check mesh silhouette ((the absolute value of pointValue's z) < 1e-5) named "view plane"
     check mesh silhouette ((the absolute value of (radialValue - 2.0)) < 0.08) named "sphere radius"
@@ -26,8 +24,7 @@ set movedResult to the cad affine transformation of sourceValue with x vector (a
 check mesh silhouette (movedResult's valid) named "affine transform"
 set movedPoints to the cad silhouette of movedResult's value viewed along the cad z axis
 check mesh silhouette ((the length of movedPoints) = (the length of contourPoints)) named "transformed topology"
-loop pointIndex from 0 to the length of movedPoints:
-    set pointValue to the item at pointIndex in movedPoints
+for each pointValue in movedPoints:
     set dx to pointValue's x - 10.0
     set dy to pointValue's y - 20.0
     set radialValue to the square root of ((dx * dx) + (dy * dy))
@@ -46,4 +43,4 @@ free cad silhouette source result singularResult
 free cad silhouette source result movedResult
 free cad silhouette source sourceValue
 free cad body mesh bodyMesh
-print "cadkernel brep mesh silhouette: PASS" as a line
+print line "cadkernel brep mesh silhouette: PASS"

@@ -6,6 +6,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallVector.h"
+#include <compare>
 #include <deque>
 #include <limits>
 #include <string>
@@ -15,6 +16,7 @@ struct MatchProgress;
 struct MatchParentAlternatives;
 struct MatchStorage;
 struct MatchStep;
+struct PatternFamily;
 
 inline constexpr size_t noMatchSequenceNode = std::numeric_limits<size_t>::max();
 
@@ -35,12 +37,31 @@ template <typename T> struct MatchSequence {
 	size_t size() const { return count; }
 };
 
+struct MatchedOperandPrecedence {
+	const PatternFamily *family{};
+	size_t start{}, end{};
+	bool startsWithArgument{}, endsWithArgument{};
+	auto operator<=>(const MatchedOperandPrecedence &) const = default;
+};
+
 struct MatchState {
 	MatchSequence<PatternTreeNode *> nodesPassed;
 	MatchSequence<VariableMatch> discoveredVariables;
 	MatchSequence<AcceptedLiteralMatch> acceptedLiterals;
 	MatchSequence<const PatternMatch *> subMatches;
 	MatchSequence<MatchedArgument> orderedArguments;
+	llvm::SmallVector<MatchedOperandPrecedence, 2> operandFamilies;
+};
+
+struct PackMatchState {
+	PatternTreeNode *captureNode{};
+	size_t argumentIndex{};
+	size_t count{};
+	size_t minimumCount = 1;
+	bool expectsItem = false;
+	bool finalSeparator = false;
+	bool singleOnly = false;
+	bool operator==(const PackMatchState &) const = default;
 };
 
 struct MatchControlState {
@@ -56,6 +77,8 @@ struct MatchControlState {
 	size_t patternStartPos{};
 	size_t patternPos{};
 	size_t matchedArgumentIndex{};
+	llvm::SmallVector<MatchedOperandPrecedence, 2> operandFamilies;
+	PackMatchState pack;
 
 	bool operator==(const MatchControlState &other) const = default;
 };
@@ -104,6 +127,7 @@ struct CompletedMatchProgress {
 };
 
 struct MatchParentAlternatives {
+	MatchParentAlternatives *redirect{};
 	std::vector<const MatchProgress *> values;
 	llvm::SmallDenseSet<MatchContinuationState, 4, MatchStateInfo<MatchContinuationState, MatchContinuationStateHash>>
 		valueStates;
@@ -113,6 +137,7 @@ struct MatchParentAlternatives {
 
 	bool addParent(const MatchProgress *parent);
 	bool addCompletion(CompletedMatchProgress completion);
+	MatchParentAlternatives *canonical();
 };
 
 // Traversing the tree outputs the first deterministic tree of possibilities.
@@ -138,6 +163,7 @@ struct MatchProgress {
 	size_t patternPos{};
 	size_t sourceArgumentIndex{};
 	size_t matchedArgumentIndex{};
+	PackMatchState pack;
 
 	bool isComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	bool isSubmatchComplete(const std::vector<PatternDefinition *> &visibleDefinitions) const;
@@ -154,6 +180,7 @@ struct MatchProgress {
 	PatternMatch
 	materializeMatch(const MatchStorage &storage, const std::vector<PatternDefinition *> &visibleDefinitions) const;
 	std::string toString() const;
+	void appendArgument(MatchStorage &storage, MatchedArgument argument);
 };
 
 struct MatchStep {

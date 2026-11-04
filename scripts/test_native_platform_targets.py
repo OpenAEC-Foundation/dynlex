@@ -11,11 +11,11 @@ compiler = Path(sys.argv[2]).resolve()
 expected = {"linux": "linux", "darwin": "macos", "win32": "windows"}[sys.platform]
 native_source = """import lib/platform.dl
 if the build target is Windows:
-    print "windows" as a line
+    print line "windows"
 if the build target is macOS:
-    print "macos" as a line
+    print line "macos"
 if the build target is Linux:
-    print "linux" as a line
+    print line "linux"
 """
 non_native_source = """import lib/platform.dl
 if ((the build target is Windows) or (the build target is macOS)) or (the build target is Linux):

@@ -32,8 +32,7 @@ to remove value from {a pointer to a unique set:items}:
     if position >= 0:
         remove item position from the values of items
 
-to clear {a pointer to a unique set:items}:
-    clear the values of items
+to clear {a pointer to a unique set:items}: clear the values of items
 
 to free {a pointer to a unique set:items}:
     free (the values of items)

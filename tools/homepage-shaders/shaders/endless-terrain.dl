@@ -91,8 +91,7 @@ if this is a vertex shader:
 
         set elevation to 0.0
         set normal to a spatial coordinate with x 0.0, y 1.0 and z 0.0
-        set variation to 0.5
-        set detail to 0.5
+        set variation and detail to 0.5
         set submersion to 0.0
         if surface > 1.5:
             set level to -0.62

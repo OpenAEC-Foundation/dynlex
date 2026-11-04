@@ -1,0 +1,10 @@
+function the next value [using counter|] after start:
+    replacement:
+        @intrinsic("store", counter, start)
+        @intrinsic("add", counter, 1)
+
+@intrinsic("store", input, @intrinsic("call", "libc", "abs", @intrinsic("type", "int"), 7))
+@intrinsic("store", first, the next value after input)
+@intrinsic("store", destination, 99)
+@intrinsic("store", second, the next value using destination after input)
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", first, 8), @intrinsic("add", @intrinsic("subtract", second, 8), @intrinsic("subtract", destination, 7))))

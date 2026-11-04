@@ -32,7 +32,7 @@ local function stop the river crossing with message:
     globals:
         challenge
     execute:
-        print message as a line
+        print line message
         set challenge's activity to false
 
 local function ensure {river passenger:passenger} is valid:
@@ -68,41 +68,41 @@ local function report that {river passenger:passenger} is being loaded:
     execute:
         ensure passenger is valid
         if passenger's identifier = 1:
-            print "RIVER|COMMAND|LOAD|SHEEP" as a line
+            print line "RIVER|COMMAND|LOAD|SHEEP"
         else if passenger's identifier = 2:
-            print "RIVER|COMMAND|LOAD|WOLF" as a line
+            print line "RIVER|COMMAND|LOAD|WOLF"
         else:
-            print "RIVER|COMMAND|LOAD|HAY" as a line
+            print line "RIVER|COMMAND|LOAD|HAY"
 
 local function report that {river passenger:passenger} was loaded:
     execute:
         ensure passenger is valid
         if passenger's identifier = 1:
-            print "RIVER|ACTION|LOAD|SHEEP" as a line
+            print line "RIVER|ACTION|LOAD|SHEEP"
         else if passenger's identifier = 2:
-            print "RIVER|ACTION|LOAD|WOLF" as a line
+            print line "RIVER|ACTION|LOAD|WOLF"
         else:
-            print "RIVER|ACTION|LOAD|HAY" as a line
+            print line "RIVER|ACTION|LOAD|HAY"
 
 local function report that {river passenger:passenger} is being unloaded:
     execute:
         ensure passenger is valid
         if passenger's identifier = 1:
-            print "RIVER|COMMAND|UNLOAD|SHEEP" as a line
+            print line "RIVER|COMMAND|UNLOAD|SHEEP"
         else if passenger's identifier = 2:
-            print "RIVER|COMMAND|UNLOAD|WOLF" as a line
+            print line "RIVER|COMMAND|UNLOAD|WOLF"
         else:
-            print "RIVER|COMMAND|UNLOAD|HAY" as a line
+            print line "RIVER|COMMAND|UNLOAD|HAY"
 
 local function report that {river passenger:passenger} was unloaded:
     execute:
         ensure passenger is valid
         if passenger's identifier = 1:
-            print "RIVER|ACTION|UNLOAD|SHEEP" as a line
+            print line "RIVER|ACTION|UNLOAD|SHEEP"
         else if passenger's identifier = 2:
-            print "RIVER|ACTION|UNLOAD|WOLF" as a line
+            print line "RIVER|ACTION|UNLOAD|WOLF"
         else:
-            print "RIVER|ACTION|UNLOAD|HAY" as a line
+            print line "RIVER|ACTION|UNLOAD|HAY"
 
 local function stop because {river passenger:passenger} is missing:
     execute:
@@ -130,13 +130,13 @@ local function check the river crossing:
     execute:
         if challenge's activity:
             if (challenge's wolf side = challenge's sheep side) and ((challenge's wolf side != -1) and (challenge's farmer side != challenge's wolf side)):
-                print "RIVER|DANGER|WOLF|SHEEP" as a line
+                print line "RIVER|DANGER|WOLF|SHEEP"
                 stop the river crossing with "RIVER|ERROR|the wolf ate the sheep"
             else if (challenge's sheep side = challenge's hay side) and ((challenge's sheep side != -1) and (challenge's farmer side != challenge's sheep side)):
-                print "RIVER|DANGER|SHEEP|HAY" as a line
+                print line "RIVER|DANGER|SHEEP|HAY"
                 stop the river crossing with "RIVER|ERROR|the sheep ate the hay"
             else if (challenge's sheep side = 1) and ((challenge's wolf side = 1) and (challenge's hay side = 1)):
-                print "RIVER|SUCCESS" as a line
+                print line "RIVER|SUCCESS"
                 set challenge's activity to false
 
 function:
@@ -197,11 +197,11 @@ function:
         challenge
     execute:
         if challenge's activity:
-            print "RIVER|COMMAND|CROSS" as a line
+            print line "RIVER|COMMAND|CROSS"
             if challenge's farmer side = 0:
                 set challenge's farmer side to 1
-                print "RIVER|ACTION|CROSS|FAR" as a line
+                print line "RIVER|ACTION|CROSS|FAR"
             else:
                 set challenge's farmer side to 0
-                print "RIVER|ACTION|CROSS|HOME" as a line
+                print line "RIVER|ACTION|CROSS|HOME"
             check the river crossing

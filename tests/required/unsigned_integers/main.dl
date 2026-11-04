@@ -24,82 +24,57 @@ set maximumPointer to @intrinsic("address of", maximum)
 set unsignedVector to a new vector with x maximum, y maximum and z (1 as a 32 bit unsigned integer)
 set shiftedVector to unsignedVector / (2 as a 32 bit unsigned integer)
 
-function checked fixed value {fixed a number:value}:
-    execute:
-        return value
+to get checked fixed value {fixed a number:value}:
+    return value
 
-function checked fixed equality {fixed boolean:value}:
-    execute:
-        return value
+to get checked fixed equality {fixed boolean:value}:
+    return value
 
-print maximum as a line
-print zero8 as a line
-print zero16 as a line
-print zero32 as a line
-print zero64 as a line
-print (maximum shifted right by 1) as a line
-print (maximum / 2) as a line
+print lines maximum, zero8, zero16, zero32, zero64, (maximum shifted right by 1) and (maximum / 2)
 set one to 1 as a 32 bit unsigned integer
-print (maximum > one) as a line
-print the minimum of maximum and one as a line
-print the maximum of maximum and one as a line
-print (signed32 + maximum) as a line
-print (signed64 + maximum) as a line
-print (signed32 as a 64 bit unsigned integer) as a line
-print (maximum as a 64 bit integer) as a line
-print (full64 as a 64 bit integer) as a line
-print high64 as a line
-print bareHigh64 as a line
-print signedMinimum as a line
-print wrappedLimit as a line
-print full64 as a line
-print (the absolute value of full64) as a line
-print (the floor of full64) as a line
-print (the ceiling of full64) as a line
-print floatRoundTrip as a line
-print floatTruncated as a line
-print floatHigh64RoundTrip as a line
-print @intrinsic("dereference", maximumPointer) as a line
-print the x of shiftedVector as a line
-print checked fixed value ((4294967295 as a 32 bit unsigned integer) + (1 as a 32 bit unsigned integer)) as a line
-print checked fixed value ((255 as a 8 bit unsigned integer) + (1 as a 8 bit unsigned integer)) as a line
-print checked fixed value ((65535 as a 16 bit unsigned integer) + (1 as a 16 bit unsigned integer)) as a line
-print checked fixed value (18446744073709551615 as a 64 bit unsigned integer as a 64 bit integer) as a line
-print checked fixed value (the minimum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer)) as a line
-print checked fixed value (the maximum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer)) as a line
-print checked fixed value (the absolute value of 18446744073709551615) as a line
-print checked fixed value (the floor of 18446744073709551615) as a line
-print checked fixed value (the ceiling of 18446744073709551615) as a line
-print checked fixed equality ((4294967295 as a 32 bit unsigned integer) = (4294967295 as a 64 bit floating-point number)) as a line
-print checked fixed equality ((4294967295 as a 64 bit floating-point number) = (4294967295 as a 32 bit unsigned integer)) as a line
-print checked fixed value ((9223372036854775808 as a 64 bit floating-point number) as a 64 bit unsigned integer) as a line
-print checked fixed value ((1.5 as a 64 bit floating-point number) as a 32 bit unsigned integer) as a line
-print checked fixed value ((65536 as a 32 bit unsigned integer) as a 16 bit unsigned integer) as a line
-print checked fixed equality (9223372036854775808 = (9223372036854775808 as a 64 bit floating-point number)) as a line
-print checked fixed equality (9223372036854775808 as a boolean) as a line
-print checked fixed value ((-1.5) as a 32 bit integer) as a line
-print checked fixed value ((-0.5) as a 32 bit unsigned integer) as a line
+print lines (maximum > one), (the minimum of maximum and one), (the maximum of maximum and one) and (signed32 + maximum)
+print lines (signed64 + maximum), (signed32 as a 64 bit unsigned integer) and (maximum as a 64 bit integer)
+print lines (full64 as a 64 bit integer), high64, bareHigh64, signedMinimum, wrappedLimit and full64
+print lines (the absolute value of full64), (the floor of full64), (the ceiling of full64) and floatRoundTrip
+print lines floatTruncated, floatHigh64RoundTrip and (@intrinsic("dereference", maximumPointer))
+print line the x of shiftedVector
+print line checked fixed value ((4294967295 as a 32 bit unsigned integer) + (1 as a 32 bit unsigned integer))
+print line checked fixed value ((255 as a 8 bit unsigned integer) + (1 as a 8 bit unsigned integer))
+print line checked fixed value ((65535 as a 16 bit unsigned integer) + (1 as a 16 bit unsigned integer))
+print line checked fixed value (18446744073709551615 as a 64 bit unsigned integer as a 64 bit integer)
+print line checked fixed value (the minimum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer))
+print line checked fixed value (the maximum of (4294967295 as a 32 bit unsigned integer) and (1 as a 32 bit unsigned integer))
+print line checked fixed value (the absolute value of 18446744073709551615)
+print line checked fixed value (the floor of 18446744073709551615)
+print line checked fixed value (the ceiling of 18446744073709551615)
+print line checked fixed equality ((4294967295 as a 32 bit unsigned integer) = (4294967295 as a 64 bit floating-point number))
+print line checked fixed equality ((4294967295 as a 64 bit floating-point number) = (4294967295 as a 32 bit unsigned integer))
+print line checked fixed value ((9223372036854775808 as a 64 bit floating-point number) as a 64 bit unsigned integer)
+print line checked fixed value ((1.5 as a 64 bit floating-point number) as a 32 bit unsigned integer)
+print line checked fixed value ((65536 as a 32 bit unsigned integer) as a 16 bit unsigned integer)
+print line checked fixed equality (9223372036854775808 = (9223372036854775808 as a 64 bit floating-point number))
+print line checked fixed equality (9223372036854775808 as a boolean)
+print line checked fixed value ((-1.5) as a 32 bit integer)
+print line checked fixed value ((-0.5) as a 32 bit unsigned integer)
 
-function the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
-    execute:
-        set golden to 2654435769 as a 32 bit unsigned integer
-        set multiplier to 2246822507 as a 32 bit unsigned integer
-        set state to hash ^ ((value + golden) + ((hash << 6) + (hash >> 2)))
-        set state to state * multiplier
-        return state ^ (state >> 16)
+to get the combined seed from {a 32 bit unsigned integer:hash} and {a 32 bit unsigned integer:value}:
+    set golden to 2654435769 as a 32 bit unsigned integer
+    set multiplier to 2246822507 as a 32 bit unsigned integer
+    set state to hash ^ ((value + golden) + ((hash << 6) + (hash >> 2)))
+    set state to state * multiplier
+    return state ^ (state >> 16)
 
-function the mixed animal seed from {a 32 bit unsigned integer:value}:
-    execute:
-        set firstMultiplier to 2146121005 as a 32 bit unsigned integer
-        set secondMultiplier to 2221713035 as a 32 bit unsigned integer
-        set state to value ^ (value >> 16)
-        set state to state * firstMultiplier
-        set state to state ^ (state >> 15)
-        set state to state * secondMultiplier
-        return state ^ (state >> 16)
+to get the mixed animal seed from {a 32 bit unsigned integer:value}:
+    set firstMultiplier to 2146121005 as a 32 bit unsigned integer
+    set secondMultiplier to 2221713035 as a 32 bit unsigned integer
+    set state to value ^ (value >> 16)
+    set state to state * firstMultiplier
+    set state to state ^ (state >> 15)
+    set state to state * secondMultiplier
+    return state ^ (state >> 16)
 
-print the combined seed from 0 as a 32 bit unsigned integer and 0 as a 32 bit unsigned integer as a line
-print the combined seed from 1 as a 32 bit unsigned integer and 2 as a 32 bit unsigned integer as a line
-print the combined seed from maximum and 2147483648 as a 32 bit unsigned integer as a line
-print the mixed animal seed from maximum as a line
-print the mixed animal seed from 2147483648 as a 32 bit unsigned integer as a line
+print line the combined seed from 0 as a 32 bit unsigned integer and 0 as a 32 bit unsigned integer
+print line the combined seed from 1 as a 32 bit unsigned integer and 2 as a 32 bit unsigned integer
+print line the combined seed from maximum and 2147483648 as a 32 bit unsigned integer
+print line the mixed animal seed from maximum
+print line the mixed animal seed from 2147483648 as a 32 bit unsigned integer

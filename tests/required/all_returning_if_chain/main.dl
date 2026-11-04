@@ -1,12 +1,10 @@
 import lib/std.dl
 
-function the value for condition:
-    execute:
-        if condition:
-            return 41
-        else:
-            return 42
-        return "unreachable"
+to get the value for condition:
+    if condition:
+        return 41
+    else:
+        return 42
+    return "unreachable"
 
-print the value for true as a line
-print the value for false as a line
+print lines (the value for true) and (the value for false)

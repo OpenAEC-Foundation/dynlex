@@ -216,6 +216,7 @@ bool subtreeHasVisibleDefinition(PatternTreeNode *node, const SourceFile &source
 			pending.push_back(child);
 		}
 		pending.push_back(current->argumentChild);
+		pending.push_back(current->argumentPackChild);
 	}
 	return false;
 }
@@ -287,8 +288,8 @@ void addCompletionItem(
 
 std::string extendLiteralSuggestion(std::string literal, PatternTreeNode *node) {
 	PatternTreeNode *current = node;
-	while (current && current->literalChildren.size() == 1 && !current->argumentChild && current->matchingDefinitions.empty() &&
-		   literal.size() < 64) {
+	while (current && current->literalChildren.size() == 1 && !current->argumentChild && !current->argumentPackChild &&
+		   current->matchingDefinitions.empty() && literal.size() < 64) {
 		const auto &[nextLiteral, nextNode] = *current->literalChildren.begin();
 		literal += nextLiteral;
 		current = nextNode;
@@ -328,7 +329,8 @@ void collectNextLiteralSuggestions(
 }
 
 bool nodeAcceptsArgument(PatternTreeNode *node, const SourceFile &sourceFile) {
-	return node && node->argumentChild && subtreeHasVisibleDefinition(node->argumentChild, sourceFile);
+	return node && ((node->argumentChild && subtreeHasVisibleDefinition(node->argumentChild, sourceFile)) ||
+					(node->argumentPackChild && subtreeHasVisibleDefinition(node->argumentPackChild, sourceFile)));
 }
 
 void collectVariableSuggestions(

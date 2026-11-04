@@ -155,48 +155,26 @@ case Expression::Kind::IntrinsicCall: {
 				expr->sectionOutcome = sectionOutcomeForIntrinsic(kind, conditionValue, sectionConditionType);
 			if (kind == IntrinsicKind::Store)
 				inferStoreEffects(expr, context, flexBindingFrameStack);
-			if (kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) {
-				DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!pointerType.isDeduced() || !pointerType.isPointer()) {
-					setConfiguredTypeFailure(expr->range, "store at requires pointer");
-					break;
-				}
-				DataType elementType = pointerType.dereferenced();
-				DataType valueType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
-				if (!context.typesValid)
-					break;
-				DataType refinedElementType;
-				if (mergeVariableAssignmentType(elementType, valueType, refinedElementType)) {
-					refinePointerStoragePointeeType(expr->arguments[1], valueType, context, flexBindingFrameStack);
-					pointerType = effectiveInferredExpressionType(expr->arguments[1]);
-					elementType = pointerType.dereferenced();
-				}
-				if (!isVariableAssignmentCompatible(elementType, valueType)) {
-					if (tryApplyUserConversion(expr->arguments[2], elementType, true, context, flexBindingFrameStack)) {
-						valueType = effectiveInferredExpressionType(expr->arguments[2]);
-					} else {
-						if (!context.typesValid)
-							break;
-						setConfiguredTypeFailure(
-							expr->range, "store at value incompatible", "message",
-							{{"value_type", typeToUserName(valueType)}, {"element_type", typeToUserName(elementType)}}
-						);
-						break;
-					}
-				}
-				applyStoreThroughAddress(
-					context, inferAddressProvenance(expr->arguments[1], context, flexBindingFrameStack), expr->arguments[2],
-					flexBindingFrameStack
-				);
-			}
+			if ((kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) &&
+				!inferPointerStoreEffects(
+					expr->arguments[1], flexBindingFrameStack, expr->arguments[2], flexBindingFrameStack, expr->range, context
+				))
+				break;
 			if (kind == IntrinsicKind::ExecuteBody && !inferSectionFlexCallerBody(expr, context))
 				break;
 			if (kind == IntrinsicKind::SetSubject) {
+				ScopedRecursiveInferenceObservation subjectObservation(context, context.currentInstantiation);
 				DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-				if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void) {
-					failWithDetail(expr->arguments[1]->range, "the subject must have a runtime value");
+				if (!valueType.isDeduced() && subjectObservation.ownerObserved() && context.currentInstantiation) {
+					context.currentSubject = InferenceContext::SubjectState::assigned(expr);
+					expr->type = {DataType::Kind::Void};
 					break;
 				}
+				if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void) {
+					failWithDetail(expr->arguments[1]->range, "the subject must have a value");
+					break;
+				}
+				recordSubjectTypeSource(expr, valueType, context, flexBindingFrameStack);
 				context.currentSubject = InferenceContext::SubjectState::assigned(expr);
 			}
 			if (kind == IntrinsicKind::ShaderOutput) {
@@ -277,6 +255,7 @@ case Expression::Kind::IntrinsicCall: {
 					expr->type = ptrType.dereferenced();
 			} else if (isExternalCallIntrinsicKind(kind)) {
 #include "intrinsics/external_call_inference.inl"
+
 			} else if (kind == IntrinsicKind::Function) {
 #include "intrinsics/function_reference_inference.inl"
 			} else if (kind == IntrinsicKind::Cast) {

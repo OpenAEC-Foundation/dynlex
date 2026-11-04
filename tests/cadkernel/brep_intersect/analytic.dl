@@ -24,7 +24,7 @@ set other to intersect cylinder at [0.01,0.0,0.0] normal [0.0,0.0,1.0] radius 3.
 check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
 set other to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 0.0
 check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
-print "coaxial_sphere_cylinder_preserves_latitude_order_and_refusals" as a line
+print line "coaxial_sphere_cylinder_preserves_latitude_order_and_refusals"
 
 set one to intersect cone
 set other to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 3.0
@@ -40,7 +40,7 @@ check intersect curves meeting on one and other
 check intersect ((the length of meeting's curves) = 2)
 set other to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 0.0
 check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
-print "cone_cylinder_keeps_both_nappes_and_skips_apex_only_roots" as a line
+print line "cone_cylinder_keeps_both_nappes_and_skips_apex_only_roots"
 
 set otherFrame to the cad xy plane
 set otherFrame's origin to intersect point [0.0,0.0,2.0]
@@ -52,7 +52,7 @@ check intersect ((the cad meeting of one and one within 1e-9) = (a coincident ca
 set one to the cad surface of (a cad cone with base (the cad xy plane), radius 5.0 and half angle 0.0)
 set other to the cad surface of (a cad cone with base (the cad xy plane), radius 3.0 and half angle 0.0)
 check intersect ((the cad meeting of one and other within 1e-9) = (no cad surface meeting))
-print "coaxial_cones_solve_both_signs_and_parallel_denominators" as a line
+print line "coaxial_cones_solve_both_signs_and_parallel_denominators"
 
 set one to intersect cone
 set other to intersect plane at [0.0,0.0,15.0] normal [0.0,0.0,1.0]
@@ -65,7 +65,7 @@ set meeting to the cad meeting of one and other within 1e-9
 check intersect curves meeting on one and other
 check intersect ((the length of meeting's curves) = 1)
 intersect near ((the item at 0 in meeting's curves)'s line's origin's x) to 5.0
-print "mirrored_cone_and_tangent_cylinders_remain_exact" as a line
+print line "mirrored_cone_and_tangent_cylinders_remain_exact"
 
 set badFrame to a cad plane with origin (the cad zero vector3), x axis (the cad zero vector3) and y axis (the cad y axis)
 set one to the cad surface of badFrame
@@ -74,4 +74,4 @@ check intersect ((the cad meeting of one and other within 1e-9) = (an unknown ca
 set one to the cad surface of (a cad sphere with frame badFrame and radius 5.0)
 set other to intersect cylinder at [0.0,0.0,0.0] normal [0.0,0.0,1.0] radius 3.0
 check intersect ((the cad meeting of one and other within 1e-9) = (an unknown cad surface meeting))
-print "degenerate_required_frames_return_unknown" as a line
+print line "degenerate_required_frames_return_unknown"

@@ -60,12 +60,12 @@ def main() -> int:
     # Intrinsic argument ranges retain the authored whitespace after the comma.
     expected = [
         (2, "f x", 0, integer), (2, "f x", 1, floating),
-        (5, " f x", 0, integer), (5, " f x", 1, floating),
-        (8, " g 8", 2, integer), (9, " g 9", 2, integer),
-        (10, " g 8.5", 2, floating), (11, " h 8", 3, integer),
-        (12, " h 8.5", 3, floating),
-        (16, " f x", 0, integer), (17, "f x", 0, integer),
-        (19, " k 8", 14, integer),
+        (4, " f x", 0, integer), (4, " f x", 1, floating),
+        (7, " g 8", 2, integer), (8, " g 9", 2, integer),
+        (9, " g 8.5", 2, floating), (10, " h 8", 3, integer),
+        (11, " h 8.5", 3, floating),
+        (15, " f x", 0, integer), (16, "f x", 0, integer),
+        (18, " k 8", 13, integer),
     ]
     assert actual == expected, f"Expected inferred calls {expected!r}, received {actual!r}"
 

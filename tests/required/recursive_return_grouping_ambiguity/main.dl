@@ -6,24 +6,21 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function left - right:
-    execute:
-        return @intrinsic("subtract", left, right)
+to get left - right:
+    return @intrinsic("subtract", left, right)
 
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function number has even parity under inversion:
-    execute:
-        if @intrinsic("not equal", number, 0):
-            return number - 1 has odd parity under inversion
-        return 1
+to get number has even parity under inversion:
+    if @intrinsic("not equal", number, 0):
+        return number - 1 has odd parity under inversion
+    return 1
 
-function number has odd parity under inversion:
-    execute:
-        if @intrinsic("not equal", number, 0):
-            return number - 1 has even parity under inversion
-        return 0
+to get number has odd parity under inversion:
+    if @intrinsic("not equal", number, 0):
+        return number - 1 has even parity under inversion
+    return 0
 
 ignore 4 has even parity under inversion

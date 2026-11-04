@@ -15,39 +15,25 @@ set signedMinusZeroResult to the signed 64 bit JSON integer read from the JSON m
 set signedOverflowResult to the signed 64 bit JSON integer read from the JSON member named "signedOverflow" in document
 set overflowResult to the unsigned 64 bit JSON integer read from the JSON member named "overflow" in document
 set textResult to the signed 64 bit JSON integer read from the JSON member named "text" in document
-print whether safeResult succeeded as a line
-print the unsigned 64 bit integer value of safeResult as a line
-print whether roundedResult succeeded as a line
-print the unsigned 64 bit integer value of roundedResult as a line
-print whether minimumResult succeeded as a line
-print the signed 64 bit integer value of minimumResult as a line
-print whether signedMaximumResult succeeded as a line
-print the signed 64 bit integer value of signedMaximumResult as a line
-print whether maximumResult succeeded as a line
-print the unsigned 64 bit integer value of maximumResult as a line
-print whether fractionResult succeeded as a line
-print whether exponentResult succeeded as a line
-print whether negativeResult succeeded as a line
-print whether minusZeroResult succeeded as a line
-print whether signedMinusZeroResult succeeded as a line
-print the signed 64 bit integer value of signedMinusZeroResult as a line
-print whether signedOverflowResult succeeded as a line
-print whether overflowResult succeeded as a line
-print whether textResult succeeded as a line
+print lines (safeResult succeeded), (the unsigned 64 bit integer value of safeResult) and (roundedResult succeeded)
+print lines (the unsigned 64 bit integer value of roundedResult) and (minimumResult succeeded)
+print lines (the signed 64 bit integer value of minimumResult) and (signedMaximumResult succeeded)
+print lines (the signed 64 bit integer value of signedMaximumResult) and (maximumResult succeeded)
+print lines (the unsigned 64 bit integer value of maximumResult) and (fractionResult succeeded)
+print lines (exponentResult succeeded), (negativeResult succeeded) and (minusZeroResult succeeded)
+print lines (signedMinusZeroResult succeeded) and (the signed 64 bit integer value of signedMinusZeroResult)
+print lines (signedOverflowResult succeeded), (overflowResult succeeded) and (textResult succeeded)
 free parsed
 
 set signedNode to a new JSON number from -9223372036854775808
 set unsignedNode to a new JSON number from (18446744073709551615 as a 64 bit unsigned integer)
-print the compact JSON form of signedNode as a line
-print the compact JSON form of unsignedNode as a line
+print lines (the compact JSON form of signedNode) and (the compact JSON form of unsignedNode)
 parse the compact JSON form of signedNode as JSON and set signedRoundTrip to it
 parse the compact JSON form of unsignedNode as JSON and set unsignedRoundTrip to it
 set signedRoundTripResult to the signed 64 bit JSON integer read from the value of signedRoundTrip
 set unsignedRoundTripResult to the unsigned 64 bit JSON integer read from the value of unsignedRoundTrip
-print whether signedRoundTripResult succeeded as a line
-print the signed 64 bit integer value of signedRoundTripResult as a line
-print whether unsignedRoundTripResult succeeded as a line
-print the unsigned 64 bit integer value of unsignedRoundTripResult as a line
+print lines (signedRoundTripResult succeeded) and (the signed 64 bit integer value of signedRoundTripResult)
+print lines (unsignedRoundTripResult succeeded) and (the unsigned 64 bit integer value of unsignedRoundTripResult)
 free signedRoundTrip
 free unsignedRoundTrip
 free signedNode

@@ -25,12 +25,12 @@ def format_library(binaries: list[tuple[str, bytes]]) -> str:
     ]
     for symbol, data in binaries:
         words = struct.unpack(f"<{len(data) // 4}I", data)
-        lines.extend((f"function {symbol}:", "    execute:", "        return ["))
+        lines.extend((f"to get {symbol}:", "    return ["))
         for offset in range(0, len(words), 8):
             entries = [f"{word} as a 32 bit unsigned integer" for word in words[offset:offset + 8]]
             suffix = "," if offset + 8 < len(words) else ""
-            lines.append("            " + ", ".join(entries) + suffix)
-        lines.extend(("        ]", ""))
+            lines.append("        " + ", ".join(entries) + suffix)
+        lines.extend(("    ]", ""))
     return "\n".join(lines)
 
 

@@ -8,4 +8,4 @@ if (copiedParts's valid) or (copiedBoundary's valid):
     @intrinsic("call", "libc", "abort", nothing)
 if ((the length of (copiedParts's parts's values)) != 0) or ((the length of (copiedBoundary's curves's values)) != 0):
     @intrinsic("call", "libc", "abort", nothing)
-print "default_boundary_results_clone_safely" as a line
+print line "default_boundary_results_clone_safely"

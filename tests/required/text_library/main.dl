@@ -2,19 +2,11 @@ import text.dl
 
 set padded to the string form of "  Hello, DynLex!  "
 set clean to padded trimmed
-print clean as a line
-print (the lowercase form of clean) as a line
-print (the uppercase form of clean) as a line
-print whether (clean starts with "Hello") as a line
-print whether (clean ends with "Lex!") as a line
-print whether (clean contains "lo, Dyn") as a line
-print (the substring of clean from 7 spanning 6 bytes) as a line
-print (clean with "DynLex" replaced by "world") as a line
-print ("ha" repeated 3 times) as a line
+print lines clean, (the lowercase form of clean), (the uppercase form of clean) and (clean starts with "Hello")
+print lines (clean ends with "Lex!"), (clean contains "lo, Dyn") and (the substring of clean from 7 spanning 6 bytes)
+print lines (clean with "DynLex" replaced by "world") and ("ha" repeated 3 times)
 
 set text to the string form of "red,green,blue"
 set parts to text split at ","
-print the length of parts as a line
-print the item at 1 in parts as a line
-print (parts joined with " | ") as a line
+print lines (the length of parts), (the item at 1 in parts) and (parts joined with " | ")
 free parts

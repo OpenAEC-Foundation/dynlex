@@ -2,6 +2,4 @@ import lib/std.dl
 
 set first to 1
 set second to 2
-print first+second as a line
-print first + second as a line
-print 3*-2 as a line
+print lines (first+second), (first + second) and (3*-2)

@@ -25,27 +25,21 @@ SHADER_INTRINSICS = {
     ),
     "shader uniform": (
         IGNORE_VALUE
-        + """\
-function the shader time:
-    replacement:
-        @intrinsic("shader uniform", "time", 0)
+        + '''the shader time means: @intrinsic("shader uniform", "time", 0)
 
 ignore the shader time
-""",
+''',
         "fragment",
     ),
     "shader output": (
-        """\
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+        '''[a|] floating-point number means: @intrinsic("type", "float")
 
 function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), red, green, blue, alpha))
 
 set the fragment color with a red channel of 0.1, a green channel of 0.2, a blue channel of 0.3 and an alpha channel of 1.0
-""",
+''',
         "fragment",
     ),
     "shader interpolant input": (
@@ -63,52 +57,40 @@ INVALID_SPIRV_SHADER_IO = (
     (
         "non-literal-input",
         IGNORE_VALUE
-        + """\
-function the invalid shader input:
-    replacement:
-        @intrinsic("shader input", 1)
+        + '''the invalid shader input means: @intrinsic("shader input", 1)
 
 ignore the invalid shader input
-""",
+''',
         ("--emit-spirv", "--shader-stage=fragment"),
         "shader input requires a string literal name",
     ),
     (
         "unknown-input",
         IGNORE_VALUE
-        + """\
-function the invalid shader input:
-    replacement:
-        @intrinsic("shader input", "Noise")
+        + '''the invalid shader input means: @intrinsic("shader input", "Noise")
 
 ignore the invalid shader input
-""",
+''',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Unknown shader input: Noise",
     ),
     (
         "position-in-fragment",
         IGNORE_VALUE
-        + """\
-function the invalid shader input:
-    replacement:
-        @intrinsic("shader input", "Position")
+        + '''the invalid shader input means: @intrinsic("shader input", "Position")
 
 ignore the invalid shader input
-""",
+''',
         ("--emit-spirv", "--shader-stage=fragment"),
         "Shader input 'Position' is unavailable for this shader stage",
     ),
     (
         "fragcoord-in-vertex",
         IGNORE_VALUE
-        + """\
-function the invalid shader input:
-    replacement:
-        @intrinsic("shader input", "FragCoord")
+        + '''the invalid shader input means: @intrinsic("shader input", "FragCoord")
 
 ignore the invalid shader input
-""",
+''',
         ("--emit-spirv", "--shader-stage=vertex"),
         "Shader input 'FragCoord' is unavailable for this shader stage",
     ),
@@ -175,18 +157,16 @@ EXPLICIT_UNIFORM_STAGE_SHADERS = {
         '@intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), 0.1, 0.2, 0.3, 1.0))\n'
     ),
 }
-FLEX_BRANCH_SHADER = """\
-import lib/shader.dl
+FLEX_BRANCH_SHADER = '''import lib/shader.dl
 
-function number bounded between zero and one:
-    execute:
-        set result to number
-        clamp result between 0.0 and 1.0
-        return result
+to get number bounded between zero and one:
+    set result to number
+    clamp result between 0.0 and 1.0
+    return result
 
 set shade to the shader time bounded between zero and one
 set the fragment color with a red channel of 0.0, a green channel of shade, a blue channel of 0.0 and an alpha channel of 1.0
-"""
+'''
 NESTED_SELECTION_SHADER = """\
 import lib/shader.dl
 
@@ -243,18 +223,13 @@ while iteration < 52 and marching:
 
 set the fragment color with a red channel of shade, a green channel of shade, a blue channel of shade and an alpha channel of 1.0
 """
-REPEATED_UNIFORM_LOAD_SHADER = """\
-function set variable to value:
+REPEATED_UNIFORM_LOAD_SHADER = '''function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function the shader time:
-    replacement:
-        @intrinsic("shader uniform", "time", 0)
+the shader time means: @intrinsic("shader uniform", "time", 0)
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+[a|] floating-point number means: @intrinsic("type", "float")
 
 function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
@@ -263,15 +238,12 @@ function set the fragment color with a red channel of {floating-point number:red
 set first to the shader time
 set second to the shader time
 set the fragment color with a red channel of first, a green channel of second, a blue channel of 0.0 and an alpha channel of 1.0
-"""
-CLASS_PROPERTY_SHADER = """\
-function set variable to value:
+'''
+CLASS_PROPERTY_SHADER = '''function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+[a|] floating-point number means: @intrinsic("type", "float")
 
 function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
@@ -283,15 +255,12 @@ class:
     members:
         first, second
 
-function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
-    replacement:
-        @intrinsic("construct", sample pair, first, second)
+a sample pair with first {floating-point number:first} and second {floating-point number:second} means: @intrinsic("construct", sample pair, first, second)
 
 set sample to a sample pair with first 0.25 and second 0.75
 set the fragment color with a red channel of sample's first, a green channel of sample's second, a blue channel of 0.0 and an alpha channel of 1.0
-"""
-CLASS_ARGUMENT_SHADER = """\
-function set variable to value:
+'''
+CLASS_ARGUMENT_SHADER = '''function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
@@ -299,13 +268,9 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+[a|] floating-point number means: @intrinsic("type", "float")
 
-function {floating-point number:left} + {floating-point number:right}:
-    replacement:
-        @intrinsic("add", left, right)
+{floating-point number:left} + {floating-point number:right} means: @intrinsic("add", left, right)
 
 function set the fragment color with a red channel of {floating-point number:red}, a green channel of {floating-point number:green}, a blue channel of {floating-point number:blue} and an alpha channel of {floating-point number:alpha}:
     replacement:
@@ -317,34 +282,22 @@ class:
     members:
         first, second
 
-function a sample pair with first {floating-point number:first} and second {floating-point number:second}:
-    replacement:
-        @intrinsic("construct", sample pair, first, second)
+a sample pair with first {floating-point number:first} and second {floating-point number:second} means: @intrinsic("construct", sample pair, first, second)
 
-function the sum of {sample pair:pair}:
-    execute:
-        return pair's first + pair's second
+to get the sum of {sample pair:pair}:
+    return pair's first + pair's second
 
 set pair to a sample pair with first 0.25 and second 0.75
 set value to the sum of pair
 set the fragment color with a red channel of value, a green channel of 0.0, a blue channel of 0.0 and an alpha channel of 1.0
-"""
-NATURAL_CLASS_PADDING_SHADER = """\
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+'''
+NATURAL_CLASS_PADDING_SHADER = '''[a|] boolean means: @intrinsic("type", "bool")
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float", 32)
+[a|] floating-point number means: @intrinsic("type", "float", 32)
 
-function false:
-    replacement:
-        @intrinsic("cast", 0, a boolean)
+false means: @intrinsic("cast", 0, a boolean)
 
-function true:
-    replacement:
-        @intrinsic("cast", 1, a boolean)
+true means: @intrinsic("cast", 1, a boolean)
 
 class:
     patterns:
@@ -352,16 +305,14 @@ class:
     members:
         first as a boolean, second as a boolean, value as a floating-point number
 
-function a parcel with first {boolean:first}, second {boolean:second} and value {floating-point number:value}:
-    replacement:
-        @intrinsic("construct", a parcel, first, second, value)
+a parcel with first {boolean:first}, second {boolean:second} and value {floating-point number:value} means: @intrinsic("construct", a parcel, first, second, value)
 
 function paint {parcel:item}:
     replacement:
         @intrinsic("shader output", @intrinsic("construct", @intrinsic("vector", 4), item's value, 0.0, 0.0, 1.0))
 
 paint a parcel with first false, second true and value 1.0
-"""
+'''
 FIXED_ARRAY_ARITHMETIC_SHADER = """\
 import lib/shader.dl
 

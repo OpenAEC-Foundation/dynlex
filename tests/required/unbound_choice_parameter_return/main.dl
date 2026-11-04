@@ -1,9 +1,8 @@
 import std.dl
 
-function the selection of alpha [and beta|alone]:
-	execute:
-		set chosen to alpha
-		set chosen to beta
-		return chosen
+to get the selection of alpha [and beta|alone]:
+	set chosen to alpha
+	set chosen to beta
+	return chosen
 
-print (the selection of 1 alone) as a line
+print line (the selection of 1 alone)

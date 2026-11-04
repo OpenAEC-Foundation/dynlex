@@ -1,0 +1,12 @@
+import lib/list.dl
+
+set first, assigned, tested, matched, destination, collection, part, index and variable to 99
+set values to an empty list of an integer
+append 1, 2 and 3 to values
+print lines (formatted "Score: {42}") and (2 is one of 1, 2 and 3)
+set checks to [first, assigned, tested, matched, destination, collection, part, index, variable]
+set checksum to 0
+for each current in checks:
+    add current to checksum
+print line checksum
+free values

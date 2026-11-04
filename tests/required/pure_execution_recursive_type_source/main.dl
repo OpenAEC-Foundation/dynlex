@@ -10,27 +10,23 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function left [is less than or equal to|<=] right:
-    execute:
-        return @intrinsic("less than or equal", left, right)
+to get left [is less than or equal to|<=] right:
+    return @intrinsic("less than or equal", left, right)
 
-function left - right:
-    execute:
-        return @intrinsic("subtract", left, right)
+to get left - right:
+    return @intrinsic("subtract", left, right)
 
-function left * right:
-    execute:
-        return @intrinsic("multiply", left, right)
+to get left * right:
+    return @intrinsic("multiply", left, right)
 
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the factorial of number:
-    execute:
-        if number <= 1:
-            return 1
-        set predecessor to (number - 1)
-        return number * the factorial of predecessor
+to get the factorial of number:
+    if number <= 1:
+        return 1
+    set predecessor to (number - 1)
+    return number * the factorial of predecessor
 
 ignore @intrinsic("array", the factorial of 8)

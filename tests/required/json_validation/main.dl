@@ -1,31 +1,25 @@
 import json.dl
 
 parse "01" as JSON and set leading to it
-print whether leading succeeded as a line
-print the JSON error position in leading as a line
+print lines (leading succeeded) and (the JSON error position in leading)
 free leading
 
 parse "1." as JSON and set fraction to it
-print whether fraction succeeded as a line
-print the JSON error position in fraction as a line
+print lines (fraction succeeded) and (the JSON error position in fraction)
 free fraction
 
 parse "1e+" as JSON and set exponent to it
-print whether exponent succeeded as a line
-print the JSON error position in exponent as a line
+print lines (exponent succeeded) and (the JSON error position in exponent)
 free exponent
 
 parse "\"\\x\"" as JSON and set escape to it
-print whether escape succeeded as a line
-print the JSON error position in escape as a line
+print lines (escape succeeded) and (the JSON error position in escape)
 free escape
 
 parse "\"\\ud800\"" as JSON and set surrogate to it
-print whether surrogate succeeded as a line
-print the JSON error position in surrogate as a line
+print lines (surrogate succeeded) and (the JSON error position in surrogate)
 free surrogate
 
 parse "[1,]" as JSON and set trailing to it
-print whether trailing succeeded as a line
-print the JSON error position in trailing as a line
+print lines (trailing succeeded) and (the JSON error position in trailing)
 free trailing

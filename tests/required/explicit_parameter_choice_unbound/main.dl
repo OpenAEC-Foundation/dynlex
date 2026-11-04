@@ -1,17 +1,9 @@
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function {integer:left} + {integer:right}:
-    replacement:
-        @intrinsic("add", left, right)
+{integer:left} + {integer:right} means: @intrinsic("add", left, right)
 
-function choose [support|{boolean:support}]:
-    execute:
-        @intrinsic("discard", support + 1)
+to choose [support|{boolean:support}]: @intrinsic("discard", support + 1)
 
 choose support

@@ -1,6 +1,4 @@
-function floating:
-    replacement:
-        @intrinsic("type", "float")
+floating means: @intrinsic("type", "float")
 
 function finish with value:
     replacement:
@@ -10,19 +8,16 @@ section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the adjustment of value:
-    execute:
-        finish with @intrinsic("add", value, 100)
+to get the adjustment of value:
+    finish with @intrinsic("add", value, 100)
 
-function the adjustment of {floating:value}:
-    execute:
-        finish with @intrinsic("negate", value)
+to get the adjustment of {floating:value}:
+    finish with @intrinsic("negate", value)
 
-function the recursive result at depth from seed:
-    execute:
-        if @intrinsic("greater than", depth, 0):
-            finish with the adjustment of (the recursive result at @intrinsic("subtract", depth, 1) from seed)
-        finish with seed
+to get the recursive result at depth from seed:
+    if @intrinsic("greater than", depth, 0):
+        finish with the adjustment of (the recursive result at @intrinsic("subtract", depth, 1) from seed)
+    finish with seed
 
 if @intrinsic("not equal", the recursive result at 3 from 7.0, @intrinsic("negate", 7.0)):
     @intrinsic("return", 1)

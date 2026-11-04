@@ -9,5 +9,4 @@ function the integer half of seven:
     execute:
         return 7 / 2
 
-print the integer half of seven as a line
-print 7 / 2 as a line
+print lines (the integer half of seven) and (7 / 2)

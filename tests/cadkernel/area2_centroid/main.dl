@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: MPL-2.0
 import tests/cadkernel/area2/main.dl
 
-function check centroid2 {cad centroid2 result:result} at {cad vector2:expected}:
-    execute:
-        check area2 result's valid
-        check area2 near result's value's x to expected's x within 1e-9
-        check area2 near result's value's y to expected's y within 1e-9
+to check centroid2 {cad centroid2 result:result} at {cad vector2:expected}:
+    check area2 result's valid
+    check area2 near result's value's x to expected's x within 1e-9
+    check area2 near result's value's y to expected's y within 1e-9
 
 set shifted to cross2 circle [3.0,-4.0] with radius 2.0
 check centroid2 (the cad enclosed centroid of shifted) at (cross2 point [3.0,-4.0])
@@ -43,11 +42,10 @@ check area2 (emptyCentre's valid = false)
 set emptyArea to the cad chord closed area of ray
 check area2 (emptyArea's valid = false)
 
-function centroid2 [retained local result]:
-    execute:
-        set local to cross2 polyline [[0.0,0.0,0.0],[2.0,0.0,0.0],[2.0,2.0,0.0],[0.0,2.0,0.0]] with closure false
-        return the cad enclosed centroid of local
+to get centroid2 [retained local result]:
+    set local to cross2 polyline [[0.0,0.0,0.0],[2.0,0.0,0.0],[2.0,2.0,0.0],[0.0,2.0,0.0]] with closure false
+    return the cad enclosed centroid of local
 set retained to centroid2 retained local result
 set duplicate to retained
 check centroid2 duplicate at (cross2 point [1.0,1.0])
-print "area conventions, translated centroids and borrowed input ownership" as a line
+print line "area conventions, translated centroids and borrowed input ownership"

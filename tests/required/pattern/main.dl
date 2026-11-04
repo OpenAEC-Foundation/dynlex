@@ -1,15 +1,12 @@
 import lib/std.dl
 # this function has a single pattern, defined right at the function definition line instead of in a pattern section.
-function variable's next power of two:
-	execute:
-		set result to 1
-		while result < variable:
-			multiply result by 2
-		return result
+to get variable's next power of two:
+	set result to 1
+	while result < variable:
+		multiply result by 2
+	return result
 
-function say message:
-	execute:
-		print message as a line
+to announce line message: print line message
 
 class:
 	patterns:
@@ -18,14 +15,13 @@ class:
 		[an|] eight bit unsigned integer
 
 
-function number%:
-	execute:
-		return number * 0.01
+to get number%:
+	return number * 0.01
 
-say "Hello, World!"
+announce line "Hello, World!"
 		
 # should print 8
-print 5.5's next power of two as a line
+print line 5.5's next power of two
 
 #should print 0.1
-print 10% as a line
+print line 10%

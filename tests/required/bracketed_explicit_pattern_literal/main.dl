@@ -1,16 +1,13 @@
-function inspect [repositories]:
-    execute:
-        @intrinsic("store", repositories, 1)
-        @intrinsic("return", repositories)
+to get inspect [repositories]:
+    @intrinsic("store", repositories, 1)
+    @intrinsic("return", repositories)
 
-function combine [repositories] with repositories:
-    execute:
-        @intrinsic("return", repositories)
+to get combine [repositories] with repositories:
+    @intrinsic("return", repositories)
 
-function inspect [pre]fixed:
-    execute:
-        @intrinsic("store", prefixed, 3)
-        @intrinsic("return", prefixed)
+to get inspect [pre]fixed:
+    @intrinsic("store", prefixed, 3)
+    @intrinsic("return", prefixed)
 
 @intrinsic("discard", inspect repositories)
 @intrinsic("discard", combine repositories with 2)

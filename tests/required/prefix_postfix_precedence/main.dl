@@ -20,7 +20,5 @@ function value tightly inverted:
     execute:
         return -value
 
-print (the loose opposite of 2 + 1) as a line
-print (the tight opposite of 2 + 1) as a line
-print (1 + 2 loosely inverted) as a line
-print (1 + 2 tightly inverted) as a line
+print lines (the loose opposite of 2 + 1), (the tight opposite of 2 + 1) and (1 + 2 loosely inverted)
+print line (1 + 2 tightly inverted)

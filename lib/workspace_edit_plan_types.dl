@@ -99,21 +99,13 @@ class:
         normalized changes as a pointer to a normalized workspace change collection
         operations as a pointer to a planned workspace operation collection
 
-function the workspace regular file resource kind:
-    replacement:
-        1
+the workspace regular file resource kind means: 1
 
-function the workspace directory resource kind:
-    replacement:
-        2
+the workspace directory resource kind means: 2
 
-function {a pointer to a workspace edit plan:plan} is valid:
-    replacement:
-        the validity of plan
+{a pointer to a workspace edit plan:plan} is valid means: the validity of plan
 
-function {a pointer to a workspace edit plan:plan} is invalid:
-    replacement:
-        the inverse of the validity of plan
+{a pointer to a workspace edit plan:plan} is invalid means: not the validity of plan
 
 local function a new workspace resource snapshot collection:
     execute:
@@ -127,22 +119,20 @@ local function a new workspace resource snapshot collection:
         allocate one slot of initial and set result to it
         return result
 
-function append workspace resource snapshot {a pointer to a workspace resource snapshot:value} to {a pointer to a workspace resource snapshot collection:collection}:
-    execute:
-        set required to the collection length after adding one item to the length of collection
-        set growth to the collection capacity from the capacity of collection expanded to hold required items
-        if growth > the capacity of collection:
-            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace resource snapshot
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to required
+to append workspace resource snapshot {a pointer to a workspace resource snapshot:value} to {a pointer to a workspace resource snapshot collection:collection}:
+    set required to the collection length after adding one item to the length of collection
+    set growth to the collection capacity from the capacity of collection expanded to hold required items
+    if growth > the capacity of collection:
+        set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a workspace resource snapshot
+        set the items of collection to resized
+        set the capacity of collection to growth
+    @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
+    set the length of collection to required
 
-function the workspace resource snapshot at {integer:position} in {a pointer to a workspace resource snapshot collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
+to get the workspace resource snapshot at {integer:position} in {a pointer to a workspace resource snapshot collection:collection}:
+    if position < 0 or position >= the length of collection:
+        @intrinsic("call", "libc", "abort", nothing)
+    return the item at position in the items of collection
 
 local function a new normalized workspace change collection:
     execute:
@@ -156,22 +146,20 @@ local function a new normalized workspace change collection:
         allocate one slot of initial and set result to it
         return result
 
-function append normalized workspace change {a pointer to a normalized workspace change:value} to {a pointer to a normalized workspace change collection:collection}:
-    execute:
-        set required to the collection length after adding one item to the length of collection
-        set growth to the collection capacity from the capacity of collection expanded to hold required items
-        if growth > the capacity of collection:
-            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a normalized workspace change
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to required
+to append normalized workspace change {a pointer to a normalized workspace change:value} to {a pointer to a normalized workspace change collection:collection}:
+    set required to the collection length after adding one item to the length of collection
+    set growth to the collection capacity from the capacity of collection expanded to hold required items
+    if growth > the capacity of collection:
+        set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a normalized workspace change
+        set the items of collection to resized
+        set the capacity of collection to growth
+    @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
+    set the length of collection to required
 
-function the normalized workspace change at {integer:position} in {a pointer to a normalized workspace change collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
+to get the normalized workspace change at {integer:position} in {a pointer to a normalized workspace change collection:collection}:
+    if position < 0 or position >= the length of collection:
+        @intrinsic("call", "libc", "abort", nothing)
+    return the item at position in the items of collection
 
 local function a new planned workspace operation collection:
     execute:
@@ -185,78 +173,73 @@ local function a new planned workspace operation collection:
         allocate one slot of initial and set result to it
         return result
 
-function append planned workspace operation {a pointer to a planned workspace operation:value} to {a pointer to a planned workspace operation collection:collection}:
-    execute:
-        set required to the collection length after adding one item to the length of collection
-        set growth to the collection capacity from the capacity of collection expanded to hold required items
-        if growth > the capacity of collection:
-            set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a planned workspace operation
-            set the items of collection to resized
-            set the capacity of collection to growth
-        @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
-        set the length of collection to required
+to append planned workspace operation {a pointer to a planned workspace operation:value} to {a pointer to a planned workspace operation collection:collection}:
+    set required to the collection length after adding one item to the length of collection
+    set growth to the collection capacity from the capacity of collection expanded to hold required items
+    if growth > the capacity of collection:
+        set resized to the checked allocation from ((the items of collection) as a pointer) resized to growth items of a pointer to a planned workspace operation
+        set the items of collection to resized
+        set the capacity of collection to growth
+    @intrinsic("initialize at", (the items of collection) + (the length of collection), value)
+    set the length of collection to required
 
-function the planned workspace operation at {integer:position} in {a pointer to a planned workspace operation collection:collection}:
-    execute:
-        if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
-        return the item at position in the items of collection
+to get the planned workspace operation at {integer:position} in {a pointer to a planned workspace operation collection:collection}:
+    if position < 0 or position >= the length of collection:
+        @intrinsic("call", "libc", "abort", nothing)
+    return the item at position in the items of collection
 
-function a new valid workspace edit plan:
-    execute:
-        set resources to a new workspace resource snapshot collection
-        set changes to a new normalized workspace change collection
-        set operations to a new planned workspace operation collection
-        set initial to @intrinsic(
-            "construct",
-            a workspace edit plan,
-            true,
-            a successful workspace edit result,
-            resources,
-            changes,
-            operations
-        )
-        allocate one slot of initial and set result to it
-        return result
+to get a new valid workspace edit plan:
+    set resources to a new workspace resource snapshot collection
+    set changes to a new normalized workspace change collection
+    set operations to a new planned workspace operation collection
+    set initial to @intrinsic(
+        "construct",
+        a workspace edit plan,
+        true,
+        a successful workspace edit result,
+        resources,
+        changes,
+        operations
+    )
+    allocate one slot of initial and set result to it
+    return result
 
-function invalidate {a pointer to a workspace edit plan:plan} with {workspace edit result:failure}:
-    execute:
-        set the validity of plan to false
-        set the outcome of plan to failure
+to invalidate {a pointer to a workspace edit plan:plan} with {workspace edit result:failure}:
+    set the validity of plan to false
+    set the outcome of plan to failure
 
-function free {a pointer to a workspace edit plan:plan}:
-    execute:
-        if plan = (0 as a pointer to a workspace edit plan):
-            @intrinsic("return")
-        set resources to the resources of plan
-        set position to 0
-        loop while position < the length of resources:
-            set resource to the workspace resource snapshot at position in resources
-            @intrinsic("destroy at", resource)
-            deallocate resource
-            set position to (position + 1)
-        deallocate the items of resources
-        @intrinsic("destroy at", resources)
-        deallocate resources
-        set changes to the normalized changes of plan
-        set position to 0
-        loop while position < the length of changes:
-            set change to the normalized workspace change at position in changes
-            @intrinsic("destroy at", change)
-            deallocate change
-            set position to (position + 1)
-        deallocate the items of changes
-        @intrinsic("destroy at", changes)
-        deallocate changes
-        set operations to the operations of plan
-        set position to 0
-        loop while position < the length of operations:
-            set operation to the planned workspace operation at position in operations
-            @intrinsic("destroy at", operation)
-            deallocate operation
-            set position to (position + 1)
-        deallocate the items of operations
-        @intrinsic("destroy at", operations)
-        deallocate operations
-        @intrinsic("destroy at", plan)
-        deallocate plan
+to free {a pointer to a workspace edit plan:plan}:
+    if plan = (0 as a pointer to a workspace edit plan):
+        @intrinsic("return")
+    set resources to the resources of plan
+    set position to 0
+    loop while position < the length of resources:
+        set resource to the workspace resource snapshot at position in resources
+        @intrinsic("destroy at", resource)
+        deallocate resource
+        set position to (position + 1)
+    deallocate the items of resources
+    @intrinsic("destroy at", resources)
+    deallocate resources
+    set changes to the normalized changes of plan
+    set position to 0
+    loop while position < the length of changes:
+        set change to the normalized workspace change at position in changes
+        @intrinsic("destroy at", change)
+        deallocate change
+        set position to (position + 1)
+    deallocate the items of changes
+    @intrinsic("destroy at", changes)
+    deallocate changes
+    set operations to the operations of plan
+    set position to 0
+    loop while position < the length of operations:
+        set operation to the planned workspace operation at position in operations
+        @intrinsic("destroy at", operation)
+        deallocate operation
+        set position to (position + 1)
+    deallocate the items of operations
+    @intrinsic("destroy at", operations)
+    deallocate operations
+    @intrinsic("destroy at", plan)
+    deallocate plan

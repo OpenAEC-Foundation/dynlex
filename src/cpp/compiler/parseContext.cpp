@@ -34,6 +34,7 @@ void deletePatternTree(PatternTreeNode *node, std::unordered_set<PatternTreeNode
 	for (auto &[_, child] : node->literalChildren)
 		deletePatternTree(child, visited);
 	deletePatternTree(node->argumentChild, visited);
+	deletePatternTree(node->argumentPackChild, visited);
 	delete node;
 }
 } // namespace
@@ -75,18 +76,38 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			return nullptr;
 		}
 		MatchProgress &currentProgress = queue.back();
+		if (currentProgress.parents)
+			currentProgress.parents = currentProgress.parents->canonical();
 		auto [memoizedState, inserted] = memoizedStates.try_emplace(currentProgress.controlState(), currentProgress.parents);
 		if (!inserted) {
 			std::vector<MatchProgress> resumedProgresses;
 			MatchParentAlternatives *canonicalParents = memoizedState->second;
+			if (canonicalParents)
+				canonicalParents = canonicalParents->canonical();
 			MatchParentAlternatives *incomingParents = currentProgress.parents;
 			if (canonicalParents && incomingParents && canonicalParents != incomingParents) {
+				// Equivalent matcher states share future continuations as well as
+				// the parents and completions already discovered on either path.
+				auto previousParents = canonicalParents->values;
+				auto incomingValues = std::move(incomingParents->values);
+				auto incomingCompletions = std::move(incomingParents->completedSubmatches);
+				incomingParents->valueStates.clear();
+				incomingParents->completedSubmatchStates.clear();
+				incomingParents->redirect = canonicalParents;
 				std::vector<const MatchProgress *> addedParents;
-				for (const MatchProgress *incomingParent : incomingParents->values) {
+				for (const MatchProgress *incomingParent : incomingValues) {
 					if (!canonicalParents->addParent(incomingParent))
 						continue;
 					addedParents.push_back(incomingParent);
 				}
+				std::vector<CompletedMatchProgress> addedCompletions;
+				for (const auto &completion : incomingCompletions) {
+					if (canonicalParents->addCompletion(completion))
+						addedCompletions.push_back(completion);
+				}
+				for (auto parent = previousParents.rbegin(); parent != previousParents.rend(); parent++)
+					for (auto completion = addedCompletions.rbegin(); completion != addedCompletions.rend(); completion++)
+						resumedProgresses.push_back(MatchProgress::resumeParent(storage, **parent, *completion));
 				for (auto addedParent = addedParents.rbegin(); addedParent != addedParents.rend(); addedParent++) {
 					for (auto completion = canonicalParents->completedSubmatches.rbegin();
 						 completion != canonicalParents->completedSubmatches.rend(); completion++) {
@@ -163,6 +184,9 @@ Expression *cloneExpressionTreeImpl(
 	clone->inferredPointerStorage = nullptr;
 	clone->memoryFacts = {};
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;
+	clone->inferredCallerBody = preserveInferenceMetadata ? expression->inferredCallerBody : nullptr;
+	clone->staticLoopBodies = preserveInferenceMetadata ? expression->staticLoopBodies : std::nullopt;
+	clone->inferredArgumentReference = preserveInferenceMetadata ? expression->inferredArgumentReference : std::nullopt;
 	clone->sectionOutcome = preserveInferenceMetadata ? expression->sectionOutcome : CopyOnWrite<Expression::SectionOutcome>{};
 	clone->executionFallsThrough = preserveInferenceMetadata ? expression->executionFallsThrough : std::nullopt;
 	clone->sectionBodyReachable = !preserveInferenceMetadata || expression->sectionBodyReachable;
@@ -202,6 +226,11 @@ Expression *ExpressionStorage::create() {
 	return expressions.back().get();
 }
 
+void ParseContext::retainCapturedExpressionBody(Expression *expression) {
+	for (auto *body = expression->owningSectionBody; body; body = body->parentBody)
+		capturedExpressionBodies.try_emplace(body, body->shared_from_this());
+}
+
 std::shared_ptr<ExpressionStorage> ParseContext::createExpressionStorage() {
 	return std::make_shared<ExpressionStorage>(expressionAllocationStats);
 }
@@ -225,12 +254,15 @@ CodeLine *ParseContext::createCodeLine(
 	return result;
 }
 
-std::shared_ptr<InstantiatedSectionBody>
-ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata, InstantiatedSectionBody *parentBody) {
+std::shared_ptr<InstantiatedSectionBody> ParseContext::cloneSectionBody(
+	Section *section, bool preserveInferenceMetadata, InstantiatedSectionBody *parentBody,
+	std::shared_ptr<const VariableStorageScope> storageScope
+) {
 	if (!section)
 		return {};
 	auto body = std::make_shared<InstantiatedSectionBody>();
 	body->sourceSection = section;
+	body->storageScope = storageScope ? std::move(storageScope) : std::make_shared<VariableStorageScope>();
 	body->parentBody = parentBody;
 	body->expressions = createExpressionStorage();
 	body->lineExpressions.reserve(section->codeLines.size());
@@ -241,8 +273,21 @@ ParseContext::cloneSectionBody(Section *section, bool preserveInferenceMetadata,
 	}
 	body->childBodies.reserve(section->children.size());
 	for (Section *child : section->children)
-		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata, body.get()));
+		body->childBodies.push_back(cloneSectionBody(child, preserveInferenceMetadata, body.get(), body->storageScope));
 	return body;
+}
+
+std::shared_ptr<const VariableStorageScope> ParseContext::storageScopeForInvocation(
+	const Expression *expression, size_t iteration, std::shared_ptr<const VariableStorageScope> parentScope
+) {
+	requireCompilerInvariant(expression != nullptr, "storage invocation requires an expression");
+	if (!parentScope && expression->owningSectionBody)
+		parentScope = expression->owningSectionBody->storageScope;
+	const Expression *source = expression->reusableTemplateExpression ? expression->reusableTemplateExpression : expression;
+	auto [entry, inserted] = invocationStorageScopes.try_emplace({parentScope, source, iteration});
+	if (inserted)
+		entry->second = std::make_shared<VariableStorageScope>();
+	return entry->second;
 }
 
 ParseContext::~ParseContext() {

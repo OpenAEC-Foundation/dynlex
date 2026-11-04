@@ -1,11 +1,7 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 function consume {integer:value}:
     replacement:
         @intrinsic("discard", value)
 
-function consume {integer:value}:
-    execute:
-        @intrinsic("discard", value)
+to consume {integer:value}: @intrinsic("discard", value)

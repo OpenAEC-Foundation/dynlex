@@ -6,15 +6,12 @@
 # explicit owner in the calling operation and are freed before it returns.
 import lib/bim/curve2.dl
 
-function the cad length of {cad circle2:shape}:
-    execute:
-        return (the absolute value of shape's radius) * 6.283185307179586
-function the cad length of {cad arc2:shape}:
-    execute:
-        return (the absolute value of shape's radius) * (the absolute value of (the cad sweep of shape))
-function the cad length of {cad ellipse arc2:shape}:
-    execute:
-        return the cad length of (the cad curve2 of shape)
+to get the cad length of {cad circle2:shape}:
+    return (the absolute value of shape's radius) * 6.283185307179586
+to get the cad length of {cad arc2:shape}:
+    return (the absolute value of shape's radius) * (the absolute value of (the cad sweep of shape))
+to get the cad length of {cad ellipse arc2:shape}:
+    return the cad length of (the cad curve2 of shape)
 
 # The returned list is owned by its caller. Every entry is a segment boundary;
 # the last entry is the source SegmentLengths.total, including the empty case.
@@ -95,79 +92,74 @@ local function the cad integrated speed of {cad curve2:shape} from {a 64 bit flo
             set total to total + ((the item at 1 in pair) * (the cad length of (the cad tangent of shape at parameter)))
         return half * total
 
-function the cad length of {cad curve2:shape}:
-    execute:
-        if shape's kind = 0:
-            return the cad length of (shape's line)
-        if (shape's kind = 6) or (shape's kind = 7):
-            return 1.0 / 0.0
-        if shape's kind = 1:
-            return the cad length of (shape's circle)
-        if shape's kind = 2:
-            return the cad length of (shape's arc)
-        if shape's kind = 4:
-            set values to the cad cumulative lengths of shape
-            set total to the last item of values
-            free values
-            return total
-        return the cad length of shape from parameter 0.0 to parameter 1.0
-
-function the cad length of {cad curve2:shape} from parameter {a 64 bit floating-point number:first} to parameter {a 64 bit floating-point number:last}:
-    execute:
-        if last < first:
-            return the negative of (the cad length of shape from parameter last to parameter first)
-        if (shape is cad straight) or ((shape's kind = 1) or (shape's kind = 2)):
-            return (the cad length of shape) * (last - first)
-        if shape's kind = 4:
-            set values to the cad cumulative lengths of shape
-            set result to (the cad cumulative length in values at last) - (the cad cumulative length in values at first)
-            free values
-            return result
-        set span to last - first
-        if span <= 0.0:
-            return 0.0
-        set width to span / 32.0
-        set total to -0.0
-        loop panel from 0 to 32:
-            set lower to first + (width * (panel as a 64 bit floating-point number))
-            set total to total + (the cad integrated speed of shape from lower to (lower + width))
+to get the cad length of {cad curve2:shape}:
+    if shape's kind = 0:
+        return the cad length of (shape's line)
+    if shape's kind is one of 6 and 7:
+        return 1.0 / 0.0
+    if shape's kind = 1:
+        return the cad length of (shape's circle)
+    if shape's kind = 2:
+        return the cad length of (shape's arc)
+    if shape's kind = 4:
+        set values to the cad cumulative lengths of shape
+        set total to the last item of values
+        free values
         return total
+    return the cad length of shape from parameter 0.0 to parameter 1.0
 
-function the cad length of {cad curve2:shape} to parameter {a 64 bit floating-point number:parameter}:
-    execute:
-        return the cad length of shape from parameter 0.0 to parameter parameter
+to get the cad length of {cad curve2:shape} from parameter {a 64 bit floating-point number:first} to parameter {a 64 bit floating-point number:last}:
+    if last < first:
+        return the negative of (the cad length of shape from parameter last to parameter first)
+    if (shape is cad straight) or (shape's kind is one of 1 and 2):
+        return (the cad length of shape) * (last - first)
+    if shape's kind = 4:
+        set values to the cad cumulative lengths of shape
+        set result to (the cad cumulative length in values at last) - (the cad cumulative length in values at first)
+        free values
+        return result
+    set span to last - first
+    if span <= 0.0:
+        return 0.0
+    set width to span / 32.0
+    set total to -0.0
+    loop panel from 0 to 32:
+        set lower to first + (width * (panel as a 64 bit floating-point number))
+        set total to total + (the cad integrated speed of shape from lower to (lower + width))
+    return total
 
-function the cad [parameter] on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
-    execute:
-        set total to the cad length of shape
-        if (total != total) or (total <= 0.0):
-            return 0.0
-        if distance <= 0.0:
-            return 0.0
-        if ((total - total) = 0.0) and (distance >= total):
-            return 1.0
-        if (shape's kind = 0) or ((shape's kind = 1) or (shape's kind = 2)):
-            return distance / total
-        if (shape's kind = 6) or (shape's kind = 7):
-            set step to the cad length of (the cad tangent of shape at 0.0)
-            if step > 0.0:
-                return distance / step
-            return 0.0
-        if shape's kind = 4:
-            set values to the cad cumulative lengths of shape
-            set parameter to the cad cumulative parameter in values at distance distance
-            free values
-            return parameter
-        set low to 0.0
-        set high to 1.0
-        loop iteration from 0 to 60:
-            set middle to 0.5 * (low + high)
-            if (the cad length of shape from parameter 0.0 to parameter middle) < distance:
-                set low to middle
-            else:
-                set high to middle
-        return 0.5 * (low + high)
+to get the cad length of {cad curve2:shape} to parameter {a 64 bit floating-point number:parameter}:
+    return the cad length of shape from parameter 0.0 to parameter parameter
 
-function the cad point on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
-    execute:
-        return the cad point on shape at (the cad parameter on shape at distance distance)
+to get the cad [parameter] on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
+    set total to the cad length of shape
+    if (total != total) or (total <= 0.0):
+        return 0.0
+    if distance <= 0.0:
+        return 0.0
+    if ((total - total) = 0.0) and (distance >= total):
+        return 1.0
+    if shape's kind is one of 0, 1 and 2:
+        return distance / total
+    if shape's kind is one of 6 and 7:
+        set step to the cad length of (the cad tangent of shape at 0.0)
+        if step > 0.0:
+            return distance / step
+        return 0.0
+    if shape's kind = 4:
+        set values to the cad cumulative lengths of shape
+        set parameter to the cad cumulative parameter in values at distance distance
+        free values
+        return parameter
+    set low to 0.0
+    set high to 1.0
+    loop iteration from 0 to 60:
+        set middle to 0.5 * (low + high)
+        if (the cad length of shape from parameter 0.0 to parameter middle) < distance:
+            set low to middle
+        else:
+            set high to middle
+    return 0.5 * (low + high)
+
+to get the cad point on {cad curve2:shape} at distance {a 64 bit floating-point number:distance}:
+    return the cad point on shape at (the cad parameter on shape at distance distance)

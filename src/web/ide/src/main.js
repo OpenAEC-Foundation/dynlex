@@ -10,11 +10,10 @@ const THEME_STORAGE_KEY = "dynlex-web-theme";
 
 const defaultSource = `import lib/std.dl
 
-function value squared:
-    execute:
-        return value * value
+to get value squared:
+    return value * value
 
-print 8 squared as a line
+print line 8 squared
 `;
 
 const queryParams = new URLSearchParams(window.location.search);

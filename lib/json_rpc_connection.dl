@@ -38,9 +38,9 @@ class:
         error message as a string
 
 {JSON-RPC connection result:outcome} succeeded means: outcome's success
-{JSON-RPC connection result:outcome} failed means: the inverse of outcome's success
+{JSON-RPC connection result:outcome} failed means: not outcome's success
 {JSON-RPC close result:outcome} succeeded means: outcome's success
-{JSON-RPC close result:outcome} failed means: the inverse of outcome's success
+{JSON-RPC close result:outcome} failed means: not outcome's success
 [the|] JSON-RPC open state means: 0
 [the|] JSON-RPC peer closed state means: 1
 [the|] JSON-RPC broken state means: 2
@@ -297,7 +297,7 @@ local function the result of writing all {string:contents} to {a pointer to a JS
             if operation failed:
                 set message to operation's error message
                 if written > 0:
-                    set message to ((the string form of "JSON-RPC frame was partially written: ") + message)
+                    set message to formatted "JSON-RPC frame was partially written: {message}"
                 return the result of breaking connection with status the JSON-RPC I/O error status reporting message
             if count = 0:
                 return the result of breaking connection with status the JSON-RPC I/O error status reporting "JSON-RPC write made no progress"
@@ -314,7 +314,7 @@ to get the result of sending JSON-RPC value {a pointer to a JSON value:envelope}
         return a failed JSON-RPC operation with status the JSON-RPC limit exceeded status reporting "JSON-RPC output payload exceeds its configured limit"
     set header to the string form of "Content-Length: "
     add the string form of the length of payload to header
-    set frame to header + the string form of "\r\n\r\n"
+    set frame to formatted "{header}\r\n\r\n"
     add payload to frame
     return the result of writing all frame to connection
 
@@ -374,7 +374,7 @@ to get the result of closing {a pointer to a JSON-RPC connection:state}:
     set succeeded to true
     set status to the JSON-RPC success status
     set detail to an empty JSON-RPC error
-    if the inverse of state's input closure:
+    if not state's input closure:
         set input to the result of closing the input of state
         if input failed:
             set succeeded to false
@@ -416,7 +416,7 @@ to get the result of closing {a pointer to a JSON-RPC connection:state}:
         set status to error's status
         set detail to error's error message
     if waiting succeeded and waiting reports completion:
-        if the inverse of forced and waiting's exit code != (0 as a 64 bit integer):
+        if not forced and waiting's exit code != (0 as a 64 bit integer):
             set succeeded to false
             set status to the JSON-RPC child exit error status
             set detail to the string form of "JSON-RPC child exited unsuccessfully"

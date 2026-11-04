@@ -8,32 +8,39 @@ static std::vector<CallableFunctionMatch> findDefinitionPathsBySignature(
 	}
 
 	auto elements = getPatternElements(converted);
-	PatternTreeNode *node = context.patternTrees[(int)sectionType];
-	std::vector<PatternTreeNode *> nodesPassed;
-	nodesPassed.reserve(elements.size());
+	std::vector<std::vector<PatternTreeNode *>> paths(1, {context.patternTrees[(int)sectionType]});
 	for (const PatternElement &element : elements) {
-		if (!node)
-			return {};
-		if (element.type == PatternElement::Type::Variable) {
-			node = node->argumentChild;
-		} else {
-			auto child = node->literalChildren.find(element.text);
-			node = child != node->literalChildren.end() ? child->second : nullptr;
+		std::vector<std::vector<PatternTreeNode *>> next;
+		for (const auto &path : paths) {
+			auto append = [&](PatternTreeNode *node) {
+				if (!node)
+					return;
+				auto extended = path;
+				extended.push_back(node);
+				next.push_back(std::move(extended));
+			};
+			PatternTreeNode *node = path.back();
+			if (element.type == PatternElement::Variable) {
+				append(node->argumentChild);
+				append(node->argumentPackChild);
+			} else if (auto child = node->literalChildren.find(element.text); child != node->literalChildren.end()) {
+				append(child->second);
+			}
 		}
-		if (node)
-			nodesPassed.push_back(node);
+		paths = std::move(next);
 	}
-
 	std::vector<CallableFunctionMatch> matches;
-	if (!node)
-		return matches;
 	requireCompilerInvariant(sourceFile != nullptr, "signature lookup requires a source file");
-	for (PatternDefinition *definition : node->matchingDefinitions) {
-		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
-		if (!isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
-			continue;
-		for (size_t pathIndex : matchingPatternPathIndices(nodesPassed, definition))
-			matches.push_back({definition, pathIndex});
+	for (auto &path : paths) {
+		PatternTreeNode *node = path.back();
+		path.erase(path.begin());
+		for (PatternDefinition *definition : node->matchingDefinitions) {
+			requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
+			if (!isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
+				continue;
+			for (size_t pathIndex : matchingPatternPathIndices(path, definition))
+				matches.push_back({definition, pathIndex});
+		}
 	}
 	return matches;
 }

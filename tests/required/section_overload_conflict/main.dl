@@ -1,0 +1,16 @@
+an integer means: @intrinsic("type", "integer")
+
+flex section combine {an integer:left} with right:
+    replacement:
+        @intrinsic("discard", left)
+        @intrinsic("discard", right)
+        @intrinsic("execute body")
+
+flex section combine left with {an integer:right}:
+    replacement:
+        @intrinsic("discard", left)
+        @intrinsic("discard", right)
+        @intrinsic("execute body")
+
+combine 1 with 2:
+    @intrinsic("store", result, 3)

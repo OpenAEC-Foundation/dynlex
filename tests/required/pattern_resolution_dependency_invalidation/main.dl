@@ -1,15 +1,12 @@
 import lib/std.dl
 
-function the result after stage one for value:
-    execute:
-        return the result after stage two for value
+to get the result after stage one for value:
+    return the result after stage two for value
 
-function the result after stage two for value:
-    execute:
-        return the result after stage three for value
+to get the result after stage two for value:
+    return the result after stage three for value
 
-function the result after stage three for value:
-    execute:
-        return value + 1
+to get the result after stage three for value:
+    return value + 1
 
-print the result after stage one for 1 as a line
+print line the result after stage one for 1

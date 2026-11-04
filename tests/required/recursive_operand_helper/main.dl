@@ -6,15 +6,13 @@ section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the negative of value:
-    execute:
-        finish with @intrinsic("negate", value)
+to get the negative of value:
+    finish with @intrinsic("negate", value)
 
-function the alternating result at depth:
-    execute:
-        if @intrinsic("greater than", depth, 0):
-            finish with the negative of (the alternating result at @intrinsic("subtract", depth, 1))
-        finish with 7.0
+to get the alternating result at depth:
+    if @intrinsic("greater than", depth, 0):
+        finish with the negative of (the alternating result at @intrinsic("subtract", depth, 1))
+    finish with 7.0
 
 if @intrinsic("not equal", the alternating result at 3, @intrinsic("negate", 7.0)):
     @intrinsic("return", 1)

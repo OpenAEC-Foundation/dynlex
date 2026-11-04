@@ -6,17 +6,13 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function print number as a line:
+function print line number:
     replacement:
         @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", number))
 
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
+left + right means: @intrinsic("add", left, right)
 
 class:
     patterns:
@@ -44,8 +40,8 @@ function {a point:value}'s y:
 set location to @intrinsic("construct", a point, 10)
 set mouse to @intrinsic("construct", a cursor, 20, 30)
 
-print location's x as a line
-print mouse's x as a line
-print mouse's y as a line
-print location's x + mouse's x as a line
-print location's y + mouse's y as a line
+print line location's x
+print line mouse's x
+print line mouse's y
+print line location's x + mouse's x
+print line location's y + mouse's y

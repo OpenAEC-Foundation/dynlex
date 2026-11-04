@@ -1,0 +1,35 @@
+import lib/std.dl
+
+flex section decide {boolean:condition}:
+    replacement:
+        @intrinsic("if", condition)
+
+flex section decide {integer:count}:
+    replacement:
+        @intrinsic("loop while", count > 0)
+
+flex section otherwise when {boolean:condition}:
+    replacement:
+        @intrinsic("else if", condition)
+
+flex section otherwise when {integer:mode}:
+    replacement:
+        @intrinsic("else if", mode = 7)
+
+flex section fallback:
+    replacement:
+        @intrinsic("else")
+
+decide false:
+    print line "unselected"
+otherwise when 7:
+    print line "integer alternative"
+fallback:
+    print line "unselected fallback"
+
+decide false:
+    print line "unselected"
+otherwise when true:
+    print line "boolean alternative"
+fallback:
+    print line "unselected fallback"

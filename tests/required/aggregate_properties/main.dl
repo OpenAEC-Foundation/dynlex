@@ -15,8 +15,4 @@ increase the x coordinate of location by 4.0
 decrease the y coordinate of location by 1.0
 set the blue channel of pigment to 0.8
 
-print location's x as a line
-print location's y as a line
-print location's z as a line
-print pigment's red as a line
-print pigment's blue as a line
+print lines location's x, location's y, location's z, pigment's red and pigment's blue

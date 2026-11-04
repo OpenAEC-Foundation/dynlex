@@ -6,30 +6,23 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
+[a|] byte means: @intrinsic("type", "int", 8)
 
-function value as destination:
-    replacement:
-        @intrinsic("cast", value, destination)
+value as destination means: @intrinsic("cast", value, destination)
 
-function left + right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left + right:
+    return @intrinsic("add", left, right)
 
-function left > right:
-    execute:
-        return @intrinsic("greater than", left, right)
+to get left > right:
+    return @intrinsic("greater than", left, right)
 
 flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function widened value:
-    execute:
-        if value > 0:
-            return value + 32
-        return value
+to get widened value:
+    if value > 0:
+        return value + 32
+    return value
 
 ignore widened (65 as a byte)

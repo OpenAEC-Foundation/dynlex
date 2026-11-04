@@ -18,10 +18,8 @@ class:
     members:
         value as a tracked value
 
-set previous to 0
-set current to 0
+set previous and current to 0
 set container to @intrinsic("construct", a managed container, @intrinsic("construct", a tracked value, the address of previous))
 set address to the address of the value of container
 @intrinsic("store at", address, @intrinsic("construct", a tracked value, the address of current))
-print previous as a line
-print current as a line
+print lines previous and current

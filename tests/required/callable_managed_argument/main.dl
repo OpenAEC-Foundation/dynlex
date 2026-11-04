@@ -15,10 +15,9 @@ class:
         if count = 0:
             deallocate the references of @intrinsic("lifecycle value")
 
-function a new callable tracked value numbered number:
-    execute:
-        set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
-        return @intrinsic("construct", a callable tracked value, references, number)
+to get a new callable tracked value numbered number:
+    set references to @intrinsic("call", "libc", "calloc", a pointer to an integer, 1 as a word sized integer, the size of an integer as a word sized integer)
+    return @intrinsic("construct", a callable tracked value, references, number)
 
 exposed function replace {callable tracked value:value}:
     execute:

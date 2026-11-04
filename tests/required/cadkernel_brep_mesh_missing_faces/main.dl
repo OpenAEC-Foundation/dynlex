@@ -2,11 +2,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh missing faces {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh missing faces {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set solidResult to the cad cuboid at the cad zero vector3 with size (a cad vector3 with x 2.0, y 3.0 and z 4.0)
 check mesh missing faces solidResult's valid named "box"
@@ -28,4 +27,4 @@ check mesh missing faces ((cad body mesh meshValue is complete) = false) named "
 
 free cad body mesh meshValue
 free cad body wireframe wireValue
-print "cadkernel brep mesh missing faces: PASS" as a line
+print line "cadkernel brep mesh missing faces: PASS"

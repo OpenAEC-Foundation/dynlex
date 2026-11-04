@@ -1,12 +1,11 @@
 import lib/font_bitmap.dl
 
-function [show mask from] {an array:bytes} [width] {integer:width} [height] {integer:height} [pitch] {integer:pitch} [mode] {integer:mode} [levels] {integer:levels}:
-    execute:
-        set mask to the font coverage bytes from ((the address of bytes) as a pointer) width width height height pitch pitch mode mode gray levels levels
-        set index to 0
-        loop while index < mask's length:
-            print (((the character at index in mask) as an integer) bitwise and 255) as a line
-            increment index
+to [show mask from] {an array:bytes} [width] {integer:width} [height] {integer:height} [pitch] {integer:pitch} [mode] {integer:mode} [levels] {integer:levels}:
+    set mask to the font coverage bytes from ((the address of bytes) as a pointer) width width height height pitch pitch mode mode gray levels levels
+    set index to 0
+    loop while index < mask's length:
+        print line (((the character at index in mask) as an integer) bitwise and 255)
+        increment index
 
 show mask from [160 as a byte, 64 as a byte] width 4 height 2 pitch 1 mode 1 levels 2
 show mask from [27 as a byte] width 4 height 1 pitch 1 mode 3 levels 4

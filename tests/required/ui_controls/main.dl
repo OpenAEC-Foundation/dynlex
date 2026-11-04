@@ -28,13 +28,13 @@ set instance to an instance of control lab with state (the address of state)
 show page "menu" in the address of instance
 set toggle to the control labeled "Grid" in the address of instance
 activate toggle belonging to control lab in the address of instance
-print (the "Grid" switch is on in the address of instance) as a line
+print line (the "Grid" switch is on in the address of instance)
 set choice to the control labeled "Pace" in the address of instance
 activate (the UI child at 1 in choice) belonging to choice in the address of instance
-print (the value of "Pace" in the address of instance) as a line
-print state's changed as a line
+print line (the value of "Pace" in the address of instance)
+print line state's changed
 show page "settings" in the address of instance
-print instance's page's text as a line
+print line instance's page's text
 close the address of instance
 
 set {other state} to a new control state

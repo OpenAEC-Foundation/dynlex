@@ -1,0 +1,11 @@
+import lib/std.dl
+
+to get touched value:
+    print line value
+    return value
+
+# These calls provide unknown conditions during inference.
+set yes to @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 1)
+set no to @intrinsic("equal", @intrinsic("call", "libc", "abs", an integer, -1), 2)
+print lines (no and touched true), (yes or touched false), (yes and touched true) and (no or touched false)
+print lines (false and touched true), (true or touched false), ((touched true) and false) and ((touched false) or true)

@@ -2,6 +2,7 @@
 
 import lib/string.dl
 import lib/subject.dl
+import lib/comparison.dl
 
 # --- Basic patterns ---
 
@@ -18,6 +19,13 @@ a new {type:kind} means: @intrinsic("construct", kind)
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
+        set the subject to variable
+function set {arguments:variables} to value:
+    replacement:
+        @intrinsic("store", {assigned}, value)
+        for each {variable} in variables:
+            set variable to assigned
+        set the subject to assigned
 function ignore value:
     replacement:
         @intrinsic("discard", value)
@@ -27,6 +35,8 @@ flex function set the subject to value:
 # --- Primitive types ---
 
 a value means: @intrinsic("type", "any")
+[an|] argument pack means: @intrinsic("type", "arguments")
+the length of {an argument pack:values} means: @intrinsic("type extent", values, 0)
 fixed means: @intrinsic("fix", a value)
 fixed value means: @intrinsic("fix", value)
 # Numbers have three independent properties: kind (integer or floating-point),
@@ -107,17 +117,12 @@ the function named {fixed C string:name} means: @intrinsic("function", name)
 
 the address of variable means: @intrinsic("address of", variable)
 the value at address means: @intrinsic("dereference", address)
-to abort the program:
-    @intrinsic("call", "libc", "abort", nothing)
-flex function:
-    patterns:
-        deallocate {a pointer to a value:address}
+to abort the program: @intrinsic("call", "libc", "abort", nothing)
+flex function deallocate {a pointer to a value:address}:
     replacement:
         @intrinsic("check deallocation", address)
         @intrinsic("call", "libc", "free", nothing, address)
-flex function:
-    patterns:
-        deallocate {a pointer to a pointer to a value:address}
+flex function deallocate {a pointer to a pointer to a value:address}:
     replacement:
         @intrinsic("check deallocation", address)
         @intrinsic("call", "libc", "free", nothing, address)
@@ -133,6 +138,7 @@ flex function destroy the value at address:
 the element at {index} in {aggregate} means: @intrinsic("extract element", aggregate, index)
 the aggregate formed by replacing element {index} in {aggregate} with {value} means: @intrinsic("insert element", aggregate, index, value)
 the item at index in address means: @intrinsic("dereference", address + index)
+the item at index in {an argument pack:values} means: @intrinsic("extract element", values, index)
 
 # --- Dynamic allocations ---
 
@@ -192,65 +198,65 @@ to get the checked allocation from {pointer:allocation} resized to {integer:coun
 # --- Arithmetic (with precedence) ---
 
 # Precedence chain (lowest to highest):
-#   or < and < the inverse of < | < ^ < & < comparisons < <<,>> < +,- < *,remainder < negative, bitwise inverse
+#   or < and < not < | < ^ < & < comparisons < <<,>> < +,- < *,modulo < negative, bitwise inverse
 
 function left[ |]|[ |]right:
-    before: $ or $, $ and $, the inverse of $
+    before: $ or $, $ and $, not $
     execute:
         return @intrinsic("bitwise or", left, right)
 
 function left bitwise or right:
-    before: $ or $, $ and $, the inverse of $
+    before: $ or $, $ and $, not $
     execute:
         return @intrinsic("bitwise or", left, right)
 
 function left[ |]^[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $
+    before: $ or $, $ and $, not $, $ | $
     execute:
         return @intrinsic("bitwise xor", left, right)
 
 function left bitwise xor right:
-    before: $ or $, $ and $, the inverse of $, $ | $
+    before: $ or $, $ and $, not $, $ | $
     execute:
         return @intrinsic("bitwise xor", left, right)
 
 function left[ |]&[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $
     execute:
         return @intrinsic("bitwise and", left, right)
 
 function left bitwise and right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $
     execute:
         return @intrinsic("bitwise and", left, right)
 
 function left[ |]<<[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift left", left, right)
 
 function value shifted left by distance:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift left", value, distance)
 
 function left[ |]>>[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift right", left, right)
 
 function value shifted right by distance:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $
     execute:
         return @intrinsic("shift right", value, distance)
 
 function left[ |]+[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("add", left, right)
 
 function left[ |]-[ |]right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         return @intrinsic("subtract", left, right)
 
@@ -265,7 +271,7 @@ function left[ |]/[ |]right:
         return @intrinsic("divide", left, right)
 
 function {an array of numbers:left}[ |]+[ |]{an array of numbers as long as left:right}:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         set result to left as (
             (the arithmetic type promoted from (the element type of left) and (the element type of right))
@@ -276,7 +282,7 @@ function {an array of numbers:left}[ |]+[ |]{an array of numbers as long as left
         return result
 
 function {an array of numbers:left}[ |]-[ |]{an array of numbers as long as left:right}:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $, $ < $, $ > $, $ = $, $ != $, $ <= $, $ >= $, $ << $, $ >> $
     execute:
         set result to left as (
             (the arithmetic type promoted from (the element type of left) and (the element type of right))
@@ -308,23 +314,28 @@ function {an array of numbers:left}[ |]/[ |]{a number:divisor}:
             store ((the item at position in left) / divisor) at result + position
         return result
 
-function the remainder of left divided by right:
+function left [mod|modulo] right:
     before: $ + $, $ - $
     execute:
         return @intrinsic("modulo", left, right)
 
+function left[ |]%[ |]right:
+    before: $ + $, $ - $
+    replacement:
+        left mod right
+
 function [the negative of |the opposite of |-]value:
-    before: $ * $, $ / $, the remainder of $ divided by $
+    before: $ * $, $ / $, $ mod $, $ % $
     execute:
         return @intrinsic("negate", value)
 
 function ~value:
-    before: $ * $, $ / $, the remainder of $ divided by $
+    before: $ * $, $ / $, $ mod $, $ % $
     execute:
         return @intrinsic("bitwise not", value)
 
 function the bitwise inverse of value:
-    before: $ * $, $ / $, the remainder of $ divided by $
+    before: $ * $, $ / $, $ mod $, $ % $
     execute:
         return @intrinsic("bitwise not", value)
 
@@ -337,6 +348,14 @@ function divide value by divisor:
 function add value to target:
 	replacement:
 		set target to target + value
+function add value:
+    replacement:
+        set the subject to it + value
+function add {arguments:values} to target:
+    replacement:
+        @intrinsic("store", {destination}, @intrinsic("address of", target))
+        for each {value} in values:
+            add value to @intrinsic("dereference", destination)
 function subtract value from target:
 	replacement:
 		set target to target - value
@@ -418,53 +437,53 @@ function the product of left and right:
 # --- Comparison ---
 
 function left < right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than", left, right)
 
 function left > right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than", left, right)
 
 function left = right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left is right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("equal", left, right)
 
 function left [!=|is not] right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     replacement:
-        the inverse of left = right
+        not left = right
 
 function left [is less than or equal to|<=] right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("less than or equal", left, right)
 
 function left [is greater than or equal to|>=] right:
-    before: $ or $, $ and $, the inverse of $, $ | $, $ ^ $, $ & $
+    before: $ or $, $ and $, not $, $ | $, $ ^ $, $ & $
     execute:
         return @intrinsic("greater than or equal", left, right)
 
 # --- Logic ---
 
-function the inverse of value:
+function not value:
     before: $ or $, $ and $
     replacement:
         @intrinsic("not", value)
 
 function {boolean:left} and {boolean:right}:
     before: $ or $
-    execute:
-        return @intrinsic("and", left, right)
+    replacement:
+        @intrinsic("and", left, right)
 
-flex function {nothing:left} and {nothing:right}:
+flex function {nothing:left}[ and|.] {nothing:right}:
     before: $ or $
     replacement:
         @intrinsic("discard", left)
@@ -472,8 +491,55 @@ flex function {nothing:left} and {nothing:right}:
 
 function left or right:
     before: default
+    replacement:
+        @intrinsic("or", left, right)
+
+function value [is |]between low and high:
+    before: $ or $, $ and $
     execute:
-        return @intrinsic("or", left, right)
+        return low < value < high
+
+function value from low until high:
+    before: $ or $, $ and $
+    execute:
+        return low <= value < high
+
+function value after low through high:
+    before: $ or $, $ and $
+    execute:
+        return low < value <= high
+
+function value from low through high:
+    before: $ or $, $ and $
+    execute:
+        return low <= value <= high
+
+function value is one of options:
+    before: $ or $, $ and $
+    execute:
+        for each option in options:
+            if value = option:
+                return true
+        return false
+
+function value is one of [{arguments:options}|{an argument pack:options}]:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("store", {tested}, value)
+        @intrinsic("store", {matched}, false)
+        for each {option} in options:
+            @intrinsic("store", matched, matched or tested = option)
+        {matched}
+
+function value is not one of options:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("not", value is one of options)
+
+function value is not one of [{arguments:options}|{an argument pack:options}]:
+    before: $ or $, $ and $
+    replacement:
+        @intrinsic("not", value is one of options)
 
 # --- Control flow ---
 
@@ -489,38 +555,45 @@ flex section [loop |]while condition:
 
 flex section loop count [time|times]:
     replacement:
-        set iteration to 0
+        @intrinsic("store", iteration, 0)
         loop while iteration < count:
             execute the body
-            increment iteration
+            @intrinsic("store", iteration, iteration + 1)
 
 flex section loop index from start to end:
     replacement:
-        set index to start
+        @intrinsic("store", index, start)
         loop while index < end:
             execute the body
-            increment index
+            @intrinsic("store", index, index + 1)
+
+flex section for each item [at index|] in values:
+    replacement:
+        @intrinsic("store", {collection}, values)
+        loop index from 0 to the length of collection:
+            @intrinsic("store", item, the item at index in collection)
+            execute the body
 
 flex section loop index from start through end:
     replacement:
-        set index to start
+        @intrinsic("store", index, start)
         loop while index <= end:
             execute the body
-            increment index
+            @intrinsic("store", index, index + 1)
 
 flex section loop index from start down to end:
     replacement:
-        set index to start
+        @intrinsic("store", index, start)
         loop while index > end:
             execute the body
-            decrement index
+            @intrinsic("store", index, index - 1)
 
 flex section loop index from start down through end:
     replacement:
-        set index to start
+        @intrinsic("store", index, start)
         loop while index >= end:
             execute the body
-            decrement index
+            @intrinsic("store", index, index - 1)
 
 flex section if condition:
     replacement:

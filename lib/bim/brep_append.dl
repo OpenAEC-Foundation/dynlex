@@ -145,167 +145,151 @@ local function cad append source {cad body:body} has linked keys:
                 set referencesValid to false
         return referencesValid
 
-function append cad body {cad body:source} into {cad body:target}:
-    execute:
-        if source's vertices = target's vertices:
-            return false
-        if (cad append source source has linked keys) = false:
-            return false
-        set vertexMap to an empty cad append mapping for source's vertices default (a new cad vertex key)
-        set curveMap to an empty cad append mapping for source's curves default (a new cad curve key)
-        set surfaceMap to an empty cad append mapping for source's surfaces default (a new cad surface key)
-        set lumpMap to an empty cad append mapping for source's lumps default (a new cad lump key)
-        set shellMap to an empty cad append mapping for source's shells default (a new cad shell key)
-        set faceMap to an empty cad append mapping for source's faces default (a new cad face key)
-        set loopMap to an empty cad append mapping for source's loops default (a new cad loop key)
-        set edgeMap to an empty cad append mapping for source's edges default (a new cad edge key)
-        set coedgeMap to an empty cad append mapping for source's coedges default (a new cad coedge key)
+to get append cad body {cad body:source} into {cad body:target}:
+    if source's vertices = target's vertices:
+        return false
+    if (cad append source source has linked keys) = false:
+        return false
+    set vertexMap to an empty cad append mapping for source's vertices default (a new cad vertex key)
+    set curveMap to an empty cad append mapping for source's curves default (a new cad curve key)
+    set surfaceMap to an empty cad append mapping for source's surfaces default (a new cad surface key)
+    set lumpMap to an empty cad append mapping for source's lumps default (a new cad lump key)
+    set shellMap to an empty cad append mapping for source's shells default (a new cad shell key)
+    set faceMap to an empty cad append mapping for source's faces default (a new cad face key)
+    set loopMap to an empty cad append mapping for source's loops default (a new cad loop key)
+    set edgeMap to an empty cad append mapping for source's edges default (a new cad edge key)
+    set coedgeMap to an empty cad append mapping for source's coedges default (a new cad coedge key)
 
-        set vertexKeys to the cad keys of (source's vertices)
-        loop vertexIndex from 0 to the length of vertexKeys:
-            set vertexRaw to the item at vertexIndex in vertexKeys
-            set vertexOld to @intrinsic("construct", a cad vertex key, vertexRaw's index, vertexRaw's generation)
-            set vertexNode to the cad node pointer for vertexOld in source
-            set vertexNew to the cad body key after inserting (a cad vertex at (vertexNode's point) with provenance (vertexNode's provenance)) into target
-            put vertexNew for vertexOld in vertexMap
-        free vertexKeys
+    set vertexKeys to the cad keys of (source's vertices)
+    for each vertexRaw in vertexKeys:
+        set vertexOld to @intrinsic("construct", a cad vertex key, vertexRaw's index, vertexRaw's generation)
+        set vertexNode to the cad node pointer for vertexOld in source
+        set vertexNew to the cad body key after inserting (a cad vertex at (vertexNode's point) with provenance (vertexNode's provenance)) into target
+        put vertexNew for vertexOld in vertexMap
+    free vertexKeys
 
-        set curveKeys to the cad keys of (source's curves)
-        loop curveIndex from 0 to the length of curveKeys:
-            set curveRaw to the item at curveIndex in curveKeys
-            set curveOld to @intrinsic("construct", a cad curve key, curveRaw's index, curveRaw's generation)
-            set curveNode to the cad node pointer for curveOld in source
-            set curveNew to the cad body key after inserting (the cad clone of @intrinsic("dereference", curveNode)) into target
-            put curveNew for curveOld in curveMap
-        free curveKeys
+    set curveKeys to the cad keys of (source's curves)
+    for each curveRaw in curveKeys:
+        set curveOld to @intrinsic("construct", a cad curve key, curveRaw's index, curveRaw's generation)
+        set curveNode to the cad node pointer for curveOld in source
+        set curveNew to the cad body key after inserting (the cad clone of @intrinsic("dereference", curveNode)) into target
+        put curveNew for curveOld in curveMap
+    free curveKeys
 
-        set surfaceKeys to the cad keys of (source's surfaces)
-        loop surfaceIndex from 0 to the length of surfaceKeys:
-            set surfaceRaw to the item at surfaceIndex in surfaceKeys
-            set surfaceOld to @intrinsic("construct", a cad surface key, surfaceRaw's index, surfaceRaw's generation)
-            set surfaceNode to the cad node pointer for surfaceOld in source
-            set surfaceNew to the cad body key after inserting (the cad clone of @intrinsic("dereference", surfaceNode)) into target
-            put surfaceNew for surfaceOld in surfaceMap
-        free surfaceKeys
+    set surfaceKeys to the cad keys of (source's surfaces)
+    for each surfaceRaw in surfaceKeys:
+        set surfaceOld to @intrinsic("construct", a cad surface key, surfaceRaw's index, surfaceRaw's generation)
+        set surfaceNode to the cad node pointer for surfaceOld in source
+        set surfaceNew to the cad body key after inserting (the cad clone of @intrinsic("dereference", surfaceNode)) into target
+        put surfaceNew for surfaceOld in surfaceMap
+    free surfaceKeys
 
-        set lumpKeys to the cad keys of (source's lumps)
-        loop lumpIndex from 0 to the length of lumpKeys:
-            set lumpRaw to the item at lumpIndex in lumpKeys
-            set lumpOld to @intrinsic("construct", a cad lump key, lumpRaw's index, lumpRaw's generation)
-            set lumpNode to the cad node pointer for lumpOld in source
-            set lumpNew to the cad body key after inserting (a cad lump with provenance (lumpNode's provenance)) into target
-            put lumpNew for lumpOld in lumpMap
-        free lumpKeys
+    set lumpKeys to the cad keys of (source's lumps)
+    for each lumpRawItem in lumpKeys:
+        set lumpOld to @intrinsic("construct", a cad lump key, lumpRawItem's index, lumpRawItem's generation)
+        set lumpNode to the cad node pointer for lumpOld in source
+        set lumpNew to the cad body key after inserting (a cad lump with provenance (lumpNode's provenance)) into target
+        put lumpNew for lumpOld in lumpMap
+    free lumpKeys
 
-        set shellKeys to the cad keys of (source's shells)
-        loop shellIndex from 0 to the length of shellKeys:
-            set shellRaw to the item at shellIndex in shellKeys
-            set shellOld to @intrinsic("construct", a cad shell key, shellRaw's index, shellRaw's generation)
-            set shellNode to the cad node pointer for shellOld in source
-            set shellNew to the cad body key after inserting (a cad shell owned by (the value for (shellNode's owner) in lumpMap) with provenance (shellNode's provenance)) into target
-            put shellNew for shellOld in shellMap
-        free shellKeys
+    set shellKeys to the cad keys of (source's shells)
+    for each shellRawItem in shellKeys:
+        set shellOld to @intrinsic("construct", a cad shell key, shellRawItem's index, shellRawItem's generation)
+        set shellNode to the cad node pointer for shellOld in source
+        set shellNew to the cad body key after inserting (a cad shell owned by (the value for (shellNode's owner) in lumpMap) with provenance (shellNode's provenance)) into target
+        put shellNew for shellOld in shellMap
+    free shellKeys
 
-        set faceKeys to the cad keys of (source's faces)
-        loop faceIndex from 0 to the length of faceKeys:
-            set faceRaw to the item at faceIndex in faceKeys
-            set faceOld to @intrinsic("construct", a cad face key, faceRaw's index, faceRaw's generation)
-            set faceNode to the cad node pointer for faceOld in source
-            set faceNew to the cad body key after inserting (a cad face on (the value for (faceNode's surface) in surfaceMap) forward (faceNode's forward) owned by (the value for (faceNode's owner) in shellMap) with provenance (faceNode's provenance)) into target
-            put faceNew for faceOld in faceMap
-        free faceKeys
+    set faceKeys to the cad keys of (source's faces)
+    for each faceRawItem in faceKeys:
+        set faceOld to @intrinsic("construct", a cad face key, faceRawItem's index, faceRawItem's generation)
+        set faceNode to the cad node pointer for faceOld in source
+        set faceNew to the cad body key after inserting (a cad face on (the value for (faceNode's surface) in surfaceMap) forward (faceNode's forward) owned by (the value for (faceNode's owner) in shellMap) with provenance (faceNode's provenance)) into target
+        put faceNew for faceOld in faceMap
+    free faceKeys
 
-        set loopKeys to the cad keys of (source's loops)
-        loop loopIndex from 0 to the length of loopKeys:
-            set loopRaw to the item at loopIndex in loopKeys
-            set loopOld to @intrinsic("construct", a cad loop key, loopRaw's index, loopRaw's generation)
-            set loopNode to the cad node pointer for loopOld in source
-            set loopNew to the cad body key after inserting (a cad loop owned by (the value for (loopNode's owner) in faceMap) with provenance (loopNode's provenance)) into target
-            put loopNew for loopOld in loopMap
-        free loopKeys
+    set loopKeys to the cad keys of (source's loops)
+    for each loopRawItem in loopKeys:
+        set loopOld to @intrinsic("construct", a cad loop key, loopRawItem's index, loopRawItem's generation)
+        set loopNode to the cad node pointer for loopOld in source
+        set loopNew to the cad body key after inserting (a cad loop owned by (the value for (loopNode's owner) in faceMap) with provenance (loopNode's provenance)) into target
+        put loopNew for loopOld in loopMap
+    free loopKeys
 
-        set edgeKeys to the cad keys of (source's edges)
-        loop edgeIndex from 0 to the length of edgeKeys:
-            set edgeRaw to the item at edgeIndex in edgeKeys
-            set edgeOld to @intrinsic("construct", a cad edge key, edgeRaw's index, edgeRaw's generation)
-            set edgeNode to the cad node pointer for edgeOld in source
-            set edgeNew to the cad body key after inserting (a cad edge on (the value for (edgeNode's curve) in curveMap) from (edgeNode's startParameter) to (edgeNode's endParameter) between (the value for (edgeNode's start) in vertexMap) and (the value for (edgeNode's end) in vertexMap) with provenance (edgeNode's provenance)) into target
-            put edgeNew for edgeOld in edgeMap
-        free edgeKeys
+    set edgeKeys to the cad keys of (source's edges)
+    for each edgeRawItem in edgeKeys:
+        set edgeOld to @intrinsic("construct", a cad edge key, edgeRawItem's index, edgeRawItem's generation)
+        set edgeNode to the cad node pointer for edgeOld in source
+        set edgeNew to the cad body key after inserting (a cad edge on (the value for (edgeNode's curve) in curveMap) from (edgeNode's startParameter) to (edgeNode's endParameter) between (the value for (edgeNode's start) in vertexMap) and (the value for (edgeNode's end) in vertexMap) with provenance (edgeNode's provenance)) into target
+        put edgeNew for edgeOld in edgeMap
+    free edgeKeys
 
-        set coedgeKeys to the cad keys of (source's coedges)
-        loop coedgeIndex from 0 to the length of coedgeKeys:
-            set coedgeRaw to the item at coedgeIndex in coedgeKeys
-            set coedgeOld to @intrinsic("construct", a cad coedge key, coedgeRaw's index, coedgeRaw's generation)
-            set coedgeNode to the cad node pointer for coedgeOld in source
-            set coedgeNew to the cad body key after inserting (a cad coedge on (the value for (coedgeNode's edge) in edgeMap) forward (coedgeNode's forward) with pcurve (the cad clone of (coedgeNode's pcurve)) owned by (the value for (coedgeNode's owner) in loopMap) with provenance (coedgeNode's provenance)) into target
-            put coedgeNew for coedgeOld in coedgeMap
-        free coedgeKeys
+    set coedgeKeys to the cad keys of (source's coedges)
+    for each coedgeRaw in coedgeKeys:
+        set coedgeOld to @intrinsic("construct", a cad coedge key, coedgeRaw's index, coedgeRaw's generation)
+        set coedgeNode to the cad node pointer for coedgeOld in source
+        set coedgeNew to the cad body key after inserting (a cad coedge on (the value for (coedgeNode's edge) in edgeMap) forward (coedgeNode's forward) with pcurve (the cad clone of (coedgeNode's pcurve)) owned by (the value for (coedgeNode's owner) in loopMap) with provenance (coedgeNode's provenance)) into target
+        put coedgeNew for coedgeOld in coedgeMap
+    free coedgeKeys
 
-        set edgeKeys to the cad keys of (source's edges)
-        loop edgeIndex from 0 to the length of edgeKeys:
-            set edgeRaw to the item at edgeIndex in edgeKeys
-            set edgeOld to @intrinsic("construct", a cad edge key, edgeRaw's index, edgeRaw's generation)
-            set edgeNode to the cad node pointer for edgeOld in source
-            set edgeCopied to the cad node pointer for (the value for edgeOld in edgeMap) in target
-            loop memberIndex from 0 to the length of (edgeNode's coedges's values):
-                set memberKey to the item at memberIndex in (edgeNode's coedges's values)
-                append (the value for memberKey in coedgeMap) to (edgeCopied's coedges's values)
-        free edgeKeys
+    set edgeKeys to the cad keys of (source's edges)
+    for each edgeRaw in edgeKeys:
+        set edgeOld to @intrinsic("construct", a cad edge key, edgeRaw's index, edgeRaw's generation)
+        set edgeNode to the cad node pointer for edgeOld in source
+        set edgeCopied to the cad node pointer for (the value for edgeOld in edgeMap) in target
+        loop memberIndex from 0 to the length of (edgeNode's coedges's values):
+            set memberKey to the item at memberIndex in (edgeNode's coedges's values)
+            append (the value for memberKey in coedgeMap) to (edgeCopied's coedges's values)
+    free edgeKeys
 
-        set loopKeys to the cad keys of (source's loops)
-        loop loopIndex from 0 to the length of loopKeys:
-            set loopRaw to the item at loopIndex in loopKeys
-            set loopOld to @intrinsic("construct", a cad loop key, loopRaw's index, loopRaw's generation)
-            set loopNode to the cad node pointer for loopOld in source
-            set loopCopied to the cad node pointer for (the value for loopOld in loopMap) in target
-            loop memberIndex from 0 to the length of (loopNode's coedges's values):
-                set memberKey to the item at memberIndex in (loopNode's coedges's values)
-                append (the value for memberKey in coedgeMap) to (loopCopied's coedges's values)
-        free loopKeys
+    set loopKeys to the cad keys of (source's loops)
+    for each loopRaw in loopKeys:
+        set loopOld to @intrinsic("construct", a cad loop key, loopRaw's index, loopRaw's generation)
+        set loopNode to the cad node pointer for loopOld in source
+        set loopCopied to the cad node pointer for (the value for loopOld in loopMap) in target
+        loop memberIndex from 0 to the length of (loopNode's coedges's values):
+            set memberKey to the item at memberIndex in (loopNode's coedges's values)
+            append (the value for memberKey in coedgeMap) to (loopCopied's coedges's values)
+    free loopKeys
 
-        set faceKeys to the cad keys of (source's faces)
-        loop faceIndex from 0 to the length of faceKeys:
-            set faceRaw to the item at faceIndex in faceKeys
-            set faceOld to @intrinsic("construct", a cad face key, faceRaw's index, faceRaw's generation)
-            set faceNode to the cad node pointer for faceOld in source
-            set faceCopied to the cad node pointer for (the value for faceOld in faceMap) in target
-            loop memberIndex from 0 to the length of (faceNode's loops's values):
-                set memberKey to the item at memberIndex in (faceNode's loops's values)
-                append (the value for memberKey in loopMap) to (faceCopied's loops's values)
-        free faceKeys
+    set faceKeys to the cad keys of (source's faces)
+    for each faceRaw in faceKeys:
+        set faceOld to @intrinsic("construct", a cad face key, faceRaw's index, faceRaw's generation)
+        set faceNode to the cad node pointer for faceOld in source
+        set faceCopied to the cad node pointer for (the value for faceOld in faceMap) in target
+        loop memberIndex from 0 to the length of (faceNode's loops's values):
+            set memberKey to the item at memberIndex in (faceNode's loops's values)
+            append (the value for memberKey in loopMap) to (faceCopied's loops's values)
+    free faceKeys
 
-        set shellKeys to the cad keys of (source's shells)
-        loop shellIndex from 0 to the length of shellKeys:
-            set shellRaw to the item at shellIndex in shellKeys
-            set shellOld to @intrinsic("construct", a cad shell key, shellRaw's index, shellRaw's generation)
-            set shellNode to the cad node pointer for shellOld in source
-            set shellCopied to the cad node pointer for (the value for shellOld in shellMap) in target
-            loop memberIndex from 0 to the length of (shellNode's faces's values):
-                set memberKey to the item at memberIndex in (shellNode's faces's values)
-                append (the value for memberKey in faceMap) to (shellCopied's faces's values)
-        free shellKeys
+    set shellKeys to the cad keys of (source's shells)
+    for each shellRaw in shellKeys:
+        set shellOld to @intrinsic("construct", a cad shell key, shellRaw's index, shellRaw's generation)
+        set shellNode to the cad node pointer for shellOld in source
+        set shellCopied to the cad node pointer for (the value for shellOld in shellMap) in target
+        loop memberIndex from 0 to the length of (shellNode's faces's values):
+            set memberKey to the item at memberIndex in (shellNode's faces's values)
+            append (the value for memberKey in faceMap) to (shellCopied's faces's values)
+    free shellKeys
 
-        set lumpKeys to the cad keys of (source's lumps)
-        loop lumpIndex from 0 to the length of lumpKeys:
-            set lumpRaw to the item at lumpIndex in lumpKeys
-            set lumpOld to @intrinsic("construct", a cad lump key, lumpRaw's index, lumpRaw's generation)
-            set lumpNode to the cad node pointer for lumpOld in source
-            set lumpCopied to the cad node pointer for (the value for lumpOld in lumpMap) in target
-            loop memberIndex from 0 to the length of (lumpNode's shells's values):
-                set memberKey to the item at memberIndex in (lumpNode's shells's values)
-                append (the value for memberKey in shellMap) to (lumpCopied's shells's values)
-        free lumpKeys
+    set lumpKeys to the cad keys of (source's lumps)
+    for each lumpRaw in lumpKeys:
+        set lumpOld to @intrinsic("construct", a cad lump key, lumpRaw's index, lumpRaw's generation)
+        set lumpNode to the cad node pointer for lumpOld in source
+        set lumpCopied to the cad node pointer for (the value for lumpOld in lumpMap) in target
+        for each memberKeyItem in (lumpNode's shells's values):
+            append (the value for memberKeyItem in shellMap) to (lumpCopied's shells's values)
+    free lumpKeys
 
-        loop rootIndex from 0 to the length of source's roots:
-            append (the value for (the item at rootIndex in source's roots) in lumpMap) to target's roots
-        free cad append mapping vertexMap
-        free cad append mapping curveMap
-        free cad append mapping surfaceMap
-        free cad append mapping lumpMap
-        free cad append mapping shellMap
-        free cad append mapping faceMap
-        free cad append mapping loopMap
-        free cad append mapping edgeMap
-        free cad append mapping coedgeMap
-        return true
+    loop rootIndex from 0 to the length of source's roots:
+        append (the value for (the item at rootIndex in source's roots) in lumpMap) to target's roots
+    free cad append mapping vertexMap
+    free cad append mapping curveMap
+    free cad append mapping surfaceMap
+    free cad append mapping lumpMap
+    free cad append mapping shellMap
+    free cad append mapping faceMap
+    free cad append mapping loopMap
+    free cad append mapping edgeMap
+    free cad append mapping coedgeMap
+    return true

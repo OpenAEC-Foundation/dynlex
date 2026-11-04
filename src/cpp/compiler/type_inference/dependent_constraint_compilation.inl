@@ -49,6 +49,7 @@ struct SymbolicConstraintCompiler {
 			return evaluatePatternCall(expression, bindings);
 		case Expression::Kind::TypedPlaceholder:
 		case Expression::Kind::ArrayLiteral:
+		case Expression::Kind::ArgumentPack:
 		case Expression::Kind::Pending:
 			return fail("dependent constraint contains an unsupported expression");
 		}

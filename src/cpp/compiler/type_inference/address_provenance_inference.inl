@@ -11,7 +11,7 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 	requireCompilerInvariant(!states.empty(), "address inference state merge requires a reachable path");
 	AddressInferenceState merged;
 	AddressInferenceStorage &mergedStorage = merged.write();
-	std::unordered_set<VariableReference *> references;
+	VariableStorageSet references;
 	for (const AddressInferenceState &state : states) {
 		const AddressInferenceStorage &storage = state.read();
 		for (const auto &[reference, provenance] : storage.variables) {
@@ -21,7 +21,7 @@ static AddressInferenceState mergeAddressInferenceStates(const std::vector<Addre
 		mergedStorage.addressTakenVariables.insert(storage.addressTakenVariables.begin(), storage.addressTakenVariables.end());
 		joinAddressProvenance(mergedStorage.externallyEscaped, storage.externallyEscaped);
 	}
-	for (VariableReference *reference : references) {
+	for (const VariableStorageKey &reference : references) {
 		AddressProvenance provenance;
 		for (const AddressInferenceState &state : states) {
 			const VariableAddressProvenance &variables = state.read().variables;
@@ -44,7 +44,7 @@ static bool typeMayContainAddresses(const DataType &type);
 static AddressProvenance dereferenceAddressProvenance(AddressProvenance address, int depth, InferenceContext &context) {
 	for (int level = 0; level < depth; level++) {
 		AddressProvenance value{.mayTargets = {}, .unknown = address.unknown || address.mayBeNull || address.mayBeStatic};
-		for (VariableReference *target : address.mayTargets)
+		for (const VariableStorageKey &target : address.mayTargets)
 			joinAddressProvenance(value, context.lookupAddressProvenance(target));
 		address = std::move(value);
 	}
@@ -62,13 +62,11 @@ static std::optional<AddressProvenance> inferLValueAddressProvenance(
 		crashCompilerBug("lvalue address provenance inference lost its expression while resolving bindings");
 
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable) {
-		VariableReference *target = context.normalizeReference(resolvedExpression->variable);
-		if (!target)
-			return std::nullopt;
+		VariableStorageKey target = variableStorageKey(resolvedExpression);
 		if (recordAddressTaken)
 			context.currentAddressState.write().addressTakenVariables.insert(target);
 		return AddressProvenance{
-			.mayTargets = {target}, .unknown = variableReferenceIsCurrentInstantiationParameter(context, target)
+			.mayTargets = {target}, .unknown = variableReferenceIsCurrentInstantiationParameter(context, target.definition)
 		};
 	}
 
@@ -134,7 +132,7 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 			return {.mayTargets = {}, .mayBeNull = true};
 	}
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable)
-		return context.lookupAddressProvenance(resolvedExpression->variable);
+		return context.lookupAddressProvenance(variableStorageKey(resolvedExpression));
 	if (resolvedExpression->kind == Expression::Kind::Literal)
 		return {.mayTargets = {}, .mayBeStatic = resolvedExpression->type.isPointer()};
 	if (resolvedExpression->kind == Expression::Kind::ArrayLiteral) {
@@ -276,7 +274,8 @@ inferAddressProvenance(Expression *expression, InferenceContext &context, const 
 	return provenance;
 }
 
-static Variable *variableForAddressTarget(VariableReference *reference) {
+static Variable *variableForAddressTarget(const VariableStorageKey &target) {
+	VariableReference *reference = target.definition;
 	if (!reference || !reference->range.line || !reference->range.line->section)
 		return nullptr;
 	return reference->range.line->section->findVariable(reference);
@@ -315,37 +314,34 @@ static void noteUnknownExternalEscape(InferenceContext &context) {
 	context.currentInstantiation->externallyEscapesUnknownAddress = true;
 }
 
-static void noteAddressTargetWrite(InferenceContext &context, VariableReference *target) {
+static void noteAddressTargetWrite(InferenceContext &context, const VariableStorageKey &target) {
 	Variable *variable = variableForAddressTarget(target);
 	if (variable && variable->isGlobal)
-		context.noteWrittenGlobalReference(target);
+		context.noteWrittenGlobalReference(target.definition);
 }
 
-static void addUnknownAddressUniverse(InferenceContext &context, std::unordered_set<VariableReference *> &targets) {
-	const std::unordered_set<VariableReference *> &addressTakenVariables =
-		context.currentAddressState.read().addressTakenVariables;
+static void addUnknownAddressUniverse(InferenceContext &context, VariableStorageSet &targets) {
+	const VariableStorageSet &addressTakenVariables = context.currentAddressState.read().addressTakenVariables;
 	targets.insert(addressTakenVariables.begin(), addressTakenVariables.end());
 }
 
-static std::unordered_set<VariableReference *>
-possibleAddressTargets(InferenceContext &context, const AddressProvenance &provenance) {
-	std::unordered_set<VariableReference *> targets = provenance.mayTargets;
+static VariableStorageSet possibleAddressTargets(InferenceContext &context, const AddressProvenance &provenance) {
+	VariableStorageSet targets = provenance.mayTargets;
 	if (provenance.unknown)
 		addUnknownAddressUniverse(context, targets);
 	return targets;
 }
 
 static void collectTransitiveAddressTargets(
-	InferenceContext &context, const AddressProvenance &provenance, std::unordered_set<VariableReference *> &targets,
-	bool &unknown
+	InferenceContext &context, const AddressProvenance &provenance, VariableStorageSet &targets, bool &unknown
 ) {
 	unknown = unknown || provenance.unknown;
-	for (VariableReference *target : provenance.mayTargets) {
+	for (const VariableStorageKey &target : provenance.mayTargets) {
 		if (!targets.insert(target).second)
 			continue;
 		Variable *variable = variableForAddressTarget(target);
 		const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
-		auto stored = variables.find(context.normalizeReference(target));
+		auto stored = variables.find(target);
 		if (stored == variables.end()) {
 			if (variable && typeMayContainAddresses(variable->type))
 				unknown = true;
@@ -357,7 +353,7 @@ static void collectTransitiveAddressTargets(
 }
 
 static void invalidateAddressTargets(InferenceContext &context, const AddressProvenance &provenance, bool transitive) {
-	std::unordered_set<VariableReference *> targets;
+	VariableStorageSet targets;
 	bool unknown = provenance.unknown;
 	if (transitive)
 		collectTransitiveAddressTargets(context, provenance, targets, unknown);
@@ -367,10 +363,10 @@ static void invalidateAddressTargets(InferenceContext &context, const AddressPro
 		noteUnknownAddressWrite(context);
 		addUnknownAddressUniverse(context, targets);
 		if (transitive) {
-			std::vector<VariableReference *> addressTaken(targets.begin(), targets.end());
-			for (VariableReference *target : addressTaken) {
+			std::vector<VariableStorageKey> addressTaken(targets.begin(), targets.end());
+			for (const VariableStorageKey &target : addressTaken) {
 				const VariableAddressProvenance &variables = context.currentAddressState.read().variables;
-				auto stored = variables.find(context.normalizeReference(target));
+				auto stored = variables.find(target);
 				if (stored == variables.end())
 					continue;
 				bool nestedUnknown = false;
@@ -378,11 +374,11 @@ static void invalidateAddressTargets(InferenceContext &context, const AddressPro
 			}
 		}
 	}
-	for (VariableReference *target : targets) {
+	for (const VariableStorageKey &target : targets) {
 		noteAddressTargetWrite(context, target);
 		context.setKnownConstant(target, {});
 		Variable *variable = variableForAddressTarget(target);
-		if (context.currentAddressState.read().variables.contains(context.normalizeReference(target)) ||
+		if (context.currentAddressState.read().variables.contains(target) ||
 			(variable && typeMayContainAddresses(variable->type)))
 			context.setAddressProvenance(target, {.mayTargets = {}, .unknown = true});
 	}
@@ -392,7 +388,7 @@ static void applyStoreThroughAddress(
 	InferenceContext &context, const AddressProvenance &destination, Expression *assignedExpression,
 	const BindingFrameStack &bindingFrameStack
 ) {
-	std::unordered_set<VariableReference *> targets = possibleAddressTargets(context, destination);
+	VariableStorageSet targets = possibleAddressTargets(context, destination);
 	if (destination.unknown)
 		noteUnknownAddressWrite(context);
 	if (targets.empty())
@@ -403,7 +399,7 @@ static void applyStoreThroughAddress(
 	AddressProvenance assignedProvenance = assignedExpression
 											   ? inferAddressProvenance(assignedExpression, context, bindingFrameStack)
 											   : AddressProvenance{.mayTargets = {}, .unknown = true};
-	for (VariableReference *target : targets) {
+	for (const VariableStorageKey &target : targets) {
 		noteAddressTargetWrite(context, target);
 		CompileTimeValue previousValue = context.lookupKnownConstant(target);
 		context.setKnownConstant(target, definiteTarget || previousValue == assignedValue ? assignedValue : CompileTimeValue{});

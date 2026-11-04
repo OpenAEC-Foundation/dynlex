@@ -4,14 +4,11 @@ exposed function one more than {integer:value}:
     execute:
         return value + 1
 
-function one less than {integer:value}:
-    execute:
-        return value - 1
+to get one less than {integer:value}:
+    return value - 1
 
 set exposed to the function named "one more than $"
 set internal to the function named "one less than $"
 
-print whether (exposed as a 64 bit integer) > 0 as a line
-print one more than 41 as a line
-print whether (internal as a 64 bit integer) > 0 as a line
-print one less than 41 as a line
+print lines ((exposed as a 64 bit integer) > 0), (one more than 41) and ((internal as a 64 bit integer) > 0)
+print line one less than 41

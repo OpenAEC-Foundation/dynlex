@@ -37,6 +37,7 @@ struct DataBodyField;
 
 struct InstantiatedSectionBody : std::enable_shared_from_this<InstantiatedSectionBody> {
 	std::shared_ptr<ExpressionStorage> expressions;
+	std::shared_ptr<const VariableStorageScope> storageScope;
 	Section *sourceSection{};
 	InstantiatedSectionBody *parentBody{};
 	std::vector<Expression *> lineExpressions;
@@ -44,6 +45,7 @@ struct InstantiatedSectionBody : std::enable_shared_from_this<InstantiatedSectio
 
 	Expression *&lineExpression(size_t index);
 	InstantiatedSectionBody *bodyForChild(Section *child) const;
+	Expression *expressionForLine(const CodeLine *sourceLine) const;
 	Expression *findCloneOf(const Expression *templateExpression) const;
 	std::optional<CompileTimeValue> compileTimeValueForReference(const VariableReference *reference) const;
 };
@@ -121,7 +123,7 @@ struct InstantiationExecutionEffects {
 	std::unordered_map<std::string, DataType> parameterOutputTypesByName;
 	std::unordered_set<VariableReference *> writtenGlobalReferences;
 	std::unordered_map<VariableReference *, CompileTimeValue> finalGlobalConstantValues;
-	VariableAddressProvenance finalGlobalAddressProvenance;
+	GlobalAddressProvenance finalGlobalAddressProvenance;
 	std::unordered_set<VariableReference *> addressTakenGlobalReferences;
 	AddressProvenance externallyEscapedGlobalProvenance;
 	AddressProvenance returnAddressProvenance;
@@ -148,7 +150,7 @@ struct Instantiation : InstantiationExecutionEffects {
 	std::unordered_set<std::string> requiredCompileTimeParameters;
 	std::map<std::vector<CompileTimeValue>, CompileTimeValue> pureReturnValuesByArguments;
 	std::shared_ptr<InstantiatedSectionBody> body;
-	llvm::Function *llvmFunction = nullptr;
+	std::map<std::vector<unsigned>, llvm::Function *> llvmFunctionsByParameterAddressSpaces;
 	llvm::Function *llvmCallableFunction = nullptr;
 	bool fallsThrough = true;
 	bool inferring = false;

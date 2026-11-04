@@ -1,21 +1,13 @@
-function integer:
-    replacement:
-        @intrinsic("type", "int")
-function text:
-    replacement:
-        @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
-function the type of value:
-    replacement:
-        @intrinsic("type of", value)
+integer means: @intrinsic("type", "int")
+text means: @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+the type of value means: @intrinsic("type of", value)
 implicitly convert {integer:value}:
     execute:
         @intrinsic("return", @intrinsic("select", @intrinsic("equal", value, 7), "7", "0"))
-function measured {text:value}:
-    execute:
-        @intrinsic("return", @intrinsic("cast", @intrinsic("dereference", value), integer))
-function sample:
-    execute:
-        @intrinsic("return", measured 7)
+to get measured {text:value}:
+    @intrinsic("return", @intrinsic("cast", @intrinsic("dereference", value), integer))
+to get sample:
+    @intrinsic("return", measured 7)
 class:
     patterns:
         container

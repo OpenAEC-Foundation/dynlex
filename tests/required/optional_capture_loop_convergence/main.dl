@@ -1,0 +1,12 @@
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+function touch [scratch|]:
+    replacement:
+        @intrinsic("store", scratch, 1)
+        @intrinsic("discard", scratch)
+@intrinsic("store", index, 0)
+while @intrinsic("less than", index, 3):
+    touch
+    @intrinsic("store", index, @intrinsic("add", index, 1))
+@intrinsic("return", @intrinsic("subtract", index, 3))

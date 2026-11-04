@@ -1,5 +1,3 @@
-# DynLex entrypoint flags: --emit-spirv --shader-stage=fragment
-
 import lib/shader_art.dl
 
 # EVENT HORIZON

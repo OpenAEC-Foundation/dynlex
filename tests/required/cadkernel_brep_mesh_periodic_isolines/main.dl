@@ -2,11 +2,10 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check periodic isolines {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check periodic isolines {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
 set toleranceValue to (a cad tessellation tolerance with maximum angle 0.25 within 1e-9) with 1 cad u isolines and 1 cad v isolines
 
@@ -30,8 +29,7 @@ set torusResult to the cad torus at the cad zero vector3 with major radius 4.0 a
 check periodic isolines torusResult's valid named "torus"
 set torusWire to the cad wireframe of torusResult's value with tolerance toleranceValue
 check periodic isolines ((the length of torusWire's isolines) = 2) named "torus uv isolines"
-loop torusLineIndex from 0 to the length of torusWire's isolines:
-    set lineValue to the item at torusLineIndex in torusWire's isolines
+for each lineValue in torusWire's isolines:
     check periodic isolines ((the length of lineValue's positions) > 2) named "sampled torus isoline"
     set lineFirst to the item at 0 in lineValue's positions
     set lineLast to the last item of lineValue's positions
@@ -44,8 +42,7 @@ set cylinderBody to cylinderResult's value
 set cylinderFaces to the cad face keys of cylinderBody
 set wallFound to false
 set wallKey to a new cad face key
-loop faceIndex from 0 to the length of cylinderFaces:
-    set candidateKey to the item at faceIndex in cylinderFaces
+for each candidateKey in cylinderFaces:
     set candidateFace to the cad node pointer for candidateKey in cylinderBody
     set candidateSurface to the cad node pointer for candidateFace's surface in cylinderBody
     if candidateSurface's kind = 1:
@@ -57,8 +54,7 @@ set wallFace to the cad node pointer for wallKey in cylinderBody
 set originalLoopKey to the item at 0 in ((wallFace's loops's values))
 set originalLoop to the cad node pointer for originalLoopKey in cylinderBody
 set rimUses to an empty list of a cad coedge key
-loop useIndex from 0 to the length of ((originalLoop's coedges's values)):
-    set useKey to the item at useIndex in ((originalLoop's coedges's values))
+for each useKey in ((originalLoop's coedges's values)):
     set useNode to the cad node pointer for useKey in cylinderBody
     set edgeNode to the cad node pointer for useNode's edge in cylinderBody
     if edgeNode's start = edgeNode's end:
@@ -66,8 +62,7 @@ loop useIndex from 0 to the length of ((originalLoop's coedges's values)):
 check periodic isolines ((the length of rimUses) = 2) named "two cylinder rims"
 loop while (the length of ((wallFace's loops's values))) > 0:
     remove the last item from ((wallFace's loops's values))
-loop rimIndex from 0 to the length of rimUses:
-    set useKey to the item at rimIndex in rimUses
+for each useKey in rimUses:
     set loopKey to the cad body key after inserting (a cad loop owned by wallKey with provenance (the synthesized cad provenance)) into cylinderBody
     set loopNode to the cad node pointer for loopKey in cylinderBody
     append useKey to ((loopNode's coedges's values))
@@ -79,4 +74,4 @@ set cylinderWire to the cad wireframe of cylinderBody with tolerance toleranceVa
 check periodic isolines ((the length of cylinderWire's isolines) = 2) named "seamless cylinder uv isolines"
 free cad body wireframe cylinderWire
 
-print "cadkernel brep mesh periodic isolines: PASS" as a line
+print line "cadkernel brep mesh periodic isolines: PASS"

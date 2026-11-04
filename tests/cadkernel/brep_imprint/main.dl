@@ -2,10 +2,9 @@
 import lib/bim/brep_imprint.dl
 import lib/bim/brep_make.dl
 
-function check cad imprint {boolean:condition}:
-    execute:
-        if condition = false:
-            @intrinsic("call", "libc", "abort", nothing)
+to check cad imprint {boolean:condition}:
+    if condition = false:
+        @intrinsic("call", "libc", "abort", nothing)
 
 set firstMade to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
 set secondMade to the cad cuboid at (a cad vector3 with x 5.0, y 5.0 and z 5.0) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
@@ -17,7 +16,7 @@ set secondBounds to the cad bounds of secondBody
 set result to the cad imprint of firstBody and secondBody within 1e-9
 check cad imprint result's valid
 check cad imprint (result's cuts > 0)
-check cad imprint ((result's meetings > 0) and (result's meetings < 36))
+check cad imprint (0 < result's meetings < 36)
 check cad imprint ((the cad count of firstBody's faces) > 6)
 check cad imprint ((the cad count of secondBody's faces) > 6)
 check cad imprint ((the cad euler characteristic of firstBody) = 2)
@@ -30,7 +29,7 @@ check cad imprint ((the length of firstFlaws) = 0)
 check cad imprint ((the length of secondFlaws) = 0)
 free firstFlaws
 free secondFlaws
-print "overlapping_solids_are_imprinted_without_changing_their_shape" as a line
+print line "overlapping_solids_are_imprinted_without_changing_their_shape"
 
 set apartMadeA to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 1.0, y 1.0 and z 1.0)
 set apartMadeB to the cad cuboid at (a cad vector3 with x 50.0, y 50.0 and z 50.0) with size (a cad vector3 with x 1.0, y 1.0 and z 1.0)
@@ -41,7 +40,7 @@ check cad imprint apartResult's valid
 check cad imprint ((apartResult's cuts = 0) and (apartResult's meetings = 0))
 check cad imprint ((the cad count of apartBodyA's faces) = 6)
 check cad imprint ((the cad count of apartBodyB's faces) = 6)
-print "disjoint_solids_are_left_unchanged" as a line
+print line "disjoint_solids_are_left_unchanged"
 
 set stackedMadeA to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
 set stackedMadeB to the cad cuboid at (a cad vector3 with x 0.0, y 0.0 and z 10.0) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
@@ -52,7 +51,7 @@ check cad imprint stackedResult's valid
 check cad imprint (stackedResult's cuts = 0)
 check cad imprint ((the cad count of stackedBodyA's faces) = 6)
 check cad imprint ((the cad count of stackedBodyB's faces) = 6)
-print "equal_shared_ground_needs_no_partition" as a line
+print line "equal_shared_ground_needs_no_partition"
 
 set wallMadeA to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
 set wallMadeB to the cad cuboid at (a cad vector3 with x 0.0, y 0.0 and z 10.0) with size (a cad vector3 with x 4.0, y 4.0 and z 4.0)
@@ -71,7 +70,7 @@ check cad imprint ((the length of wallFlawsA) = 0)
 check cad imprint ((the length of wallFlawsB) = 0)
 free wallFlawsA
 free wallFlawsB
-print "a_partly_shared_wall_is_partitioned_at_its_footprint" as a line
+print line "a_partly_shared_wall_is_partitioned_at_its_footprint"
 
 set unknownMadeA to the cad cuboid at (the cad zero vector3) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
 set unknownMadeB to the cad cuboid at (a cad vector3 with x 5.0, y 5.0 and z 5.0) with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
@@ -84,7 +83,7 @@ set unknownResult to the cad imprint of unknownBodyA and unknownBodyB within 1e-
 check cad imprint (unknownResult's valid = false)
 check cad imprint (unknownResult's snag = cad imprint no closed form snag)
 free unknownFaces
-print "an_unknown_surface_intersection_is_reported_as_a_snag" as a line
+print line "an_unknown_surface_intersection_is_reported_as_a_snag"
 
 set surveyOrigin to a cad vector3 with x 512345.678, y 4512345.678 and z 91.5
 set surveyMadeA to the cad cuboid at surveyOrigin with size (a cad vector3 with x 10.0, y 10.0 and z 10.0)
@@ -101,4 +100,4 @@ check cad imprint ((the length of surveyFlawsA) = 0)
 check cad imprint ((the length of surveyFlawsB) = 0)
 free surveyFlawsA
 free surveyFlawsB
-print "imprinting_remains_stable_at_survey_coordinates" as a line
+print line "imprinting_remains_stable_at_survey_coordinates"

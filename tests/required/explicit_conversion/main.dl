@@ -12,5 +12,4 @@ convert {integer:input}:
 
 set input to 23
 set wrapped to input as a number box
-print the payload of wrapped as a line
-print input as a line
+print lines (the payload of wrapped) and input

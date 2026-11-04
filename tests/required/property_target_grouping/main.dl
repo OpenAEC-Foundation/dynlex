@@ -12,10 +12,8 @@ class:
         yaw
         turning
 
-function a box facing {integer:yaw} and turning by {integer:turning}:
-    replacement:
-        @intrinsic("construct", a box, yaw, turning)
+a box facing {integer:yaw} and turning by {integer:turning} means: @intrinsic("construct", a box, yaw, turning)
 
 set view to a box facing 1 and turning by 2
 add view's turning to view's yaw
-print view's yaw as a line
+print line view's yaw

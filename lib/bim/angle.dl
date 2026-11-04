@@ -14,41 +14,37 @@ local function cad angular epsilon:
         1e-9 as a 64 bit floating-point number
 
 # Reduce to [0, TAU), including negative and multiple-turn inputs.
-function the cad normalized angle of {a 64 bit floating-point number:angle}:
-    execute:
-        set remainder to the remainder of angle divided by (cad angle full turn)
-        return the remainder of (remainder + (cad angle full turn)) divided by (cad angle full turn)
+to get the cad normalized angle of {a 64 bit floating-point number:angle}:
+    set remainder to angle mod (cad angle full turn)
+    return (remainder + (cad angle full turn)) mod (cad angle full turn)
 
 # Counterclockwise span in (0, TAU]; coincident directions form a full circle.
-function cad arc span from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
-    execute:
-        set sweep to (the cad normalized angle of end) - (the cad normalized angle of start)
-        if sweep <= 0.0:
-            return sweep + (cad angle full turn)
-        return sweep
+to get cad arc span from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    set sweep to (the cad normalized angle of end) - (the cad normalized angle of start)
+    if sweep <= 0.0:
+        return sweep + (cad angle full turn)
+    return sweep
 
 # Inclusive counterclockwise containment; a near-zero or near-full sweep covers all.
-function cad angle {a 64 bit floating-point number:angle} within arc from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
-    execute:
-        set normalizedAngle to the cad normalized angle of angle
-        set normalizedStart to the cad normalized angle of start
-        set normalizedEnd to the cad normalized angle of end
-        set sweep to normalizedEnd - normalizedStart
-        if ((the absolute value of sweep) < (cad angular epsilon)) or ((the absolute value of (sweep - (cad angle full turn))) < (cad angular epsilon)):
-            return true
-        if normalizedStart <= normalizedEnd:
-            return (normalizedAngle >= (normalizedStart - (cad angular epsilon))) and (normalizedAngle <= (normalizedEnd + (cad angular epsilon)))
-        return (normalizedAngle >= (normalizedStart - (cad angular epsilon))) or (normalizedAngle <= (normalizedEnd + (cad angular epsilon)))
+to get cad angle {a 64 bit floating-point number:angle} within arc from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    set normalizedAngle to the cad normalized angle of angle
+    set normalizedStart to the cad normalized angle of start
+    set normalizedEnd to the cad normalized angle of end
+    set sweep to normalizedEnd - normalizedStart
+    if ((the absolute value of sweep) < (cad angular epsilon)) or ((the absolute value of (sweep - (cad angle full turn))) < (cad angular epsilon)):
+        return true
+    if normalizedStart <= normalizedEnd:
+        return (normalizedAngle >= (normalizedStart - (cad angular epsilon))) and (normalizedAngle <= (normalizedEnd + (cad angular epsilon)))
+    return (normalizedAngle >= (normalizedStart - (cad angular epsilon))) or (normalizedAngle <= (normalizedEnd + (cad angular epsilon)))
 
 # Normalized counterclockwise travel divided by exact span, clamped to [0, 1].
 # The seam of a closed arc maps to zero; travel before the start wraps forward.
-function cad arc parameter of {a 64 bit floating-point number:angle} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
-    execute:
-        set span to cad arc span from start to end
-        set travelled to (the cad normalized angle of angle) - (the cad normalized angle of start)
-        if travelled < 0.0:
-            set travelled to travelled + (cad angle full turn)
-        set position to travelled / span
-        # Ordered comparisons preserve NaN, as Rust f64::clamp does.
-        clamp position between 0.0 and 1.0
-        return position
+to get cad arc parameter of {a 64 bit floating-point number:angle} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
+    set span to cad arc span from start to end
+    set travelled to (the cad normalized angle of angle) - (the cad normalized angle of start)
+    if travelled < 0.0:
+        set travelled to travelled + (cad angle full turn)
+    set position to travelled / span
+    # Ordered comparisons preserve NaN, as Rust f64::clamp does.
+    clamp position between 0.0 and 1.0
+    return position

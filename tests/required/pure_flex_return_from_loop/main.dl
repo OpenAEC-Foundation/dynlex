@@ -7,10 +7,9 @@ flex section repeat body:
         while @intrinsic("equal", 0, 0):
             @intrinsic("execute body")
 
-function the selected item:
-    execute:
-        repeat body:
-            @intrinsic("return", 7)
+to get the selected item:
+    repeat body:
+        @intrinsic("return", 7)
 
 @intrinsic("store", fixed, @intrinsic("construct", @intrinsic("array", the selected item, @intrinsic("type", "int", 32))))
 @intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", fixed, 0), 7))

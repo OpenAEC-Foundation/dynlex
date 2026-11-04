@@ -79,7 +79,7 @@ numbers example numbers:
     0
     4
 
-print the item at 2 in example numbers as a line
+print line the item at 2 in example numbers
 ```
 
 The final line prints `4`. The section value is an array. There is no runtime builder
@@ -254,7 +254,7 @@ set squares to a synchronous event receiving integer returning integer
 when squares is requested:
     return this request * this request
 
-print (request 9 from squares) as a line # 81
+print line (request 9 from squares) # 81
 ```
 
 The request can be a data record containing explicit context, including pointers.

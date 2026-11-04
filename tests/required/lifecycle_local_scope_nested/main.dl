@@ -25,15 +25,12 @@ class:
             if total != 6:
                 @intrinsic("call", "libc", "exit", nothing, 86)
 
-function exercise nested lifetime:
-    execute:
-        set held to @intrinsic("construct", a nested scope probe, 0)
-        ignore held
+to exercise nested lifetime:
+    set held to @intrinsic("construct", a nested scope probe, 0)
+    ignore held
 
 set total to 90
 set outer to 91
 set cursor to 92
 exercise nested lifetime
-print total as a line
-print outer as a line
-print cursor as a line
+print lines total, outer and cursor

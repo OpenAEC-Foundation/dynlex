@@ -9,9 +9,7 @@ class:
     members:
         success as a boolean
 
-function {example action:action} succeeded:
-    replacement:
-        action's success
+{example action:action} succeeded means: action's success
 
 local function a successful example action:
     replacement:
@@ -26,17 +24,26 @@ flex function perform an example action:
 
 ```dynlex
 perform an example action
-print whether it succeeded as a line
+print line it succeeded
 ```
 
-Subject assignment is explicit. Referencing `it` before `set the subject` is an error. If different runtime branches would assign different subjects, reading `it` after the branch is also an error because its source is ambiguous. A subject assigned inside a loop is available afterward only when the first iteration is statically guaranteed and every path that can leave the loop has the same subject. When zero iterations remain possible, the pre-loop subject path is retained and a different loop assignment makes the result ambiguous.
-
-The standard library has separate `and` overloads for booleans and actions. The action overload expands both expressions that produce nothing in order, so the right action can use the subject assigned by the left action:
+The standard `set variable to value` action assigns the variable and publishes its value as the subject. The subject is a value copy; changing it does not assign the original variable. Managed values retain their subject copies until the owning function ends:
 
 ```dynlex
-perform an example action and print whether it succeeded as a line
+set x to 1. add 5
+print lines x and it
+# 1
+# 6
 ```
 
-`print` does not add a newline. Use `as a line` when a line ending is needed.
+Replacement definitions can publish another value with `set the subject to value`. Referencing `it` before any subject assignment is an error. If different runtime branches would assign different subjects, reading `it` after the branch is also an error because its source is ambiguous. A subject assigned inside a loop is available afterward only when the first iteration is statically guaranteed and every path that can leave the loop has the same subject. When zero iterations remain possible, the pre-loop subject path is retained and a different loop assignment makes the result ambiguous.
+
+The standard library has separate `and` overloads for booleans and actions. Actions can also be joined with a period. The action overload expands both expressions that produce nothing in order, so the right action can use the subject assigned by the left action:
+
+```dynlex
+perform an example action and print line it succeeded
+```
+
+`print` does not add a newline. Use `print line value` to append a newline, or `print lines x, y and z` to print each value on its own line.
 
 `local` definitions are visible only within their source file. This lets a library expose a small action surface while keeping its implementation patterns private.

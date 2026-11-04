@@ -4,9 +4,7 @@ set left to the left mouse button
 set right to the right mouse button
 set middle to the middle mouse button
 
-print left's number as a line
-print right's number as a line
-print middle's number as a line
+print lines left's number, right's number and middle's number
 
 set invalid to false
 if false:

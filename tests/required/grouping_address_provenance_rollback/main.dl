@@ -10,21 +10,15 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] floating-point number:
-    replacement:
-        @intrinsic("type", "float")
+[a|] floating-point number means: @intrinsic("type", "float")
 
-function left - right:
-    execute:
-        return @intrinsic("cast", @intrinsic("subtract", left, right), @intrinsic("type", "float"))
+to get left - right:
+    return @intrinsic("cast", @intrinsic("subtract", left, right), @intrinsic("type", "float"))
 
-function {floating-point number:value} adjusted to be odd:
-    execute:
-        return value
+to get {floating-point number:value} adjusted to be odd:
+    return value
 
 function {integer:value} adjusted to be odd:
     globals:
@@ -33,13 +27,11 @@ function {integer:value} adjusted to be odd:
         set rejected to @intrinsic("address of", guard)
         return @intrinsic("cast", value, @intrinsic("type", "float"))
 
-function value tested:
-    execute:
-        return value - 1 adjusted to be odd
+to get value tested:
+    return value - 1 adjusted to be odd
 
-function the identity of value:
-    execute:
-        return value
+to get the identity of value:
+    return value
 
 set guard to 32
 set target to 0

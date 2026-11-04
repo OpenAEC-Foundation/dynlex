@@ -26,7 +26,7 @@ try {
     assert.ok(specifications.every(isSupportedRuntimeImport), `${name}: unsupported runtime import`);
     assert.ok(specifications.every(({ name }) => !name.startsWith("dynlex_path_")), "Paths must execute in DynLex");
     const output = [];
-    const imports = buildRuntimeImports(specifications, output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(bytes));
+    const imports = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(bytes));
     const instance = await WebAssembly.instantiate(module, imports);
     instance.exports.main();
     const expected = readFileSync(path.join(project, "tests/required", name, "expected.txt"), "utf8");

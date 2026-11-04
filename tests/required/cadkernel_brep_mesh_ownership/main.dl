@@ -2,16 +2,14 @@
 import lib/bim/brep_mesh.dl
 import lib/bim/brep_make.dl
 
-function check mesh ownership {boolean:passed} named {C string:label}:
-    execute:
-        if passed = false:
-            print label as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check mesh ownership {boolean:passed} named {C string:label}:
+    if passed = false:
+        print line label
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function a returned test cad mesh at {a 64 bit floating-point number:offset}:
-    execute:
-        set made to the cad cuboid at (a cad vector3 with x offset, y 0.0 and z 0.0) with size (a cad vector3 with x 1.0, y 2.0 and z 3.0)
-        return the cad mesh of made's value with maximum angle (the cad default sampling angle) within 1e-9
+to get a returned test cad mesh at {a 64 bit floating-point number:offset}:
+    set made to the cad cuboid at (a cad vector3 with x offset, y 0.0 and z 0.0) with size (a cad vector3 with x 1.0, y 2.0 and z 3.0)
+    return the cad mesh of made's value with maximum angle (the cad default sampling angle) within 1e-9
 
 loop cycleIndex from 0 to 64:
     set originalMesh to a returned test cad mesh at (cycleIndex as a 64 bit floating-point number)
@@ -27,4 +25,4 @@ loop cycleIndex from 0 to 64:
     free cad mesh firstView
     check mesh ownership ((the cad triangle count of originalMesh) = 24) named "surviving owner"
     free cad mesh originalMesh
-print "cadkernel brep mesh ownership: PASS" as a line
+print line "cadkernel brep mesh ownership: PASS"

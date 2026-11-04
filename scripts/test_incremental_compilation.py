@@ -12,12 +12,8 @@ from pathlib import Path
 project = Path(sys.argv[1]).resolve()
 compiler = project / "build" / ("dynlex.exe" if os.name == "nt" else "dynlex")
 source = '''integer means: @intrinsic("type", "int")
-function alpha:
-    execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))
-function beta:
-    execute:
-        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))
+to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))
+to beta: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))
 alpha
 beta
 '''

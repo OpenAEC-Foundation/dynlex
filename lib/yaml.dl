@@ -127,7 +127,7 @@ local function the YAML double-quote escape value for {integer:escaped}:
 local function the YAML scalar decoded in {string:source} from {integer:start} to {integer:finish} relative to {integer:beginning}:
     execute:
         set first to the unsigned YAML byte at start in source
-        if first != 34 and first != 39:
+        if 34 != first != 39:
             set text to the substring of source from start spanning (finish - start) bytes
             return a successful decoded YAML scalar containing text
         set quote to first
@@ -303,8 +303,7 @@ local function the YAML mapping parsed from {string:source}:
         set document to a new YAML mapping node named name at source position 0, 0
         set ancestors to a pointer to a YAML mapping node array of the length of source + 1 slots
         store document into ancestors at 0
-        set width to 0
-        set previous to 0
+        set width and previous to 0
         set prior to 0 as a pointer to a YAML mapping node
         set offset to 0
         set line to 1
@@ -334,7 +333,7 @@ local function the YAML mapping parsed from {string:source}:
                         set width to spaces
                         set depth to 1
                     else:
-                        if the remainder of spaces divided by width != 0:
+                        if spaces mod width != 0:
                             return a YAML parsing failure for document with ancestors at source position line, column reporting "indentation does not match the established width"
                         set depth to spaces / width
                 if depth > previous + 1:
@@ -357,7 +356,7 @@ local function the YAML mapping parsed from {string:source}:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "a mapping key cannot be empty"
                 set column to ((beginning - origin) + 1)
                 set initial to the unsigned YAML byte at beginning in source
-                if initial = 34 or initial = 39:
+                if initial is one of 34 and 39:
                     return a YAML parsing failure for document with ancestors at source position line, column reporting "quoted mapping keys are not supported"
                 set name to the substring of source from beginning spanning (ending - beginning) bytes
                 if the YAML child index named name in parent >= 0:
@@ -390,19 +389,19 @@ flex function parse source as a YAML mapping:
     replacement:
         set the subject to the YAML mapping parsed from source
 {YAML result:outcome} succeeded means: outcome's success
-{YAML result:outcome} failed means: the inverse of outcome's success
+{YAML result:outcome} failed means: not outcome's success
 local function {decoded YAML scalar:outcome} succeeded:
     replacement:
         outcome's success
 
 local function {decoded YAML scalar:outcome} failed:
     replacement:
-        the inverse of outcome's success
+        not outcome's success
 
 to get the number of YAML entries in {a pointer to a YAML mapping node:parent}:
     return the length of parent
 
-{a pointer to a YAML mapping node:node} is a YAML mapping means: the inverse of node's scalar presence
+{a pointer to a YAML mapping node:node} is a YAML mapping means: not node's scalar presence
 {a pointer to a YAML mapping node:node} is a YAML scalar means: node's scalar presence
 to get the YAML key of {a pointer to a YAML mapping node:node}:
     return the key of node

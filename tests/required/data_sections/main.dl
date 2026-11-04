@@ -15,9 +15,9 @@ numbers example numbers:
     0
     4
 
-print the length of example numbers as a line
-print the item at 0 in example numbers as a line
-print the item at 2 in example numbers as a line
+print line the length of example numbers
+print line the item at 0 in example numbers
+print line the item at 2 in example numbers
 
 section matrix {name}:
     declares: name
@@ -37,4 +37,4 @@ matrix grid:
         2
         3
 
-print the item at 1 in grid as a line
+print line the item at 1 in grid

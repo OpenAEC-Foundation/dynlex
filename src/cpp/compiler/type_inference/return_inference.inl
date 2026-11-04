@@ -87,6 +87,8 @@ static std::optional<std::string> returnTypeReferenceSource(const DataType &type
 	case DataType::Kind::Void:
 	case DataType::Kind::Class:
 	case DataType::Kind::Type:
+	case DataType::Kind::ArgumentPack:
+	case DataType::Kind::ArgumentReference:
 	case DataType::Kind::Constraint:
 		break;
 	}

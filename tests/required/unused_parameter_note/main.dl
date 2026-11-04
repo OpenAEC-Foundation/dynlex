@@ -1,5 +1,3 @@
 import helper.dl
 
-function run:
-    execute:
-        the hash from 1.0 and 2.0
+to run: the hash from 1.0 and 2.0

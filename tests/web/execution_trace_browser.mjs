@@ -7,8 +7,7 @@ await installEditorAccess();
 await clickElement("[data-farm-challenge-load]");
 await waitFor("document.querySelector('[data-river-challenge-mount]').dataset.challengeLoaded==='farm'", "farm ready");
 await clickElement("[data-farm-pause-worker]");
-await editCode("[data-farm-editor]", `to rest:
-    wait
+await editCode("[data-farm-editor]", `to rest: wait
 if my hands are full:
     turn right
 else:
@@ -17,7 +16,7 @@ await clickElement("[data-farm-apply]");
 await waitFor("document.querySelector('[data-farm-game]').dataset.playing==='true'", "role ready");
 await clickElement("[data-farm-step-worker]");
 assert.match(await evaluate("document.querySelector('[data-farm-execution]').textContent"), /false/);
-assert.equal(await evaluate("editorFeedback('[data-farm-editor]','active').line"), "3");
+assert.equal(await evaluate("editorFeedback('[data-farm-editor]','active').line"), "2");
 await clickElement("[data-farm-step-worker]");
 assert.equal(await evaluate("editorFeedback('[data-farm-editor]','active').text"), "wait");
 await captureScreenshot("farm-step-helper");
@@ -28,8 +27,7 @@ await navigate("/");
 await waitFor("document.querySelectorAll('[data-snippet-source][data-language-ready=true]').length===5", "site ready for river");
 await clickElement("[data-river-challenge-load]");
 await waitFor("document.querySelector('[data-river-editor-shell][data-language-ready=true]')", "river ready");
-await editCode("[data-river-editor-shell]", `to load a passenger:
-    get the sheep in the boat
+await editCode("[data-river-editor-shell]", `to load a passenger: get the sheep in the boat
 if 1 = 2:
     get the hay in the boat
 else:
@@ -38,7 +36,7 @@ row to the other side`);
 await clickElement("[data-river-step]");
 await waitFor("document.querySelector('[data-river-game]').dataset.playbackState==='paused'", "river pauses after condition");
 assert.match(await evaluate("document.querySelector('[data-river-execution]').textContent"), /false/);
-assert.equal(await evaluate("editorFeedback('[data-river-editor-shell]','active').line"), "3");
+assert.equal(await evaluate("editorFeedback('[data-river-editor-shell]','active').line"), "2");
 await clickElement("[data-river-step]");
 await waitFor("document.querySelector('[data-river-game]').dataset.playbackState==='paused'", "river pauses after load");
 assert.equal(await evaluate("editorFeedback('[data-river-editor-shell]','active').text"), "get the sheep in the boat");

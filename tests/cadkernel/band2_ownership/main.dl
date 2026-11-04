@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: MPL-2.0
 import tests/cadkernel/band2/main.dl
 
-function band2 local [result]:
-    execute:
-        set source to band2 open line
-        set widths to a list containing [2.0,4.0]
-        set result to the cad band boundary of source with widths widths within angle 0.1
-        free widths
-        free cad polyline source
-        return result
+to get band2 local [result]:
+    set source to band2 open line
+    set widths to a list containing [2.0,4.0]
+    set result to the cad band boundary of source with widths widths within angle 0.1
+    free widths
+    free cad polyline source
+    return result
 
 loop repetition from 0 to 24:
     set original to band2 local result
@@ -34,8 +33,8 @@ loop repetition from 0 to 24:
     set retained to a new (the type of retained)
     check band2 (firstEdge's sourceSegment = 0)
     check band2 (firstStation's sourceSegment = 0)
-print "band lists retain across returns and resets and clones own independent storage" as a line
+print line "band lists retain across returns and resets and clones own independent storage"
 set empty to an empty cad band boundary2
 set emptyCopy to the cad clone of empty
 check band2 (empty = emptyCopy)
-print "default band results own cloneable empty lists" as a line
+print line "default band results own cloneable empty lists"

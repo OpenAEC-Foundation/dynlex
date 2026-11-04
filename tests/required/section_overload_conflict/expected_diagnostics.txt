@@ -1,0 +1,4 @@
+tests/required/section_overload_conflict/main.dl:14-50: Error: Duplicate pattern definition
+  note: Conflicts with this definition tests/required/section_overload_conflict/main.dl:14-50
+  note: 'left' is a parameter because it was used here: tests/required/section_overload_conflict/main.dl:30-35
+  note: 'right' is a parameter because it was used here: tests/required/section_overload_conflict/main.dl:30-36

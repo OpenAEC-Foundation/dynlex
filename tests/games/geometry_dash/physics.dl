@@ -43,8 +43,7 @@ to get the jump speed:
 to get the player's ground height:
 	return (the ground height - the player size) as a floating-point number
 
-to start a jump for {runner state:body}:
-	set body's velocity to the negative of the jump speed
+to start a jump for {runner state:body}: set body's velocity to the negative of the jump speed
 
 to apply gravity to {runner state:body}:
 	add the gravity strength to body's velocity

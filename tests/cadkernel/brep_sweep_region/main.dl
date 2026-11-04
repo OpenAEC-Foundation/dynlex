@@ -17,7 +17,7 @@ check extrusion ((the length of flaws) = 0)
 free flaws
 check extrusion ((the length of outer) = 4)
 check extrusion ((the length of inner) = 1)
-print "each_region_loop_makes_its_own_lateral_sheet" as a line
+print line "each_region_loop_makes_its_own_lateral_sheet"
 
 set tapered to the tapered cad extrusion sheets of profiles on (the cad xy plane) along direction by 0.1
 check extrusion (tapered's valid)
@@ -26,13 +26,13 @@ check extrusion ((the cad count of (tapered's value's faces)) = 5)
 set flaws to the cad flaws of (tapered's value)
 check extrusion ((the length of flaws) = 0)
 free flaws
-print "tapered_region_sheets_preserve_separate_loops" as a line
+print line "tapered_region_sheets_preserve_separate_loops"
 
 set emptyProfiles to an empty list of (the type of outer)
 set absent to the cad extrusion sheets of emptyProfiles on (the cad xy plane) along direction
 check extrusion ((absent's valid) = false)
 free emptyProfiles
-print "an_empty_region_has_no_lateral_sheet" as a line
+print line "an_empty_region_has_no_lateral_sheet"
 
 free profiles
 free outer

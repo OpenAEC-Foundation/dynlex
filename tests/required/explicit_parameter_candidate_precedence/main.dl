@@ -2,37 +2,28 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
 function return value:
     replacement:
         @intrinsic("return", value)
 
-function whether support for the value is {boolean:support}:
-    execute:
-        return support
+to get whether support for the value is {boolean:support}:
+    return support
 
-function whether {boolean:value} controls support:
-    execute:
-        return value
+to get whether {boolean:value} controls support:
+    return value
 
-function [whether support is available before the check when {boolean:support}|whether {boolean:support} means support is available after the check]:
-    execute:
-        return support
+to get [whether support is available before the check when {boolean:support}|whether {boolean:support} means support is available after the check]:
+    return support
 
-function whether shared support [before the check|after the check] is {boolean:support}:
-    execute:
-        return support
+to get whether shared support [before the check|after the check] is {boolean:support}:
+    return support
 
-function label value:
-    replacement:
-        @intrinsic("type", "string")
+label value means: @intrinsic("type", "string")
 
-function the label named {label value:label}:
-    execute:
-        return label
+to get the label named {label value:label}:
+    return label
 
 function:
     patterns:

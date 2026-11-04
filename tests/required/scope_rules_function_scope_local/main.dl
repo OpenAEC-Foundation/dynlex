@@ -5,5 +5,4 @@ local function the inner value:
     execute:
         return 10
 
-print the outer value as a line
-print the inner value as a line
+print lines (the outer value) and (the inner value)

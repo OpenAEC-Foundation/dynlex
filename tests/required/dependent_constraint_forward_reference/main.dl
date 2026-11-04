@@ -2,20 +2,12 @@ function return value:
     replacement:
         @intrinsic("return", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function an array:
-    replacement:
-        @intrinsic("array")
+an array means: @intrinsic("array")
 
-flex function [an|] array as long as value:
-    replacement:
-        @intrinsic("array", @intrinsic("type extent", value, 0))
+[an|] array as long as value means: @intrinsic("array", @intrinsic("type extent", value, 0))
 
-function compare {an array as long as right:left} with {an array:right}:
-    replacement:
-        1
+compare {an array as long as right:left} with {an array:right} means: 1
 
 @intrinsic("discard", compare [1, 2] with [3, 4])

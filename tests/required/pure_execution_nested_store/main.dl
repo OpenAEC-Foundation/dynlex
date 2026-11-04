@@ -10,12 +10,11 @@ flex section while condition:
     replacement:
         @intrinsic("loop while", condition)
 
-function the next power above limit:
-    execute:
-        set result to 1
-        while @intrinsic("less than", result, limit):
-            multiply result by 2
-        @intrinsic("return", result)
+to get the next power above limit:
+    set result to 1
+    while @intrinsic("less than", result, limit):
+        multiply result by 2
+    @intrinsic("return", result)
 
 set powers to @intrinsic("construct", @intrinsic("array", the next power above 5.5, @intrinsic("type", "int", 32)))
 @intrinsic("return", @intrinsic("subtract", @intrinsic("type extent", powers, 0), 8))

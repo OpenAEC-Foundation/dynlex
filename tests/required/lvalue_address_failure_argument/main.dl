@@ -1,5 +1,3 @@
-function consume value:
-    execute:
-        @intrinsic("discard", value)
+to consume value: @intrinsic("discard", value)
 
 consume @intrinsic("address of", 1)

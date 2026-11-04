@@ -1,21 +1,13 @@
 function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
-function left + right:
-    replacement:
-        @intrinsic("add", left, right)
-function left < right:
-    replacement:
-        @intrinsic("less than", left, right)
+left + right means: @intrinsic("add", left, right)
+left < right means: @intrinsic("less than", left, right)
 function publish value:
     replacement:
         @intrinsic("set subject", value)
-function it:
-    replacement:
-        @intrinsic("subject")
-function nothing:
-    replacement:
-        @intrinsic("type", "nothing")
+it means: @intrinsic("subject")
+nothing means: @intrinsic("type", "nothing")
 flex function {nothing:first} and {nothing:second}:
     replacement:
         @intrinsic("discard", first)

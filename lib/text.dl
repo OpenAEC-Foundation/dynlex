@@ -3,12 +3,12 @@
 import lib/list.dl
 
 to get the lowercase ASCII character corresponding to value:
-    if value >= 65 and value <= 90:
+    if 65 <= value <= 90:
         return (value + 32) as a byte
     return value
 
 to get the uppercase ASCII character corresponding to value:
-    if value >= 97 and value <= 122:
+    if 97 <= value <= 122:
         return (value - 32) as a byte
     return value
 
@@ -91,8 +91,7 @@ to get {C string:text} trimmed:
 to get {string:text} with {string:original} replaced by {string:replacement}:
     if the length of original = 0:
         abort the program
-    set occurrences to 0
-    set reader to 0
+    set occurrences and reader to 0
     loop while reader + the length of original <= the length of text:
         if text has original at offset reader:
             increment occurrences
@@ -101,8 +100,7 @@ to get {string:text} with {string:original} replaced by {string:replacement}:
             increment reader
     set length to (the length of text + occurrences * (the length of replacement - the length of original))
     set result to a new string buffer containing length bytes
-    set reader to 0
-    set writer to 0
+    set reader and writer to 0
     loop while reader < the length of text:
         if reader + the length of original <= the length of text and text has original at offset reader:
             set cursor to 0
@@ -140,8 +138,7 @@ to get {string:text} split at {string:separator}:
     if the length of separator = 0:
         abort the program
     set pieces to an empty list of string
-    set start to 0
-    set cursor to 0
+    set start and cursor to 0
     loop while cursor + the length of separator <= the length of text:
         if text has separator at offset cursor:
             append the substring of text from start spanning (cursor - start) bytes to pieces
@@ -159,16 +156,14 @@ to get {C string:text} split at {C string:separator}:
     return the string form of text split at the string form of separator
 
 to get {a pointer to a list:parts} joined with {string:separator}:
-    set length to 0
-    set cursor to 0
+    set length and cursor to 0
     loop while cursor < the length of parts:
         add the length of the item at cursor in parts to length
         if cursor > 0:
             add the length of separator to length
         increment cursor
     set result to a new string buffer containing length bytes
-    set writer to 0
-    set cursor to 0
+    set writer and cursor to 0
     loop while cursor < the length of parts:
         if cursor > 0:
             copy separator into (the data of result) at offset writer

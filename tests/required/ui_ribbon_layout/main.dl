@@ -32,4 +32,4 @@ loop while tab != @intrinsic("construct", a pointer to UI layout):
     set tab to tab's next
 release UI layout layout
 close the address of instance
-print "Ribbon layout passed" as a line
+print line "Ribbon layout passed"

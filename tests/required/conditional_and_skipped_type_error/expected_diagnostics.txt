@@ -1,0 +1,3 @@
+tests/required/conditional_and_skipped_type_error/main.dl:23-70: Error: Logical operator 'and' requires boolean operands, got 'a boolean' and 'a 32-bit integer'
+  note: while inferring intrinsic 'and' in '@intrinsic("and", @intrinsic("equal", 1, 2), 7)' with arguments [a boolean, a 32-bit integer] -> an unresolved value tests/required/conditional_and_skipped_type_error/main.dl:23-70
+  note: while inferring intrinsic 'discard' in '@intrinsic("discard", @intrinsic("and", @intrinsic("equal", 1, 2), 7))' with arguments [an unresolved value] -> an unresolved value tests/required/conditional_and_skipped_type_error/main.dl:1-71

@@ -14,22 +14,17 @@ flex section loop while condition:
     replacement:
         @intrinsic("loop while", condition)
 
-function write through pointer:
-    execute:
-        @intrinsic("store at", pointer, 37)
+to write through pointer: @intrinsic("store at", pointer, 37)
 
-function the identity of value:
-    execute:
-        @intrinsic("return", value)
+to get the identity of value:
+    @intrinsic("return", value)
 
-function opaque zero:
-    execute:
-        @intrinsic("return", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0))
+to get opaque zero:
+    @intrinsic("return", @intrinsic("call", "libc", "abs", @intrinsic("type", "int", 32), 0))
 
-function write indirectly through holder:
-    execute:
-        set pointer to @intrinsic("dereference", holder)
-        @intrinsic("store at", pointer, 53)
+to write indirectly through holder:
+    set pointer to @intrinsic("dereference", holder)
+    @intrinsic("store at", pointer, 53)
 
 class:
     patterns:

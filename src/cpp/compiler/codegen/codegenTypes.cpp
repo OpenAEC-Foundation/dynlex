@@ -315,7 +315,8 @@ collectFinalizedVariableTypes(InstantiatedSectionBody *body, VariableReference *
 		if (!expression)
 			return;
 		if (expression->kind == Expression::Kind::Variable && expression->variable &&
-			normalizeBindingReference(expression->variable) == definition && expression->type.isDeduced()) {
+			normalizeBindingReference(expression->variable) == definition && expression->type.isDeduced() &&
+			!expression->inferredArgumentReference) {
 			DataType expressionType = expression->type;
 			if (!type) {
 				type = expressionType;
@@ -367,6 +368,9 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 		// pointer; variable resolution finds them there first. Parameters the
 		// active match did not bind (their choice alternative was not taken)
 		// fall through and get local storage like any other variable.
+		BindingFrameStack callerScope;
+		if (context.flexBindingFrames.lookupWithCallerScope(normalizedDefinition, nullptr, callerScope))
+			continue;
 		if (context.codegenParameterBindings.contains(normalizedDefinition) ||
 			(context.currentCodegenInstantiation && context.codegenParameterDefinitions.contains(normalizedDefinition) &&
 			 context.currentCodegenInstantiation->requiredCompileTimeParameters.contains(name)))

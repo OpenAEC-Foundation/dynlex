@@ -17,15 +17,15 @@ loop while frame < 60:
     render the address of view
     increment frame
 set duration to (the time since start for view's window) - started
-print (60.0 / duration) as a line
+print line (60.0 / duration)
 
 set match's length to the snake board capacity
 set match's phase to the completed screen
 set index to 0
 loop while index < match's length:
     set row to index / the snake board width
-    set column to the remainder of index divided by the snake board width
-    if (the remainder of row divided by 2) = 1:
+    set column to index mod the snake board width
+    if (row mod 2) = 1:
         set column to (the snake board width - 1) - column
     store a snake cell at column and row into match's body at index
     increment index
@@ -50,4 +50,4 @@ require condition ((match's phase = the finished screen) and (match's impact tim
 close the address of view
 close the address of interface
 close the address of match
-print "Snake rendering passed" as a line
+print line "Snake rendering passed"

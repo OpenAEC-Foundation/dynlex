@@ -2,13 +2,9 @@
 import other.dl
 import std.dl
 
-function print the imported message:
-	execute:
-		print "printing from main.dl"
+to print the imported message: print "printing from main.dl"
 
 # We start a relay through the imported file before printing the message.
-function start the imported message relay:
-	execute:
-		relay the imported message
+to start the imported message relay: relay the imported message
 
 start the imported message relay

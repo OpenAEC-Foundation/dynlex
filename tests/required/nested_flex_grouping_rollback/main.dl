@@ -6,13 +6,11 @@ function set variable to value:
     replacement:
         @intrinsic("store", variable, value)
 
-function left + right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left + right:
+    return @intrinsic("add", left, right)
 
-function left < right:
-    execute:
-        return @intrinsic("less than", left, right)
+to get left < right:
+    return @intrinsic("less than", left, right)
 
 flex function loop while condition:
     replacement:

@@ -4,7 +4,6 @@ function the outer value:
     in this function, by default:
         functions are local
     execute:
-        function the inner value:
-            execute:
-                return 5
+        to get the inner value:
+            return 5
         return the inner value + 1

@@ -53,6 +53,6 @@ to get the UI ink named {C string:name}:
         return UI ink 121 87 154
     if name = "gold":
         return UI ink 171 128 49
-    print "Unknown UI color" as a line
+    print line "Unknown UI color"
     abort the program
     return UI ink 0 0 0

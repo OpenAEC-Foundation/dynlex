@@ -1,0 +1,15 @@
+import lib/list.dl
+
+describe {arguments:parts} means: formatted parts
+
+contains value among {arguments:options} means: value is one of options
+
+function collect {arguments:items} into values:
+    replacement:
+        append items to values
+
+set values to an empty list of an integer
+collect 1, 2 and 3 into values
+print lines (describe "Score: " and 42), (contains 2 among 1, 2 and 3) and (the length of values)
+print line the item at 2 in values
+free values

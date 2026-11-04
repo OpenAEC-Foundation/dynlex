@@ -1,0 +1,24 @@
+function set variable to value:
+    replacement:
+        @intrinsic("store", variable, value)
+flex section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+flex section for each item in values:
+    replacement:
+        set index to 0
+        while @intrinsic("less than", index, @intrinsic("type extent", @intrinsic("type of", values), 0)):
+            set item to @intrinsic("extract element", values, index)
+            @intrinsic("execute body")
+            set index to @intrinsic("add", index, 1)
+function storage size of {arguments:values}:
+    replacement:
+        set total to 0
+        for each item in values:
+            set copy to item
+            set total to @intrinsic("add", total, @intrinsic("size of", @intrinsic("type of", copy)))
+        @intrinsic("add", total, 0)
+@intrinsic("store", width, (storage size of 1, "word" and 1.5))
+@intrinsic("store", bytes, @intrinsic("construct", @intrinsic("array", (storage size of 1, "word" and 1.5), @intrinsic("type", "int", 8))))
+@intrinsic("store", expected, @intrinsic("add", 12, @intrinsic("size of", @intrinsic("type of", "word"))))
+@intrinsic("return", @intrinsic("subtract", @intrinsic("add", width, @intrinsic("size of", @intrinsic("type of", bytes))), @intrinsic("multiply", expected, 2)))

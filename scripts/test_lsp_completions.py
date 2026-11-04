@@ -103,10 +103,10 @@ def replace_line(
 
 
 def test_substitution_completions(root: pathlib.Path) -> None:
-    edit_line = 20
     document = root / "tests" / "lsp" / "completion_substitutions" / "main.dl"
     uri = to_file_uri(document)
     source = document.read_text()
+    edit_line = source.splitlines().index("get sheep in")
     current_line = source.splitlines()[edit_line]
     version = 1
     session = LspSession(default_server_path(root), root, False, False)

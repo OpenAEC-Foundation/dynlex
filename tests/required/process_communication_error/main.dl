@@ -1,8 +1,7 @@
 import lib/process.dl
 
-function the communication error test interpreter:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the communication error test interpreter:
+    return "python" if the process platform is Windows, else "python3"
 
 set length to 262144
 set input to a new string buffer containing length bytes
@@ -17,9 +16,6 @@ add "-c" as an argument to command
 add "import os,sys; sys.stdout.buffer.write(b'before close\\n'); sys.stdout.buffer.flush(); sys.stderr.buffer.write(b'input rejected\\n'); sys.stderr.buffer.flush(); os.close(0); sys.exit(9)" as an argument to command
 run command using input and set result to it
 
-print whether result was launched as a line
-print whether result failed as a line
-print whether (result's standard output = "before close\n") as a line
-print whether (result's standard error = "input rejected\n") as a line
-print whether (result's exit code = (9 as a 64 bit integer)) as a line
-print whether result's error message is not empty as a line
+print lines (result was launched), (result failed) and (result's standard output = "before close\n")
+print lines (result's standard error = "input rejected\n") and (result's exit code = (9 as a 64 bit integer))
+print line result's error message is not empty

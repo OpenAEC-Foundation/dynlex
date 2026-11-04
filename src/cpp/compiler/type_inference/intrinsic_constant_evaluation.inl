@@ -34,6 +34,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (expr->type.kind == DataType::Kind::Float)
 			return 0.0;
 	}
+	if (kind == IntrinsicKind::ExtractElement && expr->arguments[1]->type.kind == DataType::Kind::ArgumentPack) {
+		CompileTimeValue aggregate = readArgumentValue(expr->arguments[1]);
+		const auto *pack = std::get_if<ArgumentPackValue>(&aggregate);
+		auto index = getCompileTimeIntegerValue(readArgumentValue(expr->arguments[2]));
+		requireCompilerInvariant(
+			pack && index && *index >= 0 && static_cast<size_t>(*index) < pack->elements.size(),
+			"validated argument pack extraction lost its compile-time operands"
+		);
+		return pack->elements[static_cast<size_t>(*index)];
+	}
 	if (kind == IntrinsicKind::BuildInfo) {
 		CompileTimeValue keyValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		if (auto *key = std::get_if<std::string>(&keyValue))
@@ -69,16 +79,13 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 			valueType.getByteSize(parseContext.llvmModule->getDataLayout(), *parseContext.llvmContext)
 		);
 	}
-	if (kind == IntrinsicKind::Select) {
+	if (auto conditional = conditionalOperands(kind); conditional && !expr->type.isMetaType()) {
 		CompileTimeValue conditionValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
-		CompileTimeValue leftValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
-		CompileTimeValue rightValue = readArgumentValue(requireArgument(3, expr->intrinsicName));
-		(void)leftValue;
-		(void)rightValue;
-		auto *condition = std::get_if<bool>(&conditionValue);
+		const bool *condition = std::get_if<bool>(&conditionValue);
 		if (!condition)
 			return {};
-		return readArgumentValue(requireArgument(*condition ? 2 : 3, expr->intrinsicName));
+		size_t selected = conditional->selected(*condition);
+		return selected ? readArgumentValue(requireArgument(selected, expr->intrinsicName)) : CompileTimeValue(*condition);
 	}
 	if (kind == IntrinsicKind::Cast && expr->arguments.size() > 2) {
 		CompileTimeValue value = readArgumentValue(requireArgument(1, expr->intrinsicName));
@@ -133,11 +140,11 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return numericValue ? CompileTimeValue(*numericValue) : CompileTimeValue{};
 	}
 	if (kind == IntrinsicKind::FunctionType || kind == IntrinsicKind::FunctionResultType ||
-		kind == IntrinsicKind::FunctionParameterType || kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix || kind == IntrinsicKind::TypeOf ||
-		kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType || kind == IntrinsicKind::Number ||
-		kind == IntrinsicKind::NumberRule || kind == IntrinsicKind::TypeExtent || kind == IntrinsicKind::Array ||
-		kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix || kind == IntrinsicKind::AddPointerDepth ||
-		(kind == IntrinsicKind::And && expr->type.isMetaType())) {
+		kind == IntrinsicKind::FunctionParameterType || kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix ||
+		kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::ElementType || kind == IntrinsicKind::PromoteArithmeticType ||
+		kind == IntrinsicKind::Number || kind == IntrinsicKind::NumberRule || kind == IntrinsicKind::TypeExtent ||
+		kind == IntrinsicKind::Array || kind == IntrinsicKind::Vector || kind == IntrinsicKind::Matrix ||
+		kind == IntrinsicKind::AddPointerDepth || (kind == IntrinsicKind::And && expr->type.isMetaType())) {
 		return readStoredValue(expr);
 	}
 
@@ -197,26 +204,16 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		return {};
 	}
 
-	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or || kind == IntrinsicKind::Equal ||
-		kind == IntrinsicKind::NotEqual || kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr ||
-		kind == IntrinsicKind::BitwiseXor || kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight ||
-		kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract || kind == IntrinsicKind::Multiply ||
-		kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo || kind == IntrinsicKind::LessThan ||
-		kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
+	if (kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual || kind == IntrinsicKind::BitwiseAnd ||
+		kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor || kind == IntrinsicKind::ShiftLeft ||
+		kind == IntrinsicKind::ShiftRight || kind == IntrinsicKind::Add || kind == IntrinsicKind::Subtract ||
+		kind == IntrinsicKind::Multiply || kind == IntrinsicKind::Divide || kind == IntrinsicKind::Modulo ||
+		kind == IntrinsicKind::LessThan || kind == IntrinsicKind::GreaterThan || kind == IntrinsicKind::LessThanOrEqual ||
 		kind == IntrinsicKind::GreaterThanOrEqual || kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
 		CompileTimeValue leftValue = readArgumentValue(requireArgument(1, expr->intrinsicName));
 		CompileTimeValue rightValue = readArgumentValue(requireArgument(2, expr->intrinsicName));
 		if (!isCompileTimeKnown(leftValue) || !isCompileTimeKnown(rightValue))
 			return {};
-
-		if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
-			auto *leftBool = std::get_if<bool>(&leftValue);
-			auto *rightBool = std::get_if<bool>(&rightValue);
-			if (!leftBool || !rightBool)
-				return {};
-			return kind == IntrinsicKind::And ? CompileTimeValue(*leftBool && *rightBool)
-											  : CompileTimeValue(*leftBool || *rightBool);
-		}
 
 		DataType leftType = expr->arguments[1]->type;
 		DataType rightType = expr->arguments[2]->type;

@@ -41,7 +41,7 @@ local function {a pointer to a JSON value:node} contains a valid LSP integer:
         if JSON-RPC number node is not an integer identifier:
             return false
         set number to the number of node
-        return number >= -2147483648.0 and number <= 2147483647.0
+        return -2147483648.0 <= number <= 2147483647.0
 
 local function {a pointer to a JSON value:node} contains an invalid LSP integer:
     execute:
@@ -52,7 +52,7 @@ local function {a pointer to a JSON value:node} contains a valid unsigned LSP in
         if JSON-RPC number node is not an integer identifier:
             return false
         set number to the number of node
-        return number >= 0.0 and number <= 2147483647.0
+        return 0.0 <= number <= 2147483647.0
 
 local function {a pointer to a JSON value:position} is a valid LSP position:
     execute:
@@ -195,9 +195,7 @@ local function the result of configuring LSP server capabilities {a pointer to a
             if name != "utf-16":
                 return a failed JSON-RPC operation with status the LSP invalid response status reporting "The LSP client supports only UTF-16 positions"
         set kind to the LSP no synchronization kind
-        set opens to false
-        set saves to false
-        set includes to false
+        set opens, saves and includes to false
         if capabilities has JSON member named "textDocumentSync":
             set synchronization to the JSON member named "textDocumentSync" in capabilities
             if the kind of synchronization = the JSON number kind:

@@ -1,0 +1,12 @@
+integer means: @intrinsic("type", "int")
+it means: @intrinsic("subject")
+function publish value:
+    replacement:
+        @intrinsic("set subject", value)
+to get successor of value:
+    publish value
+    publish @intrinsic("add", it, 1)
+    @intrinsic("return", it)
+@intrinsic("store", first, @intrinsic("construct", @intrinsic("array", successor of 1, integer)))
+@intrinsic("store", second, @intrinsic("construct", @intrinsic("array", successor of 5, integer)))
+@intrinsic("return", @intrinsic("select", @intrinsic("and", @intrinsic("equal", @intrinsic("type extent", first, 0), 2), @intrinsic("equal", @intrinsic("type extent", second, 0), 6)), 0, 1))

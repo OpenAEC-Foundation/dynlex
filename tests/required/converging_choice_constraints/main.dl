@@ -2,17 +2,11 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function [a|] boolean:
-    replacement:
-        @intrinsic("type", "bool")
+[a|] boolean means: @intrinsic("type", "bool")
 
-function the choice of [{integer:value}|{boolean:value}]:
-    replacement:
-        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
+the choice of [{integer:value}|{boolean:value}] means: @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore the choice of 1
 ignore the choice of @intrinsic("equal", 1, 1)

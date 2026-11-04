@@ -1,22 +1,18 @@
 import lib/std.dl
 
-function record a recursive event:
-	execute:
-		@intrinsic("discard", 0)
+to record a recursive event: @intrinsic("discard", 0)
 
-function the first recursive result for {integer:value}:
-	execute:
-		if value > 0:
-			set predecessor to (value - 1)
-			set ignored to the second recursive result for predecessor
-		record a recursive event
-		return value
+to get the first recursive result for {integer:value}:
+	if value > 0:
+		set predecessor to (value - 1)
+		set ignored to the second recursive result for predecessor
+	record a recursive event
+	return value
 
-function the second recursive result for {integer:value}:
-	execute:
-		if value > 0:
-			set predecessor to (value - 1)
-			set ignored to the first recursive result for predecessor
-		return value
+to get the second recursive result for {integer:value}:
+	if value > 0:
+		set predecessor to (value - 1)
+		set ignored to the first recursive result for predecessor
+	return value
 
 set result to the first recursive result for 1

@@ -1,11 +1,7 @@
 import lib/std.dl
 
-function cache profile width:
-    execute:
-        persist profile width
+to cache profile width: persist profile width
 
-function persist profile width:
-    execute:
-        set width to 320
+to persist profile width: set width to 320
 
 cache profile width

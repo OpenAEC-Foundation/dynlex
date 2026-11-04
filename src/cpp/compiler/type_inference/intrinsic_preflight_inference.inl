@@ -1,6 +1,14 @@
 const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
 IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
 if (info) {
+	if ((context.parseContext.options.emitSPIRV && info->targets != IntrinsicTargets::All) ||
+		(context.parseContext.options.emitWASM && info->targets == IntrinsicTargets::Native)) {
+		std::string targets = info->targets == IntrinsicTargets::Native ? "native CPU" : "native CPU or WebAssembly";
+		failWithDetail(
+			expr->range, "Intrinsic '" + expr->intrinsicName + "' is only available when emitting " + targets + " code", 0
+		);
+		break;
+	}
 	for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
 		if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
 			continue;

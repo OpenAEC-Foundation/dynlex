@@ -1,0 +1,15 @@
+flex section assign [using slot|] from value:
+    replacement:
+        @intrinsic("store", slot, value)
+        @intrinsic("execute body")
+
+# Omitted captures remain local, even when another invocation binds the same
+# declaration to a caller variable with a different type.
+@intrinsic("store", destination, 99)
+@intrinsic("store", innerDestination, 88)
+assign using destination from 7:
+    assign from 23.5:
+        assign using innerDestination from 11:
+            assign from "local":
+                @intrinsic("store", result, 1)
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", destination, 7), @intrinsic("subtract", innerDestination, 11)))

@@ -7,8 +7,7 @@ ignore @intrinsic("variadic call", "libc", "fprintf", an integer, 2, stream, "A%
 ignore @intrinsic("call", "libc", "fclose", an integer, stream)
 
 read the file at path and set reading to it
-print (the length of reading's contents) as a line
-print (the character at 0 in reading's contents) as an integer as a line
-print (the character at 1 in reading's contents) as an integer as a line
-print (the character at 2 in reading's contents) as an integer as a line
+print lines (the length of reading's contents) and ((the character at 0 in reading's contents) as an integer)
+print line (the character at 1 in reading's contents) as an integer
+print line (the character at 2 in reading's contents) as an integer
 delete the filesystem entry at path

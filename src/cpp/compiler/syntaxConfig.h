@@ -44,6 +44,9 @@ struct SyntaxConfig {
 	std::string actionShorthand = "to";
 	std::string valueShorthand = "to get";
 	std::string replacementShorthand = "means";
+	std::string formattedStringPrefix = "formatted";
+	std::string argumentPackSeparator = ",";
+	std::string argumentPackConjunction = "and";
 
 	std::string executeSectionName = "execute";
 	std::string replacementSectionName = "replacement";

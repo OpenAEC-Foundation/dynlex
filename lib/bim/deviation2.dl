@@ -94,7 +94,7 @@ local function the cad polyline deviation samples of {cad curve2:shape} within {
             set points to the cad samples of (the item at index in segments) within deviation tolerance
             if (the length of points) > 0:
                 replace item at index 0 in points with (the position of (the item at index in vertices))
-                replace item at index ((the length of points) - 1) in points with (the position of (the item at (the remainder of (index + 1) divided by (the maximum of count and 1)) in vertices))
+                replace item at index ((the length of points) - 1) in points with (the position of (the item at ((index + 1) mod (the maximum of count and 1)) in vertices))
             set skip to 0
             if (the length of output) > 0:
                 if (the length of points) > 0:
@@ -111,22 +111,21 @@ local function the cad polyline deviation samples of {cad curve2:shape} within {
         free segments
         return output
 
-function the cad samples of {cad curve2:shape} within deviation {a 64 bit floating-point number:tolerance}:
-    execute:
-        if shape's kind = 0:
-            set output to a list containing shape's line's start
-            append shape's line's end to output
-            return output
-        if (shape's kind = 6) or (shape's kind = 7):
-            set output to a list containing (the cad point on shape at 0.0)
-            append (the cad point on shape at 1.0) to output
-            return output
-        if shape's kind = 1:
-            return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's circle's radius and sweep 6.283185307179586 within tolerance)
-        if shape's kind = 2:
-            return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's arc's radius and sweep (the cad sweep of shape's arc) within tolerance)
-        if shape's kind = 3:
-            return the cad curve2 uniform samples of shape in (the cad elliptic segment count of shape's ellipse within tolerance)
-        if shape's kind = 4:
-            return the cad polyline deviation samples of shape within tolerance
-        return the cad deviation samples of shape's nurbs within tolerance
+to get the cad samples of {cad curve2:shape} within deviation {a 64 bit floating-point number:tolerance}:
+    if shape's kind = 0:
+        set output to a list containing shape's line's start
+        append shape's line's end to output
+        return output
+    if shape's kind is one of 6 and 7:
+        set output to a list containing (the cad point on shape at 0.0)
+        append (the cad point on shape at 1.0) to output
+        return output
+    if shape's kind = 1:
+        return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's circle's radius and sweep 6.283185307179586 within tolerance)
+    if shape's kind = 2:
+        return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's arc's radius and sweep (the cad sweep of shape's arc) within tolerance)
+    if shape's kind = 3:
+        return the cad curve2 uniform samples of shape in (the cad elliptic segment count of shape's ellipse within tolerance)
+    if shape's kind = 4:
+        return the cad polyline deviation samples of shape within tolerance
+    return the cad deviation samples of shape's nurbs within tolerance

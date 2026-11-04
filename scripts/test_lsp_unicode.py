@@ -65,12 +65,15 @@ def main():
                                        "position": {"line": 1, "character": units(prefix)}})
         twice = next(item for item in completions["items"] if "twice" in item["label"])
         assert twice["textEdit"]["range"]["end"]["character"] == units(prefix), twice
-        source = source.splitlines()[0] + '\nto example:\n    show "😀é中" twice\nexample\n'
+        source = source.splitlines()[0] + '''
+to example: show "😀é中" twice
+example
+'''
         session.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 5},
                                                   "contentChanges": [{"text": source}]})
         symbols = session.request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
         example = next(symbol for symbol in symbols if "example" in symbol["name"])
-        assert example["range"]["end"] == {"line": 2, "character": units(source.splitlines()[2])}, example
+        assert example["range"]["end"] == {"line": 1, "character": units(source.splitlines()[1])}, example
         source = source.splitlines()[0] + '\nshow "😀é中" unknown\n'
         session.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 6},
                                                   "contentChanges": [{"text": source}]})

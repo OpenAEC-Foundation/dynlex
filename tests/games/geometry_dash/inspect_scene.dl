@@ -10,11 +10,7 @@ fill plan using seed 1337
 
 set minimum to (the item at 0 in (plan's steps))'s jump duration
 set maximum to (the item at 0 in (plan's steps))'s jump duration
-set total to 0
-set peak to 0
-set run to 0
-set longest to 0
-set index to 0
+set total, peak, run, longest and index to 0
 loop while index < plan's count:
 	set step to the item at index in (plan's steps)
 	set jump to step's jump duration

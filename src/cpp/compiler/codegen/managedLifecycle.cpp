@@ -31,13 +31,13 @@ bool invokeCustomLifecycle(ParseContext &context, const DataType &type, llvm::Va
 	placeholder.kind = Expression::Kind::TypedPlaceholder;
 	placeholder.type = type;
 	std::vector<std::pair<std::string, Expression *>> bindings = {{std::string(managedLifecycleParameterName), &placeholder}};
-	if (!instantiation.llvmFunction && !generateSpecializedFunction(context, section, bindings, instantiation))
-		return false;
-	requireCompilerInvariant(instantiation.llvmFunction != nullptr, "managed lifecycle function was not generated");
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	llvm::AllocaInst *valueAddress = createEntryAlloca(context, "managed_value", type);
 	builder.CreateAlignedStore(value, valueAddress, getLLVMABIAlignment(context, type));
-	builder.CreateCall(instantiation.llvmFunction, {valueAddress});
+	llvm::Function *function = generateSpecializedFunction(context, section, bindings, instantiation, {valueAddress});
+	if (!function)
+		return false;
+	builder.CreateCall(function, {valueAddress});
 	return true;
 }
 

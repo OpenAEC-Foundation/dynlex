@@ -27,29 +27,29 @@ class CommandLineSourceTests(unittest.TestCase):
         )
 
     def test_split_arguments_are_executed_as_source(self) -> None:
-        result = self.run_dynlex("print", "3", "as", "a", "line")
+        result = self.run_dynlex("print", "line", "3")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "3\n")
 
     def test_single_argument_is_executed_as_source(self) -> None:
-        result = self.run_dynlex("print 4 as a line")
+        result = self.run_dynlex("print line 4")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "4\n")
 
     def test_double_dash_forces_source_mode(self) -> None:
-        result = self.run_dynlex("--", "print", "5", "as", "a", "line")
+        result = self.run_dynlex("--", "print", "line", "5")
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "5\n")
 
     def test_multiline_source_is_executed_without_rewriting(self) -> None:
         result = self.run_dynlex(
-            "function value doubled:\n"
-            "    execute:\n"
-            "        return value + value\n"
-            "print 4 doubled as a line\n"
+            '''to get value doubled:
+    return value + value
+print line 4 doubled
+'''
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -63,7 +63,7 @@ class CommandLineSourceTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            result = self.run_dynlex("print", "6", "as", "a", "line", cwd=root)
+            result = self.run_dynlex("print", "line", "6", cwd=root)
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, "6\n")

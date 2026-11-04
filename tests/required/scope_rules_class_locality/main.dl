@@ -8,4 +8,4 @@ class:
     members:
         amount as an integer
 
-print 1 as a line
+print line 1

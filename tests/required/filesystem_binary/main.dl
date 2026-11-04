@@ -8,6 +8,6 @@ store 65 as a byte into the data of payload at 0
 store 0 as a byte into the data of payload at 1
 store 66 as a byte into the data of payload at 2
 write payload to the file at path and set writing to it
-print whether writing succeeded as a line
+print line writing succeeded
 
 delete the filesystem entry at path

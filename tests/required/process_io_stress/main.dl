@@ -1,8 +1,7 @@
 import lib/process.dl
 
-function the stress process test interpreter:
-    execute:
-        return "python" if the process platform is Windows, else "python3"
+to get the stress process test interpreter:
+    return "python" if the process platform is Windows, else "python3"
 
 set length to 262144
 set input to a new string buffer containing length bytes
@@ -17,13 +16,9 @@ add "-c" as an argument to command
 add "import sys\nsize=262144\nsys.stdout.write('O'*size); sys.stdout.flush()\nsys.stderr.write('E'*size); sys.stderr.flush()\ndata=sys.stdin.buffer.read()\nsys.stdout.write(str(len(data)))" as an argument to command
 run command using input and set result to it
 
-print whether result was launched as a line
-print whether result succeeded as a line
-print result's exit code as a line
-print whether (result's standard output's length = length + 6) as a line
-print whether (the character at 0 in result's standard output = 79) as a line
-print whether (the character at (length - 1) in result's standard output = 79) as a line
-print whether (the substring of result's standard output from length spanning 6 bytes = "262144") as a line
-print whether (result's standard error's length = length) as a line
-print whether (the character at 0 in result's standard error = 69) as a line
-print whether (the character at (length - 1) in result's standard error = 69) as a line
+print lines (result was launched), (result succeeded) and (result's exit code)
+print lines (result's standard output's length = length + 6) and (the character at 0 in result's standard output = 79)
+print line (the character at (length - 1) in result's standard output = 79)
+print line (the substring of result's standard output from length spanning 6 bytes = "262144")
+print lines (result's standard error's length = length) and (the character at 0 in result's standard error = 69)
+print line (the character at (length - 1) in result's standard error = 69)

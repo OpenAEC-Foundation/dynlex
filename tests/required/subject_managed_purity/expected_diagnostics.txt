@@ -1,0 +1,1 @@
+tests/required/subject_managed_purity/main.dl:22-36: Error: Type constraint 'effectful type' must be pure

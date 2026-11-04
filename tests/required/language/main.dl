@@ -1,30 +1,19 @@
-function fixed quantity:
-	replacement:
-		@intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function [een|] integer:
-	replacement:
-		@intrinsic("type", "int")
+[een|] integer means: @intrinsic("type", "int")
 
-function [een|] {fixed integer:bits} bit integer:
-	replacement:
-		@intrinsic("type", "int", bits)
+[een|] {fixed integer:bits} bit integer means: @intrinsic("type", "int", bits)
 
-function waarde als {fixed integer:bits} bit integer:
-	replacement:
-		@intrinsic("cast", waarde, @intrinsic("type", "int", bits))
+waarde als {fixed integer:bits} bit integer means: @intrinsic("cast", waarde, @intrinsic("type", "int", bits))
 
 function negeer waarde:
 	replacement:
 		@intrinsic("discard", waarde)
 
-function zeg bericht:
-	execute:
-		negeer @intrinsic("variadic call", "libc", "printf", een 32 bit integer, 1, "%s\n", bericht)
+to zeg bericht: negeer @intrinsic("variadic call", "libc", "printf", een 32 bit integer, 1, "%s\n", bericht)
 
-function toon getal:
-	execute:
-		negeer @intrinsic("variadic call", "libc", "printf", een 32 bit integer, 1, "%ld\n", getal als 64 bit integer)
+to toon getal:
+	negeer @intrinsic("variadic call", "libc", "printf", een 32 bit integer, 1, "%ld\n", getal als 64 bit integer)
 
 function maak variabele waarde:
 	replacement:

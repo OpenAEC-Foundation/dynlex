@@ -8,9 +8,7 @@ import tempfile
 
 
 def shared_member_program(class_count: int) -> str:
-    source = '''function integer:
-    replacement:
-        @intrinsic("type", "int")
+    source = '''integer means: @intrinsic("type", "int")
 
 function set variable to value:
     replacement:
@@ -77,9 +75,7 @@ def main() -> int:
         assert result.stdout == "31\n1\n6\n11\n", result.stdout
 
         cycles = {
-            "choice_family": '''function left [woven|braided] right:
-    replacement:
-        @intrinsic("add", left, right)
+            "choice_family": '''left [woven|braided] right means: @intrinsic("add", left, right)
 
 function left woven right:
     before: $ braided $

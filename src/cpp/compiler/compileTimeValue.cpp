@@ -178,6 +178,7 @@ CompileTimeValue resolveImmediateCompileTimeValue(const Expression *expr) {
 			return TypeReferenceValue::exact(expr->type);
 		return {};
 	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::ArgumentPack:
 	case Expression::Kind::IntrinsicCall:
 	case Expression::Kind::PatternCall:
 		if (expr->type.kind == DataType::Kind::Type)

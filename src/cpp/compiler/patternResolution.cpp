@@ -448,6 +448,8 @@ static bool
 patternTransitionsOverlap(const PatternDomainAutomaton::Transition &left, const PatternDomainAutomaton::Transition &right) {
 	if (left.element.type != right.element.type)
 		return false;
+	if (left.element.isArgumentPack != right.element.isArgumentPack)
+		return false;
 	if (left.element.type == PatternElement::Type::Variable)
 		return left.constraint.structurallyOverlaps(right.constraint);
 	return left.element.text == right.element.text;
@@ -572,10 +574,7 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 				PatternDefinition *laterDefinition = earlierDefinition == definition ? other : definition;
 				if (!seenDuplicatePairs.insert({earlierDefinition, laterDefinition}).second)
 					continue;
-				bool flexSectionOverload = earlierDefinition->section->type == SectionType::Section &&
-										   laterDefinition->section->type == SectionType::Section &&
-										   (earlierDefinition->section->isFlex || laterDefinition->section->isFlex);
-				if (flexSectionOverload || definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
+				if (definitionsHaveAmbiguousTypeDomainOverlap(*earlierDefinition, *laterDefinition))
 					conflicts.push_back({laterDefinition, earlierDefinition});
 			}
 		}
@@ -587,16 +586,9 @@ static bool emitDefinitionConflicts(ParseContext &context) {
 	std::sort(conflicts.begin(), conflicts.end(), definitionConflictComesBefore);
 	const DefinitionConflict &conflict = conflicts.front();
 	const SyntaxConfig &syntax = syntaxConfigForRange(context, conflict.primary->range);
-	bool flexSectionOverload = conflict.primary->section->type == SectionType::Section &&
-							   conflict.related->section->type == SectionType::Section &&
-							   (conflict.primary->section->isFlex || conflict.related->section->isFlex);
-	Diagnostic diagnostic(
-		context, Diagnostic::Level::Error,
-		flexSectionOverload ? "flex sections cannot be overloaded" : "duplicate pattern definition", conflict.primary->range
-	);
+	Diagnostic diagnostic(context, Diagnostic::Level::Error, "duplicate pattern definition", conflict.primary->range);
 	diagnostic.relatedInfo.push_back({
-		flexSectionOverload ? "conflicts with this flex section"
-							: renderConfiguredMessage(syntax, "duplicate pattern definition related existing"),
+		renderConfiguredMessage(syntax, "duplicate pattern definition related existing"),
 		conflict.related->range,
 	});
 	appendImplicitPromotionDuplicateDetails(diagnostic, conflict.primary, conflict.related);

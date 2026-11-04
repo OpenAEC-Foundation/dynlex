@@ -7,8 +7,6 @@ delete the filesystem entry at destination
 
 write the string form of "contents" to the file at source
 rename the filesystem entry at source to destination
-print whether it succeeded as a line
-print whether source is readable as a line
-print whether destination is readable as a line
+print lines (it succeeded), (source is readable) and (destination is readable)
 
 delete the filesystem entry at destination

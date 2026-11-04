@@ -1,14 +1,11 @@
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
 function initialize value:
     replacement:
         @intrinsic("store", value, 11)
 
-function initialize {integer:value}:
-    execute:
-        @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value))
+to initialize {integer:value}:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", value))
 
 initialize result
 initialize result

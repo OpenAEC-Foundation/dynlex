@@ -4,7 +4,7 @@
 #include <cstddef>
 
 struct MatchDependency {
-	enum class Kind { Endpoint, ArgumentChild, LiteralChild };
+	enum class Kind { Endpoint, ArgumentChild, ArgumentPackChild, LiteralChild };
 
 	Kind kind;
 	const PatternTreeNode *node;
@@ -30,6 +30,7 @@ struct MatchedArgument {
 	Kind kind{};
 	Expression *expression{};
 	size_t itemIndex{};
+	bool isPackElement = false;
 };
 
 struct PatternMatch {

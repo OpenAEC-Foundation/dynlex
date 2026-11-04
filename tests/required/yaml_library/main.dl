@@ -1,47 +1,43 @@
 import yaml.dl
 
-function print YAML error for {a value:input}:
-    execute:
-        parse input as a YAML mapping and set parsed to it
-        print whether parsed succeeded
-        print ":"
-        print parsed's error line
-        print ":"
-        print parsed's error column
-        print ":"
-        print parsed's error message as a line
-        free parsed
+to print YAML error for {a value:input}:
+    parse input as a YAML mapping and set parsed to it
+    print parsed succeeded
+    print ":"
+    print parsed's error line
+    print ":"
+    print parsed's error column
+    print ":"
+    print line parsed's error message
+    free parsed
 
 set source to the string form of "# heading\r\nroot: # root comment\r\n  plain: hello world # comment\r\n  quoted: \"hello # world\"\r\n  escaped: \"line\\nnext\"\r\n  single: 'it''s here'\r\n  empty: \"\"\r\n  colon: scheme:value\r\n  nested:\r\n    leaf: value\r\nsibling: done\r\n"
 parse source as a YAML mapping and set parsed to it
-print whether parsed succeeded as a line
+print line parsed succeeded
 set document to parsed's document
-print the number of YAML entries in document as a line
+print line the number of YAML entries in document
 set root to the YAML entry named "root" in document
-print whether root is a YAML mapping as a line
-print the YAML scalar named "plain" in root as a line
-print the YAML scalar named "quoted" in root as a line
-print the YAML scalar named "escaped" in root as a line
-print the YAML scalar named "single" in root as a line
+print lines (root is a YAML mapping) and (the YAML scalar named "plain" in root)
+print lines (the YAML scalar named "quoted" in root) and (the YAML scalar named "escaped" in root)
+print line the YAML scalar named "single" in root
 set empty to the YAML entry named "empty" in root
-print whether empty is a YAML scalar as a line
+print line empty is a YAML scalar
 print "["
 print the YAML scalar of empty
-print "]" as a line
-print the YAML scalar named "colon" in root as a line
+print lines "]" and (the YAML scalar named "colon" in root)
 set nested to the YAML entry named "nested" in root
-print the YAML scalar named "leaf" in nested as a line
+print line the YAML scalar named "leaf" in nested
 set sibling to the YAML entry named "sibling" in document
-print the YAML scalar of sibling as a line
+print line the YAML scalar of sibling
 print the YAML source line of sibling
 print ":"
-print the YAML source column of sibling as a line
+print line the YAML source column of sibling
 free parsed
 
 parse "# only a comment\n\n" as a YAML mapping and set blank to it
-print whether blank succeeded
+print blank succeeded
 print ":"
-print the number of YAML entries in blank's document as a line
+print line the number of YAML entries in blank's document
 free blank
 
 print YAML error for "root:\n   child: yes\n  broken: no\n"

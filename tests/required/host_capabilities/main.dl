@@ -8,21 +8,11 @@ set platform to whether the host platform is Windows
 set native to the native path style
 set style to native's value
 
-print whether executable succeeded as a line
-print whether executable is supported as a line
-print whether directory succeeded as a line
-print whether directory is supported as a line
-print whether cache succeeded as a line
-print whether cache is supported as a line
-print whether platform succeeded as a line
-print whether platform is supported as a line
-print whether native succeeded as a line
-print whether native is supported as a line
-print whether (executable's error message = "") as a line
-print whether (directory's error message = "") as a line
-print whether (cache's error message = "") as a line
-print whether (platform's error message = "") as a line
-print whether (native's error message = "") as a line
+print lines (executable succeeded), (executable is supported), (directory succeeded) and (directory is supported)
+print lines (cache succeeded), (cache is supported), (platform succeeded) and (platform is supported)
+print lines (native succeeded), (native is supported) and (executable's error message = "")
+print lines (directory's error message = ""), (cache's error message = "") and (platform's error message = "")
+print line (native's error message = "")
 
 set filename to the filename of executable's value using style
 set parent to the parent path of executable's value using style
@@ -32,9 +22,8 @@ set folder to whether directory's value is an absolute path using style
 set cached to whether cache's value is an absolute path using style
 
 set expected to "main.exe" if platform's value, else "main.out"
-print whether (filename succeeded) and (filename's value = expected) as a line
-print whether (parent succeeded) and (parent's value = directory's value) as a line
-print whether (resolved succeeded) and (resolved's value = executable's value) as a line
-print ((program succeeded) and program's value) as a line
-print ((folder succeeded) and folder's value) as a line
-print ((cached succeeded) and cached's value) as a line
+print line (filename succeeded) and (filename's value = expected)
+print line (parent succeeded) and (parent's value = directory's value)
+print line (resolved succeeded) and (resolved's value = executable's value)
+print lines ((program succeeded) and program's value) and ((folder succeeded) and folder's value)
+print line ((cached succeeded) and cached's value)

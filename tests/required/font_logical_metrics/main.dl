@@ -21,4 +21,4 @@ set slot to metadata's glyph as a pointer to FT glyph slot
 require condition (first = ((slot's advance x as a floating-point number) / 128.0)) reporting "Raster scaling changed the logical text size"
 set released to the result of releasing (the address of typeface)
 require condition (released succeeded) reporting "The test font could not be released"
-print "Logical font metrics passed" as a line
+print line "Logical font metrics passed"

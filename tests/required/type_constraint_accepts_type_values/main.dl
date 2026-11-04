@@ -2,20 +2,12 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [a|] type:
-    replacement:
-        @intrinsic("type", "type")
+[a|] type means: @intrinsic("type", "type")
 
-function [a|] byte:
-    replacement:
-        @intrinsic("type", "int", 8)
+[a|] byte means: @intrinsic("type", "int", 8)
 
-function [a|] pointer to pointed:
-    replacement:
-        @intrinsic("add pointer depth", pointed)
+[a|] pointer to pointed means: @intrinsic("add pointer depth", pointed)
 
-function the identity of {type:value}:
-    replacement:
-        @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
+the identity of {type:value} means: @intrinsic("select", @intrinsic("equal", 0, 0), value, value)
 
 ignore @intrinsic("size of", the identity of a pointer to a byte)

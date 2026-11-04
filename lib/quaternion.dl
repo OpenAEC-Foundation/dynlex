@@ -9,17 +9,15 @@ class:
 
 a new quaternion with w {a number:scalar}, x {a number:horizontal}, y {a number:vertical} and z {a number:depth} means: @intrinsic("construct", a quaternion, scalar, horizontal, vertical, depth)
 
-function {quaternion:left} + {a number:right}:
-    execute:
-        return a new quaternion with w the w of left + right, x the x of left + right, y the y of left + right and z the z of left + right
+to get {quaternion:left} + {a number:right}:
+    return a new quaternion with w the w of left + right, x the x of left + right, y the y of left + right and z the z of left + right
 
-function {quaternion:left} * {a number:factor}:
-    execute:
-        set scalar to (the w of left) * factor
-        set horizontal to (the x of left) * factor
-        set vertical to (the y of left) * factor
-        set depth to (the z of left) * factor
-        return a new quaternion with w scalar, x horizontal, y vertical and z depth
+to get {quaternion:left} * {a number:factor}:
+    set scalar to (the w of left) * factor
+    set horizontal to (the x of left) * factor
+    set vertical to (the y of left) * factor
+    set depth to (the z of left) * factor
+    return a new quaternion with w scalar, x horizontal, y vertical and z depth
 
 to get the string form of {quaternion:value}:
     set result to the string form of "["
@@ -142,12 +140,11 @@ to get {vector:value} rotated around {vector:axis} by {a number:angle} degrees:
     set result to (rotation * point) * inverse
     return a vector from result
 
-function {vector:value} rotated by {quaternion:rotation}:
-    execute:
-        set point to a quaternion from value
-        set inverse to the inverse of rotation
-        set result to (rotation * point) * inverse
-        return a vector from result
+to get {vector:value} rotated by {quaternion:rotation}:
+    set point to a quaternion from value
+    set inverse to the inverse of rotation
+    set result to (rotation * point) * inverse
+    return a vector from result
 
 to get {quaternion:value} rotated around {vector:axis} by {a number:angle} degrees:
     set rotation to a quaternion for rotation around axis by angle degrees

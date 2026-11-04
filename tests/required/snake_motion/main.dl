@@ -93,4 +93,4 @@ set position to the snake position 0 in (the address of game)
 require condition ((position's column = first's column) and (position's row = first's row)) reporting "Changing pace or waiting while paused moved the snake"
 close the address of game
 close the address of peer
-print "Snake motion passed" as a line
+print line "Snake motion passed"

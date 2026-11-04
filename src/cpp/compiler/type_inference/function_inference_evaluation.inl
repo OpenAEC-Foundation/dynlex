@@ -130,6 +130,7 @@ struct ScopedPureExecution {
 struct PureExecutionFrame {
 	Instantiation *instantiation{};
 	std::map<VariableStorageKey, CompileTimeValue> localValues;
+	std::unordered_map<Expression *, CompileTimeValue> subjectValues;
 };
 
 static Expression *resolvePureExecutionBinding(
@@ -307,6 +308,7 @@ static PureExpressionExecutionResult evaluatePureExpression(
 	case Expression::Kind::TypedPlaceholder:
 	case Expression::Kind::Pending:
 	case Expression::Kind::ArrayLiteral:
+	case Expression::Kind::ArgumentPack:
 		return {pureExecutionStoredValue(expr, state), false, {}};
 
 	case Expression::Kind::Variable: {
@@ -318,7 +320,19 @@ static PureExpressionExecutionResult evaluatePureExpression(
 
 	case Expression::Kind::IntrinsicCall: {
 		IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
+		if (kind == IntrinsicKind::SetSubject) {
+			auto value = evaluatePureExpression(expr->arguments[1], state, frame, bindingFrameStack);
+			requireCompilerInvariant(!value.returned, "subject value returned during pure evaluation");
+			frame.subjectValues[expr] = std::move(value.value);
+			return {};
+		}
+		if (kind == IntrinsicKind::Subject) {
+			auto value = frame.subjectValues.find(expr->subjectSetter);
+			requireCompilerInvariant(value != frame.subjectValues.end(), "pure subject read has no executed assignment");
+			return {value->second, false, {}};
+		}
 		if (isTypeQueryIntrinsicKind(kind))
+
 			return {pureExecutionStoredValue(expr, state), false, {}};
 		if (kind == IntrinsicKind::ExecuteBody)
 			return executePureSectionFlexCallerBody(expr, state, frame);
@@ -345,6 +359,18 @@ static PureExpressionExecutionResult evaluatePureExpression(
 			}
 			setPureExecutionLocalValue(frame, variableStorageKey(destinationExpression), valueResult.value);
 			return {};
+		}
+
+		if (auto conditional = conditionalOperands(kind); conditional && !expr->type.isMetaType()) {
+			auto conditionResult = evaluatePureExpression(expr->arguments[1], state, frame, bindingFrameStack);
+			if (conditionResult.returned)
+				return conditionResult;
+			const bool *condition = std::get_if<bool>(&conditionResult.value);
+			if (!condition)
+				return {};
+			size_t selected = conditional->selected(*condition);
+			return selected ? evaluatePureExpression(expr->arguments[selected], state, frame, bindingFrameStack)
+							: PureExpressionExecutionResult{*condition, false, {}};
 		}
 
 		std::unordered_map<Expression *, CompileTimeValue> argumentValues;
@@ -544,6 +570,14 @@ static PureExpressionExecutionResult executePureSection(
 	}
 	if (!openingExpression || openingExpression->sectionOutcome.read().kind != Expression::SectionOutcome::Kind::Loop)
 		return executePureSectionBodyOnce(state, frame, section, body, bindingFrameStack);
+	if (openingExpression->staticLoopBodies) {
+		for (const auto &iteration : *openingExpression->staticLoopBodies) {
+			auto result = executePureSectionBodyOnce(state, frame, section, iteration.get(), bindingFrameStack);
+			if (result.returned)
+				return result;
+		}
+		return {};
+	}
 	while (true) {
 		PureExpressionExecutionResult headerResult = evaluatePureExpression(openingExpression, state, frame, bindingFrameStack);
 		if (headerResult.returned)
@@ -674,7 +708,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 		}
 	}
 	if (!isCompileTimeKnown(computedValue))
-		computedValue = context.lookupKnownConstant(expr->variable);
+		computedValue = context.lookupKnownConstant(variableStorageKey(expr));
 	if (!isCompileTimeKnown(computedValue) && context.currentInstantiation) {
 		if (variableReferenceIsCurrentInstantiationParameter(context, expr->variable) &&
 			context.currentInstantiation->requiredCompileTimeParameters.contains(expr->variable->name)) {
@@ -692,6 +726,7 @@ inferVariableCompileTimeValue(Expression *expr, InferenceContext &context, const
 	return computedValue;
 }
 
+#include "variable_flow.inl"
+
 #include "intrinsics/store_inference.inl"
 #include "return_inference.inl"
-#include "variable_flow.inl"

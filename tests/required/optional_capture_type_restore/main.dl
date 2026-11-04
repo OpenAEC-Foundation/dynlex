@@ -1,0 +1,12 @@
+flex section measure [using slot|] from value into width:
+    replacement:
+        @intrinsic("store", slot, value)
+        @intrinsic("execute body")
+        @intrinsic("store", width, @intrinsic("size of", @intrinsic("type of", slot)))
+
+@intrinsic("store", outerWidth, 0)
+@intrinsic("store", innerWidth, 0)
+measure from 7 into outerWidth:
+    measure from 23.5 into innerWidth:
+        @intrinsic("store", visited, 1)
+@intrinsic("return", @intrinsic("add", @intrinsic("subtract", outerWidth, 4), @intrinsic("subtract", innerWidth, 8)))

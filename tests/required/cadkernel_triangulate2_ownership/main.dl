@@ -2,23 +2,19 @@
 # Managed return, copy, list, clone and reset behavior for triangulation results.
 import lib/bim/triangulate2.dl
 
-function check triangulation ownership {boolean:condition}:
-    execute:
-        if condition = false:
-            print "triangulation ownership failure" as a line
-            @intrinsic("call", "libc", "exit", nothing, 1)
+to check triangulation ownership {boolean:condition}:
+    if condition = false:
+        print line "triangulation ownership failure"
+        @intrinsic("call", "libc", "exit", nothing, 1)
 
-function a triangulation ownership [mesh]:
-    execute:
-        set vertices to an empty list of a cad vector2
-        append (a cad vector2 with x 0.0 and y 0.0) to vertices
-        append (a cad vector2 with x 4.0 and y 0.0) to vertices
-        append (a cad vector2 with x 0.0 and y 3.0) to vertices
-        set holes to an empty list of the type of vertices
-        set mesh to the cad triangulation of vertices with holes holes
-        free vertices
-        free holes
-        return mesh
+to get a triangulation ownership [mesh]:
+    set vertices to an empty list of a cad vector2
+    append (a cad vector2 with x 0.0 and y 0.0), (a cad vector2 with x 4.0 and y 0.0) and (a cad vector2 with x 0.0 and y 3.0) to vertices
+    set holes to an empty list of the type of vertices
+    set mesh to the cad triangulation of vertices with holes holes
+    free vertices
+    free holes
+    return mesh
 
 set mesh to a triangulation ownership mesh
 set alias to mesh
@@ -63,4 +59,4 @@ check triangulation ownership ((the length of the points of the value of invalid
 free cad polygon frame result invalidAlias
 free cad polygon frame result invalidClone
 free empty
-print "cadkernel triangulate2 ownership: PASS" as a line
+print line "cadkernel triangulate2 ownership: PASS"

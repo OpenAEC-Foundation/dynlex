@@ -1,5 +1,6 @@
 #include "expression_invocation_identity.h"
 #include "knownConstantState.h"
+#include "typeRefinementState.h"
 
 static bool mergeArrayElementType(const DataType &current, const DataType &next, DataType &merged) {
 	if (!current.isDeduced() || !next.isDeduced())
@@ -63,6 +64,9 @@ struct InferenceContext {
 		std::optional<ExpressionInvocationIdentity> bodyTransferIdentity;
 		bool bodyInferred = false;
 		bool bodyFallsThrough = true;
+	};
+	struct StaticLoopFrame {
+		bool required = false;
 	};
 
 	struct TrialJournal {
@@ -365,9 +369,11 @@ struct InferenceContext {
 	ParseContext &parseContext;
 	Instantiation *currentInstantiation{};
 	const InferredArgumentScope *inferredArguments{};
+	bool inferringReferenceAssignmentTarget = false;
 	RecursiveInferenceObservationFrame *recursiveInferenceObservationFrame{};
 	InstantiatedSectionBody *currentInstantiatedSectionBody{};
 	std::vector<SectionFlexBodyInferenceFrame> sectionFlexBodyFrames;
+	std::vector<StaticLoopFrame> staticLoopFrames;
 	std::vector<Section *> activeFlexDefinitionStack;
 	std::vector<std::optional<FlexExpansionKey>> activeFlexExpansionKeys;
 	std::vector<Expression *> activeFlexCallStack;
@@ -378,6 +384,7 @@ struct InferenceContext {
 	// Flow-sensitive provenance for pointer variables whose runtime value may
 	// address local or global variables tracked by constant inference.
 	AddressInferenceState currentAddressState;
+	TypeRefinementState typeRefinements;
 	// Flex invocations below this depth belong to the caller of a non-flex
 	// instantiation. Its statements summarize their effects on that callee.
 	size_t memoryFlexBase = 0;
@@ -412,9 +419,12 @@ struct InferenceContext {
 	InferenceContext(ParseContext &pc, bool trial) : parseContext(pc), trial(trial) {}
 
 	void inheritSectionExecutionState(const InferenceContext &other) {
+		typeRefinements = other.typeRefinements;
 		memoryFlexBase = other.memoryFlexBase;
 		currentInstantiatedSectionBody = other.currentInstantiatedSectionBody;
 		sectionFlexBodyFrames = other.sectionFlexBodyFrames;
+		staticLoopFrames = other.staticLoopFrames;
+		inferringReferenceAssignmentTarget = other.inferringReferenceAssignmentTarget;
 		activeFlexDefinitionStack = other.activeFlexDefinitionStack;
 		activeFlexExpansionKeys = other.activeFlexExpansionKeys;
 		activeFlexCallStack = other.activeFlexCallStack;
@@ -528,8 +538,11 @@ struct InferenceContext {
 		return reference->definition ? reference->definition : reference;
 	}
 
-	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(Section *section, InstantiatedSectionBody *parentBody = nullptr) {
-		auto body = parseContext.cloneSectionBody(section, false, parentBody);
+	std::shared_ptr<InstantiatedSectionBody> cloneSectionBody(
+		Section *section, InstantiatedSectionBody *parentBody = nullptr,
+		std::shared_ptr<const VariableStorageScope> storageScope = {}, bool preserveInferenceMetadata = false
+	) {
+		auto body = parseContext.cloneSectionBody(section, preserveInferenceMetadata, parentBody, std::move(storageScope));
 		if (trial) {
 			requireCompilerInvariant(trialJournal, "trial cloning requires a journal");
 			trialJournal->clonedBodies.push_back(body);
@@ -549,8 +562,9 @@ struct InferenceContext {
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {
 		if (!expression)
 			return {};
-		if (expression->kind == Expression::Kind::Variable && expression->variable) {
-			VariableReference *key = normalizeReference(expression->variable);
+		if (expression->kind == Expression::Kind::Variable && expression->variable && !expression->inferredArgumentReference) {
+			VariableStorageKey key = variableStorageKey(expression);
+
 			const KnownConstantStorage &knownConstants = currentVariableValues.read();
 			auto currentValue = knownConstants.find(key);
 			if (currentValue != knownConstants.end())
@@ -607,36 +621,36 @@ struct InferenceContext {
 		return expression ? expression->inferredFlexExpansion : nullptr;
 	}
 
-	CompileTimeValue lookupKnownConstant(VariableReference *reference) const {
-		VariableReference *key = normalizeReference(reference);
-		if (!key)
-			return {};
+	CompileTimeValue lookupKnownConstant(const VariableStorageKey &key) const {
 		const KnownConstantStorage &knownConstants = currentVariableValues.read();
 		auto it = knownConstants.find(key);
 		return it != knownConstants.end() ? it->second : CompileTimeValue{};
 	}
 
-	void setKnownConstant(VariableReference *reference, const CompileTimeValue &value) {
-		VariableReference *key = normalizeReference(reference);
-		if (!key)
-			return;
+	CompileTimeValue lookupKnownConstant(VariableReference *reference) const {
+		return lookupKnownConstant(variableStorageKey(reference, currentInstantiatedSectionBody));
+	}
+
+	void setKnownConstant(const VariableStorageKey &key, const CompileTimeValue &value) {
 		currentVariableValues.write()[key] = value;
 	}
 
-	AddressProvenance lookupAddressProvenance(VariableReference *reference) const {
-		VariableReference *key = normalizeReference(reference);
-		if (!key)
-			return {.mayTargets = {}, .unknown = true};
+	void setKnownConstant(VariableReference *reference, const CompileTimeValue &value) {
+		setKnownConstant(variableStorageKey(reference, currentInstantiatedSectionBody), value);
+	}
+
+	AddressProvenance lookupAddressProvenance(const VariableStorageKey &key) const {
 		const VariableAddressProvenance &variables = currentAddressState.read().variables;
 		auto it = variables.find(key);
 		return it != variables.end() ? it->second : AddressProvenance{.mayTargets = {}, .unknown = true};
 	}
 
-	void setAddressProvenance(VariableReference *reference, AddressProvenance provenance) {
-		VariableReference *key = normalizeReference(reference);
-		if (!key)
-			return;
+	void setAddressProvenance(const VariableStorageKey &key, AddressProvenance provenance) {
 		currentAddressState.write().variables[key] = std::move(provenance);
+	}
+
+	void setAddressProvenance(VariableReference *reference, AddressProvenance provenance) {
+		setAddressProvenance(variableStorageKey(reference, currentInstantiatedSectionBody), std::move(provenance));
 	}
 
 	void noteWrittenGlobalReference(VariableReference *reference) {

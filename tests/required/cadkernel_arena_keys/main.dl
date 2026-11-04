@@ -14,56 +14,44 @@ class:
     members:
         number as an integer
 
-function hash cad unsigned integer {a 32 bit unsigned integer:number} into {an arena hash trace:state}:
-    execute:
-        append number to the words of state
+to hash cad unsigned integer {a 32 bit unsigned integer:number} into {an arena hash trace:state}:
+    append number to the words of state
 
 set nodes to a cad arena of an integer
 set key to the cad key after inserting 12 into nodes
 set copied to key
 set cloned to the cad clone of key
-print whether key equals cad key copied as a line
-print whether key equals cad key cloned as a line
-print whether key = cloned as a line
-print whether key != cloned as a line
-print the cad slot of key as a line
-print the cad debug text of key as a line
+print lines (key equals cad key copied), (key equals cad key cloned), (key = cloned) and (key != cloned)
+print lines (the cad slot of key) and (the cad debug text of key)
 ignore the cad removal of key from nodes
 set fresh to the cad key after inserting 15 into nodes
-print whether key equals cad key fresh as a line
-print the cad debug text of fresh as a line
+print lines (key equals cad key fresh) and (the cad debug text of fresh)
 set words to an empty list of a 32 bit unsigned integer
 set trace to @intrinsic("construct", an arena hash trace, words)
 hash cad key fresh into trace
-print the length of words as a line
-print the item at 0 in words as a line
-print the item at 1 in words as a line
+print lines (the length of words), (the item at 0 in words) and (the item at 1 in words)
 set maximal to @intrinsic("construct", a cad key, 4294967295 as a 32 bit unsigned integer, 4294967295 as a 32 bit unsigned integer, the witness of key)
-print the cad debug text of maximal as a line
+print line the cad debug text of maximal
 hash cad key maximal into trace
-print the item at 2 in words as a line
-print the item at 3 in words as a line
+print lines (the item at 2 in words) and (the item at 3 in words)
 set sink to an empty list of a 32 bit unsigned integer
 hash cad key fresh into sink
-print the item at 0 in sink as a line
-print the item at 1 in sink as a line
+print lines (the item at 0 in sink) and (the item at 1 in sink)
 free sink
 set keys to the cad keys of nodes
-print whether keys contains fresh as a line
+print line keys contains fresh
 free keys
-print the cad debug text of nodes as a line
+print line the cad debug text of nodes
 free words
 free cad arena nodes
 set empty to a cad arena of an integer
-print the cad debug text of empty as a line
+print line the cad debug text of empty
 free cad arena empty
 # Key traits must not require Clone, Eq, Hash or Debug implementations on T.
 set independent to @intrinsic("construct", a cad key, 5 as a 32 bit unsigned integer, 9 as a 32 bit unsigned integer, 0 as a pointer to an arena keyonly node)
 set duplicated to the cad clone of independent
-print whether independent = duplicated as a line
-print the cad debug text of duplicated as a line
+print lines (independent = duplicated) and (the cad debug text of duplicated)
 set inputWords to an empty list of a 32 bit unsigned integer
 hash cad key duplicated into inputWords
-print the item at 0 in inputWords as a line
-print the item at 1 in inputWords as a line
+print lines (the item at 0 in inputWords) and (the item at 1 in inputWords)
 free inputWords

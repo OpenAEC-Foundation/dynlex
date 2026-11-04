@@ -20,6 +20,6 @@ item first:
 item second:
     next: first
 
-print first's label as a line
-print first's next's label as a line
-print second's next's label as a line
+print line first's label
+print line first's next's label
+print line second's next's label

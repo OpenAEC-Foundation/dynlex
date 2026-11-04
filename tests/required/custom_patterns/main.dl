@@ -6,30 +6,22 @@ function ignore value:
 	replacement:
 		@intrinsic("discard", value)
 
-function [an|] integer:
-	replacement:
-		@intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function fixed quantity:
-	replacement:
-		@intrinsic("fix", quantity)
+fixed quantity means: @intrinsic("fix", quantity)
 
-function say message:
-	execute:
-		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", message)
+[a|] C string means: @intrinsic("type", "string")
 
-function value as [a|] {fixed integer:bits} bit integer:
-	replacement:
-		@intrinsic("cast", value, @intrinsic("type", "int", bits))
+to print line {a C string:message}: ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%s\n", message)
 
-function print message:
-	execute:
-		ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
+value as [a|] {fixed integer:bits} bit integer means: @intrinsic("cast", value, @intrinsic("type", "int", bits))
 
-function run the custom adder:
-	execute:
-		say "custom adder:"
-		set result to @intrinsic("add", 1, 2)
-		print result
+to print line {an integer:message}:
+	ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%ld\n", message as a 64 bit integer)
+
+to run the custom adder:
+	print line "custom adder:"
+	set result to @intrinsic("add", 1, 2)
+	print line result
 
 run the custom adder

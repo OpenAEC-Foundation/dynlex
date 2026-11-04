@@ -10,25 +10,19 @@ function ignore value:
     replacement:
         @intrinsic("discard", value)
 
-function [an|] integer:
-    replacement:
-        @intrinsic("type", "int")
+[an|] integer means: @intrinsic("type", "int")
 
-function left + right:
-    execute:
-        return @intrinsic("add", left, right)
+to get left + right:
+    return @intrinsic("add", left, right)
 
-function left - right:
-    execute:
-        return @intrinsic("subtract", left, right)
+to get left - right:
+    return @intrinsic("subtract", left, right)
 
-function left < right:
-    execute:
-        return @intrinsic("less than", left, right)
+to get left < right:
+    return @intrinsic("less than", left, right)
 
-function left > right:
-    execute:
-        return @intrinsic("greater than", left, right)
+to get left > right:
+    return @intrinsic("greater than", left, right)
 
 flex function repeat while condition:
     replacement:
@@ -42,15 +36,14 @@ flex section if condition:
     replacement:
         @intrinsic("if", condition)
 
-function the count from initial:
-    execute:
-        set total to initial
-        set cursor to 0
-        loop while cursor < 2:
-            if cursor > 0:
-                set total to (total + 1)
-            set cursor to (cursor + 1)
-        return total
+to get the count from initial:
+    set total to initial
+    set cursor to 0
+    loop while cursor < 2:
+        if cursor > 0:
+            set total to (total + 1)
+        set cursor to (cursor + 1)
+    return total
 
 set initial to @intrinsic("call", "libc", "rand", an integer)
 set result to the count from initial

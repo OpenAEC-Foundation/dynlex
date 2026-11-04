@@ -27,6 +27,7 @@ static constexpr uint32_t spvOpMemoryModel = 14;
 static constexpr uint32_t spvOpDecorate = 71;
 static constexpr uint32_t spvOpName = 5;
 static constexpr uint32_t spvOpVariable = 59;
+static constexpr uint32_t spvOpFunction = 54;
 static constexpr uint32_t spvOpTypeInt = 21;
 static constexpr uint32_t spvOpTypePointer = 32;
 static constexpr uint32_t spvOpTypeStruct = 30;
@@ -238,16 +239,22 @@ static bool patchShaderBinary(
 		return false;
 	}
 
-	// First pass: collect all OpVariable result IDs so we only match names against actual variables
+	// Global declarations form the complete SPIR-V 1.4+ entry-point interface.
+	// Function-local variables must never appear in that interface.
 	std::unordered_set<uint32_t> variableIds;
+	std::vector<uint32_t> interfaceIds;
 	size_t pos = 5;
 	while (pos < binary.size()) {
 		uint32_t wc = spvWordCount(binary[pos]);
 		uint32_t op = spvOpcode(binary[pos]);
 		if (wc == 0)
 			break;
-		if (op == spvOpVariable && wc >= 4)
-			variableIds.insert(binary[pos + 2]); // result ID
+		if (op == spvOpFunction)
+			break;
+		if (op == spvOpVariable && wc >= 4) {
+			variableIds.insert(binary[pos + 2]);
+			interfaceIds.push_back(binary[pos + 2]);
+		}
 		pos += wc;
 	}
 
@@ -318,13 +325,12 @@ static bool patchShaderBinary(
 
 			// Then emit the EntryPoint
 			std::vector<uint32_t> nameWords = encodeSpvString("main");
-			uint32_t entryWc = 3 + nameWords.size() + vars.size();
+			uint32_t entryWc = 3 + nameWords.size() + interfaceIds.size();
 			output.push_back(spvInstWord(entryWc, spvOpEntryPoint));
 			output.push_back(executionModel);
 			output.push_back(mainId);
 			output.insert(output.end(), nameWords.begin(), nameWords.end());
-			for (const auto &v : vars)
-				output.push_back(v.id);
+			output.insert(output.end(), interfaceIds.begin(), interfaceIds.end());
 			if (executionModel == 5) { // GLCompute, with a fixed 64-thread workgroup.
 				output.insert(output.end(), {spvInstWord(6, spvOpExecutionMode), mainId, 17, 64, 1, 1});
 			}

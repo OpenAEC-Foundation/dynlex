@@ -8,7 +8,7 @@ check solid maker ((the cad count of (cylinder's value's edges)) = 3)
 check solid maker ((the cad count of (cylinder's value's vertices)) = 2)
 check solid maker ((the cad euler characteristic of (cylinder's value)) = 2)
 check consistent solid (cylinder's value)
-print "a_cylinder_has_the_parts_a_cylinder_has" as a line
+print line "a_cylinder_has_the_parts_a_cylinder_has"
 
 set roundEdges to the cad edge keys of (cylinder's value)
 loop index from 0 to the length of roundEdges:
@@ -18,7 +18,7 @@ loop index from 0 to the length of roundEdges:
     set last to the cad node pointer for (the item at 1 in ((edge's coedges's values))) in (cylinder's value)
     check solid maker ((first's forward) != (last's forward))
 free roundEdges
-print "a_cylinders_rims_are_each_shared_by_two_faces" as a line
+print line "a_cylinders_rims_are_each_shared_by_two_faces"
 
 set sphere to the cad sphere body at (the cad zero vector3) with radius 5.0
 check solid maker (sphere's valid)
@@ -27,7 +27,7 @@ check solid maker ((the cad count of (sphere's value's edges)) = 1)
 check solid maker ((the cad count of (sphere's value's vertices)) = 2)
 check solid maker ((the cad euler characteristic of (sphere's value)) = 2)
 check consistent solid (sphere's value)
-print "a_sphere_is_one_face_bounded_by_a_seam" as a line
+print line "a_sphere_is_one_face_bounded_by_a_seam"
 
 set shifted to the cad sphere body at (a maker point [1.0,2.0,3.0]) with radius 4.0
 set seamKeys to the cad edge keys of (shifted's value)
@@ -37,7 +37,7 @@ set north to the cad node pointer for (seam's end) in (shifted's value)
 check solid maker ((the absolute value of ((south's point's z) + 1.0)) < 1e-9)
 check solid maker ((the absolute value of ((north's point's z) - 7.0)) < 1e-9)
 free seamKeys
-print "a_spheres_poles_are_a_radius_apart_along_its_axis" as a line
+print line "a_spheres_poles_are_a_radius_apart_along_its_axis"
 
 set sphereFaces to the cad face keys of (sphere's value)
 set face to the cad node pointer for (the item at 0 in sphereFaces) in (sphere's value)
@@ -51,7 +51,7 @@ loop index from 0 to 9:
     check solid maker ((@intrinsic("dereference", surface)) contains cad point point within 1e-9)
 free seamKeys
 free sphereFaces
-print "a_spheres_seam_lies_on_the_sphere" as a line
+print line "a_spheres_seam_lies_on_the_sphere"
 
 set cone to the cad cone body at (the cad zero vector3) with radius 5.0 and height 12.0
 check solid maker (cone's valid)
@@ -60,7 +60,7 @@ check solid maker ((the cad count of (cone's value's edges)) = 2)
 check solid maker ((the cad count of (cone's value's vertices)) = 2)
 check solid maker ((the cad euler characteristic of (cone's value)) = 2)
 check consistent solid (cone's value)
-print "a_cone_is_a_wall_and_a_base_meeting_at_a_point" as a line
+print line "a_cone_is_a_wall_and_a_base_meeting_at_a_point"
 
 set coneVertices to the cad keys of (cone's value's vertices)
 set apex to the cad zero vector3
@@ -82,7 +82,7 @@ loop index from 0 to the length of coneSurfaces:
         check solid maker ((@intrinsic("dereference", surfaceNode)) contains cad point apex within 1e-9)
 check solid maker coneSurfaceFound
 free coneSurfaces
-print "a_cones_surface_reaches_its_own_apex" as a line
+print line "a_cones_surface_reaches_its_own_apex"
 
 set absentSphere to the cad sphere body at (the cad zero vector3) with radius 0.0
 check solid maker ((absentSphere's valid) = false)
@@ -90,11 +90,11 @@ set absentSphere to the cad sphere body at (the cad zero vector3) with radius -1
 check solid maker ((absentSphere's valid) = false)
 set absentCone to the cad cone body at (the cad zero vector3) with radius 1.0 and height 0.0
 check solid maker ((absentCone's valid) = false)
-print "zero_size_spheres_and_cones_are_refused" as a line
+print line "zero_size_spheres_and_cones_are_refused"
 set absentCylinder to the cad cylinder body at (the cad zero vector3) with radius 0.0 and height 1.0
 check solid maker ((absentCylinder's valid) = false)
 set absentCylinder to the cad cylinder body at (the cad zero vector3) with radius 1.0 and height -1.0
 check solid maker ((absentCylinder's valid) = false)
 set absentCylinder to the cad cylinder body at (the cad zero vector3) with radius (0.0 / 0.0) and height 1.0
 check solid maker ((absentCylinder's valid) = false)
-print "a_cylinder_with_no_size_is_refused" as a line
+print line "a_cylinder_with_no_size_is_refused"

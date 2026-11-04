@@ -67,9 +67,7 @@ function the assembled program byte at {integer:offset}:
 function reset the assembly state:
 	globals: assembler
 	execute:
-		set assembler's program's cursor to 0
-		set assembler's labels's count to 0
-		set assembler's fixups's count to 0
+		set assembler's program's cursor, assembler's labels's count and assembler's fixups's count to 0
 
 # --- Byte emission ---
 
@@ -120,8 +118,7 @@ function resolve [all|] labels:
 			set name to the item at index in (assembler's fixups)'s names
 			set target to the address of label name
 			if target < 0:
-				print "assembler error: unknown label" as a line
-				print name as a line
+				print lines "assembler error: unknown label" and name
 				@intrinsic("call", "libc", "exit", nothing, 1)
 			set offset to the item at index in (assembler's fixups)'s offsets
 			store ((the item at offset in (assembler's program)'s bytes) bitwise or ((target shifted right by 8) bitwise and 15)) into assembler's program's bytes at offset
@@ -133,20 +130,16 @@ function resolve [all|] labels:
 # can name their register roles with ordinary DynLex variables.
 
 # 00E0
-to clear the display:
-	emit an opcode with high byte 0 and low byte 224
+to clear the display: emit an opcode with high byte 0 and low byte 224
 
 # 00EE
-to end the routine:
-	emit an opcode with high byte 0 and low byte 238
+to end the routine: emit an opcode with high byte 0 and low byte 238
 
 # 1nnn
-to jump to label {C string:name}:
-	emit an opcode with top nibble 1 addressing label name
+to jump to label {C string:name}: emit an opcode with top nibble 1 addressing label name
 
 # 2nnn
-to run the routine named {C string:name}:
-	emit an opcode with top nibble 2 addressing label name
+to run the routine named {C string:name}: emit an opcode with top nibble 2 addressing label name
 
 # 3xnn
 to skip when register {integer:target} equals {integer:value}:
@@ -209,12 +202,10 @@ to shift register {integer:target} left:
 	emit an opcode with high byte (128 bitwise or target) and low byte ((target shifted left by 4) bitwise or 14)
 
 # Annn
-to point index at label {C string:name}:
-	emit an opcode with top nibble 10 addressing label name
+to point index at label {C string:name}: emit an opcode with top nibble 10 addressing label name
 
 # Bnnn
-to jump to label {C string:name} plus register zero:
-	emit an opcode with top nibble 11 addressing label name
+to jump to label {C string:name} plus register zero: emit an opcode with top nibble 11 addressing label name
 
 # Cxnn
 to randomize register {integer:target} masked by {integer:value}:
@@ -233,24 +224,20 @@ to skip when key in register {integer:target} is up:
 	emit an opcode with high byte (224 bitwise or target) and low byte 161
 
 # Fx07
-to load the delay into register {integer:target}:
-	emit an opcode with high byte (240 bitwise or target) and low byte 7
+to load the delay into register {integer:target}: emit an opcode with high byte (240 bitwise or target) and low byte 7
 
 # Fx0A
 to wait for a key and store it in register {integer:target}:
 	emit an opcode with high byte (240 bitwise or target) and low byte 10
 
 # Fx15
-to start the delay from register {integer:source}:
-	emit an opcode with high byte (240 bitwise or source) and low byte 21
+to start the delay from register {integer:source}: emit an opcode with high byte (240 bitwise or source) and low byte 21
 
 # Fx18
-to start the sound from register {integer:source}:
-	emit an opcode with high byte (240 bitwise or source) and low byte 24
+to start the sound from register {integer:source}: emit an opcode with high byte (240 bitwise or source) and low byte 24
 
 # Fx1E
-to add register {integer:source} to the index:
-	emit an opcode with high byte (240 bitwise or source) and low byte 30
+to add register {integer:source} to the index: emit an opcode with high byte (240 bitwise or source) and low byte 30
 
 # Fx29
 to point the index at the digit sprite in register {integer:source}:
@@ -270,13 +257,11 @@ to restore all registers through register {integer:last}:
 
 # --- Data statements ---
 
-to emit a data byte {integer:value}:
-	emit a program byte value
+to emit a data byte {integer:value}: emit a program byte value
 
 # Sprite art: an 8 character picture row, `X` for a lit pixel.
 to emit a data row {C string:picture}:
-	set value to 0
-	set index to 0
+	set value and index to 0
 	loop while index < 8:
 		set glyph to (the character at index in picture) as an integer
 		if glyph = 0:

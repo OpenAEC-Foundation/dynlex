@@ -76,48 +76,46 @@ local function the cad bounds input {cad curve2:shape}:
     execute:
         return shape
 
-function the cad analytic bounds of {a pointer to a list:curves}:
-    execute:
-        set result to the absent cad analytic bounds
-        loop index from 0 to the length of curves:
-            set curve to the cad bounds input (the item at index in curves)
-            if curve's kind = cad line curve2 kind:
-                set result to the cad bounds after absorbing curve's line's start into result
-                if result's valid = false:
-                    return result
-                set result to the cad bounds after absorbing curve's line's end into result
-            else if curve's kind = cad circle curve2 kind:
-                set result to the cad bounds after circle at curve's circle's centre with radius curve's circle's radius from 0.0 to 6.283185307179586 into result
-            else if curve's kind = cad arc curve2 kind:
-                set result to the cad bounds after circle at curve's arc's centre with radius curve's arc's radius from curve's arc's startAngle to curve's arc's endAngle into result
-            else if curve's kind = cad ellipse curve2 kind:
-                set result to the cad bounds after conic (curve's ellipse's ellipse) from (curve's ellipse's startParameter) to (curve's ellipse's endParameter) into result
-            else if curve's kind = cad polyline curve2 kind:
-                set polyline to curve's polyline
-                loop vertexIndex from 0 to the length of polyline's vertices:
-                    set vertex to the item at vertexIndex in polyline's vertices
-                    set result to the cad bounds after absorbing vertex's position into result
-                    if (result's valid = false) or ((cad bounds scalar vertex's bulge is finite) = false):
-                        return the absent cad analytic bounds
-                set count to the length of polyline's vertices
-                if polyline's closed = false:
-                    set count to the maximum of 0 and (count - 1)
-                loop segmentIndex from 0 to count:
-                    set found to the cad segment arc of polyline at index segmentIndex
-                    if found's valid:
-                        set arc to found's value
-                        set start to arc's startAngle
-                        set end to start + arc's sweep
-                        if (arc's sweep >= 0.0) = false:
-                            set start to arc's startAngle + arc's sweep
-                            set end to arc's startAngle
-                        set result to the cad bounds after circle at arc's centre with radius arc's radius from start to end into result
-                        if result's valid = false:
-                            return result
-            else:
-                return the absent cad analytic bounds
+to get the cad analytic bounds of {a pointer to a list:curves}:
+    set result to the absent cad analytic bounds
+    loop index from 0 to the length of curves:
+        set curve to the cad bounds input (the item at index in curves)
+        if curve's kind = cad line curve2 kind:
+            set result to the cad bounds after absorbing curve's line's start into result
             if result's valid = false:
-                # An empty polyline does not invalidate earlier bounds or prevent later curves.
-                if curve's kind != cad polyline curve2 kind:
-                    return result
-        return result
+                return result
+            set result to the cad bounds after absorbing curve's line's end into result
+        else if curve's kind = cad circle curve2 kind:
+            set result to the cad bounds after circle at curve's circle's centre with radius curve's circle's radius from 0.0 to 6.283185307179586 into result
+        else if curve's kind = cad arc curve2 kind:
+            set result to the cad bounds after circle at curve's arc's centre with radius curve's arc's radius from curve's arc's startAngle to curve's arc's endAngle into result
+        else if curve's kind = cad ellipse curve2 kind:
+            set result to the cad bounds after conic (curve's ellipse's ellipse) from (curve's ellipse's startParameter) to (curve's ellipse's endParameter) into result
+        else if curve's kind = cad polyline curve2 kind:
+            set polyline to curve's polyline
+            for each vertex in polyline's vertices:
+                set result to the cad bounds after absorbing vertex's position into result
+                if (result's valid = false) or ((cad bounds scalar vertex's bulge is finite) = false):
+                    return the absent cad analytic bounds
+            set count to the length of polyline's vertices
+            if polyline's closed = false:
+                set count to the maximum of 0 and (count - 1)
+            loop segmentIndex from 0 to count:
+                set found to the cad segment arc of polyline at index segmentIndex
+                if found's valid:
+                    set arc to found's value
+                    set start to arc's startAngle
+                    set end to start + arc's sweep
+                    if (arc's sweep >= 0.0) = false:
+                        set start to arc's startAngle + arc's sweep
+                        set end to arc's startAngle
+                    set result to the cad bounds after circle at arc's centre with radius arc's radius from start to end into result
+                    if result's valid = false:
+                        return result
+        else:
+            return the absent cad analytic bounds
+        if result's valid = false:
+            # An empty polyline does not invalidate earlier bounds or prevent later curves.
+            if curve's kind != cad polyline curve2 kind:
+                return result
+    return result

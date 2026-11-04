@@ -1,0 +1,9 @@
+integer means: @intrinsic("type", "int")
+floating means: @intrinsic("type", "float")
+implicitly convert {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", value, floating))
+it means: @intrinsic("subject")
+@intrinsic("set subject", 1)
+@intrinsic("store", {floating:converted}, it)
+@intrinsic("return", @intrinsic("subtract", @intrinsic("cast", converted, integer), 1))

@@ -4,30 +4,30 @@ set game to a new snake session
 begin a run in the address of game
 set game's food to a snake cell at 13 and 12
 advance the snake in the address of game
-print game's score as a line
-print game's length as a line
-print (game's food is occupied in the address of game) as a line
+print line game's score
+print line game's length
+print line (game's food is occupied in the address of game)
 turn the address of game toward 3
-print game's direction as a line
+print line game's direction
 turn the address of game toward 0
 turn the address of game toward 3
-print game's direction as a line
+print line game's direction
 advance the snake in the address of game
-print (the item at 0 in (game's body))'s row as a line
+print line (the item at 0 in (game's body))'s row
 pause or resume the address of game
 set {paused steps} to game's steps
 update the address of game after 0.25 seconds
-print (game's steps = paused steps) as a line
+print line (game's steps = paused steps)
 pause or resume the address of game
 set game's wrap edges to true
 set game's direction to 1
 store a snake cell at 23 and 0 into game's body at 0
 advance the snake in the address of game
-print (the item at 0 in (game's body))'s column as a line
+print line (the item at 0 in (game's body))'s column
 set game's wrap edges to false
 store a snake cell at 23 and 0 into game's body at 0
 advance the snake in the address of game
-print (game's phase = the finished screen) as a line
+print line (game's phase = the finished screen)
 close the address of game
 
 # Moving into the tail is legal when that cell is vacated on this turn.
@@ -75,10 +75,10 @@ set game's direction to 1
 store a snake cell at 22 and 23 into game's body at 0
 set index to 0
 loop while index < the snake board capacity - 2:
-    store a snake cell at (the remainder of index divided by the snake board width) and (index / the snake board width) into game's body at (index + 1)
+    store a snake cell at (index mod the snake board width) and (index / the snake board width) into game's body at (index + 1)
     increment index
 set game's food to a snake cell at 23 and 23
 advance the snake in the address of game
 require condition ((game's phase = the completed screen) and (game's length = the snake board capacity)) reporting "Filling the board did not complete the game"
 close the address of game
-print "Snake rules passed" as a line
+print line "Snake rules passed"
