@@ -1,0 +1,26 @@
+import lib/ui_ribbon.dl
+
+window ribbon lab:
+    ribbon "Commands" at 12 56 sized 1000 by 168:
+        tab "Home":
+            ribbon group "Clipboard":
+                large tool "Paste" with icon "paste"
+                tool column:
+                    tool "Cut" with icon "cut"
+                    tool "Copy" with icon "copy"
+        tab "Insert":
+            ribbon group "Illustrations":
+                large tool "Picture" with icon "picture"
+
+set state to 0
+set instance to an instance of ribbon lab with state (the address of state)
+set ribbon to the control labeled "Commands" in (the address of instance)
+print (the selected tab of ribbon in (the address of instance))'s text as a line
+activate (the UI child at 1 in ribbon) belonging to ribbon in (the address of instance)
+print (the selected tab of ribbon in (the address of instance))'s text as a line
+activate (the control labeled "Picture" in (the address of instance)) belonging to ribbon in (the address of instance)
+print (the selected tab of ribbon in (the address of instance))'s text as a line
+set other to an instance of ribbon lab with state (the address of state)
+print (the selected tab of ribbon in (the address of other))'s text as a line
+close the address of other
+close the address of instance

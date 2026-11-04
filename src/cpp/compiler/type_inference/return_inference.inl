@@ -82,6 +82,7 @@ static std::optional<std::string> returnTypeReferenceSource(const DataType &type
 		}
 		break;
 	case DataType::Kind::Any:
+	case DataType::Kind::Function:
 	case DataType::Kind::Unresolved:
 	case DataType::Kind::Void:
 	case DataType::Kind::Class:

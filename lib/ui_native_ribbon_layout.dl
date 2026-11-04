@@ -1,0 +1,62 @@
+# Natural command sizes compose horizontally in groups and vertically in columns.
+import lib/ui_native_layout.dl
+
+to arrange ribbon UI layout {a pointer to UI layout:layout} using {UI theme:theme}:
+    set node to layout's node
+    if node's kind = 33:
+        set width to (the maximum of 92 and (((the length of (node's text)) * 7) + 38)) as a floating-point number
+        if node's rows = 1:
+            set width to (the maximum of 68 and (((the length of (node's text)) * 7) + 16)) as a floating-point number
+        if node's rows = 2:
+            set width to 30.0
+        if node's rows = 3:
+            set width to 104.0
+        set layout's bounds' width to width
+        return nothing
+    if node's kind = 34:
+        return nothing
+    set horizontal to 0.0
+    set vertical to 0.0
+    set width to 0.0
+    set height to 0.0
+    set gap to 4.0
+    if node's kind = 28:
+        require condition (node's count > 0) reporting "A ribbon requires at least one tab"
+        set horizontal to 12.0
+    if node's kind = 30:
+        set horizontal to 10.0
+        set gap to 6.0
+    set index to 0
+    set last to @intrinsic("construct", a pointer to UI layout)
+    loop while index < node's count:
+        set item to the UI child at index in node
+        if node's kind = 28:
+            require condition (item's kind = 29) reporting "A ribbon contains tabs"
+        if node's kind = 29:
+            require condition (item's kind = 30) reporting "A ribbon tab contains ribbon groups"
+        set child to a UI layout for item inside node with width 0 using theme
+        if last = @intrinsic("construct", a pointer to UI layout):
+            set layout's first to child
+        else:
+            set last's next to child
+        if node's kind = 32:
+            set child's bounds' y to vertical
+            set vertical to vertical + (child's bounds' height + 3.0)
+            set width to the maximum of width and (child's bounds' width)
+        else:
+            set child's bounds' x to horizontal
+            set horizontal to horizontal + (child's bounds' width + gap)
+            set height to the maximum of height and (child's bounds' height)
+            if node's kind = 30:
+                set child's bounds' y to 4.0
+        set last to child
+        increment index
+    if node's kind = 29:
+        set layout's bounds to UI box at 0 0 sized (((the length of (node's text)) * 7) + 30) 40
+    if node's kind = 30:
+        set width to the maximum of (horizontal + 4.0) and ((((the length of (node's text)) * 6) + 24) as a floating-point number)
+        set layout's bounds to UI box at 0 0 sized width 116
+    if node's kind = 31:
+        set layout's bounds to UI box at 0 0 sized (the maximum of 0.0 and (horizontal - gap)) height
+    if node's kind = 32:
+        set layout's bounds to UI box at 0 0 sized width (the maximum of 0.0 and (vertical - 3.0))

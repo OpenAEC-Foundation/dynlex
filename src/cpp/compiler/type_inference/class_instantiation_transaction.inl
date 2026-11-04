@@ -128,6 +128,18 @@ replaceSymbolicClassInstantiation(DataType &type, ClassDefinition *classDefiniti
 	if (type.arrayElementType)
 		changed =
 			replaceSymbolicClassInstantiation(*type.arrayElementType, classDefinition, symbolicIndex, concreteIndex) || changed;
+	if (type.functionSignature) {
+		auto signature = std::make_shared<FunctionSignature>(*type.functionSignature);
+		bool signatureChanged =
+			replaceSymbolicClassInstantiation(signature->result, classDefinition, symbolicIndex, concreteIndex);
+		for (DataType &parameter : signature->parameters)
+			signatureChanged =
+				replaceSymbolicClassInstantiation(parameter, classDefinition, symbolicIndex, concreteIndex) || signatureChanged;
+		if (signatureChanged) {
+			type.functionSignature = std::move(signature);
+			changed = true;
+		}
+	}
 	return changed;
 }
 

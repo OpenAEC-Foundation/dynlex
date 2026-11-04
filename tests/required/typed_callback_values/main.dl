@@ -1,0 +1,36 @@
+import lib/callbacks.dl
+
+to get twice {integer:value}:
+    return value * 2
+
+class:
+    patterns:
+        callback holder
+    members:
+        action
+
+set action to the function named "twice $"
+set holder to @intrinsic("construct", callback holder, action)
+print (@intrinsic("invoke", holder's action, 7)) as a line
+set empty to a new (a callback receiving integer returning integer)
+print (empty = (a new (the type of action))) as a line
+print (action != empty) as a line
+
+set textual to a new (a callback receiving string returning string)
+set container to @intrinsic("construct", callback holder, textual)
+print ((the size of (the request type of (container's action))) = (the size of string)) as a line
+print ((the size of (the request type of (holder's action))) = (the size of integer)) as a line
+
+function describe {@intrinsic("function type", integer, integer):action}:
+    execute:
+        return 1
+function describe {@intrinsic("function type", string, string):action}:
+    execute:
+        return 2
+print (describe action) as a line
+print (describe textual) as a line
+
+to get the answer:
+    return 42
+set answer to the function named "the answer"
+print (@intrinsic("invoke", answer)) as a line

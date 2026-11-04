@@ -4,6 +4,7 @@
 #include "codegen/codegen.h"
 #include "compileTimeValue.h"
 #include "compilerUtils.h"
+#include "dataSections.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
 #include "lsp/fileSystem.h"
@@ -158,6 +159,8 @@ static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue 
 	}
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 		return typeToUserName(*constraint);
+	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
+		return "pointer(" + std::to_string(pointer->address) + ")";
 	crashCompilerBug("unknown compile-time value alternative in purity report");
 }
 
@@ -565,8 +568,7 @@ Expression *createTypeConstraintExpression(ParseContext &context, Section *secti
 	};
 
 	prepareMatches(typeExpr);
-	if (typeExpr->kind == Expression::Kind::Pending)
-		expandPendingTypeReferenceExpression(typeExpr, section);
+	expandExpression(typeExpr, section);
 	return typeExpr;
 }
 
@@ -601,6 +603,8 @@ bool compile(const std::string &path, ParseContext &context) {
 	context.compilationStage = ParseContext::CompilationStage::AnalyzedSections;
 
 	if (!resolvePatterns(context))
+		return false;
+	if (!prepareDataSectionCalls(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
 

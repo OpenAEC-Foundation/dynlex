@@ -64,6 +64,11 @@ enum class IntrinsicPurityKind {
 	X(CheckDeallocation, "check deallocation", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                  \
 	X(LoopWhile, "loop while", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                  \
 	X(ExecuteBody, "execute body", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                              \
+	X(SectionField, "section field", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                          \
+	X(SectionBody, "section body", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                            \
+	X(StaticReference, "static reference", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                    \
+	X(DeferredBody, "deferred body", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                          \
+	X(Receiver, "receiver", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                   \
 	X(If, "if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                                 \
 	X(ElseIf, "else if", 2, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                        \
 	X(Else, "else", 1, IntrinsicReturnKind::Void, 0, 0, IntrinsicPurityKind::Pure)                                             \
@@ -92,6 +97,8 @@ enum class IntrinsicPurityKind {
 	X(Number, "number", 1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)                                       \
 	X(NumberRule, "number rule", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                              \
 	X(TypeExtent, "type extent", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)                              \
+	X(FunctionResultType, "function return type", 2, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Pure)             \
+	X(FunctionParameterType, "function parameter type", 3, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Pure)       \
 	X(SizeOf, "size of", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                      \
 	X(BuildInfo, "build info", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                \
 	X(TargetIs, "target is", 2, IntrinsicReturnKind::Custom, 1, 1, IntrinsicPurityKind::Pure)                                  \
@@ -113,6 +120,8 @@ enum class IntrinsicPurityKind {
 	X(Call, "call", 4, -1, IntrinsicReturnKind::Custom, 1, 3, IntrinsicPurityKind::Impure)                                     \
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure)                    \
 	X(CallPointer, "call pointer", 3, -1, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Impure)                      \
+	X(Invoke, "invoke", 2, -1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure)                                 \
+	X(FunctionType, "function type", 1, -1, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                     \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                       \
 	X(Array, "array", 1, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                     \
 	X(Vector, "vector", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure)                                   \
@@ -236,14 +245,23 @@ inline bool isComparisonIntrinsicKind(IntrinsicKind kind) {
 	}
 }
 
+constexpr bool isTypeQueryIntrinsicKind(IntrinsicKind kind) {
+	return kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::TypeExtent || kind == IntrinsicKind::FunctionResultType ||
+		   kind == IntrinsicKind::FunctionParameterType;
+}
+
 constexpr bool isExternalCallIntrinsicKind(IntrinsicKind kind) {
-	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall || kind == IntrinsicKind::CallPointer;
+	return kind == IntrinsicKind::Call || kind == IntrinsicKind::VariadicCall || kind == IntrinsicKind::CallPointer ||
+		   kind == IntrinsicKind::Invoke;
 }
 
 constexpr size_t externalCallReturnTypeArgumentIndex(IntrinsicKind kind) { return kind == IntrinsicKind::CallPointer ? 2 : 3; }
 
 constexpr size_t externalCallRuntimeArgumentStart(IntrinsicKind kind) {
-	return kind == IntrinsicKind::VariadicCall ? 5 : kind == IntrinsicKind::CallPointer ? 3 : 4;
+	return kind == IntrinsicKind::Invoke		 ? 2
+		   : kind == IntrinsicKind::VariadicCall ? 5
+		   : kind == IntrinsicKind::CallPointer	 ? 3
+												 : 4;
 }
 
 inline bool intrinsicArgumentIsCompileTimeOnly(const std::string &name, int argIndex) {

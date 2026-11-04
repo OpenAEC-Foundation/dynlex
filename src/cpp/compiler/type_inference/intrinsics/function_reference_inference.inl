@@ -37,5 +37,4 @@ if (!callableInstantiation)
 expr->selectedCallableDefinition = callableMatches.front().definition;
 expr->selectedCallablePathIndex = callableMatches.front().pathIndex;
 expr->selectedInstantiation = callableInstantiation;
-expr->type = {DataType::Kind::Int, 1};
-expr->type.pointerDepth = 1;
+expr->type = makeFunctionType(callableInstantiation->returnType, callableInstantiation->argumentTypes);

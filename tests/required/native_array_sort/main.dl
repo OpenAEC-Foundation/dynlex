@@ -39,6 +39,7 @@ function compare weighted records {pointer:left} and {pointer:right}:
 function the comparator that must not be called {pointer:left} and {pointer:right}:
     execute:
         @intrinsic("call", "libc", "abort", nothing)
+        return 0 # Keep qsort's integer result signature even though reaching this comparator aborts.
 
 set comparator to the function named "compare unsigned values $ and $"
 allocate 5 slots of a 32 bit unsigned integer and set values to it

@@ -1,0 +1,44 @@
+import lib/ui_components.dl
+
+class:
+    patterns:
+        control state
+    members:
+        changed as an integer
+
+this control state means: this window's state as a pointer to control state
+
+window control lab:
+    page "menu":
+        panel at 20 20 sized 240 by 320:
+            switch "Grid"
+            choices "Pace":
+                option "Relaxed"
+                option "Classic"
+    page "settings":
+        label "Settings"
+    code:
+        when the "Grid" control changes:
+            increment this control state's changed
+        when the "Pace" control changes:
+            increment this control state's changed
+
+set state to a new control state
+set instance to an instance of control lab with state (the address of state)
+show page "menu" in the address of instance
+set toggle to the control labeled "Grid" in the address of instance
+activate toggle belonging to control lab in the address of instance
+print (the "Grid" switch is on in the address of instance) as a line
+set choice to the control labeled "Pace" in the address of instance
+activate (the UI child at 1 in choice) belonging to choice in the address of instance
+print (the value of "Pace" in the address of instance) as a line
+print state's changed as a line
+show page "settings" in the address of instance
+print instance's page's text as a line
+close the address of instance
+
+set {other state} to a new control state
+set other to an instance of control lab with state (the address of other state)
+require condition ((the "Grid" switch is on in the address of other) = false) reporting "UI instances shared control values"
+require condition (other state's changed = 0) reporting "UI instances shared callback state"
+close the address of other

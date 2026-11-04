@@ -10,6 +10,31 @@
 #include "llvm/Support/MathExtras.h"
 #include <set>
 
+bool sameFunctionSignature(
+	const std::shared_ptr<const FunctionSignature> &left, const std::shared_ptr<const FunctionSignature> &right
+) {
+	return (!left && !right) || (left && right && *left == *right);
+}
+
+bool lessFunctionSignature(
+	const std::shared_ptr<const FunctionSignature> &left, const std::shared_ptr<const FunctionSignature> &right
+) {
+	if (!left || !right)
+		return !left && static_cast<bool>(right);
+	if (left->result != right->result)
+		return left->result < right->result;
+	return std::lexicographical_compare(
+		left->parameters.begin(), left->parameters.end(), right->parameters.begin(), right->parameters.end()
+	);
+}
+
+bool concreteFunctionSignature(const std::shared_ptr<const FunctionSignature> &signature) {
+	return signature && signature->result.isConcrete() && !signature->result.isMetaType() &&
+		   std::ranges::all_of(signature->parameters, [](const DataType &parameter) {
+		return parameter.isConcrete() && parameter.isRuntimeValueType();
+	});
+}
+
 namespace {
 
 uint64_t fixedAllocationSize(const llvm::DataLayout &dataLayout, llvm::Type *type) {
@@ -211,6 +236,18 @@ std::string typeToUserName(const DataType &type) {
 	case DataType::Kind::Class:
 		result = classTypeName(valueType.classDefinition);
 		break;
+	case DataType::Kind::Function:
+		result = "a callback";
+		if (valueType.functionSignature) {
+			result += " receiving (";
+			for (const DataType &parameter : valueType.functionSignature->parameters) {
+				if (!result.ends_with('('))
+					result += ", ";
+				result += typeToUserName(parameter);
+			}
+			result += ") returning " + typeToUserName(valueType.functionSignature->result);
+		}
+		break;
 	case DataType::Kind::Type:
 		result = "a type";
 		break;
@@ -292,6 +329,12 @@ std::string typeToUserName(const TypeConstraint &constraint) {
 		case DataType::Kind::Class:
 			result = classTypeName(constraint.classDefinition);
 			break;
+		case DataType::Kind::Function: {
+			DataType callback{DataType::Kind::Function};
+			callback.functionSignature = constraint.functionSignature;
+			result = typeToUserName(callback);
+			break;
+		}
 		case DataType::Kind::Type:
 			result = "a type";
 			break;
@@ -344,6 +387,18 @@ std::string DataType::toString() const {
 	case Kind::Class:
 		result += (classDefinition && !classDefinition->patternNames.empty()) ? classDefinition->patternNames[0] : "class";
 		break;
+	case Kind::Function:
+		result += "callback";
+		if (functionSignature) {
+			result += "(";
+			for (const DataType &parameter : functionSignature->parameters) {
+				if (!result.ends_with('('))
+					result += ",";
+				result += parameter.toString();
+			}
+			result += ")->" + functionSignature->result.toString();
+		}
+		break;
 	case Kind::Type:
 		result += "type";
 		break;
@@ -390,6 +445,11 @@ llvm::Type *DataType::toLLVM(llvm::LLVMContext &ctx, const llvm::DataLayout &dat
 		return llvm::PointerType::getUnqual(ctx);
 
 	switch (kind) {
+	case Kind::Function:
+		requireCompilerInvariant(
+			concreteFunctionSignature(functionSignature), "callback storage requires a concrete signature"
+		);
+		return llvm::PointerType::getUnqual(ctx);
 	case Kind::Void:
 		return llvm::Type::getVoidTy(ctx);
 	case Kind::Bool:

@@ -1,0 +1,138 @@
+# Reusable controls and presentation data. Rendering lives in ui_native.dl.
+import lib/ui.dl
+
+a UI component {integer:kind} labeled {C string:text} styled {C string:variant} at {integer:left} {integer:top} sized {integer:width} by {integer:height} containing {an array:children} means: UI node kind with text colored "" sized 0 by 0 bordered 0 containing children acting no UI action at left top measuring width by height styled variant
+a UI text component {integer:kind} labeled {C string:text} styled {C string:variant} means: a UI component kind labeled text styled variant at 0 0 sized 0 by 0 containing no UI children
+
+eyebrow {C string:text} means: a UI text component 13 labeled text styled ""
+title {C string:text} means: a UI text component 14 labeled text styled ""
+accent title {C string:text} means: a UI text component 14 labeled text styled "accent"
+heading {C string:text} means: a UI text component 24 labeled text styled ""
+brand {C string:text} means: a UI text component 24 labeled text styled "brand"
+caption {C string:text} means: a UI text component 15 labeled text styled ""
+badge {C string:text} means: a UI text component 27 labeled text styled ""
+space of {integer:height} pixels means: a UI component 16 labeled "" styled "" at 0 0 sized 0 by height containing no UI children
+primary button {C string:text} means: a UI text component 2 labeled text styled "primary"
+quiet button {C string:text} means: a UI text component 2 labeled text styled "quiet"
+switch {C string:text} means: a UI text component 17 labeled text styled ""
+option {C string:text} means: a UI text component 19 labeled text styled ""
+statistic {C string:text} means: a UI text component 21 labeled text styled ""
+
+section panel at {integer:left} {integer:top} sized {integer:width} by {integer:height}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI component 12 labeled "" styled "card" at left top sized width by height containing (the body's children)
+
+section group at {integer:left} {integer:top} sized {integer:width} by {integer:height}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI component 12 labeled "" styled "plain" at left top sized width by height containing (the body's children)
+
+section page {C string:name}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI container of kind 22 containing (the body's children) named name
+
+a UI container of kind {integer:kind} containing {an array:children} named {C string:name} means: a UI component kind labeled name styled "" at 0 0 sized 0 by 0 containing children
+
+section choices {C string:name}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI component 18 labeled name styled "" at 0 0 sized 0 by 0 containing (the body's children)
+
+canvas {C string:name} at {integer:left} {integer:top} sized {integer:width} by {integer:height} means: a UI component 20 labeled name styled "" at left top sized width by height containing no UI children
+the interface uses [a|an] {C string:name} theme means: a UI text component 25 labeled name styled ""
+the interface fits {integer:width} by {integer:height} pixels means: a UI component 26 labeled "" styled "" at 0 0 sized width by height containing no UI children
+
+to get the UI element labeled {C string:label} in {UI reference:root}:
+    if root's text = label:
+        return root
+    set index to 0
+    loop while index < root's count:
+        set found to the UI element labeled label in (the UI child at index in root)
+        if found != @intrinsic("construct", UI reference):
+            return found
+        increment index
+    return @intrinsic("construct", UI reference)
+
+to get the control labeled {C string:label} in {a pointer to UI instance:instance}:
+    set found to the UI element labeled label in (instance's description)
+    require condition (found != @intrinsic("construct", UI reference)) reporting "The UI control does not exist"
+    return found
+
+to get the UI value for {UI reference:node} in {a pointer to UI instance:instance}:
+    set entry to instance's values
+    loop while entry != @intrinsic("construct", a pointer to UI value):
+        if entry's target = node:
+            return entry
+        set entry to entry's next
+    set {new entry} to a new UI value
+    set new entry's target to node
+    set new entry's text to node's text
+    if node's kind = 21:
+        set new entry's text to "0"
+    set new entry's next to instance's values
+    set instance's values to storage for one slot initialized with new entry
+    return instance's values
+
+to set the text of {C string:label} in {a pointer to UI instance:instance} to {a value:text}:
+    set node to the control labeled label in instance
+    set entry to the UI value for node in instance
+    set entry's text to the string form of text
+
+to set the value of {C string:label} in {a pointer to UI instance:instance} to {integer:number}:
+    set node to the control labeled label in instance
+    set entry to the UI value for node in instance
+    set entry's number to number
+
+to get the value of {C string:label} in {a pointer to UI instance:instance}:
+    return (the UI value for (the control labeled label in instance) in instance)'s number
+
+to get the {C string:label} switch is on in {a pointer to UI instance:instance}:
+    return (the value of label in instance) != 0
+
+to show page {C string:name} in {a pointer to UI instance:instance}:
+    set instance's page to the control labeled name in instance
+    require condition (instance's page's kind = 22) reporting "The selected UI element is not a page"
+
+to bind {UI reference:target} in {a pointer to UI instance:instance} to {a callback:action} for event {integer:event}:
+    set handler to @intrinsic("construct", UI handler, target, @intrinsic("cast", action, a pointer), instance's handlers, event)
+    set instance's handlers to storage for one slot initialized with handler
+
+section when the {C string:label} control changes:
+    receiver: a pointer to UI instance
+    returns: nothing
+    value:
+        bind (the control labeled label in this window) in this window to @intrinsic("deferred body") for event 0
+
+to get the action for {UI reference:target} in {a pointer to UI instance:instance} for event {integer:event}:
+    set handler to instance's handlers
+    loop while handler != @intrinsic("construct", a pointer to UI handler):
+        if (handler's target = target) and (handler's event = event):
+            return handler's action
+        set handler to handler's next
+    return no UI action
+
+to activate {UI reference:node} belonging to {UI reference:parent} in {a pointer to UI instance:instance}:
+    set target to node
+    if node's kind = 17:
+        set entry to the UI value for node in instance
+        set entry's number to 1 - entry's number
+    if (node's kind = 19) or (node's kind = 29):
+        set target to parent
+        set index to 0
+        loop while (the UI child at index in parent) != node:
+            increment index
+        set entry to the UI value for parent in instance
+        set entry's number to index
+    set action to the action for target in instance for event 0
+    if action != no UI action:
+        @intrinsic("call pointer", action, nothing, instance)

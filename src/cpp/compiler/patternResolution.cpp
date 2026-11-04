@@ -1,6 +1,7 @@
 #include "classSection.h"
 #include "compiler.h"
 #include "compilerUtils.h"
+#include "dataSections.h"
 #include "expression.h"
 #include "functionSection.h"
 #include "intrinsicInfo.h"

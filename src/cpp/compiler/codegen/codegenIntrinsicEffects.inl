@@ -266,7 +266,14 @@ if (kind == IntrinsicKind::DefaultCase) {
 }
 
 if (kind == IntrinsicKind::Return) {
-	if (args.size() <= 1) {
+	llvm::Value *returnValue = nullptr;
+	DataType returnType{DataType::Kind::Void};
+	if (args.size() > 1) {
+		if (!generateRuntimeValue(args[1], returnValue))
+			return CodegenResult::failure();
+		returnType = finalizedExpressionType(context, args[1]);
+	}
+	if (returnType.kind == DataType::Kind::Void) {
 		llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();
 		if (!releaseManagedStorageForReturn(context))
 			return CodegenResult::failure();
@@ -282,10 +289,6 @@ if (kind == IntrinsicKind::Return) {
 		}
 		return nullptr;
 	}
-	llvm::Value *returnValue = nullptr;
-	if (!generateRuntimeValue(args[1], returnValue))
-		return CodegenResult::failure();
-	DataType returnType = finalizedExpressionType(context, args[1]);
 	bool managedReturn = typeHasManagedLifecycle(returnType);
 	bool ownedReturn = managedReturn && managedExpressionResultIsOwned(context, args[1]);
 	llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();
@@ -330,7 +333,7 @@ if (isExternalCallIntrinsicKind(kind)) {
 	// call: args[1]="library", args[2]="function", args[3]="return type", args[4+]=actual args.
 	// variadic call: the fixed argument count is args[4], and actual args begin at args[5].
 	// call pointer: args[1]=runtime callee, args[2]="return type", args[3+]=actual args.
-	const bool isPointerCall = kind == IntrinsicKind::CallPointer;
+	const bool isPointerCall = kind == IntrinsicKind::CallPointer || kind == IntrinsicKind::Invoke;
 	std::string funcName;
 	if (!isPointerCall) {
 		std::string library = getCompileTimeString(context, args[1]);
@@ -339,8 +342,7 @@ if (isExternalCallIntrinsicKind(kind)) {
 			context.requiredLibraries.insert(library);
 	}
 
-	DataType retTypeRef = finalizedExpressionType(context, args[externalCallReturnTypeArgumentIndex(kind)]);
-	DataType returnType = retTypeRef.toReferencedType();
+	DataType returnType = resultType;
 	llvm::Type *returnLLVMType = getLLVMType(context, returnType);
 	llvm::Value *pointerCallee = nullptr;
 	if (isPointerCall) {
@@ -436,7 +438,7 @@ if (isExternalCallIntrinsicKind(kind)) {
 	return callResult;
 }
 
-if (kind == IntrinsicKind::Function) {
+if (kind == IntrinsicKind::Function || kind == IntrinsicKind::DeferredBody) {
 	requireCompilerInvariant(callExpr, "function intrinsic reached codegen without its call expression");
 	PatternDefinition *definition = callExpr->selectedCallableDefinition;
 	requireCompilerInvariant(definition, "function intrinsic reached codegen without its inferred callable definition");
@@ -499,7 +501,8 @@ if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind 
 	return nullptr;
 }
 
-if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array) {
+if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array || kind == IntrinsicKind::FunctionType ||
+	kind == IntrinsicKind::FunctionResultType || kind == IntrinsicKind::FunctionParameterType) {
 	// Compile-time only — no runtime code
 	return nullptr;
 }
@@ -527,6 +530,36 @@ if (kind == IntrinsicKind::AddPointerDepth) {
 	return nullptr;
 }
 
+if (kind == IntrinsicKind::StaticReference) {
+	if (auto cached = context.staticLLVMValues.find(callExpr); cached != context.staticLLVMValues.end())
+		return cached->second;
+	DataType valueType = finalizedExpressionType(context, args[1]);
+	auto *global = new llvm::GlobalVariable(
+		*context.llvmModule, getLLVMType(context, valueType), true, llvm::GlobalValue::InternalLinkage,
+		llvm::Constant::getNullValue(getLLVMType(context, valueType)), "section.data"
+	);
+	global->setAlignment(getLLVMABIAlignment(context, valueType));
+	context.staticLLVMValues[callExpr] = global;
+	CodegenResult value = generateExpressionCode(context, args[1]);
+	if (!value)
+		return value;
+	auto *constant = llvm::dyn_cast<llvm::Constant>(value.value);
+	if (!constant) {
+		Diagnostic diagnostic;
+		diagnostic.range = intrinsicDiagnosticRange(context, callExpr);
+		diagnostic.message = "A static reference requires a constant aggregate value";
+		context.addDiagnostic(std::move(diagnostic));
+		return CodegenResult::failure();
+	}
+	global->setInitializer(constant);
+	return global;
+}
+
+if (kind == IntrinsicKind::SectionField || kind == IntrinsicKind::SectionBody || kind == IntrinsicKind::Receiver) {
+	requireCompilerInvariant(callExpr->inferredDataValue, "section field reached codegen without its inferred aggregate");
+	return generateExpressionCode(context, callExpr->inferredDataValue);
+}
+
 if (kind == IntrinsicKind::Construct) {
 	if (args.size() == 2) {
 		requireCompilerInvariant(
@@ -537,7 +570,7 @@ if (kind == IntrinsicKind::Construct) {
 	}
 	if (resultType.kind == DataType::Kind::Array) {
 		llvm::Type *arrayType = getLLVMType(context, resultType);
-		llvm::AllocaInst *alloca = createEntryAlloca(context, "array_tmp", resultType);
+		llvm::Value *array = llvm::Constant::getNullValue(arrayType);
 		DataType elementType = *resultType.arrayElementType;
 		for (size_t i = 2; i < args.size(); i++) {
 			llvm::Value *elementVal = nullptr;
@@ -548,11 +581,9 @@ if (kind == IntrinsicKind::Construct) {
 			if (typeHasManagedLifecycle(elementType) && !managedExpressionResultIsOwned(context, args[i]) &&
 				!retainManagedValue(context, elementType, elementVal))
 				return CodegenResult::failure();
-			llvm::Value *elementPtr =
-				builder.CreateGEP(arrayType, alloca, {builder.getInt64(0), builder.getInt64(i - 2)}, "array_elem_ptr");
-			builder.CreateStore(elementVal, elementPtr);
+			array = builder.CreateInsertValue(array, elementVal, {static_cast<unsigned>(i - 2)}, "array_element");
 		}
-		return builder.CreateAlignedLoad(arrayType, alloca, getLLVMABIAlignment(context, resultType), "array_load");
+		return array;
 	}
 
 	if (resultType.kind == DataType::Kind::Vector) {
@@ -586,7 +617,7 @@ if (kind == IntrinsicKind::Construct) {
 		concreteType.classInstIndex >= 0, "class construct result type must have a concrete instantiation"
 	);
 	ClassInstantiation &inst = classDef->instantiations[concreteType.classInstIndex];
-	llvm::AllocaInst *alloca = createEntryAlloca(context, "class_tmp", concreteType);
+	llvm::Value *result = llvm::Constant::getNullValue(getLLVMType(context, concreteType));
 	std::vector<std::pair<DataType, llvm::Value *>> ownedManagedFields;
 
 	for (size_t i = 0; i < inst.fieldTypes.size(); i++) {
@@ -601,13 +632,10 @@ if (kind == IntrinsicKind::Construct) {
 				return CodegenResult::failure();
 			ownedManagedFields.push_back({inst.fieldTypes[i], fieldVal});
 		}
-		llvm::Value *fieldPtr = createClassFieldPointer(context, concreteType, static_cast<int>(i), alloca);
-		builder.CreateStore(fieldVal, fieldPtr);
+		result = builder.CreateInsertValue(
+			result, fieldVal, {getClassFieldLLVMIndex(context, concreteType, static_cast<int>(i))}, "class_field"
+		);
 	}
-
-	llvm::Value *result = builder.CreateAlignedLoad(
-		getLLVMType(context, concreteType), alloca, getLLVMABIAlignment(context, concreteType), "struct_load"
-	);
 	if (classDef->retainSection) {
 		if (!retainManagedValue(context, concreteType, result))
 			return CodegenResult::failure();

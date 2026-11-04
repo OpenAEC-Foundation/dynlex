@@ -28,234 +28,9 @@ static std::optional<ResolvedPatternConstraint> resolvePatternConstraintForInfer
 	return resolveCompiledPatternConstraint(definition, pathIndex, argumentIndex, argumentTypes, argumentValues);
 }
 
-struct ConversionCandidate {
-	PatternDefinition *definition{};
-	size_t pathIndex{};
-	TypeConstraint sourceConstraint;
-	DataType outcomeType;
-};
+#include "conversion_inference.inl"
 
-struct ConversionLookup {
-	std::optional<ConversionCandidate> selected;
-	std::vector<ConversionCandidate> ambiguous;
-	bool deferred = false;
-};
-
-struct ConversionOutcome {
-	DataType type;
-	bool compileTimeKnown = false;
-};
-
-struct OwnedConversionCall {
-	std::shared_ptr<ExpressionStorage> storage;
-	Expression *expression;
-};
-
-static OwnedConversionCall
-createConversionCall(InferenceContext &context, Expression *source, PatternDefinition *definition, size_t pathIndex) {
-	requireCompilerInvariant(source != nullptr, "conversion call requires a source expression");
-	requireCompilerInvariant(
-		definition && definition->section && definition->section->isConversion,
-		"conversion call requires a conversion definition"
-	);
-	requireCompilerInvariant(
-		pathIndex < definition->indexedNodePaths.size() && definition->indexedNodePaths[pathIndex].size() == 1,
-		"conversion definition does not have one indexed parameter"
-	);
-
-	auto storage = context.createExpressionStorage();
-	auto match = std::make_shared<PatternMatch>();
-	match->nodesPassed = definition->indexedNodePaths[pathIndex];
-	match->matchedEndNode = match->nodesPassed.back();
-	match->matchingDefinitions = {definition};
-	match->lineStartPos = static_cast<size_t>(std::max(0, source->range.start()));
-	match->lineEndPos = static_cast<size_t>(std::max(0, source->range.end()));
-	PatternMatch *matchPointer = match.get();
-
-	auto *call = storage->create();
-	call->kind = Expression::Kind::PatternCall;
-	call->range = source->range;
-	call->owningSectionBody = source->owningSectionBody;
-	call->patternMatch = matchPointer;
-	call->syntheticPatternMatch = std::move(match);
-	Expression *sourceClone = context.parseContext.cloneExpressionTree(source, *storage, true);
-	if (!source->reusableTemplateExpression)
-		sourceClone->reusableTemplateExpression = nullptr;
-	context.setExpressionValue(sourceClone, context.lookupExpressionValue(source));
-	call->arguments.push_back(sourceClone);
-	return {std::move(storage), call};
-}
-
-static std::optional<ConversionOutcome> probeConversionOutcome(
-	Expression *source, const BindingFrameStack &bindingFrameStack, InferenceContext &context,
-	const ConversionCandidate &candidate, bool &deferred
-) {
-	InferenceContext::TrialJournal journal;
-	InferenceContext trialContext(context.parseContext, true);
-	trialContext.currentInstantiation = context.currentInstantiation;
-	trialContext.inheritSectionExecutionState(context);
-	trialContext.currentVariableValues = context.currentVariableValues;
-	trialContext.currentAddressState = context.currentAddressState;
-	trialContext.currentSubject = context.currentSubject;
-	trialContext.inheritedTrialExpressionValues =
-		context.trial ? &context.trialExpressionValues : context.inheritedTrialExpressionValues;
-	trialContext.trialJournal = &journal;
-	if (context.unresolvedPatternConstraintSignal)
-		trialContext.unresolvedPatternConstraintSignal = std::make_shared<bool>(false);
-	trialContext.detectGroupingAmbiguity = false;
-
-	auto conversion = createConversionCall(trialContext, source, candidate.definition, candidate.pathIndex);
-	Expression *call = conversion.expression;
-	bool inferred = inferPatternCall(call, trialContext, bindingFrameStack, true) && trialContext.typesValid;
-	deferred = trialContext.unresolvedPatternConstraintSignal && *trialContext.unresolvedPatternConstraintSignal;
-	std::optional<ConversionOutcome> result;
-	if (inferred && call->type.isDeduced() && call->type.kind != DataType::Kind::Void)
-		result = ConversionOutcome{call->type, isCompileTimeKnown(trialContext.lookupExpressionValue(call))};
-	rollbackTrialJournal(journal);
-	return result;
-}
-
-static ConversionLookup findUserConversion(
-	Expression *source, const TypeConstraint &targetConstraint, bool implicitOnly, InferenceContext &context,
-	const BindingFrameStack &bindingFrameStack
-) {
-	if (!source || source->inferredConversion || !source->type.isDeduced() || !targetConstraint.isResolved()) {
-		return {};
-	}
-	PatternTreeNode *root = context.parseContext.patternTrees[(int)SectionType::Conversion];
-	if (!root || !root->argumentChild || !source->range.line || !source->range.line->sourceFile)
-		return {};
-
-	const DataType sourceType = source->type;
-	CompileTimeValue sourceValue = context.lookupExpressionValue(source);
-	bool compileTimeKnown = sourceType.isMetaType() || isCompileTimeKnown(sourceValue);
-	const std::vector<DataType> sourceTypes{sourceType};
-	const std::vector<CompileTimeValue> sourceValues{sourceValue};
-	PatternConstraintResolver resolveSourceConstraint = [&](PatternDefinition *definition, size_t pathIndex,
-															size_t argumentIndex) {
-		return resolvePatternConstraintForInference(context, definition, pathIndex, argumentIndex, sourceTypes, sourceValues);
-	};
-	std::vector<ConversionCandidate> matches;
-	bool hasDeferredCandidate = false;
-	for (PatternDefinition *definition : root->argumentChild->matchingDefinitions) {
-		if (!definition || !definition->section || !definition->section->isConversion)
-			continue;
-		if (implicitOnly && !definition->section->isImplicitConversion)
-			continue;
-		if (!isPatternDefinitionVisibleFromSource(*definition, *source->range.line->sourceFile))
-			continue;
-
-		PatternOverloadSelection sourceSelection = selectOverload(
-			{definition}, {source}, definition->indexedNodePaths.front(), {sourceType}, {compileTimeKnown},
-			resolveSourceConstraint
-		);
-		if (sourceSelection.deferred) {
-			hasDeferredCandidate = true;
-			continue;
-		}
-		if (!sourceSelection)
-			continue;
-		std::optional<ResolvedPatternConstraint> sourceConstraint =
-			resolveSourceConstraint(definition, sourceSelection.pathIndex, 0);
-		requireCompilerInvariant(sourceConstraint.has_value(), "selected conversion constraint could not be materialized");
-		ConversionCandidate candidate{definition, sourceSelection.pathIndex, std::move(sourceConstraint->constraint), {}};
-		bool deferred = false;
-		std::optional<ConversionOutcome> outcome =
-			probeConversionOutcome(source, bindingFrameStack, context, candidate, deferred);
-		hasDeferredCandidate = hasDeferredCandidate || deferred;
-		if (outcome && targetConstraint.accepts(outcome->type, outcome->compileTimeKnown)) {
-			candidate.outcomeType = outcome->type;
-			matches.push_back(candidate);
-		}
-	}
-	if (hasDeferredCandidate)
-		return {std::nullopt, {}, true};
-	if (matches.empty())
-		return {};
-
-	std::vector<ConversionCandidate> maximalMatches;
-	for (size_t candidateIndex = 0; candidateIndex < matches.size(); candidateIndex++) {
-		bool dominated = false;
-		for (size_t otherIndex = 0; otherIndex < matches.size(); otherIndex++) {
-			if (candidateIndex == otherIndex)
-				continue;
-			if (matches[candidateIndex].sourceConstraint.compareSpecificity(matches[otherIndex].sourceConstraint) ==
-				ConstraintSpecificity::RightMoreSpecific) {
-				dominated = true;
-				break;
-			}
-		}
-		if (!dominated)
-			maximalMatches.push_back(matches[candidateIndex]);
-	}
-	requireCompilerInvariant(!maximalMatches.empty(), "conversion domains have no maximal candidate");
-	if (maximalMatches.size() == 1) {
-		ConversionLookup result;
-		result.selected = maximalMatches.front();
-		return result;
-	}
-	ConversionLookup result;
-	result.ambiguous = std::move(maximalMatches);
-	return result;
-}
-
-static void reportAmbiguousUserConversion(
-	Expression *source, const std::string &targetDescription, const std::vector<ConversionCandidate> &candidates,
-	InferenceContext &context
-) {
-	requireCompilerInvariant(source != nullptr && candidates.size() > 1, "invalid ambiguous conversion diagnostic");
-	std::string detail = renderConfiguredMessage(
-		syntaxConfigForRange(context.parseContext, source->range), "ambiguous conversion", "message",
-		{{"from_type", typeToUserName(source->type)}, {"to_type", targetDescription}}
-	);
-	context.setTypeFailure(detail);
-	Diagnostic diagnostic = buildFailureDetailDiagnostic(source->range, detail);
-	for (const ConversionCandidate &candidate : candidates)
-		diagnostic.relatedInfo.push_back({"Conversion is defined here", candidate.definition->range});
-	context.fail(std::move(diagnostic), 1);
-}
-
-static bool tryApplyUserConversion(
-	Expression *source, const DataType &targetType, bool implicitOnly, InferenceContext &context,
-	const BindingFrameStack &bindingFrameStack, bool requireCompileTimeResult
-) {
-	if (!source)
-		return false;
-	if (source->inferredConversion)
-		return source->inferredConversion->type == targetType;
-	if (source->type == targetType)
-		return true;
-	TypeConstraint targetConstraint = TypeConstraint::fromValueType(targetType);
-	targetConstraint.requiresCompileTimeValue = requireCompileTimeResult;
-	ConversionLookup lookup = findUserConversion(source, targetConstraint, implicitOnly, context, bindingFrameStack);
-	if (lookup.deferred) {
-		requireCompilerInvariant(
-			context.unresolvedPatternConstraintSignal != nullptr, "deferred conversion outside signature inference"
-		);
-		*context.unresolvedPatternConstraintSignal = true;
-		context.typesValid = false;
-		return false;
-	}
-	if (!lookup.ambiguous.empty()) {
-		reportAmbiguousUserConversion(source, typeToUserName(targetType), lookup.ambiguous, context);
-		return false;
-	}
-	if (!lookup.selected)
-		return false;
-	auto conversion = createConversionCall(context, source, lookup.selected->definition, lookup.selected->pathIndex);
-	Expression *call = conversion.expression;
-	if (!inferPatternCall(call, context, bindingFrameStack, true) || !context.typesValid)
-		return false;
-	requireCompilerInvariant(
-		lookup.selected->outcomeType == targetType, "selected conversion outcome differs from its target type"
-	);
-	requireCompilerInvariant(call->type == targetType, "committed conversion outcome differs from its successful probe");
-	source->inferredConversion = call;
-	source->inferredConversionStorage = std::move(conversion.storage);
-	context.parseContext.expressionsWithInferredConversions.emplace_back(source, source->inferredConversionStorage);
-	context.setExpressionValue(source, context.lookupExpressionValue(call));
-	return true;
-}
+#include "data_section_inference.inl"
 
 struct ImplicitPatternOverload {
 	PatternDefinition *definition{};
@@ -605,7 +380,8 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	argumentConstraints.reserve(argTypesForOverload.size());
 	size_t constraintArgumentIndex = 0;
 	forEachPatternParameterName(
-		def, overload.pathIndex, [&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
+		def, overload.pathIndex,
+		[&](const std::string &parameterName, PatternTreeNode *, size_t startPos) {
 		const DefinitionPatternElement *parameterElement = matchedPatternParameterElement(def, parameterName, startPos);
 		requireCompilerInvariant(parameterElement, "selected overload parameter has no definition element");
 		std::optional<ResolvedPatternConstraint> constraint =
@@ -683,7 +459,8 @@ static void pushResolvedFlexBindingScope(
 	BindingFrame frame;
 	size_t argumentIndex = 0;
 	forEachPatternParameterName(
-		definition, resolution.pathIndex, [&](const std::string &name, PatternTreeNode *, size_t startPos) {
+		definition, resolution.pathIndex,
+		[&](const std::string &name, PatternTreeNode *, size_t startPos) {
 		requireCompilerInvariant(argumentIndex < expression->arguments.size(), "flex call has too few arguments");
 		Expression *argument = expression->arguments[argumentIndex];
 		frame.bindings[name] = argument;
@@ -780,7 +557,7 @@ static void inferFlexPatternCall(
 	if (callSiteSection)
 		context.flexCallSiteSectionStack.push_back(callSiteSection);
 	std::optional<size_t> sectionBodyFrameIndex;
-	if (matchedSection->type == SectionType::Section) {
+	if (matchedSection->type == SectionType::Section && !matchedSection->dataSection) {
 		Section *callerBodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
 		if (callerBodySection) {
 			InferenceContext::SectionFlexBodyInferenceFrame frame;
@@ -796,6 +573,8 @@ static void inferFlexPatternCall(
 	}
 	BindingFrameStack callBindingFrameStack = flexBindingFrameStack;
 	pushResolvedFlexBindingScope(callBindingFrameStack, expr, resolution);
+	if (matchedSection->dataSection && !inferDataSectionFields(expr, matchedSection, context, callBindingFrameStack))
+		return;
 	std::shared_ptr<InstantiatedSectionBody> flexBody = context.cloneSectionBody(matchedSection, expr->owningSectionBody);
 	if (sectionBodyFrameIndex)
 		context.sectionFlexBodyFrames[*sectionBodyFrameIndex].definitionBody = flexBody.get();
@@ -856,13 +635,27 @@ static void inferFlexPatternCall(
 		}
 		expr->sectionBodyFallsThrough = context.sectionFlexBodyFrames[frameIndex].bodyFallsThrough;
 	}
-	DataType resolvedType = matchedSection->type == SectionType::Section ? DataType{DataType::Kind::Void} : bodyExpr->type;
+	DataType resolvedType = matchedSection->type == SectionType::Section && !matchedSection->dataSection
+								? DataType{DataType::Kind::Void}
+								: bodyExpr->type;
+	if (matchedSection->dataSection &&
+		!validateDataSectionResult(expr, matchedSection, resolvedType, context, callBindingFrameStack))
+		return;
 	if (resolvedType.isDeduced()) {
 		expr->type = resolvedType;
 		if (!validateDefinitionReturnContract(matchedSection, def, resolvedType, context))
 			return;
 	}
 	context.setExpressionValue(expr, context.lookupExpressionValue(bodyExpr));
+	if (expr->dataDeclaration) {
+		Variable *variable = expr->dataDeclaration->range.section()->findVariable(expr->dataDeclaration->variable);
+		requireCompilerInvariant(variable, "data declaration has no bound variable");
+		if (context.trial && context.trialJournal)
+			context.trialJournal->recordVariableWrite(variable);
+		commitVariableTypeFromValue(variable, expr, resolvedType);
+		expr->dataDeclaration->type = resolvedType;
+		context.setKnownConstant(variable->definition, context.lookupExpressionValue(expr));
+	}
 	applyNumberRuleToTypePhrase(expr, context);
 }
 

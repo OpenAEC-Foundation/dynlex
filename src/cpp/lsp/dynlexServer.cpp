@@ -797,6 +797,8 @@ static std::string formatInstantiationKeyValue(const CompileTimeValue &value) {
 	}
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 		return typeToUserName(*constraint);
+	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
+		return "pointer(" + std::to_string(pointer->address) + ")";
 	return "?";
 }
 

@@ -11,23 +11,23 @@
 
 using ExpressionNodeSet = llvm::SmallPtrSet<Expression *, 32>;
 
-static bool collectExpressionNodes(Expression *expr, ExpressionNodeSet &nodes, ExpressionNodeSet &visiting) {
+static bool collectGroupingNodes(Expression *expr, ExpressionNodeSet &nodes, ExpressionNodeSet &visiting) {
 	if (visiting.contains(expr))
 		return true;
 	if (!nodes.insert(expr).second)
 		return false;
 	visiting.insert(expr);
-	for (Expression *arg : expr->arguments) {
-		if (collectExpressionNodes(arg, nodes, visiting))
+	for (Expression *arg : unconvertedExpression(expr)->arguments) {
+		if (collectGroupingNodes(arg, nodes, visiting))
 			return true;
 	}
 	visiting.erase(expr);
 	return false;
 }
 
-static bool collectExpressionNodes(Expression *expr, ExpressionNodeSet &nodes) {
+static bool collectGroupingNodes(Expression *expr, ExpressionNodeSet &nodes) {
 	ExpressionNodeSet visiting;
-	return collectExpressionNodes(expr, nodes, visiting);
+	return collectGroupingNodes(expr, nodes, visiting);
 }
 
 static void recomputeRanges(Expression *expr, ExpressionNodeSet &visited) {
@@ -67,7 +67,7 @@ static bool expressionContains(Expression *root, Expression *target, ExpressionN
 		return true;
 	if (!visited.insert(root).second)
 		return false;
-	for (Expression *arg : root->arguments) {
+	for (Expression *arg : unconvertedExpression(root)->arguments) {
 		if (expressionContains(arg, target, visited))
 			return true;
 	}
@@ -82,8 +82,13 @@ static bool expressionContains(Expression *root, Expression *target) {
 static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	if (!visited.insert(expr).second)
 		return;
+	// A new inference trial chooses conversions again from the authored tree.
+	if (isInsertedConversionCall(expr)) {
+		Expression original = *unconvertedExpression(expr);
+		*expr = std::move(original);
+	}
 	auto inferredFlexBody = std::move(expr->inferredFlexBody);
-	auto conversionStorage = std::move(expr->inferredConversionStorage);
+	auto valueStorage = std::move(expr->inferredValueStorage);
 	Expression *inferredFlexExpansion = expr->inferredFlexExpansion;
 	if (expr->kind != Expression::Kind::Literal && expr->kind != Expression::Kind::TypedPlaceholder)
 		expr->type = {};
@@ -102,9 +107,10 @@ static void resetExpressionTypes(Expression *expr, ExpressionNodeSet &visited) {
 	expr->sectionBodyFallsThrough = true;
 	expr->branchSelection.reset();
 	expr->inferredFlexExpansion = nullptr;
-	expr->inferredConversion = nullptr;
 	expr->inferredPointerStorage = nullptr;
 	expr->inferredFlexBody.reset();
+	expr->dataSectionValues.reset();
+	expr->inferredDataValue = nullptr;
 	for (Expression *arg : expr->arguments)
 		resetExpressionTypes(arg, visited);
 	if (inferredFlexExpansion)
@@ -131,6 +137,8 @@ static std::string renderResolvedExpressionArgument(Expression *expr) {
 }
 
 static std::string renderResolvedExpression(Expression *expr) {
+	if (isInsertedConversionCall(expr))
+		return renderResolvedExpression(unconvertedExpression(expr));
 	if (!expr->range.subString.empty() && (expr->kind == Expression::Kind::Literal ||
 										   expr->kind == Expression::Kind::Variable || expr->kind == Expression::Kind::Pending))
 		return (std::string)expr->range.subString;
@@ -296,8 +304,9 @@ static void considerGroupingFailure(GroupingFailure *currentBest, Diagnostic dia
 static void captureGroupingSnapshot(Expression *expr, GroupingSnapshot &snapshot, ExpressionNodeSet &visited) {
 	if (!expr || !visited.insert(expr).second)
 		return;
-	snapshot.nodes.emplace(expr, GroupingSnapshot::NodeState{expr->arguments, expr->isExplicitGroup});
-	for (Expression *arg : expr->arguments)
+	Expression *syntax = unconvertedExpression(expr);
+	snapshot.nodes.emplace(expr, GroupingSnapshot::NodeState{syntax->arguments, syntax->isExplicitGroup});
+	for (Expression *arg : syntax->arguments)
 		captureGroupingSnapshot(arg, snapshot, visited);
 }
 
@@ -317,24 +326,28 @@ static bool expressionNodeSetsEqual(const ExpressionNodeSet &left, const Express
 
 static void applyGroupingSnapshot(const GroupingSnapshot &snapshot) {
 	for (const auto &[expression, state] : snapshot.nodes) {
-		expression->arguments = state.arguments;
-		expression->isExplicitGroup = state.explicitGroup;
+		Expression *syntax = unconvertedExpression(expression);
+		syntax->arguments = state.arguments;
+		syntax->isExplicitGroup = state.explicitGroup;
 	}
 }
 
 static bool expressionHasGroupingShape(Expression *expression) {
+	expression = unconvertedExpression(expression);
 	if (expression->kind == Expression::Kind::PatternCall && !expression->arguments.empty())
 		return true;
 	return !expression->groupingArgumentIndices.empty();
 }
 
 static size_t groupingArgumentCount(Expression *expression) {
+	expression = unconvertedExpression(expression);
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->arguments.size();
 	return expression->groupingArgumentIndices.size();
 }
 
 static int groupingArgumentIndex(Expression *expression, size_t sourceArgumentIndex) {
+	expression = unconvertedExpression(expression);
 	if (!expression)
 		return -1;
 	if (expression->kind == Expression::Kind::PatternCall)
@@ -365,7 +378,7 @@ static GroupingSnapshot groupingForReusableInstance(const GroupingSnapshot &temp
 	GroupingSnapshot instanceGrouping;
 	ExpressionNodeSet instanceNodes;
 	requireCompilerInvariant(
-		instanceRoot && !collectExpressionNodes(instanceRoot, instanceNodes),
+		instanceRoot && !collectGroupingNodes(instanceRoot, instanceNodes),
 		"reusable grouping instance contains an expression cycle"
 	);
 	std::unordered_map<Expression *, Expression *> instanceByTemplate;
@@ -498,6 +511,7 @@ static void commitTrialCodeLineGroupings(InferenceContext &context) {
 }
 
 static int countMatchedParameters(Expression *expression, PatternDefinition *definition) {
+	expression = unconvertedExpression(expression);
 	if (!expression || !definition || !expression->patternMatch)
 		return 0;
 	(void)matchingPatternPathIndices(expression->patternMatch->nodesPassed, definition);
@@ -517,18 +531,21 @@ static int countMatchedParameters(Expression *expression, PatternDefinition *def
 // the middle "$" is interior even though it is also a variable element.
 // There can never be multiple left or right boundary slots.
 static bool startsWithArgument(Expression *expression) {
+	expression = unconvertedExpression(expression);
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->patternMatch->nodesPassed.front()->type == PatternElement::Type::Variable;
 	return expression->groupingStartsWithArgument;
 }
 
 static bool endsWithArgument(Expression *expression) {
+	expression = unconvertedExpression(expression);
 	if (expression->kind == Expression::Kind::PatternCall)
 		return expression->patternMatch->nodesPassed.back()->type == PatternElement::Type::Variable;
 	return expression->groupingEndsWithArgument;
 }
 
 static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argumentIndex) {
+	expression = unconvertedExpression(expression);
 	if (expression->kind != Expression::Kind::PatternCall) {
 		return expression->groupingArgumentHasAdjacentSiblingSlot[argumentIndex];
 	}
@@ -556,6 +573,7 @@ static bool argumentHasAdjacentSiblingSlot(Expression *expression, size_t argume
 }
 
 static const PatternFamily *expressionPrecedenceFamily(Expression *expression) {
+	expression = unconvertedExpression(expression);
 	if (!expression || expression->kind != Expression::Kind::PatternCall || !expression->patternMatch ||
 		!expression->patternMatch->matchedEndNode)
 		return nullptr;
@@ -757,6 +775,8 @@ static bool standaloneExpressionHasNonVoidResult(
 	Expression *expression, const InferenceContext &context, bool observedRecursiveDependency
 ) {
 	DataType resultType = expression ? expression->type : DataType{};
+	if (expression && expression->dataDeclaration)
+		return false;
 	if (resultType.isDeduced())
 		return resultType.kind != DataType::Kind::Void;
 	requireCompilerInvariant(
@@ -775,7 +795,7 @@ static bool validateGroupingInTrial(
 	std::unique_ptr<GroupingInferenceTransaction> *retainedTransaction = nullptr
 ) {
 	ExpressionNodeSet originalExpressionNodes;
-	if (collectExpressionNodes(expr, originalExpressionNodes)) {
+	if (collectGroupingNodes(expr, originalExpressionNodes)) {
 		considerGroupingFailure(
 			trialFailure, buildFailureDetailDiagnostic(failureSnapshot.range, "internal operand regrouping cycle detected"), 1
 		);
@@ -785,7 +805,7 @@ static bool validateGroupingInTrial(
 	resetExpressionTypes(expr);
 	inferOrderedExpression(expr, context, flexBindingFrameStack, true);
 	ExpressionNodeSet inferredExpressionNodes;
-	bool inferredCycle = collectExpressionNodes(expr, inferredExpressionNodes);
+	bool inferredCycle = collectGroupingNodes(expr, inferredExpressionNodes);
 	requireCompilerInvariant(
 		!inferredCycle && expressionNodeSetsEqual(inferredExpressionNodes, originalExpressionNodes),
 		"grouping trial inference changed the expression node set"

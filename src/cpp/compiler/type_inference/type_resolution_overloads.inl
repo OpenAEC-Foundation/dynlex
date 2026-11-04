@@ -219,7 +219,8 @@ struct InferenceContext {
 			if (fromSeenIt == seenSectionInstantiations.end())
 				return SectionInstantiationRetargetResult::MissingSourceRecord;
 			auto undoIt = std::find_if(
-				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(), [&](const SectionInstantiationUndo &undo) {
+				sectionInstantiationUndo.begin(), sectionInstantiationUndo.end(),
+				[&](const SectionInstantiationUndo &undo) {
 				return undo.section == section && undo.key == fromKey;
 			}
 			);
@@ -548,8 +549,6 @@ struct InferenceContext {
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {
 		if (!expression)
 			return {};
-		if (expression->inferredConversion)
-			return lookupExpressionValue(expression->inferredConversion);
 		if (expression->kind == Expression::Kind::Variable && expression->variable) {
 			VariableReference *key = normalizeReference(expression->variable);
 			const KnownConstantStorage &knownConstants = currentVariableValues.read();
@@ -583,6 +582,25 @@ struct InferenceContext {
 			return;
 		}
 		setExpressionCompileTimeValue(expression, value);
+	}
+
+	void absorbTrialResultsFrom(InferenceContext &other) {
+		requireCompilerInvariant(
+			trial && other.trial && trialJournal == other.trialJournal,
+			"committing child inference requires its owning trial context"
+		);
+		for (const auto &[expression, value] : other.trialExpressionValues)
+			setExpressionValue(expression, value);
+		for (auto &[line, grouping] : other.trialCodeLineGroupings) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordCodeLineGroupingWrite(trialCodeLineGroupings, line);
+			trialCodeLineGroupings.insert_or_assign(line, std::move(grouping));
+		}
+		for (const auto &[definition, instantiation] : other.trialCallableInstantiations) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordCallableInstantiationWrite(trialCallableInstantiations, definition);
+			trialCallableInstantiations.insert_or_assign(definition, instantiation);
+		}
 	}
 
 	Expression *lookupFlexExpansion(Expression *expression) const {

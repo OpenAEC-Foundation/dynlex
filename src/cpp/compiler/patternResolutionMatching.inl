@@ -199,7 +199,8 @@ static bool isArgumentExpressionReference(const PatternReference *reference) {
 		reference && reference->expression && reference->range().line,
 		"pattern reference argument classification requires a source expression"
 	);
-	return reference->range().line->expression != reference->expression;
+	return reference->range().line->expression != reference->expression ||
+		reference->range().section()->isValueExpressionContext();
 }
 
 // Resolve a list of pattern references against the tree. Returns true if all resolved.
@@ -321,7 +322,7 @@ static bool resolveReferences(
 		} else if (reference->patternElements.size() == 1 &&
 				   reference->patternElements[0].type == PatternElement::Type::VariableLike) {
 			const std::string &varName = reference->patternElements[0].text;
-			if (!isArgumentExpressionReference(reference) ||
+			if ((!isArgumentExpressionReference(reference) && !isDataSectionBodyReference(*reference)) ||
 				(!allowUnmatchedVariables && !findEnclosingParameterCandidate(reference, varName)))
 				return false;
 			failedMatchDependencies.erase(reference);
@@ -343,6 +344,7 @@ static bool resolveReferences(
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
+	prepareDataSectionDefinitions(context);
 	generateClassPropertyPatterns(context);
 	std::list<PatternReference *> bodyReferences;
 	std::list<PatternReference *> globalReferences;
@@ -730,6 +732,8 @@ bool resolvePatterns(ParseContext &context) {
 		return false;
 	}
 	context.compilationStage = ParseContext::CompilationStage::ResolvedGlobalPatterns;
+	if (!prepareDeferredSectionBodies(context))
+		return false;
 	emitExplicitDefinitionParameterAmbiguityWarnings(context);
 
 	// Phase 3: Resolve the family partial order used by operand grouping.

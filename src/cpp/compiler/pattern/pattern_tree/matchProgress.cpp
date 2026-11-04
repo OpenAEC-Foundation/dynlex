@@ -1,4 +1,6 @@
 #include "matchProgress.h"
+#include "compiler.h"
+#include "dataSections.h"
 #include "parseContext.h"
 #include "patternDefinition.h"
 #include "patternReference.h"
@@ -73,7 +75,8 @@ static std::vector<ExplicitVariableCandidate> explicitMultiWordVariableCandidate
 																	   : progress.patternReference->range().section();
 	for (Section *section = candidateScope; section; section = section->parent) {
 		for (const auto &[name, declaration] : section->explicitVariableDeclarations) {
-			if (!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
+			if (!section->dataVariableDeclarations.contains(name) &&
+				!explicitVariableDeclarationPrecedes(declaration, *progress.patternReference, progress.sourceElementIndex))
 				continue;
 			if (!shadowedNames.insert(name).second || name.find(' ') == std::string::npos)
 				continue;
@@ -296,7 +299,8 @@ std::vector<PatternDefinition *> MatchProgress::visibleDefinitions() const {
 	requireCompilerInvariant(sourceFile != nullptr, "pattern matching requires a source file");
 	for (PatternDefinition *definition : currentNode->matchingDefinitions) {
 		requireCompilerInvariant(definition != nullptr, "pattern tree endpoint contains a null definition");
-		if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
+		if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile) &&
+			dataSectionFieldVisible(definition->section, *patternReference))
 			result.push_back(definition);
 	}
 	return result;
@@ -495,6 +499,46 @@ MatchStep MatchProgress::step(MatchStorage &storage, const std::vector<PatternDe
 			pushArgumentCapture();
 			pushExplicitMultiWordCaptures();
 			pushSubmatch();
+			// A declaration parameter binds source identifiers rather than
+			// evaluating them as an existing expression. It uses this same trie.
+			bool declarationCapture = false;
+			for (const auto &[definition, occurrences] : currentNode->argumentChild->definitionOccurrences) {
+				if (!definition->section->dataSection || definition->section->dataSection->declarationParameter.empty())
+					continue;
+				for (const auto &occurrence : occurrences) {
+					if (matchedPatternParameterElement(
+							definition, definition->section->dataSection->declarationParameter, occurrence.startPos
+						))
+						declarationCapture = true;
+				}
+			}
+			if (declarationCapture && sourceCharIndex == 0 && elementType == PatternElement::Type::VariableLike) {
+				size_t length = 0;
+				for (size_t end = sourceElementIndex; end < patternReference->patternElements.size(); end++) {
+					const auto &part = patternReference->patternElements[end];
+					if (part.type != PatternElement::Type::VariableLike && part.text != " ")
+						break;
+					length += part.text.size();
+					if (part.type != PatternElement::Type::VariableLike)
+						continue;
+					MatchProgress next = *this;
+					next.currentNode = currentNode->argumentChild;
+					storage.append(next.match.nodesPassed, next.currentNode);
+					size_t first = patternReference->pattern.getLinePos(patternPos);
+					size_t last = patternReference->pattern.getLinePos(patternPos + length);
+					size_t index = next.match.discoveredVariables.size();
+					std::string name(patternReference->range().subString.substr(first, last - first));
+					storage.append(next.match.discoveredVariables, VariableMatch{name, first, last});
+					storage.append(
+						next.match.orderedArguments,
+						{next.matchedArgumentIndex, MatchedArgument::Kind::Variable, nullptr, index}
+					);
+					next.sourceElementIndex = end + 1;
+					next.matchedArgumentIndex++;
+					next.patternPos += length;
+					nextMatches.push_back(std::move(next));
+				}
+			}
 		}
 		// most priority: text match
 		if (fullLiteralMatch != currentNode->literalChildren.end()) {

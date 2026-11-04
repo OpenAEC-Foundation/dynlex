@@ -4,6 +4,9 @@ import lib/host.dl
 import lib/atomic.dl
 import lib/graphics_native_types.dl
 
+to poll window events:
+    @intrinsic("call", "glfw", "glfwPollEvents", nothing)
+
 local class:
     patterns:
         [a|] graphics library state

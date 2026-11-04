@@ -1,5 +1,26 @@
 case Expression::Kind::IntrinsicCall: {
 #include "intrinsic_preflight_inference.inl"
+	if (kind == IntrinsicKind::SectionField || kind == IntrinsicKind::SectionBody) {
+		inferDataSectionField(expr, context);
+		break;
+	}
+	if (kind == IntrinsicKind::StaticReference) {
+		expr->type = expr->arguments[1]->type;
+		expr->type.pointerDepth++;
+		break;
+	}
+	if (kind == IntrinsicKind::DeferredBody) {
+		inferDeferredSectionBody(expr, context, flexBindingFrameStack);
+		break;
+	}
+	if (kind == IntrinsicKind::Receiver) {
+		inferSectionReceiver(expr, context);
+		break;
+	}
+	if (isCallbackTypeIntrinsic(kind)) {
+		inferCallbackTypeIntrinsic(expr, context, flexBindingFrameStack);
+		break;
+	}
 	recordIntrinsicMemoryViolation(expr, context, flexBindingFrameStack);
 	if (isShaderRuntimeIntrinsicKind(kind) && !validateShaderRuntimeIntrinsic(expr, kind, context))
 		break;
@@ -255,87 +276,7 @@ case Expression::Kind::IntrinsicCall: {
 				if (ptrType.isDeduced() && ptrType.isPointer())
 					expr->type = ptrType.dereferenced();
 			} else if (isExternalCallIntrinsicKind(kind)) {
-				if (kind == IntrinsicKind::CallPointer) {
-					if (context.parseContext.options.emitWASM || context.parseContext.options.emitSPIRV) {
-						failWithDetail(
-							expr->range, "Intrinsic 'call pointer' is only available when emitting native CPU code", 0
-						);
-						break;
-					}
-					DataType calleeType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-					if (calleeType.isDeduced() && !calleeType.isPointer()) {
-						setConfiguredTypeFailure(expr->range, "call pointer callee must be a native pointer");
-						break;
-					}
-				} else {
-					for (size_t metadataIndex = 1; metadataIndex <= 2; metadataIndex++) {
-						Expression *metadataExpression = resolveThroughFlexBindings(expr->arguments[metadataIndex]);
-						if (!metadataExpression || !std::holds_alternative<std::string>(metadataExpression->literalValue)) {
-							failIntrinsicArgumentRequirement(metadataIndex, "a string literal");
-							break;
-						}
-					}
-				}
-				if (!context.typesValid)
-					break;
-				size_t returnTypeArgumentIndex = externalCallReturnTypeArgumentIndex(kind);
-				DataType retTypeRef =
-					ensureExpressionType(expr->arguments[returnTypeArgumentIndex], context, flexBindingFrameStack);
-				if (retTypeRef.kind != DataType::Kind::Type) {
-					setConfiguredTypeFailure(expr->range, "call return type must be type reference");
-					break;
-				}
-				if (retTypeRef.kind == DataType::Kind::Type &&
-					(!retTypeRef.toReferencedType().isDeduced() || retTypeRef.toReferencedType().isMetaType())) {
-					setConfiguredTypeFailure(expr->range, "call return type must be concrete runtime type");
-					break;
-				}
-				size_t runtimeArgumentStart = externalCallRuntimeArgumentStart(kind);
-				if (kind == IntrinsicKind::VariadicCall) {
-					int fixedArgumentCount = 0;
-					if (!resolveStoredCompileTimeInteger(
-							expr->arguments[4], flexBindingFrameStack, fixedArgumentCount, &context
-						)) {
-						failIntrinsicArgumentRequirement(4, "a compile-time integer");
-						break;
-					}
-					if (fixedArgumentCount < 0) {
-						failWithDetail(
-							expr->arguments[4]->range, "Intrinsic 'variadic call' fixed argument count cannot be negative", 0
-						);
-						break;
-					}
-					size_t callArgumentCount = expr->arguments.size() - runtimeArgumentStart;
-					if (static_cast<size_t>(fixedArgumentCount) > callArgumentCount) {
-						std::string argumentLabel = callArgumentCount == 1 ? " call argument" : " call arguments";
-						failWithDetail(
-							expr->arguments[4]->range,
-							"Intrinsic 'variadic call' fixed argument count cannot exceed its " +
-								std::to_string(callArgumentCount) + argumentLabel,
-							0
-						);
-						break;
-					}
-				}
-				for (size_t i = runtimeArgumentStart; i < expr->arguments.size(); i++) {
-					DataType argType = ensureExpressionType(expr->arguments[i], context, flexBindingFrameStack);
-					if (argType.kind == DataType::Kind::Type) {
-						setConfiguredTypeFailure(expr->range, "call arguments cannot be type values");
-						break;
-					}
-					if (argType.kind == DataType::Kind::Void) {
-						failWithDetail(expr->arguments[i]->range, "call arguments must have runtime values");
-						break;
-					}
-				}
-				if (!context.typesValid)
-					break;
-				for (size_t i = runtimeArgumentStart; i < expr->arguments.size(); i++) {
-					retainExternalAddress(context, inferAddressProvenance(expr->arguments[i], context, flexBindingFrameStack));
-				}
-				invalidateExternalCallWrites(context);
-				if (retTypeRef.kind == DataType::Kind::Type)
-					expr->type = retTypeRef.toReferencedType();
+#include "intrinsics/external_call_inference.inl"
 			} else if (kind == IntrinsicKind::Function) {
 #include "intrinsics/function_reference_inference.inl"
 			} else if (kind == IntrinsicKind::Cast) {

@@ -150,6 +150,12 @@ static std::string encodeDataTypeForCacheKey(const DataType &type) {
 		key += "(" + encodeDataTypeForCacheKey(*type.arrayElementType) + ")";
 	else
 		key += "()";
+	if (type.functionSignature) {
+		key += "|f(" + encodeDataTypeForCacheKey(type.functionSignature->result);
+		for (const DataType &parameter : type.functionSignature->parameters)
+			key += "," + encodeDataTypeForCacheKey(parameter);
+		key += ")";
+	}
 	return key;
 }
 
@@ -191,6 +197,8 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 		return "t" + encodeDataTypeForCacheKey(typeRef->type) + "|" + encodeTypeConstraintForCacheKey(typeRef->constraint);
 	if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 		return "c" + encodeTypeConstraintForCacheKey(*constraint);
+	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
+		return "p" + std::to_string(pointer->address);
 	return "?";
 }
 

@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace llvm {
 class DataLayout;
@@ -16,6 +17,14 @@ class LLVMContext;
 struct ClassDefinition;
 struct Expression;
 struct TypeConstraint;
+struct FunctionSignature;
+bool sameFunctionSignature(
+	const std::shared_ptr<const FunctionSignature> &left, const std::shared_ptr<const FunctionSignature> &right
+);
+bool lessFunctionSignature(
+	const std::shared_ptr<const FunctionSignature> &left, const std::shared_ptr<const FunctionSignature> &right
+);
+bool concreteFunctionSignature(const std::shared_ptr<const FunctionSignature> &signature);
 
 struct DataType {
 	enum class Kind {
@@ -34,6 +43,7 @@ struct DataType {
 		Matrix,
 		// a class with members. for example point
 		Class,
+		Function,
 		// a type literal. for example, we can pass a type literal like '32 bit int' as argument.
 		Type,
 		// a compile-time value describing which argument types and values a pattern accepts.
@@ -50,6 +60,7 @@ struct DataType {
 	int arraySize = 0;							// For Kind::Array and Type(Array)
 	std::shared_ptr<DataType> arrayElementType; // For Kind::Array and Type(Array)
 	int matrixRowCount = 0;						// For Kind::Matrix and Type(Matrix): row count, arraySize stores column count
+	std::shared_ptr<const FunctionSignature> functionSignature;
 
 	DataType() = default;
 	DataType(Kind kind) : kind(kind) {}
@@ -66,10 +77,15 @@ struct DataType {
 	bool hasArrayPayload() const { return kind == Kind::Array || (kind == Kind::Type && referencedKind == Kind::Array); }
 	bool hasVectorPayload() const { return kind == Kind::Vector || (kind == Kind::Type && referencedKind == Kind::Vector); }
 	bool hasMatrixPayload() const { return kind == Kind::Matrix || (kind == Kind::Type && referencedKind == Kind::Matrix); }
+	bool hasFunctionPayload() const {
+		return kind == Kind::Function || (kind == Kind::Type && referencedKind == Kind::Function);
+	}
 
 	bool operator==(const DataType &other) const {
 		if (kind != other.kind || pointerDepth != other.pointerDepth || numericSize != other.numericSize ||
 			referencedKind != other.referencedKind || arraySize != other.arraySize || matrixRowCount != other.matrixRowCount)
+			return false;
+		if (hasFunctionPayload() && !sameFunctionSignature(functionSignature, other.functionSignature))
 			return false;
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			bool hasElem = !!arrayElementType;
@@ -99,6 +115,8 @@ struct DataType {
 			return arraySize < other.arraySize;
 		if (matrixRowCount != other.matrixRowCount)
 			return matrixRowCount < other.matrixRowCount;
+		if (hasFunctionPayload() && !sameFunctionSignature(functionSignature, other.functionSignature))
+			return lessFunctionSignature(functionSignature, other.functionSignature);
 		if (hasArrayPayload() || hasVectorPayload() || hasMatrixPayload()) {
 			if (!!arrayElementType != !!other.arrayElementType)
 				return !!arrayElementType < !!other.arrayElementType;
@@ -167,6 +185,8 @@ struct DataType {
 		return *arrayElementType;
 	}
 	bool isPointer() const { return pointerDepth > 0; }
+	bool isFunction() const { return kind == Kind::Function && pointerDepth == 0; }
+	bool isAddress() const { return isPointer() || isFunction(); }
 	bool isMetaType() const { return kind == Kind::Type || kind == Kind::Constraint; }
 	bool isRuntimeValueType() const { return isDeduced() && kind != Kind::Void && !isMetaType(); }
 	bool isBytePointer() const { return kind == Kind::Int && numericSize == 1 && pointerDepth == 1; }
@@ -179,6 +199,8 @@ struct DataType {
 		// pointee class is still being instantiated.
 		if (pointerDepth > 0)
 			return kind != Kind::Class || classDefinition;
+		if (hasFunctionPayload())
+			return concreteFunctionSignature(functionSignature);
 		if (kind == Kind::Array)
 			return arraySize >= 0 && arrayElementType && arrayElementType->isConcrete();
 		if (kind == Kind::Vector)
@@ -211,11 +233,13 @@ struct DataType {
 			concreteToType.isMetaType())
 			return false;
 
-		if (concreteFromType.isPointer() && concreteToType.isPointer())
+		if (concreteFromType.isFunction() && concreteToType.isFunction())
+			return false;
+		if (concreteFromType.isAddress() && concreteToType.isAddress())
 			return true;
-		if (concreteFromType.isPointer() && concreteToType.isInteger())
+		if (concreteFromType.isAddress() && concreteToType.isInteger())
 			return true;
-		if (concreteFromType.isInteger() && concreteToType.isPointer())
+		if (concreteFromType.isInteger() && concreteToType.isAddress())
 			return true;
 
 		if (concreteFromType.isNumeric() && concreteToType.isNumeric())
@@ -363,6 +387,10 @@ struct DataType {
 	}
 
 	static bool promoteEquality(const DataType &a, const DataType &b, DataType &result) {
+		if (a.isFunction() && a == b) {
+			result = a;
+			return true;
+		}
 		if (a.kind == Kind::Bool && b.kind == Kind::Bool) {
 			result = {Kind::Bool};
 			return true;
@@ -408,6 +436,7 @@ struct DataType {
 		result.arraySize = arraySize;
 		result.matrixRowCount = matrixRowCount;
 		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
+		result.functionSignature = functionSignature;
 		return result;
 	}
 
@@ -423,6 +452,7 @@ struct DataType {
 		result.arraySize = arraySize;
 		result.matrixRowCount = matrixRowCount;
 		result.arrayElementType = arrayElementType ? std::make_shared<DataType>(*arrayElementType) : nullptr;
+		result.functionSignature = functionSignature;
 		return result;
 	}
 
@@ -430,6 +460,18 @@ struct DataType {
 
 	std::string toString() const;
 };
+
+struct FunctionSignature {
+	DataType result;
+	std::vector<DataType> parameters;
+	bool operator==(const FunctionSignature &) const = default;
+};
+
+inline DataType makeFunctionType(DataType result, std::vector<DataType> parameters) {
+	DataType type{DataType::Kind::Function};
+	type.functionSignature = std::make_shared<FunctionSignature>(std::move(result), std::move(parameters));
+	return type;
+}
 
 bool typeHasManagedLifecycle(const DataType &type);
 std::string typeToUserName(const DataType &type);

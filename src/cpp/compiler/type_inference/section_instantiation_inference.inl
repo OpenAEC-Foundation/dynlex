@@ -66,7 +66,8 @@ bool ensureSectionInstantiationInferred(
 	std::string functionName = definition ? (std::string)definition->range.subString : "";
 	bool instantiationFallsThrough = true;
 	bool inferenceSucceeded = runInstantiationReinferenceLoop(
-		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr, [&]() {
+		context, inst, definition, fallbackRange, std::move(functionName), callerInstantiation != nullptr,
+		[&]() {
 		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
 		beginParameterOutputReinference(inst);
 		inst.writtenGlobalReferences.clear();
@@ -138,10 +139,7 @@ bool ensureSectionInstantiationInferred(
 	if (!inst.valid || !context.typesValid)
 		return false;
 
-	bool unresolvedLocalFound = false;
-	std::function<void(Section *)> validateInstantiatedVariables = [&](Section *currentSection) {
-		if (unresolvedLocalFound || !currentSection)
-			return;
+	bool localsResolved = section->forEachExecutionSection([&](Section *currentSection) {
 		for (auto &[name, var] : currentSection->variables) {
 			if (var->type.isDeduced())
 				continue;
@@ -150,14 +148,11 @@ bool ensureSectionInstantiationInferred(
 					parseContext, Diagnostic::Level::Error, "variable has no type", var->definition->range, "name", name
 				));
 			}
-			unresolvedLocalFound = true;
-			return;
+			return false;
 		}
-		for (Section *child : currentSection->children)
-			validateInstantiatedVariables(child);
-	};
-	validateInstantiatedVariables(section);
-	if (unresolvedLocalFound) {
+		return true;
+	});
+	if (!localsResolved) {
 		inst.valid = false;
 		return false;
 	}
@@ -172,5 +167,9 @@ bool ensureSectionInstantiationInferred(
 		auto insertResult = section->instantiations.insert(std::move(node));
 		requireCompilerInvariant(insertResult.inserted, "Refined instantiation key collided with existing entry");
 	}
+	// The body and its trial metadata must survive together. A child context
+	// owns constants, groupings and callable selections until its caller commits.
+	if (context.trial)
+		callerContext->absorbTrialResultsFrom(context);
 	return inst.returnType.isDeduced();
 }

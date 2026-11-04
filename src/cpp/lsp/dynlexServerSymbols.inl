@@ -62,8 +62,10 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 			if (auto childRange = collect(child, children))
 				include(*childRange);
 		}
+		bool hasAuthoredDefinition = false;
 		for (PatternDefinition *def : section->patternDefinitions) {
-			if (!def->range.line || pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri)
+			if (!def->range.line || def->range.line->synthetic ||
+				pathutil::toAbsoluteUri(def->range.line->sourceFile->uri) != params.textDocument.uri)
 				continue;
 			DocumentSymbol symbol;
 			symbol.name = getPatternName(def);
@@ -74,8 +76,9 @@ std::vector<DocumentSymbol> DynLexServer::onDocumentSymbol(const DocumentSymbolP
 			symbol.range = *extent;
 			symbol.children = children;
 			out.push_back(std::move(symbol));
+			hasAuthoredDefinition = true;
 		}
-		if (section->patternDefinitions.empty()) {
+		if (!hasAuthoredDefinition) {
 			for (auto &child : children)
 				out.push_back(std::move(child));
 		}

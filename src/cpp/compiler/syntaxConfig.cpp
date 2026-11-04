@@ -294,6 +294,18 @@ bool applySyntaxNode(ParseContext &context, std::string_view path, const ConfigN
 	if (node.key == "section") {
 		return assignNameValue(context, path, node, config.sectionName);
 	}
+	if (node.key == "data body")
+		return assignNameValue(context, path, node, config.dataBodyName);
+	if (node.key == "data value")
+		return assignNameValue(context, path, node, config.dataValueName);
+	if (node.key == "data declares")
+		return assignNameValue(context, path, node, config.dataDeclaresName);
+	if (node.key == "data result")
+		return assignNameValue(context, path, node, config.dataResultName);
+	if (node.key == "data returns")
+		return assignNameValue(context, path, node, config.dataReturnsName);
+	if (node.key == "data receiver")
+		return assignNameValue(context, path, node, config.dataReceiverName);
 	if (node.key == "function") {
 		return assignNameValue(context, path, node, config.functionName);
 	}

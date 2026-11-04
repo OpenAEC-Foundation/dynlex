@@ -20,6 +20,9 @@ bool isPatternDefinitionVisibleFromSource(const PatternDefinition &definition, c
 bool patternDefinitionsShareVisibilityScope(const PatternDefinition &left, const PatternDefinition &right) {
 	requireCompilerInvariant(left.section != nullptr, "left pattern definition is missing its owning section");
 	requireCompilerInvariant(right.section != nullptr, "right pattern definition is missing its owning section");
+	if (left.section->dataFieldOwner && right.section->dataFieldOwner &&
+		left.section->dataFieldOwner != right.section->dataFieldOwner)
+		return false;
 	requireCompilerInvariant(
 		left.range.line && left.range.line->sourceFile, "left pattern definition is missing its source location"
 	);

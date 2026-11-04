@@ -161,8 +161,7 @@ static bool inferSectionLineRange(
 				}
 				defaultBranch = branches.size();
 			} else if (!caseValues.insert(*caseValue).second) {
-				context.fail(
-					Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
+				context.fail(Diagnostic(context.parseContext, Diagnostic::Level::Error, "duplicate case", lineExpression->range)
 				);
 				return false;
 			}
@@ -565,26 +564,6 @@ static bool inferManagedClassLifecycles(ParseContext &parseContext, InferenceCon
 	return true;
 }
 
-static void materializeInferredConversionCalls(ParseContext &parseContext) {
-	for (const auto &[source, lifetime] : parseContext.expressionsWithInferredConversions) {
-		auto storage = lifetime.lock();
-		if (!storage)
-			continue;
-		Expression *call = source->inferredConversion;
-		requireCompilerInvariant(
-			call && call->kind == Expression::Kind::PatternCall && call->arguments.size() == 1,
-			"inferred conversion is not a unary function call"
-		);
-		auto argument = std::make_shared<Expression>(std::move(*source));
-		argument->inferredConversion = nullptr;
-		argument->inferredConversionStorage.reset();
-		*source = std::move(*call);
-		source->arguments = {argument.get()};
-		source->materializedConversionArgument = std::move(argument);
-	}
-	parseContext.expressionsWithInferredConversions.clear();
-}
-
 bool inferTypes(ParseContext &parseContext) {
 	ActiveTypeResolutionParseContextGuard typeResolutionGuard(parseContext);
 	struct ScopeRuleWarningEmission {
@@ -709,8 +688,6 @@ bool inferTypes(ParseContext &parseContext) {
 	};
 	validateReturnTypes(parseContext.mainSection);
 
-	if (valid)
-		materializeInferredConversionCalls(parseContext);
 	return valid;
 }
 

@@ -32,6 +32,8 @@ struct Variable;
 struct Expression;
 struct ExpressionStorage;
 struct PatternDefinition;
+struct DataSectionDefinition;
+struct DataBodyField;
 
 struct InstantiatedSectionBody : std::enable_shared_from_this<InstantiatedSectionBody> {
 	std::shared_ptr<ExpressionStorage> expressions;
@@ -169,6 +171,7 @@ struct Section {
 	std::unordered_map<std::string, VariableReference *> variableDefinitions;
 	// First source declaration for names introduced with explicit capture syntax in this lexical scope.
 	std::unordered_map<std::string, Range> explicitVariableDeclarations;
+	std::unordered_set<std::string> dataVariableDeclarations;
 	ExplicitParameterIndex explicitParameterIndex;
 	std::vector<CodeLine *> codeLines;
 	std::vector<Section *> children;
@@ -189,6 +192,10 @@ struct Section {
 	std::unordered_map<std::string, int> variableLikeCounts;
 	// whether this is a flex (inlined at call site instead of function call)
 	bool isFlex = false;
+	std::shared_ptr<DataSectionDefinition> dataSection;
+	Section *dataFieldOwner{};
+	DataBodyField *dataField{};
+	VariableReference *receiverParameter{};
 	DefinitionReturnContract returnContract = DefinitionReturnContract::Inferred;
 	// whether this sections patterns can be called from other files
 	bool isLocal = false;
@@ -214,6 +221,7 @@ struct Section {
 	// Whether the enclosing body executes this section's lines when it reaches the opening line. Definitions and
 	// scope rule blocks only declare.
 	virtual bool runsInEnclosingBody() const { return true; }
+	virtual bool isValueExpressionContext() const { return false; }
 	Expression *
 	detectPatterns(ParseContext &context, Range range, SectionType patternType, bool registerPatternReferences = true);
 	Expression *detectPatternsRecursively(
@@ -246,6 +254,18 @@ struct Section {
 
 	static bool isDefinitionBodySectionType(SectionType sectionType) {
 		return sectionType == SectionType::Get || sectionType == SectionType::Replacement;
+	}
+
+	// Nested definitions own independent locals and instantiations. Only blocks
+	// executed by this scope share its variable-state lifetime.
+	template <typename Visitor> bool forEachExecutionSection(Visitor &&visitor) {
+		if (!visitor(this))
+			return false;
+		for (Section *child : children) {
+			if (child->runsInEnclosingBody() && !child->forEachExecutionSection(visitor))
+				return false;
+		}
+		return true;
 	}
 
 	template <typename Visitor> bool forEachDefinitionBodySection(Visitor &&visitor) {

@@ -22,7 +22,8 @@ void deleteExpressionTree(Expression *expression, std::unordered_set<Expression 
 	if (!expression || !visited.insert(expression).second)
 		return;
 	for (Expression *argument : expression->arguments)
-		deleteExpressionTree(argument, visited, argument != expression->materializedConversionArgument.get());
+		deleteExpressionTree(argument, visited, argument != expression->ownedArgument.get());
+	deleteExpressionTree(expression->dataDeclaration, visited);
 	if (deleteNode)
 		delete expression;
 }
@@ -147,13 +148,18 @@ Expression *cloneExpressionTreeImpl(
 	clone->range = expression->range;
 	clone->literalValue = expression->literalValue;
 	clone->variable = expression->variable;
+	clone->dataDeclaration =
+		cloneExpressionTreeImpl(storage, expression->dataDeclaration, preserveInferenceMetadata, owningBody);
+	clone->dataSectionValues = preserveInferenceMetadata ? expression->dataSectionValues : nullptr;
+	clone->deferredFunction = expression->deferredFunction;
+	clone->inferredDataValue = preserveInferenceMetadata ? expression->inferredDataValue : nullptr;
+	clone->inferredValueStorage = preserveInferenceMetadata ? expression->inferredValueStorage : nullptr;
 	clone->owningSectionBody = owningBody;
 	clone->patternMatch = expression->patternMatch;
 	clone->syntheticPatternMatch = expression->syntheticPatternMatch;
 	clone->patternReference = expression->patternReference;
 	clone->intrinsicName = expression->intrinsicName;
 	clone->inferredFlexExpansion = nullptr;
-	clone->inferredConversion = nullptr;
 	clone->inferredPointerStorage = nullptr;
 	clone->memoryFacts = {};
 	clone->inferredFlexBody = preserveInferenceMetadata ? expression->inferredFlexBody : nullptr;

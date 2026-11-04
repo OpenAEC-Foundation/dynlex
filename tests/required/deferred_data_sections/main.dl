@@ -1,0 +1,27 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        context record
+    members:
+        count as an integer
+
+this context means: @intrinsic("receiver")
+
+section behavior {name}:
+    declares: name
+    receiver: a pointer to context record
+    returns: nothing
+    value:
+        @intrinsic("deferred body")
+
+behavior incrementer:
+    set this context's count to this context's count + 1
+
+set first to @intrinsic("construct", context record, 10)
+set second to @intrinsic("construct", context record, 50)
+@intrinsic("call pointer", incrementer, nothing, the address of first)
+@intrinsic("call pointer", incrementer, nothing, the address of first)
+@intrinsic("call pointer", incrementer, nothing, the address of second)
+print first's count as a line
+print second's count as a line

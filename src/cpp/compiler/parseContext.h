@@ -203,6 +203,8 @@ struct ParseContext {
 	std::unordered_set<llvm::SwitchInst *> switchesWithDefaultCase;
 	// Global variables (module-level, accessible across all DynLex files in the program)
 	std::unordered_map<std::string, llvm::GlobalVariable *> globalLLVMVariables;
+	std::unordered_map<const Expression *, llvm::Value *> dataLLVMValues;
+	std::unordered_map<const Expression *, llvm::GlobalVariable *> staticLLVMValues;
 	// Subject values are call-site-local temporaries keyed by their inferred assignment expression.
 	std::unordered_map<const Expression *, llvm::Value *> subjectStorage;
 	// Runtime storage that owns values with class-defined or recursively derived
@@ -258,7 +260,6 @@ struct ParseContext {
 	std::vector<VariableReference *> pendingExplicitVariableReferences;
 	// A conversion source is usable only while its selected call storage lives.
 	// Failed trials and replaced bodies expire these entries before finalization.
-	std::vector<std::pair<Expression *, std::weak_ptr<ExpressionStorage>>> expressionsWithInferredConversions;
 	std::unordered_set<std::string> emittedOperandGroupingWarnings;
 	// variable names declared as global (collected from globals: sections)
 	std::unordered_set<std::string> declaredGlobalVariables;
@@ -388,7 +389,8 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex,
+		[&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -477,7 +479,8 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
+		[](Expression *) {
 		return false;
 	}
 	);

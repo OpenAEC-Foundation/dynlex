@@ -1,4 +1,5 @@
 #include "definitionSection.h"
+#include "dataSections.h"
 #include "diagnostic.h"
 #include "globalsSection.h"
 #include "parseContext.h"
@@ -16,6 +17,8 @@ bool DefinitionSection::processLine(ParseContext &context, CodeLine *line) {
 }
 
 Section *DefinitionSection::createSection(ParseContext &context, CodeLine *line) {
+	if (auto data = createDataSectionMetadata(context, line, this))
+		return *data;
 	if (std::optional<Section *> scopeRulesSection = createScopeRulesSection(context, line, this))
 		return *scopeRulesSection;
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);

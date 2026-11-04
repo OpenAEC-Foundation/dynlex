@@ -1,0 +1,96 @@
+import tests/games/snake/motion.dl
+
+set game to a new snake session
+begin a run in the address of game
+store a snake cell at 4 and 5 into game's body at 0
+store a snake cell at 4 and 4 into game's body at 1
+set game's direction to 2
+set game's progress to 0.6
+set position to the snake position 0 in (the address of game)
+require condition ((the absolute value of (position's column - 4.0)) < 0.000001) reporting "The head left its column before turning"
+require condition ((the absolute value of (position's row - 5.6)) < 0.000001) reporting "The head was drawn behind its current movement"
+turn the address of game toward 1
+set position to the snake position 0 in (the address of game)
+require condition ((the absolute value of (position's column - 4.6)) < 0.000001) reporting "The turn did not redirect the current fractional move"
+require condition ((the absolute value of (position's row - 5.0)) < 0.000001) reporting "Turning retained the abandoned vertical move"
+require condition ((game's steps = 0) and (game's progress = 0.6)) reporting "Turning committed a tick or reset its progress"
+turn the address of game toward 2
+require condition (game's direction = 2) reporting "A second valid turn during the same tick was discarded"
+turn the address of game toward 0
+require condition (game's direction = 2) reporting "A turn back into the neck was allowed"
+
+# A pending move toward the right wall can still be redirected before its tick.
+begin a run in the address of game
+store a snake cell at 23 and 5 into game's body at 0
+store a snake cell at 22 and 5 into game's body at 1
+set game's direction to 1
+set game's progress to 0.6
+turn the address of game toward 0
+update the address of game after 0.05 seconds
+require condition (game's phase = the playing screen) reporting "An abandoned move hit the wall"
+require condition ((the item at 0 in (game's body)) is the same cell as (a snake cell at 23 and 4)) reporting "The redirected move did not commit its new destination"
+
+# Contact ends the game at the next tick, then the already-failed run animates.
+begin a run in the address of game
+store a snake cell at 23 and 5 into game's body at 0
+store a snake cell at 22 and 5 into game's body at 1
+store a snake cell at 21 and 5 into game's body at 2
+store a snake cell at 20 and 5 into game's body at 3
+store a snake cell at 19 and 5 into game's body at 4
+set game's direction to 1
+update the address of game after 0.119 seconds
+require condition (game's phase = the playing screen) reporting "A future wall collision ended the game early"
+set position to the snake position 0 in (the address of game)
+require condition (position's column < 24.0) reporting "The head crossed the wall before contact"
+update the address of game after 0.002 seconds
+require condition ((game's phase = the finished screen) and game's impact) reporting "The collision tick did not end the game and begin its impact animation"
+set {impact steps} to game's steps
+turn the address of game toward 0
+require condition (game's direction = 1) reporting "Input changed a run after the collision tick"
+update the address of game after 0.14 seconds
+set head to the snake position 0 in (the address of game)
+set neck to the snake position 1 in (the address of game)
+require condition ((head's column - neck's column) < 0.9) reporting "The body did not compress behind the head"
+require condition ((head's column <= 24.0) and (head's column > 23.5)) reporting "The impact animation crossed the wall or recoiled too far"
+require condition (game's steps = impact steps) reporting "The game kept simulating during the impact animation"
+update the address of game after 0.25 seconds
+update the address of game after 0.25 seconds
+require condition (game's impact time = the snake impact duration) reporting "The impact animation did not settle"
+require condition (game's phase = the finished screen) reporting "The impact animation restarted the game"
+begin a run in the address of game
+require condition ((game's impact = false) and (game's progress = 0.0)) reporting "Restart retained motion or impact state"
+
+# Wrapping crosses the seam without forecasting a wall collision.
+set game's wrap edges to true
+store a snake cell at 23 and 5 into game's body at 0
+store a snake cell at 22 and 5 into game's body at 1
+set game's progress to 0.6
+set position to the snake position 0 in (the address of game)
+require condition ((the absolute value of (position's column - 23.6)) < 0.000001) reporting "Wrapping advanced the visible head before it reached the seam"
+update the address of game after 0.05 seconds
+require condition ((game's phase = the playing screen) and ((the item at 0 in (game's body))'s column = 0)) reporting "Wrapping failed at the next tick"
+turn the address of game toward 3
+require condition (game's direction = 1) reporting "A turn back into the neck across the wrapped seam was allowed"
+close the address of game
+
+# Splitting a frame preserves the same simulation and fractional position.
+set game to a new snake session
+set peer to a new snake session
+begin a run in the address of game
+begin a run in the address of peer
+set game's food to a snake cell at 0 and 0
+set peer's food to a snake cell at 0 and 0
+update the address of game after 0.25 seconds
+update the address of peer after 0.1 seconds
+update the address of peer after 0.15 seconds
+set first to the snake position 0 in (the address of game)
+set second to the snake position 0 in (the address of peer)
+require condition ((game's steps = peer's steps) and ((the absolute value of (first's column - second's column)) < 0.000001)) reporting "Frame splitting changed the snake's actual position"
+pause or resume the address of game
+set game's pace to 0
+update the address of game after 0.25 seconds
+set position to the snake position 0 in (the address of game)
+require condition ((position's column = first's column) and (position's row = first's row)) reporting "Changing pace or waiting while paused moved the snake"
+close the address of game
+close the address of peer
+print "Snake motion passed" as a line

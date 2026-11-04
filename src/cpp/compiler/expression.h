@@ -21,6 +21,7 @@ struct VariableReference;
 struct Instantiation;
 struct InstantiatedSectionBody;
 struct ExpressionStorage;
+struct DataSectionValues;
 struct ExpressionAllocationStats {
 	size_t liveExpressions = 0;
 	size_t peakExpressions = 0;
@@ -73,6 +74,10 @@ struct Expression {
 
 	// For Variable: reference to the variable
 	VariableReference *variable{};
+	Expression *dataDeclaration{};
+	std::shared_ptr<DataSectionValues> dataSectionValues;
+	Expression *inferredDataValue{};
+	Section *deferredFunction{};
 	// Lexical instance containing this expression; source templates have none.
 	InstantiatedSectionBody *owningSectionBody{};
 
@@ -97,13 +102,12 @@ struct Expression {
 	// expression. Section-flex inference consumes its recorded outcome while
 	// structural codegen traverses the complete replacement section.
 	Expression *inferredFlexExpansion{};
-	// Operand-grouping trials temporarily record a selected unary function call
-	// here. Successful inference materializes it as an ordinary PatternCall
-	// before any later compiler stage observes the expression tree.
-	Expression *inferredConversion{};
-	std::shared_ptr<ExpressionStorage> inferredConversionStorage;
 	std::shared_ptr<PatternMatch> syntheticPatternMatch;
-	std::shared_ptr<Expression> materializedConversionArgument;
+	// A synthetic call can take ownership of an existing expression by moving
+	// its root under the call. This aliases that argument's expression storage;
+	// arguments still contains the same node, with no copied source subtree.
+	std::shared_ptr<Expression> ownedArgument;
+	std::shared_ptr<ExpressionStorage> inferredValueStorage;
 	// For pointer-producing calls: the caller expression whose storage supplies
 	// the returned pointer.
 	Expression *inferredPointerStorage{};
@@ -186,7 +190,8 @@ inline bool visitExpressionTree(Expression *expression, Visitor &&visitor, std::
 		if (visitExpressionTree(argument, visitor, visited))
 			return true;
 	}
-	return visitExpressionTree(expression->inferredFlexExpansion, visitor, visited);
+	return visitExpressionTree(expression->inferredFlexExpansion, visitor, visited) ||
+		   visitExpressionTree(expression->inferredDataValue, visitor, visited);
 }
 
 template <typename Visitor> inline bool visitExpressionTree(Expression *expression, Visitor &&visitor) {

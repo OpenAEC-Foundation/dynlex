@@ -1,0 +1,14 @@
+integerkind means: @intrinsic("type", "int", 32)
+
+function read {@intrinsic("add pointer depth", integerkind):p}:
+    execute:
+        @intrinsic("return", @intrinsic("dereference", p))
+
+function read twice {@intrinsic("add pointer depth", @intrinsic("add pointer depth", integerkind)):p}:
+    execute:
+        @intrinsic("return", @intrinsic("dereference", @intrinsic("dereference", p)))
+
+@intrinsic("store", count, 37)
+@intrinsic("store", address, @intrinsic("address of", count))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integerkind, 1, "%d\n", read @intrinsic("address of", count)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integerkind, 1, "%d\n", read twice @intrinsic("address of", address)))

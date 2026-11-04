@@ -1,0 +1,22 @@
+integerkind means: @intrinsic("type", "int", 32)
+nothing means: @intrinsic("type", "nothing")
+this context means: @intrinsic("receiver")
+
+section callback {name}:
+    declares: name
+    receiver: @intrinsic("add pointer depth", integerkind)
+    returns: @intrinsic("type", "nothing")
+    value: @intrinsic("deferred body")
+
+section run body:
+    receiver: @intrinsic("add pointer depth", integerkind)
+    returns: @intrinsic("type", "nothing")
+    value: @intrinsic("call pointer", @intrinsic("deferred body"), nothing, this context)
+
+callback outer:
+    run body:
+        @intrinsic("store at", this context, @intrinsic("add", @intrinsic("dereference", this context), 1))
+
+@intrinsic("store", count, 0)
+@intrinsic("call pointer", outer, nothing, @intrinsic("address of", count))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integerkind, 1, "%d\n", count))

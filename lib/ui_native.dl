@@ -1,0 +1,176 @@
+# Native rendering, input and typography for declarative UI descriptions.
+import lib/ui_native_types.dl
+import lib/ui_native_theme.dl
+import lib/ui_ribbon.dl
+import lib/time.dl
+
+to get a UI font from {C string:path} sized {integer:size} for {a pointer:window}:
+    set loading to the result of loading a font from path at size size rasterized at scale 2 for window
+    require condition (loading succeeded) reporting "Loading a UI font failed"
+    set prepared to the result of preparing characters from 32 through 126 using (loading's typeface)
+    require condition (prepared succeeded) reporting "Preparing UI font characters failed"
+    return loading's typeface
+
+to get a native view of {a pointer to UI instance:instance} sized {integer:width} by {integer:height} using fonts {C string:regular} and {C string:bold}:
+    set result to a new native UI view
+    set result's instance to instance
+    set result's theme to the UI theme for (instance's description)
+    set result's logical width to width
+    set result's logical height to height
+    set result's focus order to 1
+    set rule to the element of kind 26 labeled "" in (instance's description)
+    if rule != @intrinsic("construct", UI reference):
+        set result's fitted to true
+        set result's logical width to rule's width
+        set result's logical height to rule's height
+    set result's layout to a UI layout for (instance's description) inside (instance's description) with width (result's logical width) using (result's theme)
+    set result's window to a new window with width width and height height
+    if result's fitted:
+        keep result's window at aspect (result's logical width) by (result's logical height)
+    set the title of (result's window) to instance's description's text
+    preserve mouse clicks in result's window
+    preserve key presses in result's window
+    set result's typeface to a UI font from regular sized 15 for (result's window)
+    set result's heading to a UI font from bold sized 26 for (result's window)
+    set result's small to a UI font from regular sized 12 for (result's window)
+    set result's display to a UI font from bold sized 48 for (result's window)
+    set result's strong to a UI font from bold sized 15 for (result's window)
+    set result's brand to a UI font from bold sized 30 for (result's window)
+    return result
+
+to get a native view of {a pointer to UI instance:instance} sized {integer:width} by {integer:height} using font {C string:path}:
+    return a native view of instance sized width by height using fonts path and path
+
+import lib/ui_native_layout.dl
+import lib/ui_native_ribbon_layout.dl
+import lib/ui_native_table.dl
+import lib/ui_native_controls.dl
+import lib/ui_native_ribbon.dl
+
+to draw UI layout {a pointer to UI layout:layout} at {a value:x} {a value:y} with cursor {cursor position:cursor} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set node to layout's node
+    if node's kind = 22:
+        if node != view's instance's page:
+            return nothing
+    set box to layout's bounds
+    set box's x to box's x + x
+    set box's y to box's y + y
+    if node's kind = 28:
+        draw UI ribbon layout in box with cursor cursor in view on frame
+    else if (node's kind = 2) or (((node's kind = 17) or (node's kind = 19)) or ((node's kind = 33) or (node's kind = 34))):
+        draw UI control layout in box with cursor cursor in view on frame
+    else if node's kind = 3:
+        draw UI table node at (box's x) (box's y) in view on frame
+    else if node's kind = 20:
+        set action to the action for node in (view's instance) for event 1
+        require condition (action != no UI action) reporting "The UI canvas has no paint callback"
+        set painting to @intrinsic("construct", UI canvas frame, view's instance, frame, box, the time since start for view's window)
+        @intrinsic("call pointer", action, nothing, the address of painting)
+    else:
+        draw UI presentation node in box in view on frame
+        set child to layout's first
+        loop while child != @intrinsic("construct", a pointer to UI layout):
+            draw UI layout child at (box's x) (box's y) with cursor cursor in view on frame
+            set child to child's next
+
+to get the UI cursor in {a pointer to native UI view:view}:
+    set position to the cursor position of view's window
+    set dimensions to the window dimensions of view's window
+    set width to dimensions' width
+    set height to dimensions' height
+    if view's fitted:
+        set position's x to position's x * ((view's logical width as a floating-point number) / (width as a floating-point number))
+        set position's y to position's y * ((view's logical height as a floating-point number) / (height as a floating-point number))
+    else:
+        set position's x to position's x * (((the framebuffer width of view's window) as a floating-point number) / (width as a floating-point number))
+        set position's y to position's y * (((the framebuffer height of view's window) as a floating-point number) / (height as a floating-point number))
+    return position
+
+to render {a pointer to native UI view:view}:
+    poll window events
+    set cursor to the UI cursor in view
+    set down to the left mouse button is pressed in view's window
+    set enter to key 257 is down in view's window
+    set now to the time since start for view's window
+    set view's frame seconds to the minimum of 0.05 and (now - view's last paint)
+    set view's last paint to now
+    if view's page != view's instance's page:
+        set view's page to view's instance's page
+        set view's focus order to 1
+        set view's keyboard focus to false
+        set view's pressed to @intrinsic("construct", a pointer to UI layout)
+    set tab to key 258 is down in view's window
+    if tab and (view's was tab = false):
+        if view's keyboard focus:
+            increment view's focus order
+        set view's keyboard focus to true
+        if view's focus order > view's control count:
+            set view's focus order to 1
+    set view's was tab to tab
+    navigate UI tabs in view
+    set ink to view's theme's background
+    set state to view's window as a pointer to DynlexGraphics
+    set red to (graphics color channel (ink's red) for state) as a floating-point number
+    set green to (graphics color channel (ink's green) for state) as a floating-point number
+    set blue to (graphics color channel (ink's blue) for state) as a floating-point number
+    set frame to a new graphics frame in (view's window) with background red red, green green, blue blue and alpha 1.0
+    use screen coordinates in frame
+    if view's fitted and frame's drawable:
+        set state to view's window as a pointer to DynlexGraphics
+        set state's projection to a graphics orthographic projection from left 0.0 right (view's logical width as a floating-point number) top 0.0 bottom (view's logical height as a floating-point number) near -1.0 far 1.0
+    if view's theme's dark:
+        set backdrop to UI box at 0 0 sized (view's logical width) (view's logical height)
+        draw a rounded UI surface backdrop with radius 0.0 from (UI ink 17 28 43) to (view's theme's background) opacity 255 feathered by 0.75 on frame
+        draw a rounded UI surface (UI box at 88 104 sized 348 280) with radius 140.0 from (view's theme's accent) to (UI ink 28 61 94) opacity 9 feathered by 180.0 on frame
+        draw a rounded UI surface (UI box at 690 180 sized 280 340) with radius 140.0 from (UI ink 146 113 244) to (UI ink 35 80 133) opacity 9 feathered by 190.0 on frame
+    set view's hot to @intrinsic("construct", a pointer to UI layout)
+    set view's focused to @intrinsic("construct", a pointer to UI layout)
+    set view's control count to 0
+    if view's fitted:
+        draw UI layout (view's layout) at 0 0 with cursor cursor in view on frame
+    else:
+        draw UI text (view's instance's description's text) at 32 57 with (view's heading) in (view's theme's text) on frame
+        draw UI layout (view's layout) at 32 120 with cursor cursor in view on frame
+        set bottom to (the framebuffer height of view's window) - 72
+        set width to (the framebuffer width of view's window) - 64
+        draw a rounded UI box (UI box at 32 bottom sized width 44) with radius 10.0 in (UI ink 229 236 248) on frame
+        draw UI text (view's instance's status) at 48 (bottom + 27) with (view's typeface) in (view's theme's text) on frame
+    display frame
+    if down and (view's was down = false):
+        set view's pressed to view's hot
+        set view's keyboard focus to false
+        if view's hot != @intrinsic("construct", a pointer to UI layout):
+            set view's focus order to view's hot's order
+    if (down = false) and view's was down:
+        if view's pressed != @intrinsic("construct", a pointer to UI layout):
+            if view's pressed = view's hot:
+                activate (view's pressed's node) belonging to (view's pressed's parent) in (view's instance)
+        set view's pressed to @intrinsic("construct", a pointer to UI layout)
+    set view's was down to down
+    if enter and (view's was enter = false):
+        if view's focused != @intrinsic("construct", a pointer to UI layout):
+            activate (view's focused's node) belonging to (view's focused's parent) in (view's instance)
+    set view's was enter to enter
+
+to release UI font {a pointer to font:typeface}:
+    set released to the result of releasing typeface
+    require condition (released succeeded) reporting "Releasing a UI font failed"
+
+to close {a pointer to native UI view:view}:
+    release UI font the address of view's typeface
+    release UI font the address of view's heading
+    release UI font the address of view's small
+    release UI font the address of view's display
+    release UI font the address of view's strong
+    release UI font the address of view's brand
+    release UI layout view's layout
+    close view's window
+
+to show {a pointer to UI instance:instance} in a window with width {integer:width} and height {integer:height} using font {C string:path}:
+    set view to a native view of instance sized width by height using font path
+    loop while view's window remains open:
+        render the address of view
+        if key (the escape key) is down in view's window:
+            request that view's window close
+        sleep for 4 milliseconds
+    close the address of view
