@@ -89,6 +89,8 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 			suffix += encodeLLVMNameComponent(typeRef->type.toString());
 		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
+		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
+			suffix += "ptr" + std::to_string(pointer->address);
 		else
 			suffix += "unknown";
 	}
@@ -512,7 +514,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		if (arrayType.kind != DataType::Kind::Array || !arrayType.arrayElementType)
 			return nullptr;
 		llvm::Type *llvmArrayType = getLLVMType(context, arrayType);
-		llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "array_literal", arrayType);
+		llvm::Value *aggregate = llvm::Constant::getNullValue(llvmArrayType);
 		for (size_t i = 0; i < expr->arguments.size(); i++) {
 			CodegenResult element = generateExpressionCode(context, expr->arguments[i]);
 			if (!element)
@@ -524,14 +526,9 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 				!managedExpressionResultIsOwned(context, expr->arguments[i]) &&
 				!retainManagedValue(context, *arrayType.arrayElementType, elementValue))
 				return CodegenResult::failure();
-			llvm::Value *elementPtr = builder.CreateGEP(
-				llvmArrayType, tempAlloca, {builder.getInt64(0), builder.getInt64(static_cast<int64_t>(i))}, "array_elem_ptr"
-			);
-			builder.CreateStore(elementValue, elementPtr);
+			aggregate = builder.CreateInsertValue(aggregate, elementValue, {static_cast<unsigned>(i)}, "array_element");
 		}
-		return builder.CreateAlignedLoad(
-			llvmArrayType, tempAlloca, getLLVMABIAlignment(context, arrayType), "array_literal_load"
-		);
+		return aggregate;
 	}
 
 	case Expression::Kind::Variable: {
@@ -544,6 +541,15 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		requireCompilerInvariant(expr->variable != nullptr, "Variable expression reached codegen without a resolved variable");
 		std::string varName = expr->variable->name;
 		VariableReference *definition = normalizeBindingReference(expr->variable);
+		Variable *dataVariable = expr->range.section()->findVariable(expr->variable);
+		if (dataVariable && dataVariable->dataInitializer) {
+			Expression *initializer = dataVariable->dataInitializer;
+			if (context.currentInstantiatedSectionBody) {
+				if (Expression *clone = context.currentInstantiatedSectionBody->findCloneOf(initializer))
+					initializer = clone;
+			}
+			return generateExpressionCode(context, initializer);
+		}
 
 		// Determine this variable's type for loading
 		DataType varType = finalizedExpressionType(context, expr);
@@ -594,6 +600,10 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 
 		Section *matchedSection = matchedDef->section;
 		requireCompilerInvariant(matchedSection != nullptr, "Selected overload has no section");
+		if (matchedSection->dataSection) {
+			if (auto cached = context.dataLLVMValues.find(expr); cached != context.dataLLVMValues.end())
+				return cached->second;
+		}
 
 		// Non-flex class type references are compile-time only — no runtime code.
 		// Flex class sections (primitive type definitions) fall through to flex expansion.
@@ -627,7 +637,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			// the body section, even if they appear on a line that opens one.
 			Section *bodySection = nullptr;
 			InstantiatedSectionBody *bodyInstantiation = nullptr;
-			if (matchedSection->type == SectionType::Section) {
+			if (matchedSection->type == SectionType::Section && !matchedSection->dataSection) {
 				bodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
 				bodyInstantiation = context.currentInstantiatedSectionBody && bodySection
 										? context.currentInstantiatedSectionBody->bodyForChild(bodySection)
@@ -703,6 +713,8 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			context.currentSwitchExitBlock = savedSwitchExitBlock;
 			if (!succeeded)
 				return CodegenResult::failure();
+			if (matchedSection->dataSection)
+				context.dataLLVMValues[expr] = result;
 			return result;
 		}
 

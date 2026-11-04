@@ -290,7 +290,14 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 
 [[gnu::noinline]] static CodegenResult generateReturnIntrinsic(ParseContext &context, const std::vector<Expression *> &args) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
-	if (args.size() <= 1) {
+	llvm::Value *returnValue = nullptr;
+	DataType returnType{DataType::Kind::Void};
+	if (args.size() > 1) {
+		if (!generateIntrinsicRuntimeValue(context, args[1], returnValue))
+			return CodegenResult::failure();
+		returnType = finalizedExpressionType(context, args[1]);
+	}
+	if (returnType.kind == DataType::Kind::Void) {
 		llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();
 		if (!releaseManagedStorageForReturn(context))
 			return CodegenResult::failure();
@@ -306,10 +313,6 @@ generateCaseIntrinsic(ParseContext &context, Expression *callExpr, const std::ve
 		}
 		return nullptr;
 	}
-	llvm::Value *returnValue = nullptr;
-	if (!generateIntrinsicRuntimeValue(context, args[1], returnValue))
-		return CodegenResult::failure();
-	DataType returnType = finalizedExpressionType(context, args[1]);
 	bool managedReturn = typeHasManagedLifecycle(returnType);
 	bool ownedReturn = managedReturn && managedExpressionResultIsOwned(context, args[1]);
 	llvm::Function *currentFunction = builder.GetInsertBlock()->getParent();

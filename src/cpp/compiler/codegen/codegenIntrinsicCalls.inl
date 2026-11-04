@@ -1,10 +1,11 @@
-[[gnu::noinline]] static CodegenResult
-generateExternalCallIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
+[[gnu::noinline]] static CodegenResult generateExternalCallIntrinsic(
+	ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind, const DataType &returnType
+) {
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	// call: args[1]="library", args[2]="function", args[3]="return type", args[4+]=actual args.
 	// variadic call: the fixed argument count is args[4], and actual args begin at args[5].
 	// call pointer: args[1]=runtime callee, args[2]="return type", args[3+]=actual args.
-	const bool isPointerCall = kind == IntrinsicKind::CallPointer;
+	const bool isPointerCall = kind == IntrinsicKind::CallPointer || kind == IntrinsicKind::Invoke;
 	std::string funcName;
 	if (!isPointerCall) {
 		std::string library = getCompileTimeString(context, args[1]);
@@ -13,8 +14,6 @@ generateExternalCallIntrinsic(ParseContext &context, const std::vector<Expressio
 			context.requiredLibraries.insert(library);
 	}
 
-	DataType retTypeRef = finalizedExpressionType(context, args[externalCallReturnTypeArgumentIndex(kind)]);
-	DataType returnType = retTypeRef.toReferencedType();
 	llvm::Type *returnLLVMType = getLLVMType(context, returnType);
 	llvm::Value *pointerCallee = nullptr;
 	if (isPointerCall) {

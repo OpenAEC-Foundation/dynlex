@@ -1,0 +1,18 @@
+integer means: @intrinsic("type", "integer")
+class:
+    patterns:
+        box
+    members:
+        data as integer
+implicitly convert {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("construct", box, value))
+class:
+    patterns:
+        source record
+    members:
+        data as integer
+@intrinsic("store", source, @intrinsic("construct", source record, 42))
+@intrinsic("store", target, @intrinsic("construct", box))
+@intrinsic("store", target, source's data)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", target's data))

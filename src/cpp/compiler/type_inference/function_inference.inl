@@ -3,7 +3,9 @@
 #include "arithmeticTypePromotion.h"
 #include "compilerUtils.h"
 #include "const_evaluation.inl"
+#include "dataSections.h"
 #include "expressionCapture.h"
+
 #include "sectionFlexBody.h"
 static bool
 inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
@@ -20,8 +22,6 @@ static DataType ensureExpressionType(Expression *&expr, InferenceContext &contex
 static DataType effectiveInferredExpressionType(Expression *expression) {
 	if (!expression)
 		return {};
-	if (expression->inferredConversion)
-		return expression->inferredConversion->type;
 	return expression->type;
 }
 
@@ -596,9 +596,7 @@ struct ScopedSectionLocalVariableState {
 	std::vector<Entry> entries;
 
 	explicit ScopedSectionLocalVariableState(Section *section) {
-		std::function<void(Section *)> collect = [&](Section *current) {
-			if (!current)
-				return;
+		section->forEachExecutionSection([&](Section *current) {
 			for (const auto &[name, variable] : current->variables) {
 				(void)name;
 				if (!variable || variable->isGlobal)
@@ -607,10 +605,8 @@ struct ScopedSectionLocalVariableState {
 					{variable, variable->type, variable->typeOriginRange, variable->typeOriginFloatLiteralReplacement}
 				);
 			}
-			for (Section *child : current->children)
-				collect(child);
-		};
-		collect(section);
+			return true;
+		});
 	}
 
 	~ScopedSectionLocalVariableState() {
@@ -937,5 +933,6 @@ static DataType ensureExpressionTypeWithCurrentGrouping(
 	return requestKnownOrInferExpressionType(expr, context, bindingFrameStack, true);
 }
 
+#include "callback_type_inference.inl"
 #include "function_inference_evaluation.inl"
 #include "function_inference_ordered.inl"

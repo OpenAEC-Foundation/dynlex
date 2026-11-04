@@ -85,15 +85,8 @@ class RuntimeLifecycleUses {
 		if (expression->type.isMetaType() || !expressions.insert(expression).second)
 			return;
 		collectType(expression->type);
-		if (expression->inferredConversion)
-			collectExpression(expression->inferredConversion, bindings);
 		if (expression->selectedInstantiation)
-			collectInstantiation(*expression->selectedInstantiation);
-		if (expression->selectedCallableDefinition) {
-			Instantiation *callable = expression->selectedCallableDefinition->callableInstantiation;
-			requireCompilerInvariant(callable, "runtime function reference has no inferred instantiation");
-			collectInstantiation(*callable, true);
-		}
+			collectInstantiation(*expression->selectedInstantiation, expression->selectedCallableDefinition != nullptr);
 		BindingFrameStack replacementBindings = bindings;
 		if (expression->inferredFlexBody) {
 			pushPatternCallBindingScope(replacementBindings, expression, expression->selectedPatternDefinition);

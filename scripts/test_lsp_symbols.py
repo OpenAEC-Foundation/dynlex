@@ -54,9 +54,28 @@ class:
         lines = updated.splitlines()
         symbols = session.request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
         span(next(symbol for symbol in symbols if symbol["name"] == "outer"), 0, 3)
+
+        deferred = (root / "tests/required/deferred_data_sections_nested/main.dl").read_text()
+        deferred = deferred.replace("    run body:", '    to nested helper:\n        @intrinsic("discard", 0)\n    run body:')
+        session.notify("textDocument/didChange", {"textDocument": {"uri": uri, "version": 3},
+                                                  "contentChanges": [{"text": deferred}]})
+        symbols = session.request("textDocument/documentSymbol", {"textDocument": {"uri": uri}})
+
+        def authored_symbols(entries):
+            for symbol in entries:
+                assert not symbol["name"].startswith("__section_body_"), symbol
+                authored_symbols(symbol.get("children", []))
+
+        authored_symbols(symbols)
+        assert any(symbol["name"] == "nested helper" for symbol in symbols), symbols
+        rendered = session.request("dynlex/renderSemanticTokens", {"uri": uri})
+        body_line = deferred.splitlines().index("    run body:")
+        header = rendered.splitlines()[body_line]
+        assert "<section>" in header, header
+        assert all(tag not in header for tag in ("<patternDefinition>", "<variable>", "<type>")), header
     finally:
         session.close()
-    print("Outline ranges cover shorthand, nested and explicit bodies, classes and edits in UTF-16.")
+    print("Outline ranges cover authored bodies and UTF-16 edits; deferred callbacks keep generated headers hidden.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,17 @@
+integer means: @intrinsic("type", "integer")
+nothing means: @intrinsic("type", "nothing")
+
+section callback {name}:
+    declares: name
+    receiver: @intrinsic("add pointer depth", integer)
+    returns: @intrinsic("type", "nothing")
+    value: @intrinsic("deferred body")
+
+to get the item count:
+    @intrinsic("return", @intrinsic("type extent", [1, 2], 0))
+
+callback count items:
+    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", the item count))
+
+@intrinsic("store", state, 0)
+@intrinsic("call pointer", count items, nothing, @intrinsic("address of", state))

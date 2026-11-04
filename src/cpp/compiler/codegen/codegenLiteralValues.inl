@@ -24,6 +24,11 @@ static llvm::Value *
 generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &value, const DataType &type) {
 	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
 	llvm::Type *llvmType = getLLVMType(context, type);
+	if (const auto *pointer = std::get_if<CompileTimePointer>(&value)) {
+		requireCompilerInvariant(type.isAddress(), "constant pointer has a non-address runtime type");
+		auto *addressType = context.llvmModule->getDataLayout().getIntPtrType(*context.llvmContext);
+		return llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(addressType, pointer->address), llvmType);
+	}
 	if (const auto *integer = std::get_if<std::int64_t>(&value)) {
 		if (type.isInteger())
 			return llvm::ConstantInt::get(llvmType, *integer, true);

@@ -1,0 +1,53 @@
+# Render the actual UI, a full board, and the game-over impact on a private display.
+import tests/games/snake/application.dl
+
+set match to a new snake session
+arrange the opening trail in the address of match
+set interface to an instance of snake studio with state (the address of match)
+set view to a native view of (the address of interface) sized 1120 by 760 using fonts "tests/games/fonts/NotoSans-Regular.ttf" and "tests/games/fonts/NotoSans-SemiBold.ttf"
+set frame to 0
+loop while frame < 8:
+    refresh the snake interface in the address of view
+    render the address of view
+    increment frame
+set started to the time since start for view's window
+set frame to 0
+loop while frame < 60:
+    refresh the snake interface in the address of view
+    render the address of view
+    increment frame
+set duration to (the time since start for view's window) - started
+print line (60.0 / duration)
+
+set match's length to the snake board capacity
+set match's phase to the completed screen
+set index to 0
+loop while index < match's length:
+    set row to index / the snake board width
+    set column to index mod the snake board width
+    if (row mod 2) = 1:
+        set column to (the snake board width - 1) - column
+    store a snake cell at column and row into match's body at index
+    increment index
+refresh the snake interface in the address of view
+render the address of view
+render the address of view
+
+begin a run in the address of match
+set index to 0
+loop while index < match's length:
+    store a snake cell at (23 - index) and 12 into match's body at index
+    increment index
+update the address of match after 0.12 seconds
+require condition (match's phase = the finished screen) reporting "The collision tick did not end the run"
+set frame to 0
+loop while frame < 32:
+    refresh the snake interface in the address of view
+    render the address of view
+    update the address of match after (1.0 / 60.0) seconds
+    increment frame
+require condition ((match's phase = the finished screen) and (match's impact time = the snake impact duration)) reporting "The native impact sequence did not settle"
+close the address of view
+close the address of interface
+close the address of match
+print line "Snake rendering passed"

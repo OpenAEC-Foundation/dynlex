@@ -20,6 +20,7 @@ struct Variable {
 	VariableReference *definition;
 	// whether this variable is global (module-level) or local (function-level)
 	bool isGlobal;
+	Expression *dataInitializer{};
 
 	void addDeclaredTypeConstraintReference(VariableReference *reference) {
 		if (std::find(declaredTypeConstraintReferences.begin(), declaredTypeConstraintReferences.end(), reference) ==

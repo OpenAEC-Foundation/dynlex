@@ -1,0 +1,212 @@
+import lib/sections.dl
+import lib/check.dl
+
+the menu screen means: 0
+the playing screen means: 1
+the paused screen means: 2
+the finished screen means: 3
+the completed screen means: 4
+the snake board width means: 24
+the snake board capacity means: the snake board width * the snake board width
+the snake impact duration means: 0.5
+
+class:
+    patterns:
+        snake cell
+    members:
+        column as an integer
+        row as an integer
+
+class:
+    patterns:
+        snake match
+    members:
+        body as a pointer to snake cell
+        length as an integer
+        direction as an integer
+        food as snake cell
+        score as an integer
+        best score as an integer
+        phase as an integer
+        pace as an integer
+        wrap edges as a boolean
+        show grid as a boolean
+        reduced motion as a boolean
+        palette as an integer
+        seed as a 32 bit unsigned integer
+        elapsed as a floating-point number
+        progress as a floating-point number
+        impact as a boolean
+        impact time as a floating-point number
+        steps as an integer
+
+to get a snake cell at {integer:column} and {integer:row}:
+    set location to a new snake cell
+    set location's column to column
+    set location's row to row
+    return location
+
+to get {snake cell:first} is the same cell as {snake cell:second}:
+    return (first's column = second's column) and (first's row = second's row)
+
+to get {snake cell:location} is occupied in {a pointer to snake match:match}:
+    set index to 0
+    loop while index < match's length:
+        if location is the same cell as (the item at index in (match's body)):
+            return true
+        increment index
+    return false
+
+to get the next choice below {integer:limit} in {a pointer to snake match:match}:
+    require condition (limit > 0) reporting "A random choice requires a positive limit"
+    set match's seed to (match's seed * (1664525 as a 32 bit unsigned integer)) + (1013904223 as a 32 bit unsigned integer)
+    return ((match's seed) mod (limit as a 32 bit unsigned integer)) as an integer
+
+to place food in {a pointer to snake match:match}:
+    set {free cells} to the snake board capacity - match's length
+    if free cells = 0:
+        set match's phase to the completed screen
+        return nothing
+    set {chosen cell} to the next choice below free cells in match
+    set index to 0
+    loop while index < the snake board capacity:
+        set location to a snake cell at (index mod the snake board width) and (index / the snake board width)
+        if (location is occupied in match) = false:
+            if chosen cell = 0:
+                set match's food to location
+                return nothing
+            decrement chosen cell
+        increment index
+    require condition false reporting "The snake board's free-cell count is inconsistent"
+
+to get the cell after {snake cell:origin} toward {integer:direction}:
+    set target to origin
+    if direction = 0:
+        decrement target's row
+    else if direction = 1:
+        increment target's column
+    else if direction = 2:
+        increment target's row
+    else:
+        decrement target's column
+    return target
+
+to get the cell after {snake cell:origin} toward {integer:direction} in {a pointer to snake match:match}:
+    set target to the cell after origin toward direction
+    if match's wrap edges:
+        set target's column to (target's column + the snake board width) mod the snake board width
+        set target's row to (target's row + the snake board width) mod the snake board width
+    return target
+
+to get the next snake cell in {a pointer to snake match:match}:
+    return the cell after (the item at 0 in (match's body)) toward match's direction in match
+
+to end {a pointer to snake match:match} on impact:
+    set match's phase to the finished screen
+    set match's impact to true
+    set match's impact time to 0.0
+
+to begin a run in {a pointer to snake match:match}:
+    set match's length to 5
+    set match's direction to 1
+    set match's score to 0
+    set match's elapsed to 0.0
+    set match's progress to 0.0
+    set match's impact to false
+    set match's impact time to 0.0
+    set match's steps to 0
+    set match's phase to the playing screen
+    set index to 0
+    loop while index < match's length:
+        store a snake cell at (12 - index) and 12 into match's body at index
+        increment index
+    place food in match
+
+to get a new snake session:
+    set result to a new snake match
+    set result's body to storage for (the snake board capacity) slots initialized with a new snake cell
+    set result's seed to 20261030 as a 32 bit unsigned integer
+    set result's pace to 1
+    set result's show grid to true
+    begin a run in the address of result
+    set result's phase to the menu screen
+    return result
+
+to turn {a pointer to snake match:match} toward {integer:direction}:
+    if match's phase != the playing screen:
+        return nothing
+    set target to the cell after (the item at 0 in (match's body)) toward direction in match
+    if match's length > 1:
+        if target is the same cell as (the item at 1 in (match's body)):
+            return nothing
+    set match's direction to direction
+
+to advance the snake in {a pointer to snake match:match}:
+    if match's phase != the playing screen:
+        return nothing
+    set head to the next snake cell in match
+    set outside to ((head's column < 0) or (head's column >= the snake board width)) or ((head's row < 0) or (head's row >= the snake board width))
+    if outside:
+        end match on impact
+        return nothing
+    set eating to head is the same cell as match's food
+    set {collision length} to match's length - 1
+    if eating:
+        increment collision length
+    set index to 0
+    loop while index < collision length:
+        if head is the same cell as (the item at index in (match's body)):
+            end match on impact
+            return nothing
+        increment index
+    if eating:
+        increment match's length
+        increment match's score
+        if match's score > match's best score:
+            set match's best score to match's score
+    set index to match's length - 1
+    loop while index > 0:
+        store the item at (index - 1) in (match's body) into match's body at index
+        decrement index
+    store head into match's body at 0
+    increment match's steps
+    if eating:
+        place food in match
+
+to get the step duration for {a pointer to snake match:match}:
+    if match's pace = 0:
+        return 0.18
+    if match's pace = 2:
+        return 0.075
+    return 0.12
+
+to animate the impact in {a pointer to snake match:match} after {floating-point number:elapsed time} seconds:
+    if match's impact:
+        set match's impact time to the minimum of (the snake impact duration) and (match's impact time + elapsed time)
+
+to update {a pointer to snake match:match} after {floating-point number:elapsed time} seconds:
+    set {frame time} to elapsed time
+    if frame time > 0.25:
+        set frame time to 0.25
+    loop while (frame time > 0.0) and (match's phase = the playing screen):
+        set duration to the step duration for match
+        set {until tick} to (1.0 - match's progress) * duration
+        set portion to the minimum of frame time and until tick
+        set match's elapsed to match's elapsed + portion
+        set frame time to frame time - portion
+        if portion = until tick:
+            set match's progress to 0.0
+            advance the snake in match
+        else:
+            set match's progress to match's progress + (portion / duration)
+    if match's phase = the finished screen:
+        animate the impact in match after frame time seconds
+
+to pause or resume {a pointer to snake match:match}:
+    if match's phase = the playing screen:
+        set match's phase to the paused screen
+    else if match's phase = the paused screen:
+        set match's phase to the playing screen
+
+to close {a pointer to snake match:match}:
+    deallocate match's body

@@ -1,0 +1,7 @@
+import lib/ui_native.dl
+import project_description.dl
+
+set state to a new project state
+set instance to an instance of project window with state (the address of state)
+show the address of instance in a window with width 840 and height 600 using font "tests/games/fonts/LiberationMono-Regular.ttf"
+close the address of instance

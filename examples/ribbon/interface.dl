@@ -1,0 +1,184 @@
+import lib/ui_ribbon.dl
+
+window ribbon studio:
+    canvas "Editor" at 0 0 sized 1280 by 800
+    ribbon "Main ribbon" at 12 56 sized 1256 by 168:
+        tab "File":
+            ribbon group "Presentation":
+                large tool "New" with icon "slide"
+                large tool "Open" with icon "layout"
+                large tool "Save" with icon "save"
+                large tool "Export" with icon "share"
+            ribbon group "Share":
+                tool column:
+                    tool "Share presentation" with icon "share"
+                    tool "Copy link" with icon "link"
+                    tool "Version history" with icon "clock"
+        tab "Home":
+            ribbon group "Clipboard":
+                large tool "Paste" with icon "paste"
+                tool column:
+                    tool "Cut" with icon "cut"
+                    tool "Copy" with icon "copy"
+                    tool "Format painter" with icon "brush"
+            ribbon group "Slides":
+                large tool "New slide" with icon "slide"
+                tool column:
+                    tool "Layout" with icon "layout"
+                    tool "Reset" with icon "reset"
+                    tool "Section" with icon "grid"
+            ribbon group "Font":
+                tool column:
+                    tool row:
+                        tool field "Aptos (Body)" sized 142
+                        tool field "20" sized 48
+                    tool row:
+                        icon tool "Bold" with icon "bold"
+                        icon tool "Italic" with icon "italic"
+                        icon tool "Underline" with icon "underline"
+                        icon tool "Font color" with icon "colors"
+                        icon tool "Text highlight" with icon "brush"
+            ribbon group "Paragraph":
+                tool column:
+                    tool row:
+                        icon tool "Align left" with icon "align-left"
+                        icon tool "Align center" with icon "align-center"
+                        icon tool "Bullets" with icon "list"
+                    tool "Line spacing" with icon "list"
+                    tool "Text direction" with icon "text"
+            ribbon group "Drawing":
+                large tool "Shapes" with icon "shapes"
+                large tool "Arrange" with icon "layout"
+            ribbon group "Editing":
+                tool column:
+                    tool "Find" with icon "find"
+                    tool "Replace" with icon "replace"
+                    tool "Select" with icon "eye"
+        tab "Insert":
+            ribbon group "Slides":
+                large tool "New slide" with icon "slide"
+            ribbon group "Tables":
+                large tool "Table" with icon "table"
+            ribbon group "Images":
+                large tool "Pictures" with icon "picture"
+                large tool "Screenshot" with icon "layout"
+            ribbon group "Illustrations":
+                large tool "Shapes" with icon "shapes"
+                large tool "Icons" with icon "star"
+                large tool "Chart" with icon "chart"
+            ribbon group "Text":
+                large tool "Text box" with icon "text"
+                tool column:
+                    tool "Header & footer" with icon "layout"
+                    tool "Slide number" with icon "slide"
+            ribbon group "Media":
+                large tool "Video" with icon "video"
+                large tool "Audio" with icon "audio"
+            ribbon group "Links":
+                large tool "Link" with icon "link"
+                large tool "Comment" with icon "comment"
+        tab "Design":
+            ribbon group "Themes":
+                theme preview "Office" in "orange"
+                theme preview "Facet" in "green"
+                theme preview "Integral" in "blue"
+                theme preview "Ion" in "purple"
+                theme preview "Retrospect" in "gold"
+            ribbon group "Variants":
+                large tool "Colors" with icon "colors"
+                large tool "Fonts" with icon "text"
+                large tool "Effects" with icon "star"
+            ribbon group "Customize":
+                large tool "Slide size" with icon "layout"
+                large tool "Background" with icon "background"
+                large tool "Designer" with icon "theme"
+        tab "Transitions":
+            ribbon group "Preview":
+                large tool "Preview" with icon "play"
+            ribbon group "Transition to this slide":
+                large tool "None" with icon "slide"
+                large tool "Morph" with icon "shapes"
+                large tool "Fade" with icon "transition"
+                large tool "Push" with icon "chevron"
+                large tool "Wipe" with icon "layout"
+                large tool "Split" with icon "grid"
+            ribbon group "Timing":
+                tool column:
+                    tool "Sound: none" with icon "audio"
+                    tool "Duration: 02.00" with icon "clock"
+                    tool "Apply to all" with icon "check"
+            ribbon group "Advance slide":
+                tool column:
+                    tool "On mouse click" with icon "check"
+                    tool "After: 00:00" with icon "clock"
+        tab "Animations":
+            ribbon group "Preview":
+                large tool "Preview" with icon "play"
+            ribbon group "Animation":
+                large tool "Appear" with icon "star"
+                large tool "Fade" with icon "transition"
+                large tool "Fly in" with icon "chevron"
+                large tool "Float in" with icon "shapes"
+                large tool "Zoom" with icon "zoom"
+            ribbon group "Advanced animation":
+                large tool "Add animation" with icon "star"
+                tool column:
+                    tool "Animation pane" with icon "list"
+                    tool "Trigger" with icon "play"
+                    tool "Animation painter" with icon "brush"
+            ribbon group "Timing":
+                tool column:
+                    tool "Start: on click" with icon "play"
+                    tool "Duration: 00.50" with icon "clock"
+                    tool "Delay: 00.00" with icon "clock"
+        tab "Slide Show":
+            ribbon group "Start slide show":
+                large tool "From beginning" with icon "play"
+                large tool "Current slide" with icon "slide"
+                large tool "Custom show" with icon "layout"
+            ribbon group "Set up":
+                large tool "Set up show" with icon "layout"
+                large tool "Hide slide" with icon "eye"
+                large tool "Rehearse" with icon "clock"
+                large tool "Record" with icon "video"
+            ribbon group "Monitors":
+                tool column:
+                    tool "Presenter view" with icon "check"
+                    tool "Monitor: automatic" with icon "layout"
+        tab "Review":
+            ribbon group "Proofing":
+                large tool "Spelling" with icon "check"
+                large tool "Thesaurus" with icon "text"
+            ribbon group "Accessibility":
+                large tool "Check access" with icon "eye"
+            ribbon group "Language":
+                large tool "Translate" with icon "text"
+                large tool "Language" with icon "colors"
+            ribbon group "Comments":
+                large tool "New comment" with icon "comment"
+                tool column:
+                    tool "Show comments" with icon "comment"
+                    tool "Previous" with icon "undo"
+                    tool "Next" with icon "redo"
+        tab "View":
+            ribbon group "Presentation views":
+                large tool "Normal" with icon "layout"
+                large tool "Outline" with icon "list"
+                large tool "Slide sorter" with icon "grid"
+                large tool "Reading view" with icon "eye"
+            ribbon group "Master views":
+                large tool "Slide master" with icon "slide"
+                large tool "Notes master" with icon "text"
+            ribbon group "Show":
+                tool column:
+                    tool "Ruler" with icon "ruler"
+                    tool "Gridlines" with icon "grid"
+                    tool "Guides" with icon "layout"
+            ribbon group "Zoom":
+                large tool "Zoom" with icon "zoom"
+                large tool "Fit to window" with icon "layout"
+    style:
+        the interface uses an "office" theme
+        the interface fits 1280 by 800 pixels
+    code:
+        set the value of "Main ribbon" in this window to 1

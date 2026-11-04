@@ -1,0 +1,8 @@
+integer means: @intrinsic("type", "integer")
+section answer {name}:
+    declares: name
+    result: integer
+    value:
+        42
+answer example:
+@intrinsic("discard", example)

@@ -19,13 +19,16 @@ static SuspendedGroupingLayout captureSuspendedGroupingLayout(Expression *root, 
 	layout.explicitGroups.reserve(expressionNodes.size());
 	size_t argumentCount = 0;
 	for (Expression *expression : expressionNodes)
-		argumentCount += expression->arguments.size();
+		argumentCount += unconvertedExpression(expression)->arguments.size();
 	layout.arguments.reserve(argumentCount);
 	for (Expression *expression : expressionNodes) {
 		layout.expressions.push_back(expression);
 		layout.argumentOffsets.push_back(layout.arguments.size());
-		layout.arguments.insert(layout.arguments.end(), expression->arguments.begin(), expression->arguments.end());
-		layout.explicitGroups.push_back(expression->isExplicitGroup);
+		layout.arguments.insert(
+			layout.arguments.end(), unconvertedExpression(expression)->arguments.begin(),
+			unconvertedExpression(expression)->arguments.end()
+		);
+		layout.explicitGroups.push_back(unconvertedExpression(expression)->isExplicitGroup);
 	}
 	layout.argumentOffsets.push_back(layout.arguments.size());
 	return layout;
@@ -36,8 +39,8 @@ static void applySuspendedGroupingLayout(const SuspendedGroupingLayout &layout) 
 		Expression *expression = layout.expressions[expressionIndex];
 		auto argumentsBegin = layout.arguments.begin() + layout.argumentOffsets[expressionIndex];
 		auto argumentsEnd = layout.arguments.begin() + layout.argumentOffsets[expressionIndex + 1];
-		expression->arguments.assign(argumentsBegin, argumentsEnd);
-		expression->isExplicitGroup = layout.explicitGroups[expressionIndex];
+		unconvertedExpression(expression)->arguments.assign(argumentsBegin, argumentsEnd);
+		unconvertedExpression(expression)->isExplicitGroup = layout.explicitGroups[expressionIndex];
 	}
 }
 
@@ -57,10 +60,11 @@ struct GroupingGenerationState {
 };
 
 static bool isOpaqueGroupingNode(Expression *expression, bool isOnBoundary, bool isRoot, bool forceLocal) {
-	return !isRoot && (forceLocal || expression->isExplicitGroup || !isOnBoundary);
+	return !isRoot && (forceLocal || unconvertedExpression(expression)->isExplicitGroup || !isOnBoundary);
 }
 
-static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
+// Keep suspended enumeration state out of recursive inference's native stack.
+[[gnu::noinline]] static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
 	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &flexBindingFrameStack
 );
 
@@ -77,7 +81,7 @@ generateOpaqueGroupingChoices(Expression *&current, GroupingGenerationState &sta
 	}
 
 	Expression *savedCurrent = current;
-	bool preserveExplicitGroup = current && current->isExplicitGroup;
+	bool preserveExplicitGroup = current && unconvertedExpression(current)->isExplicitGroup;
 	GroupingSnapshot savedCurrentSnapshot = captureGroupingSnapshot(savedCurrent);
 	Expression *groupedCurrent = current;
 	auto childCandidates =
@@ -86,7 +90,7 @@ generateOpaqueGroupingChoices(Expression *&current, GroupingGenerationState &sta
 		const GroupingCandidate &childCandidate = childCandidates.current();
 		Expression *groupedExpression = childCandidate.root;
 		if (preserveExplicitGroup && groupedExpression)
-			groupedExpression->isExplicitGroup = true;
+			unconvertedExpression(groupedExpression)->isExplicitGroup = true;
 		current = groupedExpression;
 
 		std::vector<Expression *> insertedRoots;
@@ -104,7 +108,7 @@ generateOpaqueGroupingChoices(Expression *&current, GroupingGenerationState &sta
 			state.fixedGroupingRoots.erase(root);
 		applyGroupingSnapshot(savedCurrentSnapshot);
 		if (preserveExplicitGroup && savedCurrent)
-			savedCurrent->isExplicitGroup = true;
+			unconvertedExpression(savedCurrent)->isExplicitGroup = true;
 		groupedCurrent = savedCurrent;
 		current = savedCurrent;
 	}
@@ -133,21 +137,21 @@ static GroupingGenerator<GroupingGenerationStep> generatePrioritizedGroupingArgu
 		co_return;
 	}
 
-	Expression *savedArgument = parentExpression->arguments[actualArgumentIndex];
+	Expression *savedArgument = unconvertedExpression(parentExpression)->arguments[actualArgumentIndex];
 	Expression *argumentExpression = savedArgument;
 	bool forceLocalArgument = argumentHasAdjacentSiblingSlot(parentExpression, sourceArgumentIndex);
 	auto argumentChoices = generatePrioritizedGroupingChoices(
 		argumentExpression, isLeftBoundaryArgument || isRightBoundaryArgument, false, forceLocalArgument, true, state
 	);
 	while (argumentChoices.next()) {
-		parentExpression->arguments[actualArgumentIndex] = argumentExpression;
+		unconvertedExpression(parentExpression)->arguments[actualArgumentIndex] = argumentExpression;
 		auto remainingChoices = generatePrioritizedGroupingArgumentChoices(
 			parentExpression, hasLeftEdge, hasRightEdge, includeBoundaryArguments, sourceArgumentIndex - 1, state
 		);
 		while (remainingChoices.next())
 			co_yield GroupingGenerationStep{};
 	}
-	parentExpression->arguments[actualArgumentIndex] = savedArgument;
+	unconvertedExpression(parentExpression)->arguments[actualArgumentIndex] = savedArgument;
 }
 
 static GroupingGenerator<GroupingGenerationStep> generatePrioritizedGroupingChoices(
@@ -271,13 +275,13 @@ static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 		Expression *rightResult = rightGroupings.current();
 		if (expressionContains(rightResult, rootExpression))
 			continue;
-		rootExpression->arguments[rightArgumentIndex] = rightResult;
+		unconvertedExpression(rootExpression)->arguments[rightArgumentIndex] = rightResult;
 		Expression *candidateRoot = rootExpression;
 		auto choices = generatePrioritizedGroupingChoices(candidateRoot, true, true, false, true, state);
 		while (choices.next())
 			co_yield rootExpression;
 	}
-	rootExpression->arguments[rightArgumentIndex] = savedRight;
+	unconvertedExpression(rootExpression)->arguments[rightArgumentIndex] = savedRight;
 }
 
 static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
@@ -316,8 +320,10 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
 		size_t sourceArgumentCount = groupingArgumentCount(rootExpression);
 		int leftArgumentIndex = hasLeftEdge ? groupingArgumentIndex(rootExpression, 0) : -1;
 		int rightArgumentIndex = hasRightEdge ? groupingArgumentIndex(rootExpression, sourceArgumentCount - 1) : -1;
-		Expression *savedLeft = leftArgumentIndex >= 0 ? rootExpression->arguments[leftArgumentIndex] : nullptr;
-		Expression *savedRight = rightArgumentIndex >= 0 ? rootExpression->arguments[rightArgumentIndex] : nullptr;
+		Expression *savedLeft =
+			leftArgumentIndex >= 0 ? unconvertedExpression(rootExpression)->arguments[leftArgumentIndex] : nullptr;
+		Expression *savedRight =
+			rightArgumentIndex >= 0 ? unconvertedExpression(rootExpression)->arguments[rightArgumentIndex] : nullptr;
 		bool inserted = state.fixedGroupingRoots.insert(rootExpression).second;
 
 		if (hasLeftEdge) {
@@ -327,13 +333,13 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
 				Expression *leftResult = leftGroupings.current();
 				if (expressionContains(leftResult, rootExpression))
 					continue;
-				rootExpression->arguments[leftArgumentIndex] = leftResult;
+				unconvertedExpression(rootExpression)->arguments[leftArgumentIndex] = leftResult;
 				auto rightGroupings = generateRightExpressionGroupings(
 					rootExpression, rootIndex, end, hasRightEdge, rightArgumentIndex, savedRight, state
 				);
 				while (rightGroupings.next())
 					co_yield rightGroupings.current();
-				rootExpression->arguments[leftArgumentIndex] = savedLeft;
+				unconvertedExpression(rootExpression)->arguments[leftArgumentIndex] = savedLeft;
 			}
 		} else {
 			auto rightGroupings = generateRightExpressionGroupings(
@@ -344,9 +350,9 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
 		}
 
 		if (leftArgumentIndex >= 0)
-			rootExpression->arguments[leftArgumentIndex] = savedLeft;
+			unconvertedExpression(rootExpression)->arguments[leftArgumentIndex] = savedLeft;
 		if (rightArgumentIndex >= 0)
-			rootExpression->arguments[rightArgumentIndex] = savedRight;
+			unconvertedExpression(rootExpression)->arguments[rightArgumentIndex] = savedRight;
 		if (inserted)
 			state.fixedGroupingRoots.erase(rootExpression);
 	}
@@ -386,13 +392,13 @@ static void collectFlatGroupingNodes(Expression *expr, GroupingGenerationState &
 		if (hasRightEdge && sourceArgumentCount > 0) {
 			int rightArgumentIndex = groupingArgumentIndex(expression, sourceArgumentCount - 1);
 			if (rightArgumentIndex >= 0)
-				pending.push({expression->arguments[rightArgumentIndex], true, false, false});
+				pending.push({unconvertedExpression(expression)->arguments[rightArgumentIndex], true, false, false});
 		}
 		pending.push({expression, frame.isOnBoundary, frame.isRoot, true});
 		if (hasLeftEdge && sourceArgumentCount > 0) {
 			int leftArgumentIndex = groupingArgumentIndex(expression, 0);
 			if (leftArgumentIndex >= 0)
-				pending.push({expression->arguments[leftArgumentIndex], true, false, false});
+				pending.push({unconvertedExpression(expression)->arguments[leftArgumentIndex], true, false, false});
 		}
 	}
 }
@@ -429,7 +435,7 @@ static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates
 	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &flexBindingFrameStack
 ) {
 	GroupingGenerationState state{context, flexBindingFrameStack, {}, {}, {}, {}};
-	if (collectExpressionNodes(expr, state.originalExpressionNodes)) {
+	if (collectGroupingNodes(expr, state.originalExpressionNodes)) {
 		if (!context.hasTypeFailureDiagnostic)
 			context.fail(
 				buildFailureDetailDiagnostic(
@@ -469,7 +475,7 @@ static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates
 		Expression *candidateRoot = groupings.current();
 		expr = candidateRoot;
 		ExpressionNodeSet candidateExpressionNodes;
-		bool candidateHasCycle = collectExpressionNodes(expr, candidateExpressionNodes);
+		bool candidateHasCycle = collectGroupingNodes(expr, candidateExpressionNodes);
 		requireCompilerInvariant(
 			!candidateHasCycle && expressionNodeSetsEqual(candidateExpressionNodes, state.originalExpressionNodes),
 			"operand regrouping changed the expression node set"

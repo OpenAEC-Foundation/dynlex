@@ -142,8 +142,6 @@ static bool tryResolveCastResultType(const DataType &fromType, const DataType &t
 
 static DataType
 resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFrameStack, InferenceContext *inferenceContext) {
-	if (expr && expr->inferredConversion)
-		return resolveKnownExpressionType(expr->inferredConversion, bindingFrameStack, inferenceContext);
 	if (expr && expr->kind == Expression::Kind::PatternCall && expr->type.isDeduced() && !bindingFrameStack.hasBindings()) {
 		return expr->type;
 	}
@@ -346,6 +344,10 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			if (valueType.isDeduced())
 				return valueType.pointed();
 		} else if (isExternalCallIntrinsicKind(kind)) {
+			if (kind == IntrinsicKind::Invoke) {
+				DataType callee = resolveKnownExpressionType(resolved->arguments[1], effectiveBindingFrameStack);
+				return callee.isFunction() ? callee.functionSignature->result : DataType{};
+			}
 			size_t returnTypeArgumentIndex = externalCallReturnTypeArgumentIndex(kind);
 			if (resolved->arguments.size() <= returnTypeArgumentIndex)
 				return {};
@@ -360,8 +362,10 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 					return {};
 			}
 			return retTypeRef.toReferencedType();
-		} else if (kind == IntrinsicKind::Function) {
-			return {DataType::Kind::Int, 1, 1};
+		} else if (kind == IntrinsicKind::Function || kind == IntrinsicKind::DeferredBody) {
+			if (resolved->selectedInstantiation)
+				return makeFunctionType(resolved->selectedInstantiation->returnType, resolved->selectedInstantiation->argumentTypes);
+			return {};
 		} else if (kind == IntrinsicKind::Return) {
 			return {DataType::Kind::Void};
 		} else if (kind == IntrinsicKind::Cast) {

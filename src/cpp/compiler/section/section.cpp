@@ -977,7 +977,8 @@ Variable *Section::findVariable(const std::string &name, const Range &useRange) 
 			return variable->second;
 		const Range &declarationRange = declaration->second;
 		requireCompilerInvariant(declarationRange.line != nullptr, "explicit variable declaration has no source position");
-		if (std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <= usePosition)
+		if (section->dataVariableDeclarations.contains(name) ||
+			std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <= usePosition)
 			return variable->second;
 	}
 	return nullptr;

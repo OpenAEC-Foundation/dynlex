@@ -147,8 +147,7 @@ static void inferOrderedExpression(
 	} expressionTraceGuard(context, expr);
 	ExpressionInferenceSupport support{expr, context, flexBindingFrameStack};
 	bool typeQuery =
-		expr->kind == Expression::Kind::IntrinsicCall && (intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeOf ||
-														  intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeExtent);
+		expr->kind == Expression::Kind::IntrinsicCall && isTypeQueryIntrinsicKind(intrinsicKind(expr->intrinsicName));
 	std::optional<InferenceExecutionSnapshot> argumentEffects;
 	if (expr->kind == Expression::Kind::PatternCall || typeQuery)
 		argumentEffects.emplace(context);

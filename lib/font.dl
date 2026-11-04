@@ -88,8 +88,9 @@ class:
         height as an integer
         left as an integer
         top as an integer
-        advance as an integer
-        texture as a graphics texture
+        advance as a floating-point number
+        atlas left as an integer
+        atlas top as an integer
         next as a pointer to a font glyph
 
 class:
@@ -98,6 +99,14 @@ class:
     members:
         window as a pointer
         first as a pointer to a font glyph
+        pixels as a pointer to a byte
+        width as an integer
+        height as an integer
+        next x as an integer
+        next y as an integer
+        row height as an integer
+        atlas as a graphics texture
+        dirty as a boolean
 
 class:
     patterns:
@@ -106,6 +115,7 @@ class:
         library as a pointer
         face as a pointer
         cache as a pointer to a font cache
+        scale as a floating-point number
 
 class:
     patterns:
@@ -125,7 +135,14 @@ class:
     patterns:
         [a|] font rendering result
     members:
-        horizontal position as an integer
+        horizontal position as a floating-point number
+        status as a font operation status
+
+class:
+    patterns:
+        font glyph result
+    members:
+        glyph as a pointer to font glyph
         status as a font operation status
 
 class:
@@ -138,7 +155,7 @@ class:
 
 local function a new font using {pointer:library}, {pointer:face} and {a pointer to a font cache:cache}:
     replacement:
-        @intrinsic("construct", a font, library, face, cache)
+        @intrinsic("construct", a font, library, face, cache, 1.0)
 
 local function an empty font:
     execute:
@@ -168,11 +185,11 @@ local function a failed font load containing {font:typeface} with {font operatio
 
 {font load result:result} succeeded means: result's status succeeded
 {font load result:result} failed means: result's status failed
-local function a successful font rendering at horizontal position {integer:horizontal}:
+local function a successful font rendering at horizontal position {floating-point number:horizontal}:
     replacement:
         @intrinsic("construct", a font rendering result, horizontal, a successful font operation status)
 
-local function a failed font rendering at horizontal position {integer:horizontal} in {C string:operation} with error code {integer:error}:
+local function a failed font rendering at horizontal position {floating-point number:horizontal} in {C string:operation} with error code {integer:error}:
     replacement:
         @intrinsic("construct", a font rendering result, horizontal, (a failed font operation status for operation with error code error))
 
@@ -187,7 +204,23 @@ local function a failed font load after cleaning up {pointer:library} and {point
             return a failed font load containing typeface with cleanup
         return a failed font load in operation with error code error
 
+to get a new font [cache] for {pointer:window}:
+    set cache to @intrinsic("call", "libc", "calloc", a pointer to a font cache, 1 as a word sized integer, the size of a font cache)
+    require condition (cache != (0 as a pointer to a font cache)) reporting "Could not allocate the font glyph cache"
+    set cache's window to window
+    set cache's width to 512
+    set cache's height to 512
+    set cache's next x to 1
+    set cache's next y to 1
+    set cache's pixels to @intrinsic("call", "libc", "calloc", a pointer to a byte, 262144 as a word sized unsigned integer, 1 as a word sized unsigned integer)
+    require condition (cache's pixels != (0 as a pointer to a byte)) reporting "Could not allocate the font atlas"
+    return cache
+
 to get the result of loading a font from path at size {a value:size} for {pointer:window}:
+    return the result of loading a font from path at size size rasterized at scale 1 for window
+
+to get the result of loading a font from path at size {a value:size} rasterized at scale {integer:scale} for {pointer:window}:
+    require condition (scale > 0) reporting "A font raster scale must be positive"
     # Initialize FreeType
     set library to 0 as a pointer to a byte
     set error to @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
@@ -201,16 +234,16 @@ to get the result of loading a font from path at size {a value:size} for {pointe
         return a failed font load after cleaning up library and face following "FT_New_Face" with error code error
 
     # Set pixel size
-    set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+    set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, (size * scale) as a 32 bit integer)
     if error != 0:
         return a failed font load after cleaning up library and face following "FT_Set_Pixel_Sizes" with error code error
 
     if window = (0 as a pointer):
         return a failed font load after cleaning up library and face following "creating the font texture" with error code -1
-    set cache to @intrinsic("call", "libc", "calloc", a pointer to a font cache, 1 as a word sized integer, the size of a font cache)
-    require condition (cache != (0 as a pointer to a font cache)) reporting "Could not allocate the font glyph cache"
-    set cache's window to window
-    return a successful font load containing (a new font using library, face and cache)
+    set cache to a new font cache for window
+    set typeface to a new font using library, face and cache
+    set typeface's scale to scale as a floating-point number
+    return a successful font load containing typeface
 
 
 local function [clear cached glyphs in] {a pointer to a font cache:cache}:
@@ -218,22 +251,59 @@ local function [clear cached glyphs in] {a pointer to a font cache:cache}:
         loop while cache's first != (0 as a pointer to a font glyph):
             set glyph to cache's first
             set cache's first to glyph's next
-            release glyph's texture
             deallocate glyph
+        set cache's next x to 1
+        set cache's next y to 1
+        set cache's row height to 0
+        set bytes to (cache's width as a word sized unsigned integer) * (cache's height as a word sized unsigned integer)
+        ignore @intrinsic("call", "libc", "memset", a pointer, cache's pixels, 0, bytes)
+        set cache's dirty to true
 
-local function the result of rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
+local function [the cached font glyph for] {word sized integer:code} [in] {a pointer to a font cache:cache}:
     execute:
-        set cache to typeface's cache
         set glyph to 0 as a pointer to a font glyph
         if cache != (0 as a pointer to a font cache):
             set glyph to cache's first
         loop while glyph != (0 as a pointer to a font glyph):
-            if glyph's code = (code as a word sized integer):
-                return the result of drawing cached glyph glyph at x horizontal y vertical in color color on frame
+            if glyph's code = code:
+                return glyph
             set glyph to glyph's next
+        return glyph
+
+local function [grow the font atlas in] {a pointer to a font cache:cache}:
+    execute:
+        set width to cache's width * 2
+        set height to cache's height * 2
+        set bytes to (width as a word sized unsigned integer) * (height as a word sized unsigned integer)
+        set pixels to @intrinsic("call", "libc", "calloc", a pointer to a byte, bytes, 1 as a word sized unsigned integer)
+        require condition (pixels != (0 as a pointer to a byte)) reporting "Could not grow the font atlas"
+        set row to 0
+        loop while row < cache's height:
+            ignore @intrinsic("call", "libc", "memcpy", a pointer, pixels + (row * width), cache's pixels + (row * cache's width), cache's width as a word sized unsigned integer)
+            increment row
+        deallocate cache's pixels
+        set cache's pixels to pixels
+        set cache's width to width
+        set cache's height to height
+
+local function [upload the font atlas in] {a pointer to a font cache:cache}:
+    execute:
+        if cache's dirty:
+            if cache's atlas is loaded:
+                release cache's atlas
+            set resource to a graphics texture resource from (cache's pixels) with width (cache's width) height (cache's height) channels (1 as a 32 bit unsigned integer) in (cache's window as a pointer to DynlexGraphics)
+            set cache's atlas to @intrinsic("construct", graphics texture, resource as a pointer, cache's width, cache's height)
+            set cache's dirty to false
+
+local function [the result of caching character] {a value:code} [using] {font:typeface}:
+    execute:
+        set cache to typeface's cache
+        set glyph to the cached font glyph for (code as a word sized integer) in cache
+        if glyph != (0 as a pointer to font glyph):
+            return @intrinsic("construct", font glyph result, glyph, a successful font operation status)
         set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, typeface's face, code as a C long integer, 4)
         if error != 0:
-            return a failed font rendering at horizontal position horizontal in "FT_Load_Char" with error code error
+            return @intrinsic("construct", font glyph result, glyph, a failed font operation status for "FT_Load_Char" with error code error)
         set metadata to typeface's face as a pointer to an FT face
         set slot to metadata's glyph as a pointer to an FT glyph slot
         set glyph to @intrinsic("call", "libc", "calloc", a pointer to a font glyph, 1 as a word sized integer, the size of a font glyph)
@@ -243,22 +313,74 @@ local function the result of rendering character {a value:code} at x {a value:ho
         set glyph's height to slot's bitmap rows
         set glyph's left to slot's bitmap left
         set glyph's top to slot's bitmap top
-        set glyph's advance to (slot's advance x / 64) as an integer
+        set glyph's advance to ((slot's advance x as a floating-point number) / 64.0) / typeface's scale
         if (glyph's width > 0) and (glyph's height > 0):
+            loop while ((glyph's width + 2) > cache's width) or ((glyph's height + 2) > cache's height):
+                grow the font atlas in cache
+            if ((cache's next x + glyph's width) + 1) > cache's width:
+                set cache's next x to 1
+                set cache's next y to cache's next y + (cache's row height + 2)
+                set cache's row height to 0
+            loop while ((cache's next y + glyph's height) + 1) > cache's height:
+                grow the font atlas in cache
+            set glyph's atlas left to cache's next x
+            set glyph's atlas top to cache's next y
             set pixels to the font coverage bytes from slot's bitmap buffer width glyph's width height glyph's height pitch slot's bitmap pitch mode (slot's bitmap pixel mode as an integer) gray levels (slot's bitmap number of gray levels as an integer)
-            set resource to a graphics texture resource from (the data of pixels) with width glyph's width height glyph's height channels (1 as a 32 bit unsigned integer) in (cache's window as a pointer to DynlexGraphics)
-            set glyph's texture to @intrinsic("construct", a graphics texture, resource as a pointer, glyph's width, glyph's height)
+            set row to 0
+            loop while row < glyph's height:
+                set destination to cache's pixels + (((glyph's atlas top + row) * cache's width) + glyph's atlas left)
+                ignore @intrinsic("call", "libc", "memcpy", a pointer, destination, (the data of pixels) + (row * glyph's width), glyph's width as a word sized unsigned integer)
+                increment row
+            set cache's next x to cache's next x + (glyph's width + 2)
+            set cache's row height to the maximum of (cache's row height) and (glyph's height)
+            set cache's dirty to true
         set glyph's next to cache's first
         set cache's first to glyph
-        return the result of drawing cached glyph glyph at x horizontal y vertical in color color on frame
+        return @intrinsic("construct", font glyph result, glyph, a successful font operation status)
 
-local function [the result of drawing cached glyph] {a pointer to a font glyph:glyph} [at x] {a value:horizontal} [y] {a value:vertical} [in color] {font color:color} [on] {graphics frame:frame}:
+to get the result of preparing characters from {integer:first} through {integer:last} using {font:typeface}:
+    require condition (first <= last) reporting "Preparing font characters requires an ordered range"
+    set code to first
+    loop while code <= last:
+        set loading to the result of caching character code using typeface
+        if loading's status failed:
+            return loading's status
+        increment code
+    return a successful font operation status
+
+local function [append cached glyph] {a pointer to a font glyph:glyph} [at x] {floating-point number:horizontal} [y] {floating-point number:vertical} [using] {font:typeface} [on] {graphics frame:frame}:
     execute:
-        if glyph's width > 0 and glyph's height > 0:
-            set west to horizontal + glyph's left
-            set north to vertical - glyph's top
-            draw glyph's texture from x west, y north to x (west + glyph's width), y (north + glyph's height) in color red color's red, green color's green and blue color's blue in frame
-        return a successful font rendering at horizontal position ((horizontal + glyph's advance) as an integer)
+        set scale to typeface's scale
+        set cache to typeface's cache
+        set west to horizontal + ((glyph's left as a floating-point number) / scale)
+        set north to vertical - ((glyph's top as a floating-point number) / scale)
+        set corners to [0, 1, 2, 0, 2, 3]
+        set index to 0
+        loop while index < 6:
+            set corner to the item at index in corners
+            set u to 1.0 if ((corner = 1) or (corner = 2)), else 0.0
+            set v to 1.0 if ((corner = 2) or (corner = 3)), else 0.0
+            set x to west + (((glyph's width as a floating-point number) * u) / scale)
+            set y to north + (((glyph's height as a floating-point number) * v) / scale)
+            set s to ((glyph's atlas left as a floating-point number) + ((glyph's width as a floating-point number) * u)) / (cache's width as a floating-point number)
+            set t to ((glyph's atlas top as a floating-point number) + ((glyph's height as a floating-point number) * v)) / (cache's height as a floating-point number)
+            use texture coordinates x s and y t in frame
+            add a vertex at x x and y y to frame
+            increment index
+
+local function the result of rendering character {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
+    execute:
+        set loading to the result of caching character code using typeface
+        if loading's status failed:
+            return a failed font rendering at horizontal position (horizontal as a floating-point number) in (loading's status's operation) with error code (loading's status's error code)
+        set glyph to loading's glyph
+        if (glyph's width > 0) and (glyph's height > 0):
+            upload the font atlas in typeface's cache
+            start triangles using (typeface's cache's atlas) in frame
+            use vertex color red (color's red), green (color's green) and blue (color's blue) in frame
+            append cached glyph glyph at x (horizontal as a floating-point number) y (vertical as a floating-point number) using typeface on frame
+            finish triangles in frame
+        return a successful font rendering at horizontal position ((horizontal as a floating-point number) + glyph's advance)
 
 flex function render {a value:code} at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in {font color:color} in {graphics frame:frame}:
     replacement:
@@ -266,7 +388,7 @@ flex function render {a value:code} at x {a value:horizontal} and y {a value:ver
 # Set font pixel size (call before rendering at a new size)
 to get the result of setting {font:typeface}'s pixel size to {a value:size}:
     set face to the face of typeface
-    set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, size as a 32 bit integer)
+    set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0 as a 32 bit integer, ((size as a floating-point number) * typeface's scale) as a 32 bit integer)
     if error != 0:
         return a failed font operation status for "FT_Set_Pixel_Sizes" with error code error
     clear cached glyphs in typeface's cache
@@ -275,7 +397,7 @@ to get the result of setting {font:typeface}'s pixel size to {a value:size}:
 # --- Number rendering ---
 
 to get the result of drawing {a value:value} as a number at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
-    set cursor to horizontal
+    set cursor to horizontal as a floating-point number
     set ink to a font color from red, green and blue
     if value < 10:
         render (value + 48) at x cursor and y vertical using typeface in ink in frame and set rendering to it
@@ -309,16 +431,51 @@ to get the result of drawing {a value:value} as a number at x {a value:horizonta
 
 # --- Text rendering ---
 
-to get the result of drawing {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
-    set cursor to horizontal
-    set ink to a font color from red, green and blue
+to get the advance of character {integer:code} using {font:typeface}:
+    set cached to typeface's cache's first
+    loop while cached != (0 as a pointer to a font glyph):
+        if cached's code = (code as a word sized integer):
+            return cached's advance
+        set cached to cached's next
+    set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, typeface's face, code as a C long integer, 0)
+    require condition (error = 0) reporting "Measuring UI text failed"
+    set metadata to typeface's face as a pointer to an FT face
+    set slot to metadata's glyph as a pointer to an FT glyph slot
+    return ((slot's advance x as a floating-point number) / 64.0) / typeface's scale
+
+to get the width of {a value:message} using {font:typeface}:
+    set extent to 0.0
     set position to 0
     loop while position < the length of message:
-        render (the character at position in message) at x cursor and y vertical using typeface in ink in frame and set rendering to it
-        if rendering failed:
-            return rendering
-        set cursor to rendering's horizontal position
+        set extent to extent + (the advance of character (the character at position in message) using typeface)
         increment position
+    return extent
+
+to get the result of drawing {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+    set cursor to horizontal as a floating-point number
+    set position to 0
+    loop while position < the length of message:
+        set loading to the result of caching character (the character at position in message) using typeface
+        if loading's status failed:
+            return a failed font rendering at horizontal position cursor in (loading's status's operation) with error code (loading's status's error code)
+        increment position
+    set started to false
+    set position to 0
+    loop while position < the length of message:
+        set code to (the character at position in message) as a word sized integer
+        set glyph to the cached font glyph for code in (typeface's cache)
+        require condition (glyph != (0 as a pointer to font glyph)) reporting "A prepared font glyph is missing from the cache"
+        if (glyph's width > 0) and (glyph's height > 0):
+            if started = false:
+                upload the font atlas in typeface's cache
+                start triangles using (typeface's cache's atlas) in frame
+                use vertex color red red, green green and blue blue in frame
+                set started to true
+            append cached glyph glyph at x cursor y (vertical as a floating-point number) using typeface on frame
+        set cursor to cursor + glyph's advance
+        increment position
+    if started:
+        finish triangles in frame
     return a successful font rendering at horizontal position cursor
 
 to get the result of releasing {a pointer to a font:typeface}:
@@ -330,6 +487,9 @@ to get the result of releasing {a pointer to a font:typeface}:
         else:
             if typeface's cache != (0 as a pointer to a font cache):
                 clear cached glyphs in typeface's cache
+                if typeface's cache's atlas is loaded:
+                    release typeface's cache's atlas
+                deallocate typeface's cache's pixels
                 deallocate typeface's cache
                 set typeface's cache to 0 as a pointer to a font cache
             set the library of typeface to 0 as a pointer to a byte

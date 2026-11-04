@@ -1,0 +1,51 @@
+# Palette and declarative style interpretation.
+import lib/ui_layout_types.dl
+
+to get the UI theme for {UI reference:description}:
+    set result to a new UI theme
+    set result's table ink to UI ink 237 243 255
+    set result's button ink to UI ink 255 255 255
+    set result's border to 1
+    set result's cell width to default UI cell width
+    set result's cell height to default UI cell height
+    set result's background to UI ink 246 248 252
+    set result's surface to UI ink 255 255 255
+    set result's outline to UI ink 211 222 241
+    set result's text to UI ink 24 34 55
+    set result's muted to UI ink 105 119 144
+    set result's accent to UI ink 32 123 87
+    set rule to the element of kind 25 labeled "midnight" in description
+    if rule != @intrinsic("construct", UI reference):
+        set result's dark to true
+        set result's background to UI ink 9 14 25
+        set result's surface to UI ink 20 30 46
+        set result's outline to UI ink 52 71 94
+        set result's text to UI ink 239 246 251
+        set result's muted to UI ink 151 171 191
+        set result's accent to UI ink 117 242 201
+        set result's button ink to UI ink 35 49 68
+        set result's border to 0
+    set rule to the element of kind 25 labeled "office" in description
+    if rule != @intrinsic("construct", UI reference):
+        set result's background to UI ink 245 246 248
+        set result's surface to UI ink 255 255 255
+        set result's outline to UI ink 225 228 232
+        set result's text to UI ink 43 47 54
+        set result's muted to UI ink 105 111 121
+        set result's accent to UI ink 184 65 38
+        set result's button ink to UI ink 255 255 255
+        set result's border to 0
+    set rule to the element of kind 7 labeled "" in description
+    if rule != @intrinsic("construct", UI reference):
+        set result's table ink to the UI ink named (rule's color)
+    set rule to the element of kind 8 labeled "" in description
+    if rule != @intrinsic("construct", UI reference):
+        require condition ((rule's columns > 0) and (rule's rows > 0)) reporting "UI cells require positive dimensions"
+        set result's cell width to rule's columns
+        set result's cell height to rule's rows
+    set rule to the element of kind 9 labeled "" in description
+    if rule != @intrinsic("construct", UI reference):
+        require condition ((rule's border >= 0) and (rule's border < 20)) reporting "UI button borders must fit inside the button"
+        set result's button ink to the UI ink named (rule's color)
+        set result's border to rule's border
+    return result

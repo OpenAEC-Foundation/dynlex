@@ -1,0 +1,7 @@
+# Native callbacks keep their full parameter and result signature.
+import lib/std.dl
+
+a callback means: @intrinsic("function type")
+a callback receiving {type:request} returning {type:reply} means: @intrinsic("function type", reply, request)
+the request type of {a callback:action} means: @intrinsic("function parameter type", action, 0)
+the response type of {a callback:action} means: @intrinsic("function return type", action)

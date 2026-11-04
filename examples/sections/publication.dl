@@ -1,0 +1,22 @@
+import lib/state_machine.dl
+
+state machine publication:
+    initial state: draft
+    state draft:
+        on "submit": review
+    state review:
+        on "approve": published
+        on "reject": draft
+    state published:
+        on "withdraw": draft
+
+set first to an instance of publication
+set second to an instance of publication
+print line first's current's name
+send "submit" to the address of first
+print line first's current's name
+send "approve" to the address of first
+print line first's current's name
+print line second's current's name
+send "withdraw" to the address of first
+print line first's current's name

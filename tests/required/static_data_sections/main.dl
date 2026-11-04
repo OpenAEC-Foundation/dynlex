@@ -1,0 +1,25 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        linked item
+    members:
+        label as a C string
+        next as a pointer to linked item
+
+section item {name}:
+    declares: name
+    result: a pointer to linked item
+    body:
+        next: a pointer to linked item
+    value:
+        a static reference to @intrinsic("construct", linked item, name, the body's next)
+
+item first:
+    next: second
+item second:
+    next: first
+
+print line first's label
+print line first's next's label
+print line second's next's label

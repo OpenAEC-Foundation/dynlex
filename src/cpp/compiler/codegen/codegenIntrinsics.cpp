@@ -406,8 +406,8 @@ CodegenResult generateIntrinsicCode(
 	if (kind == IntrinsicKind::Return)
 		return generateReturnIntrinsic(context, args);
 	if (isExternalCallIntrinsicKind(kind))
-		return generateExternalCallIntrinsic(context, args, kind);
-	if (kind == IntrinsicKind::Function)
+		return generateExternalCallIntrinsic(context, args, kind, resultType);
+	if (kind == IntrinsicKind::Function || kind == IntrinsicKind::DeferredBody)
 		return generateFunctionIntrinsic(context, callExpr);
 	if (kind == IntrinsicKind::Cast)
 		return generateCastIntrinsic(context, args);
@@ -420,7 +420,8 @@ CodegenResult generateIntrinsicCode(
 	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs ||
 		kind == IntrinsicKind::TypeExtent)
 		return generateCompileTimeResultIntrinsic(context, callExpr, resultType);
-	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array) {
+	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array || kind == IntrinsicKind::FunctionType ||
+		kind == IntrinsicKind::FunctionResultType || kind == IntrinsicKind::FunctionParameterType) {
 		// Compile-time only — no runtime code
 		return nullptr;
 	}
@@ -430,6 +431,10 @@ CodegenResult generateIntrinsicCode(
 		// Compile-time only — modifies TypeReference, no runtime code
 		return nullptr;
 	}
+	if (kind == IntrinsicKind::StaticReference)
+		return generateStaticReferenceIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::SectionField || kind == IntrinsicKind::SectionBody || kind == IntrinsicKind::Receiver)
+		return generateSectionDataIntrinsic(context, callExpr);
 	if (kind == IntrinsicKind::Construct)
 		return generateConstructIntrinsic(context, args, resultType);
 	if (kind == IntrinsicKind::Property)

@@ -1,0 +1,25 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        text cell
+    members:
+        text as a C string
+
+implicitly convert {C string:text}:
+    replacement:
+        @intrinsic("construct", text cell, text)
+
+section cells {name}:
+    declares: name
+    body:
+        items: many text cell
+    value:
+        the body's items
+
+cells heading:
+    "name"
+    "amount"
+
+print line (the item at 0 in heading)'s text
+print line (the item at 1 in heading)'s text

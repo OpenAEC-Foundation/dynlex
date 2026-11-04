@@ -1,0 +1,36 @@
+integer means: @intrinsic("type", "integer")
+number means: @intrinsic("type", "float")
+this argument means: @intrinsic("receiver")
+
+section responder {name} receiving {request} returning {reply}:
+    declares: name
+    receiver: request
+    returns: reply
+    value: @intrinsic("deferred body")
+
+responder doubled receiving integer returning integer:
+    @intrinsic("return", @intrinsic("multiply", this argument, 2))
+
+class:
+    patterns:
+        triple
+    members:
+        x as number
+        y as number
+        z as number
+
+responder translated receiving triple returning triple:
+    @intrinsic("return", @intrinsic("construct", triple, @intrinsic("add", this argument's x, 1.0), @intrinsic("add", this argument's y, 2.0), @intrinsic("add", this argument's z, 3.0)))
+
+@intrinsic("store", answer, @intrinsic("invoke", doubled, 21))
+@intrinsic("store", moved, @intrinsic("invoke", translated, @intrinsic("construct", triple, 1.0, 2.0, 3.0)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n%.1f %.1f %.1f\n", answer, moved's x, moved's y, moved's z))
+
+section infer responder {name}:
+    declares: name
+    receiver: integer
+    value: @intrinsic("deferred body")
+
+infer responder inferred:
+    @intrinsic("return", 17)
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("invoke", inferred, 0)))

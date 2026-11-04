@@ -1,0 +1,34 @@
+import lib/events.dl
+
+set squares to a synchronous event receiving integer returning integer
+when squares is requested:
+    return this request * this request
+print line (request 9 from squares)
+
+set greetings to a synchronous event receiving string returning string
+when greetings is requested:
+    return this request + "!"
+print line (request (the string form of "Hello") from greetings)
+
+set other to a synchronous event receiving integer returning integer
+when other is requested:
+    return this request + 1
+print line (request 9 from other)
+print line (request 9 from squares)
+
+when squares is requested:
+    return this request + 10
+print line (request 9 from squares)
+
+set notices to a synchronous event receiving (a pointer to integer) returning nothing
+when notices is requested:
+    store (the value at this request) + 1 at this request
+set count to 0
+request (the address of count) from notices
+print line count
+
+to get a greeting counted by {a pointer to integer:counter}:
+    store (the value at counter) + 1 at counter
+    return "Hi"
+print line (request (a greeting counted by (the address of count)) from greetings)
+print line count

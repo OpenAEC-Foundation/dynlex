@@ -8,7 +8,7 @@ static std::optional<std::string_view>
 memoryIntrinsicViolation(Expression *expression, InferenceContext &context, const BindingFrameStack &bindings) {
 	IntrinsicKind kind = intrinsicKind(expression->intrinsicName);
 	bool deallocation = kind == IntrinsicKind::CheckDeallocation;
-	bool reads = kind == IntrinsicKind::Dereference || kind == IntrinsicKind::CallPointer || isAtomicIntrinsicKind(kind);
+	bool reads = kind == IntrinsicKind::Dereference || isExternalCallIntrinsicKind(kind) || isAtomicIntrinsicKind(kind);
 	bool writes = kind == IntrinsicKind::Store || kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt;
 	bool destruction = kind == IntrinsicKind::DestroyAt;
 	bool property = kind == IntrinsicKind::Property;
@@ -75,8 +75,7 @@ static const MemoryFacts &expressionMemoryFacts(Expression *expression, const Bi
 	// Resolve parameter bindings without expanding away those call effects.
 	ResolvedBindingLayers resolved = resolveExpressionBindingWithCallerScope(expression, bindings);
 	requireCompilerInvariant(resolved.expression, "memory fact lookup lost its bound expression");
-	return resolved.expression->inferredConversion ? resolved.expression->inferredConversion->memoryFacts
-												   : resolved.expression->memoryFacts;
+	return resolved.expression->memoryFacts;
 }
 
 static void recordExpressionMemoryFacts(Expression *expression, InferenceContext &context, const BindingFrameStack &bindings) {
@@ -129,6 +128,7 @@ static void recordExpressionMemoryFacts(Expression *expression, InferenceContext
 		}
 		for (size_t index = 1; index < expression->arguments.size(); index++) {
 			if (intrinsicArgumentIsTypeOnly(expression->intrinsicName, static_cast<int>(index)))
+
 				continue;
 			const MemoryFacts &argument = expressionMemoryFacts(expression->arguments[index], bindings);
 			bool addressOnly = index == 1 && (kind == IntrinsicKind::AddressOf || kind == IntrinsicKind::Store);
