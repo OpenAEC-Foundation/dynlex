@@ -317,8 +317,24 @@ static Section *currentFunctionLifetimeSection(ParseContext &context) {
 	return context.currentCodegenInstantiation->body->sourceSection;
 }
 
-// Generate code for an intrinsic call.
-// All type decisions use finalizedExpressionType to resolve through flex/pattern bindings.
+// Intrinsic operands recurse through the dispatcher. Handler calls keep
+// unrelated operation temporaries outside those recursive dispatch frames.
+static bool generateIntrinsicRuntimeValue(ParseContext &context, Expression *expression, llvm::Value *&value) {
+	CodegenResult result = generateExpressionCode(context, expression);
+	if (!result)
+		return false;
+	value = result.value;
+	return true;
+}
+
+#include "codegenAtomicIntrinsics.inl"
+#include "codegenIntrinsicAggregates.inl"
+#include "codegenIntrinsicCalls.inl"
+#include "codegenIntrinsicControlFlow.inl"
+#include "codegenIntrinsicMemory.inl"
+#include "codegenIntrinsicNumeric.inl"
+#include "codegenIntrinsicTypes.inl"
+
 CodegenResult generateIntrinsicCode(
 	ParseContext &context, Expression *callExpr, const std::string &name, const std::vector<Expression *> &allArguments,
 	DataType resultType
@@ -328,466 +344,108 @@ CodegenResult generateIntrinsicCode(
 		crashCompilerBug("intrinsic call is missing the intrinsic-name argument");
 	const std::vector<Expression *> &args = allArguments;
 	IntrinsicKind kind = intrinsicKind(name);
-	auto generateRuntimeValue = [&](Expression *expression, llvm::Value *&value) {
-		CodegenResult result = generateExpressionCode(context, expression);
-		if (!result)
-			return false;
-		value = result.value;
-		return true;
-	};
 	if (kind == IntrinsicKind::LifecycleValue) {
 		if (!context.managedLifecycleValueBinding)
 			crashCompilerBug("lifecycle value reached codegen without its managed value binding");
 		return builder.CreateLoad(getLLVMType(context, resultType), context.managedLifecycleValueBinding, "lifecycle_value");
 	}
-	if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues) {
-		llvm::GlobalVariable *global = kind == IntrinsicKind::CommandLineArgumentCount
-										   ? context.commandLineArgumentCountGlobal
-										   : context.commandLineArgumentValuesGlobal;
-		requireCompilerInvariant(global != nullptr, "command-line argument intrinsic reached codegen without native ABI state");
-		return builder.CreateLoad(global->getValueType(), global, global->getName() + ".value");
-	}
-
-	if (kind == IntrinsicKind::SetSubject) {
-		DataType valueType = finalizedExpressionType(context, args[1]);
-		if (!valueType.isDeduced() || valueType.kind == DataType::Kind::Void)
-			crashCompilerBug("subject assignment reached codegen without a runtime value type");
-		if (valueType.isMetaType())
-			return nullptr;
-		CodegenResult generatedValue = generateExpressionCode(context, args[1]);
-		if (!generatedValue)
-			return generatedValue;
-		llvm::Value *value = generatedValue.value;
-		requireCompilerInvariant(value != nullptr, "subject assignment reached codegen without a runtime value");
-		llvm::AllocaInst *storage = createEntryAlloca(context, "subject", valueType);
-		if (typeHasManagedLifecycle(valueType)) {
-			Section *ownerSection = currentFunctionLifetimeSection(context);
-			requireCompilerInvariant(ownerSection != nullptr, "managed subject assignment has no owning function section");
-			registerManagedStorage(context, storage, valueType, ownerSection);
-			if (!managedExpressionResultIsOwned(context, args[1]) && !retainManagedValue(context, valueType, value))
-				return CodegenResult::failure();
-			if (!storeManagedValue(context, storage, valueType, value))
-				return CodegenResult::failure();
-		} else {
-			builder.CreateStore(value, storage);
-		}
-		context.subjectStorage[callExpr] = storage;
-		return nullptr;
-	}
-
-	if (kind == IntrinsicKind::Subject) {
-		if (!callExpr || !callExpr->subjectSetter)
-			crashCompilerBug("subject read reached codegen without an inferred assignment");
-		if (resultType.isMetaType())
-			return nullptr;
-		auto storage = context.subjectStorage.find(callExpr->subjectSetter);
-		if (storage == context.subjectStorage.end())
-			crashCompilerBug("subject read reached codegen before its inferred assignment");
-		llvm::Value *value = builder.CreateLoad(getLLVMType(context, resultType), storage->second, "subject");
-		if (typeHasManagedLifecycle(resultType) && !retainManagedValue(context, resultType, value))
-			return CodegenResult::failure();
-		return value;
-	}
-
-	if (kind == IntrinsicKind::Discard) {
-		// Evaluate the argument for side effects and discard the result
-		CodegenResult generatedValue = generateExpressionCode(context, args[1]);
-		if (!generatedValue)
-			return generatedValue;
-		llvm::Value *value = generatedValue.value;
-		DataType valueType = finalizedExpressionType(context, args[1]);
-		if (managedExpressionResultIsOwned(context, args[1]) && !releaseManagedValue(context, valueType, value))
-			return CodegenResult::failure();
-		return nullptr;
-	}
+	if (kind == IntrinsicKind::CommandLineArgumentCount || kind == IntrinsicKind::CommandLineArgumentValues)
+		return generateCommandLineArgumentsIntrinsic(context, kind);
+	if (kind == IntrinsicKind::SetSubject)
+		return generateSetSubjectIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::Subject)
+		return generateSubjectIntrinsic(context, callExpr, resultType);
+	if (kind == IntrinsicKind::Discard)
+		return generateDiscardIntrinsic(context, args);
 	if (kind == IntrinsicKind::CheckDeallocation)
 		return nullptr;
-
-	if (kind == IntrinsicKind::Store) {
-		DataType valType = finalizedExpressionType(context, args[2]);
-		if (valType.isMetaType())
-			return nullptr;
-		CodegenResult generatedValue = generateExpressionCode(context, args[2]);
-		if (!generatedValue)
-			return generatedValue;
-		llvm::Value *val = generatedValue.value;
-		requireCompilerInvariant(val != nullptr, "store value reached codegen without a generated value");
-
-		LValueAddressResult destination = generateLValueAddress(context, args[1]);
-		if (destination.status == LValueAddressStatus::Failed)
-			return CodegenResult::failure();
-		requireCompilerInvariant(
-			destination.status == LValueAddressStatus::Addressable && destination.address != nullptr,
-			"store destination reached codegen without addressable storage"
-		);
-
-		llvm::Value *ptr = destination.address;
-		DataType destType = finalizedExpressionType(context, args[1]);
-		if (typeHasManagedLifecycle(destType)) {
-			val = ensureType(context, val, valType, destType);
-			if (!managedExpressionResultIsOwned(context, args[2]) && !retainManagedValue(context, destType, val))
-				return CodegenResult::failure();
-			if (!storeManagedValue(context, ptr, destType, val))
-				return CodegenResult::failure();
-		} else {
-			val = ensureType(context, val, valType, destType);
-			builder.CreateAlignedStore(val, ptr, getLLVMABIAlignment(context, destType));
-		}
-		return nullptr;
-	}
-
+	if (kind == IntrinsicKind::Store)
+		return generateStoreIntrinsic(context, args);
 	ArithmeticIntrinsicKind arithmeticOp = arithmeticIntrinsicKind(name);
-
-	// Arithmetic intrinsics
-	if (isArithmeticIntrinsic(arithmeticOp)) {
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
-		int arrayOperandIndex = decayingArrayOperandIndex(arithmeticOp, leftType, rightType);
-		if (arrayOperandIndex != 0) {
-			int indexOperandIndex = arrayOperandIndex == 1 ? 2 : 1;
-			LValueAddressResult arrayStorage = generateLValueAddress(context, args[arrayOperandIndex]);
-			if (arrayStorage.status == LValueAddressStatus::Failed)
-				return CodegenResult::failure();
-			requireCompilerInvariant(
-				arrayStorage.status == LValueAddressStatus::Addressable && arrayStorage.address != nullptr,
-				"fixed-array decay reached codegen without addressable storage"
-			);
-
-			llvm::Value *indexValue = nullptr;
-			if (!generateRuntimeValue(args[indexOperandIndex], indexValue))
-				return CodegenResult::failure();
-			DataType indexType = finalizedExpressionType(context, args[indexOperandIndex]);
-			indexValue = coerceIndexToSizeT(context, indexValue, indexType);
-			if (arithmeticOp == ArithmeticIntrinsicKind::Subtract)
-				indexValue = builder.CreateNeg(indexValue, "neg_idx");
-
-			DataType arrayType = finalizedExpressionType(context, args[arrayOperandIndex]);
-			requireCompilerInvariant(
-				isFixedArrayValue(arrayType) && arrayType.arrayElementType,
-				"fixed-array decay reached codegen without an element type"
-			);
-			return builder.CreateGEP(
-				getLLVMType(context, arrayType), arrayStorage.address, {builder.getInt64(0), indexValue}, "array_decay"
-			);
-		}
-
-		llvm::Value *left = nullptr;
-		llvm::Value *right = nullptr;
-		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-			return CodegenResult::failure();
-
-		// Pointer arithmetic: ptr +/- integer → GEP
-		if (isPointerArithmeticIntrinsic(arithmeticOp) && (leftType.isPointer() || rightType.isPointer())) {
-			llvm::Value *ptrVal = leftType.isPointer() ? left : right;
-			llvm::Value *indexVal = leftType.isPointer() ? right : left;
-			DataType indexType = leftType.isPointer() ? rightType : leftType;
-			DataType ptrType = leftType.isPointer() ? leftType : rightType;
-			llvm::Type *elemType = getLLVMType(context, ptrType.dereferenced());
-			indexVal = coerceIndexToSizeT(context, indexVal, indexType);
-			if (arithmeticOp == ArithmeticIntrinsicKind::Subtract && leftType.isPointer())
-				indexVal = builder.CreateNeg(indexVal, "neg_idx");
-			return builder.CreateGEP(elemType, ptrVal, indexVal, "ptr_arith");
-		}
-
-		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Vector &&
-			arithmeticOp == ArithmeticIntrinsicKind::Multiply)
-			return generateMatrixVectorMultiply(context, left, leftType, right, rightType);
-		if (leftType.kind == DataType::Kind::Vector && rightType.kind == DataType::Kind::Matrix &&
-			arithmeticOp == ArithmeticIntrinsicKind::Multiply) {
-			// Treat row-vector * matrix as transpose-compatible multiply by transposing the operand order.
-			return generateMatrixVectorMultiply(context, right, rightType, left, leftType);
-		}
-		if (leftType.kind == DataType::Kind::Matrix && rightType.kind == DataType::Kind::Matrix &&
-			arithmeticOp == ArithmeticIntrinsicKind::Multiply)
-			return generateMatrixMatrixMultiply(context, left, leftType, right, rightType);
-
-		left = ensureType(context, left, leftType, resultType);
-		right = ensureType(context, right, rightType, resultType);
-		return generateScalarOrVectorArithmetic(context, arithmeticOp, left, right, resultType);
-	}
-
-	if (kind == IntrinsicKind::BitwiseNot) {
-		llvm::Value *value = nullptr;
-		if (!generateRuntimeValue(args[1], value))
-			return CodegenResult::failure();
-		DataType valueType = finalizedExpressionType(context, args[1]);
-		value = ensureType(context, value, valueType, resultType);
-		return builder.CreateNot(value, "bnot");
-	}
-
+	if (isArithmeticIntrinsic(arithmeticOp))
+		return generateArithmeticIntrinsic(context, args, resultType, arithmeticOp);
+	if (kind == IntrinsicKind::BitwiseNot)
+		return generateBitwiseNotIntrinsic(context, args, resultType);
 	if (kind == IntrinsicKind::BitwiseAnd || kind == IntrinsicKind::BitwiseOr || kind == IntrinsicKind::BitwiseXor ||
-		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight) {
-		llvm::Value *left = nullptr;
-		llvm::Value *right = nullptr;
-		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-			return CodegenResult::failure();
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
-
-		left = ensureType(context, left, leftType, resultType);
-		right = ensureType(context, right, rightType, resultType);
-		return generateScalarBitwise(context, kind, left, right, resultType);
-	}
-
-	// Comparison intrinsics
-	if (isComparisonIntrinsicKind(kind)) {
-		llvm::Value *left = nullptr;
-		llvm::Value *right = nullptr;
-		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-			return CodegenResult::failure();
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
-
-		llvm::Value *cmp;
-		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-			rightType.isPointer()) {
-			DataType comparisonType = leftType;
-			if (ClassDefinition::typeStructurallyRefines(rightType, leftType))
-				comparisonType = rightType;
-			left = ensureType(context, left, leftType, comparisonType);
-			right = ensureType(context, right, rightType, comparisonType);
-			cmp = kind == IntrinsicKind::Equal ? builder.CreateICmpEQ(left, right, "peq")
-											   : builder.CreateICmpNE(left, right, "pne");
-		} else {
-			DataType promoted;
-			bool equality = kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual;
-			bool promotable = equality ? DataType::promoteEquality(leftType, rightType, promoted)
-									   : DataType::promoteArithmetic(leftType, rightType, promoted);
-			requireCompilerInvariant(promotable, "comparison operands accepted by inference have no common codegen type");
-			left = ensureType(context, left, leftType, promoted);
-			right = ensureType(context, right, rightType, promoted);
-			if (promoted.kind == DataType::Kind::Float) {
-				if (kind == IntrinsicKind::LessThan)
-					cmp = builder.CreateFCmpOLT(left, right, "flt");
-				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = builder.CreateFCmpOLE(left, right, "fle");
-				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = builder.CreateFCmpOGT(left, right, "fgt");
-				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = builder.CreateFCmpOGE(left, right, "fge");
-				else if (kind == IntrinsicKind::Equal)
-					cmp = builder.CreateFCmpOEQ(left, right, "feq");
-				else
-					cmp = builder.CreateFCmpONE(left, right, "fne");
-			} else {
-				DataType comparisonElementType = promoted.numericElementType();
-				if (kind == IntrinsicKind::LessThan)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULT(left, right, "lt")
-																	: builder.CreateICmpSLT(left, right, "lt");
-				else if (kind == IntrinsicKind::LessThanOrEqual)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpULE(left, right, "le")
-																	: builder.CreateICmpSLE(left, right, "le");
-				else if (kind == IntrinsicKind::GreaterThan)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGT(left, right, "gt")
-																	: builder.CreateICmpSGT(left, right, "gt");
-				else if (kind == IntrinsicKind::GreaterThanOrEqual)
-					cmp = comparisonElementType.isUnsignedInteger() ? builder.CreateICmpUGE(left, right, "ge")
-																	: builder.CreateICmpSGE(left, right, "ge");
-				else if (kind == IntrinsicKind::Equal)
-					cmp = builder.CreateICmpEQ(left, right, "eq");
-				else
-					cmp = builder.CreateICmpNE(left, right, "ne");
-			}
-		}
-
-		requireCompilerInvariant(resultType.isDeduced(), "Comparison result type must be deduced before codegen");
-		if (resultType.kind == DataType::Kind::Bool)
-			return cmp; // already i1
-		return builder.CreateZExt(cmp, getLLVMType(context, resultType), "cmp_ext");
-	}
-
-	if (kind == IntrinsicKind::Not) {
-		llvm::Value *val = nullptr;
-		if (!generateRuntimeValue(args[1], val))
-			return CodegenResult::failure();
-		DataType valType = finalizedExpressionType(context, args[1]);
-		if (valType.kind != DataType::Kind::Bool)
-			crashCompilerBug("logical not operand must be boolean after type inference");
-
-		return builder.CreateXor(val, builder.getTrue(), "not");
-	}
-
-	// Negate
-	if (kind == IntrinsicKind::Negate) {
-		llvm::Value *val = nullptr;
-		if (!generateRuntimeValue(args[1], val))
-			return CodegenResult::failure();
-		DataType valType = finalizedExpressionType(context, args[1]);
-		DataType elementType = valType.numericElementType();
-		if (!valType.isNumeric() && !valType.isVector())
-			crashCompilerBug("negate reached code generation with a non-numeric operand");
-		if (!elementType.isNumeric())
-			crashCompilerBug("negate reached code generation with a non-numeric element type");
-		if (elementType.kind == DataType::Kind::Float)
-			return builder.CreateFNeg(val, "fneg");
-		return builder.CreateNeg(val, "neg");
-	}
-
-	if (kind == IntrinsicKind::Min || kind == IntrinsicKind::Max) {
-		llvm::Value *left = nullptr;
-		llvm::Value *right = nullptr;
-		if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-			return CodegenResult::failure();
-		DataType leftType = finalizedExpressionType(context, args[1]);
-		DataType rightType = finalizedExpressionType(context, args[2]);
-		DataType promoted;
-		if (!DataType::promoteArithmetic(leftType, rightType, promoted)) {
-			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "min max requires arithmetic operands",
-				intrinsicDiagnosticRange(context, callExpr)
-			));
-			return CodegenResult::failure();
-		}
-		left = ensureType(context, left, leftType, promoted);
-		right = ensureType(context, right, rightType, promoted);
-
-		if (promoted.kind == DataType::Kind::Float) {
-			llvm::Intrinsic::ID intrinsicId = kind == IntrinsicKind::Min ? llvm::Intrinsic::minnum : llvm::Intrinsic::maxnum;
-			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
-			return builder.CreateCall(fn, {left, right}, kind == IntrinsicKind::Min ? "fmin" : "fmax");
-		}
-
-		bool unsignedElements = promoted.numericElementType().isUnsignedInteger();
-		llvm::Value *cmp = kind == IntrinsicKind::Min ? (unsignedElements ? builder.CreateICmpULT(left, right, "min_cmp")
-																		  : builder.CreateICmpSLT(left, right, "min_cmp"))
-													  : (unsignedElements ? builder.CreateICmpUGT(left, right, "max_cmp")
-																		  : builder.CreateICmpSGT(left, right, "max_cmp"));
-		return builder.CreateSelect(cmp, left, right, kind == IntrinsicKind::Min ? "min" : "max");
-	}
-
-	// Math functions (sin, cos, sqrt, abs, floor, ceil, round, exp, log, pow, atan2, min, max)
-	if (isMathFunction(name)) {
-		context.requiredLibraries.insert("m");
-		llvm::Intrinsic::ID intrinsicId = mathIntrinsicId(kind);
-		if (intrinsicId != llvm::Intrinsic::not_intrinsic) {
-			DataType operandType = args.size() == 2 ? finalizedExpressionType(context, args[1]) : DataType{};
-			DataType elementType = operandType.numericElementType();
-			if ((isRoundingIntrinsicKind(kind) && elementType.isInteger()) ||
-				(kind == IntrinsicKind::Abs && elementType.isUnsignedInteger())) {
-				llvm::Value *value = nullptr;
-				if (!generateRuntimeValue(args[1], value))
-					return CodegenResult::failure();
-				return value;
-			}
-			// GLSL.std.450 extended instructions (used by SPIR-V) only support 16/32-bit floats.
-			// Native LLVM math intrinsics retain the inferred 32/64-bit floating-point width.
-			int maximumFloatBytes = defaultFloatByteSize(context.options.emitSPIRV);
-			DataType computationType = mathComputationType(resultType, maximumFloatBytes);
-			if (args.size() == 2) {
-				llvm::Value *val = nullptr;
-				if (!generateRuntimeValue(args[1], val))
-					return CodegenResult::failure();
-				DataType valType = finalizedExpressionType(context, args[1]);
-				if (valType != computationType)
-					val = ensureType(context, val, valType, computationType);
-				llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {val->getType()});
-				llvm::Value *computed = builder.CreateCall(fn, {val}, name);
-				return ensureType(context, computed, computationType, resultType);
-			}
-			llvm::Value *left = nullptr;
-			llvm::Value *right = nullptr;
-			if (!generateRuntimeValue(args[1], left) || !generateRuntimeValue(args[2], right))
-				return CodegenResult::failure();
-			DataType leftType = finalizedExpressionType(context, args[1]);
-			DataType rightType = finalizedExpressionType(context, args[2]);
-			left = ensureType(context, left, leftType, computationType);
-			right = ensureType(context, right, rightType, computationType);
-			llvm::Function *fn = llvm::Intrinsic::getOrInsertDeclaration(context.llvmModule, intrinsicId, {left->getType()});
-			llvm::Value *computed = builder.CreateCall(fn, {left, right}, name);
-			return ensureType(context, computed, computationType, resultType);
-		}
-
-		// atan2: no LLVM intrinsic, call libm
-		if (kind == IntrinsicKind::Atan2) {
-			llvm::Value *y = nullptr;
-			llvm::Value *x = nullptr;
-			if (!generateRuntimeValue(args[1], y) || !generateRuntimeValue(args[2], x))
-				return CodegenResult::failure();
-			DataType yType = finalizedExpressionType(context, args[1]);
-			DataType xType = finalizedExpressionType(context, args[2]);
-			DataType promoted;
-			DataType::promoteArithmetic(yType, xType, promoted);
-			promoted = mathComputationType(promoted, defaultFloatByteSize(context.options.emitSPIRV));
-			y = ensureType(context, y, yType, promoted);
-			x = ensureType(context, x, xType, promoted);
-			llvm::Type *floatType = getLLVMType(context, promoted);
-			llvm::FunctionType *ft = llvm::FunctionType::get(floatType, {floatType, floatType}, false);
-			const char *fnName = promoted.numericSize == 4 ? "atan2f" : "atan2";
-			llvm::FunctionCallee callee = context.llvmModule->getOrInsertFunction(fnName, ft);
-			llvm::Value *computed = builder.CreateCall(callee, {y, x}, "atan2");
-			return ensureType(context, computed, promoted, resultType);
-		}
-
+		kind == IntrinsicKind::ShiftLeft || kind == IntrinsicKind::ShiftRight)
+		return generateBinaryBitwiseIntrinsic(context, args, resultType, kind);
+	if (isComparisonIntrinsicKind(kind))
+		return generateComparisonIntrinsic(context, args, resultType, kind);
+	if (kind == IntrinsicKind::Not)
+		return generateNotIntrinsic(context, args);
+	if (kind == IntrinsicKind::Negate)
+		return generateNegateIntrinsic(context, args);
+	if (kind == IntrinsicKind::Min || kind == IntrinsicKind::Max)
+		return generateMinMaxIntrinsic(context, callExpr, args, kind);
+	if (isMathFunction(name))
+		return generateMathIntrinsic(context, name, args, resultType, kind);
+	if (kind == IntrinsicKind::AddressOf)
+		return generateAddressOfIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::Dereference)
+		return generateDereferenceIntrinsic(context, args);
+	if (kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt)
+		return generatePointerStoreIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::DestroyAt)
+		return generateDestroyAtIntrinsic(context, args);
+	if (isAtomicIntrinsicKind(kind))
+		return generateAtomicIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::ExecuteBody)
+		return generateExecuteBodyIntrinsic(context, callExpr);
+	if (kind == IntrinsicKind::LoopWhile)
+		return generateLoopWhileIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::If)
+		return generateIfIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::Else || kind == IntrinsicKind::ElseIf)
+		return generateAlternativeIntrinsic(context, callExpr, args, kind);
+	if (kind == IntrinsicKind::Switch)
+		return generateSwitchIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::Case)
+		return generateCaseIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::DefaultCase)
+		return generateDefaultCaseIntrinsic(context, callExpr);
+	if (kind == IntrinsicKind::Return)
+		return generateReturnIntrinsic(context, args);
+	if (isExternalCallIntrinsicKind(kind))
+		return generateExternalCallIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::Function)
+		return generateFunctionIntrinsic(context, callExpr);
+	if (kind == IntrinsicKind::Cast)
+		return generateCastIntrinsic(context, args);
+	if (kind == IntrinsicKind::Type || kind == IntrinsicKind::Fix) {
+		// Meta-values are compile-time only — no runtime code.
 		return nullptr;
 	}
-
-	// Pointer intrinsics
-	if (kind == IntrinsicKind::AddressOf) {
-		LValueAddressResult lvalue = generateLValueAddress(context, args[1]);
-		if (lvalue.status == LValueAddressStatus::Failed)
-			return CodegenResult::failure();
-		if (lvalue.status == LValueAddressStatus::NotAddressable) {
-			context.addDiagnostic(Diagnostic(
-				context, Diagnostic::Level::Error, "address of requires addressable value",
-				intrinsicDiagnosticRange(context, callExpr)
-			));
-			return CodegenResult::failure();
-		}
-		requireCompilerInvariant(lvalue.address != nullptr, "addressable lvalue produced no address");
-		return lvalue.address;
-	}
-
-	if (kind == IntrinsicKind::Dereference) {
-		llvm::Value *ptrVal = nullptr;
-		if (!generateRuntimeValue(args[1], ptrVal))
-			return CodegenResult::failure();
-		DataType ptrType = finalizedExpressionType(context, args[1]);
-		DataType elemType = ptrType.dereferenced();
-		llvm::Type *elemLLVMType = getLLVMType(context, elemType);
-		return builder.CreateAlignedLoad(elemLLVMType, ptrVal, getLLVMABIAlignment(context, elemType), "deref");
-	}
-
-	// Pointer storage intrinsics
-	if (kind == IntrinsicKind::StoreAt || kind == IntrinsicKind::InitializeAt) {
-		llvm::Value *ptr = nullptr;
-		llvm::Value *value = nullptr;
-		if (!generateRuntimeValue(args[1], ptr) || !generateRuntimeValue(args[2], value))
-			return CodegenResult::failure();
-		DataType ptrType = finalizedExpressionType(context, args[1]);
-		requireCompilerInvariant(ptrType.isPointer(), "pointer store reached codegen with a non-pointer destination");
-		DataType elementType = ptrType.dereferenced();
-		value = ensureType(context, value, finalizedExpressionType(context, args[2]), elementType);
-		if (typeHasManagedLifecycle(elementType)) {
-			if (!managedExpressionResultIsOwned(context, args[2]) && !retainManagedValue(context, elementType, value))
-				return CodegenResult::failure();
-			if (kind == IntrinsicKind::StoreAt) {
-				if (!storeManagedValue(context, ptr, elementType, value))
-					return CodegenResult::failure();
-			} else {
-				builder.CreateAlignedStore(value, ptr, getLLVMABIAlignment(context, elementType));
-			}
-		} else {
-			builder.CreateAlignedStore(value, ptr, getLLVMABIAlignment(context, elementType));
-		}
+	if (kind == IntrinsicKind::SizeOf)
+		return generateSizeOfIntrinsic(context, args);
+	if (kind == IntrinsicKind::BuildInfo || kind == IntrinsicKind::TargetIs || kind == IntrinsicKind::ShaderStageIs ||
+		kind == IntrinsicKind::TypeExtent)
+		return generateCompileTimeResultIntrinsic(context, callExpr, resultType);
+	if (kind == IntrinsicKind::TypeOf || kind == IntrinsicKind::Array) {
+		// Compile-time only — no runtime code
 		return nullptr;
 	}
-
-	if (kind == IntrinsicKind::DestroyAt) {
-		llvm::Value *ptr = nullptr;
-		if (!generateRuntimeValue(args[1], ptr))
-			return CodegenResult::failure();
-		DataType ptrType = finalizedExpressionType(context, args[1]);
-		requireCompilerInvariant(ptrType.isPointer(), "destroy at reached codegen with a non-pointer destination");
-		DataType elementType = ptrType.dereferenced();
-		if (typeHasManagedLifecycle(elementType)) {
-			llvm::Value *value = builder.CreateAlignedLoad(
-				getLLVMType(context, elementType), ptr, getLLVMABIAlignment(context, elementType), "destroy_value"
-			);
-			if (!releaseManagedValue(context, elementType, value))
-				return CodegenResult::failure();
-		}
+	if (auto conditional = conditionalOperands(kind))
+		return buildConditionalValue(context, args, resultType, *conditional);
+	if (kind == IntrinsicKind::AddPointerDepth) {
+		// Compile-time only — modifies TypeReference, no runtime code
 		return nullptr;
 	}
-
-#include "codegenAtomicIntrinsics.inl"
-#include "codegenIntrinsicEffects.inl"
+	if (kind == IntrinsicKind::Construct)
+		return generateConstructIntrinsic(context, args, resultType);
+	if (kind == IntrinsicKind::Property)
+		return generatePropertyIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderInterpolantInput)
+		return generateShaderInputIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::ShaderUniform)
+		return generateShaderUniformIntrinsic(context, callExpr, args);
+	if (kind == IntrinsicKind::ShaderOutput || kind == IntrinsicKind::ShaderInterpolantOutput)
+		return generateShaderOutputIntrinsic(context, args, kind);
+	if (kind == IntrinsicKind::ExtractElement)
+		return generateExtractElementIntrinsic(context, args);
+	if (kind == IntrinsicKind::InsertElement)
+		return generateInsertElementIntrinsic(context, args);
+	std::string uri =
+		(callExpr && callExpr->range.line && callExpr->range.line->sourceFile) ? callExpr->range.line->sourceFile->uri : "";
+	int line = (callExpr && callExpr->range.line) ? callExpr->range.line->sourceFileLineIndex + 1 : -1;
+	crashUnimplementedIntrinsic("codegen", name, uri, line);
+}

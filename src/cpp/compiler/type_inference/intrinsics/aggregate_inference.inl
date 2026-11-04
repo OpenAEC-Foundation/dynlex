@@ -1,14 +1,17 @@
-bool handledAggregateIntrinsic = true;
-if (kind == IntrinsicKind::ShaderInput) {
+void ExpressionInferenceSupport::inferShaderInputIntrinsic() {
 	expr->type = {DataType::Kind::Vector};
 	expr->type.arraySize = 4;
 	expr->type.arrayElementType = std::make_shared<DataType>(DataType::Kind::Float, 4);
-} else if (kind == IntrinsicKind::Number) {
+}
+
+void ExpressionInferenceSupport::inferNumberIntrinsic() {
 	TypeConstraint numberConstraint = TypeConstraint::any();
 	numberConstraint.requiresNumeric = true;
 	expr->type = {DataType::Kind::Constraint};
 	context.setExpressionValue(expr, numberConstraint);
-} else if (kind == IntrinsicKind::ElementType) {
+}
+
+void ExpressionInferenceSupport::inferElementTypeIntrinsic() {
 	DataType aggregateType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 	if (aggregateType.kind == DataType::Kind::Type)
 		aggregateType = aggregateType.toReferencedType();
@@ -20,7 +23,9 @@ if (kind == IntrinsicKind::ShaderInput) {
 		expr->type = aggregateType.aggregateElementType().asTypeReference();
 		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 	}
-} else if (kind == IntrinsicKind::PromoteArithmeticType) {
+}
+
+void ExpressionInferenceSupport::inferPromoteArithmeticTypeIntrinsic() {
 	std::optional<TypeReferenceValue> leftReference =
 		getCompileTimeTypeReferenceValue(resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context));
 	std::optional<TypeReferenceValue> rightReference =
@@ -42,7 +47,9 @@ if (kind == IntrinsicKind::ShaderInput) {
 			context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
 		}
 	}
-} else if (kind == IntrinsicKind::ExtractElement || kind == IntrinsicKind::InsertElement) {
+}
+
+void ExpressionInferenceSupport::inferElementIntrinsic(IntrinsicKind kind) {
 	DataType aggregateType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 	if (aggregateType.kind == DataType::Kind::ArgumentPack && kind == IntrinsicKind::ExtractElement) {
 		int index = 0;
@@ -102,6 +109,4 @@ if (kind == IntrinsicKind::ShaderInput) {
 			}
 		}
 	}
-} else {
-	handledAggregateIntrinsic = false;
 }

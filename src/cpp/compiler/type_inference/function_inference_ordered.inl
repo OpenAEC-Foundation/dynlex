@@ -121,6 +121,9 @@ static bool inferSectionFlexCallerBody(Expression *executeBodyExpression, Infere
 #include "intrinsics/shader_runtime_inference.inl"
 
 #include "expression_inference_support.inl"
+
+#include "expression_argument_inference.inl"
+#include "expression_value_inference.inl"
 #include "function_inference_intrinsics.inl"
 
 // Infer the type of an expression bottom-up.
@@ -150,27 +153,6 @@ static void inferOrderedExpression(
 	if (expr->kind == Expression::Kind::PatternCall || typeQuery)
 		argumentEffects.emplace(context);
 	InferredArgumentScope argumentScope(context);
-	auto inferArgument = [&](size_t index) {
-		struct ReferenceTargetScope {
-			InferenceContext &context;
-			bool previous;
-			~ReferenceTargetScope() { context.inferringReferenceAssignmentTarget = previous; }
-		} targetScope{context, context.inferringReferenceAssignmentTarget};
-		context.inferringReferenceAssignmentTarget = expr->kind == Expression::Kind::IntrinsicCall &&
-													 intrinsicKind(expr->intrinsicName) == IntrinsicKind::Store && index == 1;
-		Expression *arg = expr->arguments[index];
-		std::optional<InferenceExecutionSnapshot> beforeArgument;
-		if (expr->kind == Expression::Kind::PatternCall)
-			beforeArgument.emplace(context);
-		bool preserveArgumentGrouping =
-			preserveCurrentGrouping && (!context.fixedGroupingRoots || context.fixedGroupingRoots->contains(arg));
-		bool inferred = preserveArgumentGrouping ? inferExpressionWithCurrentGrouping(arg, context, flexBindingFrameStack)
-												 : inferExpression(arg, context, false, flexBindingFrameStack);
-		expr->arguments[index] = arg;
-		if (inferred && beforeArgument && beforeArgument->matches(context))
-			argumentScope.unchanged.emplace(arg, std::move(*beforeArgument));
-		return inferred;
-	};
 	// The condition executes before its branches. Infer every branch for typing,
 	// but retain execution effects only from reachable paths, as for sections.
 	for (size_t i = 0; expr->kind != Expression::Kind::ArgumentPack && i < expr->arguments.size(); i++) {
@@ -178,197 +160,34 @@ static void inferOrderedExpression(
 							   ? conditionalOperands(intrinsicKind(expr->intrinsicName))
 							   : std::nullopt;
 		if (i == 2 && conditional && expr->arguments[1]->type.kind == DataType::Kind::Bool) {
-			InferenceExecutionSnapshot branchInput(context);
-			CompileTimeValue conditionValue =
-				resolveStoredCompileTimeValue(expr->arguments[1], flexBindingFrameStack, &context);
-			const bool *condition = std::get_if<bool>(&conditionValue);
-			std::vector<KnownConstantState> values;
-			std::vector<AddressInferenceState> addresses;
-			std::vector<InferenceContext::SubjectState> subjects;
-			auto rememberPath = [&] {
-				values.push_back(context.currentVariableValues);
-				addresses.push_back(context.currentAddressState);
-				subjects.push_back(context.currentSubject);
-			};
-			if ((!condition && (!conditional->whenFalse || !conditional->whenTrue)) ||
-				(condition && !conditional->selected(*condition)))
-				rememberPath();
-			for (size_t branch = i; branch < expr->arguments.size(); branch++) {
-				branchInput.restoreState(context);
-				InferenceExecutionSnapshot beforeBranch(context);
-				if (!inferArgument(branch))
-					return;
-				if (!condition || conditional->selected(*condition) == branch)
-					rememberPath();
-				else
-					beforeBranch.restore(context);
-			}
-			mergeExecutionStates(context, values, addresses, subjects);
+			if (!support.inferConditionalArguments(i, *conditional, preserveCurrentGrouping, argumentScope))
+				return;
 			break;
 		}
-		if (!inferArgument(i))
+		if (!support.inferArgument(i, preserveCurrentGrouping, argumentScope))
 			return;
 	}
 	if (typeQuery)
 		argumentEffects->restore(context);
 
 	switch (expr->kind) {
-	case Expression::Kind::Literal: {
-		CompileTimeValue literalValue{};
-		if (std::optional<NumericLiteralValue> numericValue = numericLiteralValueOf(*expr)) {
-			// Shader pipelines default explicit float literals to f32 to avoid
-			// introducing Float64 arithmetic from constants like 0.5 or 800.0.
-			NumericLiteralTyping typing = typeNumericLiteral(context.parseContext, expr->range.line, *numericValue);
-			if (typing.unrepresentableBy) {
-				support.setConfiguredTypeFailure(
-					expr->range, "number rule literal unrepresentable", "message",
-					{{"rule", std::string(typing.unrepresentableBy->range.subString)}}
-				);
-				context.typeFailureRelatedInfo.push_back(
-					{renderConfiguredMessage(
-						 syntaxConfigForRange(context.parseContext, expr->range), "number rule literal unrepresentable",
-						 "related rule"
-					 ),
-					 typing.unrepresentableBy->range}
-				);
-				break;
-			}
-			// A literal's typing does not depend on how its line is grouped, so trials record it too.
-			if (typing.widenedBy) {
-				context.parseContext.scopeRuleWarnings.push_back(
-					{"number rule literal widened",
-					 expr->range,
-					 typing.widenedBy->range,
-					 {{"rule", std::string(typing.widenedBy->range.subString)}, {"type", typeToUserName(typing.type)}}}
-				);
-			}
-			if (typing.contradicted) {
-				context.parseContext.scopeRuleWarnings.push_back(
-					{"number rule contradicted",
-					 expr->range,
-					 typing.contradicted->range,
-					 {{"explicit", std::string(expr->range.subString)},
-					  {"rule", std::string(typing.contradicted->range.subString)}}}
-				);
-			}
-			expr->type = typing.type;
-			literalValue = typing.value;
-		} else if (std::holds_alternative<std::string>(expr->literalValue)) {
-			expr->type = {DataType::Kind::Int, 1};
-			expr->type.pointerDepth = 1;
-			literalValue = std::get<std::string>(expr->literalValue);
-		}
-		context.setExpressionValue(expr, literalValue);
+	case Expression::Kind::Literal:
+		support.inferLiteral();
 		break;
-	}
 
-	case Expression::Kind::ArgumentPack: {
-		ArgumentPackValue pack;
-		for (size_t index = 0; index < expr->arguments.size(); index++) {
-			Expression *argument = expr->arguments[index];
-			CompileTimeValue forwarded = resolveStoredCompileTimeValue(argument, flexBindingFrameStack, &context);
-			if (expr->arguments.size() == 1 && std::holds_alternative<ArgumentPackValue>(forwarded))
-				pack = std::get<ArgumentPackValue>(std::move(forwarded));
-			else
-				pack.elements.push_back(captureExpression(context.parseContext, expr, index, flexBindingFrameStack));
-		}
-		expr->type = {DataType::Kind::ArgumentPack};
-		expr->type.arraySize = static_cast<int>(pack.elements.size());
-		context.setExpressionValue(expr, std::move(pack));
+	case Expression::Kind::ArgumentPack:
+		support.inferArgumentPack();
 		break;
-	}
 
-	case Expression::Kind::ArrayLiteral: {
-		context.setExpressionValue(expr, {});
-		if (expr->arguments.empty())
-			break;
-		DataType elementType = ensureExpressionType(expr->arguments[0], context, flexBindingFrameStack);
-		if (!elementType.isDeduced())
-			break;
-		for (size_t i = 1; i < expr->arguments.size(); i++) {
-			DataType nextType = ensureExpressionType(expr->arguments[i], context, flexBindingFrameStack);
-			DataType merged;
-			if (!mergeArrayElementType(elementType, nextType, merged)) {
-				context.typesValid = false;
-				support.setConfiguredTypeFailure(expr->range, "array literal element type mismatch");
-				return;
-			}
-			elementType = merged;
-		}
-		expr->type = DataType(DataType::Kind::Array);
-		expr->type.arraySize = static_cast<int>(expr->arguments.size());
-		expr->type.arrayElementType = std::make_shared<DataType>(elementType);
+	case Expression::Kind::ArrayLiteral:
+		if (!support.inferArrayLiteral())
+			return;
 		break;
-	}
 
-	case Expression::Kind::Variable: {
-		if (expr->variable) {
-			std::string varName = expr->variable->name;
-			// Check flex bindings first
-			ResolvedBindingLayers resolvedBinding = resolveVariableBindingWithCallerScope(expr, flexBindingFrameStack);
-			Expression *flexBinding = resolvedBinding.expression;
-			if (flexBinding && flexBinding != expr) {
-				bool reusable = flexBinding->type.isDeduced() && context.inferredArguments->reusable(flexBinding);
-				if (!reusable) {
-					// A binding belongs to the caller, outside this expression's
-					// grouping snapshot. Rejected trials must restore its selected
-					// expansion together with the expansion's compile-time values.
-					if (context.trial)
-						context.trialJournal->recordBorrowedExpressionWrite(flexBinding);
-					bool preserveBindingGrouping =
-						flexBinding->type.isDeduced() ||
-						(context.fixedGroupingRoots && context.fixedGroupingRoots->contains(flexBinding));
-					bool inferred =
-						inferExpression(flexBinding, context, preserveBindingGrouping, resolvedBinding.bindingFrameStack);
-					if (!inferred)
-						return;
-				}
-				DataType boundType = ensureExpressionType(flexBinding, context, resolvedBinding.bindingFrameStack);
-				if (boundType.isDeduced())
-					expr->type = boundType;
-				expr->inferredArgumentReference = flexBinding->inferredArgumentReference;
-				CompileTimeValue variableValue = inferVariableCompileTimeValue(expr, context, flexBindingFrameStack);
-				if (!isCompileTimeKnown(variableValue) && expr->type.kind == DataType::Kind::Type)
-					variableValue = TypeReferenceValue::exact(expr->type);
-				context.setExpressionValue(expr, variableValue);
-				break;
-			}
-			// Look up variable in scope
-			Section *sec = expr->range.line ? expr->range.line->section : nullptr;
-			Variable *var = sec ? sec->findVariable(expr->variable) : nullptr;
-			if (!var) {
-				context.typesValid = false;
-				context.setTypeFailure(renderConfiguredMessage(
-					syntaxConfigForRange(context.parseContext, expr->range), "unknown variable", "message", {{"name", varName}}
-				));
-				if (!context.trial)
-					context.addDiagnosticWithCurrentTrace(Diagnostic(
-						context.parseContext, Diagnostic::Level::Error, "unknown variable", expr->range, "name", varName
-					));
-				return;
-			}
-			if (context.currentInstantiation && var->isGlobal && !expressionIsLValueOnlyUse(context, expr))
-				markCurrentInstantiationImpure(context);
-			restoreRefinedVariableType(expr, var, context);
-			if (var->type.isDeduced())
-				expr->type = var->type;
-			else if (var->declaredType.isDeduced() && expressionIsLValueOnlyUse(context, expr))
-				expr->type = var->declaredType;
-		}
-		context.setExpressionValue(expr, inferVariableCompileTimeValue(expr, context, flexBindingFrameStack));
-		if (expr->type.kind == DataType::Kind::ArgumentReference && !context.inferringReferenceAssignmentTarget) {
-			CompileTimeValue stored = context.lookupExpressionValue(expr);
-			const auto *capture = std::get_if<ExpressionCapture>(&stored);
-			requireCompilerInvariant(capture && capture->data, "argument reference variable lost its capture");
-			expr->inferredArgumentReference = *capture;
-			Expression *&referenced = capture->data->expression();
-			if (!inferExpression(referenced, context, referenced->type.isDeduced(), capture->data->bindings))
-				return;
-			expr->type = referenced->type;
-			context.setExpressionValue(expr, context.lookupExpressionValue(referenced));
-		}
+	case Expression::Kind::Variable:
+		if (!support.inferVariable())
+			return;
 		break;
-	}
 
 	case Expression::Kind::TypedPlaceholder:
 		if (expr->type.kind == DataType::Kind::Type)
@@ -377,4 +196,30 @@ static void inferOrderedExpression(
 			context.setExpressionValue(expr, {});
 		break;
 
-#include "function_inference_patterns.inl"
+	case Expression::Kind::IntrinsicCall:
+		support.inferIntrinsic();
+		break;
+
+	case Expression::Kind::PatternCall:
+		if (!inferPatternCall(
+				expr, context, flexBindingFrameStack, preserveCurrentGrouping, argumentEffects ? &*argumentEffects : nullptr
+			))
+			return;
+		break;
+
+	case Expression::Kind::Pending:
+		context.setExpressionValue(expr, {});
+		break;
+	}
+	CompileTimeValue inferredValue = context.lookupExpressionValue(expr);
+	if (!isCompileTimeKnown(inferredValue) && expr->type.kind == DataType::Kind::Type && !expr->inferredFlexExpansion)
+		context.setExpressionValue(expr, TypeReferenceValue::exact(expr->type));
+	if (context.typesValid)
+		recordExpressionMemoryFacts(expr, context, flexBindingFrameStack);
+}
+
+static bool
+inferExpressionWithCurrentGrouping(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
+	inferOrderedExpression(expr, context, bindingFrameStack, true);
+	return context.typesValid;
+}

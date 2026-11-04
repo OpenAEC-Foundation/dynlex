@@ -1,4 +1,6 @@
-if (isAtomicIntrinsicKind(kind)) {
+[[gnu::noinline]] static CodegenResult
+generateAtomicIntrinsic(ParseContext &context, const std::vector<Expression *> &args, IntrinsicKind kind) {
+	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
 	const size_t orderIndex = args.size() - 1;
 	std::optional<AtomicMemoryOrder> sourceOrder = parseAtomicMemoryOrder(getCompileTimeString(context, args[orderIndex]));
 	requireCompilerInvariant(sourceOrder.has_value(), "atomic operation reached codegen with an invalid memory order");
@@ -18,7 +20,7 @@ if (isAtomicIntrinsicKind(kind)) {
 		crashCompilerBug("unknown atomic memory order");
 	};
 	llvm::Value *pointer = nullptr;
-	if (!generateRuntimeValue(args[1], pointer))
+	if (!generateIntrinsicRuntimeValue(context, args[1], pointer))
 		return CodegenResult::failure();
 	DataType pointerType = finalizedExpressionType(context, args[1]);
 	DataType valueType = pointerType.dereferenced();
@@ -38,7 +40,7 @@ if (isAtomicIntrinsicKind(kind)) {
 		return fromStorage(load);
 	}
 	llvm::Value *value = nullptr;
-	if (!generateRuntimeValue(args[2], value))
+	if (!generateIntrinsicRuntimeValue(context, args[2], value))
 		return CodegenResult::failure();
 	value = toStorage(value);
 	if (kind == IntrinsicKind::AtomicStore) {

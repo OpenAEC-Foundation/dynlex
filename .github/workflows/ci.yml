@@ -45,13 +45,24 @@ jobs:
             linux-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         run: ./scripts/install.sh
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
@@ -86,13 +97,24 @@ jobs:
             macos-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         run: ./scripts/install.sh
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
@@ -109,7 +131,8 @@ jobs:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: |
             .cache/llvm-toolchain
@@ -121,6 +144,21 @@ jobs:
       - name: Install dependencies
         run: ./scripts/install.ps1
         shell: pwsh
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+        shell: bash
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .cache/llvm-toolchain
+            .cache/llvm-mingw
+            .cache/vcpkg
+            .cache/vcpkg-installed
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
@@ -145,10 +183,21 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-web-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh web
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build web compiler and run smoke test
         run: ./scripts/test_web_smoke.sh

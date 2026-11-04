@@ -428,6 +428,16 @@ All instantiations of a function have the same operand reordering for each code 
 
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
+Each function body is contained in one source file. Includes at file scope may
+join complete definitions; they must not insert statements, case labels or closing
+braces into another file's function body.
+
+Node handling, conditional branch merging, overload selection and flex-entry
+bookkeeping have separate, non-inlined call boundaries. This keeps their scratch
+space out of traversal frames for other expression kinds and recursive callees.
+These boundaries preserve the compiler's native stack budget, including the
+Windows default stack.
+
 Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
 ## Operand Reordering

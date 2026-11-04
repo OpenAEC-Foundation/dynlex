@@ -1,99 +1,101 @@
-const IntrinsicInfo *info = findIntrinsic(expr->intrinsicName);
-IntrinsicKind kind = intrinsicKind(expr->intrinsicName);
-if (info) {
-	if ((context.parseContext.options.emitSPIRV && info->targets != IntrinsicTargets::All) ||
-		(context.parseContext.options.emitWASM && info->targets == IntrinsicTargets::Native)) {
-		std::string targets = info->targets == IntrinsicTargets::Native ? "native CPU" : "native CPU or WebAssembly";
-		failWithDetail(
-			expr->range, "Intrinsic '" + expr->intrinsicName + "' is only available when emitting " + targets + " code", 0
-		);
-		break;
-	}
-	for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
-		if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
-			continue;
-		Expression *argumentExpression = expr->arguments[argumentIndex];
-		if (!argumentExpression)
-			crashCompilerBug("intrinsic compile-time argument validation encountered null argument expression");
-		ensureExpressionType(argumentExpression, context, flexBindingFrameStack);
-		if (!context.typesValid)
-			break;
-		CompileTimeValue argumentValue = resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
-		if (!isCompileTimeKnown(argumentValue)) {
-			failCompileTimeOnlyIntrinsicArgument(argumentIndex, "compile-time known");
-			break;
-		}
-	}
-	if (!context.typesValid)
-		break;
-}
-if (isShaderRuntimeIntrinsicKind(kind)) {
-	if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
-		CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
-		const std::string *name = std::get_if<std::string>(&nameValue);
-		if (!name || (kind == IntrinsicKind::ShaderUniform && name->empty())) {
-			std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
-																				: "shader uniform requires string literal";
-			context.fail(
-				Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0, false
+bool ExpressionInferenceSupport::validateIntrinsic(IntrinsicKind kind, const IntrinsicInfo *info) {
+	if (info) {
+		if ((context.parseContext.options.emitSPIRV && info->targets != IntrinsicTargets::All) ||
+			(context.parseContext.options.emitWASM && info->targets == IntrinsicTargets::Native)) {
+			std::string targets = info->targets == IntrinsicTargets::Native ? "native CPU" : "native CPU or WebAssembly";
+			failWithDetail(
+				expr->range, "Intrinsic '" + expr->intrinsicName + "' is only available when emitting " + targets + " code", 0
 			);
-			break;
+			return false;
 		}
-		if (kind == IntrinsicKind::ShaderInput) {
-			bool knownInput = *name == "FragCoord" || *name == "Position";
-			if (!knownInput) {
-				failWithDetail(
-					expr->arguments[1]->range,
-					renderConfiguredMessage(
-						syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "unknown shader input",
-						"message", {{"name", *name}}
-					),
-					0
-				);
+		for (size_t argumentIndex = 1; argumentIndex < expr->arguments.size(); argumentIndex++) {
+			if (!intrinsicArgumentIsCompileTimeOnly(expr->intrinsicName, static_cast<int>(argumentIndex)))
+				continue;
+			Expression *argumentExpression = expr->arguments[argumentIndex];
+			if (!argumentExpression)
+				crashCompilerBug("intrinsic compile-time argument validation encountered null argument expression");
+			ensureExpressionType(argumentExpression, context, flexBindingFrameStack);
+			if (!context.typesValid)
+				break;
+			CompileTimeValue argumentValue = resolveStoredCompileTimeValue(argumentExpression, flexBindingFrameStack, &context);
+			if (!isCompileTimeKnown(argumentValue)) {
+				failCompileTimeOnlyIntrinsicArgument(argumentIndex, "compile-time known");
 				break;
 			}
-			if (context.parseContext.options.emitSPIRV) {
-				bool stageProvidesInput =
-					context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
-					(*name == "Position") == (context.parseContext.options.shaderStage == ParseContext::ShaderStage::Vertex);
-				if (!stageProvidesInput) {
+		}
+		if (!context.typesValid)
+			return false;
+	}
+	if (isShaderRuntimeIntrinsicKind(kind)) {
+		if (kind == IntrinsicKind::ShaderInput || kind == IntrinsicKind::ShaderUniform) {
+			CompileTimeValue nameValue = context.lookupExpressionValue(expr->arguments[1]);
+			const std::string *name = std::get_if<std::string>(&nameValue);
+			if (!name || (kind == IntrinsicKind::ShaderUniform && name->empty())) {
+				std::string_view diagnosticKey = kind == IntrinsicKind::ShaderInput ? "shader input requires string literal"
+																					: "shader uniform requires string literal";
+				context.fail(
+					Diagnostic(context.parseContext, Diagnostic::Level::Error, diagnosticKey, expr->arguments[1]->range), 0,
+					false
+				);
+				return false;
+			}
+			if (kind == IntrinsicKind::ShaderInput) {
+				bool knownInput = *name == "FragCoord" || *name == "Position";
+				if (!knownInput) {
 					failWithDetail(
 						expr->arguments[1]->range,
 						renderConfiguredMessage(
-							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "shader input unavailable",
+							syntaxConfigForRange(context.parseContext, expr->arguments[1]->range), "unknown shader input",
 							"message", {{"name", *name}}
 						),
 						0
 					);
-					break;
+					return false;
+				}
+				if (context.parseContext.options.emitSPIRV) {
+					bool stageProvidesInput = context.parseContext.options.shaderStage != ParseContext::ShaderStage::Compute &&
+											  (*name == "Position") == (context.parseContext.options.shaderStage ==
+																		ParseContext::ShaderStage::Vertex);
+					if (!stageProvidesInput) {
+						failWithDetail(
+							expr->arguments[1]->range,
+							renderConfiguredMessage(
+								syntaxConfigForRange(context.parseContext, expr->arguments[1]->range),
+								"shader input unavailable", "message", {{"name", *name}}
+							),
+							0
+						);
+						return false;
+					}
 				}
 			}
 		}
+		if (!context.parseContext.options.emitSPIRV) {
+			failWithDetail(
+				expr->range,
+				renderConfiguredMessage(
+					syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
+					{{"operation", expr->intrinsicName}}
+				),
+				0
+			);
+			return false;
+		}
 	}
-	if (!context.parseContext.options.emitSPIRV) {
-		failWithDetail(
-			expr->range,
-			renderConfiguredMessage(
-				syntaxConfigForRange(context.parseContext, expr->range), "shader operation unavailable", "message",
-				{{"operation", expr->intrinsicName}}
-			),
-			0
-		);
-		break;
-	}
-}
 
-if (kind == IntrinsicKind::DestroyAt) {
-	DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
-	if (!pointerType.isDeduced() || !pointerType.isPointer()) {
-		setConfiguredTypeFailure(expr->range, "store at requires pointer");
-		break;
+	if (kind == IntrinsicKind::DestroyAt) {
+		DataType pointerType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+		if (!pointerType.isDeduced() || !pointerType.isPointer()) {
+			setConfiguredTypeFailure(expr->range, "store at requires pointer");
+			return false;
+		}
+		DataType elementType = pointerType.dereferenced();
+		if (!elementType.isConcrete()) {
+			setConfiguredTypeFailure(
+				expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
+			);
+			return false;
+		}
 	}
-	DataType elementType = pointerType.dereferenced();
-	if (!elementType.isConcrete()) {
-		setConfiguredTypeFailure(
-			expr->range, "destroy at requires concrete pointee", "message", {{"type", typeToUserName(elementType)}}
-		);
-		break;
-	}
+	return true;
 }

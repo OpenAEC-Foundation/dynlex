@@ -432,7 +432,8 @@ static std::optional<ImplicitPatternOverload> selectOverloadUsingImplicitConvers
 	return candidates[maximalCandidates.front()];
 }
 
-static std::optional<PatternCallResolution> resolvePatternCall(
+// Overload selection completes before recursive callee inference begins.
+[[gnu::noinline]] static std::optional<PatternCallResolution> resolvePatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack, bool preserveCurrentGrouping
 ) {
 	expr->selectedPatternDefinition = nullptr;
@@ -626,7 +627,7 @@ static std::optional<PatternCallResolution> resolvePatternCall(
 	return PatternCallResolution{def, overload.pathIndex, std::move(argTypesForOverload), std::move(argumentConstraints)};
 }
 
-static void inferClassPatternCall(
+[[gnu::noinline]] static void inferClassPatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
 	const PatternCallResolution &resolution
 ) {
@@ -727,35 +728,27 @@ static void pushResolvedFlexBindingScope(
 	pushBindingScope(bindingFrameStack, std::move(frame));
 }
 
-static void inferFlexPatternCall(
-	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
-	const PatternCallResolution &resolution
-) {
+struct FlexInferenceScope {
+	InferenceContext &context;
+	size_t activeDefinitionCount;
+	size_t activeExpansionKeyCount;
+	size_t activeCallCount;
+	size_t callSiteCount;
+	size_t bodyFrameCount;
+	~FlexInferenceScope() {
+		context.activeFlexDefinitionStack.resize(activeDefinitionCount);
+		context.activeFlexExpansionKeys.resize(activeExpansionKeyCount);
+		context.activeFlexCallStack.resize(activeCallCount);
+		context.flexCallSiteSectionStack.resize(callSiteCount);
+		context.sectionFlexBodyFrames.resize(bodyFrameCount);
+	}
+	[[gnu::noinline]] bool enter(Expression *expr, const PatternCallResolution &resolution);
+};
+
+bool FlexInferenceScope::enter(Expression *expr, const PatternCallResolution &resolution) {
 	PatternDefinition *def = resolution.definition;
 	Section *matchedSection = def->section;
 	const std::vector<DataType> &argumentTypes = resolution.argumentTypes;
-	struct FlexInferenceScope {
-		InferenceContext &context;
-		size_t activeDefinitionCount;
-		size_t activeExpansionKeyCount;
-		size_t activeCallCount;
-		size_t callSiteCount;
-		size_t bodyFrameCount;
-		~FlexInferenceScope() {
-			context.activeFlexDefinitionStack.resize(activeDefinitionCount);
-			context.activeFlexExpansionKeys.resize(activeExpansionKeyCount);
-			context.activeFlexCallStack.resize(activeCallCount);
-			context.flexCallSiteSectionStack.resize(callSiteCount);
-			context.sectionFlexBodyFrames.resize(bodyFrameCount);
-		}
-	} flexInferenceScope{
-		context,
-		context.activeFlexDefinitionStack.size(),
-		context.activeFlexExpansionKeys.size(),
-		context.activeFlexCallStack.size(),
-		context.flexCallSiteSectionStack.size(),
-		context.sectionFlexBodyFrames.size()
-	};
 	FlexExpansionKey expansionKey;
 	expansionKey.definition = def;
 	expansionKey.pathIndex = resolution.pathIndex;
@@ -774,13 +767,32 @@ static void inferFlexPatternCall(
 															sectionIsDescendantOrSame(callSiteSection, matchedSection)));
 	})) {
 		context.setTypeFailure("recursive flex expansion");
-		return;
+		return false;
 	}
 	context.activeFlexDefinitionStack.push_back(matchedSection);
 	context.activeFlexExpansionKeys.push_back(std::move(expansionKey));
 	context.activeFlexCallStack.push_back(expr);
 	if (callSiteSection)
 		context.flexCallSiteSectionStack.push_back(callSiteSection);
+	return true;
+}
+
+[[gnu::noinline]] static void inferFlexPatternCall(
+	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
+	const PatternCallResolution &resolution
+) {
+	PatternDefinition *def = resolution.definition;
+	Section *matchedSection = def->section;
+	FlexInferenceScope flexInferenceScope{
+		context,
+		context.activeFlexDefinitionStack.size(),
+		context.activeFlexExpansionKeys.size(),
+		context.activeFlexCallStack.size(),
+		context.flexCallSiteSectionStack.size(),
+		context.sectionFlexBodyFrames.size()
+	};
+	if (!flexInferenceScope.enter(expr, resolution))
+		return;
 	std::optional<size_t> sectionBodyFrameIndex;
 	if (matchedSection->type == SectionType::Section) {
 		Section *callerBodySection = expr->range.line ? expr->range.line->sectionOpening : nullptr;
