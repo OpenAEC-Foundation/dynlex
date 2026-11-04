@@ -27,9 +27,6 @@ bool ensureCallableFunctionGenerated(
 	parameterBindings.reserve(parameters.size());
 	for (size_t parameterIndex = 0; parameterIndex < parameters.size(); parameterIndex++) {
 		requireCompilerInvariant(
-			parameters[parameterIndex].type == argumentTypes[parameterIndex], "callable parameter type changed after inference"
-		);
-		requireCompilerInvariant(
 			!parameters[parameterIndex].requiresCompileTimeValue, "fixed callable parameter reached code generation"
 		);
 		parameterBindings.push_back({parameters[parameterIndex].name, nullptr});

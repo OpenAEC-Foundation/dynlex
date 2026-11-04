@@ -1,0 +1,7 @@
+# Data-producing section helpers. Body schemas use ordinary type expressions.
+import lib/std.dl
+
+many {type:kind} means: @intrinsic("array", kind)
+many {constraint:kind} means: @intrinsic("array", kind)
+the body means: @intrinsic("section body")
+a static reference to value means: @intrinsic("static reference", value)

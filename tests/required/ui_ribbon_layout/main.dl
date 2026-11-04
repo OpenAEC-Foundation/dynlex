@@ -1,0 +1,35 @@
+import examples/ribbon/interface.dl
+import lib/ui_native_layout.dl
+import lib/ui_icons.dl
+
+to check ribbon command {a pointer to UI layout:layout}:
+    if (layout's node's kind = 33) and (layout's node's rows != 3):
+        set icon to the UI icon named (layout's node's variant)
+        require condition (icon's count > 0) reporting "A ribbon command has no icon geometry"
+    set child to layout's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        check ribbon command child
+        set child to child's next
+
+set state to 0
+set instance to an instance of ribbon studio with state (the address of state)
+set ribbon to the control labeled "Main ribbon" in (the address of instance)
+require condition (ribbon's count = 9) reporting "The example is missing a ribbon tab"
+require condition ((the selected tab of ribbon in (the address of instance))'s text = "Home") reporting "The ribbon did not select its declared initial tab"
+set theme to the UI theme for ribbon studio
+set layout to a UI layout for ribbon inside ribbon studio with width 1256 using theme
+set tab to layout's first
+loop while tab != @intrinsic("construct", a pointer to UI layout):
+    set group to tab's first
+    loop while group != @intrinsic("construct", a pointer to UI layout):
+        require condition (((group's bounds' x + group's bounds' width) + 12.0) <= layout's bounds' width) reporting "A ribbon group overflows its tab"
+        set command to group's first
+        loop while command != @intrinsic("construct", a pointer to UI layout):
+            require condition ((command's bounds' y + command's bounds' height) <= 94.0) reporting "A ribbon command overlaps its group caption"
+            check ribbon command command
+            set command to command's next
+        set group to group's next
+    set tab to tab's next
+release UI layout layout
+close the address of instance
+print line "Ribbon layout passed"

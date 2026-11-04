@@ -701,6 +701,12 @@ run_auxiliary_test "string_literal_boundaries" 10 python3 -B "$SCRIPT_DIR/test_s
 run_auxiliary_test "codegen_options" 30 python3 -B "$SCRIPT_DIR/test_codegen_options.py" "$COMPILER"
 run_auxiliary_test "object_output" 20 python3 -B "$SCRIPT_DIR/test_object_output.py" "$COMPILER"
 run_auxiliary_test "native_pointer_calls" 20 python3 -B "$SCRIPT_DIR/test_native_pointer_calls.py" "$COMPILER"
+run_auxiliary_test "typed_callbacks" 120 python3 -B "$SCRIPT_DIR/test_typed_callbacks.py" "$PROJECT_DIR" "$COMPILER"
+if [[ "$(uname -s)" == "Linux" ]]; then
+    run_auxiliary_test "declarative_ui_window" 120 python3 -B "$SCRIPT_DIR/test_ui_sections.py" "$PROJECT_DIR" "$COMPILER"
+    run_auxiliary_test "snake_studio_window" 120 python3 -B "$SCRIPT_DIR/test_snake_ui.py" "$PROJECT_DIR" "$COMPILER"
+    run_auxiliary_test "ribbon_studio_window" 120 python3 -B "$SCRIPT_DIR/test_ribbon_ui.py" "$PROJECT_DIR" "$COMPILER"
+fi
 run_auxiliary_test "native_atomics" 30 python3 -B "$SCRIPT_DIR/test_native_atomics.py" "$COMPILER"
 run_auxiliary_test "json_integer64" 30 python3 -B "$SCRIPT_DIR/test_json_integer64.py" "$COMPILER"
 run_auxiliary_test "float_math_codegen" 20 python3 -B "$SCRIPT_DIR/test_float_math_codegen.py" "$COMPILER"

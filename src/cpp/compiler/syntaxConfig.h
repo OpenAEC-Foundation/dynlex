@@ -27,6 +27,12 @@ struct SyntaxConfig {
 	std::string sectionOpener = ":";
 
 	std::string sectionName = "section";
+	std::string dataBodyName = "body";
+	std::string dataValueName = "value";
+	std::string dataDeclaresName = "declares";
+	std::string dataResultName = "result";
+	std::string dataReceiverName = "receiver";
+	std::string dataReturnsName = "returns";
 	std::string functionName = "function";
 	std::string conversionName = "convert";
 	std::string implicitName = "implicitly";

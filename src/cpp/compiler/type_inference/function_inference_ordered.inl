@@ -168,9 +168,7 @@ static void inferOrderedExpression(
 	auto failCompileTimeOnlyIntrinsicArgument = [&](size_t argumentIndex, std::string_view requirement) {
 		failIntrinsicArgumentRequirement(argumentIndex, requirement);
 	};
-	bool typeQuery =
-		expr->kind == Expression::Kind::IntrinsicCall && (intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeOf ||
-														  intrinsicKind(expr->intrinsicName) == IntrinsicKind::TypeExtent);
+	bool typeQuery = expr->kind == Expression::Kind::IntrinsicCall && isTypeQueryIntrinsicKind(intrinsicKind(expr->intrinsicName));
 	std::optional<InferenceExecutionSnapshot> argumentEffects;
 	if (expr->kind == Expression::Kind::PatternCall || typeQuery)
 		argumentEffects.emplace(context);
@@ -372,7 +370,26 @@ static void inferOrderedExpression(
 					));
 				return;
 			}
-			if (context.currentInstantiation && var->isGlobal && !expressionIsLValueOnlyUse(context, expr))
+			if (var->dataInitializer && !var->type.isDeduced()) {
+				Expression *initializer = var->dataInitializer;
+				Section *definition = initializer->patternMatch->matchingDefinitions.front()->section;
+				if (definition->dataSection && definition->dataSection->resultType) {
+					Expression *resultType = definition->dataSection->resultType;
+					ensureExpressionType(resultType, context, flexBindingFrameStack);
+					auto type = getCompileTimeTypeReferenceValue(context.lookupExpressionValue(resultType));
+					if (!type) {
+						context.fail(
+							buildFailureDetailDiagnostic(resultType->range, "A data section result must be a compile-time type")
+						);
+						return;
+					}
+					if (context.trial && context.trialJournal)
+						context.trialJournal->recordVariableWrite(var);
+					var->type = type->type.toReferencedType();
+				}
+			}
+			if (context.currentInstantiation && var->isGlobal && !var->dataInitializer &&
+				!expressionIsLValueOnlyUse(context, expr))
 				markCurrentInstantiationImpure(context);
 			restoreRefinedVariableType(expr, var, context);
 			if (var->type.isDeduced())

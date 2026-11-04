@@ -51,6 +51,12 @@ configured syntax and decide `local` for later definitions in the scope, validat
 modifiers. Every other rule line is an ordinary pattern reference resolved like code, but never executed. See
 `docs/scope_rules.md`.
 
+Data-section metadata (`body`, `value`, `declares`, `result`, `receiver`, and `returns`, with spellings
+from the syntax configuration) describes a section's body and value. A body schema creates
+an anonymous record with ordinary generated property accessors. Each field's constraint
+is an ordinary expression. The parser does not recognize domain-specific child syntax.
+See `docs/data_sections.md`.
+
 Integer literals are parsed exactly rather than through floating-point storage.
 Signed values use 32 or 64 bits, and positive values through `2^64 - 1` use
 unsigned 64 bits. The `2^63` boundary is unsigned in ordinary expressions;
@@ -75,6 +81,23 @@ by the precedence graph. Expression expansion and variable binding complete the
 full resolved-pattern stage. Language tooling may consume only data guaranteed by
 the latest completed boundary; failed later work does not make its partial state
 observable.
+
+Named data-body fields become section patterns whose visibility is limited to their
+owning section calls. A declared data name is indexed before expression expansion, so
+multiword names and forward references use the normal variable matcher. After matching,
+the declaring capture binds the result variable and supplies its spelling as a string
+argument to the value expression.
+
+A section with `receiver` metadata moves its already parsed body into an ordinary
+callable function with one receiver parameter. This occurs before expression expansion
+and variable grouping, including for nested deferred bodies. The original section call
+retains the callable definition; its value expression decides whether to store or invoke
+it. Deferred bodies do not execute as caller-body control flow.
+
+When a child inference context retains a function instantiation during a trial, its
+expression constants, operand groupings, and callable selections join the caller's
+trial state. The outer transaction commits or discards those results together with
+the inferred body; retaining only types loses metadata needed by code generation.
 
 After the pattern trees stabilize, definitions connected through shared trie
 endpoints form one syntax family, including transitive connections through choice
@@ -179,6 +202,8 @@ over a secondary error at the call site.
 We loop over the code like it would get executed.
 
 Before inferring executable code, we infer every pattern argument type constraint with the same expression inference engine.
+Freshly parsed constraint expressions expand their entire expression tree before inference,
+including pattern calls nested inside intrinsics or array expressions.
 Pattern matching has already recorded all candidates, but it has not selected an overload. Signature inference resolves
 constraint dependencies first, selects overloads from inferred argument types, and requires every constraint expression to
 produce a pure compile-time type or constraint value. An unresolved candidate defers a call only while that candidate can still
@@ -222,6 +247,12 @@ truncate toward zero and are compile-time-known only when the truncated value
 fits the target signed or unsigned width, matching the native LLVM conversion.
 The positive `2^63` literal participates in floating-point conversion, Boolean
 conversion and mixed numeric comparison like other unsigned values.
+
+Known numeric pointer addresses have a distinct compile-time value category. Null
+construction, integer/pointer casts, pointer equality, and pointer arithmetic preserve
+that category with the selected target's pointer width and pointee size. They never
+dereference host addresses. Default scalar construction supplies its zero value to
+ordinary constant evaluation, so null-guarded control flow follows the known condition.
 
 Floor, ceiling, and round preserve an integer operand exactly, without converting it to floating point.
 For floating-point operands they preserve the operand width; round chooses the nearest integer value,
@@ -287,6 +318,15 @@ their existing fixed-point inference and runtime branches.
 Control-flow classification is an outcome of that normal inference walk. A control-flow intrinsic emits a typed section outcome, and a flex call may forward the outcome produced by its inferred replacement. A section flex forwards the outcome of its final top-level replacement statement after the preceding statements have executed. A function flex forwards a control-flow outcome only when its replacement is a single expression; control flow in a multi-line function flex remains internal to that function flex. When replacement inference transfers caller-body control, the outcome is recorded on the exact replacement expression that performed the transfer and enclosing flex calls forward it normally. A direct outcome already recorded on an active flex call takes precedence over the replacement expression's forwarded outcome. Transfer identity is the complete active flex-invocation path plus the transfer expression, with reusable clones normalized to their template nodes. This lets retries of one logical invocation share the inferred caller body while distinct direct, helper, and nested-helper call sites produce the required duplicate-transfer diagnostic. The section walker consumes outcomes in execution order: infer an `if` header, infer its reachable body, infer the next alternative header, then infer that reachable body. Before merging the fallthrough state of a conditional, the following section header may be trial-inferred through the ordinary inference transaction to determine whether its outcome continues the same chain. This uses the produced outcome only; it never inspects pattern text or searches an expansion for a particular intrinsic. Section overloads use the same type constraints and ambiguity checks as function overloads. Header inference selects the overload before its produced control-flow outcome is consumed. Parameters introduced by the section may remain unresolved until the selected replacement binds them; overload selection must be determined by the other header arguments, without depending on inference of the caller body.
 
 The section walker records finalized fallthrough metadata on every top-level expression it reaches. An expression without that metadata is outside the inferred execution paths and remains intentionally uninferred. Code generation consumes this metadata before inspecting an expression, so it emits only paths whose overloads, types, and control flow were finalized by inference.
+
+Data-section inference consumes the caller body structurally. Normal expression
+inference produces each child's value, and the body's type constraints route it into
+scalar fields or array elements. Named field sections select a destination explicitly;
+omitted sequences are typed empty arrays. The value block reads the resulting anonymous
+record through `section body` or a named `section field`. An optional result constraint
+checks the value and supplies forward-reference types. A deferred body is inferred as
+a separate callable instantiation; receiver lookup and local-variable validation stop
+at function boundaries.
 
 Section outcomes are value state stored through copy-on-write ownership. Ordinary expressions
 share the empty outcome; a mutation detaches the complete outcome before writing. Clones and
@@ -525,7 +565,14 @@ We do not clone the expression tree for reordering; we reorder it. Even when sto
 
 reusable expression trees are cloned only to own per-usage inference state: once for each function instantiation and flex expansion. the original tree is unmodified.
 
-Each instantiated body owns its cloned nodes independently of the mutable argument tree. Replacing a body releases those nodes when its last user ends. Trial journals retain provisional bodies and standalone conversion/header storage until rollback or promotion finishes, including when nested journals are absorbed. A rollback restores borrowed expression and instantiation state before releasing that storage. Saved execution states retain the body and lexical owner chain of their subject assignment until the state is restored or discarded; owner references do not participate in subject identity or fixed-point comparison. Conversion calls own their synthetic matches, and only conversions whose source still owns the selected call storage are materialized.
+Each instantiated body owns its cloned nodes independently of the mutable argument tree. Replacing a body releases those nodes when its last user ends. All inference-created expression storage goes through the inference context. Trial journals retain provisional bodies and standalone expression storage until rollback or promotion finishes, including conversion probes, section result constraints, body fields and receivers, and when nested journals are absorbed. A rollback restores borrowed expression and instantiation state before releasing that storage. Saved execution states retain the body and lexical owner chain of their subject assignment until the state is restored or discarded; owner references do not participate in subject identity or fixed-point comparison.
+
+User conversions are ordinary unary pattern calls in the inferred tree. Candidate probes borrow the source expression
+and use the trial journal to restore it; they do not clone its subtree. A committed conversion moves the existing source
+root under its call and retains the argument storage through rollback or promotion. The call keeps the source's statement
+placement and execution metadata. Grouping reads the authored operand beneath inserted calls, so its snapshots contain
+only source operators. Type, value, memory, and code-generation passes consume the same ordinary call tree. There is no
+conversion side link or late conversion-materialization pass.
 
 We do not use pointers to expression-pointer locations (`expression**`), since those can be dangling pointers.
 
@@ -579,6 +626,14 @@ Did the user mean `(the maximum of 5 and 3) + 4` or `the maximum of 5 and (3 + 4
 # Code Generation Stage
 
 We already know which patterns call which instantiations, the type of every variable, etc. But now, we branch off into compilation target: browser, machine code, SPIR-V, etc.
+
+Array literals and class construction compose SSA aggregate values directly, allowing
+LLVM to fold static operands into constant aggregates. Named data declarations refer
+to their inferred initializer instead of mutable variable storage. `static reference`
+publishes an immutable global before lowering its initializer, allowing cyclic static
+graphs; the initializer must lower to a constant. `deferred body` uses ordinary native
+callable generation, while the body record and receiver intrinsics use their inferred
+expressions. There is no runtime data-section builder pass.
 
 Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
 the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward

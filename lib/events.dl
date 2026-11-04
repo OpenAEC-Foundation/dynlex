@@ -1,0 +1,23 @@
+# A synchronous request has one responder. Binding again replaces that responder.
+import lib/callbacks.dl
+import lib/check.dl
+
+class:
+    patterns:
+        synchronous event
+    members:
+        responder
+
+a synchronous event receiving {type:request} returning {type:reply} means: @intrinsic("construct", synchronous event, @intrinsic("construct", a callback receiving request returning reply))
+this request means: @intrinsic("receiver")
+
+section when {synchronous event:channel} is requested:
+    receiver: the request type of (channel's responder)
+    returns: the response type of (channel's responder)
+    value:
+        set channel's responder to @intrinsic("deferred body")
+
+function request {a value:payload} from {synchronous event:channel}:
+    execute:
+        require condition (channel's responder != @intrinsic("construct", the type of channel's responder)) reporting "The synchronous event has no responder"
+        @intrinsic("return", @intrinsic("invoke", channel's responder, payload))

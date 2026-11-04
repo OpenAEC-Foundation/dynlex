@@ -1,0 +1,31 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        configuration
+    members:
+        title as a C string
+        values
+
+section settings {name}:
+    declares: name
+    body:
+        title: a C string
+        values: many integer
+    value:
+        @intrinsic("construct", configuration, the body's title, the body's values)
+
+settings example:
+    title: "Configured"
+    values:
+        10
+        20
+
+print line example's title
+print line the length of example's values
+print line the item at 1 in example's values
+
+settings empty:
+    title: "Empty"
+
+print line the length of empty's values

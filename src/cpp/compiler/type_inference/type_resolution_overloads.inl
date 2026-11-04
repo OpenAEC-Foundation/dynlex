@@ -562,10 +562,9 @@ struct InferenceContext {
 	CompileTimeValue lookupExpressionValue(Expression *expression) const {
 		if (!expression)
 			return {};
-		if (expression->inferredConversion)
-			return lookupExpressionValue(expression->inferredConversion);
 		if (expression->kind == Expression::Kind::Variable && expression->variable && !expression->inferredArgumentReference) {
 			VariableStorageKey key = variableStorageKey(expression);
+
 			const KnownConstantStorage &knownConstants = currentVariableValues.read();
 			auto currentValue = knownConstants.find(key);
 			if (currentValue != knownConstants.end())
@@ -597,6 +596,25 @@ struct InferenceContext {
 			return;
 		}
 		setExpressionCompileTimeValue(expression, value);
+	}
+
+	void absorbTrialResultsFrom(InferenceContext &other) {
+		requireCompilerInvariant(
+			trial && other.trial && trialJournal == other.trialJournal,
+			"committing child inference requires its owning trial context"
+		);
+		for (const auto &[expression, value] : other.trialExpressionValues)
+			setExpressionValue(expression, value);
+		for (auto &[line, grouping] : other.trialCodeLineGroupings) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordCodeLineGroupingWrite(trialCodeLineGroupings, line);
+			trialCodeLineGroupings.insert_or_assign(line, std::move(grouping));
+		}
+		for (const auto &[definition, instantiation] : other.trialCallableInstantiations) {
+			if (groupingTrialJournal)
+				groupingTrialJournal->recordCallableInstantiationWrite(trialCallableInstantiations, definition);
+			trialCallableInstantiations.insert_or_assign(definition, instantiation);
+		}
 	}
 
 	Expression *lookupFlexExpansion(Expression *expression) const {

@@ -50,6 +50,8 @@ std::optional<std::int64_t> checkedBinary(ConstraintIntegerTerm::Kind kind, std:
 }
 
 void overlayConstraint(TypeConstraint &destination, const TypeConstraint &source) {
+	if (source.functionSignature)
+		destination.functionSignature = source.functionSignature;
 	if (source.kind)
 		destination.kind = source.kind;
 	if (source.numericSize)

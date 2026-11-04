@@ -291,6 +291,7 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		resolveInferenceBindingLayers(expr->arguments[2], flexBindingFrameStack, &context, [](Expression *) {
 		return true;
 	});
+
 	Expression *valueExpr = resolvedValue.expression;
 	BindingFrameStack valueBindingFrameStack = std::move(resolvedValue.bindingFrameStack);
 	ScopedRecursiveInferenceObservation valueObservation(context, context.currentInstantiation);
@@ -362,6 +363,12 @@ static void inferStoreEffects(Expression *expr, InferenceContext &context, const
 		Variable *variable = section ? section->findVariable(destinationExpr->variable) : nullptr;
 		if (!variable) {
 			setInvalidStoreDestinationFailure(destinationSourceExpr, context);
+			return;
+		}
+		if (variable->dataInitializer) {
+			context.fail(buildFailureDetailDiagnostic(
+				destinationExpr->range, "A data declaration cannot be reassigned; create a separate instance"
+			));
 			return;
 		}
 		if (variable->hasDeclaredTypeConstraint()) {

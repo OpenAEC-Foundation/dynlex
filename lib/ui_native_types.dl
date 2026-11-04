@@ -1,0 +1,52 @@
+# Native view and canvas data. Layout data is renderer-independent.
+import lib/ui_layout_types.dl
+import lib/ui_native_shapes.dl
+
+class:
+    patterns:
+        native UI view
+    members:
+        window as a pointer
+        instance as a pointer to UI instance
+        typeface as a font
+        heading as a font
+        small as a font
+        display as a font
+        strong as a font
+        brand as a font
+        last paint as a floating-point number
+        frame seconds as a floating-point number
+        theme as UI theme
+        layout as a pointer to UI layout
+        hot as a pointer to UI layout
+        pressed as a pointer to UI layout
+        was down as a boolean
+        was tab as a boolean
+        was enter as a boolean
+        was left as a boolean
+        was right as a boolean
+        focus order as an integer
+        control count as an integer
+        focused as a pointer to UI layout
+        keyboard focus as a boolean
+        page as UI reference
+        fitted as a boolean
+        logical width as an integer
+        logical height as an integer
+
+class:
+    patterns:
+        UI canvas frame
+    members:
+        instance as a pointer to UI instance
+        frame as a graphics frame
+        bounds as UI bounds
+        seconds as a floating-point number
+
+this canvas means: @intrinsic("receiver")
+
+section when painting the {C string:label} canvas:
+    receiver: a pointer to UI canvas frame
+    returns: nothing
+    value:
+        bind (the control labeled label in this window) in this window to @intrinsic("deferred body") for event 1

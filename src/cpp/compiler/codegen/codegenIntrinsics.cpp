@@ -539,8 +539,8 @@ CodegenResult generateIntrinsicCode(
 		DataType rightType = finalizedExpressionType(context, args[2]);
 
 		llvm::Value *cmp;
-		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isPointer() &&
-			rightType.isPointer()) {
+		if ((kind == IntrinsicKind::Equal || kind == IntrinsicKind::NotEqual) && leftType.isAddress() &&
+			rightType.isAddress()) {
 			DataType comparisonType = leftType;
 			if (ClassDefinition::typeStructurallyRefines(rightType, leftType))
 				comparisonType = rightType;

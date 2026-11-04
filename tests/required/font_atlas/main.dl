@@ -1,0 +1,46 @@
+import lib/font.dl
+
+set library to 0 as a pointer
+set error to @intrinsic("call", "freetype", "FT_Init_FreeType", an integer, the address of library)
+require condition (error = 0) reporting "FreeType initialization failed"
+set face to 0 as a pointer
+set error to @intrinsic("call", "freetype", "FT_New_Face", an integer, library, "tests/games/fonts/NotoSans-Regular.ttf", 0 as a C long integer, the address of face)
+require condition (error = 0) reporting "The test font could not be loaded"
+set error to @intrinsic("call", "freetype", "FT_Set_Pixel_Sizes", an integer, face, 0, 128)
+require condition (error = 0) reporting "The test font could not be sized"
+set cache to a new font cache for (0 as a pointer)
+set typeface to @intrinsic("construct", font, library, face, cache, 2.0)
+set prepared to the result of preparing characters from 32 through 126 using typeface
+require condition (prepared succeeded) reporting "Preparing the atlas failed"
+require condition ((cache's width > 512) and (cache's width = cache's height)) reporting "The font atlas did not grow"
+set glyph to cache's first
+loop while (glyph != (0 as a pointer to font glyph)) and (glyph's code != 65):
+    set glyph to glyph's next
+require condition (glyph != (0 as a pointer to font glyph)) reporting "The prepared atlas is missing a glyph"
+set error to @intrinsic("call", "freetype", "FT_Load_Char", an integer, face, 65 as a C long integer, 4)
+require condition (error = 0) reporting "The reference glyph could not be rendered"
+set metadata to face as a pointer to FT face
+set slot to metadata's glyph as a pointer to FT glyph slot
+set reference to the font coverage bytes from (slot's bitmap buffer) width (slot's bitmap width) height (slot's bitmap rows) pitch (slot's bitmap pitch) mode (slot's bitmap pixel mode as an integer) gray levels (slot's bitmap number of gray levels as an integer)
+set row to 0
+loop while row < glyph's height:
+    set column to 0
+    loop while column < glyph's width:
+        set offset to ((glyph's atlas top + row) * cache's width) + (glyph's atlas left + column)
+        set actual to the item at offset in (cache's pixels)
+        set expected to the item at (row * glyph's width + column) in (the data of reference)
+        require condition (actual = expected) reporting "Atlas growth changed a cached glyph's pixels"
+        increment column
+    increment row
+set gutter to ((glyph's atlas top - 1) * cache's width) + (glyph's atlas left - 1)
+require condition ((the item at gutter in (cache's pixels)) = 0) reporting "A glyph's sampling gutter was overwritten"
+set {old height} to glyph's height
+set sizing to the result of setting typeface's pixel size to 16
+require condition (sizing succeeded) reporting "Resizing the font failed"
+require condition (cache's first = (0 as a pointer to font glyph)) reporting "Resizing kept old glyph metadata"
+set prepared to the result of preparing characters from 65 through 65 using typeface
+require condition (prepared succeeded) reporting "Preparing a resized glyph failed"
+require condition (cache's first's height < old height) reporting "Resizing retained the old raster dimensions"
+set released to the result of releasing (the address of typeface)
+require condition (released succeeded) reporting "The atlas could not be released"
+print line "Font atlas passed"

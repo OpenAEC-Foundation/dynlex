@@ -1,0 +1,116 @@
+# Reusable control drawing and hit testing; application callbacks own behavior.
+import lib/ui_native_types.dl
+import lib/ui_native_ribbon.dl
+
+to draw UI control {a pointer to UI layout:layout} in {UI bounds:box} with cursor {cursor position:cursor} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set node to layout's node
+    increment view's control count
+    set layout's order to view's control count
+    set focused to view's focus order = view's control count
+    if focused:
+        set view's focused to layout
+    set inside to ((cursor's x >= box's x) and (cursor's x < (box's x + box's width))) and ((cursor's y >= box's y) and (cursor's y < (box's y + box's height)))
+    set ink to view's theme's button ink
+    set text to view's theme's text
+    set lit to false
+    if node's variant = "primary":
+        set ink to view's theme's accent
+        set text to UI ink 12 31 24
+        set lit to true
+    if node's kind = 19:
+        set selected to (the UI value for (layout's parent) in (view's instance))'s number
+        set index to 0
+        loop while (the UI child at index in (layout's parent)) != node:
+            increment index
+        if index = selected:
+            set ink to view's theme's accent
+            set text to UI ink 12 31 24
+            set lit to true
+    set target to 0.0
+    if inside:
+        set view's hot to layout
+        set target to 1.0
+    if view's instance's reduced motion:
+        set layout's hover to target
+    else:
+        set response to the minimum of 1.0 and (view's frame seconds * 14.0)
+        set layout's hover to layout's hover + ((target - layout's hover) * response)
+    if (node's kind = 29) or ((node's kind = 33) or (node's kind = 34)):
+        draw ribbon control layout in box focused focused in view on frame
+        return nothing
+    set lift to (layout's hover * 16.0) as an integer
+    if view's pressed = layout:
+        set lift to -12
+    set ink's red to the minimum of 255 and (the maximum of 0 and (ink's red + lift))
+    set ink's green to the minimum of 255 and (the maximum of 0 and (ink's green + lift))
+    set ink's blue to the minimum of 255 and (the maximum of 0 and (ink's blue + lift))
+    if focused and view's keyboard focus:
+        draw a rounded UI box (UI box at (box's x - 3) (box's y - 3) sized (box's width + 6) (box's height + 6)) with radius 13.0 in (view's theme's accent) on frame
+    if node's kind = 17:
+        draw UI text (node's text) at (box's x) (box's y + 29) with (view's typeface) in (view's theme's text) on frame
+        set enabled to (the UI value for node in (view's instance))'s number != 0
+        set destination to 0.0
+        if enabled:
+            set destination to 1.0
+        if (layout's painted = false) or view's instance's reduced motion:
+            set layout's transition to destination
+        else:
+            set response to the minimum of 1.0 and (view's frame seconds * 18.0)
+            set layout's transition to layout's transition + ((destination - layout's transition) * response)
+        set layout's painted to true
+        set track to UI ink between (UI ink 48 62 73) and (view's theme's accent) at layout's transition
+        set offset to 3.0 + (20.0 * layout's transition)
+        set left to box's x + (box's width - 46)
+        draw a glass UI panel (UI box at left (box's y + 12) sized 46 26) with radius 13.0 in track on frame
+        draw a UI disc at (a UI point at ((left + offset) + 10.0) and (box's y + 25.0)) with radius 10.0 from (UI ink 255 255 255) to (UI ink 204 220 234) opacity 255 on frame
+    else:
+        set border to view's theme's border
+        if view's theme's dark:
+            if lit:
+                draw a UI shadow under box with radius 12.0 softness (6.0 + layout's hover * 4.0) strength 16 in ink on frame
+            draw a glass UI panel box with radius 12.0 in ink on frame
+        else:
+            if border > 0:
+                draw a rounded UI box box with radius 10.0 in (UI ink 18 24 35) on frame
+            draw a rounded UI box (UI box at (box's x + border) (box's y + border) sized (box's width - 2 * border) (box's height - 2 * border)) with radius 9.0 in ink on frame
+        if view's theme's dark = false:
+            set text to UI ink 255 255 255
+            if ink's red > 210:
+                set text to UI ink 18 24 35
+        draw UI text (node's text) centered in box with (view's strong) in text on frame
+
+to draw UI presentation {UI reference:node} in {UI bounds:box} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set ink to view's theme's text
+    if node's kind = 30:
+        draw UI text (node's text) centered in (UI box at (box's x) (box's y + 94.0) sized (box's width) 20) with (view's small) in (view's theme's muted) on frame
+        draw a flat UI box (UI box at ((box's x + box's width) + 1.0) (box's y + 7.0) sized 1 82) in (UI ink 232 234 238) on frame
+    if node's kind = 12:
+        if node's variant = "card":
+            if view's theme's dark:
+                draw a glass UI panel box with radius 24.0 in (view's theme's surface) on frame
+            else:
+                draw a rounded UI box box with radius 20.0 in (view's theme's outline) on frame
+                draw a rounded UI box (UI box at (box's x + 1) (box's y + 1) sized (box's width - 2) (box's height - 2)) with radius 19.0 in (view's theme's surface) on frame
+    if node's kind = 11:
+        draw UI text (node's text) at (box's x) (box's y + 17) with (view's typeface) in (view's theme's muted) on frame
+    if (node's kind = 13) or ((node's kind = 15) or (node's kind = 18)):
+        draw UI text (node's text) at (box's x) (box's y + 13) with (view's small) in (view's theme's muted) on frame
+    if node's kind = 14:
+        if node's variant = "accent":
+            set ink to view's theme's accent
+        draw UI text (node's text) at (box's x - 2) (box's y + 45) with (view's display) in ink on frame
+    if node's kind = 24:
+        if node's variant = "brand":
+            draw UI text (node's text) at (box's x) (box's y + 30) with (view's brand) in ink on frame
+        else:
+            draw UI text (node's text) at (box's x) (box's y + 28) with (view's heading) in ink on frame
+    if node's kind = 21:
+        if view's theme's dark:
+            draw a glass UI panel (UI box at (box's x - 10) (box's y - 6) sized (box's width + 8) 74) with radius 13.0 in (view's theme's surface) on frame
+        draw UI text (node's text) at (box's x) (box's y + 12) with (view's small) in (view's theme's muted) on frame
+        set value to the UI value for node in (view's instance)
+        draw UI text (value's text) at (box's x) (box's y + 50) with (view's heading) in ink on frame
+    if node's kind = 27:
+        set tint to UI ink between (view's theme's surface) and (view's theme's accent) at 0.08
+        draw a glass UI panel box with radius 14.0 in tint on frame
+        draw UI text ((the UI value for node in (view's instance))'s text) centered in box with (view's small) in (view's theme's accent) on frame

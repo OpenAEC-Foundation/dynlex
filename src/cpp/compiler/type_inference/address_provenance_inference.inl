@@ -119,17 +119,18 @@ static AddressProvenance
 inferAddressProvenance(Expression *expression, InferenceContext &context, const BindingFrameStack &bindingFrameStack) {
 	if (!expression)
 		crashCompilerBug("address provenance inference received a null expression");
-	if (expression->inferredConversion)
-		return inferAddressProvenance(expression->inferredConversion, context, bindingFrameStack);
 	ResolvedBindingLayers resolvedBinding = resolveInferenceBindingLayers(expression, bindingFrameStack, &context);
 	Expression *resolvedExpression = resolvedBinding.expression;
 	BindingFrameStack resolvedBindingFrameStack = std::move(resolvedBinding.bindingFrameStack);
 	if (!resolvedExpression)
 		crashCompilerBug("address provenance inference lost its expression while resolving bindings");
-	if (resolvedExpression->inferredConversion)
-		return inferAddressProvenance(resolvedExpression->inferredConversion, context, resolvedBindingFrameStack);
 	if (resolvedExpression->type.isMetaType())
 		return {};
+	if (resolvedExpression->type.isPointer()) {
+		CompileTimeValue value = resolveStoredCompileTimeValue(resolvedExpression, resolvedBindingFrameStack, &context);
+		if (const auto *pointer = std::get_if<CompileTimePointer>(&value); pointer && pointer->address == 0)
+			return {.mayTargets = {}, .mayBeNull = true};
+	}
 	if (resolvedExpression->kind == Expression::Kind::Variable && resolvedExpression->variable)
 		return context.lookupAddressProvenance(variableStorageKey(resolvedExpression));
 	if (resolvedExpression->kind == Expression::Kind::Literal)

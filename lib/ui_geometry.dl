@@ -1,0 +1,58 @@
+# Geometry and color data shared by layout and rendering.
+import lib/std.dl
+
+class:
+    patterns:
+        UI paint
+    members:
+        red as an integer
+        green as an integer
+        blue as an integer
+
+class:
+    patterns:
+        UI bounds
+    members:
+        x as a floating-point number
+        y as a floating-point number
+        width as a floating-point number
+        height as a floating-point number
+
+class:
+    patterns:
+        UI point
+    members:
+        x as a floating-point number
+        y as a floating-point number
+
+UI ink {integer:red} {integer:green} {integer:blue} means: @intrinsic("construct", UI paint, red, green, blue)
+UI box at {a value:x} {a value:y} sized {a value:width} {a value:height} means: @intrinsic("construct", UI bounds, x as a floating-point number, y as a floating-point number, width as a floating-point number, height as a floating-point number)
+a UI point at {floating-point number:x} and {floating-point number:y} means: @intrinsic("construct", UI point, x, y)
+
+to get UI ink between {UI paint:first} and {UI paint:second} at {floating-point number:amount}:
+    set phase to the minimum of 1.0 and (the maximum of 0.0 and amount)
+    set red to (first's red as a floating-point number) + (((second's red - first's red) as a floating-point number) * phase)
+    set green to (first's green as a floating-point number) + (((second's green - first's green) as a floating-point number) * phase)
+    set blue to (first's blue as a floating-point number) + (((second's blue - first's blue) as a floating-point number) * phase)
+    return UI ink (red as an integer) (green as an integer) (blue as an integer)
+
+to get the UI ink named {C string:name}:
+    if name = "blue":
+        return UI ink 57 93 190
+    if name = "light blue":
+        return UI ink 237 243 255
+    if name = "green":
+        return UI ink 32 123 87
+    if name = "white":
+        return UI ink 255 255 255
+    if name = "black":
+        return UI ink 18 24 35
+    if name = "orange":
+        return UI ink 184 65 38
+    if name = "purple":
+        return UI ink 121 87 154
+    if name = "gold":
+        return UI ink 171 128 49
+    print line "Unknown UI color"
+    abort the program
+    return UI ink 0 0 0

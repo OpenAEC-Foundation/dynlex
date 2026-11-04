@@ -1,0 +1,13 @@
+intkind means: @intrinsic("type", "int", 32)
+ptrkind means: @intrinsic("add pointer depth", intkind)
+
+section if condition:
+    replacement: @intrinsic("if", condition)
+section else:
+    replacement: @intrinsic("else")
+
+@intrinsic("store", p, @intrinsic("construct", ptrkind))
+if @intrinsic("equal", p, @intrinsic("construct", ptrkind)):
+    @intrinsic("discard", p)
+else:
+    @intrinsic("store at", p, 1)

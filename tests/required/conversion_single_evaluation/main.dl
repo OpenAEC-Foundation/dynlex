@@ -1,0 +1,57 @@
+import lib/std.dl
+
+class:
+    patterns:
+        number box
+    members:
+        payload as an integer
+
+class:
+    patterns:
+        alternate box
+    members:
+        payload as an integer
+
+implicitly convert {integer:number}:
+    execute:
+        print line "converted"
+        return a new number box from number
+
+implicitly convert {integer:number}:
+    execute:
+        print line "wrong candidate"
+        return a new alternate box from number
+
+to get the next number from {a pointer to integer:counter}:
+    store ((the value at counter) + 1) at counter
+    print line "read"
+    return 42
+
+to get the contents of {number box:container}:
+    return container's payload
+
+set counter to 0
+print line (the contents of (the next number from the address of counter))
+print line counter
+
+# Reusing a definition must not retain a previous call's conversion or values.
+set source to a new alternate box from 17
+set target to a new number box
+set target to source's payload
+print line target's payload
+store source's payload at the address of target
+print line target's payload
+print line (source's payload as number box)'s payload
+
+implicitly convert {integer:number}:
+    execute:
+        print line "float conversion"
+        return (number as a floating-point number) + 6.0
+
+# An impure conversion must invalidate the source's former constant value.
+set converted to 0.0
+set converted to 7
+if converted = 13.0:
+    print line "updated"
+else:
+    print line "stale"

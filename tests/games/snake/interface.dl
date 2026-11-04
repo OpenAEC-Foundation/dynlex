@@ -1,0 +1,174 @@
+import lib/ui_native.dl
+import tests/games/snake/rules.dl
+import tests/games/snake/painting.dl
+
+this match means: this window's state as a pointer to snake match
+the snake match in {a pointer to UI instance:instance} means: instance's state as a pointer to snake match
+
+to start snake in {a pointer to UI instance:instance}:
+    begin a run in (the snake match in instance)
+    show page "playing" in instance
+
+to open snake settings in {a pointer to UI instance:instance}:
+    set match to the snake match in instance
+    if match's phase = the playing screen:
+        pause or resume match
+    show page "settings" in instance
+
+to leave snake settings in {a pointer to UI instance:instance}:
+    set match to the snake match in instance
+    if match's phase = the paused screen:
+        show page "paused" in instance
+    else:
+        show page "menu" in instance
+
+to return to the snake menu in {a pointer to UI instance:instance}:
+    set match to the snake match in instance
+    set match's phase to the menu screen
+    set match's impact to false
+    show page "menu" in instance
+
+window snake studio:
+    group at 32 24 sized 420 by 64:
+        brand "SNAKE"
+        caption "A LITTLE FOCUS. A LITTLE FLOW."
+    group at 852 32 sized 236 by 40:
+        badge "Session status"
+    panel at 344 112 sized 744 by 600:
+        group at 24 20 sized 528 by 20:
+            eyebrow "THE PLAYFIELD"
+        canvas "Playfield" at 24 56 sized 528 by 528
+        group at 580 56 sized 140 by 504:
+            badge "Board mode"
+            space of 8 pixels
+            statistic "Score"
+            statistic "Session best"
+            statistic "Length"
+            statistic "Time"
+            caption "ONE CELL AT A TIME."
+    page "menu":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "A FAMILIAR GAME. A FRESH START."
+            space of 12 pixels
+            title "One more"
+            accent title "turn."
+            space of 4 pixels
+            label "Find your rhythm. Keep your edge."
+            label "How long can you stay in flow?"
+            space of 12 pixels
+            primary button "Start a run"
+            button "Settings"
+            space of 20 pixels
+            caption "24 x 24 cells. Endless possibilities."
+            caption "Your next best run starts here."
+    page "settings":
+        panel at 32 112 sized 288 by 600:
+            heading "Make it yours."
+            caption "Your rules. Your rhythm."
+            choices "Game pace":
+                option "Relaxed"
+                option "Classic"
+                option "Swift"
+            switch "Wrap edges"
+            switch "Show grid"
+            switch "Reduce motion"
+            choices "Snake color":
+                option "Mint"
+                option "Amber"
+                option "Violet"
+            primary button "Apply & play"
+            quiet button "Back"
+    page "playing":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "YOUR RUN"
+            space of 12 pixels
+            title "Stay in"
+            accent title "flow."
+            space of 4 pixels
+            label "Every turn is a new decision."
+            label "Make the next one count."
+            space of 12 pixels
+            primary button "Pause"
+            button "End run"
+            space of 20 pixels
+            caption "ARROWS / WASD   Steer"
+            caption "SPACE / ESC     Pause"
+    page "paused":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "TAKE A BREATH"
+            space of 12 pixels
+            title "No rush."
+            accent title "You're in"
+            title "control."
+            label "Your run is right where you left it."
+            space of 12 pixels
+            primary button "Keep playing"
+            button "New run"
+            button "Preferences"
+    page "finished":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "RUN COMPLETE"
+            space of 12 pixels
+            title "A good"
+            accent title "run."
+            statistic "Outcome"
+            space of 12 pixels
+            primary button "Try again"
+            button "Main menu"
+            caption "A new run is a new possibility."
+    page "impact":
+        panel at 32 112 sized 288 by 600:
+            eyebrow "RUN COMPLETE"
+            space of 12 pixels
+            title "Ouch."
+            accent title "Again?"
+            space of 4 pixels
+            label "A moment to catch your breath."
+    group at 32 728 sized 1056 by 20:
+        caption "ARROWS / WASD  MOVE     SPACE  PAUSE     TAB + ENTER  NAVIGATE     ESC  BACK"
+    style:
+        the interface uses a "midnight" theme
+        the interface fits 1120 by 760 pixels
+    code:
+        set the value of "Game pace" in this window to 1
+        set the value of "Show grid" in this window to 1
+        show page "menu" in this window
+        when the "Start a run" button is clicked:
+            start snake in this window
+        when the "Settings" button is clicked:
+            open snake settings in this window
+        when the "Apply & play" button is clicked:
+            start snake in this window
+        when the "Back" button is clicked:
+            leave snake settings in this window
+        when the "Pause" button is clicked:
+            pause or resume this match
+            if this match's phase = the paused screen:
+                show page "paused" in this window
+        when the "Keep playing" button is clicked:
+            pause or resume this match
+            show page "playing" in this window
+        when the "New run" button is clicked:
+            start snake in this window
+        when the "Preferences" button is clicked:
+            open snake settings in this window
+        when the "End run" button is clicked:
+            set this match's phase to the finished screen
+            show page "finished" in this window
+        when the "Try again" button is clicked:
+            start snake in this window
+        when the "Main menu" button is clicked:
+            return to the snake menu in this window
+        when the "Game pace" control changes:
+            set this match's pace to the value of "Game pace" in this window
+        when the "Snake color" control changes:
+            set this match's palette to the value of "Snake color" in this window
+        when the "Wrap edges" control changes:
+            set this match's wrap edges to the "Wrap edges" switch is on in this window
+        when the "Show grid" control changes:
+            set this match's show grid to the "Show grid" switch is on in this window
+        when the "Reduce motion" control changes:
+            set this match's reduced motion to the "Reduce motion" switch is on in this window
+            set this window's reduced motion to this match's reduced motion
+        when painting the "Playfield" canvas:
+            paint snake for (this canvas's instance) on this canvas

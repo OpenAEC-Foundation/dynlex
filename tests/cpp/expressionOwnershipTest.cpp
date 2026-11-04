@@ -40,6 +40,31 @@ static void checkBodyOwnership() {
 	expect(context.expressionAllocationStats->liveExpressions == 0, "last body user did not release its clones");
 }
 
+static void checkSectionResultOwnership() {
+	std::shared_ptr<ExpressionAllocationStats> stats;
+	{
+		ParseContext context;
+		stats = context.expressionAllocationStats;
+		auto files = std::make_unique<lsp::MemoryFileSystem>();
+		files->setFile("section-result-ownership.dl", R"(
+integer means: @intrinsic("type", "integer")
+section answer {name}:
+    declares: name
+    result: integer
+    value:
+        42
+answer example:
+@intrinsic("discard", example)
+)");
+		context.fileSystem = std::move(files);
+		if (!compile("section-result-ownership.dl", context)) {
+			context.printDiagnostics();
+			expect(false, "section result ownership fixture did not infer");
+		}
+	}
+	expect(stats->liveExpressions == 0, "section result inference leaked clones");
+}
+
 static void checkInferenceOwnership() {
 	std::string source = R"(
 integer means: @intrinsic("type", "int")
@@ -102,6 +127,7 @@ to get the boxed payload of {a number box:container}:
 		}
 		std::unordered_set<ExpressionStorage *> reachableStorage;
 		std::unordered_set<Expression *> visited;
+		std::unordered_set<Expression *> ownedArguments;
 		std::function<void(InstantiatedSectionBody *)> visitBody;
 		std::function<void(Expression *)> visitExpression = [&](Expression *expression) {
 			if (!expression || !visited.insert(expression).second)
@@ -109,7 +135,15 @@ to get the boxed payload of {a number box:container}:
 			for (Expression *argument : expression->arguments)
 				visitExpression(argument);
 			visitBody(expression->inferredFlexBody.get());
-			expect(!expression->inferredConversionStorage, "conversion storage survived materialization");
+			if (expression->ownedArgument) {
+				expect(
+					expression->arguments.size() == 1 && expression->arguments.front() == expression->ownedArgument.get(),
+					"synthetic call lost its owned source argument"
+				);
+				ownedArguments.insert(expression->ownedArgument.get());
+			}
+			if (expression->inferredValueStorage)
+				reachableStorage.insert(expression->inferredValueStorage.get());
 		};
 		visitBody = [&](InstantiatedSectionBody *body) {
 			if (!body || !reachableStorage.insert(body->expressions.get()).second)
@@ -135,7 +169,7 @@ to get the boxed payload of {a number box:container}:
 				visitSection(child);
 		};
 		visitSection(context.mainSection);
-		size_t reachable = 0;
+		size_t reachable = ownedArguments.size();
 		for (ExpressionStorage *storage : reachableStorage)
 			reachable += storage->expressions.size();
 		expect(stats->liveExpressions == reachable, "inference retained clones outside the final bodies");
@@ -147,5 +181,6 @@ to get the boxed payload of {a number box:container}:
 
 int main() {
 	checkBodyOwnership();
+	checkSectionResultOwnership();
 	checkInferenceOwnership();
 }

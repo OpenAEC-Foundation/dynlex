@@ -29,6 +29,7 @@ struct TypeConstraint {
 	ClassDefinition *classDefinition = nullptr;
 	std::optional<int> classInstantiationIndex;
 	std::shared_ptr<TypeConstraint> elementConstraint;
+	std::shared_ptr<const FunctionSignature> functionSignature;
 	bool requiresCompileTimeValue = false;
 
 	static TypeConstraint any() {
@@ -44,6 +45,7 @@ struct TypeConstraint {
 		TypeConstraint result = any();
 		result.kind = type.kind;
 		result.pointerDepth = type.pointerDepth;
+		result.functionSignature = type.functionSignature;
 		if (type.kind == DataType::Kind::Int || type.kind == DataType::Kind::UInt || type.kind == DataType::Kind::Float)
 			result.numericSize = type.numericSize;
 		if (type.kind == DataType::Kind::Array || type.kind == DataType::Kind::Vector) {
@@ -69,6 +71,7 @@ struct TypeConstraint {
 	static TypeConstraint fromTypeReference(const DataType &typeReference) {
 		requireCompilerInvariant(typeReference.kind == DataType::Kind::Type, "Constraint source must be a type reference");
 		TypeConstraint result = any();
+		result.functionSignature = typeReference.functionSignature;
 		if (typeReference.referencedKind == DataType::Kind::Unresolved) {
 			result.resolved = false;
 			return result;
@@ -104,6 +107,8 @@ struct TypeConstraint {
 	bool isResolved() const { return resolved; }
 
 	bool equivalentTo(const TypeConstraint &other) const {
+		if (!sameFunctionSignature(functionSignature, other.functionSignature))
+			return false;
 		if (resolved != other.resolved || kind != other.kind || numericSize != other.numericSize ||
 			pointerDepth != other.pointerDepth || arraySize != other.arraySize || matrixRows != other.matrixRows ||
 			matrixColumns != other.matrixColumns || requiresNumeric != other.requiresNumeric ||
@@ -117,13 +122,16 @@ struct TypeConstraint {
 
 	bool isStructurallyUnconstrained() const {
 		return !kind && !numericSize && !pointerDepth && !arraySize && !matrixRows && !matrixColumns && !requiresNumeric &&
-			   !requiresInteger && !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint;
+			   !requiresInteger && !constrainsClassDefinition && !classInstantiationIndex && !elementConstraint &&
+			   !functionSignature;
 	}
 
 	bool accepts(const DataType &argumentType, bool compileTimeKnown) const {
 		if (!resolved || !argumentType.isDeduced())
 			return false;
 		if (requiresCompileTimeValue && !compileTimeKnown)
+			return false;
+		if (functionSignature && !sameFunctionSignature(functionSignature, argumentType.functionSignature))
 			return false;
 		if (kind && argumentType.kind != *kind)
 			return false;
@@ -174,6 +182,8 @@ struct TypeConstraint {
 	bool structurallyOverlaps(const TypeConstraint &other) const {
 		if (!resolved || !other.resolved)
 			return true;
+		if (functionSignature && other.functionSignature && !sameFunctionSignature(functionSignature, other.functionSignature))
+			return false;
 		auto incompatible = [](const auto &left, const auto &right) {
 			return left.has_value() && right.has_value() && *left != *right;
 		};
@@ -220,6 +230,8 @@ struct TypeConstraint {
 	// Whether every value accepted by other is also accepted by this constraint.
 	bool contains(const TypeConstraint &other) const {
 		if (!resolved || !other.resolved)
+			return false;
+		if (functionSignature && !sameFunctionSignature(functionSignature, other.functionSignature))
 			return false;
 		auto containsField = [](const auto &required, const auto &provided) {
 			return !required.has_value() || (provided.has_value() && *required == *provided);
@@ -284,6 +296,11 @@ struct TypeConstraint {
 	static std::optional<TypeConstraint> conjunction(const TypeConstraint &left, const TypeConstraint &right) {
 		requireCompilerInvariant(left.resolved && right.resolved, "constraint conjunction requires resolved operands");
 		TypeConstraint result = left;
+		if (right.functionSignature) {
+			if (result.functionSignature && !sameFunctionSignature(result.functionSignature, right.functionSignature))
+				return std::nullopt;
+			result.functionSignature = right.functionSignature;
+		}
 		auto merge = [](auto &destination, const auto &source) {
 			if (!source)
 				return true;
@@ -344,6 +361,11 @@ struct TypeConstraint {
 			return std::nullopt;
 		DataType result{*kind};
 		result.pointerDepth = *pointerDepth;
+		if (*kind == DataType::Kind::Function) {
+			if (!functionSignature)
+				return std::nullopt;
+			result.functionSignature = functionSignature;
+		}
 		if (*kind == DataType::Kind::Int || *kind == DataType::Kind::UInt || *kind == DataType::Kind::Float) {
 			if (!numericSize)
 				return std::nullopt;
@@ -397,10 +419,18 @@ struct TypeConstraint {
 		result += "|ct" + std::to_string(requiresCompileTimeValue);
 		result += "|e";
 		result += elementConstraint ? elementConstraint->toInternalString() : "-";
+		if (functionSignature) {
+			result += "|fn(" + fromValueType(functionSignature->result).toInternalString();
+			for (const DataType &parameter : functionSignature->parameters)
+				result += "," + fromValueType(parameter).toInternalString();
+			result += ")";
+		}
 		return result + ")";
 	}
 
 	bool samePayload(const TypeConstraint &other, bool includeCompileTimeRequirement) const {
+		if (!sameFunctionSignature(functionSignature, other.functionSignature))
+			return false;
 		bool sameElement = (!elementConstraint && !other.elementConstraint) ||
 						   (elementConstraint && other.elementConstraint &&
 							elementConstraint->samePayload(*other.elementConstraint, includeCompileTimeRequirement));
@@ -428,6 +458,8 @@ struct TypeConstraint {
 			return leftScalars < rightScalars;
 		if (classDefinition != other.classDefinition)
 			return std::less<ClassDefinition *>{}(classDefinition, other.classDefinition);
+		if (!sameFunctionSignature(functionSignature, other.functionSignature))
+			return lessFunctionSignature(functionSignature, other.functionSignature);
 		if (!!elementConstraint != !!other.elementConstraint)
 			return !elementConstraint;
 		return elementConstraint && *elementConstraint < *other.elementConstraint;

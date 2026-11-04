@@ -1,0 +1,19 @@
+import lib/events.dl
+
+set squares to a synchronous event receiving integer returning integer
+when squares is requested:
+    return this request * this request
+
+print line (request 9 from squares)
+
+set greetings to a synchronous event receiving string returning string
+when greetings is requested:
+    return "Hello, " + this request + "!"
+
+print line (request "DynLex" from greetings)
+
+# A second binding replaces the responder on this instance.
+when squares is requested:
+    return this request + 10
+
+print line (request 9 from squares)

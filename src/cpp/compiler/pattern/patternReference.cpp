@@ -1,5 +1,6 @@
 #include "patternReference.h"
 #include "codeLine.h"
+#include "dataSections.h"
 #include "section.h"
 
 PatternReference::PatternReference(Expression *expression, SectionType patternType)
@@ -22,6 +23,19 @@ std::optional<std::string> numericPatternArgumentSpelling(const PatternReference
 
 void PatternReference::resolve(PatternMatch *matchResult) {
 	match = matchResult;
+	if (match) {
+		for (PatternDefinition *definition : match->matchingDefinitions) {
+			if (!definition->section->dataSection || definition->section->dataSection->declarationParameter.empty())
+				continue;
+			if (const VariableMatch *variable = dataSectionDeclaredVariable(*match, *definition)) {
+				range().section()->dataVariableDeclarations.insert(variable->name);
+				range().section()->registerExplicitVariableName(
+					variable->name,
+					Range(range().line, range().start() + variable->lineStartPos, range().start() + variable->lineEndPos)
+				);
+			}
+		}
+	}
 	resolved = true;
 	range().section()->decrementUnresolved();
 }

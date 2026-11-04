@@ -165,13 +165,9 @@ refineStorageRootType(const VariableStorageKey &root, Variable *variable, const 
 static std::optional<StorageTypeView> storageTypeView(
 	Expression *expression, InferenceContext &context, const BindingFrameStack &bindings, bool requireRoot = false
 ) {
-	if (expression->inferredConversion)
-		return storageTypeView(expression->inferredConversion, context, bindings, requireRoot);
 	ResolvedBindingLayers resolved = resolveInferenceBindingLayers(expression, bindings, &context);
 	Expression *value = resolved.expression;
 	requireCompilerInvariant(value != nullptr, "storage type view lost its expression");
-	if (value->inferredConversion)
-		return storageTypeView(value->inferredConversion, context, resolved.bindingFrameStack, requireRoot);
 	if (value->kind == Expression::Kind::Variable && value->variable) {
 		VariableStorageKey root = variableStorageKey(value);
 		Variable *variable = value->range.line->section->findVariable(value->variable);

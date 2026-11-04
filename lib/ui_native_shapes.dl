@@ -1,0 +1,218 @@
+import lib/font.dl
+import lib/ui_geometry.dl
+
+class:
+    patterns:
+        linear UI paint
+    members:
+        red as a 32 bit floating-point number
+        green as a 32 bit floating-point number
+        blue as a 32 bit floating-point number
+
+to get the UI [corner point] {integer:index} of {integer:steps} on {UI bounds:box} rounded by {floating-point number:radius} expanded by {floating-point number:fringe}:
+    set corner to index / steps
+    set step to index mod steps
+    set angle to (((corner * 90) + 180) as a floating-point number) + ((step as a floating-point number) * (90.0 / ((steps - 1) as a floating-point number)))
+    set radians to angle * 0.017453292519943295
+    set centerX to (box's x as a floating-point number) + radius
+    set centerY to (box's y as a floating-point number) + radius
+    if corner = 1 or corner = 2:
+        set centerX to ((box's x + box's width) as a floating-point number) - radius
+    if corner = 2 or corner = 3:
+        set centerY to ((box's y + box's height) as a floating-point number) - radius
+    return @intrinsic("construct", UI point, centerX + (the cosine of radians) * (radius + fringe), centerY + (the sine of radians) * (radius + fringe))
+
+to get the linear UI [ink] of {UI paint:ink} on {graphics frame:frame}:
+    set state to frame's window as a pointer to DynlexGraphics
+    return @intrinsic("construct", linear UI paint, graphics color channel (ink's red) for state, graphics color channel (ink's green) for state, graphics color channel (ink's blue) for state)
+
+to get linear UI ink between {linear UI paint:first} and {linear UI paint:second} at {floating-point number:amount}:
+    set phase to (the minimum of 1.0 and (the maximum of 0.0 and amount)) as a 32 bit floating-point number
+    set red to first's red + ((second's red - first's red) * phase)
+    set green to first's green + ((second's green - first's green) * phase)
+    set blue to first's blue + ((second's blue - first's blue) * phase)
+    return @intrinsic("construct", linear UI paint, red, green, blue)
+
+to add UI vertex {UI point:point} in {linear UI paint:ink} with alpha {integer:alpha} to {graphics frame:frame}:
+    set state to frame's window as a pointer to DynlexGraphics
+    set state's current_vertex's color to [ink's red, ink's green, ink's blue, (alpha as a 32 bit floating-point number) / (255.0 as a 32 bit floating-point number)]
+    add a vertex at x point's x and y point's y to frame
+
+to draw a rounded UI box {UI bounds:box} with radius {floating-point number:radius} in {UI paint:ink} on {graphics frame:frame}:
+    draw a rounded UI surface box with radius radius from ink to ink opacity 255 feathered by 0.75 on frame
+
+to add UI vertex {UI point:point} shaded from {linear UI paint:top} to {linear UI paint:bottom} across {UI bounds:box} with alpha {integer:alpha} to {graphics frame:frame}:
+    set amount to (point's y - box's y) / box's height
+    add UI vertex point in (linear UI ink between top and bottom at amount) with alpha alpha to frame
+
+# Geometry carries a gradient and coverage; the same primitive draws crisp
+# surfaces and wide, translucent shadow fringes at fractional coordinates.
+to draw a rounded UI surface {UI bounds:box} with radius {floating-point number:radius} from {UI paint:top} to {UI paint:bottom} opacity {integer:opacity} feathered by {floating-point number:feather} on {graphics frame:frame}:
+    if frame's drawable:
+        set upper to the linear UI ink of top on frame
+        set lower to the linear UI ink of bottom on frame
+        set rounding to radius
+        set limit to (box's width as a floating-point number) / 2.0
+        if box's height < box's width:
+            set limit to (box's height as a floating-point number) / 2.0
+        if rounding > limit:
+            set rounding to limit
+        set center to @intrinsic("construct", UI point, (box's x as a floating-point number) + (box's width as a floating-point number) / 2.0, (box's y as a floating-point number) + (box's height as a floating-point number) / 2.0)
+        set steps to the maximum of 5 and (((the square root of (rounding * 2.0)) as an integer) + 3)
+        set count to steps * 4
+        start triangles in frame
+        set index to 0
+        loop while index < count:
+            set next to (index + 1) mod count
+            set insideA to the UI corner point index of steps on box rounded by rounding expanded by -0.5
+            set insideB to the UI corner point next of steps on box rounded by rounding expanded by -0.5
+            set outsideA to the UI corner point index of steps on box rounded by rounding expanded by feather
+            set outsideB to the UI corner point next of steps on box rounded by rounding expanded by feather
+            add UI vertex center shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex insideA shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex insideB shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex insideA shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex insideB shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex outsideB shaded from upper to lower across box with alpha 0 to frame
+            add UI vertex insideA shaded from upper to lower across box with alpha opacity to frame
+            add UI vertex outsideB shaded from upper to lower across box with alpha 0 to frame
+            add UI vertex outsideA shaded from upper to lower across box with alpha 0 to frame
+            increment index
+        finish triangles in frame
+        set graphics vertex color to red 255 green 255 blue 255 alpha 255 in (frame's window as a pointer to DynlexGraphics)
+
+to draw a UI [shadow] under {UI bounds:box} with radius {floating-point number:radius} softness {floating-point number:softness} strength {integer:strength} in {UI paint:ink} on {graphics frame:frame}:
+    set shadow to UI box at (box's x) (box's y + 6.0) sized (box's width) (box's height)
+    draw a rounded UI surface shadow with radius radius from ink to ink opacity strength feathered by softness on frame
+
+to draw a UI disc at {UI point:center} with radius {floating-point number:radius} from {UI paint:top} to {UI paint:bottom} opacity {integer:opacity} on {graphics frame:frame}:
+    set box to UI box at (center's x - radius) (center's y - radius) sized (radius * 2.0) (radius * 2.0)
+    draw a rounded UI surface box with radius radius from top to bottom opacity opacity feathered by 0.75 on frame
+
+to draw a glass UI panel {UI bounds:box} with radius {floating-point number:radius} in {UI paint:ink} on {graphics frame:frame}:
+    draw a UI shadow under box with radius radius softness 12.0 strength 32 in (UI ink 0 0 0) on frame
+    set rim to UI ink between ink and (UI ink 164 196 221) at 0.12
+    set edge to UI ink between ink and (UI ink 2 8 16) at 0.18
+    draw a rounded UI surface box with radius radius from rim to edge opacity 255 feathered by 0.75 on frame
+    set inside to UI box at (box's x + 1.0) (box's y + 1.0) sized (box's width - 2.0) (box's height - 2.0)
+    set top to UI ink between ink and (UI ink 129 160 187) at 0.035
+    set bottom to UI ink between ink and (UI ink 2 8 18) at 0.1
+    draw a rounded UI surface inside with radius (radius - 1.0) from top to bottom opacity 255 feathered by 0.5 on frame
+    set reflection to UI box at (box's x + radius) (box's y + 1.0) sized (box's width - (2.0 * radius)) 0.8
+    draw a rounded UI surface reflection with radius 0.4 from (UI ink 211 232 245) to (UI ink 211 232 245) opacity 10 feathered by 0.5 on frame
+
+to draw a flat UI box {UI bounds:box} in {UI paint:ink} on {graphics frame:frame}:
+    draw a rectangle at x box's x and y box's y with width box's width and height box's height in color red ink's red, green ink's green and blue ink's blue in frame
+
+to draw UI text {a value:message} at {a value:x} {a value:y} with {font:typeface} in {UI paint:ink} on {graphics frame:frame}:
+    set rendering to the result of drawing message as text at x x and y y using typeface in color red ink's red, green ink's green and blue ink's blue in frame
+    require condition (rendering succeeded) reporting "Rendering UI text failed"
+
+to draw UI text {a value:message} centered in {UI bounds:box} with {font:typeface} in {UI paint:ink} on {graphics frame:frame}:
+    set width to the width of message using typeface
+    draw UI text message at (box's x + (box's width - width) / 2) (box's y + ((box's height / 2) + 5)) with typeface in ink on frame
+
+to draw a UI stroke from {UI point:first} to {UI point:second} with width {floating-point number:width} from {UI paint:first ink} to {UI paint:second ink} on {graphics frame:frame}:
+    draw a UI stroke from first to second with width width opacity 255 from first ink to second ink on frame
+
+to get the shaded UI color of {UI paint:ink} at {floating-point number:side} across {UI point:normal}:
+    set illumination to 0.5 - (side * ((normal's x * 0.3) + (normal's y * 0.5)))
+    set shine to (1.0 - side * side) * 0.2
+    set dark to UI ink between ink and (UI ink 5 39 48) at 0.3
+    set light to UI ink between ink and (UI ink 234 255 251) at 0.28
+    return UI ink between dark and light at (illumination + shine)
+
+to draw a glossy UI stroke from {UI point:first} to {UI point:second} with width {floating-point number:width} from {UI paint:first ink} to {UI paint:second ink} on {graphics frame:frame}:
+    set horizontal to second's x - first's x
+    set vertical to second's y - first's y
+    set distance to the square root of ((horizontal * horizontal) + (vertical * vertical))
+    if distance > 0.0:
+        set normal to a UI point at (-vertical / distance) and (horizontal / distance)
+        set layers to [-1.0, -0.45, 0.2, 1.0]
+        start triangles in frame
+        set index to 0
+        loop while index < 3:
+            set {first side} to the item at index in layers
+            set {second side} to the item at (index + 1) in layers
+            set {first offset} to (first side * width) / 2.0
+            set {second offset} to (second side * width) / 2.0
+            set {first A} to a UI point at (first's x + normal's x * first offset) and (first's y + normal's y * first offset)
+            set {first B} to a UI point at (first's x + normal's x * second offset) and (first's y + normal's y * second offset)
+            set {second A} to a UI point at (second's x + normal's x * first offset) and (second's y + normal's y * first offset)
+            set {second B} to a UI point at (second's x + normal's x * second offset) and (second's y + normal's y * second offset)
+            set {first light} to the linear UI ink of (the shaded UI color of first ink at first side across normal) on frame
+            set {first dark} to the linear UI ink of (the shaded UI color of first ink at second side across normal) on frame
+            set {second light} to the linear UI ink of (the shaded UI color of second ink at first side across normal) on frame
+            set {second dark} to the linear UI ink of (the shaded UI color of second ink at second side across normal) on frame
+            add UI vertex first A in first light with alpha 255 to frame
+            add UI vertex second A in second light with alpha 255 to frame
+            add UI vertex second B in second dark with alpha 255 to frame
+            add UI vertex first A in first light with alpha 255 to frame
+            add UI vertex second B in second dark with alpha 255 to frame
+            add UI vertex first B in first dark with alpha 255 to frame
+            increment index
+        set side to -1.0
+        loop while side <= 1.0:
+            set inside to (side * width) / 2.0
+            set outside to side * (width / 2.0 + 0.9)
+            set {first A} to a UI point at (first's x + normal's x * inside) and (first's y + normal's y * inside)
+            set {first B} to a UI point at (first's x + normal's x * outside) and (first's y + normal's y * outside)
+            set {second A} to a UI point at (second's x + normal's x * inside) and (second's y + normal's y * inside)
+            set {second B} to a UI point at (second's x + normal's x * outside) and (second's y + normal's y * outside)
+            set {first light} to the linear UI ink of (the shaded UI color of first ink at side across normal) on frame
+            set {second light} to the linear UI ink of (the shaded UI color of second ink at side across normal) on frame
+            add UI vertex first A in first light with alpha 255 to frame
+            add UI vertex second A in second light with alpha 255 to frame
+            add UI vertex second B in second light with alpha 0 to frame
+            add UI vertex first A in first light with alpha 255 to frame
+            add UI vertex second B in second light with alpha 0 to frame
+            add UI vertex first B in first light with alpha 0 to frame
+            set side to side + 2.0
+        finish triangles in frame
+        use vertex color red 255, green 255 and blue 255 in frame
+
+to draw a UI stroke from {UI point:first} to {UI point:second} with width {floating-point number:width} opacity {integer:opacity} from {UI paint:first ink} to {UI paint:second ink} on {graphics frame:frame}:
+    if (first's x = second's x) and (first's y = second's y):
+        return nothing
+    set {first paint} to the linear UI ink of first ink on frame
+    set {second paint} to the linear UI ink of second ink on frame
+    start triangles in frame
+    append a UI stroke from first to second with width width opacity opacity from first paint to second paint on frame
+    finish triangles in frame
+    use vertex color red 255, green 255 and blue 255 in frame
+
+to append a UI stroke from {UI point:first} to {UI point:second} with width {floating-point number:width} opacity {integer:opacity} from {linear UI paint:first paint} to {linear UI paint:second paint} on {graphics frame:frame}:
+    set horizontal to second's x - first's x
+    set vertical to second's y - first's y
+    set distance to the square root of ((horizontal * horizontal) + (vertical * vertical))
+    if distance > 0.0:
+        set across to (((vertical / distance) * width) / 2.0)
+        set along to (((horizontal / distance) * width) / 2.0)
+        set {first A} to a UI point at (first's x - across) and (first's y + along)
+        set {first B} to a UI point at (first's x + across) and (first's y - along)
+        set {second A} to a UI point at (second's x - across) and (second's y + along)
+        set {second B} to a UI point at (second's x + across) and (second's y - along)
+        add UI vertex first A in first paint with alpha opacity to frame
+        add UI vertex second A in second paint with alpha opacity to frame
+        add UI vertex second B in second paint with alpha opacity to frame
+        add UI vertex first A in first paint with alpha opacity to frame
+        add UI vertex second B in second paint with alpha opacity to frame
+        add UI vertex first B in first paint with alpha opacity to frame
+        set across to (vertical / distance) * (width / 2.0 + 0.9)
+        set along to (horizontal / distance) * (width / 2.0 + 0.9)
+        set {first outside A} to a UI point at (first's x - across) and (first's y + along)
+        set {first outside B} to a UI point at (first's x + across) and (first's y - along)
+        set {second outside A} to a UI point at (second's x - across) and (second's y + along)
+        set {second outside B} to a UI point at (second's x + across) and (second's y - along)
+        add UI vertex first A in first paint with alpha opacity to frame
+        add UI vertex second A in second paint with alpha opacity to frame
+        add UI vertex second outside A in second paint with alpha 0 to frame
+        add UI vertex first A in first paint with alpha opacity to frame
+        add UI vertex second outside A in second paint with alpha 0 to frame
+        add UI vertex first outside A in first paint with alpha 0 to frame
+        add UI vertex first B in first paint with alpha opacity to frame
+        add UI vertex second B in second paint with alpha opacity to frame
+        add UI vertex second outside B in second paint with alpha 0 to frame
+        add UI vertex first B in first paint with alpha opacity to frame
+        add UI vertex second outside B in second paint with alpha 0 to frame
+        add UI vertex first outside B in first paint with alpha 0 to frame

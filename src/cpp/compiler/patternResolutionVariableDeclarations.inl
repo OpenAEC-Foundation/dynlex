@@ -26,7 +26,7 @@ static const std::string *findVisibleExplicitWholeVariableName(const PatternRefe
 	if (!reference || !reference->range().line)
 		return nullptr;
 	std::optional<std::string> sourceName = explicitWholeVariableSourceName(reference);
-	if (!sourceName || sourceName->find(' ') == std::string::npos)
+	if (!sourceName)
 		return nullptr;
 	Section *sourceScope = reference->matchingScope ? reference->matchingScope : reference->range().section();
 	for (Section *section = sourceScope; section; section = section->parent) {
@@ -34,6 +34,10 @@ static const std::string *findVisibleExplicitWholeVariableName(const PatternRefe
 		if (declaration == section->explicitVariableDeclarations.end())
 			continue;
 		const Range &declarationRange = declaration->second;
+		if (section->dataVariableDeclarations.contains(*sourceName))
+			return &declaration->first;
+		if (sourceName->find(' ') == std::string::npos)
+			continue;
 		if (std::pair(declarationRange.line->mergedLineIndex, declarationRange.start()) <
 			std::pair(reference->range().line->mergedLineIndex, reference->range().start()))
 			return &declaration->first;
@@ -71,7 +75,8 @@ static Section *visibleExplicitVariableSection(Section *section, const std::stri
 		auto declaration = current->explicitVariableDeclarations.find(name);
 		if (declaration != current->explicitVariableDeclarations.end()) {
 			const Range &range = declaration->second;
-			if (std::pair(range.line->mergedLineIndex, range.start()) <= referencePosition)
+			if (current->dataVariableDeclarations.contains(name) ||
+				std::pair(range.line->mergedLineIndex, range.start()) <= referencePosition)
 				return current;
 		}
 		if (!declaredGlobalHere && current == functionScope)

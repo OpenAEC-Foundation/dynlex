@@ -1,0 +1,18 @@
+# Native drawing for the renderer-independent icon descriptions.
+import lib/ui_icons.dl
+import lib/ui_native_shapes.dl
+
+to draw UI icon {C string:name} in {UI bounds:box} in {UI paint:ink} on {graphics frame:frame}:
+    set drawing to the UI icon named name
+    set paint to the linear UI ink of ink on frame
+    set scale to box's width / 24.0
+    start triangles in frame
+    set index to 0
+    loop while index < drawing's count:
+        set line to the item at index in (drawing's lines)
+        set first to a UI point at (box's x + line's left * scale) and (box's y + line's top * scale)
+        set second to a UI point at (box's x + line's right * scale) and (box's y + line's bottom * scale)
+        append a UI stroke from first to second with width (1.5 * scale) opacity 255 from paint to paint on frame
+        increment index
+    finish triangles in frame
+    use vertex color red 255, green 255 and blue 255 in frame

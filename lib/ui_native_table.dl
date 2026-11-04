@@ -1,0 +1,31 @@
+import lib/ui_native_types.dl
+
+to draw UI table {UI reference:node} at {a value:x} {a value:y} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set theme to view's theme
+    set width to node's columns * theme's cell width
+    set height to node's rows * theme's cell height
+    draw a rounded UI box (UI box at (x - 1) (y - 1) sized (width + 2) (height + 2)) with radius 10.0 in (UI ink 209 218 233) on frame
+    draw a rounded UI box (UI box at x y sized width height) with radius 9.0 in (theme's table ink) on frame
+    set rowIndex to 0
+    loop while rowIndex < node's rows:
+        set ink to UI ink 54 67 88
+        set north to y + rowIndex * theme's cell height
+        if rowIndex < node's count:
+            set entry to the UI child at rowIndex in node
+            require condition ((entry's kind = 4) and (entry's count <= node's columns)) reporting "A UI table requires rows that fit its columns"
+            if entry's color != "":
+                draw a rounded UI box (UI box at (x + 1) (north + 1) sized (width - 2) (theme's cell height - 1)) with radius 9.0 in (the UI ink named (entry's color)) on frame
+                set ink to UI ink 255 255 255
+            set columnIndex to 0
+            loop while columnIndex < entry's count:
+                set cell to the UI child at columnIndex in entry
+                require condition (cell's kind = 5) reporting "A UI row requires text cells"
+                draw UI text (cell's text) at ((x + (columnIndex * theme's cell width)) + 16) ((north + (theme's cell height / 2)) + 5) with (view's typeface) in ink on frame
+                increment columnIndex
+        if rowIndex > 0:
+            draw a flat UI box (UI box at x north sized width 1) in (UI ink 211 222 241) on frame
+        increment rowIndex
+    set columnIndex to 1
+    loop while columnIndex < node's columns:
+        draw a flat UI box (UI box at (x + columnIndex * theme's cell width) (y + 1) sized 1 (height - 2)) in (UI ink 211 222 241) on frame
+        increment columnIndex

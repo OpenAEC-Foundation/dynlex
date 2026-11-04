@@ -87,6 +87,16 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	}
 
 	switch (type.kind) {
+	case DataType::Kind::Function: {
+		requireCompilerInvariant(concreteFunctionSignature(type.functionSignature), "callback debug type has no signature");
+		std::vector<llvm::Metadata *> parameters{getDIType(context, type.functionSignature->result)};
+		for (const DataType &parameter : type.functionSignature->parameters)
+			parameters.push_back(getDIType(context, parameter));
+		return context.diBuilder->createPointerType(
+			context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(parameters)),
+			context.llvmModule->getDataLayout().getPointerSizeInBits()
+		);
+	}
 	case DataType::Kind::Bool:
 		return context.diBuilder->createBasicType("bool", 8, llvm::dwarf::DW_ATE_boolean);
 	case DataType::Kind::Float: {
@@ -344,6 +354,8 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 	for (auto &[name, varDef] : definitions) {
 		Variable *var = section->findVariable(name);
 		requireCompilerInvariant(var != nullptr, "variableDefinitions contains a name missing from section variable metadata");
+		if (var->dataInitializer)
+			continue;
 		std::optional<DataType> finalizedType;
 		if (body)
 			collectFinalizedVariableTypes(body, normalizeBindingReference(varDef), finalizedType);
@@ -635,11 +647,11 @@ llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromTy
 	llvm::Type *targetLLVM = getLLVMType(context, toType);
 
 	// Pointer ↔ Integer conversions (check first, before kind-based checks)
-	if (fromType.isPointer() && toType.isPointer())
+	if (fromType.isAddress() && toType.isAddress())
 		return builder.CreateBitCast(val, targetLLVM, "ptop");
-	if (fromType.isPointer() && toType.isInteger())
+	if (fromType.isAddress() && toType.isInteger())
 		return builder.CreatePtrToInt(val, targetLLVM, "ptoi");
-	if (fromType.isInteger() && toType.isPointer())
+	if (fromType.isInteger() && toType.isAddress())
 		return builder.CreateIntToPtr(val, targetLLVM, "itop");
 
 	if (fromType.kind == DataType::Kind::Class && toType.kind == DataType::Kind::Class && !fromType.isPointer() &&

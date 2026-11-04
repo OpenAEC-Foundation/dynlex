@@ -19,6 +19,10 @@ import lib/graphics_context.dl
 # Naming them by user intent keeps the window-system implementation private.
 
 the escape key means: 256
+the space key means: 32
+the enter key means: 257
+the tab key means: 258
+the P key means: 80
 the A key means: 65
 the D key means: 68
 the E key means: 69
@@ -134,6 +138,22 @@ to get the cursor position of {pointer:window}:
 	@intrinsic("call", "glfw", "glfwGetCursorPos", nothing, the GLFW window of window, the address of x, the address of y)
 	return @intrinsic("construct", a cursor position, x, y)
 
+class:
+    patterns:
+        window dimensions
+    members:
+        width as an integer
+        height as an integer
+
+to get the window dimensions of {pointer:window}:
+    set horizontal to 0
+    set vertical to 0
+    @intrinsic("call", "glfw", "glfwGetWindowSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
+    return @intrinsic("construct", window dimensions, horizontal, vertical)
+
+to keep {pointer:window} at aspect {integer:width} by {integer:height}:
+    @intrinsic("call", "glfw", "glfwSetWindowAspectRatio", nothing, the GLFW window of window, width, height)
+
 to get {mouse button:button} is pressed in {pointer:window}:
 	return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, the GLFW window of window, button's number) != 0
 
@@ -148,6 +168,9 @@ to release the mouse cursor in {pointer:window}:
 
 to preserve mouse clicks in {pointer:window}:
 	@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208899, 1)
+
+to preserve key presses in {pointer:window}:
+	@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208898, 1)
 
 to [set the application state of] {pointer:window} [to] {pointer:data}:
 	set state to window as a pointer to DynlexGraphics
@@ -217,7 +240,7 @@ flex function display {graphics frame:frame}:
 		if frame's drawable:
 			present the Vulkan frame in (frame's window as a pointer to DynlexGraphics)
 		else:
-			@intrinsic("call", "glfw", "glfwPollEvents", nothing)
+			poll window events
 		set frame's drawable to false
 
 to use screen coordinates in {graphics frame:frame}:

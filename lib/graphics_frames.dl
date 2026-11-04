@@ -2,6 +2,7 @@ import lib/vulkan_memory.dl
 import lib/graphics_builtin_pipelines.dl
 import lib/graphics_textures.dl
 import lib/vulkan_frame_types.dl
+import lib/graphics_window.dl
 
 to get [begin a Vulkan frame cleared to red] {floating-point number:red} [green] {floating-point number:green} [blue] {floating-point number:blue} [alpha] {floating-point number:alpha} [in] {a pointer to DynlexGraphics:state}:
     require condition (state's frame_active = false) reporting "Beginning a graphics frame requires an idle graphics context"
@@ -80,7 +81,7 @@ to [present the Vulkan frame in] {a pointer to DynlexGraphics:state}:
     set result to @intrinsic("call", "vulkan", "vkQueuePresentKHR", an integer, state's present_queue, the address of presentation)
     set state's frame_active to false
     set state's frame_index to ((state's frame_index + 1) mod (the length of state's frames)) as a 32 bit unsigned integer
-    @intrinsic("call", "glfw", "glfwPollEvents", nothing)
+    poll window events
     if result = -1000001004 or result = 1000001003:
         set state's swapchain_dirty to true
     else:

@@ -1,0 +1,104 @@
+import lib/ui_native_icons.dl
+import lib/ui_native.dl
+
+to draw ribbon control {a pointer to UI layout:layout} in {UI bounds:box} focused {boolean:focused} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set node to layout's node
+    set ink to view's theme's text
+    set background to UI ink between (UI ink 255 255 255) and (UI ink 222 228 237) at (layout's hover * 0.65)
+    if view's pressed = layout:
+        set background to UI ink 224 229 237
+    if focused and view's keyboard focus:
+        draw a rounded UI box (UI box at (box's x - 2.0) (box's y - 2.0) sized (box's width + 4.0) (box's height + 4.0)) with radius 6.0 in (view's theme's accent) on frame
+    if node's kind = 29:
+        set background to UI ink between (view's theme's background) and (UI ink 228 231 235) at (layout's hover * 0.7)
+        draw a rounded UI box box with radius 6.0 in background on frame
+        if node = (the selected tab of (layout's parent) in (view's instance)):
+            set ink to view's theme's accent
+            draw UI text (node's text) centered in box with (view's strong) in ink on frame
+        else:
+            draw UI text (node's text) centered in box with (view's typeface) in ink on frame
+        return nothing
+    if node's kind = 34:
+        draw a rounded UI box box with radius 4.0 in (UI ink 210 214 221) on frame
+        draw a rounded UI box (UI box at (box's x + 1.0) (box's y + 1.0) sized (box's width - 2.0) (box's height - 2.0)) with radius 3.0 in background on frame
+        draw UI text (node's text) at (box's x + 8.0) (box's y + 19.0) with (view's small) in ink on frame
+        draw UI icon "down" in (UI box at ((box's x + box's width) - 17.0) (box's y + 10.0) sized 8 8) in (view's theme's muted) on frame
+        return nothing
+    draw a rounded UI box box with radius 5.0 in background on frame
+    if node's rows = 3:
+        set color to the UI ink named (node's color)
+        set preview to UI box at (box's x + 5.0) (box's y + 4.0) sized (box's width - 10.0) 55
+        draw a rounded UI box preview with radius 3.0 in (UI ink 213 219 226) on frame
+        draw a flat UI box (UI box at (preview's x + 1.0) (preview's y + 1.0) sized (preview's width - 2.0) 53) in (UI ink between (UI ink 255 255 255) and color at 0.06) on frame
+        draw a flat UI box (UI box at ((preview's x + preview's width) - 23.0) (preview's y + 1.0) sized 22 53) in color on frame
+        draw UI text "Aa" at (preview's x + 9.0) (preview's y + 33.0) with (view's heading) in color on frame
+        draw a flat UI box (UI box at (preview's x + 11.0) (preview's y + 42.0) sized 35 2) in (UI ink between color and (UI ink 255 255 255) at 0.6) on frame
+        draw UI text (node's text) centered in (UI box at (box's x) (box's y + 59.0) sized (box's width) 22) with (view's small) in ink on frame
+        return nothing
+    set {icon ink} to UI ink 71 102 127
+    if (node's variant = "paste") or ((node's variant = "slide") or (node's variant = "star")):
+        set icon ink to view's theme's accent
+    if node's rows = 1:
+        draw UI icon (node's variant) in (UI box at (box's x + ((box's width - 30.0) / 2.0)) (box's y + 7.0) sized 30 30) in icon ink on frame
+        draw UI text (node's text) centered in (UI box at (box's x) (box's y + 40.0) sized (box's width) 22) with (view's small) in ink on frame
+        draw UI icon "down" in (UI box at (box's x + ((box's width - 8.0) / 2.0)) (box's y + 69.0) sized 8 8) in (view's theme's muted) on frame
+    else if node's rows = 2:
+        draw UI icon (node's variant) in (UI box at (box's x + 6.0) (box's y + 5.0) sized 18 18) in ink on frame
+    else:
+        draw UI icon (node's variant) in (UI box at (box's x + 5.0) (box's y + 5.0) sized 18 18) in icon ink on frame
+        draw UI text (node's text) at (box's x + 31.0) (box's y + 19.0) with (view's small) in ink on frame
+
+to draw UI ribbon {a pointer to UI layout:layout} in {UI bounds:box} with cursor {cursor position:cursor} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set body to UI box at (box's x) (box's y + 40.0) sized (box's width) (box's height - 40.0)
+    draw a UI shadow under body with radius 10.0 softness 5.0 strength 12 in (UI ink 30 39 51) on frame
+    draw a rounded UI box body with radius 10.0 in (UI ink 255 255 255) on frame
+    set selected to the selected tab of (layout's node) in (view's instance)
+    set active to @intrinsic("construct", a pointer to UI layout)
+    set child to layout's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        set header to child's bounds
+        set header's x to header's x + box's x
+        set header's y to header's y + box's y
+        draw UI control child in header with cursor cursor in view on frame
+        if child's node = selected:
+            set active to child
+        set child to child's next
+    require condition (active != @intrinsic("construct", a pointer to UI layout)) reporting "The selected tab has no native layout"
+    set destination to active's bounds' x + 14.0
+    set width to active's bounds' width - 28.0
+    if (layout's painted = false) or view's instance's reduced motion:
+        set layout's transition to destination
+        set layout's extent to width
+    else:
+        set response to the minimum of 1.0 and (view's frame seconds * 22.0)
+        set layout's transition to layout's transition + ((destination - layout's transition) * response)
+        set layout's extent to layout's extent + ((width - layout's extent) * response)
+    set layout's painted to true
+    draw a rounded UI box (UI box at (box's x + layout's transition) (box's y + 35.0) sized (layout's extent) 3) with radius 1.5 in (view's theme's accent) on frame
+    set child to active's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        draw UI layout child at (box's x + 6.0) (box's y + 45.0) with cursor cursor in view on frame
+        set child to child's next
+
+to navigate UI tabs in {a pointer to native UI view:view}:
+    set left to false
+    set right to false
+    if view's keyboard focus and (view's focused != @intrinsic("construct", a pointer to UI layout)):
+        if view's focused's node's kind = 29:
+            set left to key 263 is down in view's window
+            set right to key 262 is down in view's window
+            set direction to 0
+            if left and (view's was left = false):
+                set direction to -1
+            if right and (view's was right = false):
+                set direction to 1
+            if direction != 0:
+                set ribbon to view's focused's parent
+                set current to 0
+                loop while (the UI child at current in ribbon) != view's focused's node:
+                    increment current
+                set index to ((current + direction) + ribbon's count) mod ribbon's count
+                set view's focus order to view's focus order + (index - current)
+                activate (the UI child at index in ribbon) belonging to ribbon in (view's instance)
+    set view's was left to left
+    set view's was right to right

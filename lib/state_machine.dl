@@ -1,0 +1,72 @@
+# Editable declarative grammar, plus a separate interpreter for runtime instances.
+import lib/sections.dl
+
+class:
+    patterns:
+        machine state
+    members:
+        name as a C string
+        transitions as a pointer to a pointer to state transition
+        count as an integer
+
+class:
+    patterns:
+        state transition
+    members:
+        event as a C string
+        target as a pointer to machine state
+
+class:
+    patterns:
+        machine description
+    members:
+        name as a C string
+        initial as a pointer to machine state
+        states as a pointer to a pointer to machine state
+        count as an integer
+
+class:
+    patterns:
+        machine instance
+    members:
+        description as a pointer to machine description
+        current as a pointer to machine state
+
+section state machine {name}:
+    declares: name
+    result: a pointer to machine description
+    body:
+        initial state: a pointer to machine state
+        states: many a pointer to machine state
+    value:
+        a static reference to @intrinsic("construct", machine description, name, the body's initial state, @intrinsic("cast", a static reference to (the body's states), a pointer to a pointer to machine state), the length of (the body's states))
+
+section state {name}:
+    declares: name
+    result: a pointer to machine state
+    body:
+        transitions: many a pointer to state transition
+    value:
+        a static reference to @intrinsic("construct", machine state, name, @intrinsic("cast", a static reference to (the body's transitions), a pointer to a pointer to state transition), the length of (the body's transitions))
+
+section on {C string:event}:
+    result: a pointer to state transition
+    body:
+        target: a pointer to machine state
+    value:
+        a static reference to @intrinsic("construct", state transition, event, the body's target)
+
+to get an instance of {a pointer to machine description:description}:
+    return @intrinsic("construct", machine instance, description, description's initial)
+
+to send {C string:event} to {a pointer to machine instance:instance}:
+    set state to instance's current
+    set index to 0
+    loop while index < state's count:
+        set transition to the item at index in (state's transitions)
+        if transition's event = event:
+            set instance's current to transition's target
+            return nothing
+        increment index
+    print line "No transition for this event"
+    abort the program

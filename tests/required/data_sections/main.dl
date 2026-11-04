@@ -1,0 +1,40 @@
+import lib/std.dl
+
+many {type:kind} means: @intrinsic("array", kind)
+body field {fixed C string:name} means: @intrinsic("section field", name)
+
+section numbers {name}:
+    declares: name
+    body:
+        items: many integer
+    value:
+        body field "items"
+
+numbers example numbers:
+    1
+    0
+    4
+
+print line the length of example numbers
+print line the item at 0 in example numbers
+print line the item at 2 in example numbers
+
+section matrix {name}:
+    declares: name
+    body:
+        rows: an array
+    value:
+        body field "rows"
+
+section row:
+    body:
+        cells: many integer
+    value:
+        body field "cells"
+
+matrix grid:
+    row:
+        2
+        3
+
+print line the item at 1 in grid

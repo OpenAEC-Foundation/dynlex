@@ -1,0 +1,12 @@
+# Project the current simulation pose into the playfield.
+import tests/games/snake/motion.dl
+import lib/ui_geometry.dl
+
+to get the painted [position] of {snake position:position} in {UI bounds:box}:
+    set scale to (box's width - 16.0) / ((the snake board width + 1) as a floating-point number)
+    set x to (box's x + 8.0) + ((position's column + 1.0) * scale)
+    set y to (box's y + 8.0) + ((position's row + 1.0) * scale)
+    return a UI point at x and y
+
+to get the painted snake point {integer:index} for {a pointer to snake match:match} in {UI bounds:box}:
+    return the painted position of (the snake position index in match) in box
