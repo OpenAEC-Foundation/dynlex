@@ -1,5 +1,3 @@
-import std.dl
-
 # A pattern's choices multiply into concrete paths; an unbounded product
 # would hang the compiler, so it is rejected with a diagnostic instead.
 to probe [a1|b1] [a2|b2] [a3|b3] [a4|b4] [a5|b5] [a6|b6] [a7|b7] [a8|b8] [a9|b9] [a10|b10] [a11|b11]: print line 1

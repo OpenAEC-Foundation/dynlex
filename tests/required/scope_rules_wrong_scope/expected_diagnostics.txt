@@ -1,0 +1,1 @@
+tests/required/scope_rules_wrong_scope/main.dl:1-29: Error: 'in this function' must appear directly inside a function, conversion or section definition

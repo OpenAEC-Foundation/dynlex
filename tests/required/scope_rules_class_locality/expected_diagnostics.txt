@@ -1,0 +1,1 @@
+tests/required/scope_rules_class_locality/main.dl:9-28: Error: Locality rules have no effect in a class, which contains no definitions
