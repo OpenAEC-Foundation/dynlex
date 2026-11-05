@@ -11,6 +11,10 @@ A natural-language-like programming language that compiles to native code via LL
 - Named compile-time values via zero-argument replacement functions (see [`docs/named_compile_time_values.md`](./docs/named_compile_time_values.md))
 - VS Code extension with LSP support
 
+CAD and BIM geometry lives in the separate
+[dynlex-cadkernel](https://github.com/OpenAEC-Foundation/dynlex-cadkernel)
+repository.
+
 ## Build
 
 ```bash
@@ -33,6 +37,18 @@ cache location instead. Build that toolchain independently with:
 The normal build uses `-O2` while retaining debug information and compiler
 invariants. Use `./scripts/build.sh --debug` when an unoptimized executable is
 needed for source-level debugging.
+
+## Tests
+
+```bash
+./scripts/test.sh
+./scripts/test.sh --integration
+```
+
+The required suite checks focused compiler behavior and has a 120-second
+process-tree budget starting after the compiler build. Integration tests cover
+larger library and application programs separately. Release verification runs
+both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
 
 ## Browser Compiler
 
