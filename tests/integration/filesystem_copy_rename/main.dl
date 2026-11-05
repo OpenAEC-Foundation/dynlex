@@ -1,0 +1,14 @@
+import lib/filesystem.dl
+
+set source to "tests/integration/filesystem_copy_rename/input.txt"
+set copy to "tests/integration/filesystem_copy_rename/copy.tmp"
+delete the filesystem entry at copy
+
+copy the filesystem entry at source to copy
+print line it succeeded
+set stream to @intrinsic("call", "libc", "fopen", a pointer to a byte, copy, "rb")
+set initial to @intrinsic("call", "libc", "fgetc", an integer, stream)
+ignore @intrinsic("call", "libc", "fclose", an integer, stream)
+ignore @intrinsic("variadic call", "libc", "printf", an integer, 1, "%d\n", initial)
+
+delete the filesystem entry at copy

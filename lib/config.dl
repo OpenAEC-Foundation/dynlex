@@ -210,6 +210,9 @@ dynlex options:
             variable read before assigned: "Variable '{name}' may be read before being assigned"
             related argument definition: "Defined as argument here"
             related assignment: "Assigned here"
+        deferred callback captures local:
+            message: "Deferred callback cannot capture local variable '{name}'"
+            related definition: "Local variable is defined here"
         arithmetic operator operand invalid: "Arithmetic operator '{operator}' requires a numeric scalar or vector operand, got '{value_type}'"
         incompatible operand types: "Incompatible operand types '{left_type}' and '{right_type}'"
         file scope rules misplaced: "'{scope}' must appear at the top level of a file"

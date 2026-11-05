@@ -1,0 +1,12 @@
+import lib/filesystem.dl
+
+set source to "tests/integration/filesystem_rename/source.tmp"
+set destination to "tests/integration/filesystem_rename/moved.tmp"
+delete the filesystem entry at source
+delete the filesystem entry at destination
+
+write the string form of "contents" to the file at source
+rename the filesystem entry at source to destination
+print lines (it succeeded), (source is readable) and (destination is readable)
+
+delete the filesystem entry at destination

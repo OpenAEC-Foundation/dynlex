@@ -1,1 +1,0 @@
-tests/required/scope_rules_local_hidden/main.dl:1-25: Error: This pattern couldn't be resolved

@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/integration/local_class_hidden/helper.dl
+
+ignore a hidden record

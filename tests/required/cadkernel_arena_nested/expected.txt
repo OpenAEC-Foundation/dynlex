@@ -1,5 +1,0 @@
-alpha
-Alpha
-beta
-Alpha
-true

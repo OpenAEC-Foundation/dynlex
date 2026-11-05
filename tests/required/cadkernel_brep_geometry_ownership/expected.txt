@@ -1,4 +1,0 @@
-native knot edge survives variant replacement, clone and list cleanup
-planar edge preserves normalized parameter and derivative
-tensor spline surface retains owned rows and uses knot derivatives
-variant equality keeps NaN nonreflexivity and signed-zero equality

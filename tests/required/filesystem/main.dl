@@ -1,7 +1,0 @@
-import lib/filesystem.dl
-
-set path to "tests/required/filesystem/delete.tmp"
-delete the filesystem entry at path
-write the string form of "delete me" to the file at path
-
-delete the filesystem entry at path and print line it succeeded

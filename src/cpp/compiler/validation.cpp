@@ -2,6 +2,7 @@
 #include "compiler.h"
 #include "expression.h"
 #include "intrinsicInfo.h"
+#include "parseContext.h"
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
@@ -172,7 +173,60 @@ static void validateSection(ParseContext &context, Section *section) {
 		validateSection(context, child);
 }
 
+static bool isWithinSection(const Section *section, const Section *ancestor) {
+	for (const Section *current = section; current; current = current->parent)
+		if (current == ancestor)
+			return true;
+	return false;
+}
+
+static bool validateDeferredCaptures(ParseContext &context, Section *function) {
+	if (!function->receiverParameter)
+		return true;
+	const auto inspectBody = [&](auto &&self, Section *body) -> bool {
+		for (const auto &[name, references] : body->variableReferences) {
+			(void)name;
+			for (VariableReference *reference : references) {
+				requireCompilerInvariant(reference && reference->range.line, "deferred body has an invalid variable reference");
+				VariableReference *definition = normalizeBindingReference(reference);
+				requireCompilerInvariant(definition && definition->range.line, "deferred body variable has no definition");
+				Variable *variable = reference->range.section()->findVariable(reference);
+				requireCompilerInvariant(variable, "deferred body variable is absent from its scope");
+				if (variable->isGlobal || isWithinSection(definition->range.section(), function))
+					continue;
+				Diagnostic diagnostic(
+					context, Diagnostic::Level::Error, "deferred callback captures local", reference->range, "name",
+					variable->name
+				);
+				const SyntaxConfig &syntax = syntaxConfigForRange(context, reference->range);
+				diagnostic.relatedInfo.push_back(
+					{renderConfiguredMessage(syntax, "deferred callback captures local", "related definition"),
+					 definition->range}
+				);
+				context.addDiagnostic(std::move(diagnostic));
+				return false;
+			}
+		}
+		for (Section *child : body->children)
+			if (child->runsInEnclosingBody() && !self(self, child))
+				return false;
+		return true;
+	};
+	for (Section *child : function->children)
+		if (child->runsInEnclosingBody() && !inspectBody(inspectBody, child))
+			return false;
+	return true;
+}
+
 bool validate(ParseContext &context) {
 	validateSection(context, context.mainSection);
-	return true;
+	const auto validateCallbacks = [&](auto &&self, Section *section) -> bool {
+		if (!validateDeferredCaptures(context, section))
+			return false;
+		for (Section *child : section->children)
+			if (!self(self, child))
+				return false;
+		return true;
+	};
+	return validateCallbacks(validateCallbacks, context.mainSection);
 }

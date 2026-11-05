@@ -1,1 +1,0 @@
-tests/required/lifecycle_duplicate_section/main.dl:5-11: Error: class has more than one retain section

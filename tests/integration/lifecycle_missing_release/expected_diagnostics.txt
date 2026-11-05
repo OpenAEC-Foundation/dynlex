@@ -1,0 +1,1 @@
+tests/integration/lifecycle_missing_release/main.dl:1-6: Error: managed class requires both retain and release sections

@@ -1,0 +1,1 @@
+tests/integration/choice_combination_limit/main.dl:4-101: Error: pattern expands to more than 1024 choice combinations

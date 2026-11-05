@@ -72,7 +72,9 @@ class EntryPointResult:
 
 def is_existing_test_file(path: Path, repo_root: Path) -> bool:
     relative = path.relative_to(repo_root)
-    return relative.parts[:2] == ("tests", "required") or relative == Path("tests/purity_dump/main.dl")
+    return relative.parts[:2] in (("tests", "required"), ("tests", "integration")) or relative == Path(
+        "tests/purity_dump/main.dl"
+    )
 
 
 def read_dependencies(compiler: Path, path: Path, repo_root: Path, timeout: float) -> Dependencies:

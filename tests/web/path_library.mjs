@@ -16,7 +16,7 @@ const compiler = path.resolve(process.argv[2]);
 const temporary = mkdtempSync(path.join(tmpdir(), "dynlex-path-wasm-"));
 try {
   for (const name of ["path_library", "path_uri", "path_uri_edge_cases"]) {
-    const source = path.join(project, "tests/required", name, "main.dl");
+    const source = path.join(project, "tests/integration", name, "main.dl");
     const wasm = path.join(temporary, `${name}.wasm`);
     const diagnostics = execFileSync(compiler, [source, "--emit-wasm", "-o", wasm], { cwd: project, encoding: "utf8" });
     assert.equal(diagnostics, "");
@@ -29,7 +29,7 @@ try {
     const imports = buildRuntimeImports(output, createRuntimeFilesystem(), inspectRuntimeWasmLayout(bytes));
     const instance = await WebAssembly.instantiate(module, imports);
     instance.exports.main();
-    const expected = readFileSync(path.join(project, "tests/required", name, "expected.txt"), "utf8");
+    const expected = readFileSync(path.join(project, "tests/integration", name, "expected.txt"), "utf8");
     assert.equal(output.join("").trim(), expected.trim(), name);
     console.log(`${name}: compiled DynLex WebAssembly passed`);
   }

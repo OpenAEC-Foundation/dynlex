@@ -1,0 +1,13 @@
+integer means: @intrinsic("type", "integer")
+
+section using {integer:id}:
+    receiver: integer
+    returns: integer
+    value:
+        @intrinsic("discard", @intrinsic("invoke", @intrinsic("deferred body"), 0))
+
+to test {integer:base}:
+    using 1:
+        @intrinsic("return", base)
+
+test 5

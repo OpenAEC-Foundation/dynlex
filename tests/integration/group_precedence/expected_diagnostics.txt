@@ -1,0 +1,10 @@
+tests/integration/group_precedence/main.dl:55-96: Warning: Expression 'the square root of (2.0 + 3.0 + 4.0 * 4.0' has multiple valid operand groupings. Using 'the square root of ((2.0 + 3.0) + (4.0 * 4.0))' instead of 'the square root of (2.0 + (3.0 + (4.0 * 4.0)))'.
+  note: while inferring call 'the square root of (2.0 + 3.0 + 4.0 * 4.0' with arguments [a 64-bit floating-point number] -> a 64-bit floating-point number tests/integration/group_precedence/main.dl:55-96
+  note: while inferring call 'print line message' with arguments [an argument reference] -> an unresolved value lib/string.dl:13-31
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring intrinsic 'execute body' in '@intrinsic("execute body")' -> an unresolved value lib/std.dl:9-35
+  note: while inferring call 'execute the body' -> an unresolved value lib/std.dl:13-29
+  note: while inferring call 'loop index from 0 to the length of collection' with arguments [a 32-bit integer, a 32-bit integer, a 32-bit integer] -> an unresolved value lib/std.dl:9-54
+  note: while inferring call 'for each {message} in messages' with arguments [an argument reference, an argument pack] -> an unresolved value lib/string.dl:9-39
+  note: while inferring call 'print lines (2.0 + 3.0 * 4.0), (2.0 + 3.0 * 4.0) and (the square root of (2.0 + 3.0 + 4.0 * 4.0)' with arguments [an argument pack] -> an unresolved value tests/integration/group_precedence/main.dl:1-97

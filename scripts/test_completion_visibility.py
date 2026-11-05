@@ -23,7 +23,7 @@ def completion_output(compiler: Path, source: Path, position: str) -> str:
 def main() -> int:
     project_dir = Path(__file__).resolve().parent.parent
     compiler = Path(sys.argv[1]) if len(sys.argv) > 1 else project_dir / "build" / "dynlex"
-    fixture_dir = project_dir / "tests" / "required" / "local_functions"
+    fixture_dir = project_dir / "tests" / "integration" / "local_functions"
 
     imported_labels = completion_labels(compiler, fixture_dir / "main.dl")
     if "secret" in imported_labels:
@@ -46,7 +46,7 @@ def main() -> int:
                 f"completion invented parameter names in {source.name}: {placeholders}"
             )
 
-    multi_word_source = project_dir / "tests" / "required" / "multi_word_variables" / "main.dl"
+    multi_word_source = project_dir / "tests" / "integration" / "multi_word_variables" / "main.dl"
     before_declaration = completion_labels(compiler, multi_word_source, "20:12")
     for future_name in ["same line value", "val", "numeric value"]:
         if future_name in before_declaration:
@@ -75,7 +75,7 @@ def main() -> int:
         raise AssertionError("completion duplicated a multi-word variable prefix before the cursor")
 
     shorthand_source = (
-        project_dir / "tests" / "required" / "declaration_shorthand_source_mapping" / "main.dl"
+        project_dir / "tests" / "integration" / "declaration_shorthand_source_mapping" / "main.dl"
     )
     shorthand_body_labels = completion_labels(compiler, shorthand_source, "4:30")
     if "value" not in shorthand_body_labels:

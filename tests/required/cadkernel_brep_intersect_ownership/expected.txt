@@ -1,2 +1,0 @@
-curves_and_points_survive_returns_copies_clones_resets_and_lists
-empty_and_zero_results_clone_and_remain_distinct

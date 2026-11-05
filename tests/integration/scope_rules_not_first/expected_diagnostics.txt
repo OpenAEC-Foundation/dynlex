@@ -1,0 +1,2 @@
+tests/integration/scope_rules_not_first/main.dl:1-25: Error: Scope rules must precede every other line of their scope
+  note: This line comes first tests/integration/scope_rules_not_first/main.dl:1-13

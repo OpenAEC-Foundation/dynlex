@@ -1,5 +1,0 @@
-tests/required/implicit_conversion_ambiguous/main.dl:40-41: Error: More than one conversion from a 32-bit integer to a number box is equally specific
-  note: Conversion is defined here tests/required/implicit_conversion_ambiguous/main.dl:20-35
-  note: Conversion is defined here tests/required/implicit_conversion_ambiguous/main.dl:20-36
-  note: while inferring call 'the payload unwrapped from 8' with arguments [a 32-bit integer] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:13-41
-  note: while inferring call 'print line (the payload unwrapped from 8' with arguments [an unresolved value] -> an unresolved value tests/required/implicit_conversion_ambiguous/main.dl:1-41

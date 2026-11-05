@@ -1,7 +1,0 @@
-# SPDX-License-Identifier: MPL-2.0
-# Port of cadkernel src/brep/presspull.rs at
-# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-# Face offsets edit cloned topology in place so concavity, holes and unrelated
-# lumps are retained. Region booleans are added with the boolean dependency.
-import lib/bim/brep_presspull_regions.dl
-import lib/bim/brep_presspull_offset.dl

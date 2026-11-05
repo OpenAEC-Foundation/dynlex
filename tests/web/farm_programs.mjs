@@ -11,8 +11,8 @@ import { assignRole, tickFarm, canDeliver, deliverOrder } from "../../web/farm-s
 const temporary = mkdtempSync(path.join(tmpdir(), "dynlex-farm-programs-"));
 const compiler = path.resolve("build/dynlex");
 try {
-  execFileSync(compiler, ["tests/required/farm_challenge/main.dl", "-o", path.join(temporary, "fixture.out")]);
-  assert.equal(execFileSync(path.join(temporary, "fixture.out"), { encoding: "utf8" }), readFileSync("tests/required/farm_challenge/expected.txt", "utf8"));
+  execFileSync(compiler, ["tests/integration/farm_challenge/main.dl", "-o", path.join(temporary, "fixture.out")]);
+  assert.equal(execFileSync(path.join(temporary, "fixture.out"), { encoding: "utf8" }), readFileSync("tests/integration/farm_challenge/expected.txt", "utf8"));
   const roles = createTestTeam();
   for (const role of roles) {
     const source = path.join(temporary, `${role.id}.dl`), binary = path.join(temporary, `${role.id}.out`);

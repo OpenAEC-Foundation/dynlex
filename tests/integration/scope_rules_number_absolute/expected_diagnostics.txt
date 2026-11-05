@@ -1,0 +1,6 @@
+tests/integration/scope_rules_number_absolute/main.dl:21-42: Warning: 'floating-point number' contradicts the scope rule 'numbers are integer'
+  note: The rule is stated here tests/integration/scope_rules_number_absolute/main.dl:5-24
+tests/integration/scope_rules_number_absolute/main.dl:26-49: Warning: 'a floating-point number' contradicts the scope rule 'numbers are integer'
+  note: The rule is stated here tests/integration/scope_rules_number_absolute/main.dl:5-24
+tests/integration/scope_rules_number_absolute/main.dl:26-29: Warning: '1.5' contradicts the scope rule 'numbers are integer'
+  note: The rule is stated here tests/integration/scope_rules_number_absolute/main.dl:5-24

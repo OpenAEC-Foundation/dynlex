@@ -1,0 +1,6 @@
+import lib/filesystem.dl
+
+set path to "tests/integration/filesystem_missing/missing.tmp"
+delete the filesystem entry at path
+
+read the file at path and print line it succeeded

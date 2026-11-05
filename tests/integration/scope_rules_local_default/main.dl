@@ -1,0 +1,16 @@
+import lib/std.dl
+import tests/integration/scope_rules_local_default/helper.dl
+
+in this file, by default:
+    everything is local
+
+to get secret value:
+    return 1
+
+class:
+    patterns:
+        [a|] secret record
+    members:
+        amount as an integer
+
+print lines (the shared value) and (secret value)

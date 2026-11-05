@@ -1,3 +1,0 @@
-cadkernel vector2 fixtures passed
-cadkernel vector3 fixtures passed
-cadkernel IEEE edge fixtures passed
