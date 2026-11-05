@@ -1,6 +1,6 @@
 The source migrations save **165,233 characters** across **792 `.dl` files**. Counts include spaces, tabs and LF newlines. The initial migration saved 54,675 characters; the first follow-up saved 3,653; the complete repository pass saves another 106,905. Implementation changes and new source additions between those snapshots are excluded. Documentation and embedded source snippets were also migrated and are excluded from this program-source total.
 
-The [per-file audit](syntax-sugar-savings.json) records before/after counts and hashes for each migration snapshot. Those historical hashes describe the measured rewrites. The separate HEAD comparison includes the current implementation and every new `.dl` file.
+The [per-file audit](syntax-sugar-savings.json) records before/after counts and hashes for each migration snapshot. Those historical hashes describe the measured rewrites. Its repository comparison is also a snapshot from before the CAD library moved to [dynlex-cadkernel](https://github.com/OpenAEC-Foundation/dynlex-cadkernel), not a measurement of the present tree.
 
 | Migration | Characters saved |
 |---|---:|

@@ -1,6 +1,6 @@
 {
   "metric": "Unicode code points, including spaces, tabs and LF newlines",
-  "scope": "Cumulative source rewrites measured in three snapshots; implementation changes and additions between snapshots are excluded. Historical after hashes describe each migration snapshot, not the current source. Repository comparison independently includes all current .dl changes and additions.",
+  "scope": "Cumulative source rewrites measured in three snapshots; implementation changes and additions between snapshots are excluded. Historical after hashes describe each migration snapshot, not the current source. The repository comparison is a historical snapshot from before the CAD library moved to dynlex-cadkernel.",
   "totals": {
     "files": 792,
     "saved": 165233
