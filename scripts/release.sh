@@ -4,19 +4,18 @@ set -euo pipefail
 usage() {
   cat <<USAGE
 Usage:
-  ./scripts/release.sh patch
-  ./scripts/release.sh minor
-  ./scripts/release.sh major
-  ./scripts/release.sh <X.Y.Z>
+  ./scripts/release.sh
+  ./scripts/release.sh <YEAR.WEEK.REVISION>
   ./scripts/release.sh --retag
 
 Behavior:
   - Requires a clean git worktree
-  - Verifies native and extension versions match
+  - Verifies compiler, extension and translator versions match
   - Verifies HEAD is already pushed to upstream
   - Verifies CI workflow succeeded for that exact HEAD SHA
-  - For patch/minor/major/X.Y.Z:
-      - updates native and extension version metadata together
+  - With no version, uses the current UTC ISO week and increments its revision
+  - For a new release:
+      - updates compiler, extension and translator version metadata together
       - builds and runs tests locally
       - commits "Release <version>"
       - creates release tag and pushes commit+tag in one push
@@ -27,14 +26,14 @@ Behavior:
 
 Notes:
   - If your worktree is not clean, commit first.
-  - metadata/VERSION and the extension package metadata must stay synchronized.
+  - All package versions must stay synchronized with metadata/VERSION.
   - Requires GitHub CLI auth: gh auth login
   - Override workflow files with:
       RELEASE_CI_WORKFLOW_FILE=<file> RELEASE_WORKFLOW_FILE=<file> ./scripts/release.sh ...
 USAGE
 }
 
-if [[ $# -ne 1 ]]; then
+if [[ $# -gt 1 ]]; then
   usage
   exit 1
 fi
@@ -42,7 +41,7 @@ fi
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="${ROOT_DIR}/metadata/VERSION"
 VERSION_TOOL="${ROOT_DIR}/scripts/update-version.mjs"
-CI_WORKFLOW_FILE="${RELEASE_CI_WORKFLOW_FILE:-ci.yml}"
+CI_WORKFLOW_FILE="${RELEASE_CI_WORKFLOW_FILE:-pipeline.yml}"
 RELEASE_WORKFLOW_FILE="${RELEASE_WORKFLOW_FILE:-release.yml}"
 WORKFLOW_TIMEOUT_SECONDS="${RELEASE_WORKFLOW_TIMEOUT_SECONDS:-1800}"
 WORKFLOW_POLL_SECONDS="${RELEASE_WORKFLOW_POLL_SECONDS:-5}"
@@ -81,17 +80,12 @@ fi
 
 current_version="$(node "${VERSION_TOOL}" --check)"
 
-mode="$1"
+mode="${1:-next}"
 retag_mode=false
 target_version=""
 case "${mode}" in
-  patch|minor|major)
-    IFS='.' read -r major minor patch <<< "${current_version}"
-    case "${mode}" in
-      patch) target_version="${major}.${minor}.$((patch + 1))" ;;
-      minor) target_version="${major}.$((minor + 1)).0" ;;
-      major) target_version="$((major + 1)).0.0" ;;
-    esac
+  next)
+    target_version="$(node "${VERSION_TOOL}" --next)"
     ;;
   --retag)
     retag_mode=true
@@ -99,7 +93,7 @@ case "${mode}" in
     ;;
   *)
     if [[ "${mode}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-      target_version="${mode}"
+      target_version="$(node "${VERSION_TOOL}" --validate "${mode}")"
     else
       echo "Error: invalid argument '${mode}'" >&2
       usage
@@ -113,6 +107,7 @@ if [[ "${retag_mode}" != "true" && "${target_version}" == "${current_version}" ]
   exit 1
 fi
 
+release_tag="v${target_version}"
 head_sha="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
 upstream_ref="$(git -C "${ROOT_DIR}" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
 if [[ -z "${upstream_ref}" ]]; then
@@ -162,10 +157,10 @@ echo "CI workflow run ${ci_base_run_id} succeeded."
 
 local_tag_exists=false
 remote_tag_exists=false
-if git -C "${ROOT_DIR}" rev-parse -q --verify "refs/tags/${target_version}" >/dev/null; then
+if git -C "${ROOT_DIR}" rev-parse -q --verify "refs/tags/${release_tag}" >/dev/null; then
   local_tag_exists=true
 fi
-if git -C "${ROOT_DIR}" ls-remote --exit-code --tags origin "refs/tags/${target_version}" >/dev/null 2>&1; then
+if git -C "${ROOT_DIR}" ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
   remote_tag_exists=true
 fi
 
@@ -197,18 +192,18 @@ if [[ "${retag_mode}" != "true" ]]; then
   echo "Building and testing release ${target_version}..."
   "${ROOT_DIR}/scripts/test.sh" --release
 
-  git -C "${ROOT_DIR}" add metadata/VERSION vscode-extension/package.json vscode-extension/package-lock.json
+  git -C "${ROOT_DIR}" add metadata/VERSION vscode-extension/package.json vscode-extension/package-lock.json tools/wgsl-translator/Cargo.toml tools/wgsl-translator/Cargo.lock
   git -C "${ROOT_DIR}" commit -m "Release ${target_version}"
   release_commit_created=true
   release_sha="$(git -C "${ROOT_DIR}" rev-parse HEAD)"
 fi
 
 if [[ "${retag_mode}" == "true" ]]; then
-  git -C "${ROOT_DIR}" tag -f "${target_version}" "${release_sha}"
-  git -C "${ROOT_DIR}" push --force origin "refs/tags/${target_version}"
+  git -C "${ROOT_DIR}" tag -f "${release_tag}" "${release_sha}"
+  git -C "${ROOT_DIR}" push --force origin "refs/tags/${release_tag}"
 else
-  git -C "${ROOT_DIR}" tag "${target_version}" "${release_sha}"
-  git -C "${ROOT_DIR}" push origin HEAD "refs/tags/${target_version}"
+  git -C "${ROOT_DIR}" tag "${release_tag}" "${release_sha}"
+  git -C "${ROOT_DIR}" push origin HEAD "refs/tags/${release_tag}"
 fi
 
 if [[ "${retag_mode}" != "true" ]]; then

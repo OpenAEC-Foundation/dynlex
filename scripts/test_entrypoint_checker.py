@@ -26,7 +26,7 @@ class EntryPointCheckerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory(prefix="dynlex-entrypoint-checker-")
         self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
+        self.root = Path(self.directory.name).resolve()
 
     def source(self, content: str) -> Path:
         path = self.root / "main.dl"

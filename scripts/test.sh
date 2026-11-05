@@ -632,7 +632,7 @@ run_auxiliary_test() {
     local test_name="$1"
     local required_test=false
     case "$test_name" in
-    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|import_root_consistency|pattern_precedence)
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
         required_test=true ;;
     esac
     if [[ "$suite" == required && "$required_test" != true ]] ||
@@ -699,12 +699,16 @@ fi
 run_auxiliary_test "macos_signature_verifier" 10 python3 -B "$SCRIPT_DIR/test_verify_macos_signature.py"
 run_auxiliary_test "release_executable_architecture" 10 python3 -B "$PROJECT_DIR/tests/release/test_executable_architecture.py"
 run_auxiliary_test "release_ref" 10 python3 -B "$PROJECT_DIR/tests/release/test_release_ref.py"
+run_auxiliary_test "release_script" 45 python3 -B "$PROJECT_DIR/tests/release/test_release_script.py"
 run_auxiliary_test "windows_runtime_dependencies" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_runtime_dependencies.py"
 run_auxiliary_test "windows_upgrade_metadata_cmake" 10 cmake -P "$PROJECT_DIR/tests/release/windows_upgrade_metadata.cmake"
 run_auxiliary_test "windows_upgrade_metadata" 10 python3 -B "$PROJECT_DIR/tests/release/test_windows_upgrade_metadata.py"
 run_auxiliary_test "release_distribution" 30 node "$PROJECT_DIR/tests/release/distribution.mjs"
+run_auxiliary_test "calendar_version" 10 node "$PROJECT_DIR/tests/release/calendar_version.mjs"
 run_auxiliary_test "import_root_consistency" 60 python3 -B "$SCRIPT_DIR/test_import_roots.py" "$COMPILER"
 run_auxiliary_test "pattern_precedence" 60 python3 -B "$SCRIPT_DIR/test_pattern_precedence.py" "$COMPILER"
+run_auxiliary_test "associative_grouping" 30 python3 -B "$SCRIPT_DIR/test_associative_grouping.py" "$COMPILER"
+run_auxiliary_test "compiler_stack" 45 python3 -B "$SCRIPT_DIR/test_compiler_stack.py" "$COMPILER"
 run_auxiliary_test "completion_visibility" 15 python3 -B "$SCRIPT_DIR/test_completion_visibility.py" "$COMPILER"
 run_auxiliary_test \
     "lifecycle_codegen" 15 python3 -B "$SCRIPT_DIR/test_lifecycle_codegen.py" "$COMPILER" \

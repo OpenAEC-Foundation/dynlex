@@ -1,4 +1,4 @@
-case IntrinsicReturnKind::Bool: {
+void ExpressionInferenceSupport::inferBooleanIntrinsic(IntrinsicKind kind) {
 	if (kind == IntrinsicKind::And || kind == IntrinsicKind::Or) {
 		DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
 		DataType rightType = ensureExpressionType(expr->arguments[2], context, flexBindingFrameStack);
@@ -14,11 +14,11 @@ case IntrinsicReturnKind::Bool: {
 			}
 			if (!constraints[0] || !constraints[0]->isResolved()) {
 				failCompileTimeOnlyIntrinsicArgument(1, "a type or constraint value");
-				break;
+				return;
 			}
 			if (!constraints[1] || !constraints[1]->isResolved()) {
 				failCompileTimeOnlyIntrinsicArgument(2, "a type or constraint value");
-				break;
+				return;
 			}
 			std::optional<TypeConstraint> combined = TypeConstraint::conjunction(*constraints[0], *constraints[1]);
 			if (!combined) {
@@ -26,7 +26,7 @@ case IntrinsicReturnKind::Bool: {
 					expr->range, "constraint conjunction empty", "message",
 					{{"left_type", typeToUserName(*constraints[0])}, {"right_type", typeToUserName(*constraints[1])}}
 				);
-				break;
+				return;
 			}
 			if (std::optional<TypeReferenceValue> typeValue =
 					TypeReferenceValue::forConstraint(*combined, context.parseContext.options.emitSPIRV)) {
@@ -36,7 +36,7 @@ case IntrinsicReturnKind::Bool: {
 				expr->type = {DataType::Kind::Constraint};
 				context.setExpressionValue(expr, *combined);
 			}
-			break;
+			return;
 		}
 		if (!isLogicalOperandType(leftType) || !isLogicalOperandType(rightType)) {
 			setConfiguredTypeFailure(
@@ -45,7 +45,7 @@ case IntrinsicReturnKind::Bool: {
 				 {"left_type", typeToUserName(leftType)},
 				 {"right_type", typeToUserName(rightType)}}
 			);
-			break;
+			return;
 		}
 	} else if (kind == IntrinsicKind::Not) {
 		DataType valueType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
@@ -54,7 +54,7 @@ case IntrinsicReturnKind::Bool: {
 				expr->range, "logical operator operand invalid", "message",
 				{{"operator", "not"}, {"value_type", typeToUserName(valueType)}}
 			);
-			break;
+			return;
 		}
 	} else {
 		DataType leftType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
@@ -72,9 +72,8 @@ case IntrinsicReturnKind::Bool: {
 				expr->range, "incompatible operand types", "message",
 				{{"left_type", typeToUserName(leftType)}, {"right_type", typeToUserName(rightType)}}
 			);
-			break;
+			return;
 		}
 	}
 	expr->type = {DataType::Kind::Bool};
-	break;
 }

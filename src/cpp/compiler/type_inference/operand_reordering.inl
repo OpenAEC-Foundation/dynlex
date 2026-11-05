@@ -25,7 +25,9 @@ static bool collectGroupingNodes(Expression *expr, ExpressionNodeSet &nodes, Exp
 	return false;
 }
 
-static bool collectGroupingNodes(Expression *expr, ExpressionNodeSet &nodes) {
+// Completed tree walks must release their inline node-set storage before
+// recursive inference begins in the caller.
+[[gnu::noinline]] static bool collectGroupingNodes(Expression *expr, ExpressionNodeSet &nodes) {
 	ExpressionNodeSet visiting;
 	return collectGroupingNodes(expr, nodes, visiting);
 }
@@ -74,7 +76,7 @@ static bool expressionContains(Expression *root, Expression *target, ExpressionN
 	return false;
 }
 
-static bool expressionContains(Expression *root, Expression *target) {
+[[gnu::noinline]] static bool expressionContains(Expression *root, Expression *target) {
 	ExpressionNodeSet visited;
 	return expressionContains(root, target, visited);
 }
@@ -315,7 +317,7 @@ static void captureGroupingSnapshot(Expression *expr, GroupingSnapshot &snapshot
 		captureGroupingSnapshot(arg, snapshot, visited);
 }
 
-static GroupingSnapshot captureGroupingSnapshot(Expression *expr) {
+[[gnu::noinline]] static GroupingSnapshot captureGroupingSnapshot(Expression *expr) {
 	GroupingSnapshot snapshot;
 	snapshot.root = expr;
 	ExpressionNodeSet visited;

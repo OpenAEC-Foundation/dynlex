@@ -1,4 +1,4 @@
-static bool inferNonFlexPatternCall(
+[[gnu::noinline]] static bool inferNonFlexPatternCall(
 	Expression *expr, InferenceContext &context, const BindingFrameStack &flexBindingFrameStack,
 	const PatternCallResolution &resolution
 ) {

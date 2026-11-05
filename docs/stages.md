@@ -468,9 +468,35 @@ All instantiations of a function have the same operand reordering for each code 
 
 We reuse the same strategy (code) for flex functions where possible, keeping it DRY.
 
+Each function body is contained in one source file. Includes at file scope may
+join complete definitions; they must not insert statements, case labels or closing
+braces into another file's function body.
+
+Node handling, conditional branch merging, overload selection and flex-entry
+bookkeeping have separate, non-inlined call boundaries. This keeps their scratch
+space out of traversal frames for other expression kinds and recursive callees.
+These boundaries preserve the compiler's native stack budget, including the
+Windows default stack.
+
+The grouping candidate generator also has a non-inlined entry point. This keeps
+coroutine allocation elision from placing its suspended enumeration state in
+the recursive inference stack.
+
 Unary arithmetic intrinsics require numeric scalar or vector values. Classes, pointers, arrays, matrices, booleans, and type values are rejected during inference, before code generation. Floating-point vector negation uses the element type to select floating-point instructions.
 
 ## Operand Reordering
+
+Binary infix patterns may declare `associativity: left` or `associativity: right`.
+This is a syntax-family rule shared by typed overloads and choice spellings;
+contradictory declarations are errors. It determines grouping, not algebraic
+equivalence or reassociation by an optimizer. The rule applies to directly
+connected parent and operand operators: an intervening function starts another
+chain. Only binary infix uses of a family participate in its chains; prefix
+choice spellings remain capture boundaries. Explicit operand parentheses take
+precedence. The standard `+`, `*`, `and` and `or` families group to the left.
+Unspecified families retain ambiguity checking. The grouping complexity limit
+counts operators with unconstrained relative order, so declared chains can be
+long without being classified as ambiguous.
 
 We iterate over all possible operand orders until we find a valid one.
 

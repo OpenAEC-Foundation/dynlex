@@ -203,11 +203,19 @@ when the source passes through the shell.
 
 Compiler/release version source of truth is [`metadata/VERSION`](./metadata/VERSION).
 
-Create and push a release tag with automatic version bump:
+Releases use `YEAR.WEEK.REVISION`, with ISO week numbers and a revision starting
+at zero each week. Compiler, editor extension and WGSL translator share this
+version. Release tags have a `v` prefix. The release clock uses UTC.
+
+Create and push a release tag with the next version for the current week:
 
 ```bash
-./scripts/release.sh patch   # or: minor, major, set X.Y.Z
+./scripts/release.sh         # or an explicit version: ./scripts/release.sh 2026.45.1
 ```
+
+Windows MSI stores the year as an offset from 2000 (`26.45.1` for public version
+`2026.45.1`) because its first version field is limited to 255. The compiler and
+all source package metadata retain the full public version.
 
 ## ASan Leak Check (With Third-Party Suppressions)
 
