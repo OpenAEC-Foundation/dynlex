@@ -367,6 +367,8 @@ bool functionDependenciesUnchanged(
 	return memo[section] = safe;
 }
 
+bool hasNoGlobalAccess(const Section *section);
+
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
 std::unordered_set<const Section *> eligibleCodegenSections(
@@ -381,13 +383,16 @@ std::unordered_set<const Section *> eligibleCodegenSections(
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
 	const Json &priorProjection = previous.at("all_function_projection");
-	if (!compatibleFunctionProjection(priorProjection, currentProjection))
+	bool fullyCompatible = compatibleFunctionProjection(priorProjection, currentProjection);
+	bool globalFreeCompatible = compatibleGlobalFreeProjection(priorProjection, currentProjection);
+	if (!fullyCompatible && !globalFreeCompatible)
 		return eligible;
 	std::unordered_map<const Section *, bool> unchanged;
 	for (const auto &[path, section] : sections)
-		unchanged[section] = !reusableCodegenSection(*section) ||
-							 unchangedFunctionSource(path, priorProjection, currentProjection) ||
-							 interfaceStableChanges.contains(section);
+		unchanged[section] =
+			(fullyCompatible || (section != context.mainSection && hasNoGlobalAccess(section))) &&
+			(!reusableCodegenSection(*section) || unchangedFunctionSource(path, priorProjection, currentProjection) ||
+			 interfaceStableChanges.contains(section));
 	std::unordered_map<Section *, bool> memo;
 	for (const auto &[_, section] : sections)
 		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&

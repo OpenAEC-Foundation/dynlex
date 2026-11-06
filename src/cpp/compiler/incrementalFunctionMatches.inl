@@ -75,6 +75,11 @@ bool compatibleFunctionProjection(const Json &prior, const Json &current) {
 		   current.at("ambient_sources") == prior.at("ambient_sources");
 }
 
+bool compatibleGlobalFreeProjection(const Json &prior, const Json &current) {
+	return current.at("ambient_declarations") == prior.at("ambient_declarations") &&
+		   current.at("ambient_nonexecution_sources") == prior.at("ambient_nonexecution_sources");
+}
+
 bool unchangedFunctionSource(const std::string &path, const Json &prior, const Json &current) {
 	const Json &oldDeclarations = prior.at("function_declarations");
 	const Json &newDeclarations = current.at("function_declarations");

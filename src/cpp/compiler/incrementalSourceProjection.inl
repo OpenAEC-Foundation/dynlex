@@ -1,6 +1,6 @@
 Json sourceProjection(
 	const ParseContext &context, const std::unordered_set<const Section *> &inactive, bool maskOpeningLines = false,
-	bool ignoreMaskedRuns = false
+	bool ignoreMaskedRuns = false, bool maskGlobalExecution = false
 ) {
 	using SourceRanges = std::map<const lsp::SourceFile *, std::map<int, std::vector<std::pair<size_t, size_t>>>>;
 	std::map<const lsp::SourceFile *, std::set<int>> masked;
@@ -12,7 +12,14 @@ Json sourceProjection(
 			if (section->openingLine)
 				openings.insert(section->openingLine);
 	for (const CodeLine *line : context.codeLines) {
-		bool insideInactive = openings.contains(line);
+		bool globalExecution = maskGlobalExecution && (!line->sectionOpening || line->sectionOpening->runsInEnclosingBody());
+		if (globalExecution)
+			for (const Section *section = line->section; section && section != context.mainSection; section = section->parent)
+				if (!section->runsInEnclosingBody()) {
+					globalExecution = false;
+					break;
+				}
+		bool insideInactive = openings.contains(line) || globalExecution;
 		for (const Section *section = line->section; section; section = section->parent) {
 			if (inactive.contains(section)) {
 				insideInactive = true;

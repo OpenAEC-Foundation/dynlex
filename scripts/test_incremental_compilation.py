@@ -251,6 +251,35 @@ function left times right:
     assert edited[0]["objects_built"] > 0, f"changed function did not rebuild its object: {edited[0]}"
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
 
+    outer_main = root / "outer_edit.dl"
+    outer_source = ('integer means: @intrinsic("type", "int")\n'
+                    'to independent: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "function"))\n'
+                    'independent\n'
+                    '@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n')
+    outer_main.write_text(outer_source)
+    build(entry=outer_main)
+    outer_main.write_text(outer_source.replace('"before"', '"after"'))
+    outer_edit = build(entry=outer_main)
+    assert outer_edit[0]["inference_instantiations_reused"] >= 1, "top-level execution edit re-inferred independent function"
+    assert outer_edit[0]["functions_ir_reused"] >= 1, "top-level execution edit regenerated independent function IR"
+    assert outer_edit[1:] == build(False, entry=outer_main)[1:], "top-level execution edit differs from clean build"
+
+    scope_main = root / "scope_rule_edit.dl"
+    scope_source = ('numbers are properties means: @intrinsic("number rule", properties)\n'
+                    'floating-point means: @intrinsic("type", "float")\n'
+                    'integer means: @intrinsic("type", "int")\n'
+                    'in this file:\n'
+                    '    numbers are floating-point\n'
+                    'to get one:\n'
+                    '    @intrinsic("return", 1)\n'
+                    '@intrinsic("discard", one)\n')
+    scope_main.write_text(scope_source)
+    build(entry=scope_main)
+    scope_main.write_text(scope_source.replace('numbers are floating-point', 'numbers are integer'))
+    scope_edit = build(entry=scope_main)
+    assert scope_edit[0]["functions_ir_reused"] == 0, "file number-rule edit retained stale function IR"
+    assert scope_edit[1:] == build(False, entry=scope_main)[1:], "file number-rule edit differs from clean build"
+
     leaf_a = root / "leaf_a.dl"
     leaf_b = root / "leaf_b.dl"
     leaf_helper = root / "leaf_helper.dl"
@@ -646,7 +675,7 @@ function left times right:
     assert global_edit[1:] == build(False, entry=global_main)[1:], "global reader edit differs from clean build"
     global_main.write_text(global_main.read_text().replace('counter, 1)', 'counter, 2)').replace('read state, 1)', 'read state, 2)'))
     global_initializer_edit = build(entry=global_main)
-    assert global_initializer_edit[0]["functions_ir_reused"] == 0, "changed global initializer reused old function IR"
+    assert global_initializer_edit[0]["functions_ir_reused"] == 1, "global initializer edit should reuse only the independent function IR"
     assert global_initializer_edit[1:] == build(False, entry=global_main)[1:]
 
     indirect_global_main = root / "indirect_global_main.dl"

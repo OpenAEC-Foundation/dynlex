@@ -36,7 +36,8 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 		!compatibleObservations(previous, observations, context))
 		return result;
 	const Json &prior = previous.at("all_function_projection");
-	if (!compatibleFunctionProjection(prior, current))
+	bool fullyCompatible = compatibleFunctionProjection(prior, current);
+	if (!fullyCompatible && !compatibleGlobalFreeProjection(prior, current))
 		return result;
 	for (const auto &[section, path] : sectionPaths)
 		result.bodyUnchanged[section] = !reusableCodegenSection(*section) ||
@@ -49,7 +50,7 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 			generatedFunctionCounts[owner.get<std::string>()]++;
 	std::unordered_map<const Section *, bool> globalFree;
 	for (const auto &[section, _] : sectionPaths)
-		globalFree[section] = hasNoGlobalAccess(section);
+		globalFree[section] = (fullyCompatible || section != context.mainSection) && hasNoGlobalAccess(section);
 	std::unordered_map<Section *, bool> globalFreeClosure;
 	for (const auto &[section, path] : sectionPaths) {
 		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||

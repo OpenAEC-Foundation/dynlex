@@ -40,6 +40,7 @@ Json captureAllFunctionProjection(const ParseContext &context, const Json *previ
 	projection["function_declarations"] = std::move(declarations);
 	projection["ambient_declarations"] = declarationDigest(sections, reusable);
 	projection["ambient_sources"] = sourceProjection(context, reusable, true, true);
+	projection["ambient_nonexecution_sources"] = sourceProjection(context, reusable, true, true, true);
 	const Json *prior =
 		previous && previous->contains("all_function_projection") ? &previous->at("all_function_projection") : nullptr;
 	bool stableMatchingEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
