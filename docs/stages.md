@@ -810,8 +810,10 @@ retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
 
 For active edits, the native cache also persists inference summaries for impure
-functions with primitive scalar or pointer arguments and scalar or no return values
-when they do not access globals. A summary
+functions with primitive scalar or pointer arguments and scalar or no return values.
+Summaries record writes, known constants, address provenance, and address escapes for
+global variables. A summary that accesses globals requires the same structural global
+types as the previous build. A summary
 is reused only if its source body, pattern declarations, every matched function
 dependency and its cached IR closure are unchanged. Other instantiations still
 run ordinary inference. A function in a file with diagnostics gets no inference

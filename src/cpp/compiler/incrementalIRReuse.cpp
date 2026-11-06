@@ -68,7 +68,8 @@ IncrementalIRReuse::IncrementalIRReuse(
 }
 
 bool IncrementalIRReuse::reusableClosure(
-	const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names
+	const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
+	bool allowUnmaterializedGlobals
 ) const {
 	std::string name = function.getName().str();
 	if (!names.insert(name).second)
@@ -82,18 +83,20 @@ bool IncrementalIRReuse::reusableClosure(
 	collectDependencies(function, dependencies, mutableGlobals);
 	for (const llvm::GlobalVariable *old : mutableGlobals) {
 		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
+		if (!now && allowUnmaterializedGlobals)
+			continue;
 		if (!now || now->getValueType() != old->getValueType() || now->getLinkage() != old->getLinkage() ||
 			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
 			return false;
 	}
 	for (const llvm::Function *dependency : dependencies) {
-		if (!reusableClosure(*dependency, current, names))
+		if (!reusableClosure(*dependency, current, names, allowUnmaterializedGlobals))
 			return false;
 	}
 	return true;
 }
 
-bool IncrementalIRReuse::hasReusableIRForSection(const Section *section) const {
+bool IncrementalIRReuse::hasReusableIRForSection(const Section *section, bool allowUnmaterializedGlobals) const {
 	if (!eligibleSections.contains(section))
 		return false;
 	const std::string &path = sectionPaths.at(section);
@@ -105,7 +108,7 @@ bool IncrementalIRReuse::hasReusableIRForSection(const Section *section) const {
 		if (!function || function->isDeclaration())
 			return false;
 		std::unordered_set<std::string> closure;
-		if (!reusableClosure(*function, *currentModule, closure))
+		if (!reusableClosure(*function, *currentModule, closure, allowUnmaterializedGlobals))
 			return false;
 		found = true;
 	}

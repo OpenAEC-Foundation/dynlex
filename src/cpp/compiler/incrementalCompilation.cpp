@@ -9,6 +9,8 @@
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
 #include "section.h"
+#include "section/classSection.h"
+#include "section/variable.h"
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -27,6 +29,7 @@
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
 #include <array>
+#include <bit>
 #include <cctype>
 #include <chrono>
 #include <filesystem>
@@ -697,6 +700,9 @@ void restoreCachedModule(ParseContext &context, const Json &cached, const fs::pa
 }
 
 #include "incrementalCompilationPartitions.inl"
+#include "incrementalInferenceTypes.inl"
+
+#include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceReuse.inl"
 } // namespace
 
@@ -795,7 +801,8 @@ bool compileIncrementally(
 							sectionPaths, eligible
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							context, previous->at("inference_summaries"), *functionReuse, std::move(eligible)
+							context, previous->at("inference_summaries"), previous->at("global_types"), *functionReuse,
+							std::move(eligible)
 						);
 						context.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
 																 Instantiation &instantiation) {
@@ -895,8 +902,11 @@ bool compileIncrementally(
 					for (const auto &[_, path] : functionSections)
 						generatedFunctionPaths.insert(path);
 					result["inactive_projection"] = captureInactiveProjection(compiled, nullptr, &generatedFunctionPaths);
-					result["inference_summaries"] = inferenceReuse ? inferenceReuse->snapshot(sectionPaths, diagnosticSources)
-																   : captureInferenceSummaries(sectionPaths, diagnosticSources);
+					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
+					result["global_types"] = globalTypes;
+					result["inference_summaries"] =
+						inferenceReuse ? inferenceReuse->snapshot(sectionPaths, diagnosticSources, globalTypes)
+									   : captureInferenceSummaries(sectionPaths, diagnosticSources, globalTypes);
 					recordSemanticSources(result, *recording, compiled);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {

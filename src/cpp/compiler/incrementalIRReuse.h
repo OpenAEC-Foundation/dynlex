@@ -21,13 +21,16 @@ class IncrementalIRReuse {
 		std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections
 	);
 	bool reuse(Section *section, Instantiation &instantiation, llvm::Function *function);
-	bool hasReusableIRForSection(const Section *section) const;
+	bool hasReusableIRForSection(const Section *section, bool allowUnmaterializedGlobals = false) const;
 	bool import(ParseContext &context);
 	size_t reusedCount() const { return reusedNames.size(); }
 	const std::unordered_set<std::string> &reusedFunctionNames() const { return reusedNames; }
 
   private:
-	bool reusableClosure(const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names) const;
+	bool reusableClosure(
+		const llvm::Function &function, llvm::Module &current, std::unordered_set<std::string> &names,
+		bool allowUnmaterializedGlobals = false
+	) const;
 	std::unique_ptr<llvm::Module> previousModule;
 	llvm::Module *currentModule;
 	const nlohmann::json &previousFunctions;

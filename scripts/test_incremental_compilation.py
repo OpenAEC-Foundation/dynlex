@@ -401,6 +401,60 @@ function left times right:
     assert global_initializer_edit[0]["functions_ir_reused"] == 0, "changed global initializer reused old function IR"
     assert global_initializer_edit[1:] == build(False, entry=global_main)[1:]
 
+    writer_main = root / "writer_main.dl"
+    writer_source = ('integer means: @intrinsic("type", "int")\n'
+                     '@intrinsic("store", counter, 0)\n'
+                     'function alpha:\n'
+                     '    globals:\n'
+                     '        counter\n'
+                     '    execute:\n'
+                     '        @intrinsic("store", counter, 1)\n'
+                     '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                     'function beta:\n'
+                     '    globals:\n'
+                     '        counter\n'
+                     '    execute:\n'
+                     '        @intrinsic("store", counter, 2)\n'
+                     '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                     'alpha\nbeta\n'
+                     '@intrinsic("return", @intrinsic("subtract", counter, 2))\n')
+    writer_main.write_text(writer_source)
+    build(entry=writer_main)
+    writer_main.write_text(writer_source.replace('"alpha"))', '"changed"))'))
+    writer_edit = build(entry=writer_main)
+    assert writer_edit[0]["inference_instantiations_reused"] >= 1, "global writer was re-inferred"
+    assert writer_edit[0]["functions_ir_reused"] >= 1, "global writer IR was regenerated"
+    assert writer_edit[1:] == build(False, entry=writer_main)[1:], "global writer edit differs from clean build"
+
+    class_writer_main = root / "class_writer_main.dl"
+    class_writer_source = ('integer means: @intrinsic("type", "int")\n'
+                           'class:\n'
+                           '    patterns:\n'
+                           '        a record\n'
+                           '    members:\n'
+                           '        value\n'
+                           '@intrinsic("store", state, @intrinsic("construct", a record, 0))\n'
+                           'function alpha:\n'
+                           '    globals:\n'
+                           '        state\n'
+                           '    execute:\n'
+                           '        @intrinsic("store", state, @intrinsic("construct", a record, 1))\n'
+                           '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                           'function beta:\n'
+                           '    globals:\n'
+                           '        state\n'
+                           '    execute:\n'
+                           '        @intrinsic("store", state, @intrinsic("construct", a record, 2))\n'
+                           '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                           'alpha\nbeta\n'
+                           '@intrinsic("return", @intrinsic("subtract", state\'s value, 2))\n')
+    class_writer_main.write_text(class_writer_source)
+    build(entry=class_writer_main)
+    class_writer_main.write_text(class_writer_source.replace('"alpha"))', '"changed"))'))
+    class_writer_edit = build(entry=class_writer_main)
+    assert class_writer_edit[0]["inference_instantiations_reused"] >= 1, "class global writer was re-inferred"
+    assert class_writer_edit[1:] == build(False, entry=class_writer_main)[1:]
+
     pointer_main = root / "pointer_main.dl"
     pointer_source = ('integer means: @intrinsic("type", "int")\n'
                       'pointer to kind means: @intrinsic("add pointer depth", kind)\n'
