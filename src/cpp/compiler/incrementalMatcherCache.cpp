@@ -180,34 +180,60 @@ std::string IncrementalMatcherCache::precedenceDigest() {
 	);
 	if (cachedPrecedenceRevision == context.patternPrecedenceRevision)
 		return cachedPrecedenceDigest;
-	Fingerprint fingerprint;
 	std::unordered_map<const PatternFamily *, size_t> familyIndices;
 	familyIndices.reserve(context.patternFamilies.size());
 	for (size_t index = 0; index < context.patternFamilies.size(); index++)
 		familyIndices.emplace(context.patternFamilies[index].get(), index);
-	fingerprint.number(context.patternFamilies.size());
-	for (const auto &family : context.patternFamilies) {
-		fingerprint.number(static_cast<int>(family->associativity));
-		std::vector<size_t> successors;
-		successors.reserve(family->precedenceSuccessors.size());
-		for (const PatternFamily *successor : family->precedenceSuccessors)
-			successors.push_back(familyIndices.at(successor));
-		std::sort(successors.begin(), successors.end());
-		fingerprint.number(successors.size());
-		for (size_t successor : successors)
-			fingerprint.number(successor);
+	std::vector<bool> participating(context.patternFamilies.size(), false);
+	for (size_t index = 0; index < context.patternFamilies.size(); index++) {
+		const PatternFamily &family = *context.patternFamilies[index];
+		if (family.associativity != PatternAssociativity::Unspecified || !family.precedenceSuccessors.empty())
+			participating[index] = true;
+		for (const PatternFamily *successor : family.precedenceSuccessors)
+			participating[familyIndices.at(successor)] = true;
 	}
+	std::vector<Fingerprint> memberFingerprints(context.patternFamilies.size());
 	auto appendSections = [&](auto &&self, const Section *section) -> void {
-		fingerprint.number(section->patternDefinitions.size());
 		for (const PatternDefinition *definition : section->patternDefinitions) {
-			appendDefinition(fingerprint, definition);
-			fingerprint.number(familyIndices.at(definition->family));
+			size_t index = familyIndices.at(definition->family);
+			if (participating[index])
+				appendDefinition(memberFingerprints[index], definition);
 		}
-		fingerprint.number(section->children.size());
 		for (const Section *child : section->children)
 			self(self, child);
 	};
 	appendSections(appendSections, context.mainSection);
+	std::vector<std::string> familyIds(context.patternFamilies.size());
+	std::unordered_map<std::string, size_t> duplicateCounts;
+	for (size_t index = 0; index < participating.size(); index++) {
+		if (!participating[index])
+			continue;
+		std::string members = memberFingerprints[index].finish();
+		familyIds[index] = members + ":" + std::to_string(duplicateCounts[members]++);
+	}
+	std::vector<std::string> records;
+	for (size_t index = 0; index < participating.size(); index++) {
+		if (!participating[index])
+			continue;
+		const PatternFamily &family = *context.patternFamilies[index];
+		Fingerprint record;
+		record.string(familyIds[index]);
+		record.number(static_cast<int>(family.associativity));
+		std::vector<std::string> successors;
+		successors.reserve(family.precedenceSuccessors.size());
+		for (const PatternFamily *successor : family.precedenceSuccessors)
+			successors.push_back(familyIds[familyIndices.at(successor)]);
+		std::sort(successors.begin(), successors.end());
+		record.number(successors.size());
+		for (const std::string &successor : successors)
+			record.string(successor);
+		records.push_back(record.finish());
+	}
+	std::sort(records.begin(), records.end());
+	Fingerprint fingerprint;
+	fingerprint.number(records.size());
+	for (const std::string &record : records)
+		fingerprint.string(record);
 	cachedPrecedenceDigest = fingerprint.finish();
 	cachedPrecedenceRevision = context.patternPrecedenceRevision;
 	return cachedPrecedenceDigest;

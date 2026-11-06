@@ -777,8 +777,14 @@ Successful matches are rebound to the new tree and expression objects. Failed ma
 restore their trie dependencies, so later definition insertions still retry them.
 New or removed matching overloads change the relevant tree fingerprint and invalidate
 cached matches from that point in resolution. Precedence-pass results also include
-the resolved syntax families, associativity and precedence reachability in their
-fingerprint, so a changed precedence rule cannot reuse a stale grouping.
+the syntax families participating in associativity or precedence reachability in
+their fingerprint, so a changed precedence rule cannot reuse a stale grouping and
+an unrelated definition with no precedence relation leaves the fingerprint intact.
+Within a compilation, a newly indexed more-specific definition requeues callers of
+less-specific patterns only when at least one canonical path can occur in that
+reference's matcher input. Missing literal words exclude a path; numeric arguments
+use their matcher spelling. This keeps unrelated callers resolved during cold and
+edited builds while retaining rematches for genuinely competing patterns.
 Type inference and LLVM generation still run for the full program after a code edit.
 
 Native emission divides the finalized IR

@@ -82,6 +82,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source.replace("alpha\nbeta\n", unrelated_definition + repeated_calls))
     unrelated = build()
     assert unrelated[0]["matcher_cache_hits"] >= 20, "unrelated new pattern invalidated unchanged calls"
+    assert unrelated[0]["precedence_matcher_cache_hits"] >= 20, "unrelated new pattern invalidated precedence calls"
     assert unrelated[1:] == build(False)[1:], "unrelated new pattern changed cached matches"
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
     build()

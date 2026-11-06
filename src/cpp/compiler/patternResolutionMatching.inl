@@ -150,6 +150,38 @@ static bool patternMatchUsesDefinition(const PatternMatch &match, const PatternD
 	});
 }
 
+// A literal word in a newly indexed definition must be present in the
+// reference's matcher input (or in the spelling of a numeric argument). If
+// every canonical path requires a missing word, adding this definition cannot
+// change the reference's existing match.
+static bool definitionCouldMatchReference(const PatternDefinition &definition, const PatternReference &reference) {
+	for (const auto &path : definition.indexedPaths) {
+		bool pathPossible = true;
+		for (const PatternElement &required : path) {
+			if (required.type != PatternElement::Type::VariableLike)
+				continue;
+			bool present = std::ranges::any_of(reference.patternElements, [&](const PatternElement &source) {
+				return source.text == required.text;
+			});
+			if (!present && reference.expression) {
+				for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+					if (numericPatternArgumentSpelling(&reference, index) == required.text) {
+						present = true;
+						break;
+					}
+				}
+			}
+			if (!present) {
+				pathPossible = false;
+				break;
+			}
+		}
+		if (pathPossible)
+			return true;
+	}
+	return false;
+}
+
 using FailedMatchDependencies = std::unordered_map<PatternReference *, MatchDependencies>;
 
 static SectionType definitionPatternTreeType(const Section *section) {
@@ -473,7 +505,8 @@ bool resolvePatterns(ParseContext &context) {
 				const lsp::SourceFile *sourceFile =
 					activeResolvingReference->range().line ? activeResolvingReference->range().line->sourceFile : nullptr;
 				requireCompilerInvariant(sourceFile != nullptr, "active stale match invalidation requires a source file");
-				if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
+				if (isPatternDefinitionVisibleFromSource(*definition, *sourceFile) &&
+					definitionCouldMatchReference(*definition, *activeResolvingReference))
 					queueReferenceForRematch(activeResolvingReference);
 			}
 			auto it = definitionToReferences.find(lessDef);
@@ -488,6 +521,8 @@ bool resolvePatterns(ParseContext &context) {
 				const lsp::SourceFile *sourceFile = ref->range().line ? ref->range().line->sourceFile : nullptr;
 				requireCompilerInvariant(sourceFile != nullptr, "stale match invalidation requires a source file");
 				if (!isPatternDefinitionVisibleFromSource(*definition, *sourceFile))
+					continue;
+				if (!definitionCouldMatchReference(*definition, *ref))
 					continue;
 				queueReferenceForRematch(ref);
 			}
