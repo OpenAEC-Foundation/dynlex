@@ -1,3 +1,0 @@
-tests/required/scope_rules_duplicate_nested/main.dl:9-37: Warning: 'in this function' applies to its named scope at compile time, regardless of whether this code is reached
-tests/required/scope_rules_duplicate_nested/main.dl:9-37: Warning: 'in this function' applies to its named scope at compile time, regardless of whether this code is reached
-tests/required/scope_rules_duplicate_nested/main.dl:9-37: Error: Each scope can have one rule block and one default block

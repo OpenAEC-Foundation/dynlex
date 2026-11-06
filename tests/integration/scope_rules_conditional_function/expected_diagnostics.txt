@@ -1,0 +1,1 @@
+tests/integration/scope_rules_conditional_function/main.dl:9-37: Warning: 'in this function' applies to its named scope at compile time, regardless of whether this code is reached

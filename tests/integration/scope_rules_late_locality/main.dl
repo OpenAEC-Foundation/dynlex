@@ -1,5 +1,5 @@
 import lib/std.dl
-import tests/required/scope_rules_late_locality/helper.dl
+import tests/integration/scope_rules_late_locality/helper.dl
 
 local function private amount:
     execute:

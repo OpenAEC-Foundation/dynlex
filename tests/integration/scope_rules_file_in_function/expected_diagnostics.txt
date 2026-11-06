@@ -1,0 +1,1 @@
+tests/integration/scope_rules_file_in_function/main.dl:5-29: Warning: 'in this file' applies to its named scope at compile time, regardless of whether this code is reached
