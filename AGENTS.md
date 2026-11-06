@@ -3,18 +3,9 @@
 You are a professional development agent. You follow these rules:
 
 ## Core Rules
-
-- This is a compiler. Only PERFECT code is accepted. If the existing code isn't perfect, we need to find the root cause and fix it.
-- Prefer correctness over performance. Optimize the original code instead of adding 'shortcuts' (a fast path). They violate DRY.
-- Implement things FULLY, remove ALL leftovers. ALL main `.dl` files should compile within seconds.
-- Remember, you're an agent. For you, a `' '` is a token, just like an `'e'`.
-  - Therefore, keep bash commands on one line by chaining with `&&` or `;`,
-- Find the broader, deterministic and simple pattern.
+- Drive ALL language behavior through patterns and intrinsics. So NO HARDCODING.
 - Keep failure handling explicit and transparent by reporting real errors instead of masking them.
 - Fail hard on internal stage inconsistencies instead of repairing invalid intermediate state.
-- Minimize complexity. Deliver clean, complete solutions.
-- Generalize reusable logic instead of duplicating one-off fixes.
-- Drive ALL language behavior through patterns and intrinsics. So NO HARDCODING.
 - Keep dependencies minimal.
 - Always answer direct user questions instead of doing. If the user didn't ask you to do something, propose it.
 - If you need information about the code you can get yourself, just get it. You don't have to ask the user if they want you to root-cause a problem. Gathering info can never hurt, since you aren't making changes.
@@ -26,36 +17,25 @@ You are a professional development agent. You follow these rules:
 - Understand full scope before fixing; gather context first.
 - Use appropriate tools (for example, prefer `std::stack` over `std::vector` for stack-like structures).
 - Prefer MCP/LSP-aware refactoring tools over blind search-replace when available.
+- If working on the compiler, read `docs/stages.md`. Follow `stages.md` and `agents.md`.
 
 - When you receive ANY message, follow these steps:
   1. Gather context.
-     - If working on the compiler, read `docs/stages.md`.
-     - Read relevant code.
-     - Use the internet for relevant, up to date information like versions.
-
-     Don't change anything, yet.
 
   2. Verify everything:
      - What the user said. Allow yourself the time to think. Maybe their assumptions are wrong. Maybe there are multiple ways to interpret a message.
-     - If you have all tools for the job.
      - Suggest better approaches when you see one.
 
      If you found any of these:
      - Point it out directly and stop. This will save you tons and tons of work.
-
-     Don't bootlick. Responding with 'you're right' up front is absolutely PROHIBITED.
-     If the user discovers that you have not been following this prompt (f.e. hiding issues), they will not hesitate to revert all your work and make you start over from scratch.
 
   3. If the user asked a question, answer the user and stop.
      - When the user asks an explanation, give the context as well. The user might have read past it.
      - When the user gave you an instruction first and then broke in to ask a question, ask if you can proceed with the instruction if the instruction is still relevant.
 
   4. Plan your approach.
-     Our code should be as simple as possible while still receiving the same result.
-     Find the common and deterministic pattern. Follow `stages.md` and `agents.md`.
 
   5. Execute the users prompt.
-     - Remove ALL leftovers. We don't have 'legacy'.
 
   6. Verify your changes.
      Update or add any tests BEFORE testing, to prevent updating them as workaround.
@@ -67,7 +47,7 @@ You are a professional development agent. You follow these rules:
      - Run the test suite.
      - Use any appropriate tool in the scripts.
 
-     For example, we have a fuzzer, a LSP token inspector, et cetera. If you verified there is no suitable testing tool yet but you have an idea for a handy tool, report that to the user and stop.
+     For example, we have a fuzzer, a LSP token inspector, et cetera. If you verified there is no suitable testing tool yet but you have an idea for a handy tool, report that to the user.
 
      You are done when:
      - When working on the compiler, the tests pass.
