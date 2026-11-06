@@ -284,6 +284,11 @@ function left times right:
     assert added_definition[0]["inference_instantiations_reused"] >= 3, f"unrelated definition re-inferred existing functions: {added_definition[0]}"
     assert added_definition[0]["functions_ir_reused"] >= 3, "unrelated definition regenerated existing function IR"
     assert added_definition[1:] == build(False, entry=leaf_main)[1:], "unrelated definition changed incremental build behavior"
+    leaf_a.write_text('to unused prefix:\n    @intrinsic("discard", 4)\n' + leaf_a.read_text())
+    inserted_definition = build(entry=leaf_main)
+    assert inserted_definition[0]["inference_instantiations_reused"] >= 3, f"insertion shifted unchanged function identities: {inserted_definition[0]}"
+    assert inserted_definition[0]["functions_ir_reused"] >= 3, "insertion regenerated unchanged function IR"
+    assert inserted_definition[1:] == build(False, entry=leaf_main)[1:], "inserted definition changed incremental build behavior"
 
     specific_main = root / "specific_addition.dl"
     specific_base = ('integer means: @intrinsic("type", "int")\n'

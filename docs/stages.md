@@ -813,6 +813,9 @@ cached function imports do not renumber type identities or invalidate unrelated
 object partitions. Reused function IR
 retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
+Section cache identities use source URI, normalized header, section type, and a
+same-identity sibling ordinal. Inserting a different definition before an existing
+function leaves that function's identity and cached inference or IR intact.
 
 For active edits, the native cache also persists inference summaries for impure
 functions with primitive scalar or pointer arguments and scalar or no return values.

@@ -29,13 +29,12 @@ std::set<Section *> matchedSectionDependencies(Section *section) {
 
 IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	const ParseContext &context, const Json &previous, const Json &observations,
-	const std::map<const Section *, std::string> &sectionPaths
+	const std::map<const Section *, std::string> &sectionPaths, const Json &current
 ) {
 	IncrementalPreinferPlan result;
 	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
 		!compatibleObservations(previous, observations, context))
 		return result;
-	Json current = captureAllFunctionProjection(context);
 	const Json &prior = previous.at("all_function_projection");
 	if (!compatibleFunctionProjection(prior, current))
 		return result;

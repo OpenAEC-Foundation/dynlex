@@ -210,24 +210,7 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 	}
 }
 
-void collectSections(Section *section, const std::string &path, std::map<std::string, Section *> &sections) {
-	sections.emplace(path, section);
-	for (size_t index = 0; index < section->children.size(); index++)
-		collectSections(section->children[index], path + "/" + std::to_string(index), sections);
-}
-
-Json sectionIdentity(const Section &section) {
-	const CodeLine *opening = section.openingLine;
-	if (!opening && !section.patternDefinitions.empty())
-		opening = section.patternDefinitions.front()->range.line;
-	requireCompilerInvariant(opening && opening->sourceFile, "incremental section has no source identity");
-	return Json{
-		{"uri", opening->sourceFile->uri},
-		{"header",
-		 section.openingLine ? std::string(opening->rightTrimmedText) : section.patternDefinitions.front()->toString()},
-		{"type", static_cast<int>(section.type)}
-	};
-}
+#include "incrementalSectionIdentity.inl"
 
 bool containsNestedDefinition(const Section &section) {
 	for (const Section *child : section.children) {
@@ -419,7 +402,7 @@ bool functionDependenciesUnchanged(
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
 std::unordered_set<const Section *> eligibleFunctionSections(
-	const ParseContext &context, const Json &previous, const Json &currentObservations,
+	const ParseContext &context, const Json &previous, const Json &currentObservations, const Json &currentProjection,
 	const std::unordered_set<const Section *> &interfaceStableChanges = {}
 ) {
 	std::unordered_set<const Section *> eligible;
@@ -429,7 +412,6 @@ std::unordered_set<const Section *> eligibleFunctionSections(
 		return eligible;
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
-	Json currentProjection = captureAllFunctionProjection(context);
 	const Json &priorProjection = previous.at("all_function_projection");
 	if (!compatibleFunctionProjection(priorProjection, currentProjection))
 		return eligible;
@@ -783,8 +765,9 @@ bool compileIncrementally(
 				for (const auto &[path, section] : sections)
 					sectionPaths.emplace(section, path);
 				if (previous) {
-					IncrementalPreinferPlan plan =
-						scalarArgumentIncrementalCandidates(context, *previous, recording->observations, sectionPaths);
+					IncrementalPreinferPlan plan = scalarArgumentIncrementalCandidates(
+						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
+					);
 					context.runIncrementalPreinference =
 						[&, plan = std::move(plan)](
 							ParseContext &inferred,
@@ -814,8 +797,9 @@ bool compileIncrementally(
 							}
 							first = end;
 						}
-						std::unordered_set<const Section *> eligible =
-							eligibleFunctionSections(inferred, *previous, recording->observations, stable);
+						std::unordered_set<const Section *> eligible = eligibleFunctionSections(
+							inferred, *previous, recording->observations, resolvedFunctionProjection, stable
+						);
 						if (eligible.empty())
 							return;
 						std::unordered_set<std::string> replacementPaths;
