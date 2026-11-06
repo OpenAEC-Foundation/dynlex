@@ -1,0 +1,5 @@
+@intrinsic("store", sample, 42)
+function inspect:
+    execute:
+        @intrinsic("discard", sample)
+inspect

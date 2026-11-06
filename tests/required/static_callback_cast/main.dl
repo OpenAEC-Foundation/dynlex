@@ -1,0 +1,30 @@
+integer32 means: @intrinsic("type", "int", 32)
+address means: @intrinsic("add pointer depth", integer32)
+meta means: @intrinsic("type", "type")
+fixed value means: @intrinsic("fix", value)
+
+class:
+    patterns:
+        driver
+    members:
+        callback as address
+
+function answer:
+    execute:
+        @intrinsic("return", 42)
+
+function value as {meta:destination}:
+    execute:
+        @intrinsic("return", @intrinsic("cast", value, destination))
+
+function forwarded {fixed address:callback}:
+    execute:
+        @intrinsic("return", callback)
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+@intrinsic("store", callbacks, @intrinsic("static reference", @intrinsic("construct", driver, forwarded (@intrinsic("function", "answer") as address))))
+if @intrinsic("not equal", @intrinsic("call pointer", callbacks' callback, integer32), 42):
+    @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))

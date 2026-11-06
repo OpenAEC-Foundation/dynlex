@@ -9,6 +9,8 @@
 #include <vector>
 
 struct ExpressionCaptureData;
+struct PatternDefinition;
+struct Instantiation;
 
 struct ExpressionCapture {
 	std::string identity;
@@ -37,6 +39,14 @@ struct CompileTimePointer {
 	auto operator<=>(const CompileTimePointer &) const = default;
 };
 
+// A callable has a stable identity before linking assigns its address or table index.
+struct CompileTimeFunction {
+	PatternDefinition *definition{};
+	size_t pathIndex{};
+	Instantiation *instantiation{};
+	auto operator<=>(const CompileTimeFunction &) const = default;
+};
+
 using CompileTimeValue = std::variant<
 	std::monostate, std::int64_t, std::uint64_t, MinimumSignedIntegerMagnitude, double, std::string, bool, TypeReferenceValue,
-	TypeConstraint, CompileTimePointer, ExpressionCapture, ArgumentPackValue>;
+	TypeConstraint, CompileTimePointer, CompileTimeFunction, ExpressionCapture, ArgumentPackValue>;

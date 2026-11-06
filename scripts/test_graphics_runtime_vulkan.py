@@ -68,6 +68,9 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
         raise SystemExit(f"The Vulkan runtime test requires a Vulkan driver: {error}") from error
     environment = vulkan_driver_environment(vulkan_icd, environment)
     if sys.platform.startswith("linux"):
+        environment.pop("WAYLAND_DISPLAY", None)
+        environment.pop("WAYLAND_SOCKET", None)
+        environment["XDG_SESSION_TYPE"] = "x11"
         xvfb_run = shutil.which("xvfb-run")
         if xvfb_run is None:
             raise SystemExit("The Vulkan runtime test requires xvfb-run on Linux")

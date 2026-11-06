@@ -1,0 +1,34 @@
+address means: @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+class:
+    patterns:
+        owned
+    members:
+        data as address
+    retain:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "retain"))
+    release:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int", 32), "release"))
+class:
+    patterns:
+        node
+    members:
+        action as address
+        child as reference
+reference means: @intrinsic("add pointer depth", node)
+section code:
+    receiver: address
+    returns: @intrinsic("type", "nothing")
+    result: reference
+    value:
+        @intrinsic("static reference", @intrinsic("construct", node, @intrinsic("cast", @intrinsic("deferred body"), address), @intrinsic("construct", reference)))
+section group {name}:
+    declares: name
+    result: reference
+    body:
+        children: @intrinsic("array", reference)
+    value:
+        @intrinsic("static reference", @intrinsic("construct", node, @intrinsic("construct", address), @intrinsic("extract element", @intrinsic("section field", "children"), 0)))
+group container:
+    code:
+        @intrinsic("store", local, @intrinsic("construct", owned, @intrinsic("construct", address)))
+@intrinsic("call pointer", container's child's action, @intrinsic("type", "nothing"), @intrinsic("construct", address))

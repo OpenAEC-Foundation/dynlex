@@ -598,6 +598,14 @@ bool resolvePatterns(ParseContext &context) {
 			if (staleInvalidationOccurred) {
 				madeProgress = true;
 			}
+			if (unResolvedSections.empty()) {
+				bool namesChanged = indexDataDeclarationNames(context, globalReferences);
+				namesChanged |= indexDataDeclarationNames(context, bodyReferences);
+				if (namesChanged) {
+					failedBodyMatchDependencies.clear();
+					madeProgress = true;
+				}
+			}
 
 			appendRequeuedReferences();
 			activeResolvingReference = nullptr;
@@ -799,7 +807,8 @@ bool resolvePatterns(ParseContext &context) {
 		appendRequeuedReferences();
 		clearPatternFamilies(context);
 		if (++precedencePass >= context.options.maxResolutionIterations) {
-			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "pattern resolution did not converge", Range())
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "pattern resolution did not converge", Range())
 			);
 			return false;
 		}

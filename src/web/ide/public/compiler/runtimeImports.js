@@ -16,7 +16,37 @@ const {
 const { createHostImports } = hostModule;
 const { inspectRuntimeWasmLayout } = layoutModule;
 
+// LLVM lowers these floating-point intrinsics to C ABI imports in WebAssembly.
+// Share the definitions with import validation so the IDE accepts the same runtime.
+function minimumNumber(left, right) {
+  if (Number.isNaN(left)) return right;
+  if (Number.isNaN(right)) return left;
+  return Math.min(left, right);
+}
+
+function maximumNumber(left, right) {
+  if (Number.isNaN(left)) return right;
+  if (Number.isNaN(right)) return left;
+  return Math.max(left, right);
+}
+
+function roundAwayFromZero(value) {
+  return Math.sign(value) * Math.floor(Math.abs(value) + 0.5);
+}
+
+const mathImports = {
+  sin: Math.sin, sinf: Math.sin,
+  cos: Math.cos, cosf: Math.cos,
+  exp: Math.exp, expf: Math.exp,
+  log: Math.log, logf: Math.log,
+  pow: Math.pow, powf: Math.pow,
+  round: roundAwayFromZero, roundf: roundAwayFromZero,
+  fmin: minimumNumber, fminf: minimumNumber,
+  fmax: maximumNumber, fmaxf: maximumNumber
+};
+
 const supportedEnvImports = new Set([
+  ...Object.keys(mathImports),
   "__linear_memory",
   "abort",
   "calloc",
@@ -74,8 +104,6 @@ const supportedEnvImports = new Set([
   "ferror",
   "fflush",
   "fgetc",
-  "fmax",
-  "fmin",
   "fopen",
   "fprintf",
   "fread",
@@ -86,7 +114,6 @@ const supportedEnvImports = new Set([
   "memcpy",
   "memmove",
   "memset",
-  "pow",
   "printf",
   "rand",
   "realloc",
@@ -466,12 +493,7 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
       stdoutChunks.push(readUtf8(memory, pointer, length));
       return 0;
     },
-    fmax(left, right) {
-      return Math.max(toNumber(left), toNumber(right));
-    },
-    fmin(left, right) {
-      return Math.min(toNumber(left), toNumber(right));
-    },
+    ...mathImports,
     fprintf(stream, formatPointer, varargsPointer) {
       const output = buildFormatStringOutput(memory, readCString(memory, formatPointer), varargsPointer);
       const encoded = new TextEncoder().encode(output);
@@ -555,9 +577,6 @@ export function buildRuntimeImports(stdoutChunks, filesystem, layout) {
         destinationEnd
       );
       return destinationStart;
-    },
-    pow(left, right) {
-      return Math.pow(toNumber(left), toNumber(right));
     },
     printf(formatPointer, varargsPointer) {
       const output = buildFormatStringOutput(memory, readCString(memory, formatPointer), varargsPointer);

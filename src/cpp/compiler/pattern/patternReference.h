@@ -28,6 +28,7 @@ struct PatternReference {
 	~PatternReference();
 	PatternReference(const PatternReference &) = delete;
 	PatternReference &operator=(const PatternReference &) = delete;
+	bool indexDataDeclarationNames(const PatternMatch &match);
 	void resolve(PatternMatch *matchResult = nullptr);
 	const Range &range() const { return sourceRange; }
 };

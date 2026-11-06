@@ -172,7 +172,8 @@ Implementation details are documented in `docs/stages.md`.
 - Core libs include `lib/std.dl`, `lib/graphics.dl`, `lib/font.dl`, `lib/string.dl`, `lib/random.dl`, `lib/vector.dl`.
 - Shader gallery works with animated SPIR-V shaders.
 - Typed pattern arguments and overload dispatch are in use.
-- Snake game is used as a practical compiler validation target.
+- UI libraries, ribbon and Snake examples live in the separate dynlex-ui repository.
+- Generic UTF-8 decoding and font support remain in the core libraries.
 
 ## Future Plans
 

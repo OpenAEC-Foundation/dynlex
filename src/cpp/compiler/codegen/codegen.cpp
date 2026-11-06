@@ -91,7 +91,13 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
 			suffix += "ptr" + std::to_string(pointer->address);
-		else
+		else if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
+			const Range &range = function->definition->range;
+			suffix += "fn" + std::to_string(range.line->mergedLineIndex) + "_" + std::to_string(range.start()) + "_" +
+					  std::to_string(function->pathIndex);
+			for (const DataType &type : function->instantiation->argumentTypes)
+				suffix += "_" + encodeLLVMNameComponent(type.toString());
+		} else
 			suffix += "unknown";
 	}
 	return suffix;
@@ -214,9 +220,9 @@ llvm::Function *generateSpecializedFunction(
 		CodeLine *firstLine = section->codeLines[0];
 		llvm::DIFile *diFile = getOrCreateDIFile(context, firstLine->sourceFile);
 		unsigned line = firstLine->sourceFileLineIndex + 1;
-		auto *funcDIType =
-			context.diBuilder->createSubroutineType(context.diBuilder->getOrCreateTypeArray(llvm::ArrayRef<llvm::Metadata *>{})
-			);
+		auto *funcDIType = context.diBuilder->createSubroutineType(
+			context.diBuilder->getOrCreateTypeArray(llvm::ArrayRef<llvm::Metadata *>{})
+		);
 		auto *sp = context.diBuilder->createFunction(
 			diFile, funcName, funcName, diFile, line, funcDIType, line, llvm::DINode::FlagPrototyped,
 			llvm::DISubprogram::SPFlagDefinition
@@ -779,7 +785,11 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		llvm::Value *result = nullptr;
 		if (constantArguments && isCompileTimeKnown(knownResult)) {
 			// Argument evaluation above still owns its effects and temporary lifetimes.
-			result = generateCompileTimeRuntimeValue(context, knownResult, finalizedExpressionType(context, expr));
+			CodegenResult generated =
+				generateCompileTimeRuntimeValue(context, knownResult, finalizedExpressionType(context, expr));
+			if (!generated)
+				return generated;
+			result = generated.value;
 		} else {
 			llvm::Function *func = generateSpecializedFunction(context, matchedSection, paramBindings, *inst, args);
 			if (!func)

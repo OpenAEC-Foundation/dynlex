@@ -1,0 +1,79 @@
+# Unicode scalar values and UTF-8 byte boundaries, shared by all UI platforms.
+import lib/check.dl
+
+class:
+    patterns:
+        UTF8 character
+    members:
+        valid as a boolean
+        code as an integer
+        next as an integer
+
+to get the UTF8 character at {integer:offset} in {string:text}:
+    set invalid to @intrinsic("construct", UTF8 character, false, 0, offset)
+    if (offset < 0) or (offset >= text's length):
+        return invalid
+    set leading to ((the character at offset in text) as an integer) bitwise and 255
+    if leading < 128:
+        return @intrinsic("construct", UTF8 character, true, leading, offset + 1)
+    set count to 0
+    set minimum to 0
+    set code to 0
+    if 194 <= leading <= 223:
+        set count to 2
+        set minimum to 128
+        set code to leading bitwise and 31
+    else if 224 <= leading <= 239:
+        set count to 3
+        set minimum to 2048
+        set code to leading bitwise and 15
+    else if 240 <= leading <= 244:
+        set count to 4
+        set minimum to 65536
+        set code to leading bitwise and 7
+    else:
+        return invalid
+    if count > (text's length - offset):
+        return invalid
+    set index to 1
+    loop while index < count:
+        set octet to ((the character at (offset + index) in text) as an integer) bitwise and 255
+        if (octet < 128) or (octet > 191):
+            return invalid
+        set code to (code * 64) + (octet bitwise and 63)
+        increment index
+    if (code < minimum) or ((code > 1114111) or (55296 <= code <= 57343)):
+        return invalid
+    return @intrinsic("construct", UTF8 character, true, code, offset + count)
+
+to get UTF8 text for code point {integer:code}:
+    require condition ((0 <= code <= 1114111) and ((55296 <= code <= 57343) = false)) reporting "A Unicode scalar value is required"
+    set count to 1
+    if code >= 128:
+        set count to 2
+    if code >= 2048:
+        set count to 3
+    if code >= 65536:
+        set count to 4
+    set result to a new string buffer containing count bytes
+    set value to code
+    set index to count - 1
+    loop while index > 0:
+        store ((128 + (value bitwise and 63)) as a byte) into (the data of result) at index
+        set value to value / 64
+        decrement index
+    set prefixes to [0, 0, 192, 224, 240]
+    store ((value + (the item at count in prefixes)) as a byte) into (the data of result) at 0
+    return result
+
+to get the previous UTF8 boundary before {integer:offset} in {string:text}:
+    require condition (0 <= offset <= text's length) reporting "A UTF-8 byte offset must be inside the text"
+    if offset = 0:
+        return 0
+    set position to offset - 1
+    loop while position > 0:
+        set octet to ((the character at position in text) as an integer) bitwise and 255
+        if (octet < 128) or (octet >= 192):
+            return position
+        decrement position
+    return position

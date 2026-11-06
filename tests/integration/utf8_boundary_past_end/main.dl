@@ -1,0 +1,3 @@
+import lib/utf8.dl
+
+print line the previous UTF8 boundary before 2 in (the string form of "A")

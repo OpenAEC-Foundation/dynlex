@@ -199,6 +199,9 @@ static std::string encodeCompileTimeValueForCacheKey(const CompileTimeValue &val
 		return "c" + encodeTypeConstraintForCacheKey(*constraint);
 	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
 		return "address:" + std::to_string(pointer->address);
+	if (const auto *function = std::get_if<CompileTimeFunction>(&value))
+		return "function:" + std::to_string(reinterpret_cast<uintptr_t>(function->definition)) + ":" +
+			   std::to_string(function->pathIndex) + ":" + std::to_string(reinterpret_cast<uintptr_t>(function->instantiation));
 	if (const auto *capture = std::get_if<ExpressionCapture>(&value))
 		return "r" + std::to_string(capture->identity.size()) + ":" + capture->identity;
 	if (const auto *pack = std::get_if<ArgumentPackValue>(&value)) {

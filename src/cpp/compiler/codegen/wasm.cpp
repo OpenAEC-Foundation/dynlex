@@ -80,7 +80,8 @@ bool emitWASMModule(ParseContext &context) {
 		"--import-undefined",
 		"--export=main",
 		"--export=__heap_base",
-		"--threads=1", // One compiler object, including in single-threaded Web Workers.
+		"--export-table", // Host imports may retain and invoke ordinary typed callbacks.
+		"--threads=1",	  // One compiler object, including in single-threaded Web Workers.
 		"--fatal-warnings",
 		objectPath.c_str(),
 		"-o",

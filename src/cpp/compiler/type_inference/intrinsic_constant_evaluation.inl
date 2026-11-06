@@ -24,6 +24,15 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		}
 		return expr->arguments[index];
 	};
+	if (kind == IntrinsicKind::Function || kind == IntrinsicKind::DeferredBody) {
+		requireCompilerInvariant(
+			expr->selectedCallableDefinition && expr->selectedCallablePathIndex && expr->selectedInstantiation,
+			"constant callable has no inferred function identity"
+		);
+		return CompileTimeFunction{
+			expr->selectedCallableDefinition, *expr->selectedCallablePathIndex, expr->selectedInstantiation
+		};
+	}
 	if (kind == IntrinsicKind::Construct && expr->arguments.size() == 2) {
 		if (expr->type.isAddress())
 			return CompileTimePointer{};
@@ -96,6 +105,8 @@ static CompileTimeValue evaluatePureIntrinsicCompileTimeValue(
 		if (!typeRef || typeRef->type.kind != DataType::Kind::Type)
 			return {};
 		DataType targetType = typeRef->type.toReferencedType();
+		if (const auto *function = std::get_if<CompileTimeFunction>(&value))
+			return targetType.isAddress() ? CompileTimeValue(*function) : CompileTimeValue{};
 		if (const auto *pointer = std::get_if<CompileTimePointer>(&value)) {
 			if (targetType.isAddress())
 				return *pointer;
