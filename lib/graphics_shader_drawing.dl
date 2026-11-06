@@ -7,9 +7,14 @@ to [set graphics uniform binding] {integer:binding} [to] {floating-point number:
 to [draw a fullscreen graphics shader in] {a pointer to DynlexGraphics:state}:
     require condition ((state's frame_active and state's triangles_active = false) and (state's active_pipeline != (0 as a pointer to DynlexGraphicsPipeline))) reporting "Drawing a fullscreen shader requires an active frame, pipeline, and no unfinished triangles"
     set frame to the address of (the item at (state's frame_index) in (state's frames))
-    set positions to [(-1.0) as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, (-1.0) as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number]
+    set positions to [
+        -1.0, -1.0, 0.0, 1.0,
+        1.0, -1.0, 0.0, 1.0,
+        -1.0, 1.0, 0.0, 1.0,
+        1.0, 1.0, 0.0, 1.0
+    ] as a 32 bit floating-point number array of 16 items
     set size to (the size of (a 32 bit floating-point number array of 16 items)) as a 64 bit unsigned integer
-    require condition (frame's upload_offset <= (33554432 - size)) reporting "The graphics frame exceeds its transient vertex capacity"
+    require condition (frame's upload_offset <= ((the graphics upload capacity) - size)) reporting "The graphics frame exceeds its transient vertex capacity"
     set offset to frame's upload_offset
     set destination to (frame's upload + offset) as a pointer to (a 32 bit floating-point number array of 16 items)
     @intrinsic("store at", destination, positions)

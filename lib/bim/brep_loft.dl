@@ -242,7 +242,7 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
                 if (the item at index in (senses's value's values)) = false:
                     set area to area * -1.0
                 set firstArea to firstArea + area
-            if (((the absolute value of firstArea) <= 1.7976931348623157e308) = false) or ((the absolute value of firstArea) <= 1e-12):
+            if ((firstArea is finite) = false) or ((the absolute value of firstArea) <= 1e-12):
                 return no cad body
         set rings to a cad topology list of a cad loft ring
         loop row from 0 to the length of sections:
@@ -402,7 +402,7 @@ local function cad loft build {a pointer to a list:sections} curved {boolean:cur
                     if (normal's valid) = false:
                         return no cad body
                     set sense to the cad dot of (normal's value) and (the cad difference of on and middle)
-                    if (((the absolute value of sense) <= 1.7976931348623157e308) = false) or (sense = 0.0):
+                    if ((sense is finite) = false) or (sense = 0.0):
                         return no cad body
                     set forward to sense > 0.0
                     set pcurves to cad loft unit pcurves

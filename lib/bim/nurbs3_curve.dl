@@ -129,7 +129,7 @@ local function the cad nurbs sampling interval of {cad nurbs curve3:shape} at {a
         if span <= 0.0:
             return @intrinsic("construct", a cad nurbs interval, 0.0, 0.0)
         if ((the start of domain) + step <= (the end of domain) - step) = false:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         clamp here between ((the start of domain) + step) and ((the end of domain) - step)
         return @intrinsic("construct", a cad nurbs interval, here, step)
 

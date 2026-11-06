@@ -205,15 +205,11 @@ to get the cad clone of {cad nurbs surface3:shape}:
     set the vReversed of result to the vReversed of shape
     return result
 
-local function cad nurbs scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 to get cad nurbs knots {a pointer to a list:knots} are valid:
     if (the length of knots) = 0:
         return false
     for each value at index in knots:
-        if (cad nurbs scalar value is finite) = false:
+        if (value is finite) = false:
             return false
         if index > 0:
             if (the item at (index - 1) in knots) > value:
@@ -228,7 +224,7 @@ to get cad nurbs points {a pointer to a list:points} are finite:
 
 to get cad nurbs weights {a pointer to a list:weights} are positive:
     for each value in weights:
-        if (cad nurbs scalar value is finite) = false or value <= 0.0:
+        if (value is finite) = false or value <= 0.0:
             return false
     return true
 
@@ -243,14 +239,14 @@ to get the cad nurbs wrapped parameter {a number:parameter} in {cad nurbs interv
     set start to the start of domain
     set end to the end of domain
     set span to end - start
-    if (((closed and (cad nurbs scalar span is finite)) and span > 0.0) and value != end):
+    if (((closed and (span is finite)) and span > 0.0) and value != end):
         set remainder to (value - start) mod span
         if remainder < 0.0:
             set remainder to remainder + (the absolute value of span)
         return start + remainder
     # Rust clamp rejects reversed or NaN bounds, even for permissive data.
     if (start <= end) = false:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     clamp value between start and end
     return value
 

@@ -17,6 +17,7 @@
 #include "pattern/pattern_tree/patternTreeNode.h"
 #include "pattern/transformedPattern.h"
 #include "section/parseUtils.h"
+#include "section/scopeRulesSection.h"
 #include "section/variable.h"
 #include "sourceTransform.h"
 #include "stringFunctions.h"
@@ -835,7 +836,7 @@ bool analyzeSections(ParseContext &context) {
 			return false;
 	}
 
-	return true;
+	return applyDefinitionLocalities(context);
 }
 
 #include "compilerTypeUtilities.inl"

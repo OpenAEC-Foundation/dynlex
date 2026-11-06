@@ -103,7 +103,7 @@ to get a cad arc2 at {cad vector2:centre} with radius {a 64 bit floating-point n
 to get a cad ellipse arc2 on {cad ellipse:ellipse} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
     return @intrinsic("construct", a cad ellipse arc2, ellipse, first, last)
 to get the full cad ellipse arc2 on {cad ellipse:ellipse}:
-    return a cad ellipse arc2 on ellipse from 0.0 to 6.283185307179586
+    return a cad ellipse arc2 on ellipse from 0.0 to (the radians in a full turn)
 to get a cad ray2 from {cad vector2:origin} along {cad vector2:direction}:
     return @intrinsic("construct", a cad ray2, origin, direction)
 to get a cad xline2 through {cad vector2:base} along {cad vector2:direction}:
@@ -117,7 +117,7 @@ to get the cad sweep of {cad arc2:arc}:
 to get the cad sweep of {cad ellipse arc2:arc}:
     set raw to arc's endParameter - arc's startParameter
     if raw <= 0.0:
-        return raw + 6.283185307179586
+        return raw + (the radians in a full turn)
     return raw
 
 # The result type is inferred here; type-of uses it without running allocations.
@@ -219,9 +219,9 @@ to get {cad curve2:shape} is cad closed:
     if shape's kind = 1:
         return true
     if shape's kind = 2:
-        return (the absolute value of ((the cad sweep of shape's arc) - 6.283185307179586)) < 1e-9
+        return (the absolute value of ((the cad sweep of shape's arc) - (the radians in a full turn))) < 1e-9
     if shape's kind = 3:
-        return (the absolute value of ((the cad sweep of shape's ellipse) - 6.283185307179586)) < 1e-9
+        return (the absolute value of ((the cad sweep of shape's ellipse) - (the radians in a full turn))) < 1e-9
     if shape's kind = 4:
         return shape's polyline's closed
     if shape's kind = 5:
@@ -268,7 +268,7 @@ local function the cad curve2 radial point at {cad vector2:centre} with radius {
         return a cad vector2 with x (centre's x + (radius * (the cosine of angle))) and y (centre's y + (radius * (the sine of angle)))
 to get the cad point on {cad curve2:shape} at {a 64 bit floating-point number:parameter}:
     if shape's kind = 1:
-        return the cad curve2 radial point at shape's circle's centre with radius shape's circle's radius and angle (parameter * 6.283185307179586)
+        return the cad curve2 radial point at shape's circle's centre with radius shape's circle's radius and angle (parameter * (the radians in a full turn))
     if shape's kind = 2:
         set arc to shape's arc
         set angle to (the cad normalized angle of arc's startAngle) + (parameter * (the cad sweep of arc))
@@ -285,9 +285,9 @@ to get the cad point on {cad curve2:shape} at {a 64 bit floating-point number:pa
 
 local function the cad curve2 euclidean turn of {a 64 bit floating-point number:angle}:
     execute:
-        set result to angle mod 6.283185307179586
+        set result to angle mod (the radians in a full turn)
         if result < 0.0:
-            set result to result + 6.283185307179586
+            set result to result + (the radians in a full turn)
         return result
 local function the cad curve2 projected parameter of {cad vector2:point} on {cad ray2:ray}:
     execute:
@@ -329,7 +329,7 @@ to get the cad [parameter] on {cad curve2:shape} nearest {cad vector2:point}:
         return the cad curve2 projected parameter of point on (the value of (the cad ray of shape))
     if shape's kind = 1:
         set angle to the cad angle of (the cad difference of point and shape's circle's centre)
-        return (the cad normalized angle of angle) / 6.283185307179586
+        return (the cad normalized angle of angle) / (the radians in a full turn)
     if shape's kind = 2:
         set arc to shape's arc
         set angle to the cad angle of (the cad difference of point and arc's centre)
@@ -423,7 +423,7 @@ to get the cad [tangent] of {cad curve2:shape} at {a 64 bit floating-point numbe
     if shape is cad straight:
         return the direction of (the value of (the cad ray of shape))
     if shape's kind = 1:
-        return the cad curve2 radial tangent with radius shape's circle's radius, angle (parameter * 6.283185307179586) and sweep 6.283185307179586
+        return the cad curve2 radial tangent with radius shape's circle's radius, angle (parameter * (the radians in a full turn)) and sweep (the radians in a full turn)
     if shape's kind = 2:
         set arc to shape's arc
         set sweep to the cad sweep of arc
@@ -544,7 +544,7 @@ to get the cad angular samples of {cad curve2:shape} within {a 64 bit floating-p
         append (the cad point on shape at 1.0) to output
         return output
     if shape's kind = 1:
-        return the cad curve2 uniform samples of shape in (the cad curve2 angular steps for 6.283185307179586 within limit)
+        return the cad curve2 uniform samples of shape in (the cad curve2 angular steps for (the radians in a full turn) within limit)
     if shape's kind = 2:
         return the cad curve2 uniform samples of shape in (the cad curve2 angular steps for (the cad sweep of shape's arc) within limit)
     if shape's kind = 4:

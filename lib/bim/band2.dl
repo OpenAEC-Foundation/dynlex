@@ -337,7 +337,7 @@ local function cad band2 [cleaned] {a pointer to a list:edges} around {cad vecto
         loop index from 0 to the length of faces's rings:
             set length to the length of (the item at index in faces's rings)
             if length > (268435456 - count):
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             set count to count + length
         set identities to a cad pair index with room for (count * 2) entries
         set edgeIndex to a cad pair index with room for count entries
@@ -408,7 +408,7 @@ local function cad band2 valid widths {a 64 bit floating-point number array of 2
     execute:
         loop index from 0 to 2:
             set value to the item at index in width
-            if (0.0 <= value <= 1.7976931348623157e308) = false:
+            if (0.0 <= value <= (the largest 64 bit floating-point number)) = false:
                 return false
         return true
 to get the cad band boundary of {cad polyline2:source} with widths {a pointer to a list:widths} within angle {a 64 bit floating-point number:maxAngle}:

@@ -49,7 +49,7 @@ class:
 # This is a distance in world units, separate from intersection and angular epsilons.
 # Explicit process failure is the native equivalent of Tolerance::new's assertion.
 to get a cad tolerance of {a 64 bit floating-point number:linear}:
-    if not (0.0 < linear <= 1.7976931348623157e308):
+    if not (0.0 < linear <= (the largest 64 bit floating-point number)):
         print line "cad tolerance must be finite and positive"
         @intrinsic("call", "libc", "exit", nothing, 1)
     return @intrinsic("construct", a cad tolerance, linear)

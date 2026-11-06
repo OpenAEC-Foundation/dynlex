@@ -141,15 +141,15 @@ local function cad rational success {cad rational curve2:value}:
 
 local function cad rational conic {cad ellipse:ellipse} from {a 64 bit floating-point number:start} sweeping {a 64 bit floating-point number:sweep}:
     execute:
-        if ((((the absolute value of start) <= 1.7976931348623157e308) = false) or (((the absolute value of sweep) <= 1.7976931348623157e308) = false)) or (sweep <= 0.0):
+        if (((start is finite) = false) or ((sweep is finite) = false)) or (sweep <= 0.0):
             return cad rational absent
-        set wanted to the maximum of (the ceiling of (sweep / 1.5707963267948966)) and 1.0
+        set wanted to the maximum of (the ceiling of (sweep / (the radians in a quarter turn))) and 1.0
         # Lists use signed 32-bit counts. Reserve space for 2*spans+4 knots.
         if wanted > 1073741821.0:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set spans to wanted as an integer
         set step to sweep / (spans as a 64 bit floating-point number)
-        if step > (1.5707963267948966 + 1e-12):
+        if step > ((the radians in a quarter turn) + 1e-12):
             return cad rational absent
         set points to an empty list of a cad vector2
         set weights to an empty list of a 64 bit floating-point number
@@ -197,7 +197,7 @@ to get the cad rational builder of {cad curve2:shape}:
     if shape's kind = 1:
         set circle to shape's circle
         set ellipse to a cad ellipse at circle's centre with radii circle's radius and circle's radius along (a cad vector2 with x 1.0 and y 0.0)
-        return cad rational conic ellipse from 0.0 sweeping 6.283185307179586
+        return cad rational conic ellipse from 0.0 sweeping (the radians in a full turn)
     if shape's kind = 2:
         set arc to shape's arc
         set ellipse to a cad ellipse at arc's centre with radii arc's radius and arc's radius along (a cad vector2 with x 1.0 and y 0.0)
@@ -208,7 +208,7 @@ to get the cad rational builder of {cad curve2:shape}:
         set nurbs to shape's nurbs
         set domain to the cad domain of nurbs
         set span to domain's end - domain's start
-        if (((the absolute value of span) <= 1.7976931348623157e308) = false) or (span <= 0.0):
+        if ((span is finite) = false) or (span <= 0.0):
             return cad rational absent
         set normalized to an empty list of a 64 bit floating-point number
         loop index from 0 to the length of nurbs's knots:

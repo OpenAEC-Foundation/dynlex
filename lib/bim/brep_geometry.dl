@@ -421,7 +421,7 @@ to get the cad parameters on {cad surface:shape} nearest {cad vector3:point}:
         return @intrinsic("construct", a cad plane coordinates result, true, the cad geometry vector around (the cad geometry angle from height over ring))
     set radius to shape's torus's majorRadius
     set outer to the cad geometry vector around (the cad geometry angle from height over (ring - radius))
-    set inner to the cad geometry vector (around + 3.141592653589793) (the cad geometry angle from height over ((the negative of ring) - radius))
+    set inner to the cad geometry vector (around + (the radians in a half turn)) (the cad geometry angle from height over ((the negative of ring) - radius))
     set outerError to the cad distance from (the cad point on shape at parameters outer's x and outer's y) to point
     set innerError to the cad distance from (the cad point on shape at parameters inner's x and inner's y) to point
     if innerError < outerError:

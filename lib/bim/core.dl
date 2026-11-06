@@ -225,7 +225,7 @@ to get the cad z axis:
 
 to get cad {cad vector3:value} is finite:
     # Ordered bounds reject both infinities and NaN in each component.
-    set maximum to 1.7976931348623157e308 as a 64 bit floating-point number
+    set maximum to the largest 64 bit floating-point number
     set x to the absolute value of (the x of value)
     set y to the absolute value of (the y of value)
     set z to the absolute value of (the z of value)

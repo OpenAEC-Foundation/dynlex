@@ -33,7 +33,7 @@ to get the cad [fillet] at {cad vector2:apex} [along] {cad vector2:direction1} a
     set cosine to the cad dot of direction1 and direction2
     clamp cosine between -1.0 and 1.0
     set corner to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, cosine)
-    if (corner < 1e-6) or ((the absolute value of (corner - 3.141592653589793)) < 1e-6):
+    if (corner < 1e-6) or ((the absolute value of (corner - (the radians in a half turn))) < 1e-6):
         return a new cad fillet2 result
     if radius < 1e-9:
         return a new cad fillet2 result
@@ -142,14 +142,14 @@ local function cad fillet2 arc at {cad vector2:centre} through {cad vector2:tang
         set forward to cad arc span from angle1 to angle2
         set start to angle1
         set end to angle2
-        if (forward <= 3.141592653589793) = false:
+        if (forward <= (the radians in a half turn)) = false:
             set start to angle2
             set end to angle1
         return @intrinsic("construct", a cad fillet2, tangent1, tangent2, centre, the cad normalized angle of start, the cad normalized angle of end)
 
 to get the cad fillets between {cad curve2:a} and {cad curve2:b} with radius {a 64 bit floating-point number:radius} within {cad tolerance:tolerance}:
     set output to an empty list of a cad fillet2
-    if ((radius <= 0.0) or (radius != radius)) or ((the absolute value of radius) > 1.7976931348623157e308):
+    if ((radius <= 0.0) or (radius != radius)) or ((the absolute value of radius) > (the largest 64 bit floating-point number)):
         return output
     set firstOffsets to an empty list of a cad curve2
     set secondOffsets to an empty list of a cad curve2

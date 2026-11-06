@@ -205,7 +205,7 @@ to get cad sweep [sense] of {cad surface:surface} at {cad vector3:point} outward
         set ahead to the cad sum of point and step
         set behind to the cad difference of point and step
         set slope to (the cad distance from surface to ahead) - (the cad distance from surface to behind)
-    if (slope = 0.0) or (((the absolute value of slope) <= 1.7976931348623157e308) = false):
+    if (slope = 0.0) or ((slope is finite) = false):
         return absent
     return @intrinsic("construct", a cad sweep sense result, true, slope > 0.0)
 
@@ -296,6 +296,3 @@ to get cad sweep circuit with base {cad edge key:base}, next rail {cad edge key:
             set usage's pcurve to the cad pcurve of (the cad curve2 of (a cad line2 from p to q))
             replace item at index index in (result's values) with usage
     return result
-
-to get cad sweep revolution scalar {a 64 bit floating-point number:value} is finite:
-    return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)

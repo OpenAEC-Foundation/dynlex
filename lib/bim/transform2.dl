@@ -90,7 +90,7 @@ local function the cad ellipse transformed from {cad ellipse:shape} by {cad tran
         set q to the cad direction of ((the cad minor axis of shape) scaled by shape's minorRadius) under map
         set shift to the cad principal shift of p and q
         set first to the cad sum of (p scaled by (the cosine of shift)) and (q scaled by (the sine of shift))
-        set turn to shift + 1.5707963267948966
+        set turn to shift + (the radians in a quarter turn)
         set second to the cad sum of (p scaled by (the cosine of turn)) and (q scaled by (the sine of turn))
         set major to first
         set minor to second
@@ -120,11 +120,11 @@ local function the cad ellipse arc transformed from {cad ellipse:shape} between 
             set temporary to start
             set start to finish
             set finish to temporary
-        set sweep to (finish - start) mod 6.283185307179586
+        set sweep to (finish - start) mod (the radians in a full turn)
         if sweep < 0.0:
-            set sweep to sweep + 6.283185307179586
+            set sweep to sweep + (the radians in a full turn)
         if sweep < 1e-12:
-            set finish to start + 6.283185307179586
+            set finish to start + (the radians in a full turn)
         return the cad curve2 of (a cad ellipse arc2 on result from start to finish)
 
 local function the successful cad transform of {cad curve2:shape}:
@@ -190,5 +190,5 @@ to get the cad [transformed] {cad curve2:shape} by {cad transform2:map}:
         set moved to the cad polyline2 with vertices vertices and closure chain's closed
         free vertices
         return the successful cad transform of (the cad curve2 of moved)
-    @intrinsic("call", "libc", "abort", nothing)
+    abort the program
     return invalid

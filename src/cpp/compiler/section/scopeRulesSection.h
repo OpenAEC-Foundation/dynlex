@@ -23,9 +23,5 @@ struct ScopeRulesSection : public Section {
 // A header in the wrong place reports an error and yields nullptr.
 std::optional<Section *> createScopeRulesSection(ParseContext &context, CodeLine *line, Section *owner);
 
-// Applies the locality rules in effect at `line` to a definition section created inside `owner`, validating the
-// explicit `local` and `public` modifiers.
-bool applyDefinitionLocality(
-	ParseContext &context, CodeLine *line, Section *owner, Section *definition, std::optional<Range> localModifier,
-	std::optional<Range> publicModifier
-);
+// Apply locality after parsing so declarations also see rules written later in their named scope.
+bool applyDefinitionLocalities(ParseContext &context);

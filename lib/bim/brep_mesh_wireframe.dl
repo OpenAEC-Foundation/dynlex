@@ -30,7 +30,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -55,7 +55,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -87,7 +87,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -145,7 +145,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -182,14 +182,14 @@ class:
 to get a cad tessellation tolerance with maximum angle {a number:requestedAngle} within {a number:requestedLinear}:
     set angleValue to the cad sampling angle for (requestedAngle as a 64 bit floating-point number)
     set linearValue to requestedLinear as a 64 bit floating-point number
-    if ((linearValue > 0.0) and ((the absolute value of linearValue) <= 1.7976931348623157e308)) = false:
+    if ((linearValue > 0.0) and (linearValue is finite)) = false:
         set linearValue to 1e-9
     return @intrinsic("construct", a cad tessellation tolerance, angleValue, linearValue, false, 0.0, 0, 0, false)
 
 to get {cad tessellation tolerance:value} with chordal cad deflection {a number:requestedDeflection}:
     set resultValue to value
     set deflectionValue to requestedDeflection as a 64 bit floating-point number
-    set resultValue's chordalValid to (deflectionValue > 0.0) and ((the absolute value of deflectionValue) <= 1.7976931348623157e308)
+    set resultValue's chordalValid to (deflectionValue > 0.0) and (deflectionValue is finite)
     set resultValue's chordal to deflectionValue
     return resultValue
 
@@ -339,7 +339,7 @@ local function the cad mesh face angle of {cad face key:faceKey} in {cad body:bo
                     set curveNode to the cad node pointer for topologyEdgeValue's curve in bodyValue
                     if curveNode != (0 as the type of curveNode):
                         set candidateValue to the cad mesh chordal radius of @intrinsic("dereference", curveNode)
-                        if 0.0 <= candidateValue <= 1.7976931348623157e308:
+                        if 0.0 <= candidateValue <= (the largest 64 bit floating-point number):
                             set radiusValue to the maximum of radiusValue and candidateValue
         free useKeys
         return the cad mesh angle for toleranceValue at chordal radius radiusValue
@@ -374,15 +374,15 @@ local function the cad analytic cone of {cad face key:faceKey} in {cad body:body
                                     set fullRevolution to true
         if fullRevolution = false:
             return absentValue
-        set lowV to 1.7976931348623157e308
-        set highV to -1.7976931348623157e308
+        set lowV to (the largest 64 bit floating-point number)
+        set highV to -(the largest 64 bit floating-point number)
         loop pointIndex from 0 to the length of meshValue's positions:
             set parameterResult to the cad parameters on surfaceValue nearest (the item at pointIndex in meshValue's positions)
             if parameterResult's valid = false:
                 return absentValue
             set lowV to the minimum of lowV and parameterResult's value's y
             set highV to the maximum of highV and parameterResult's value's y
-        if ((lowV >= -1.7976931348623157e308) and (highV <= 1.7976931348623157e308)) and (highV > lowV) = false:
+        if ((lowV >= -(the largest 64 bit floating-point number)) and (highV <= (the largest 64 bit floating-point number))) and (highV > lowV) = false:
             return absentValue
         set axisResult to the cad normal of surfaceValue's cone's base
         if axisResult's valid = false:
@@ -434,7 +434,7 @@ local function the cad mesh periodic band bounds of {cad face key:faceKey} in {c
         set secondEnd to the cad point on secondPart's curve at 1.0
         if ((the absolute value of (firstStart's y - firstEnd's y)) > tolerance) or ((the absolute value of (secondStart's y - secondEnd's y)) > tolerance):
             return absentValue
-        if ((the absolute value of (firstEnd's x - firstStart's x)) < 3.141592653589793) or ((the absolute value of (secondEnd's x - secondStart's x)) < 3.141592653589793):
+        if ((the absolute value of (firstEnd's x - firstStart's x)) < (the radians in a half turn)) or ((the absolute value of (secondEnd's x - secondStart's x)) < (the radians in a half turn)):
             return absentValue
         set lowU to the minimum of (the minimum of firstStart's x and firstEnd's x) and (the minimum of secondStart's x and secondEnd's x)
         set highU to the maximum of (the maximum of firstStart's x and firstEnd's x) and (the maximum of secondStart's x and secondEnd's x)
@@ -448,8 +448,8 @@ local function the cad mesh periodic band bounds of {cad face key:faceKey} in {c
 
 local function the cad mesh bounds of {a pointer to a list:ringValues}:
     execute:
-        set lowU and lowV to 1.7976931348623157e308
-        set highU and highV to -1.7976931348623157e308
+        set lowU and lowV to (the largest 64 bit floating-point number)
+        set highU and highV to -(the largest 64 bit floating-point number)
         set foundPoint to false
         for each ringValue in ringValues:
             for each pointValue in ringValue:
@@ -673,7 +673,7 @@ to get the cad tessellation of {cad body:bodyValue} with tolerance {cad tessella
     if nestedMeshOwner != (0 as a pointer to an integer):
         set nestedMeshReferences to the value at nestedMeshOwner
         if nestedMeshReferences = 2147483647:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         store (nestedMeshReferences + 1) at nestedMeshOwner
     allocate one slot of 0 and set storageOwner to it
     return @intrinsic("construct", a cad body mesh, outputMesh, triangleFaceValues, edgeValues, lineValues, precisionValue, missingValues, analyticValues, storageOwner)

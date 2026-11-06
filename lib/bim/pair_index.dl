@@ -35,7 +35,7 @@ class:
 
 to get a cad pair [index] with room for {integer:count} entries:
     if (count < 0) or (count > 536870912):
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     set capacity to 8
     set required to count * 2
     loop while capacity < required:
@@ -62,7 +62,7 @@ local function cad pair bucket for {a 64 bit integer:first} and {a 64 bit intege
 local function cad pair [slot] for key {a 64 bit integer:first} and {a 64 bit integer:second} in {cad pair index:table}:
     execute:
         if table's owner = (0 as a pointer to an integer):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set position to cad pair bucket for first and second with mask table's mask
         loop probe from 0 to (table's mask + 1):
             set slot to the item at position in table's slots
@@ -82,8 +82,8 @@ to get the cad pair [value] for key {a 64 bit integer:first} and {a 64 bit integ
 
 to put cad pair [value] {integer:value} for key {a 64 bit integer:first} and {a 64 bit integer:second} in {cad pair index:table}:
     if value < 0:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     set position to cad pair slot for key first and second in table
     if position < 0:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     replace item at index position in table's slots with (@intrinsic("construct", a cad pair slot, first, second, value))

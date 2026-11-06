@@ -19,12 +19,12 @@ to get the cad surface properties of {cad mesh:meshValue}:
         set secondPoint to the cad difference of (the item at triangleValue's second in meshValue's positions) and reference
         set thirdPoint to the cad difference of (the item at triangleValue's third in meshValue's positions) and reference
         set triangleArea to (the cad length of (the cad cross of (the cad difference of secondPoint and firstPoint) and (the cad difference of thirdPoint and firstPoint))) * 0.5
-        if (0.0 <= triangleArea <= 1.7976931348623157e308) = false:
+        if (0.0 <= triangleArea <= (the largest 64 bit floating-point number)) = false:
             return absent
         set triangleCentre to (the cad sum of (the cad sum of firstPoint and secondPoint) and thirdPoint) cad divided by 3.0
         set weightedCentre to the cad sum of weightedCentre and (triangleCentre scaled by triangleArea)
         set totalArea to totalArea + triangleArea
-    if (0.0 < totalArea <= 1.7976931348623157e308) = false:
+    if (0.0 < totalArea <= (the largest 64 bit floating-point number)) = false:
         return absent
     set centroidValue to the cad sum of reference and (weightedCentre cad divided by totalArea)
     set propertiesValue to @intrinsic("construct", a cad mesh surface properties, totalArea, centroidValue)
@@ -52,10 +52,6 @@ class:
         firstDirection as a cad vector3
         secondDirection as a cad vector3
         thirdDirection as a cad vector3
-
-local function cad mesh scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 
 local function cad mesh swap eigenpairs {cad mesh eigenpair:firstPair} and {cad mesh eigenpair:secondPair}:
     execute:
@@ -193,7 +189,7 @@ to get the cad inertial properties of {cad mesh:meshValue}:
         set productIntegrals's x to productIntegrals's x + ((tetraVolume * (diagonalXY + allXY)) / 20.0)
         set productIntegrals's y to productIntegrals's y + ((tetraVolume * (diagonalYZ + allYZ)) / 20.0)
         set productIntegrals's z to productIntegrals's z + ((tetraVolume * (diagonalZX + allZX)) / 20.0)
-    if ((signedVolume != 0.0) and (cad mesh scalar signedVolume is finite)) = false:
+    if ((signedVolume != 0.0) and (signedVolume is finite)) = false:
         return no cad mesh mass properties
     set localCentroid to centroidNumerator cad divided by signedVolume
     set orientation to 1.0

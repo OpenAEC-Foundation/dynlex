@@ -185,7 +185,7 @@ local function the cad plane inferred from support {a pointer to a list:points} 
         return the cad orthonormal plane with origin origin, x axis x and normal normal
 
 to get the cad common [plane] of {a pointer to a list:curves} within {a 64 bit floating-point number:tolerance}:
-    if ((the absolute value of tolerance) <= 1.7976931348623157e308) = false:
+    if (tolerance is finite) = false:
         return the absent cad common plane
     if tolerance <= 0.0:
         return the absent cad common plane
@@ -195,7 +195,7 @@ to get the cad common [plane] of {a pointer to a list:curves} within {a 64 bit f
         set plane to the plane of planar
         set kind to the kind of shape
         if kind < 0 or kind > 7:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         if kind is one of 0, 6 and 7:
             append (the cad point on planar at 0.0) and (the cad point on planar at 1.0) to points
         else:

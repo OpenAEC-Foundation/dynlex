@@ -57,8 +57,10 @@ to get the next 64 bit unit fraction from {a pointer to a Mersenne Twister 64 en
     return computedFraction
 
 to get the next 32 bit unit fraction from {a pointer to a Mersenne Twister 64 engine:engine}:
+    in this function, by default:
+        numbers are 32 bit
     set bits to the next 64 bit unsigned integer from engine
-    set computedFraction to (bits as a 32 bit floating-point number) / (18446744073709551616.0 as a 32 bit floating-point number)
+    set computedFraction to (bits as a 32 bit floating-point number) / 18446744073709551616.0
     if computedFraction >= 1.0:
-        return 0.9999999403953552 as a 32 bit floating-point number
+        return 0.9999999403953552
     return computedFraction

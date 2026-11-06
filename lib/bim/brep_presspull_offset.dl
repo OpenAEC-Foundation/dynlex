@@ -90,7 +90,7 @@ local function the cad presspull trigonometric parameters where {cad plane:moved
         set angle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, ratio)
         set roots to a cad topology list of a 64 bit floating-point number
         loop turn from -2 to 3:
-            set fullTurn to (turn as a 64 bit floating-point number) * (cad presspull tau)
+            set fullTurn to (turn as a 64 bit floating-point number) * (the radians in a full turn)
             append ((phase - angle) + fullTurn) and ((phase + angle) + fullTurn) to roots's values
         return the cad presspull parameters roots
 
@@ -114,9 +114,9 @@ to get the cad presspull parameters where {cad plane:movedPlane} meets {cad edge
 
 local function cad presspull euclidean remainder of {a 64 bit floating-point number:value}:
     execute:
-        set reduced to value mod (cad presspull tau)
+        set reduced to value mod (the radians in a full turn)
         if reduced < 0.0:
-            return reduced + (cad presspull tau)
+            return reduced + (the radians in a full turn)
         return reduced
 local function the cad presspull span of {cad edge curve3:curveValue} from {cad vector3:startPoint} to {cad vector3:endPoint} like {cad edge:oldEdge} within {a 64 bit floating-point number:tolerance}:
     execute:
@@ -125,8 +125,8 @@ local function the cad presspull span of {cad edge curve3:curveValue} from {cad 
         if curveValue's kind is one of 1 and 2:
             set secondParameter to firstParameter + (cad presspull euclidean remainder of (secondParameter - firstParameter))
             if oldEdge's start = oldEdge's end:
-                set secondParameter to firstParameter + (cad presspull tau)
-        if ((cad presspull finite firstParameter) and (cad presspull finite secondParameter)) = false:
+                set secondParameter to firstParameter + (the radians in a full turn)
+        if ((firstParameter is finite) and (secondParameter is finite)) = false:
             return no cad presspull span
         if secondParameter <= firstParameter:
             return no cad presspull span
@@ -211,7 +211,7 @@ local function the cad presspull local offset of {cad body:sourceBody} at {cad f
                     set bestDistance to 1e300 as a 64 bit floating-point number
                     set bestParameter to 0.0 as a 64 bit floating-point number
                     for each candidateParameter in (parameterResult's values's values):
-                        set allowed to cad presspull finite candidateParameter
+                        set allowed to (candidateParameter is finite)
                         if startsHere:
                             set allowed to allowed and (candidateParameter < (otherParameter - tolerance))
                         else:
@@ -325,7 +325,7 @@ local function the cad presspull local offset of {cad body:sourceBody} at {cad f
                     set sampleParameter to affectedEdge's startParameter + fraction * (affectedEdge's endParameter - affectedEdge's startParameter)
                     set samplePoint to the cad point on (@intrinsic("dereference", affectedCurve)) at sampleParameter
                     set sampleDistance to the cad distance from (@intrinsic("dereference", affectedSurface)) to samplePoint
-                    if (cad presspull finite sampleDistance) = false:
+                    if (sampleDistance is finite) = false:
                         return no cad body
                     if (the absolute value of sampleDistance) > (tolerance * 8.0):
                         return no cad body
@@ -344,7 +344,7 @@ local function the cad presspull local offset of {cad body:sourceBody} at {cad f
 
 to get the cad presspull of {cad body:sourceBody} at {cad face key:faceKey} by {a number:givenDistance} in mode {integer:mode}:
     set distance to givenDistance as a 64 bit floating-point number
-    if ((cad presspull finite distance) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
+    if ((distance is finite) = false) or ((the absolute value of distance) <= 2.220446049250313e-16):
         return no cad body
     set worldProfile to the cad planar face profile of sourceBody at faceKey
     if worldProfile's valid = false:

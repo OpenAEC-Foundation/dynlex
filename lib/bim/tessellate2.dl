@@ -11,11 +11,11 @@ to get the cad default segments per radian:
 local function cad planar sample count for {a 64 bit floating-point number:sweep} with density {a 64 bit floating-point number:density}:
     execute:
         set wanted to the ceiling of ((the absolute value of sweep) * density)
-        if ((the absolute value of wanted) <= 1.7976931348623157e308) and (wanted > 4.0):
+        if (wanted is finite) and (wanted > 4.0):
             # A DynLex list has a signed 32-bit element count. Reject an
             # unrepresentable request before conversion or endpoint addition.
             if wanted > 2147483646.0:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             return wanted as an integer
         return 4
 

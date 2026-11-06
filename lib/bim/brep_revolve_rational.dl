@@ -49,17 +49,13 @@ class:
         collapsed as a boolean
         value as a cad nurbs surface3
 
-local function cad rational revolution finite {a 64 bit floating-point number:value}:
-    execute:
-        return (value = value) and ((the absolute value of value) <= 1.7976931348623157e308)
-
 local function cad rational revolution absent bounds:
     execute:
         return @intrinsic("construct", a cad rational revolution bounds, false, 0.0 as a 64 bit floating-point number, 0.0 as a 64 bit floating-point number)
 
 local function cad rational revolution bounds between {a 64 bit floating-point number:first} and {a 64 bit floating-point number:last}:
     execute:
-        if ((cad rational revolution finite first) and (cad rational revolution finite last)) = false:
+        if ((first is finite) and (last is finite)) = false:
             return cad rational revolution absent bounds
         return @intrinsic("construct", a cad rational revolution bounds, true, the minimum of first and last, the maximum of first and last)
 
@@ -80,9 +76,9 @@ local function cad rational revolution projection of {cad vector2:point} on {cad
 local function cad rational revolution trigonometric bounds with centre {a 64 bit floating-point number:centre}, cosine {a 64 bit floating-point number:cosine}, sine {a 64 bit floating-point number:sine}, start {a 64 bit floating-point number:start} and sweep {a 64 bit floating-point number:sweep}:
     execute:
         set finish to start + sweep
-        if (((cad rational revolution finite centre) and (cad rational revolution finite cosine)) and ((cad rational revolution finite sine) and (cad rational revolution finite start))) = false:
+        if (((centre is finite) and (cosine is finite)) and ((sine is finite) and (start is finite))) = false:
             return cad rational revolution absent bounds
-        if (((cad rational revolution finite sweep) and (cad rational revolution finite finish)) and (sweep > 0.0)) = false:
+        if (((sweep is finite) and (finish is finite)) and (sweep > 0.0)) = false:
             return cad rational revolution absent bounds
         set first to (centre + (cosine * (the cosine of start))) + (sine * (the sine of start))
         set last to (centre + (cosine * (the cosine of finish))) + (sine * (the sine of finish))
@@ -91,11 +87,11 @@ local function cad rational revolution trigonometric bounds with centre {a 64 bi
             return result
         set maximum to @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, sine, cosine)
         loop index from 0 to 2:
-            set parameter to maximum + ((index as a 64 bit floating-point number) * 3.141592653589793)
-            set offset to (parameter - start) mod 6.283185307179586
+            set parameter to maximum + ((index as a 64 bit floating-point number) * (the radians in a half turn))
+            set offset to (parameter - start) mod (the radians in a full turn)
             if offset < 0.0:
-                set offset to offset + 6.283185307179586
-            if (sweep >= (6.283185307179586 - 1e-12)) or (offset <= (sweep + 1e-12)):
+                set offset to offset + (the radians in a full turn)
+            if (sweep >= ((the radians in a full turn) - 1e-12)) or (offset <= (sweep + 1e-12)):
                 set value to (centre + (cosine * (the cosine of parameter))) + (sine * (the sine of parameter))
                 set result to cad rational revolution include (cad rational revolution bounds between value and value) in result
         return result
@@ -107,17 +103,17 @@ local function cad rational revolution valid nurbs {cad nurbs curve2:shape}:
         if (the length of shape's knots) != (((the length of shape's controls) + shape's degree) + 1):
             return false
         set domain to the cad domain of shape
-        if (((cad rational revolution finite domain's start) and (cad rational revolution finite domain's end)) and (domain's end > domain's start)) = false:
+        if (((domain's start is finite) and (domain's end is finite)) and (domain's end > domain's start)) = false:
             return false
         set previous to the item at 0 in shape's knots
         loop index from 0 to the length of shape's knots:
             set knot to the item at index in shape's knots
-            if ((cad rational revolution finite knot) = false) or (knot < previous):
+            if ((knot is finite) = false) or (knot < previous):
                 return false
             set previous to knot
         for each point at index in shape's controls:
             set weight to the item at index in shape's weights
-            if (((cad rational revolution finite point's x) and (cad rational revolution finite point's y)) and ((cad rational revolution finite weight) and (weight > 0.0))) = false:
+            if (((point's x is finite) and (point's y is finite)) and ((weight is finite) and (weight > 0.0))) = false:
                 return false
         return true
 
@@ -198,7 +194,7 @@ local function cad rational revolution absent reach:
 
 local function cad rational revolution reach between {a 64 bit floating-point number:low} and {a 64 bit floating-point number:high} with tolerance {a 64 bit floating-point number:tolerance}:
     execute:
-        if (((cad rational revolution finite low) and (cad rational revolution finite high)) and (low <= high)) = false:
+        if (((low is finite) and (high is finite)) and (low <= high)) = false:
             return cad rational revolution absent reach
         return @intrinsic("construct", a cad rational revolution reach, true, low < (0.0 - tolerance), high > tolerance)
 
@@ -276,7 +272,7 @@ to get the cad rational revolution turn of {a pointer to a list:profile} on {cad
     if turnAngle < 0.0:
         set direction to the cad negative of direction
         set turnAngle to 0.0 - turnAngle
-    if (((cad rational revolution finite turnAngle) and (turnAngle > 0.0)) and (turnAngle <= (6.283185307179586 + 1e-12))) = false:
+    if (((turnAngle is finite) and (turnAngle > 0.0)) and (turnAngle <= ((the radians in a full turn) + 1e-12))) = false:
         return cad rational revolution absent turn
     set planeDistance to the cad distance from pivot to plane
     if (planeDistance's valid) = false:
@@ -288,7 +284,7 @@ to get the cad rational revolution turn of {a pointer to a list:profile} on {cad
         return cad rational revolution absent turn
     set radial to radialResult's value
     set spin to (the cad dot of normalResult's value and (the cad cross of direction and radial)) > 0.0
-    set frame to @intrinsic("construct", a cad rational revolution turn, true, pivot, direction, radial, spin, 0.0 as a 64 bit floating-point number, turnAngle, (the absolute value of (6.283185307179586 - turnAngle)) <= 1e-9)
+    set frame to @intrinsic("construct", a cad rational revolution turn, true, pivot, direction, radial, spin, 0.0 as a 64 bit floating-point number, turnAngle, (the absolute value of ((the radians in a full turn) - turnAngle)) <= 1e-9)
     set found to false
     set scaleOrigin to the cad zero vector3
     loop index from 0 to the length of profile:

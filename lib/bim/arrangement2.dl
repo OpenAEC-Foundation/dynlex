@@ -208,7 +208,7 @@ local function cad arrangement2 congestion of {a pointer to a list:bounds} verti
             set high to the maximum of high and b
             set total to total + ((b - a) + tolerance)
         set extent to high - low
-        if ((the absolute value of extent) <= 1.7976931348623157e308) = false:
+        if (extent is finite) = false:
             return 1.0 / 0.0
         if extent <= tolerance:
             return 1.0 / 0.0
@@ -341,7 +341,7 @@ local function cad arrangement2 traced [pieces] {a pointer to a list:pieces} wit
         # multiplication or pair-table growth. Allocation failure aborts.
         set count to the length of pieces
         if count > 268435456:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set vertices to an empty list of a cad vector2
         set buckets to an empty list of the type of (an empty list of an integer)
         set cells to a cad pair index with room for (count * 2) entries

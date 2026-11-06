@@ -117,10 +117,6 @@ cad presspull offset mode means: 1
 cad planar intersection area kind means: 0
 cad planar intersection touching kind means: 1
 cad planar intersection disjoint kind means: 2
-cad presspull tau means: 6.283185307179586
-to get cad presspull finite {a 64 bit floating-point number:value}:
-    return (the absolute value of value) <= 1.7976931348623157e308
-
 local function cad presspull boolean success {cad body:value}:
     execute:
         return @intrinsic("construct", a cad boolean result, true, 0, value)
@@ -226,8 +222,8 @@ to get the cad planar face profile of {cad body:sourceBody} at {cad face key:fac
 to get the cad planar face at {cad vector3:worldPoint} in {cad body:sourceBody} within {a number:givenTolerance}:
     set tolerance to givenTolerance as a 64 bit floating-point number
     set absent to @intrinsic("construct", a cad presspull face result, false, a new cad face key)
-    set finitePoint to (cad presspull finite worldPoint's x) and ((cad presspull finite worldPoint's y) and (cad presspull finite worldPoint's z))
-    if ((cad presspull finite tolerance) = false) or ((tolerance < 0.0) or (finitePoint = false)):
+    set finitePoint to (worldPoint's x is finite) and ((worldPoint's y is finite) and (worldPoint's z is finite))
+    if ((tolerance is finite) = false) or ((tolerance < 0.0) or (finitePoint = false)):
         return absent
     set faceKeys to the cad face keys of sourceBody
     set foundFace to false
@@ -835,7 +831,7 @@ local function cad presspull bodies {a pointer to a list:sourceBodies} share pla
 
 to get the cad union of planar regions {a pointer to a list:bodies} within {a number:givenTolerance}:
     set tolerance to givenTolerance as a 64 bit floating-point number
-    if ((the length of bodies) < 2) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0)):
+    if ((the length of bodies) < 2) or (((tolerance is finite) = false) or (tolerance <= 0.0)):
         return cad presspull boolean failure cad imprint cut refused snag
     set baseProfile to the cad presspull first profile in bodies
     if baseProfile's valid = false:
@@ -853,7 +849,7 @@ to get the cad union of planar regions {a pointer to a list:bodies} within {a nu
 
 to get the cad intersection of planar regions {a pointer to a list:bodies} within {a number:givenTolerance}:
     set tolerance to givenTolerance as a 64 bit floating-point number
-    if ((the length of bodies) < 2) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0)):
+    if ((the length of bodies) < 2) or (((tolerance is finite) = false) or (tolerance <= 0.0)):
         return cad presspull intersection failure cad imprint cut refused snag
     set baseProfile to the cad presspull first profile in bodies
     if baseProfile's valid = false:
@@ -893,7 +889,7 @@ to get the cad intersection of planar regions {a pointer to a list:bodies} withi
 
 to get the cad subtraction of planar regions {a pointer to a list:bases} by {a pointer to a list:cutters} within {a number:givenTolerance}:
     set tolerance to givenTolerance as a 64 bit floating-point number
-    if ((the length of bases) = 0) or (((the length of cutters) = 0) or (((cad presspull finite tolerance) = false) or (tolerance <= 0.0))):
+    if ((the length of bases) = 0) or (((the length of cutters) = 0) or (((tolerance is finite) = false) or (tolerance <= 0.0))):
         return cad presspull boolean failure cad imprint cut refused snag
     set baseProfile to the cad presspull first profile in bases
     if baseProfile's valid = false:
@@ -922,7 +918,7 @@ to get the cad subtraction of planar regions {a pointer to a list:bases} by {a p
 
 to get the cad presspull of {cad body:sourceBody} with {cad planar face profile:region} by {a number:givenDistance}:
     set distance to givenDistance as a 64 bit floating-point number
-    if ((cad presspull finite distance) = false) or (((the absolute value of distance) <= 2.220446049250313e-16) or ((the length of (region's loops's values)) = 0)):
+    if ((distance is finite) = false) or (((the absolute value of distance) <= 2.220446049250313e-16) or ((the length of (region's loops's values)) = 0)):
         return no cad body
     set normalResult to the cad normalization of region's outward
     if normalResult's valid = false:

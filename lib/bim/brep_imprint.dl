@@ -235,8 +235,8 @@ local function align cad imprint edge vertices from {cad body:sourceBody} into {
                             set located to the cad parameter on (@intrinsic("dereference", curveNode)) nearest pointValue
                             if curveNode's kind is one of 1 and 2:
                                 set middle to 0.5 * (edgeNode's startParameter + edgeNode's endParameter)
-                                set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - located) / 6.283185307179586)
-                                set located to located + 6.283185307179586 * turns
+                                set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - located) / (the radians in a full turn))
+                                set located to located + (the radians in a full turn) * turns
                             set span to edgeNode's endParameter - edgeNode's startParameter
                             if span != 0.0:
                                 set across to (located - edgeNode's startParameter) / span

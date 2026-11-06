@@ -131,7 +131,7 @@ to append workspace resource snapshot {a pointer to a workspace resource snapsho
 
 to get the workspace resource snapshot at {integer:position} in {a pointer to a workspace resource snapshot collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 local function a new normalized workspace change collection:
@@ -158,7 +158,7 @@ to append normalized workspace change {a pointer to a normalized workspace chang
 
 to get the normalized workspace change at {integer:position} in {a pointer to a normalized workspace change collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 local function a new planned workspace operation collection:
@@ -185,7 +185,7 @@ to append planned workspace operation {a pointer to a planned workspace operatio
 
 to get the planned workspace operation at {integer:position} in {a pointer to a planned workspace operation collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 to get a new valid workspace edit plan:
@@ -210,7 +210,7 @@ to invalidate {a pointer to a workspace edit plan:plan} with {workspace edit res
 
 to free {a pointer to a workspace edit plan:plan}:
     if plan = (0 as a pointer to a workspace edit plan):
-        @intrinsic("return")
+        return nothing
     set resources to the resources of plan
     set position to 0
     loop while position < the length of resources:

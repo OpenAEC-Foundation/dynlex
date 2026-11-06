@@ -1,0 +1,10 @@
+import lib/std.dl
+
+to get conditional half:
+    set value to 1 / 2
+    if false:
+        in this function, by default:
+            numbers are floating-point
+    return value
+
+print line conditional half

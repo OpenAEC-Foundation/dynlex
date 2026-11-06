@@ -50,12 +50,9 @@ local function no cad mass properties:
 local function the cad mass result of {cad mass properties:value}:
     execute:
         return @intrinsic("construct", a cad mass properties result, true, value)
-local function cad mass scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 local function cad mass vector {cad vector3:value} is finite:
     execute:
-        return ((cad mass scalar (value's x) is finite) and (cad mass scalar (value's y) is finite)) and (cad mass scalar (value's z) is finite)
+        return (((value's x) is finite) and ((value's y) is finite)) and ((value's z) is finite)
 local function the cad mass radii for {cad vector3:moments} with volume {a 64 bit floating-point number:volume}:
     execute:
         set x to the square root of ((the maximum of (moments's x) and 0.0) / volume)
@@ -72,7 +69,7 @@ local function the cad mass patch from {a 64 bit floating-point number:uStart} a
 
 local function cad mass assembled with volume {a 64 bit floating-point number:volume}, centroid {cad vector3:centroid}, principal moments {cad vector3:principal} and axes {cad vector3:xAxis} {cad vector3:yAxis} {cad vector3:zAxis}:
     execute:
-        if (((cad mass scalar volume is finite) and (volume > 0.0)) and (cad mass vector centroid is finite)) = false:
+        if (((volume is finite) and (volume > 0.0)) and (cad mass vector centroid is finite)) = false:
             return no cad mass properties
         if cad mass vector principal is finite = false:
             return no cad mass properties
@@ -161,7 +158,7 @@ local function the cad mass rectangular patch of {cad face key:faceKey} in {cad 
             set delta to the cad difference of (line's end) and (line's start)
             if ((the absolute value of (delta's x)) <= 1e-8) = ((the absolute value of (delta's y)) <= 1e-8):
                 return no cad mass patch
-            if ((cad mass scalar (line's start's x) is finite) and (cad mass scalar (line's start's y) is finite)) = false:
+            if (((line's start's x) is finite) and ((line's start's y) is finite)) = false:
                 return no cad mass patch
             set lowU to the minimum of lowU and (line's start's x)
             set lowV to the minimum of lowV and (line's start's y)
@@ -175,10 +172,10 @@ local function the cad mass rectangular patch of {cad face key:faceKey} in {cad 
                     return no cad mass patch
         set uSweep to highU - lowU
         set vSweep to highV - lowV
-        if uSweep > (6.283185307179586 + 1e-8):
+        if uSweep > ((the radians in a full turn) + 1e-8):
             return no cad mass patch
         if (surface's kind) = 4:
-            if vSweep > (6.283185307179586 + 1e-8):
+            if vSweep > ((the radians in a full turn) + 1e-8):
                 return no cad mass patch
         return the cad mass patch from lowU across uSweep and from lowV across vSweep
 
@@ -241,7 +238,7 @@ local function the cad cylindrical sector mass properties of {cad body:body}:
         set innerOrigin to inner's base's origin
         set innerOffset to the cad difference of innerOrigin and outerOrigin
         set innerLateral to the cad difference of innerOrigin and (axis scaled by (the cad dot of innerOffset and axis))
-        if ((cad mass scalar (outer's radius) is finite) and (cad mass scalar (inner's radius) is finite)) = false:
+        if (((outer's radius) is finite) and ((inner's radius) is finite)) = false:
             return no cad mass properties
         if ((inner's radius) <= 0.0) or ((inner's radius) >= (outer's radius)):
             return no cad mass properties
@@ -275,14 +272,14 @@ local function the cad cylindrical sector mass properties of {cad body:body}:
         set innerMid to the cad normalization of (the cad vector at (a cad vector2 with x (the cosine of innerMiddle) and y (the sine of innerMiddle)) on (inner's base))
         if ((outerMid's valid) and (innerMid's valid)) = false:
             return no cad mass properties
-        if (patch's value's uSweep) < (6.283185307179586 - 1e-8):
+        if (patch's value's uSweep) < ((the radians in a full turn) - 1e-8):
             if (the cad distance from (outerMid's value) to (innerMid's value)) > 1e-8:
                 return no cad mass properties
         set angle to patch's value's uSweep
         set height to patch's value's vSweep
-        if ((cad mass scalar angle is finite) and (cad mass scalar height is finite)) = false:
+        if ((angle is finite) and (height is finite)) = false:
             return no cad mass properties
-        if ((angle <= 0.0) or (angle > (6.283185307179586 + 1e-8))) or (height <= 0.0):
+        if ((angle <= 0.0) or (angle > ((the radians in a full turn) + 1e-8))) or (height <= 0.0):
             return no cad mass properties
 
         set outerSquared to (outer's radius) * (outer's radius)
@@ -293,7 +290,7 @@ local function the cad cylindrical sector mass properties of {cad body:body}:
         set area to (0.5 * radialSquared) * angle
         set half to angle * 0.5
         set centroidRadius to 0.0
-        if (the absolute value of (angle - 6.283185307179586)) > 1e-8:
+        if (the absolute value of (angle - (the radians in a full turn))) > 1e-8:
             set centroidRadius to (((4.0 * (the sine of half)) * radialCubed) / ((3.0 * angle) * radialSquared))
         set volume to area * height
         set radialResult to the cad normalization of (the cad vector at (a cad vector2 with x (the cosine of middle) and y (the sine of middle)) on (outer's base))
@@ -346,7 +343,7 @@ local function the cad spherical mass properties of {cad body:body}:
         set centre to outerSphere's frame's origin
         set scale to the maximum of (the absolute value of (outerSphere's radius)) and 1.0
         for each sphere in (spheres's values):
-            if ((cad mass scalar (sphere's radius) is finite) and ((sphere's radius) > 0.0)) = false:
+            if (((sphere's radius) is finite) and ((sphere's radius) > 0.0)) = false:
                 return no cad mass properties
             if (the cad distance from centre to (sphere's frame's origin)) > (scale * 1e-8):
                 return no cad mass properties
@@ -360,8 +357,8 @@ local function the cad spherical mass properties of {cad body:body}:
         set innerCubed to (inner * inner) * inner
         set outerFifth to ((outerCubed * outer) * outer)
         set innerFifth to ((innerCubed * inner) * inner)
-        set volume to ((4.0 * 3.141592653589793) * (outerCubed - innerCubed)) / 3.0
-        set principalValue to ((8.0 * 3.141592653589793) * (outerFifth - innerFifth)) / 15.0
+        set volume to ((4.0 * (the radians in a half turn)) * (outerCubed - innerCubed)) / 3.0
+        set principalValue to ((8.0 * (the radians in a half turn)) * (outerFifth - innerFifth)) / 15.0
         set principal to a cad vector3 with x principalValue, y principalValue and z principalValue
         return cad mass assembled with volume volume, centroid centre, principal moments principal and axes (the cad x axis) (the cad y axis) (the cad z axis)
 
@@ -391,7 +388,7 @@ local function the cad cylindrical mass properties of {cad body:body}:
             return no cad mass properties
         loop index from 0 to the length of (cylinders's values):
             set cylinder to the item at index in (cylinders's values)
-            if ((cad mass scalar (cylinder's radius) is finite) and ((cylinder's radius) > 0.0)) = false:
+            if (((cylinder's radius) is finite) and ((cylinder's radius) > 0.0)) = false:
                 return no cad mass properties
         sort cad mass cylinders by descending radius cylinders
         set outer to the item at 0 in (cylinders's values)
@@ -471,7 +468,7 @@ local function the cad cylindrical mass properties of {cad body:body}:
         if outerHeight <= 0.0:
             return no cad mass properties
         set outerRadiusSquared to (outerCylinder's radius) * (outerCylinder's radius)
-        set outerVolume to (3.141592653589793 * outerRadiusSquared) * outerHeight
+        set outerVolume to ((the radians in a half turn) * outerRadiusSquared) * outerHeight
         set outerCentre to (outerMinimum + outerMaximum) * 0.5
         set innerRadius, innerHeight and innerVolume to 0.0
         set innerCentre to outerCentre
@@ -485,10 +482,10 @@ local function the cad cylindrical mass properties of {cad body:body}:
             if innerHeight <= 0.0:
                 return no cad mass properties
             set innerRadius to innerCylinder's radius
-            set innerVolume to (3.141592653589793 * (innerRadius * innerRadius)) * innerHeight
+            set innerVolume to ((the radians in a half turn) * (innerRadius * innerRadius)) * innerHeight
             set innerCentre to (innerMinimum + innerMaximum) * 0.5
         set volume to outerVolume - innerVolume
-        if ((cad mass scalar volume is finite) and (volume > 0.0)) = false:
+        if ((volume is finite) and (volume > 0.0)) = false:
             return no cad mass properties
         set centreAt to ((outerVolume * outerCentre) - (innerVolume * innerCentre)) / volume
         set centroid to the cad sum of reference and (axis scaled by centreAt)

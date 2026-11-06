@@ -33,10 +33,6 @@ local function no cad gradient frame:
     execute:
         return @intrinsic("construct", a cad gradient result, false, a new cad gradient frame)
 
-local function cad gradient scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function check cad gradient point {cad vector2:pointValue}:
     execute:
         ignore pointValue
@@ -44,7 +40,7 @@ local function check cad gradient point {cad vector2:pointValue}:
 to get the cad gradient frame of {a pointer to a list:boundary} at angle {a 64 bit floating-point number:angle} with shift {a 64 bit floating-point number:shift} within {cad tolerance:tolerance}:
     # Constrain the payload even for an empty list; typeof does not read an item.
     check cad gradient point (a new (the type of (the item at 0 in boundary)))
-    if ((cad gradient scalar angle is finite) = false) or ((cad gradient scalar shift is finite) = false):
+    if ((angle is finite) = false) or ((shift is finite) = false):
         return no cad gradient frame
     set horizontal to the cosine of angle
     set vertical to the sine of angle
@@ -57,7 +53,7 @@ to get the cad gradient frame of {a pointer to a list:boundary} at angle {a 64 b
     for each pointValueItem in boundary:
         set x to the x of pointValueItem
         set y to the y of pointValueItem
-        if (cad gradient scalar x is finite) and (cad gradient scalar y is finite):
+        if (x is finite) and (y is finite):
             set minimumX to the minimum of minimumX and x
             set minimumY to the minimum of minimumY and y
             set maximumX to the maximum of maximumX and x
@@ -65,7 +61,7 @@ to get the cad gradient frame of {a pointer to a list:boundary} at angle {a 64 b
             set projection to (x * horizontal) + (y * vertical)
             set projectionMinimum to the minimum of projectionMinimum and projection
             set projectionMaximum to the maximum of projectionMaximum and projection
-    if (cad gradient scalar projectionMinimum is finite) = false:
+    if (projectionMinimum is finite) = false:
         return no cad gradient frame
     # Preserve addition-before-halving and extent-before-scaling, including overflow.
     set baseX to (minimumX + maximumX) * 0.5
@@ -80,7 +76,7 @@ to get the cad gradient frame of {a pointer to a list:boundary} at angle {a 64 b
     for each pointValue in boundary:
         set x to the x of pointValue
         set y to the y of pointValue
-        if (cad gradient scalar x is finite) and (cad gradient scalar y is finite):
+        if (x is finite) and (y is finite):
             # hypot retains the source's overflow and NaN/infinity behavior.
             set distance to @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, x - centreX, y - centreY)
             set radius to the maximum of radius and distance

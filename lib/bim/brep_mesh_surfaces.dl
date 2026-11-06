@@ -19,7 +19,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -65,7 +65,7 @@ local function the cad owned surface mesh from {cad mesh:meshValue} with edges {
         if nestedMeshOwner != (0 as a pointer to an integer):
             set nestedMeshReferences to the value at nestedMeshOwner
             if nestedMeshReferences = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (nestedMeshReferences + 1) at nestedMeshOwner
         allocate one slot of 0 and set storageOwner to it
         return @intrinsic("construct", a cad surface mesh, meshValue, edgeValues, storageOwner)

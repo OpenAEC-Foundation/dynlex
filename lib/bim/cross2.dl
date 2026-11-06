@@ -183,7 +183,7 @@ local function the cad cross2 circle of {cad curve2:shape}:
             return shape's circle
         if shape's kind = 2:
             return a cad circle2 at shape's arc's centre with radius shape's arc's radius
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
         return a new cad circle2
 
 local function collect cad cross2 candidates of {cad curve2:first} and {cad curve2:second} within {cad tolerance:tolerance} into {a pointer to a list:output}:

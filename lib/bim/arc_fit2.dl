@@ -62,12 +62,9 @@ to get a cad [arc] fit direction2 along {cad vector2:direction}:
 local function the cad [arc] fit2 typed direction {cad arc fit direction2:direction}:
     execute:
         return direction
-local function cad [arc] fit2 finite {a 64 bit floating-point number:value}:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 local function cad [arc] fit2 finite point {cad vector2:point}:
     execute:
-        return (cad arc fit2 finite point's x) and (cad arc fit2 finite point's y)
+        return (point's x is finite) and (point's y is finite)
 local function the cad [arc] fit2 storage owning {a pointer to a list:values}:
     execute:
         allocate one slot of 0 and set owner to it
@@ -78,14 +75,14 @@ local function the cad [arc] fit2 vertex at {cad vector2:point} with bulge {a 64
 local function the cad [arc] fit2 unit {cad vector2:direction}:
     execute:
         set length to the cad length of direction
-        if (cad arc fit2 finite length) and (length > 1e-12):
+        if (length is finite) and (length > 1e-12):
             return @intrinsic("construct", a cad normalization2, true, direction cad divided by length)
         return @intrinsic("construct", a cad normalization2, false, the cad zero vector2)
 local function the cad [arc] fit2 piece [from] {cad vector2:start} along {cad vector2:tangent} [to] {cad vector2:end}:
     execute:
         set chord to the cad difference of end and start
         set length to the cad length of chord
-        if ((cad arc fit2 finite length) = false) or (length <= 1e-12):
+        if ((length is finite) = false) or (length <= 1e-12):
             return a new cad arc fit2 piece
         set cross to the cad cross of tangent and chord
         if (the absolute value of cross) <= (length * 1e-12):
@@ -102,7 +99,7 @@ local function the cad [arc] fit2 piece [from] {cad vector2:start} along {cad ve
             set sign to cross
         set bulge to sign * (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25))
         set length to arc's radius * sweep
-        if (cad arc fit2 finite bulge) and ((cad arc fit2 finite length) and (length > 0.0)):
+        if (bulge is finite) and ((length is finite) and (length > 0.0)):
             return @intrinsic("construct", a cad arc fit2 piece, true, bulge, length)
         return a new cad arc fit2 piece
 
@@ -154,7 +151,7 @@ local function cad [arc] fit2 span [from] {cad vector2:p0} [to] {cad vector2:p1}
         if second's valid = false:
             return false
         set total to first's length + second's length
-        if ((cad arc fit2 finite total) = false) or (total <= 0.0):
+        if ((total is finite) = false) or (total <= 0.0):
             return false
         set fraction to first's length / total
         append (the cad arc fit2 vertex at p0 with bulge first's bulge, source index, fraction 0.0 and inserted false) and (the cad arc fit2 vertex at knee with bulge (-second's bulge), source index, fraction fraction and inserted true) to result

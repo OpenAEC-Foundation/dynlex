@@ -24,21 +24,18 @@ local function the cad construct2 absent arc:
 local function the cad construct2 present {cad arc2:arc}:
     execute:
         return @intrinsic("construct", a cad arc2 result, true, arc)
-local function cad construct2 finite {a 64 bit floating-point number:value}:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 # Rust rem_euclid uses one remainder followed by a conditional addition.
 # angle.dl's double-modulus normalization has different rounding and zero signs.
 local function the cad construct2 [remainder] of {a 64 bit floating-point number:value}:
     execute:
-        set remainder to value mod 6.283185307179586
+        set remainder to value mod (the radians in a full turn)
         if remainder < 0.0:
-            return remainder + 6.283185307179586
+            return remainder + (the radians in a full turn)
         return remainder
 
 to get the bounded cad arc2 at {cad vector2:centre} with radius {a 64 bit floating-point number:radius} from {a 64 bit floating-point number:first} to {a 64 bit floating-point number:last}:
     set sweep to the cad construct2 remainder of (last - first)
-    if (((cad construct2 finite radius) = false) or ((cad construct2 finite first) = false)) or (((cad construct2 finite last) = false) or ((radius <= 1e-9) or (sweep <= 1e-9))):
+    if (((radius is finite) = false) or ((first is finite) = false)) or (((last is finite) = false) or ((radius <= 1e-9) or (sweep <= 1e-9))):
         return the cad construct2 absent arc
     return the cad construct2 present (a cad arc2 at centre with radius radius from first to last)
 
@@ -54,7 +51,7 @@ local function the cad construct2 stored [arc] from {cad vector2:start} to {cad 
 
 to get the cad arc2 from {cad vector2:start} to {cad vector2:end} with included angle {a 64 bit floating-point number:included}:
     set sweep to the absolute value of included
-    if ((cad construct2 finite included) = false) or ((sweep <= 1e-9) or (sweep >= (6.283185307179586 - 1e-9))):
+    if ((included is finite) = false) or ((sweep <= 1e-9) or (sweep >= ((the radians in a full turn) - 1e-9))):
         return the cad construct2 absent arc
     set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, included * 0.25)
     return the cad construct2 stored arc from start to end with bulge bulge
@@ -62,7 +59,7 @@ to get the cad arc2 from {cad vector2:start} to {cad vector2:end} with included 
 to get the cad arc2 from {cad vector2:start} to {cad vector2:end} with signed [radius] {a 64 bit floating-point number:signedRadius}:
     set chord to the cad distance from start to end
     set radius to the absolute value of signedRadius
-    if ((cad construct2 finite radius) = false) or ((radius <= 1e-9) or (chord > (2.0 * radius))):
+    if ((radius is finite) = false) or ((radius <= 1e-9) or (chord > (2.0 * radius))):
         return the cad construct2 absent arc
     set signedChord to @intrinsic("call", "libc", "copysign", a 64 bit floating-point number, chord, signedRadius)
     set sweep to the cad arc2 sweep for radius radius and signed chord signedChord
@@ -72,7 +69,7 @@ to get the cad arc2 from {cad vector2:start} to {cad vector2:end} with signed [r
 
 to get the cad arc2 from {cad vector2:start} to {cad vector2:end} with sagitta {a 64 bit floating-point number:sagitta}:
     set chord to the cad distance from start to end
-    if ((cad construct2 finite sagitta) = false) or (chord <= 1e-9):
+    if ((sagitta is finite) = false) or (chord <= 1e-9):
         return the cad construct2 absent arc
     return the cad construct2 stored arc from start to end with bulge ((-2.0 * sagitta) / chord)
 
@@ -122,11 +119,11 @@ to get the cad arc2 through {cad vector2:start} then {cad vector2:middle} to {ca
 
 to get the cad arc2 sweep for radius {a 64 bit floating-point number:radius} and signed [chord] {a 64 bit floating-point number:signedChord}:
     set chord to the absolute value of signedChord
-    if (((cad construct2 finite radius) = false) or ((cad construct2 finite signedChord) = false)) or ((radius <= 1e-9) or ((chord <= 1e-9) or (chord > (2.0 * radius)))):
+    if (((radius is finite) = false) or ((signedChord is finite) = false)) or ((radius <= 1e-9) or ((chord <= 1e-9) or (chord > (2.0 * radius)))):
         return @intrinsic("construct", a cad arc2 sweep result, false, 0.0)
     set ratio to chord / (2.0 * radius)
     clamp ratio between 0.0 and 1.0
     set minor to 2.0 * (@intrinsic("call", "libc", "asin", a 64 bit floating-point number, ratio))
     if signedChord > 0.0:
         return @intrinsic("construct", a cad arc2 sweep result, true, minor)
-    return @intrinsic("construct", a cad arc2 sweep result, true, 6.283185307179586 - minor)
+    return @intrinsic("construct", a cad arc2 sweep result, true, (the radians in a full turn) - minor)

@@ -68,7 +68,7 @@ to [require Vulkan status] {integer:status} [for] {C string:operation}:
         print " failed with Vulkan status "
         print line status
         ignore @intrinsic("call", "libc", "fflush", an integer, 0 as a pointer)
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
 
 to get [a Vulkan memory type matching bits] {32 bit unsigned integer:bits} [and flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
     set properties to a new VkPhysicalDeviceMemoryProperties
@@ -85,7 +85,7 @@ to get [a Vulkan memory type matching bits] {32 bit unsigned integer:bits} [and 
 to get [a Vulkan buffer of] {64 bit unsigned integer:size} [bytes with usage] {32 bit unsigned integer:usage} [and memory flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
     set result to a new Vulkan allocation
     set creation to a new VkBufferCreateInfo
-    set creation's sType to 12
+    set creation's sType to the Vulkan buffer create info tag
     set creation's size to size
     set creation's usage to usage
     require Vulkan status @intrinsic("call", "vulkan", "vkCreateBuffer", an integer, state's device, the address of creation, 0 as a pointer, the address of (result's handle)) for "Creating a graphics buffer"
@@ -97,7 +97,7 @@ to get [a Vulkan buffer of] {64 bit unsigned integer:size} [bytes with usage] {3
 
 to get [Vulkan memory meeting] {VkMemoryRequirements:requirements} [with flags] {32 bit unsigned integer:flags} [in] {a pointer to DynlexGraphics:state}:
     set allocation to a new VkMemoryAllocateInfo
-    set allocation's sType to 5
+    set allocation's sType to the Vulkan memory allocate info tag
     set allocation's allocationSize to requirements' size
     set allocation's memoryTypeIndex to a Vulkan memory type matching bits requirements' memoryTypeBits and flags flags in state
     set memory to 0 as a pointer

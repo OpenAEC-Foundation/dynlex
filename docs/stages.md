@@ -45,9 +45,10 @@ an ordinary flex function and `replacement` section. Logical indentation and sou
 and diagnostic locations; later stages do not have a separate shorthand execution path.
 
 Scope rule blocks (`in this file`, `in this class` and `in this function`, optionally followed by `, by default`) are
-parsed here, because locality must be known before pattern matching. A block must precede every other line of its
-scope; the header phrase is checked against the block's position. Locality rules (`functions are local`, ...) are
-configured syntax and decide `local` for later definitions in the scope, validating the `local` and `public`
+parsed here, because locality must be known before pattern matching. The header names the source file or nearest
+enclosing class or function definition, independently of ordinary body sections. Rules inside executable nesting or
+file rules inside functions warn but still apply statically to the entire named scope. Section parsing collects all
+rules before applying locality to definitions, including preceding definitions, and validating `local` and `public`
 modifiers. Every other rule line is an ordinary pattern reference resolved like code, but never executed. See
 `docs/scope_rules.md`.
 

@@ -47,12 +47,9 @@ local function cad bounds3 success {cad box3:value}:
 local function cad bounds3 components of {cad vector3:value}:
     execute:
         return [(value's x),(value's y),(value's z)]
-local function cad bounds3 scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 local function cad bounds3 point {cad vector3:value} is finite:
     execute:
-        return ((cad bounds3 scalar (value's x) is finite) and (cad bounds3 scalar (value's y) is finite)) and (cad bounds3 scalar (value's z) is finite)
+        return (((value's x) is finite) and ((value's y) is finite)) and ((value's z) is finite)
 local function check cad bounds3 point {cad vector3:value}:
     execute:
         ignore value
@@ -153,7 +150,7 @@ to get the cad [bounds] of {cad face key:faceKey} in {cad body:body}:
         for each weights in (nurbs's weights):
             loop column from 0 to the length of weights:
                 set weight to the item at column in weights
-                if ((cad bounds3 scalar weight is finite) and (weight > 0.0)) = false:
+                if ((weight is finite) and (weight > 0.0)) = false:
                     return cad bounds3 absent
         set result to cad bounds3 absent
         for each points in (nurbs's controls):
@@ -229,6 +226,6 @@ to get the cad operation tolerance of {a pointer to a list:bodies}:
     set extent to 1.0
     loop axis from 0 to 3:
         set value to the item at axis in extents
-        if cad bounds3 scalar value is finite:
+        if value is finite:
             set extent to the maximum of extent and value
     return (extent * 1e-8) + ((2.220446049250313e-16 * coordinateScale) * 64.0)

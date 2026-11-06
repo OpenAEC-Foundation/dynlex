@@ -8,18 +8,12 @@ import lib/bim/brep_topology.dl
 import lib/bim/nurbs_builder.dl
 import lib/bim/containment2.dl
 
-local function cad pcurve tau:
-    replacement:
-        6.283185307179586
 local function cad pcurve hypot {a 64 bit floating-point number:x} {a 64 bit floating-point number:y}:
     execute:
         return @intrinsic("call", "libc", "hypot", a 64 bit floating-point number, x, y)
 local function cad pcurve angle {a 64 bit floating-point number:y} {a 64 bit floating-point number:x}:
     execute:
         return @intrinsic("call", "libc", "atan2", a 64 bit floating-point number, y, x)
-local function cad pcurve finite {a 64 bit floating-point number:value}:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 local function cad pcurve uv {a 64 bit floating-point number:x} {a 64 bit floating-point number:y}:
     execute:
         return a cad vector2 with x x and y y
@@ -29,7 +23,7 @@ local function cad pcurve unwound {a 64 bit floating-point number:value} after {
         return value + period * turns
 local function cad pcurve band {a 64 bit floating-point number:height}:
     execute:
-        return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv 0.0 height) to (cad pcurve uv (cad pcurve tau) height)))
+        return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv 0.0 height) to (cad pcurve uv (the radians in a full turn) height)))
 local function cad pcurve generator {a 64 bit floating-point number:angle}:
     execute:
         return the cad pcurve of (the cad curve2 of (a cad xline2 through (cad pcurve uv angle 0.0) along (cad pcurve uv 0.0 1.0)))
@@ -54,14 +48,14 @@ to get the cad parameter periods of {cad surface:surface}:
     else:
         set (result's uValid) to (surface's kind) != 0
         set (result's vValid) to (surface's kind) = 4
-        set (result's u) to cad pcurve tau
-        set (result's v) to cad pcurve tau
+        set (result's u) to the radians in a full turn
+        set (result's v) to the radians in a full turn
     return result
 
 local function cad pcurve lies on {cad surface:surface} with {cad edge curve3:curve} within {a 64 bit floating-point number:tolerance}:
     execute:
         loop index from 0 to 9:
-            set t to (cad pcurve tau * (index as a 64 bit floating-point number)) / 9.0
+            set t to (the radians in a full turn * (index as a 64 bit floating-point number)) / 9.0
             if (curve's kind) = 0:
                 set t to -2.0 + ((4.0 * (index as a 64 bit floating-point number)) / 8.0)
             if (curve's kind) = 3:
@@ -75,19 +69,19 @@ local function cad pcurve sampled sphere {cad surface:surface} with {cad edge cu
         set points to a cad topology list of a cad polyline vertex2
         set previous to 0.0
         loop index from 0 to 96:
-            set t to (cad pcurve tau * (index as a 64 bit floating-point number)) / 96.0
+            set t to (the radians in a full turn * (index as a 64 bit floating-point number)) / 96.0
             set uv to the cad parameters on surface nearest (the cad point on curve at t)
             if (uv's valid) = false:
                 return no cad pcurve
             set u to (uv's value's x)
             if index > 0:
-                set u to cad pcurve unwound u after previous with (cad pcurve tau)
+                set u to cad pcurve unwound u after previous with (the radians in a full turn)
             set previous to u
             append (a straight cad polyline vertex2 at (cad pcurve uv u ((uv's value's y)))) to (points's values)
-        set ending to the cad parameters on surface nearest (the cad point on curve at (cad pcurve tau))
+        set ending to the cad parameters on surface nearest (the cad point on curve at (the radians in a full turn))
         if (ending's valid) = false:
             return no cad pcurve
-        set u to cad pcurve unwound ((ending's value's x)) after previous with (cad pcurve tau)
+        set u to cad pcurve unwound ((ending's value's x)) after previous with (the radians in a full turn)
         set first to (the item at 0 in (points's values))'s position
         if ((the absolute value of (u - (first's x))) > 1e-6) or ((the absolute value of ((ending's value's y) - (first's y))) > 1e-6):
             return no cad pcurve
@@ -149,7 +143,7 @@ to get the cad projection of {cad edge curve3:curve} onto {cad surface:surface} 
             if (further's valid) = false:
                 return no cad pcurve
             set turn to the absolute value of ((cad pcurve angle ((further's value's y)) ((further's value's x))) - angle)
-            if (the minimum of turn and (cad pcurve tau - turn)) > tolerance:
+            if (the minimum of turn and (the radians in a full turn - turn)) > tolerance:
                 return no cad pcurve
         return cad pcurve generator angle
     if (curve's kind) != 1:
@@ -173,7 +167,7 @@ to get the cad projection of {cad edge curve3:curve} onto {cad surface:surface} 
             if (centre's valid) = false:
                 return no cad pcurve
             set angle to cad pcurve angle ((centre's value's y)) ((centre's value's x))
-            return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv angle 0.0) to (cad pcurve uv angle (cad pcurve tau))))
+            return the cad pcurve of (the cad curve2 of (a cad line2 from (cad pcurve uv angle 0.0) to (cad pcurve uv angle (the radians in a full turn))))
         return no cad pcurve
     if parallel:
         if (the absolute value of height) > ((surface's sphere's radius) + tolerance):
@@ -237,18 +231,18 @@ local function cad pcurve trimmed {cad curve2:flat} on {cad surface:surface} alo
                 append (cad pcurve uv nan (cad pcurve angle height 0.0)) to (raw's values)
         loop index from 0 to 9:
             set here to the item at index in (raw's values)
-            if (cad pcurve finite ((here's x))) = false:
+            if ((((here's x)) is finite)) = false:
                 set found to false
                 set distance to 1
                 loop while (distance < 9) and (found = false):
                     if index >= distance:
                         set near to the item at (index - distance) in (raw's values)
-                        if cad pcurve finite ((near's x)):
+                        if (((near's x)) is finite):
                             set (here's x) to (near's x)
                             set found to true
                     if ((index + distance) < 9) and (found = false):
                         set near to the item at (index + distance) in (raw's values)
-                        if cad pcurve finite ((near's x)):
+                        if (((near's x)) is finite):
                             set (here's x) to (near's x)
                             set found to true
                     increment distance
@@ -274,14 +268,14 @@ local function cad pcurve trimmed {cad curve2:flat} on {cad surface:surface} alo
             if (flat's kind) = 1:
                 set angle to cad pcurve angle ((uvPoint's y) - (flat's circle's centre's y)) ((uvPoint's x) - (flat's circle's centre's x))
             else:
-                set angle to (the cad parameter on flat nearest uvPoint) * cad pcurve tau
+                set angle to (the cad parameter on flat nearest uvPoint) * the radians in a full turn
             if index > 0:
-                set angle to cad pcurve unwound angle after previous with (cad pcurve tau)
+                set angle to cad pcurve unwound angle after previous with (the radians in a full turn)
             else:
                 set from to angle
             set previous to angle
         set positive to flat
-        if ((the absolute value of (previous - from)) >= (cad pcurve tau - 1e-9)) = false:
+        if ((the absolute value of (previous - from)) >= (the radians in a full turn - 1e-9)) = false:
             set lo to the minimum of from and previous
             set hi to the maximum of from and previous
             if (flat's kind) = 1:
@@ -308,10 +302,10 @@ local function cad pcurve chain {a pointer to a list:pieces} with {cad pcurve pe
         set behind to the cad point on first at 0.0
         set u and v to 0.0
         set uSpan and vSpan to 0
-        if (periods's uValid) and ((cad pcurve finite ((periods's u))) and ((periods's u) > 0.0)):
+        if (periods's uValid) and (((((periods's u)) is finite)) and ((periods's u) > 0.0)):
             set u to (periods's u)
             set uSpan to 2
-        if (periods's vValid) and ((cad pcurve finite ((periods's v))) and ((periods's v) > 0.0)):
+        if (periods's vValid) and (((((periods's v)) is finite)) and ((periods's v) > 0.0)):
             set v to (periods's v)
             set vSpan to 2
         loop index from 1 to the length of pieces:

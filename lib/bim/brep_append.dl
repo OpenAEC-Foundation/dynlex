@@ -35,14 +35,14 @@ local function put value for key in {a pointer to a cad append mapping:mapping}:
         set position to key's index as an integer
         if mapping's dense:
             if (position < 0) or (position >= (the length of mapping's values)):
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             replace item at index position in (mapping's indices) with position
             replace item at index position in (mapping's values) with value
             replace item at index position in (mapping's generations) with key's generation
         else:
             if (the length of mapping's indices) > 0:
                 if (the last item of mapping's indices) >= position:
-                    @intrinsic("call", "libc", "abort", nothing)
+                    abort the program
             append position to mapping's indices
             append value to mapping's values
             append key's generation to mapping's generations
@@ -62,9 +62,9 @@ local function the value for key in {a pointer to a cad append mapping:mapping}:
                     set high to middle
             set found to low
         if (found < 0) or (found >= (the length of mapping's values)):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         if ((the item at found in (mapping's indices)) != position) or ((the item at found in (mapping's generations)) != key's generation):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         return the item at found in (mapping's values)
 
 local function free cad append mapping {a pointer to a cad append mapping:mapping}:

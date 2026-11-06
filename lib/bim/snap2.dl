@@ -35,15 +35,15 @@ local function cad snap2 at {cad vector2:point} of kind {cad snap kind:kind} wit
         return @intrinsic("construct", a cad snap point2, kind, point, parameter)
 local function cad snap2 turn remainder of {a 64 bit floating-point number:value}:
     execute:
-        set rest to value mod 6.283185307179586
+        set rest to value mod (the radians in a full turn)
         if rest < 0.0:
-            return rest + 6.283185307179586
+            return rest + (the radians in a full turn)
         return rest
 
 local function append cad snap2 circular quadrants of {cad curve2:shape} at {cad vector2:centre} into {a pointer to a list:output}:
     execute:
         loop index from 0 to 4:
-            set angle to (index as a 64 bit floating-point number) * 1.5707963267948966
+            set angle to (index as a 64 bit floating-point number) * (the radians in a quarter turn)
             set accepted to true
             if shape's kind = 2:
                 set accepted to cad angle angle within arc from shape's arc's startAngle to shape's arc's endAngle
@@ -57,7 +57,7 @@ local function append cad snap2 elliptical quadrants of {cad ellipse arc2:arc} i
     execute:
         set sweep to the cad sweep of arc
         loop index from 0 to 4:
-            set parameter to (index as a 64 bit floating-point number) * 1.5707963267948966
+            set parameter to (index as a 64 bit floating-point number) * (the radians in a quarter turn)
             set travelled to cad snap2 turn remainder of (parameter - arc's startParameter)
             if travelled <= (sweep + 1e-9):
                 set point to the cad point on arc's ellipse at parameter

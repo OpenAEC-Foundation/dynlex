@@ -100,7 +100,7 @@ local function cad sweep offset area of {cad polyline2:outline}:
 # the wall angle for oblique extrusion vectors.
 to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
     set angle to givenAngle as a 64 bit floating-point number
-    if ((cad sweep revolution scalar angle is finite) = false) or ((the absolute value of angle) >= 1.5707963267948966):
+    if ((angle is finite) = false) or ((the absolute value of angle) >= (the radians in a quarter turn)):
         return no cad body
     if (the absolute value of angle) <= 1e-12:
         return the cad extrusion of profile on plane along direction
@@ -131,7 +131,7 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
                     if (the absolute value of (piece's arc's radius - circularRadius)) > 1e-9:
                         set circular to false
                     set totalSweep to totalSweep + (the cad sweep of (piece's arc))
-            if (the absolute value of (totalSweep - 6.283185307179586)) >= 1e-9:
+            if (the absolute value of (totalSweep - (the radians in a full turn))) >= 1e-9:
                 set circular to false
             if circular:
                 set ordered to the cad profile senses of profile
@@ -158,13 +158,13 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
                 set firstPoint to a cad vector2 with x (the item at 0 in start) and y (the item at 1 in start)
                 set lastPoint to a cad vector2 with x (the item at 0 in finish) and y (the item at 1 in finish)
                 append (the cad curve2 of (a cad line2 from firstPoint to lastPoint)) to section
-            set result to the cad revolution of section on sectionPlane about pivot along axis by 6.283185307179586
+            set result to the cad revolution of section on sectionPlane about pivot along axis by (the radians in a full turn)
             free section
             return result
     set height to the absolute value of (the cad dot of direction and (normal's value))
     set tangentAngle to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)
     set offsetDistance to height * (the absolute value of tangentAngle)
-    if ((cad sweep revolution scalar offsetDistance is finite) = false) or (offsetDistance <= 1e-12):
+    if ((offsetDistance is finite) = false) or (offsetDistance <= 1e-12):
         return no cad body
 
     set ordered to the cad profile senses of profile
@@ -193,7 +193,7 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
         if forward = false:
             set area to the negative of area
         set handed to handed + area
-    if (handed = 0.0) or ((cad sweep revolution scalar handed is finite) = false):
+    if (handed = 0.0) or ((handed is finite) = false):
         free vertices
         return no cad body
     set source to the cad polyline2 with vertices vertices and closure true
@@ -205,7 +205,7 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
     if firstForward = false:
         set direction2 to direction2 scaled by -1.0
     set tangentLength to the cad length of direction2
-    if ((cad sweep revolution scalar tangentLength is finite) = false) or (tangentLength <= 1e-12):
+    if ((tangentLength is finite) = false) or (tangentLength <= 1e-12):
         free cad polyline source
         return no cad body
     set tangent2 to direction2 scaled by (1.0 / tangentLength)
@@ -253,7 +253,7 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
             loop sourceIndex from 0 to the length of profile:
                 set sourceDistance to the cad distance to (the item at sourceIndex in profile) from topPoint
                 set nearestDistance to the minimum of nearestDistance and sourceDistance
-            if ((cad sweep revolution scalar nearestDistance is finite) = false) or ((the absolute value of (nearestDistance - offsetDistance)) > distanceTolerance):
+            if ((nearestDistance is finite) = false) or ((the absolute value of (nearestDistance - offsetDistance)) > distanceTolerance):
                 free topProfile
                 return no cad body
         set topOrdered to the cad profile senses of topProfile
@@ -266,7 +266,7 @@ to get the tapered cad extrusion of {a pointer to a list:profile} on {cad plane:
             if (the item at topIndex in (topOrdered's value's values)) = false:
                 set pieceArea to the negative of pieceArea
             set topArea to topArea + pieceArea
-        if ((cad sweep revolution scalar topArea is finite) = false) or ((the absolute value of topArea) >= (the absolute value of handed)):
+        if ((topArea is finite) = false) or ((the absolute value of topArea) >= (the absolute value of handed)):
             free topProfile
             return no cad body
     set far to a cad plane with origin (the cad sum of (plane's origin) and direction), x axis (plane's xAxis) and y axis (plane's yAxis)
@@ -382,7 +382,7 @@ local function cad sweep open taper profile of {a pointer to a list:profile} on 
             return absent
         set height to the absolute value of (the cad dot of direction and (normal's value))
         set offset to height * (the absolute value of (@intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle)))
-        if ((cad sweep revolution scalar offset is finite) = false) or (offset <= 1e-12):
+        if ((offset is finite) = false) or (offset <= 1e-12):
             return absent
         set vertices to an empty list of a cad polyline vertex2
         for each piece at index in profile:
@@ -412,7 +412,7 @@ local function cad sweep open taper profile of {a pointer to a list:profile} on 
         if (the item at 0 in (senses's value's values)) = false:
             set tangent to tangent scaled by -1.0
         set length to the cad length of tangent
-        if ((cad sweep revolution scalar length is finite) = false) or (length <= 1e-12):
+        if ((length is finite) = false) or (length <= 1e-12):
             free cad polyline source
             return absent
         set left to a cad vector2 with x ((the negative of tangent's y) / length) and y (tangent's x / length)
@@ -555,7 +555,7 @@ local function cad sweep open taper sheet of {a pointer to a list:baseProfile} o
 
 to get the tapered cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction} by {a number:givenAngle}:
     set angle to givenAngle as a 64 bit floating-point number
-    if ((cad sweep revolution scalar angle is finite) = false) or ((the absolute value of angle) >= 1.5707963267948966):
+    if ((angle is finite) = false) or ((the absolute value of angle) >= (the radians in a quarter turn)):
         return no cad body
     if (the absolute value of angle) <= 1e-12:
         return the cad extrusion sheet of profile on plane along direction
@@ -589,7 +589,7 @@ to get the tapered cad extrusion sheet of {a pointer to a list:profile} on {cad 
 
 to get the cad extrusion sheet of {a pointer to a list:profile} on {cad plane:plane} along {cad vector3:direction}:
     set length to the cad length of direction
-    if (length <= 1e-12) or ((length <= 1.7976931348623157e308) = false):
+    if (length <= 1e-12) or ((length <= (the largest 64 bit floating-point number)) = false):
         return no cad body
     set ordered to the cad profile senses of profile
     set closed to ordered's valid

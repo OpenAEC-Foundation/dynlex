@@ -132,7 +132,7 @@ to get the cad enclosed area of {cad curve2:shape}:
     if shape's kind is one of 6 and 7:
         return 0.0
     if shape's kind = 1:
-        return cad circular area2 at shape's circle's centre with radius shape's circle's radius from 0.0 to 6.283185307179586
+        return cad circular area2 at shape's circle's centre with radius shape's circle's radius from 0.0 to (the radians in a full turn)
     if shape's kind = 2:
         set start to the cad normalized angle of shape's arc's startAngle
         return cad circular area2 at shape's arc's centre with radius shape's arc's radius from start to (start + (the cad sweep of shape's arc))
@@ -140,7 +140,7 @@ to get the cad enclosed area of {cad curve2:shape}:
         return cad polyline area2 of (shape's polyline)
     if shape's kind is one of 3 and 5:
         return cad integrated area2 of shape
-    @intrinsic("call", "libc", "abort", nothing)
+    abort the program
     return 0.0
 
 local function cad summed moments2 of {cad moments2:first} and {cad moments2:second}:
@@ -195,8 +195,8 @@ to get the cad [chord] closed area of {cad curve2:shape}:
 
 local function cad centroid2 from {cad moments2:contribution} at {cad vector2:origin}:
     execute:
-        if ((the absolute value of contribution's area) <= 1.7976931348623157e308) and (contribution's area != 0.0):
-            if ((the absolute value of contribution's firstX) <= 1.7976931348623157e308) and ((the absolute value of contribution's firstY) <= 1.7976931348623157e308):
+        if (contribution's area is finite) and (contribution's area != 0.0):
+            if (contribution's firstX is finite) and (contribution's firstY is finite):
                 set value to a cad vector2 with x (origin's x + (contribution's firstX / contribution's area)) and y (origin's y + (contribution's firstY / contribution's area))
                 return @intrinsic("construct", a cad centroid2 result, true, value)
         return @intrinsic("construct", a cad centroid2 result, false, the cad zero vector2)

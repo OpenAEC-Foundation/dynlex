@@ -7,7 +7,7 @@
 import lib/bim/curve2.dl
 
 to get the cad length of {cad circle2:shape}:
-    return (the absolute value of shape's radius) * 6.283185307179586
+    return (the absolute value of shape's radius) * (the radians in a full turn)
 to get the cad length of {cad arc2:shape}:
     return (the absolute value of shape's radius) * (the absolute value of (the cad sweep of shape))
 to get the cad length of {cad ellipse arc2:shape}:
@@ -57,13 +57,13 @@ local function the cad cumulative [parameter] in {a pointer to a list:values} at
             set middle to base + half
             set value to the item at middle in values
             if (value != value) or (distance != distance):
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             if (value > distance) = false:
                 set base to middle
             set size to size - half
         set value to the item at base in values
         if (value != value) or (distance != distance):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set index to the minimum of base and count
         if value != distance:
             set after to base
@@ -71,7 +71,7 @@ local function the cad cumulative [parameter] in {a pointer to a list:values} at
                 set after to after + 1
             set index to the minimum of (the maximum of (after - 1) and 0) and (count - 1)
         if (index + 1) >= (the length of values):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set span to (the item at (index + 1) in values) - (the item at index in values)
         set within to 0.0
         if span > 0.0:

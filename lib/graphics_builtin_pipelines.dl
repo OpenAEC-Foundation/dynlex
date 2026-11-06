@@ -24,14 +24,14 @@ to [create the built-in graphics pipelines in] {a pointer to DynlexGraphics:stat
         set builtin's textured to (index bitwise and 2) != 0
         set builtin's depth to (index bitwise and 1) != 0
         set layout to a new VkPipelineLayoutCreateInfo
-        set layout's sType to 30
+        set layout's sType to the Vulkan pipeline layout create info tag
         if builtin's textured:
             set binding to a new VkDescriptorSetLayoutBinding
             set binding's descriptorType to 1
             set binding's descriptorCount to 1 as a 32 bit unsigned integer
             set binding's stageFlags to 16 as a 32 bit unsigned integer
             set descriptor to a new VkDescriptorSetLayoutCreateInfo
-            set descriptor's sType to 32
+            set descriptor's sType to the Vulkan descriptor set layout create info tag
             set descriptor's bindingCount to 1 as a 32 bit unsigned integer
             set descriptor's pBindings to the address of binding
             require Vulkan status @intrinsic("call", "vulkan", "vkCreateDescriptorSetLayout", an integer, state's device, the address of descriptor, 0 as a pointer, the address of (builtin's descriptor_layout)) for "Creating a texture descriptor layout"

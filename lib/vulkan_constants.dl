@@ -1,0 +1,53 @@
+# Typed Vulkan ABI constants, named after the Khronos registry entries.
+import lib/std.dl
+
+in this file, by default:
+    numbers are 32 bit
+
+the Vulkan instance create info tag means: 1
+the Vulkan device queue create info tag means: 2
+the Vulkan device create info tag means: 3
+the Vulkan submit info tag means: 4
+the Vulkan memory allocate info tag means: 5
+the Vulkan fence create info tag means: 8
+the Vulkan semaphore create info tag means: 9
+the Vulkan buffer create info tag means: 12
+the Vulkan image create info tag means: 14
+the Vulkan image view create info tag means: 15
+the Vulkan shader module create info tag means: 16
+the Vulkan pipeline shader stage create info tag means: 18
+the Vulkan pipeline vertex input state create info tag means: 19
+the Vulkan pipeline input assembly state create info tag means: 20
+the Vulkan pipeline viewport state create info tag means: 22
+the Vulkan pipeline rasterization state create info tag means: 23
+the Vulkan pipeline multisample state create info tag means: 24
+the Vulkan pipeline depth stencil state create info tag means: 25
+the Vulkan pipeline color blend state create info tag means: 26
+the Vulkan pipeline dynamic state create info tag means: 27
+the Vulkan graphics pipeline create info tag means: 28
+the Vulkan pipeline layout create info tag means: 30
+the Vulkan sampler create info tag means: 31
+the Vulkan descriptor set layout create info tag means: 32
+the Vulkan descriptor pool create info tag means: 33
+the Vulkan descriptor set allocate info tag means: 34
+the Vulkan write descriptor set tag means: 35
+the Vulkan framebuffer create info tag means: 37
+the Vulkan render pass create info tag means: 38
+the Vulkan command pool create info tag means: 39
+the Vulkan command buffer allocate info tag means: 40
+the Vulkan command buffer begin info tag means: 42
+the Vulkan render pass begin info tag means: 43
+the Vulkan image memory barrier tag means: 45
+the Vulkan swapchain create info khr tag means: 1000001000
+the Vulkan present info khr tag means: 1000001001
+
+the Vulkan transfer source buffer usage means: 1 as an unsigned integer
+the Vulkan uniform buffer usage means: 16 as an unsigned integer
+the Vulkan vertex buffer usage means: 128 as an unsigned integer
+the Vulkan transfer destination image usage means: 2 as an unsigned integer
+the Vulkan sampled image usage means: 4 as an unsigned integer
+the Vulkan depth stencil image usage means: 32 as an unsigned integer
+the Vulkan host visible memory flag means: 2 as an unsigned integer
+the Vulkan host coherent memory flag means: 4 as an unsigned integer
+the Vulkan host visible coherent memory flags means: (the Vulkan host visible memory flag) bitwise or (the Vulkan host coherent memory flag)
+the Vulkan sampled transfer destination image usage means: (the Vulkan sampled image usage) bitwise or (the Vulkan transfer destination image usage)

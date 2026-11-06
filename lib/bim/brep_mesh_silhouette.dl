@@ -50,7 +50,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")
@@ -206,7 +206,7 @@ to get the cad silhouette source of {cad surface mesh:meshValue} within {a numbe
         append (0 as a 64 bit integer) to groupValues
         append true to includedValues
     set precisionValue to requestedPrecision as a 64 bit floating-point number
-    if ((precisionValue > 0.0) and ((the absolute value of precisionValue) <= 1.7976931348623157e308)) = false:
+    if ((precisionValue > 0.0) and (precisionValue is finite)) = false:
         set precisionValue to 1e-12
     set sourceValue to the cad silhouette source from meshValue's mesh with groups groupValues, included includedValues within precisionValue
     free groupValues
@@ -228,7 +228,7 @@ local function append cad cone silhouette {cad cone silhouette:coneValue} viewed
         set amplitudeValue to the square root of ((sineCoefficient * sineCoefficient) + (cosineCoefficient * cosineCoefficient))
         set scaleValue to the maximum of amplitudeValue and (the absolute value of constantValue)
         set toleranceValue to (the maximum of scaleValue and 1.0) * 1e-12
-        if (0.0 <= amplitudeValue <= 1.7976931348623157e308) = false:
+        if (0.0 <= amplitudeValue <= (the largest 64 bit floating-point number)) = false:
             return nothing
         if (amplitudeValue <= toleranceValue) or ((the absolute value of constantValue) > (amplitudeValue + toleranceValue)):
             return nothing

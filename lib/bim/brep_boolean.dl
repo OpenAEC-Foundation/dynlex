@@ -576,7 +576,7 @@ local function the cad boolean cylinder component volume of {cad topology list:f
         set radiusValue to cylinderValue's radius
         if ((cylinderFound and ((the length of (planes's values)) = 2)) and (radiusValue > 0.0)) = false:
             return no cad boolean scalar
-        if (the absolute value of radiusValue) > 1.7976931348623157e308:
+        if (the absolute value of radiusValue) > (the largest 64 bit floating-point number):
             return no cad boolean scalar
         set axisResult to the cad normal of cylinderValue's base
         if axisResult's valid = false:
@@ -592,9 +592,9 @@ local function the cad boolean cylinder component volume of {cad topology list:f
         set firstPosition to the cad dot of (the cad difference of firstPlane's origin and cylinderValue's base's origin) and (axisResult's value)
         set secondPosition to the cad dot of (the cad difference of secondPlane's origin and cylinderValue's base's origin) and (axisResult's value)
         set heightValue to the absolute value of (secondPosition - firstPosition)
-        if (heightValue <= 0.0) or ((the absolute value of heightValue) > 1.7976931348623157e308):
+        if (heightValue <= 0.0) or ((the absolute value of heightValue) > (the largest 64 bit floating-point number)):
             return no cad boolean scalar
-        set volumeValue to (3.141592653589793 * (radiusValue * radiusValue)) * heightValue
+        set volumeValue to ((the radians in a half turn) * (radiusValue * radiusValue)) * heightValue
         if sideForward = false:
             set volumeValue to -volumeValue
         return the cad boolean scalar volumeValue
@@ -609,7 +609,7 @@ local function the cad boolean component volume of {cad topology list:faces} in 
                 set onlySurfaceNode to the cad node pointer for onlyFaceNode's surface in body
                 if (onlySurfaceNode != (0 as the type of onlySurfaceNode)) and (onlySurfaceNode's kind = 3):
                     set radiusValue to onlySurfaceNode's sphere's radius
-                    set sphereVolume to ((4.0 * 3.141592653589793) * ((radiusValue * radiusValue) * radiusValue)) / 3.0
+                    set sphereVolume to ((4.0 * (the radians in a half turn)) * ((radiusValue * radiusValue) * radiusValue)) / 3.0
                     if onlyFaceNode's forward = false:
                         set sphereVolume to -sphereVolume
                     return the cad boolean scalar sphereVolume

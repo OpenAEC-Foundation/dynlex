@@ -91,13 +91,9 @@ local function the cad nurbs2 unsplit:
 to get the cad clone of {cad nurbs curve2:shape}:
     return the cad nurbs2 owned curve of degree (the degree of shape) with controls (the cad nurbs2 copied list of (the controls of shape)), knots (the cad nurbs2 copied list of (the knots of shape)) and weights (the cad nurbs2 copied list of (the weights of shape))
 
-local function cad nurbs2 scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function cad nurbs2 point {cad vector2:point} is finite:
     execute:
-        return (cad nurbs2 scalar (the x of point) is finite) and (cad nurbs2 scalar (the y of point) is finite)
+        return ((the x of point) is finite) and ((the y of point) is finite)
 
 local function the cad nurbs2 unit weights for {integer:count}:
     execute:
@@ -131,7 +127,7 @@ to get the strict cad nurbs curve2 of degree {integer:degree} with controls {a p
         return the cad nurbs2 failure
     loop index from 0 to the length of knots:
         set knot to the item at index in knots
-        if (cad nurbs2 scalar knot is finite) = false:
+        if (knot is finite) = false:
             return the cad nurbs2 failure
         if index > 0:
             if ((the item at (index - 1) in knots) <= knot) = false:
@@ -142,7 +138,7 @@ to get the strict cad nurbs curve2 of degree {integer:degree} with controls {a p
         if (cad nurbs2 point (the item at index in points) is finite) = false:
             return the cad nurbs2 failure
         set weight to the item at index in weights
-        if ((cad nurbs2 scalar weight is finite) = false) or ((weight > 0.0) = false):
+        if ((weight is finite) = false) or ((weight > 0.0) = false):
             return the cad nurbs2 failure
     set value to the cad nurbs2 owned curve of degree degree with controls (the cad nurbs2 copied list of points), knots (the cad nurbs2 copied list of knots) and weights (the cad nurbs2 copied list of weights)
     return @intrinsic("construct", a cad nurbs2 result, true, value)
@@ -199,7 +195,7 @@ to get the cad nurbs2 vector of {a 64 bit floating-point number array of 2 items
 local function the cad nurbs2 bounded {a number:parameter} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end}:
     execute:
         if (start <= end) = false:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set value to parameter as a 64 bit floating-point number
         clamp value between start and end
         return value
@@ -541,7 +537,7 @@ to get the cad split of {cad nurbs curve2:shape} at {a number:parameter}:
 to get the cad trim of {cad nurbs curve2:shape} [from] {a number:first} [to] {a number:last}:
     set from to first as a 64 bit floating-point number
     set to to last as a 64 bit floating-point number
-    if ((cad nurbs2 scalar from is finite) = false) or ((cad nurbs2 scalar to is finite) = false):
+    if ((from is finite) = false) or ((to is finite) = false):
         return the cad nurbs2 failure
     clamp from between 0.0 and 1.0
     clamp to between 0.0 and 1.0
@@ -623,7 +619,7 @@ to get the cad nurbs2 fit through {a pointer to a list:points} with start tangen
         else if (the code of spacing) = 1:
             set step to the square root of chord
         else if (the code of spacing) != 2:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         append ((the last item of knotsAt) + step) to knotsAt
     set spans to an empty list of a 64 bit floating-point number
     loop index from 0 to count - 1:
@@ -834,7 +830,7 @@ local function the cad nurbs2 rounded polyline points within {a 64 bit floating-
 
 to get the cad nurbs2 fit to polyline {a pointer to a list:points} within {a number:precision}:
     set tolerance to precision as a 64 bit floating-point number
-    if ((cad nurbs2 scalar tolerance is finite) = false) or (tolerance < 0.0):
+    if ((tolerance is finite) = false) or (tolerance < 0.0):
         return the cad nurbs2 failure
     loop index from 0 to the length of points:
         if (cad nurbs2 point (the item at index in points) is finite) = false:

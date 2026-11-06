@@ -90,9 +90,9 @@ local function the cad split pcurve of {cad curve2:curveValue} at {a 64 bit floa
             set farCurve to the cad curve2 of (a cad line2 from middle to (curveValue's line's end))
             return the cad split pcurve near nearCurve and far farCurve
         if curveValue's kind = cad circle curve2 kind:
-            set middle to 6.283185307179586 * fraction
+            set middle to (the radians in a full turn) * fraction
             set nearCurve to the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from 0.0 to middle)
-            set farCurve to the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from middle to 6.283185307179586)
+            set farCurve to the cad curve2 of (a cad arc2 at curveValue's circle's centre with radius curveValue's circle's radius from middle to (the radians in a full turn))
             return the cad split pcurve near nearCurve and far farCurve
         if curveValue's kind = cad arc curve2 kind:
             set finish to curveValue's arc's startAngle + (the cad sweep of curveValue's arc)
@@ -197,8 +197,8 @@ to get the cad split parameter on {cad edge curve3:curveValue} nearest {cad vect
     set locatedParameter to the cad parameter on curveValue nearest point
     if curveValue's kind is one of 1 and 2:
         set middle to 0.5 * (startParameter + endParameter)
-        set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - locatedParameter) / 6.283185307179586)
-        set locatedParameter to locatedParameter + (6.283185307179586 * turns)
+        set turns to @intrinsic("call", "libc", "round", a 64 bit floating-point number, (middle - locatedParameter) / (the radians in a full turn))
+        set locatedParameter to locatedParameter + ((the radians in a full turn) * turns)
     return locatedParameter
 
 to get the cad split of {cad edge key:edgeKey} in {cad body:body} at point {cad vector3:point}:

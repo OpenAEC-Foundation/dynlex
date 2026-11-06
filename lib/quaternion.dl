@@ -20,17 +20,7 @@ to get {quaternion:left} * {a number:factor}:
     return a new quaternion with w scalar, x horizontal, y vertical and z depth
 
 to get the string form of {quaternion:value}:
-    set result to the string form of "["
-    set separator to the string form of ", "
-    add the string form of the w of value to result
-    add separator to result
-    add the string form of the x of value to result
-    add separator to result
-    add the string form of the y of value to result
-    add separator to result
-    add the string form of the z of value to result
-    add the string form of "]" to result
-    return result
+    return formatted "[{the w of value}, {the x of value}, {the y of value}, {the z of value}]"
 
 to get the identity quaternion:
     return a new quaternion with w 1.0, x 0.0, y 0.0 and z 0.0

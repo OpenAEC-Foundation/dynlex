@@ -11,6 +11,9 @@ struct DefinitionSection : public Section {
 	// The replacement: or execute: section that should run when this pattern is called.
 	// A definition becomes a flex automatically once it has a replacement section.
 	Section *executionSection{};
+	// Locality is resolved after all scope rules have been collected.
+	std::optional<Range> localModifier;
+	std::optional<Range> publicModifier;
 
 	std::string toString() const override {
 		if (!patternDefinitions.empty())

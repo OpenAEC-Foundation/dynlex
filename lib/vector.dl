@@ -101,15 +101,7 @@ function {vector:left} / {a number:divisor}:
         return a new vector with x horizontal, y vertical and z depth
 
 to get the string form of {vector:value}:
-    set result to the string form of "["
-    set separator to the string form of ", "
-    add the string form of the x of value to result
-    add separator to result
-    add the string form of the y of value to result
-    add separator to result
-    add the string form of the z of value to result
-    add the string form of "]" to result
-    return result
+    return formatted "[{the x of value}, {the y of value}, {the z of value}]"
 
 to get the dot product of {vector:left} and {vector:right}:
     set leftHorizontal to the x of left

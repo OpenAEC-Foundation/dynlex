@@ -142,7 +142,7 @@ to get the cad de Boor value of degree {integer:degree} with knots {a pointer to
         set bytes to 1
     allocate bytes bytes as a pointer to (the type of prototype) and set working to it
     if working = (0 as a pointer to (the type of prototype)):
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     loop step from 0 to degree + 1:
         store (the cad spline point at ((span + step) - degree) from source) into working at step
     set result to the cad spline blend of degree degree with knots knots and span span at u using working
@@ -165,14 +165,10 @@ to get the cad clamped uniform knots of degree {integer:degree} for {integer:cou
         append 1.0 to result
     return result
 
-local function cad spline scalar {64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function cad spline point {cad spline coordinates:point} is finite:
     execute:
         loop axis from 0 to the length of point:
-            if not (cad spline scalar (the item at axis in point) is finite):
+            if not ((the item at axis in point) is finite):
                 return false
         return true
 
@@ -235,7 +231,7 @@ local function the cad spline [spans] through {points} using {cad spline paramet
                     set span to the square root of distance
                 else:
                     if (the code of parameterization) != 2:
-                        @intrinsic("call", "libc", "abort", nothing)
+                        abort the program
             append span to spans
         return spans
 
@@ -378,7 +374,7 @@ to get the cad open spline through {a pointer to a list:points} with start tange
             return the failed cad spline matching prototype
     set spans to the cad spline spans through points using parameterization with periodic false
     loop index from 0 to the length of spans:
-        if not (cad spline scalar (the item at index in spans) is finite):
+        if not ((the item at index in spans) is finite):
             free spans
             return the failed cad spline matching prototype
     set lower to a cad spline list of count copies of 0.0
@@ -437,7 +433,7 @@ to get the cad open spline through {a pointer to a list:points} with start tange
     set result to the cad spline assembled through points with derivatives slopes and intervals spans periodic false
     free spans
     free slopes
-    if (cad spline points (the controls of result) are finite) and (cad spline scalar (the last item of the knots of result) is finite):
+    if (cad spline points (the controls of result) are finite) and ((the last item of the knots of result) is finite):
         return result
     free cad spline interpolation result
     return the failed cad spline matching prototype

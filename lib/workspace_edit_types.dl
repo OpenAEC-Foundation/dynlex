@@ -159,7 +159,7 @@ to append {a pointer to a workspace text edit:value} to workspace text edits {a 
 
 to get the workspace text edit at index {integer:position} in {a pointer to a workspace text edit collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 to get a new workspace annotation collection:
@@ -185,7 +185,7 @@ to append {a pointer to a workspace change annotation:value} to workspace annota
 
 to get the workspace change annotation at index {integer:position} in {a pointer to a workspace annotation collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 to get a new workspace change collection:
@@ -211,7 +211,7 @@ to append {a pointer to a workspace edit change:value} to workspace changes {a p
 
 to get the workspace change at index {integer:position} in {a pointer to a workspace change collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 to get a new parsed workspace edit using document changes {boolean:ordered}:
@@ -275,13 +275,13 @@ a failed workspace text result reporting {string:reason} means: @intrinsic(
 
 to free {a pointer to a workspace text edit:target}:
     if target = (0 as a pointer to a workspace text edit):
-        @intrinsic("return")
+        return nothing
     @intrinsic("destroy at", target)
     deallocate target
 
 to free {a pointer to a workspace text edit collection:target}:
     if target = (0 as a pointer to a workspace text edit collection):
-        @intrinsic("return")
+        return nothing
     set position to 0
     loop while (position < the length of target):
         free (the workspace text edit at index position in target)
@@ -292,7 +292,7 @@ to free {a pointer to a workspace text edit collection:target}:
 
 to free {a pointer to a workspace edit change:target}:
     if target = (0 as a pointer to a workspace edit change):
-        @intrinsic("return")
+        return nothing
     set edits to the edits of target
     if edits != (0 as a pointer to a workspace text edit collection):
         free edits
@@ -301,7 +301,7 @@ to free {a pointer to a workspace edit change:target}:
 
 to free {a pointer to a parsed workspace edit:target}:
     if target = (0 as a pointer to a parsed workspace edit):
-        @intrinsic("return")
+        return nothing
     set changes to the changes of target
     set position to 0
     loop while (position < the length of changes):

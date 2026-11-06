@@ -156,14 +156,14 @@ to get the cad bulge arc2 [from] {cad vector2:start} [to] {cad vector2:end} with
     set sweep to last - first
     if bulge > 0.0:
         if sweep <= 0.0:
-            set sweep to sweep + 6.283185307179586
+            set sweep to sweep + (the radians in a full turn)
     else:
         if sweep >= 0.0:
-            set sweep to sweep - 6.283185307179586
+            set sweep to sweep - (the radians in a full turn)
     if (the absolute value of sweep) < 1e-9:
-        set sweep to -6.283185307179586
+        set sweep to -(the radians in a full turn)
         if bulge > 0.0:
-            set sweep to 6.283185307179586
+            set sweep to (the radians in a full turn)
     set value to @intrinsic("construct", a cad bulge arc2, centre, radius, first, last, sweep)
     return @intrinsic("construct", a cad bulge arc2 result, true, value)
 to get the cad point on {cad bulge arc2:arc} at {a 64 bit floating-point number:parameter}:
@@ -197,12 +197,9 @@ to get the cad segment arc of {cad polyline2:shape} at index {integer:index}:
 to get the cad interpolation of {cad polyline range segment2:segment} [from] {a 64 bit floating-point number:start} [to] {a 64 bit floating-point number:end}:
     return [((1.0 - segment's from) * start) + (segment's from * end), ((1.0 - segment's to) * start) + (segment's to * end)]
 
-local function cad polyline2 scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
 local function cad polyline2 point {cad vector2:point} is finite:
     execute:
-        return (cad polyline2 scalar point's x is finite) and (cad polyline2 scalar point's y is finite)
+        return (point's x is finite) and (point's y is finite)
 local function the cad polyline2 range sample [from] {cad vector2:start} [to] {cad vector2:end} with {cad bulge arc2 result:arc} at {a 64 bit floating-point number:parameter}:
     execute:
         if parameter = 0.0:
@@ -221,7 +218,7 @@ local function the cad polyline2 absent range:
         return @intrinsic("construct", a cad polyline range2 result, false, value)
 to get the cad range of {cad polyline2:shape} [from] {a 64 bit floating-point number:from} [to] {a 64 bit floating-point number:to}:
     set n to the length of shape's vertices
-    if ((n < 2) or ((cad polyline2 scalar from is finite) = false)) or ((cad polyline2 scalar to is finite) = false):
+    if ((n < 2) or ((from is finite) = false)) or ((to is finite) = false):
         return the cad polyline2 absent range
     if (((from < 0.0) or (from > 1.0)) or (to <= from)) or (to > (from + 1.0)):
         return the cad polyline2 absent range
@@ -229,7 +226,7 @@ to get the cad range of {cad polyline2:shape} [from] {a 64 bit floating-point nu
         return the cad polyline2 absent range
     loop index from 0 to n:
         set vertex to the item at index in shape's vertices
-        if ((cad polyline2 scalar vertex's bulge is finite) = false) or ((cad polyline2 point vertex's position is finite) = false):
+        if ((vertex's bulge is finite) = false) or ((cad polyline2 point vertex's position is finite) = false):
             return the cad polyline2 absent range
     set count to n - 1
     if shape's closed:
@@ -265,7 +262,7 @@ to get the cad range of {cad polyline2:shape} [from] {a 64 bit floating-point nu
                     set bulge to @intrinsic("call", "libc", "tan", a 64 bit floating-point number, angle * (b - a))
             set position to the cad polyline2 range sample from vertex's position to next's position with arc at a
             set finish to the cad polyline2 range sample from vertex's position to next's position with arc at b
-            if (((cad polyline2 scalar bulge is finite) = false) or ((cad polyline2 point position is finite) = false)) or ((cad polyline2 point finish is finite) = false):
+            if (((bulge is finite) = false) or ((cad polyline2 point position is finite) = false)) or ((cad polyline2 point finish is finite) = false):
                 free vertices
                 free segments
                 return the cad polyline2 absent range

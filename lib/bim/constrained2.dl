@@ -93,10 +93,6 @@ local function check cad constrained rings {a pointer to a list:ringValues}:
     execute:
         check cad constrained ring (a new (the type of (the item at 0 in ringValues)))
 
-local function cad constrained scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function cad constrained point {cad vector2:left} equals {cad vector2:right}:
     execute:
         return ((the x of left) = (the x of right)) and ((the y of left) = (the y of right))
@@ -172,7 +168,7 @@ to get the cad constrained mesh of rings {a pointer to a list:sourceRings}:
         set sourceRing to the item at ringIndex in sourceRings
         loop pointIndex from 0 to the length of sourceRing:
             set sourcePoint to the item at pointIndex in sourceRing
-            if ((cad constrained scalar (the x of sourcePoint) is finite) = false) or ((cad constrained scalar (the y of sourcePoint) is finite) = false):
+            if (((the x of sourcePoint) is finite) = false) or (((the y of sourcePoint) is finite) = false):
                 return an invalid cad constrained mesh result
             set lowX to the minimum of lowX and (the x of sourcePoint)
             set highX to the maximum of highX and (the x of sourcePoint)
@@ -180,7 +176,7 @@ to get the cad constrained mesh of rings {a pointer to a list:sourceRings}:
             set highY to the maximum of highY and (the y of sourcePoint)
     set originValue to a cad vector2 with x lowX and y lowY
     set scaleValue to a cad vector2 with x (highX - lowX) and y (highY - lowY)
-    if (((the x of scaleValue) <= 0.0) or ((the y of scaleValue) <= 0.0)) or (((cad constrained scalar (the x of scaleValue) is finite) = false) or ((cad constrained scalar (the y of scaleValue) is finite) = false)):
+    if (((the x of scaleValue) <= 0.0) or ((the y of scaleValue) <= 0.0)) or ((((the x of scaleValue) is finite) = false) or (((the y of scaleValue) is finite) = false)):
         return an invalid cad constrained mesh result
     loop ringIndex from 0 to the length of sourceRings:
         if (cad constrained ring (the item at ringIndex in sourceRings) is valid from originValue at scaleValue) = false:
@@ -239,10 +235,10 @@ local function cad constrained parameters {cad vector2:positionValue} in {cad co
         return a cad vector2 with x ((the x of meshValue's origin) + ((the x of positionValue) * (the x of meshValue's scale))) and y ((the y of meshValue's origin) + ((the y of positionValue) * (the y of meshValue's scale)))
 
 to get the cad constrained insertion of point {cad vector2:parameters} into {a pointer to a cad constrained mesh2:meshValue}:
-    if ((cad constrained scalar (the x of parameters) is finite) = false) or ((cad constrained scalar (the y of parameters) is finite) = false):
+    if (((the x of parameters) is finite) = false) or (((the y of parameters) is finite) = false):
         return @intrinsic("construct", a cad constrained insertion result2, false, false)
     set positionValue to cad constrained normalized parameters from (the origin of meshValue) at (the scale of meshValue)
-    if ((cad constrained scalar (the x of positionValue) is finite) = false) or ((cad constrained scalar (the y of positionValue) is finite) = false):
+    if (((the x of positionValue) is finite) = false) or (((the y of positionValue) is finite) = false):
         return @intrinsic("construct", a cad constrained insertion result2, false, false)
     set before to the length of the vertices of meshValue
     ignore cad constrained remember parameters at positionValue among (the vertices of meshValue)

@@ -96,10 +96,6 @@ local function check cad triangulation rings {a pointer to a list:boundaries}:
     execute:
         check cad triangulation ring (a new (the type of (the item at 0 in boundaries)))
 
-local function cad triangulation scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function cad triangulation point {cad vector2:left} equals {cad vector2:right}:
     execute:
         return ((the x of left) = (the x of right)) and ((the y of left) = (the y of right))
@@ -213,7 +209,7 @@ local function the cad triangulation signed area of {a pointer to a list:vertice
 local function cad triangulation ring {a pointer to a list:vertices} is finite:
     execute:
         for each pointValue in vertices:
-            if ((cad triangulation scalar (the x of pointValue) is finite) = false) or ((cad triangulation scalar (the y of pointValue) is finite) = false):
+            if (((the x of pointValue) is finite) = false) or (((the y of pointValue) is finite) = false):
                 return false
         return true
 
@@ -618,7 +614,7 @@ local function cad triangulation {cad triangulation2:mesh} matches [area] {a 64 
     execute:
         set vertices to the points of mesh
         set faces to the triangles of mesh
-        if ((the length of faces) = 0) or (((cad triangulation scalar expected is finite) = false) or (expected <= 0.0)):
+        if ((the length of faces) = 0) or (((expected is finite) = false) or (expected <= 0.0)):
             return false
         set area to 0.0
         for each face in faces:
@@ -628,7 +624,7 @@ local function cad triangulation {cad triangulation2:mesh} matches [area] {a 64 
             set b to the item at (the second of face) in vertices
             set c to the item at (the third of face) in vertices
             set twice to the cad triangulation turn from a through b to c
-            if ((cad triangulation scalar twice is finite) = false) or (twice <= 0.0):
+            if ((twice is finite) = false) or (twice <= 0.0):
                 return false
             set area to area + (twice * 0.5)
         return (the absolute value of (area - expected)) <= ((the maximum of expected and 1.0) * 1e-9)
@@ -653,7 +649,7 @@ to get the cad triangulation of rings {a pointer to a list:boundaries}:
             set bounds to the cad triangulation bounds of vertices
             set area to the cad triangulation signed area of vertices
             set candidate to @intrinsic("construct", a cad triangulation checked ring, vertices, the absolute value of area, bounds)
-            if ((cad triangulation ring vertices is simple within 0.0) = false) or (((cad triangulation scalar area is finite) = false) or (area = 0.0)):
+            if ((cad triangulation ring vertices is simple within 0.0) = false) or (((area is finite) = false) or (area = 0.0)):
                 append candidate to invalid
             else:
                 append candidate to checked

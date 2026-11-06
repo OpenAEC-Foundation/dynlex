@@ -77,7 +77,7 @@ local function the cad split arc of {cad topology list:ring} from {integer:first
 local function the cad closed period of {cad edge curve3:curveValue}:
     execute:
         if curveValue's kind is one of 1 and 2:
-            return the cad split period 6.283185307179586
+            return the cad split period (the radians in a full turn)
         if curveValue's kind = 3:
             if curveValue's planar's curve is cad closed:
                 return the cad split period 1.0
@@ -293,7 +293,7 @@ local function cad split isolated closed face in place {cad face key:faceKey} in
         if surfaceNormal's valid = false:
             return no cad split face
         set alignment to (the cad dot of planeNormal's value and surfaceNormal's value) * winding
-        if ((the absolute value of alignment) > 1.7976931348623157e308) or (alignment = 0.0):
+        if ((the absolute value of alignment) > (the largest 64 bit floating-point number)) or (alignment = 0.0):
             return no cad split face
         set islandForward to (alignment > 0.0) = originalFace's forward
 
@@ -380,7 +380,7 @@ local function cad split full sphere in place {cad face key:faceKey} in {cad bod
                     set surfaceNormal to the cad normal of (@intrinsic("dereference", surfaceNode)) at parameters sampleUV's value's x and sampleUV's value's y
                     if surfaceNormal's valid:
                         set candidateAlignment to the cad dot of planeNormal's value and surfaceNormal's value
-                        if ((the absolute value of candidateAlignment) <= 1.7976931348623157e308) and (candidateAlignment != 0.0):
+                        if (candidateAlignment is finite) and (candidateAlignment != 0.0):
                             set sampleValid to true
                             set startParameter to sampleParameter
                             set seamPoint to samplePoint
@@ -478,13 +478,13 @@ local function cad split closed planar face in place {cad face key:faceKey} in {
         if (cutterNormal's valid and surfaceNormal's valid) = false:
             return no cad split face
         set alignment to the cad dot of cutterNormal's value and surfaceNormal's value
-        if ((the absolute value of alignment) > 1.7976931348623157e308) or (alignment = 0.0):
+        if ((the absolute value of alignment) > (the largest 64 bit floating-point number)) or (alignment = 0.0):
             return no cad split face
         set islandForward to (alignment > 0.0) = originalFace's forward
 
         set seamKey to the cad body key after inserting (a cad vertex at point with provenance (the synthesized cad provenance)) into body
         set curveKey to the cad body key after inserting (the cad clone of cutter) into body
-        set cutKey to the cad body key after inserting (a cad edge on curveKey from startParameter to (startParameter + 6.283185307179586) between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
+        set cutKey to the cad body key after inserting (a cad edge on curveKey from startParameter to (startParameter + (the radians in a full turn)) between seamKey and seamKey with provenance (the synthesized cad provenance)) into body
         set holeRing to the cad body key after inserting (a cad loop owned by faceKey with provenance (the synthesized cad provenance)) into body
         set holeKey to the cad body key after inserting (a cad coedge on cutKey forward (islandForward = false) with pcurve (no cad pcurve) owned by holeRing with provenance (the synthesized cad provenance)) into body
         set holeNode to the cad node pointer for holeRing in body
@@ -773,7 +773,7 @@ local function cad split face in place {cad face key:faceKey} in {cad body:body}
 
 to get the cad split of {cad face key:faceKey} in {cad body:body} along {cad edge curve3:cutter} within {a number:givenTolerance}:
     set tolerance to givenTolerance as a 64 bit floating-point number
-    if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+    if ((tolerance > 0.0) and (tolerance is finite)) = false:
         return no cad split face
     set candidate to the cad clone of body
     set proof to cad split face in place faceKey in candidate along cutter within tolerance

@@ -13,7 +13,7 @@ local function no cad sweep projection bounds:
 
 local function cad sweep projection bounds between {a 64 bit floating-point number:first} and {a 64 bit floating-point number:second}:
     execute:
-        if ((cad sweep revolution scalar first is finite) and (cad sweep revolution scalar second is finite)) = false:
+        if ((first is finite) and (second is finite)) = false:
             return no cad sweep projection bounds
         return @intrinsic("construct", a cad sweep projection bounds, true, the minimum of first and second, the maximum of first and second)
 
@@ -23,9 +23,9 @@ local function cad sweep revolution angle from {a 64 bit floating-point number:y
 
 local function cad sweep revolution positive remainder of {a 64 bit floating-point number:value}:
     execute:
-        set result to value mod 6.283185307179586
+        set result to value mod (the radians in a full turn)
         if result < 0.0:
-            set result to result + 6.283185307179586
+            set result to result + (the radians in a full turn)
         return result
 
 local function cad sweep trigonometric value with centre {a 64 bit floating-point number:centre}, cosine {a 64 bit floating-point number:cosine}, sine {a 64 bit floating-point number:sine} at {a 64 bit floating-point number:parameter}:
@@ -35,9 +35,9 @@ local function cad sweep trigonometric value with centre {a 64 bit floating-poin
 local function cad sweep trigonometric bounds with centre {a 64 bit floating-point number:centre}, cosine {a 64 bit floating-point number:cosine}, sine {a 64 bit floating-point number:sine}, start {a 64 bit floating-point number:start} and sweep {a 64 bit floating-point number:sweep}:
     execute:
         set finish to start + sweep
-        if (((((cad sweep revolution scalar centre is finite) and (cad sweep revolution scalar cosine is finite)) and (cad sweep revolution scalar sine is finite)) and (cad sweep revolution scalar start is finite)) and ((cad sweep revolution scalar sweep is finite) and (sweep > 0.0))) = false:
+        if (((((centre is finite) and (cosine is finite)) and (sine is finite)) and (start is finite)) and ((sweep is finite) and (sweep > 0.0))) = false:
             return no cad sweep projection bounds
-        if (cad sweep revolution scalar finish is finite) = false:
+        if (finish is finite) = false:
             return no cad sweep projection bounds
         set first to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at start
         set last to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at finish
@@ -46,11 +46,11 @@ local function cad sweep trigonometric bounds with centre {a 64 bit floating-poi
             return interval
         set maximumParameter to cad sweep revolution angle from sine over cosine
         loop offsetIndex from 0 to 2:
-            set extreme to maximumParameter + ((offsetIndex as a 64 bit floating-point number) * 3.141592653589793)
+            set extreme to maximumParameter + ((offsetIndex as a 64 bit floating-point number) * (the radians in a half turn))
             set offset to cad sweep revolution positive remainder of (extreme - start)
-            if (sweep >= (6.283185307179586 - 1e-12)) or (offset <= (sweep + 1e-12)):
+            if (sweep >= ((the radians in a full turn) - 1e-12)) or (offset <= (sweep + 1e-12)):
                 set measured to cad sweep trigonometric value with centre centre, cosine cosine, sine sine at extreme
-                if (cad sweep revolution scalar measured is finite) = false:
+                if (measured is finite) = false:
                     return no cad sweep projection bounds
                 set interval's low to the minimum of (interval's low) and measured
                 set interval's high to the maximum of (interval's high) and measured
@@ -103,9 +103,9 @@ local function cad sweep complete revolution turn of {a pointer to a list:profil
         if turnAngle < 0.0:
             set direction to the cad negative of direction
             set turnAngle to 0.0 - turnAngle
-        if ((cad sweep revolution scalar turnAngle is finite) = false) or ((turnAngle <= 0.0) or (turnAngle > (6.283185307179586 + 1e-12))):
+        if ((turnAngle is finite) = false) or ((turnAngle <= 0.0) or (turnAngle > ((the radians in a full turn) + 1e-12))):
             return no cad sweep revolution turn
-        set full to (the absolute value of (6.283185307179586 - turnAngle)) <= 1e-9
+        set full to (the absolute value of ((the radians in a full turn) - turnAngle)) <= 1e-9
         set planeDistance to the cad distance from pivot to plane
         if (planeDistance's valid) = false:
             return no cad sweep revolution turn
@@ -249,7 +249,7 @@ local function cad sweep revolved parameters of {cad arc2:arc} on {cad plane:pla
         set radialTangent to the cad dot of tangent and (turn's radial)
         set heightTangent to the cad dot of tangent and (turn's axis)
         set orientation to radial * heightTangent - height * radialTangent
-        if (((cad sweep revolution scalar arcSweep is finite) and (cad sweep revolution scalar radial is finite)) and ((cad sweep revolution scalar height is finite) and ((cad sweep revolution scalar orientation is finite) and (orientation != 0.0)))) = false:
+        if (((arcSweep is finite) and (radial is finite)) and ((height is finite) and ((orientation is finite) and (orientation != 0.0)))) = false:
             return no cad sweep revolved arc parameters
         set middleAngle to cad sweep revolution angle from height over radial
         set direction to the negative of (1.0 as a 64 bit floating-point number)
@@ -259,7 +259,7 @@ local function cad sweep revolved parameters of {cad arc2:arc} on {cad plane:pla
         set ending to middleAngle + ((direction * arcSweep) * 0.5)
         set centreStation to cad sweep revolution station at (arc's centre) on plane for turn
         if (centreStation's radius) < (the negative of (turn's tolerance)):
-            return @intrinsic("construct", a cad sweep revolved arc parameters, true, 3.141592653589793 as a 64 bit floating-point number, 3.141592653589793 - beginning, 3.141592653589793 - ending)
+            return @intrinsic("construct", a cad sweep revolved arc parameters, true, (the radians in a half turn) as a 64 bit floating-point number, (the radians in a half turn) - beginning, (the radians in a half turn) - ending)
         return @intrinsic("construct", a cad sweep revolved arc parameters, true, 0.0 as a 64 bit floating-point number, beginning, ending)
 
 local function cad sweep ring on {cad face key:faceKey} in {cad body:body} using {cad topology list:uses}:
@@ -489,7 +489,7 @@ to get the cad revolution of {a pointer to a list:profile} on {cad plane:plane} 
             if ((corner's valid) and (frameResult's valid)) = false:
                 return no cad body
             set circle to the cad edge curve3 of (a cad circle3 with plane (frameResult's value) and radius ((the item at index in (stations's values))'s radius))
-            set edgeKey to cad sweep edge on circle from 0.0 to 6.283185307179586 between (corner's value) and (corner's value) in body
+            set edgeKey to cad sweep edge on circle from 0.0 to (the radians in a full turn) between (corner's value) and (corner's value) in body
             append (@intrinsic("construct", a cad sweep edge result, true, edgeKey)) to (rims's values)
     set seams to a cad topology list of a cad sweep edge result
     loop index from 0 to count:
@@ -517,8 +517,8 @@ to get the cad revolution of {a pointer to a list:profile} on {cad plane:plane} 
             set sourcePiece to the item at index in profile
             set out to cad sweep outward of sourcePiece on plane forward (the item at index in (senses's values)) counterclockwise (handed > 0.0)
             set samplePoint to the cad point at (the cad point on sourcePiece at 0.5) on plane
-            set halfwayOut to cad sweep revolution turned out by 3.141592653589793 for turn
-            set halfwayOn to cad sweep revolution moved samplePoint by 3.141592653589793 for turn
+            set halfwayOut to cad sweep revolution turned out by (the radians in a half turn) for turn
+            set halfwayOn to cad sweep revolution moved samplePoint by (the radians in a half turn) for turn
             set surfaceNode to the cad node pointer for (pieceShape's surface) in body
             if surfaceNode = (0 as the type of surfaceNode):
                 return no cad body
@@ -572,7 +572,7 @@ to get the cad revolution of {a pointer to a list:profile} on {cad plane:plane} 
                         set beginning to arcParameters's end
                         set ending to arcParameters's start
                     set near to arcParameters's around
-                    set far to near + 6.283185307179586
+                    set far to near + (the radians in a full turn)
                 set splineStart to 0.0
                 set splineEnd to 1.0
                 if (the item at index in (senses's values)) = false:

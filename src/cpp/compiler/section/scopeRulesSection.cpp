@@ -19,22 +19,33 @@ std::string_view scopePhrase(const SyntaxConfig &syntax, ScopeRulesSection::Scop
 	crashCompilerBug("unknown scope rule scope");
 }
 
-bool scopeAllowsOwner(const ParseContext &context, ScopeRulesSection::Scope scope, const Section *owner) {
-	switch (scope) {
-	case ScopeRulesSection::Scope::File:
-		return owner == context.mainSection;
-	case ScopeRulesSection::Scope::Class:
-		return owner->type == SectionType::Class;
-	case ScopeRulesSection::Scope::Function:
-		return dynamic_cast<const DefinitionSection *>(owner) && owner->type != SectionType::Class;
+Section *namedScopeOwner(const ParseContext &context, ScopeRulesSection::Scope scope, Section *owner) {
+	if (scope == ScopeRulesSection::Scope::File)
+		return context.mainSection;
+	for (Section *candidate = owner; candidate; candidate = candidate->parent) {
+		if (scope == ScopeRulesSection::Scope::Class && candidate->type == SectionType::Class)
+			return candidate;
+		if (scope == ScopeRulesSection::Scope::Function && candidate->type != SectionType::Class &&
+			dynamic_cast<DefinitionSection *>(candidate))
+			return candidate;
 	}
-	crashCompilerBug("unknown scope rule scope");
+	return nullptr;
+}
+
+bool hasMisleadingPlacement(const Section *owner, const Section *target) {
+	for (const Section *section = owner; section != target; section = section->parent) {
+		// An ordinary function body is transparent. Other nesting can suggest runtime-dependent rules.
+		if (section->parent == target && (section->type == SectionType::Get || section->type == SectionType::Replacement))
+			continue;
+		return true;
+	}
+	return false;
 }
 
 std::string_view misplacedMessageKey(ScopeRulesSection::Scope scope) {
 	switch (scope) {
 	case ScopeRulesSection::Scope::File:
-		return "file scope rules misplaced";
+		crashCompilerBug("file scope always has an owner");
 	case ScopeRulesSection::Scope::Class:
 		return "class scope rules misplaced";
 	case ScopeRulesSection::Scope::Function:
@@ -78,32 +89,19 @@ std::optional<Section *> createScopeRulesSection(ParseContext &context, CodeLine
 		if (!absolute && !byDefault)
 			continue;
 		Range headerRange(line, text);
-		if (!scopeAllowsOwner(context, scope, owner)) {
+		Section *target = namedScopeOwner(context, scope, owner);
+		if (!target) {
 			context.addDiagnostic(
 				Diagnostic(context, Diagnostic::Level::Error, misplacedMessageKey(scope), headerRange, "scope", phrase)
 			);
 			return nullptr;
 		}
-		for (CodeLine *previous : owner->codeLines) {
-			if (previous == line)
-				break;
-			if (previous->sourceFile != line->sourceFile || previous->patternText.empty())
-				continue;
-			if (previous->sectionOpening && previous->sectionOpening->type == SectionType::ScopeRules)
-				continue;
-			if (scope == ScopeRulesSection::Scope::File &&
-				extractDirectiveArgument(previous->patternText, syntax.importKeyword))
-				continue;
-			Diagnostic diagnostic(context, Diagnostic::Level::Error, "scope rules not first", headerRange);
-			diagnostic.relatedInfo.push_back(
-				{renderConfiguredMessage(syntax, "scope rules not first", "related line"),
-				 Range(previous, previous->patternText)}
+		if (hasMisleadingPlacement(owner, target))
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Warning, "scope rules inside execution", headerRange, "scope", phrase)
 			);
-			context.addDiagnostic(std::move(diagnostic));
-			return nullptr;
-		}
 		ScopeRules &rules =
-			scope == ScopeRulesSection::Scope::File ? context.fileScopeRules[line->sourceFile] : owner->scopeRules;
+			scope == ScopeRulesSection::Scope::File ? context.fileScopeRules[line->sourceFile] : target->scopeRules;
 		bool &hasBlock = absolute ? rules.hasAbsoluteBlock : rules.hasDefaultBlock;
 		if (hasBlock) {
 			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "scope rules block repeated", headerRange));
@@ -168,10 +166,10 @@ Section *ScopeRulesSection::createSection(ParseContext &context, CodeLine *line)
 	return nullptr;
 }
 
-bool applyDefinitionLocality(
-	ParseContext &context, CodeLine *line, Section *owner, Section *definition, std::optional<Range> localModifier,
-	std::optional<Range> publicModifier
-) {
+static bool applyDefinitionLocality(ParseContext &context, DefinitionSection *definition) {
+	CodeLine *line = definition->openingLine;
+	const auto &localModifier = definition->localModifier;
+	const auto &publicModifier = definition->publicModifier;
 	const SyntaxConfig &syntax = syntaxConfigForSourceFile(context, line->sourceFile);
 	if (localModifier && publicModifier) {
 		context.addDiagnostic(Diagnostic(
@@ -180,7 +178,7 @@ bool applyDefinitionLocality(
 		));
 		return false;
 	}
-	const ScopeRuleSource *rule = findLocalityRule(context, line, owner, localDefinitionKind(definition));
+	const ScopeRuleSource *rule = findLocalityRule(context, line, definition->parent, localDefinitionKind(definition));
 	if (!rule) {
 		if (publicModifier) {
 			context.addDiagnostic(Diagnostic(
@@ -212,5 +210,17 @@ bool applyDefinitionLocality(
 		context.addDiagnostic(std::move(diagnostic));
 	}
 	definition->isLocal = !publicModifier;
+	return true;
+}
+
+bool applyDefinitionLocalities(ParseContext &context) {
+	// Source openings identify authored definitions. Anonymous data-body records and other
+	// compiler-generated definitions have no source modifiers or source-level visibility.
+	for (CodeLine *line : context.codeLines) {
+		if (auto *definition = dynamic_cast<DefinitionSection *>(line->sectionOpening)) {
+			if (!applyDefinitionLocality(context, definition))
+				return false;
+		}
+	}
 	return true;
 }

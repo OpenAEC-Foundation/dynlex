@@ -87,7 +87,7 @@ local function cad make face in {cad body:body} within {cad make shell:owner} on
 
 local function cad make scalar {a 64 bit floating-point number:value} is positive finite:
     execute:
-        return 0.0 < value <= 1.7976931348623157e308
+        return 0.0 < value <= (the largest 64 bit floating-point number)
 
 class:
     patterns:
@@ -130,7 +130,7 @@ local function cad faceted links for {cad topology list:rings}:
         # The index reserves one entry per corner, including invalid open input.
         # Refuse an unrepresentable capacity before narrowing or allocating.
         if total > 536870912:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set table to a cad pair index with room for (total as an integer) entries
         set edges to a cad topology list of a cad faceted edge
         for each ring at faceIndex in (rings's values):
@@ -170,13 +170,13 @@ to get the cad faceted solid with vertices {a pointer to a list:vertices} and fa
     check cad faceted (0 as a pointer to a cad vector3) against (0 as a pointer to the type of (the item at 0 in vertices))
     check cad faceted (0 as a pointer to an integer) against (0 as a pointer to the type of (the item at 0 in (the item at 0 in faces)))
     set planarTolerance to requestedTolerance as a 64 bit floating-point number
-    if (planarTolerance < 0.0) or ((the absolute value of planarTolerance) > 1.7976931348623157e308):
+    if (planarTolerance < 0.0) or ((the absolute value of planarTolerance) > (the largest 64 bit floating-point number)):
         return no cad body
     if ((the length of vertices) < 4) or ((the length of faces) < 4):
         return no cad body
     loop index from 0 to the length of vertices:
         set point to the item at index in vertices
-        if (((the absolute value of (point's x)) <= 1.7976931348623157e308) and ((the absolute value of (point's y)) <= 1.7976931348623157e308) and ((the absolute value of (point's z)) <= 1.7976931348623157e308)) = false:
+        if (((point's x) is finite) and ((point's y) is finite) and ((point's z) is finite)) = false:
             return no cad body
     set rings to a cad topology list of the type of (a cad topology list of an integer)
     loop faceIndex from 0 to the length of faces:
@@ -260,7 +260,7 @@ to get the cad faceted solid with vertices {a pointer to a list:vertices} and fa
             set faceVolume to faceVolume + ((the cad dot of origin and (the cad cross of a and b)) / 6.0)
         set volume to volume + faceVolume
     set scale to the maximum of scale and 1e-12
-    if ((the absolute value of volume) <= 1.7976931348623157e308) = false:
+    if (volume is finite) = false:
         return no cad body
     if (the absolute value of volume) <= (((scale * scale) * scale) * 1e-12):
         return no cad body
@@ -397,8 +397,8 @@ local function cad make ellipse profile with x radius {a 64 bit floating-point n
         set ellipseShape to a cad ellipse at (the cad zero vector2) with radii xRadius and yRadius along (a cad vector2 with x 1.0 and y 0.0)
         set curveList to a cad topology list of the type of (the cad curve2 of (a new cad line2))
         loop index from 0 to 4:
-            set first to (index as a 64 bit floating-point number) * 1.5707963267948966
-            append (the cad curve2 of (a cad ellipse arc2 on ellipseShape from first to (first + 1.5707963267948966))) to (curveList's values)
+            set first to (index as a 64 bit floating-point number) * (the radians in a quarter turn)
+            append (the cad curve2 of (a cad ellipse arc2 on ellipseShape from first to (first + (the radians in a quarter turn)))) to (curveList's values)
         return curveList
 
 to get the cad cylinder [body] at {cad vector3:base} with radius {a 64 bit floating-point number:radius} and height {a 64 bit floating-point number:height}:
@@ -416,8 +416,8 @@ to get the cad cylinder [body] at {cad vector3:base} with radius {a 64 bit float
     set high to cad make vertex at seamHigh in body
     set bottomCircle to the cad edge curve3 of (a cad circle3 with plane (bottomPlane's value) and radius radius)
     set topCircle to the cad edge curve3 of (a cad circle3 with plane (topPlane's value) and radius radius)
-    set rimLow to cad make edge on bottomCircle from 0.0 to 6.283185307179586 between low and low in body
-    set rimHigh to cad make edge on topCircle from 0.0 to 6.283185307179586 between high and high in body
+    set rimLow to cad make edge on bottomCircle from 0.0 to (the radians in a full turn) between low and low in body
+    set rimHigh to cad make edge on topCircle from 0.0 to (the radians in a full turn) between high and high in body
     set seam to cad make line from low to high in body
     set owner to cad make shell in body
     if (cad make cap in body within owner on (bottomPlane's value) bounded by rimLow forward false) = false:
@@ -461,7 +461,7 @@ to get the cad sphere [body] at {cad vector3:centre} with radius {a 64 bit float
     set south to cad make vertex at southPoint in body
     set north to cad make vertex at northPoint in body
     set curve to the cad edge curve3 of (a cad circle3 with plane (meridian's value) and radius radius)
-    set seam to cad make edge on curve from -1.5707963267948966 to 1.5707963267948966 between south and north in body
+    set seam to cad make edge on curve from -(the radians in a quarter turn) to (the radians in a quarter turn) between south and north in body
     set owner to cad make shell in body
     set uses to a cad topology list of a cad make edge use
     append (cad make use of seam forward true) and (cad make use of seam forward false) to (uses's values)
@@ -482,7 +482,7 @@ to get the cad cone [body] at {cad vector3:base} with radius {a 64 bit floating-
     set rimVertex to cad make vertex at rimPoint in body
     set apex to cad make vertex at apexPoint in body
     set curve to the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius radius)
-    set rim to cad make edge on curve from 0.0 to 6.283185307179586 between rimVertex and rimVertex in body
+    set rim to cad make edge on curve from 0.0 to (the radians in a full turn) between rimVertex and rimVertex in body
     set seam to cad make line from rimVertex to apex in body
     set owner to cad make shell in body
     if (cad make cap in body within owner on (frame's value) bounded by rim forward false) = false:
@@ -506,7 +506,7 @@ local function the cad elliptical cone at {cad vector3:base} with x radius {a 64
         set rimVertex to cad make vertex at rimPoint in body
         set apex to cad make vertex at apexPoint in body
         set ellipseCurve to the cad edge curve3 of (a cad ellipse3 with plane (frame's value), major radius xRadius and minor radius yRadius)
-        set rim to cad make edge on ellipseCurve from 0.0 to 6.283185307179586 between rimVertex and rimVertex in body
+        set rim to cad make edge on ellipseCurve from 0.0 to (the radians in a full turn) between rimVertex and rimVertex in body
         set seam to cad make line from rimVertex to apex in body
         set ellipse to a cad ellipse at (the cad zero vector2) with radii xRadius and yRadius along (a cad vector2 with x 1.0 and y 0.0)
         set outline to the cad curve2 of (the full cad ellipse arc2 on ellipse)
@@ -534,7 +534,7 @@ local function the cad elliptical cone at {cad vector3:base} with x radius {a 64
 to get the cad frustum at {cad vector3:base} with base x radius {a 64 bit floating-point number:baseXRadius}, base y radius {a 64 bit floating-point number:baseYRadius}, top radius {a 64 bit floating-point number:topRadius} and height {a 64 bit floating-point number:height}:
     if (((cad make scalar baseXRadius is positive finite) and (cad make scalar baseYRadius is positive finite)) and (cad make scalar height is positive finite)) = false:
         return no cad body
-    if (0.0 <= topRadius <= 1.7976931348623157e308) = false:
+    if (0.0 <= topRadius <= (the largest 64 bit floating-point number)) = false:
         return no cad body
     set scale to the maximum of (the maximum of (the maximum of (the maximum of (the absolute value of baseXRadius) and (the absolute value of baseYRadius)) and (the absolute value of topRadius)) and (the absolute value of height)) and 1.0
     set circular to (the absolute value of (baseXRadius - baseYRadius)) <= (1e-12 * scale)
@@ -550,7 +550,7 @@ to get the cad frustum at {cad vector3:base} with base x radius {a 64 bit floati
         set p3 to a cad vector2 with x 0.0 and y height
         set profile to a list containing (the cad curve2 of (a cad line2 from p0 to p1))
         append (the cad curve2 of (a cad line2 from p1 to p2)), (the cad curve2 of (a cad line2 from p2 to p3)) and (the cad curve2 of (a cad line2 from p3 to p0)) to profile
-        return the cad revolution of profile on plane about base along (the cad z axis) by 6.283185307179586
+        return the cad revolution of profile on plane about base along (the cad z axis) by (the radians in a full turn)
     set bottom to cad make xy frame at base
     set topOrigin to the cad sum of base and ((the cad z axis) scaled by height)
     set topFrame to cad make xy frame at topOrigin
@@ -571,16 +571,16 @@ local function the cad closed hole torus at {cad vector3:centre} with major radi
         set ratio to the minimum of (the maximum of (majorRadius / minorRadius) and 0.0) and 1.0
         set angle to @intrinsic("call", "libc", "acos", a 64 bit floating-point number, ratio)
         set halfAxisLength to the square root of (the maximum of ((minorRadius * minorRadius) - (majorRadius * majorRadius)) and 0.0)
-        set profile to a list containing (the cad curve2 of (a cad arc2 at (a cad vector2 with x majorRadius and y 0.0) with radius minorRadius from (3.141592653589793 + angle) to (3.141592653589793 - angle)))
+        set profile to a list containing (the cad curve2 of (a cad arc2 at (a cad vector2 with x majorRadius and y 0.0) with radius minorRadius from ((the radians in a half turn) + angle) to ((the radians in a half turn) - angle)))
         if halfAxisLength > (2.220446049250313e-16 * (the maximum of minorRadius and 1.0)):
             set high to a cad vector2 with x 0.0 and y halfAxisLength
             set middle to the cad zero vector2
             set low to a cad vector2 with x 0.0 and y (the negative of halfAxisLength)
             append (the cad curve2 of (a cad line2 from high to middle)) and (the cad curve2 of (a cad line2 from middle to low)) to profile
-        return the cad revolution of profile on (profilePlane's value) about centre along (the cad z axis) by 6.283185307179586
+        return the cad revolution of profile on (profilePlane's value) about centre along (the cad z axis) by (the radians in a full turn)
 
 to get the cad torus at {cad vector3:centre} with major radius {a 64 bit floating-point number:majorRadius} and minor radius {a 64 bit floating-point number:minorRadius}:
-    set coordinatesFinite to (((the absolute value of (centre's x)) <= 1.7976931348623157e308) and ((the absolute value of (centre's y)) <= 1.7976931348623157e308)) and ((the absolute value of (centre's z)) <= 1.7976931348623157e308)
+    set coordinatesFinite to (((centre's x) is finite) and ((centre's y) is finite)) and ((centre's z) is finite)
     if ((coordinatesFinite and (cad make scalar majorRadius is positive finite)) and (cad make scalar minorRadius is positive finite)) = false:
         return no cad body
     if majorRadius <= minorRadius:
@@ -592,13 +592,13 @@ to get the cad torus at {cad vector3:centre} with major radius {a 64 bit floatin
     set body to an empty cad body
     set corner to cad make vertex at outer in body
     set ringCurve to the cad edge curve3 of (a cad circle3 with plane (frame's value) and radius (majorRadius + minorRadius))
-    set ring to cad make edge on ringCurve from 0.0 to 6.283185307179586 between corner and corner in body
+    set ring to cad make edge on ringCurve from 0.0 to (the radians in a full turn) between corner and corner in body
     set tubeOrigin to the cad point at (a cad vector2 with x majorRadius and y 0.0) on (frame's value)
     set tubePlane to the cad orthonormal plane with origin tubeOrigin, x axis (the cad x axis) and normal (a cad vector3 with x 0.0, y -1.0 and z 0.0)
     if tubePlane's valid = false:
         return no cad body
     set tubeCurve to the cad edge curve3 of (a cad circle3 with plane (tubePlane's value) and radius minorRadius)
-    set tube to cad make edge on tubeCurve from 0.0 to 6.283185307179586 between corner and corner in body
+    set tube to cad make edge on tubeCurve from 0.0 to (the radians in a full turn) between corner and corner in body
     set owner to cad make shell in body
     set uses to a cad topology list of a cad make edge use
     append (cad make use of ring forward true), (cad make use of tube forward true), (cad make use of ring forward false) and (cad make use of tube forward false) to (uses's values)
@@ -631,18 +631,18 @@ to get the cad polygonal frustum at {cad vector3:base} with base radius {a 64 bi
         return no cad body
     if ((cad make scalar baseRadius is positive finite) and (cad make scalar height is positive finite)) = false:
         return no cad body
-    if (0.0 <= topRadius <= 1.7976931348623157e308) = false:
+    if (0.0 <= topRadius <= (the largest 64 bit floating-point number)) = false:
         return no cad body
     # A truncated polygon produces six coedges per side, the largest arena.
     if sides > 357913941:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     set body to an empty cad body
     set ground to cad make xy frame at base
     if (ground's valid) = false:
         return no cad body
     set baseCorners to a cad topology list of a cad vertex key
     loop index from 0 to sides:
-        set angle to (6.283185307179586 * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
+        set angle to ((the radians in a full turn) * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
         set uv to a cad vector2 with x (baseRadius * (the cosine of angle)) and y (baseRadius * (the sine of angle))
         set point to the cad point at uv on (ground's value)
         append (cad make vertex at point in body) to (baseCorners's values)
@@ -684,7 +684,7 @@ to get the cad polygonal frustum at {cad vector3:base} with base radius {a 64 bi
         return the validated cad body result of body
     set topCorners to a cad topology list of a cad vertex key
     loop index from 0 to sides:
-        set angle to (6.283185307179586 * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
+        set angle to ((the radians in a full turn) * (index as a 64 bit floating-point number)) / (sides as a 64 bit floating-point number)
         set position to the cad sum of topCentre and (a cad vector3 with x (topRadius * (the cosine of angle)), y (topRadius * (the sine of angle)) and z 0.0)
         append (cad make vertex at position in body) to (topCorners's values)
     set topRim to a cad topology list of a cad edge key

@@ -65,7 +65,7 @@ class:
         if owner != (0 as a pointer to an integer):
             set count to @intrinsic("dereference", owner)
             if count = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             @intrinsic("store at", owner, count + 1)
     release:
         set owner to the references of @intrinsic("lifecycle value")
@@ -581,7 +581,7 @@ class:
         if owner != (0 as a pointer to an integer):
             set count to @intrinsic("dereference", owner)
             if count = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             @intrinsic("store at", owner, count + 1)
     release:
         set owner to the references of @intrinsic("lifecycle value")

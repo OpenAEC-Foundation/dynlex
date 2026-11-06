@@ -5,10 +5,6 @@
 # Spans are binary64 arrays of two parameters; pieces contain endpoint pairs.
 import lib/bim/containment2.dl
 
-local function cad clip2 scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 # f64 total ordering includes signed zero and the sign/payload of NaNs.
 local function the cad clip2 order key of {a 64 bit floating-point number:value}:
     execute:
@@ -45,7 +41,7 @@ local function the cad clip2 unique cuts from {a pointer to a list:values} withi
 
 to get the cad break spans on {cad curve2:shape} [from] {a 64 bit floating-point number:first} [to] {a 64 bit floating-point number:second} within {cad tolerance:tolerance}:
     set output to an empty list of a 64 bit floating-point number array of 2 items
-    if ((the cad extent of shape) != the cad bounded extent2) or (((cad clip2 scalar first is finite) = false) or ((cad clip2 scalar second is finite) = false)):
+    if ((the cad extent of shape) != the cad bounded extent2) or (((first is finite) = false) or ((second is finite) = false)):
         free output
         return 0 as the type of output
     set a to first
@@ -53,7 +49,7 @@ to get the cad break spans on {cad curve2:shape} [from] {a 64 bit floating-point
     clamp a between 0.0 and 1.0
     clamp b between 0.0 and 1.0
     set speed to the maximum of (the cad length of (the cad tangent of shape at a)) and (the cad length of (the cad tangent of shape at b))
-    if ((cad clip2 scalar speed is finite) = false) or (speed <= 0.0):
+    if ((speed is finite) = false) or (speed <= 0.0):
         free output
         return 0 as the type of output
     set epsilon to the minimum of (tolerance's linear / speed) and 1.0
@@ -85,7 +81,7 @@ to get the cad break spans on {cad curve2:shape} [from] {a 64 bit floating-point
 
 to get the cad trim spans on {cad curve2:shape} [cut] at {a pointer to a list:cuts} [picked] at {a 64 bit floating-point number:requested} within {cad tolerance:tolerance}:
     set output to an empty list of a 64 bit floating-point number array of 2 items
-    if (cad clip2 scalar requested is finite) = false:
+    if (requested is finite) = false:
         return output
     set extent to the cad extent of shape
     set first to 0.0
@@ -106,7 +102,7 @@ to get the cad trim spans on {cad curve2:shape} [cut] at {a pointer to a list:cu
     set values to a list containing first
     loop index from 0 to the length of cuts:
         set cut to the item at index in cuts
-        if (cad clip2 scalar cut is finite) and (extent holds cad parameter cut):
+        if (cut is finite) and (extent holds cad parameter cut):
             if extent = the cad bounded extent2:
                 clamp cut between 0.0 and 1.0
             if extent = the cad forward extent2:

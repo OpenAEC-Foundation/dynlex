@@ -117,7 +117,7 @@ local function append workspace open document {a pointer to a workspace open doc
 
 to get the workspace open document at index {integer:position} in {a pointer to a workspace open document collection:collection}:
     if position < 0 or position >= the length of collection:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return the item at position in the items of collection
 
 to get the workspace open document identified by {string:identity} in {a pointer to a workspace edit context:context}:
@@ -155,7 +155,7 @@ local function append {a pointer to a workspace annotation decision:value} to {a
 local function the workspace annotation decision at {integer:position} in {a pointer to a workspace annotation decision collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         return the item at position in the items of collection
 
 to get the workspace annotation decision named {string:identifier} in {a pointer to a workspace edit context:context}:
@@ -345,7 +345,7 @@ to record workspace annotation confirmation {string:identifier} as {boolean:appr
     set existing to the workspace annotation decision named identifier in context
     if existing != (0 as a pointer to a workspace annotation decision):
         set existing's approval to approval
-        @intrinsic("return")
+        return nothing
     set initial to @intrinsic(
         "construct",
         a workspace annotation decision,
@@ -389,7 +389,7 @@ to get the result of opening workspace {literal:document} {string:uri} with text
 
 to free {a pointer to a workspace edit context:context}:
     if context = (0 as a pointer to a workspace edit context):
-        @intrinsic("return")
+        return nothing
     set documents to the documents of context
     set position to 0
     loop while position < the length of documents:

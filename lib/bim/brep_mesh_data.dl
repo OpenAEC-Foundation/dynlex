@@ -25,7 +25,7 @@ class:
         if storageOwner != (0 as a pointer to an integer):
             set references to the value at storageOwner
             if references = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             store (references + 1) at storageOwner
     release:
         set storageOwner to the owner of @intrinsic("lifecycle value")

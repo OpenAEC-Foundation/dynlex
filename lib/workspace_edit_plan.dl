@@ -20,15 +20,15 @@ local function authorize workspace annotation {string:identifier} for change {in
         set candidate to the workspace annotation named identifier in edit
         if candidate = (0 as a pointer to a workspace change annotation):
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace edit references an unknown change annotation" at change protocol)
-            @intrinsic("return")
+            return nothing
         if not context's annotation setting:
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace change annotations require explicit opt-in" at change protocol)
-            @intrinsic("return")
+            return nothing
         if candidate's confirmation requirement:
             set decision to the workspace annotation decision named identifier in context
             if decision = (0 as a pointer to a workspace annotation decision):
                 invalidate plan with (a workspace edit confirmation result for candidate at change protocol)
-                @intrinsic("return")
+                return nothing
             if not decision's approval:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Workspace change annotation was declined" at change protocol)
 
@@ -129,24 +129,24 @@ local function simulate workspace text change {a pointer to a normalized workspa
         set resource to the workspace resource identified by normalized's identity in the resources of plan
         if resource = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Text edit resource was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         if not resource's presence:
             invalidate plan with (a failed workspace edit result reporting the string form of "Text edit target does not exist" at change protocol)
-            @intrinsic("return")
+            return nothing
         if resource's kind != the workspace regular file resource kind:
             invalidate plan with (a failed workspace edit result reporting the string form of "Text edit target must be a regular file" at change protocol)
-            @intrinsic("return")
+            return nothing
         if request's version presence:
             if resource's open document = (0 as a pointer to a workspace open document):
                 invalidate plan with (a failed workspace edit result reporting the string form of "Versioned text edits require an open document" at change protocol)
-                @intrinsic("return")
+                return nothing
             if request's version != resource's virtual version:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Text document version does not match" at change protocol)
-                @intrinsic("return")
+                return nothing
         set result to the result of applying workspace text edits request's edits to resource's content using the position encoding of context
         if result failed:
             invalidate plan with (a failed workspace edit result reporting result's failure reason at change protocol)
-            @intrinsic("return")
+            return nothing
         set the content of resource to result's text
         if the length of request's edits > 0:
             if resource's open document != (0 as a pointer to a workspace open document):
@@ -158,11 +158,11 @@ local function simulate workspace create change {a pointer to a normalized works
         set request to normalized's source change
         if normalized's relative path = the string form of ".":
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace root cannot be created" at change protocol)
-            @intrinsic("return")
+            return nothing
         set resource to the workspace resource identified by normalized's identity in the resources of plan
         if resource = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Create target was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         set kind to the workspace regular file resource kind
         if request's directory hint:
             set kind to the workspace directory resource kind
@@ -170,30 +170,30 @@ local function simulate workspace create change {a pointer to a normalized works
             if request's overwrite:
                 if resource's filesystem kind != kind:
                     invalidate plan with (a failed workspace edit result reporting the string form of "Create overwrite target has a different resource type" at change protocol)
-                    @intrinsic("return")
+                    return nothing
                 if kind = the workspace directory resource kind:
                     if resource's identity names a nonempty workspace directory in the resources of plan:
                         invalidate plan with (a failed workspace edit result reporting the string form of "Create cannot overwrite a nonempty directory" at change protocol)
-                        @intrinsic("return")
+                        return nothing
                 else:
                     set the content of resource to an empty workspace edit text
                 append workspace resource operation at protocol of kind the workspace create change kind skipped false for path resource's path identified by resource's identity, old path an empty workspace edit text identified by an empty workspace edit text, new path an empty workspace edit text identified by an empty workspace edit text, which is a directory if request's directory hint, and overwrite target true to plan
-                @intrinsic("return")
+                return nothing
             if request's existing target tolerance:
                 append workspace resource operation at protocol of kind the workspace create change kind skipped true for path resource's path identified by resource's identity, old path an empty workspace edit text identified by an empty workspace edit text, new path an empty workspace edit text identified by an empty workspace edit text, which is a directory if request's directory hint, and overwrite target false to plan
-                @intrinsic("return")
+                return nothing
             invalidate plan with (a failed workspace edit result reporting the string form of "Create target already exists" at change protocol)
-            @intrinsic("return")
+            return nothing
         if resource's open document != (0 as a pointer to a workspace open document):
             invalidate plan with (a failed workspace edit result reporting the string form of "Create target is open in a document buffer" at change protocol)
-            @intrinsic("return")
+            return nothing
         set parent to the workspace parent resource for resource's path using context in plan
         if parent = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Create parent was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         if (not parent's filesystem presence) or (parent's filesystem kind != the workspace directory resource kind):
             invalidate plan with (a failed workspace edit result reporting the string form of "Create parent must be an existing directory" at change protocol)
-            @intrinsic("return")
+            return nothing
         set resource's filesystem presence to true
         set the filesystem kind of resource to kind
         set resource's presence to true
@@ -217,52 +217,52 @@ local function simulate workspace rename change {a pointer to a normalized works
         set request to normalized's source change
         if normalized's old relative path = the string form of ".":
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace root cannot be renamed" at change protocol)
-            @intrinsic("return")
+            return nothing
         if normalized's old path = normalized's new path:
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename source and target are the same path" at change protocol)
-            @intrinsic("return")
+            return nothing
         set origin to the workspace resource identified by normalized's old identity in the resources of plan
         if origin = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename source was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         if not origin's filesystem presence:
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename source does not exist" at change protocol)
-            @intrinsic("return")
+            return nothing
         set distinct to normalized's old identity != normalized's new identity
         if origin's filesystem kind = the workspace directory resource kind:
             if distinct and (workspace identity normalized's new identity equals or is below normalized's old identity):
                 invalidate plan with (a failed workspace edit result reporting the string form of "Directory cannot be renamed into itself" at change protocol)
-                @intrinsic("return")
+                return nothing
         set destination to the workspace resource identified by normalized's new identity in the resources of plan
         if distinct and (destination != (0 as a pointer to a workspace resource snapshot)):
             if destination's filesystem presence:
                 if request's overwrite:
                     if destination's filesystem kind != origin's filesystem kind:
                         invalidate plan with (a failed workspace edit result reporting the string form of "Rename overwrite target has a different resource type" at change protocol)
-                        @intrinsic("return")
+                        return nothing
                     if workspace directory destination's identity contains an open document in the resources of plan:
                         invalidate plan with (a failed workspace edit result reporting the string form of "Rename target contains an open document" at change protocol)
-                        @intrinsic("return")
+                        return nothing
                     if destination's filesystem kind = the workspace directory resource kind:
                         if destination's identity names a nonempty workspace directory in the resources of plan:
                             invalidate plan with (a failed workspace edit result reporting the string form of "Rename cannot overwrite a nonempty directory" at change protocol)
-                            @intrinsic("return")
+                            return nothing
                 else if request's existing target tolerance:
                     append workspace resource operation at protocol of kind the workspace rename change kind skipped true for path an empty workspace edit text identified by an empty workspace edit text, old path normalized's old path identified by normalized's old identity, new path normalized's new path identified by normalized's new identity, which is a directory if (origin's filesystem kind = the workspace directory resource kind), and overwrite target false to plan
-                    @intrinsic("return")
+                    return nothing
                 else:
                     invalidate plan with (a failed workspace edit result reporting the string form of "Rename target already exists" at change protocol)
-                    @intrinsic("return")
+                    return nothing
             if destination's open document != (0 as a pointer to a workspace open document):
                 invalidate plan with (a failed workspace edit result reporting the string form of "Rename target is open in a document buffer" at change protocol)
-                @intrinsic("return")
+                return nothing
         set parent to the workspace parent resource for normalized's new path using context in plan
         if parent = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename target parent was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         if (not parent's filesystem presence) or (parent's filesystem kind != the workspace directory resource kind):
             invalidate plan with (a failed workspace edit result reporting the string form of "Rename target parent must be an existing directory" at change protocol)
-            @intrinsic("return")
+            return nothing
         set position to 0
         loop while position < the length of the resources of plan and plan is valid:
             set candidate to the workspace resource snapshot at position in the resources of plan
@@ -278,7 +278,7 @@ local function simulate workspace rename change {a pointer to a normalized works
                                     invalidate plan with (a failed workspace edit result reporting the string form of "Rename target collides with another workspace resource" at change protocol)
             increment position
         if plan is invalid:
-            @intrinsic("return")
+            return nothing
         if distinct and (destination != (0 as a pointer to a workspace resource snapshot)):
             set destination's activity to false
         set position to 0
@@ -304,25 +304,25 @@ local function simulate workspace delete change {a pointer to a normalized works
         set request to normalized's source change
         if normalized's relative path = the string form of ".":
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace root cannot be deleted" at change protocol)
-            @intrinsic("return")
+            return nothing
         set resource to the workspace resource identified by normalized's identity in the resources of plan
         if resource = (0 as a pointer to a workspace resource snapshot):
             invalidate plan with (a failed workspace edit result reporting the string form of "Delete target was not snapshotted" at change protocol)
-            @intrinsic("return")
+            return nothing
         if not resource's filesystem presence:
             if request's missing target tolerance:
                 append workspace resource operation at protocol of kind the workspace delete change kind skipped true for path resource's path identified by resource's identity, old path an empty workspace edit text identified by an empty workspace edit text, new path an empty workspace edit text identified by an empty workspace edit text, which is a directory if false, and overwrite target false to plan
-                @intrinsic("return")
+                return nothing
             invalidate plan with (a failed workspace edit result reporting the string form of "Delete target does not exist" at change protocol)
-            @intrinsic("return")
+            return nothing
         if workspace directory resource's identity contains an open document in the resources of plan:
             invalidate plan with (a failed workspace edit result reporting the string form of "Delete target contains an open document" at change protocol)
-            @intrinsic("return")
+            return nothing
         set directory to resource's filesystem kind = the workspace directory resource kind
         if directory and (not request's recursion):
             if resource's identity names a nonempty workspace directory in the resources of plan:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Deleting a nonempty directory requires recursive deletion" at change protocol)
-                @intrinsic("return")
+                return nothing
         set position to 0
         loop while position < the length of the resources of plan:
             set candidate to the workspace resource snapshot at position in the resources of plan

@@ -1,0 +1,12 @@
+import lib/std.dl
+
+to get duplicate rules:
+    if false:
+        in this function, by default:
+            numbers are floating-point
+    loop while false:
+        in this function, by default:
+            numbers are integer
+    return 1
+
+print line duplicate rules

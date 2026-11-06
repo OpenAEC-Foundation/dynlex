@@ -17,15 +17,11 @@ local function the absent cad analytic bounds:
     execute:
         return @intrinsic("construct", a cad bounds2, false, the cad zero vector2, the cad zero vector2)
 
-local function cad bounds scalar {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function the cad bounds after absorbing {cad vector2:point} into {cad bounds2:prior}:
     execute:
-        if (cad bounds scalar point's x is finite) = false:
+        if (point's x is finite) = false:
             return the absent cad analytic bounds
-        if (cad bounds scalar point's y is finite) = false:
+        if (point's y is finite) = false:
             return the absent cad analytic bounds
         if prior's valid = false:
             return @intrinsic("construct", a cad bounds2, true, point, point)
@@ -35,13 +31,13 @@ local function the cad bounds after absorbing {cad vector2:point} into {cad boun
 
 local function the cad bounds after conic {cad ellipse:ellipse} from {a 64 bit floating-point number:start} to {a 64 bit floating-point number:end} into {cad bounds2:prior}:
     execute:
-        if ((cad bounds scalar start is finite) and (cad bounds scalar end is finite)) = false:
+        if ((start is finite) and (end is finite)) = false:
             return the absent cad analytic bounds
-        if ((cad bounds scalar ellipse's majorRadius is finite) and (cad bounds scalar ellipse's minorRadius is finite)) = false:
+        if ((ellipse's majorRadius is finite) and (ellipse's minorRadius is finite)) = false:
             return the absent cad analytic bounds
         if (ellipse's majorRadius <= 0.0) or (ellipse's minorRadius <= 0.0):
             return the absent cad analytic bounds
-        if ((cad bounds scalar ellipse's majorAxis's x is finite) and (cad bounds scalar ellipse's majorAxis's y is finite)) = false:
+        if ((ellipse's majorAxis's x is finite) and (ellipse's majorAxis's y is finite)) = false:
             return the absent cad analytic bounds
         set result to the cad bounds after absorbing (the cad point on ellipse at start) into prior
         if result's valid = false:
@@ -60,8 +56,8 @@ local function the cad bounds after conic {cad ellipse:ellipse} from {a 64 bit f
             loop extreme from 0 to 2:
                 set parameter to maximum
                 if extreme = 1:
-                    set parameter to maximum + 3.141592653589793
-                if ((the absolute value of (end - start)) >= 6.283185307179586) or (cad angle parameter within arc from start to end):
+                    set parameter to maximum + (the radians in a half turn)
+                if ((the absolute value of (end - start)) >= (the radians in a full turn)) or (cad angle parameter within arc from start to end):
                     set result to the cad bounds after absorbing (the cad point on ellipse at parameter) into result
                     if result's valid = false:
                         return result
@@ -86,7 +82,7 @@ to get the cad analytic bounds of {a pointer to a list:curves}:
                 return result
             set result to the cad bounds after absorbing curve's line's end into result
         else if curve's kind = cad circle curve2 kind:
-            set result to the cad bounds after circle at curve's circle's centre with radius curve's circle's radius from 0.0 to 6.283185307179586 into result
+            set result to the cad bounds after circle at curve's circle's centre with radius curve's circle's radius from 0.0 to (the radians in a full turn) into result
         else if curve's kind = cad arc curve2 kind:
             set result to the cad bounds after circle at curve's arc's centre with radius curve's arc's radius from curve's arc's startAngle to curve's arc's endAngle into result
         else if curve's kind = cad ellipse curve2 kind:
@@ -95,7 +91,7 @@ to get the cad analytic bounds of {a pointer to a list:curves}:
             set polyline to curve's polyline
             for each vertex in polyline's vertices:
                 set result to the cad bounds after absorbing vertex's position into result
-                if (result's valid = false) or ((cad bounds scalar vertex's bulge is finite) = false):
+                if (result's valid = false) or ((vertex's bulge is finite) = false):
                     return the absent cad analytic bounds
             set count to the length of polyline's vertices
             if polyline's closed = false:

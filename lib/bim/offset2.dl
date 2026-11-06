@@ -30,10 +30,6 @@ class:
         valid as a boolean
         value as a cad vector2
 
-local function cad offset2 finite {a 64 bit floating-point number:value}:
-    execute:
-        return (the absolute value of value) <= 1.7976931348623157e308
-
 local function no cad offset2 primitive:
     execute:
         return @intrinsic("construct", a cad offset2 primitive result, false, a new cad offset2 primitive)
@@ -132,7 +128,7 @@ local function cad offset2 shifted primitive from {cad polyline vertex2:startVer
     execute:
         set start to startVertex's position
         set finish to endVertex's position
-        if ((cad offset2 finite startVertex's bulge) = false) or ((the absolute value of startVertex's bulge) < 1e-12):
+        if ((startVertex's bulge is finite) = false) or ((the absolute value of startVertex's bulge) < 1e-12):
             set direction to the cad difference of finish and start
             set length to the cad length of direction
             if length <= 1e-12:
@@ -166,10 +162,10 @@ local function cad offset2 bulge for {cad offset2 primitive:primitive} from {cad
         set sweep to secondAngle - firstAngle
         if primitive's sweep > 0.0:
             if sweep <= 0.0:
-                set sweep to sweep + 6.283185307179586
+                set sweep to sweep + (the radians in a full turn)
         else:
             if sweep >= 0.0:
-                set sweep to sweep - 6.283185307179586
+                set sweep to sweep - (the radians in a full turn)
         return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25)
 
 local function cad offset2 join bulge from {cad vector2:start} to {cad vector2:finish} around {cad vector2:corner} for signed distance {a 64 bit floating-point number:signedDistance}:
@@ -179,10 +175,10 @@ local function cad offset2 join bulge from {cad vector2:start} to {cad vector2:f
         set sweep to secondAngle - firstAngle
         if signedDistance < 0.0:
             if sweep <= 0.0:
-                set sweep to sweep + 6.283185307179586
+                set sweep to sweep + (the radians in a full turn)
         else:
             if sweep >= 0.0:
-                set sweep to sweep - 6.283185307179586
+                set sweep to sweep - (the radians in a full turn)
         return @intrinsic("call", "libc", "tan", a 64 bit floating-point number, sweep * 0.25)
 
 local function cad offset2 conditioned clone of {cad polyline2:source} from {cad vector2:origin} over {a 64 bit floating-point number:distance}:
@@ -200,7 +196,7 @@ local function cad offset2 conditioned clone of {cad polyline2:source} from {cad
             set endVertex to the item at next in source's vertices
             set point to the cad difference of startVertex's position and origin
             set bulge to startVertex's bulge
-            if (cad offset2 finite bulge) = false:
+            if (bulge is finite) = false:
                 set bulge to 0.0
             set normalized to point scaled by (1.0 / distance)
             set split to false
@@ -354,7 +350,7 @@ local function cad offset2 raw of {cad polyline2:source} [toward] {cad vector2:s
 
 to get the cad offset polylines of {cad polyline2:source} [by] {a number:givenDistance} [toward] {cad vector2:side}:
     set distance to the absolute value of (givenDistance as a 64 bit floating-point number)
-    if (distance < 1e-12) or ((cad offset2 finite distance) = false):
+    if (distance < 1e-12) or ((distance is finite) = false):
         return an empty list of a cad polyline2
     if (the length of source's vertices) < 2:
         return an empty list of a cad polyline2

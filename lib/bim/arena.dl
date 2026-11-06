@@ -25,7 +25,7 @@ class:
         if owner != (0 as a pointer to an integer):
             set count to @intrinsic("dereference", owner)
             if count = 2147483647:
-                @intrinsic("call", "libc", "abort", nothing)
+                abort the program
             @intrinsic("store at", owner, count + 1)
     release:
         set owner to the references of @intrinsic("lifecycle value")
@@ -121,7 +121,7 @@ to get the cad key after inserting value into {a pointer to a cad arena:nodes}:
         remove the last item from the vacant of nodes and set index to it
         set previous to the item at (index as an integer) in the slots of nodes
         if (the storage of the payload of previous) != (0 as a pointer to the type of value):
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         set generation to the generation of previous
         set next to @intrinsic("construct", a cad slot, owned, generation)
         replace item at index (index as an integer) in the slots of nodes with next
@@ -150,12 +150,12 @@ to get the cad lookup of {cad key:key} in {a pointer to a cad arena:nodes}:
 
 to get the cad value of {cad lookup result:result}:
     if (the valid of result) = false:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return @intrinsic("dereference", the value of result)
 
 to get the cad value of {cad removal result:result}:
     if (the valid of result) = false:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return @intrinsic("dereference", the storage of the payload of result)
 
 to get the cad removal of {cad key:key} from {a pointer to a cad arena:nodes}:
@@ -174,7 +174,7 @@ to get the cad removal of {cad key:key} from {a pointer to a cad arena:nodes}:
 to replace cad node {cad key:key} in {a pointer to a cad arena:nodes} with value:
     set data to the cad node pointer for key in nodes
     if data = (0 as a pointer to the type of value):
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     @intrinsic("store at", data, value)
 
 to get the cad keys of {a pointer to a cad arena:nodes}:

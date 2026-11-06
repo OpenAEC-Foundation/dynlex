@@ -3,29 +3,30 @@ import lib/check.dl
 
 [a|] graphics matrix means: (a 32 bit floating-point number) array of 16 items
 
-to get {floating-point number:value} [is finite]:
-    return (value - value) = 0.0
-
 to get [an identity graphics matrix]:
+    in this function, by default:
+        numbers are 32 bit
     set result to a new graphics matrix
-    store (1.0) as a 32 bit floating-point number into result at 0
-    store (1.0) as a 32 bit floating-point number into result at 5
-    store (1.0) as a 32 bit floating-point number into result at 10
-    store (1.0) as a 32 bit floating-point number into result at 15
+    store 1.0 into result at 0
+    store 1.0 into result at 5
+    store 1.0 into result at 10
+    store 1.0 into result at 15
     return result
 
 to get [the graphics product of] {graphics matrix:left} [and] {graphics matrix:right}:
+    in this function, by default:
+        numbers are 32 bit
     set result to a new graphics matrix
     set column to 0
     loop while column < 4:
         set row to 0
         loop while row < 4:
-            set sum to 0.0 as a 32 bit floating-point number
+            set sum to 0.0
             set inner to 0
             loop while inner < 4:
                 set sum to sum + ((the item at (inner * 4 + row) in left) * (the item at (column * 4 + inner) in right))
                 increment inner
-            store (sum) as a 32 bit floating-point number into result at (column * 4 + row)
+            store sum into result at (column * 4 + row)
             increment row
         increment column
     return result

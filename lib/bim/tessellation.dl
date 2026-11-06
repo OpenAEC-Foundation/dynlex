@@ -5,26 +5,22 @@ import lib/bim/core.dl
 import lib/list.dl
 
 to get the cad default sampling angle:
-    return 3.141592653589793 / 24.0
+    return (the radians in a half turn) / 24.0
 
 to get the cad display sampling angle:
-    return 3.141592653589793 / 9.0
+    return (the radians in a half turn) / 9.0
 
 to get the cad fine sampling angle:
-    return 3.141592653589793 / 36.0
-
-local function cad sampling value {a 64 bit floating-point number:value} is finite:
-    execute:
-        return (value - value) = 0.0
+    return (the radians in a half turn) / 36.0
 
 to get the cad sampling angle for {a 64 bit floating-point number:value}:
-    if (cad sampling value value is finite) and value > 0.0:
-        return the minimum of value and 1.5707963267948966
+    if (value is finite) and value > 0.0:
+        return the minimum of value and (the radians in a quarter turn)
     return the cad default sampling angle
 
 local function the cad bounded resolution of {a 64 bit floating-point number:value}:
     execute:
-        if (cad sampling value value is finite) and value > 0.0:
+        if (value is finite) and value > 0.0:
             return value clamped between 0.01 and 10.0
         return 1.0
 
@@ -65,8 +61,8 @@ to get the cad direction angle between left and right:
     set aa to the cad direction dot of left with left
     set bb to the cad direction dot of right with right
     set length to the square root of (aa * bb)
-    if ((cad sampling value length is finite) = false) or length <= 2.2250738585072014e-308:
-        return 3.141592653589793
+    if ((length is finite) = false) or length <= 2.2250738585072014e-308:
+        return (the radians in a half turn)
     set cosine to dot / length
     # The mutating standard clamp retains NaN through ordered comparisons.
     clamp cosine between -1.0 and 1.0

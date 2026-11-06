@@ -514,12 +514,12 @@ local function the cad whole surface mesh on {cad surface:surfaceValue} forward 
     execute:
         set outputMesh to an empty cad mesh
         set lowV to 0.0
-        set highV to 6.283185307179586
+        set highV to (the radians in a full turn)
         if surfaceValue's kind = 3:
-            set lowV to -1.5707963267948966
-            set highV to 1.5707963267948966
+            set lowV to -(the radians in a quarter turn)
+            set highV to (the radians in a quarter turn)
         set stepValue to maxAngle / 1.4142135623730951
-        set uCells to (the ceiling of (6.283185307179586 / stepValue)) as an integer
+        set uCells to (the ceiling of ((the radians in a full turn) / stepValue)) as an integer
         set vCells to (the ceiling of ((highV - lowV) / stepValue)) as an integer
         if ((uCells <= 0) or (vCells <= 0)) or ((((uCells as a 64 bit integer) * (vCells as a 64 bit integer)) * 2) > 262144):
             return outputMesh
@@ -527,8 +527,8 @@ local function the cad whole surface mesh on {cad surface:surfaceValue} forward 
             set v0 to lowV + (((highV - lowV) * (vIndex as a 64 bit floating-point number)) / (vCells as a 64 bit floating-point number))
             set v1 to lowV + (((highV - lowV) * ((vIndex + 1) as a 64 bit floating-point number)) / (vCells as a 64 bit floating-point number))
             loop uIndex from 0 to uCells:
-                set u0 to (6.283185307179586 * (uIndex as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
-                set u1 to (6.283185307179586 * ((uIndex + 1) as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
+                set u0 to ((the radians in a full turn) * (uIndex as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
+                set u1 to ((the radians in a full turn) * ((uIndex + 1) as a 64 bit floating-point number)) / (uCells as a 64 bit floating-point number)
                 set lowerLeft to a cad vector2 with x u0 and y v0
                 set lowerRight to a cad vector2 with x u1 and y v0
                 set upperLeft to a cad vector2 with x u0 and y v1
@@ -575,7 +575,7 @@ local function the cad periodic band mesh of {cad face key:faceKey} in {cad body
             return no cad mesh result
         set firstSpan to the absolute value of (firstEnd's x - firstStart's x)
         set secondSpan to the absolute value of (secondEnd's x - secondStart's x)
-        if (firstSpan < 3.141592653589793) or (secondSpan < 3.141592653589793):
+        if (firstSpan < (the radians in a half turn)) or (secondSpan < (the radians in a half turn)):
             free coedgeKeys
             return no cad mesh result
         set lowV to the minimum of firstStart's y and secondStart's y
@@ -630,7 +630,7 @@ local function the cad singular cone mesh of {cad face key:faceKey} in {cad body
             set partValue to the item at partIndex in ((boundaries's parts's values))
             set firstPoint to the cad point on partValue's curve at 0.0
             set lastPoint to the cad point on partValue's curve at 1.0
-            if ((the absolute value of (firstPoint's y - lastPoint's y)) <= tolerance) and ((the absolute value of (lastPoint's x - firstPoint's x)) >= 3.141592653589793):
+            if ((the absolute value of (firstPoint's y - lastPoint's y)) <= tolerance) and ((the absolute value of (lastPoint's x - firstPoint's x)) >= (the radians in a half turn)):
                 set rimIndex to partIndex
                 increment rimCount
         if rimCount != 1:
@@ -769,7 +769,7 @@ to get the cad mesh result of {cad face key:faceKey} in {cad body:bodyValue} wit
         return no cad mesh result
     set maxAngle to the cad sampling angle for (requestedAngle as a 64 bit floating-point number)
     set tolerance to requestedTolerance as a 64 bit floating-point number
-    if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+    if ((tolerance > 0.0) and (tolerance is finite)) = false:
         set tolerance to 1e-9
     set meshValue to the cad mesh of faceKey in bodyValue with maximum angle maxAngle within tolerance
     return @intrinsic("construct", a cad mesh result, (the cad triangle count of meshValue) > 0, meshValue)
@@ -781,7 +781,7 @@ function free cad mesh result {cad mesh result:resultValue}:
 to get the cad mesh of {cad body:bodyValue} with maximum angle {a number:requestedAngle} within {a number:requestedTolerance}:
     set maxAngle to the cad sampling angle for (requestedAngle as a 64 bit floating-point number)
     set tolerance to requestedTolerance as a 64 bit floating-point number
-    if ((tolerance > 0.0) and ((the absolute value of tolerance) <= 1.7976931348623157e308)) = false:
+    if ((tolerance > 0.0) and (tolerance is finite)) = false:
         set tolerance to 1e-9
     set outputMesh to an empty cad mesh
     set faceKeys to the cad face keys of bodyValue

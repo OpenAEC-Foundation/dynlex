@@ -121,7 +121,7 @@ to get the cad samples of {cad curve2:shape} within deviation {a 64 bit floating
         append (the cad point on shape at 1.0) to output
         return output
     if shape's kind = 1:
-        return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's circle's radius and sweep 6.283185307179586 within tolerance)
+        return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's circle's radius and sweep (the radians in a full turn) within tolerance)
     if shape's kind = 2:
         return the cad curve2 uniform samples of shape in (the cad circular segment count with radius shape's arc's radius and sweep (the cad sweep of shape's arc) within tolerance)
     if shape's kind = 3:
