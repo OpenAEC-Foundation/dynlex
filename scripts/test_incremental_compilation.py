@@ -280,6 +280,32 @@ function left times right:
     assert effect_edit[0]["inference_instantiations_reused"] == 2, "changed callee effect reused caller inference"
     assert effect_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee effect kept stale caller code"
 
+    bounded_cascade = root / "bounded_cascade.dl"
+    bounded_source = ('integer means: @intrinsic("type", "int")\n'
+                      'to leaf:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))\n'
+                      'to middle:\n'
+                      '    leaf\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "middle"))\n'
+                      'to outer: middle\n'
+                      'outer\n')
+    bounded_cascade.write_text(bounded_source)
+    build(entry=bounded_cascade)
+    bounded_cascade.write_text(bounded_source.replace('@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))', '@intrinsic("discard", 1)'))
+    bounded_edit = build(entry=bounded_cascade)
+    assert bounded_edit[0]["inference_instantiations_reused"] >= 1, f"effect change cascaded past unchanged middle interface: {bounded_edit[0]}"
+    assert bounded_edit[0]["functions_ir_reused"] >= 1, "effect change rebuilt the outer caller IR"
+    assert bounded_edit[1:] == build(False, entry=bounded_cascade)[1:], "bounded effect cascade differs from clean build"
+    bounded_cascade.write_text(bounded_cascade.read_text().replace('@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "middle"))', '@intrinsic("discard", 2)'))
+    changed_middle = build(entry=bounded_cascade)
+    assert changed_middle[0]["inference_instantiations_reused"] == 0, "changed middle interface reused outer inference"
+    assert changed_middle[1:] == build(False, entry=bounded_cascade)[1:], "changed middle interface differs from clean build"
+    invalid_cascade = root / "invalid_cascade.dl"
+    invalid_cascade.write_text(bounded_source)
+    build(entry=invalid_cascade)
+    invalid_cascade.write_text(bounded_source.replace('    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))', '    @intrinsic("add", 1, "x")'))
+    assert build(success=False, entry=invalid_cascade)[1] == build(False, success=False, entry=invalid_cascade)[1], "failed nested preinference changed diagnostics"
+
     first_helper = root / "first_helper.dl"
     second_helper = root / "second_helper.dl"
     two_caller = root / "two_caller.dl"

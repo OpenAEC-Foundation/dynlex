@@ -334,8 +334,10 @@ Json captureAllFunctionProjection(const ParseContext &context) {
 
 bool functionDependenciesUnchanged(
 	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
-	std::unordered_set<Section *> &visiting
+	std::unordered_set<Section *> &visiting, const std::unordered_set<const Section *> &stableBoundaries = {}
 ) {
+	if (stableBoundaries.contains(section))
+		return true;
 	auto cached = memo.find(section);
 	if (cached != memo.end())
 		return cached->second;
@@ -347,7 +349,7 @@ bool functionDependenciesUnchanged(
 	std::function<void(const PatternMatch &)> checkMatch = [&](const PatternMatch &match) {
 		for (PatternDefinition *definition : match.matchingDefinitions) {
 			if (definition->section != section &&
-				!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting))
+				!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting, stableBoundaries))
 				safe = false;
 		}
 		for (const PatternMatch &subMatch : match.subMatches)
@@ -372,7 +374,7 @@ bool functionDependenciesUnchanged(
 				visitExpressionTree(expression, [&](Expression *node) {
 					for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
 						if (definition && definition->section != section &&
-							!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting))
+							!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting, stableBoundaries))
 							safe = false;
 					}
 					return false;
@@ -416,7 +418,8 @@ std::unordered_set<const Section *> eligibleFunctionSections(
 	std::unordered_set<Section *> visiting;
 	for (const auto &[_, section] : sections) {
 		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-			!interfaceStableChanges.contains(section) && functionDependenciesUnchanged(section, unchanged, memo, visiting))
+			!interfaceStableChanges.contains(section) &&
+			functionDependenciesUnchanged(section, unchanged, memo, visiting, interfaceStableChanges))
 			eligible.insert(section);
 	}
 	return eligible;
@@ -755,15 +758,37 @@ bool compileIncrementally(
 				for (const auto &[path, section] : sections)
 					sectionPaths.emplace(section, path);
 				if (previous) {
-					context.preinferIncrementalFunctions =
+					IncrementalPreinferPlan plan =
 						scalarArgumentIncrementalCandidates(context, *previous, recording->observations, sectionPaths);
-					context.finishIncrementalPreinference = [&](ParseContext &inferred) {
-						Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
+					context.runIncrementalPreinference =
+						[&, plan = std::move(plan)](
+							ParseContext &inferred,
+							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &inferRequest
+						) {
 						const Json &priorSummaries = previous->at("inference_summaries");
-						std::unordered_set<const Section *> stable = stableIncrementalReplacements(
-							inferred.preinferIncrementalFunctions, sectionPaths, currentSummaries, priorSummaries,
-							inferred.incrementalReplacementFunctions
-						);
+						std::unordered_set<const Section *> stable;
+						for (size_t first = 0; first < plan.requests.size();) {
+							Section *section = plan.requests[first].section;
+							size_t end = first + 1;
+							while (end < plan.requests.size() && plan.requests[end].section == section)
+								end++;
+							std::unordered_map<Section *, bool> memo;
+							std::unordered_set<Section *> visiting;
+							if (!functionDependenciesUnchanged(section, plan.bodyUnchanged, memo, visiting, stable)) {
+								std::vector<ParseContext::IncrementalFunctionRequest> variants(
+									plan.requests.begin() + first, plan.requests.begin() + end
+								);
+								for (const auto &request : variants)
+									inferRequest(request);
+								Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
+								auto newlyStable = stableIncrementalReplacements(
+									variants, sectionPaths, currentSummaries, priorSummaries,
+									inferred.incrementalReplacementFunctions
+								);
+								stable.insert(newlyStable.begin(), newlyStable.end());
+							}
+							first = end;
+						}
 						std::unordered_set<const Section *> eligible =
 							eligibleFunctionSections(inferred, *previous, recording->observations, stable);
 						if (eligible.empty())
@@ -791,7 +816,7 @@ bool compileIncrementally(
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
 			context.reuseInferredInstantiation = {};
-			context.finishIncrementalPreinference = {};
+			context.runIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};

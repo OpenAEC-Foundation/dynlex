@@ -823,15 +823,14 @@ summary, so its warnings are regenerated. Functions imported from cached IR coun
 deciding whether an edited body can be ignored. This prevents a later callee edit
 from reusing the preceding build's type inference and executable.
 
-For a changed function with one pattern path, primitive scalar arguments, and no
-transitive global access, the compiler infers its previously generated instantiations
-before their callers when each instantiation has a reusable summary. It compares
-every instantiation before retaining a caller. If the new bodies
-have the same return types and execution effects as the prior summaries,
-unchanged callers can retain their inference summaries and LLVM bodies. The changed
-callee is generated anew and linked to those callers. A changed interface invalidates
-the callers normally. This path does not use source syntax to guess whether the edit
-is safe; it compares inferred results from both builds.
+For functions with one pattern path, primitive scalar arguments, and no transitive
+global access, the compiler can infer affected instantiations in dependency order.
+It compares every instantiation's return type and execution effects with the prior
+summary. An equivalent interface stops invalidation at that function: higher callers
+retain their inference summaries and LLVM bodies, while the function is generated
+anew and linked to them. A changed interface continues through callers until an
+equivalent interface is found or the entry point is reached. This path compares
+inferred results rather than guessing from edited source text.
 
 Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable

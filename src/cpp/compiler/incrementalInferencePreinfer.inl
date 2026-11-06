@@ -1,8 +1,37 @@
-std::vector<ParseContext::IncrementalFunctionRequest> scalarArgumentIncrementalCandidates(
+struct IncrementalPreinferPlan {
+	std::vector<ParseContext::IncrementalFunctionRequest> requests;
+	std::unordered_map<const Section *, bool> bodyUnchanged;
+};
+
+std::set<Section *> matchedSectionDependencies(Section *section) {
+	std::set<Section *> dependencies;
+	std::function<void(const PatternMatch &)> visitMatch = [&](const PatternMatch &match) {
+		for (PatternDefinition *definition : match.matchingDefinitions) {
+			if (definition->section != section)
+				dependencies.insert(definition->section);
+		}
+		for (const PatternMatch &child : match.subMatches)
+			visitMatch(child);
+	};
+	std::function<void(Section *)> visitBody = [&](Section *body) {
+		for (PatternReference *reference : body->patternReferences) {
+			if (reference->match)
+				visitMatch(*reference->match);
+		}
+		for (Section *child : body->children) {
+			if (child->patternDefinitions.empty())
+				visitBody(child);
+		}
+	};
+	visitBody(section);
+	return dependencies;
+}
+
+IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	const ParseContext &context, const Json &previous, const Json &observations,
 	const std::map<const Section *, std::string> &sectionPaths
 ) {
-	std::vector<ParseContext::IncrementalFunctionRequest> result;
+	IncrementalPreinferPlan result;
 	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
 		!compatibleObservations(previous, observations, context))
 		return result;
@@ -11,6 +40,9 @@ std::vector<ParseContext::IncrementalFunctionRequest> scalarArgumentIncrementalC
 	if (current.at("declarations") != prior.at("declarations") || current.at("sources") != prior.at("sources") ||
 		current.at("inactive") != prior.at("inactive"))
 		return result;
+	for (const auto &[section, path] : sectionPaths)
+		result.bodyUnchanged[section] =
+			!current.at("bodies").contains(path) || current.at("bodies").at(path) == prior.at("bodies").at(path);
 	const Json &summaries = previous.at("inference_summaries");
 	std::map<std::string, size_t> generatedFunctionCounts;
 	for (const auto &[_, owner] : previous.at("function_sections").items())
@@ -22,7 +54,6 @@ std::vector<ParseContext::IncrementalFunctionRequest> scalarArgumentIncrementalC
 	std::unordered_set<Section *> visiting;
 	for (const auto &[section, path] : sectionPaths) {
 		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||
-			!current.at("bodies").contains(path) || current.at("bodies").at(path) == prior.at("bodies").at(path) ||
 			!summaries.contains(path) || summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
 			section->patternDefinitions.front()->indexedPaths.size() != 1)
 			continue;
@@ -63,8 +94,25 @@ std::vector<ParseContext::IncrementalFunctionRequest> scalarArgumentIncrementalC
 			requests.push_back(std::move(request));
 		}
 		if (requests.size() == summaries.at(path).size())
-			result.insert(result.end(), requests.begin(), requests.end());
+			result.requests.insert(result.requests.end(), requests.begin(), requests.end());
 	}
+	std::map<Section *, std::vector<ParseContext::IncrementalFunctionRequest>> grouped;
+	for (const auto &request : result.requests)
+		grouped[request.section].push_back(request);
+	result.requests.clear();
+	std::unordered_set<Section *> visited;
+	std::function<void(Section *)> order = [&](Section *section) {
+		if (!visited.insert(section).second)
+			return;
+		for (Section *dependency : matchedSectionDependencies(section)) {
+			if (grouped.contains(dependency))
+				order(dependency);
+		}
+		const auto &requests = grouped.at(section);
+		result.requests.insert(result.requests.end(), requests.begin(), requests.end());
+	};
+	for (const auto &[section, _] : grouped)
+		order(section);
 	return result;
 }
 

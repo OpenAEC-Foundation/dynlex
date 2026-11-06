@@ -90,8 +90,8 @@ struct ParseContext {
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
 	std::function<bool(Section *, const InstantiationKey &, Instantiation &)> reuseInferredInstantiation;
-	std::vector<IncrementalFunctionRequest> preinferIncrementalFunctions;
-	std::function<void(ParseContext &)> finishIncrementalPreinference;
+	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
+		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
 	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
@@ -427,8 +427,7 @@ inline void collectPatternCallBindingPairsForPath(
 	std::vector<std::pair<std::string, Expression *>> &outBindings
 ) {
 	forEachPatternCallBindingOnPath(
-		expr, definition, pathIndex,
-		[&](const std::string &parameterName, Expression *argumentExpression) {
+		expr, definition, pathIndex, [&](const std::string &parameterName, Expression *argumentExpression) {
 		outBindings.push_back({parameterName, argumentExpression});
 	}
 	);
@@ -529,8 +528,7 @@ inline ResolvedBindingLayers resolveThroughBindingLayers(
 	Expression *expression, BindingFrameStack bindingFrameStack, SelectFlexExpansionFn &&selectFlexExpansion
 ) {
 	return resolveThroughBindingLayers(
-		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion),
-		[](Expression *) {
+		expression, std::move(bindingFrameStack), std::forward<SelectFlexExpansionFn>(selectFlexExpansion), [](Expression *) {
 		return false;
 	}
 	);
