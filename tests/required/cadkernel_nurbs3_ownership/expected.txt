@@ -1,3 +1,0 @@
-curve copied lifetime and deep clone
-surface rows independently cloned and borrowed inputs detached
-invalid results and repeated explicit release are safe

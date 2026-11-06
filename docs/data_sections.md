@@ -50,7 +50,7 @@ Empty rows and cells come from the table dimensions.
 
 `project window` names the descriptor data. Defining it opens no window and registers
 no handlers. `examples/sections/project.dl` creates application state, creates a UI
-instance, and opens the native view. `tests/required/ui_sections/main.dl` uses the same
+instance, and opens the native view. `tests/integration/ui_sections/main.dl` uses the same
 description without a renderer and verifies independent instances and the blue row's
 width, which is 440 pixels with this style.
 

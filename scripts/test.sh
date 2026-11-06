@@ -3,21 +3,18 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-TESTS_DIR="$PROJECT_DIR/tests/required"
+suite=required
+run_only=false
+build_args=()
+for arg in "$@"; do
+    case "$arg" in
+    --integration) suite=integration ;;
+    --run-only) run_only=true ;;
+    *) build_args+=("$arg") ;;
+    esac
+done
+TESTS_DIR="$PROJECT_DIR/tests/$suite"
 source "$SCRIPT_DIR/test_fixture_options.sh"
-
-if ! (cd "$PROJECT_DIR" && python3 -B "$SCRIPT_DIR/check_no_elf_binaries.py"); then
-    exit 1
-fi
-if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-required-tests.XXXXXX")"; then
-    echo "Failed to create the required-test output directory." >&2
-    exit 1
-fi
-
-cleanup_test_output() {
-    rm -rf -- "$TEST_OUTPUT_DIR"
-}
-trap cleanup_test_output EXIT
 
 is_windows=false
 execution_timeout_scale=1
@@ -335,14 +332,40 @@ sys.exit(process.returncode)
 PY
 }
 
-printf '%s\n' "${YELLOW}Building compiler...${NC}"
-"$SCRIPT_DIR/build.sh" "$@"
-build_exit=$?
-if [[ $build_exit -ne 0 ]]; then
-    printf '%s\n' "${RED}Build failed.${NC}"
-    exit $build_exit
+if [[ "$run_only" != "true" ]]; then
+    printf '%s\n' "${YELLOW}Building compiler...${NC}"
+    "$SCRIPT_DIR/build.sh" "${build_args[@]}"
+    build_exit=$?
+    if [[ $build_exit -ne 0 ]]; then
+        printf '%s\n' "${RED}Build failed.${NC}"
+        exit $build_exit
+    fi
+    printf '%s\n' "${GREEN}Compiler build complete.${NC}"
+    if [[ "$suite" == required ]]; then
+        run_with_timeout 120 "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only
+        suite_exit=$?
+        if [[ $suite_exit -eq 124 ]]; then
+            printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
+        fi
+    else
+        "$DYNLEX_TEST_BASH" "$SCRIPT_DIR/test.sh" --run-only --integration
+        suite_exit=$?
+    fi
+    exit "$suite_exit"
 fi
-printf '%s\n' "${GREEN}Compiler build complete.${NC}"
+
+if ! (cd "$PROJECT_DIR" && python3 -B "$SCRIPT_DIR/check_no_elf_binaries.py"); then
+    exit 1
+fi
+if ! TEST_OUTPUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/dynlex-${suite}-tests.XXXXXX")"; then
+    echo "Failed to create the test output directory." >&2
+    exit 1
+fi
+
+cleanup_test_output() {
+    rm -rf -- "$TEST_OUTPUT_DIR"
+}
+trap cleanup_test_output EXIT
 
 total_start_ms=$(now_ms)
 
@@ -607,6 +630,15 @@ done
 
 run_auxiliary_test() {
     local test_name="$1"
+    local required_test=false
+    case "$test_name" in
+    elf_binary_guard|dl_file_discovery|fixture_compile_budget|required_focus|diagnostic_expectations|process_error_mode|dependency_installer|runtime_feature_macros|llvm_toolchain|entrypoint_checker|numeric_literals|class_layout|incremental_compilation|import_root_consistency|pattern_precedence|associative_grouping|compiler_stack)
+        required_test=true ;;
+    esac
+    if [[ "$suite" == required && "$required_test" != true ]] ||
+        [[ "$suite" == integration && "$required_test" == true ]]; then
+        return
+    fi
     local base_timeout_seconds="$2"
     local timeout_seconds=$((base_timeout_seconds * execution_timeout_scale))
     shift 2
@@ -634,6 +666,7 @@ run_auxiliary_test() {
 run_auxiliary_test "elf_binary_guard" 10 python3 -B "$SCRIPT_DIR/test_no_elf_binaries.py"
 run_auxiliary_test "dl_file_discovery" 10 python3 -B "$SCRIPT_DIR/test_dl_files.py"
 run_auxiliary_test "fixture_compile_budget" 10 python3 -B "$SCRIPT_DIR/test_fixture_options.py"
+run_auxiliary_test "required_focus" 10 python3 -B "$SCRIPT_DIR/test_required_focus.py"
 run_auxiliary_test "diagnostic_expectations" 10 python3 -B "$SCRIPT_DIR/test_diagnostic_expectations.py"
 run_auxiliary_test "process_error_mode" 10 python3 -B "$SCRIPT_DIR/test_process_error_mode.py"
 run_auxiliary_test "dependency_installer" 10 python3 -B "$SCRIPT_DIR/test_install.py"
@@ -654,6 +687,7 @@ run_auxiliary_test "entrypoint_checker" 60 python3 -B "$SCRIPT_DIR/test_entrypoi
 run_auxiliary_test "numeric_literals" 30 python3 -B "$SCRIPT_DIR/test_numeric_literals.py" "$PROJECT_DIR"
 run_auxiliary_test "class_layout" 30 python3 -B "$SCRIPT_DIR/test_class_layout.py" "$PROJECT_DIR"
 run_auxiliary_test "incremental_compilation" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR"
+run_auxiliary_test "incremental_compilation_integration" 600 python3 -B "$SCRIPT_DIR/test_incremental_compilation.py" "$PROJECT_DIR" --integration
 run_auxiliary_test "address_provenance" 600 python3 -B "$SCRIPT_DIR/test_address_provenance.py" "$PROJECT_DIR"
 run_auxiliary_test "expression_ownership" 600 python3 -B "$SCRIPT_DIR/test_expression_ownership.py" "$PROJECT_DIR"
 run_auxiliary_test "path_utils" 30 python3 -B "$SCRIPT_DIR/test_path_utils.py" "$PROJECT_DIR"
@@ -718,40 +752,44 @@ run_auxiliary_test "unary_arithmetic_types" 20 python3 -B "$SCRIPT_DIR/test_unar
 run_auxiliary_test "mersenne_twister64_native_abi" 30 python3 -B "$SCRIPT_DIR/test_mersenne_twister64.py" "$COMPILER"
 run_auxiliary_test "normal_distribution_native_abi" 30 python3 -B "$SCRIPT_DIR/test_normal_distribution.py" "$COMPILER"
 
-echo "Testing timeout_process_tree..."
-timeout_test_start_ms=$(now_ms)
-timeout_test_output=$(run_with_timeout 1 python3 -B "$SCRIPT_DIR/test_timeout_process_tree.py" 2>&1)
-timeout_test_exit=$?
-timeout_test_elapsed_ms=$(elapsed_ms_since "$timeout_test_start_ms")
-if [[ $timeout_test_exit -eq 124 && $timeout_test_elapsed_ms -lt 10000 ]]; then
-    append_test_result "PASS" "$GREEN" "timeout_process_tree" "" "$timeout_test_elapsed_ms"
-    ((passed++))
-else
-    append_test_result \
-        "FAIL" "$RED" "timeout_process_tree" \
-        "expected timeout exit 124 within 10000 ms, got exit $timeout_test_exit" "$timeout_test_elapsed_ms"
-    [[ -n "$timeout_test_output" ]] && append_test_output "  $timeout_test_output"
-    ((failed++)) || true
-    failures+=("timeout_process_tree")
+if [[ "$suite" == required ]]; then
+    echo "Testing timeout_process_tree..."
+    timeout_test_start_ms=$(now_ms)
+    timeout_test_output=$(run_with_timeout 1 python3 -B "$SCRIPT_DIR/test_timeout_process_tree.py" 2>&1)
+    timeout_test_exit=$?
+    timeout_test_elapsed_ms=$(elapsed_ms_since "$timeout_test_start_ms")
+    if [[ $timeout_test_exit -eq 124 && $timeout_test_elapsed_ms -lt 10000 ]]; then
+        append_test_result "PASS" "$GREEN" "timeout_process_tree" "" "$timeout_test_elapsed_ms"
+        ((passed++))
+    else
+        append_test_result \
+            "FAIL" "$RED" "timeout_process_tree" \
+            "expected timeout exit 124 within 10000 ms, got exit $timeout_test_exit" "$timeout_test_elapsed_ms"
+        [[ -n "$timeout_test_output" ]] && append_test_output "  $timeout_test_output"
+        ((failed++)) || true
+        failures+=("timeout_process_tree")
+    fi
 fi
 
-echo "Testing lsp_integration..."
-lsp_test_start_ms=$(now_ms)
-lsp_shell="$BASH"
-if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then
-    lsp_shell=$(cygpath -w "$lsp_shell")
-fi
-lsp_test_output=$(run_with_timeout 30 "$lsp_shell" "$SCRIPT_DIR/test_lsp.sh" 2>&1)
-lsp_test_exit=$?
-lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
-if [[ $lsp_test_exit -eq 0 ]]; then
-    append_test_result "PASS" "$GREEN" "lsp_integration" "" "$lsp_test_elapsed_ms"
-    ((passed++))
-else
-    append_test_result "FAIL" "$RED" "lsp_integration" "exit $lsp_test_exit" "$lsp_test_elapsed_ms"
-    [[ -n "$lsp_test_output" ]] && append_test_output "  $lsp_test_output"
-    ((failed++)) || true
-    failures+=("lsp_integration")
+if [[ "$suite" == integration ]]; then
+    echo "Testing lsp_integration..."
+    lsp_test_start_ms=$(now_ms)
+    lsp_shell="$BASH"
+    if [[ "$is_windows" == "true" ]] && command -v cygpath >/dev/null 2>&1; then
+        lsp_shell=$(cygpath -w "$lsp_shell")
+    fi
+    lsp_test_output=$(run_with_timeout 30 "$lsp_shell" "$SCRIPT_DIR/test_lsp.sh" 2>&1)
+    lsp_test_exit=$?
+    lsp_test_elapsed_ms=$(elapsed_ms_since "$lsp_test_start_ms")
+    if [[ $lsp_test_exit -eq 0 ]]; then
+        append_test_result "PASS" "$GREEN" "lsp_integration" "" "$lsp_test_elapsed_ms"
+        ((passed++))
+    else
+        append_test_result "FAIL" "$RED" "lsp_integration" "exit $lsp_test_exit" "$lsp_test_elapsed_ms"
+        [[ -n "$lsp_test_output" ]] && append_test_output "  $lsp_test_output"
+        ((failed++)) || true
+        failures+=("lsp_integration")
+    fi
 fi
 
 total_elapsed_ms=$(elapsed_ms_since "$total_start_ms")
@@ -762,6 +800,10 @@ if [[ $failed -gt 0 ]]; then
 fi
 
 echo "Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total_elapsed_ms} ms total)"
+if [[ "$suite" == required && $total_elapsed_ms -gt 120000 ]]; then
+    printf '%s\n' "${RED}Required tests exceeded the 120-second budget.${NC}"
+    exit 1
+fi
 
 if [[ ${#failures[@]} -gt 0 ]]; then
     # Separate known vs unexpected failures

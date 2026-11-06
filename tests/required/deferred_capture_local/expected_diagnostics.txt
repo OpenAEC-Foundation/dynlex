@@ -1,0 +1,2 @@
+tests/required/deferred_capture_local/main.dl:29-34: Error: Deferred callback cannot capture local variable 'base'
+  note: Local variable is defined here tests/required/deferred_capture_local/main.dl:18-22

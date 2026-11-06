@@ -1,0 +1,112 @@
+import lib/filesystem.dl
+import lib/process.dl
+
+set root to "tests/integration/filesystem_transaction_primitives/tree.tmp"
+set source to "tests/integration/filesystem_transaction_primitives/tree.tmp/original.bin"
+set missing to "tests/integration/filesystem_transaction_primitives/tree.tmp/missing.bin"
+set copy to "tests/integration/filesystem_transaction_primitives/tree.tmp/copied.bin"
+set destination to "tests/integration/filesystem_transaction_primitives/tree.tmp/durable.bin"
+set windows to the process platform is Windows
+
+remove the filesystem tree at root
+create a directory tree at root and set created to it
+print line created succeeded
+
+set absence to the file system entry at missing
+print lines (absence is supported), (absence lookup succeeded) and (absence was absent)
+print line (the length of absence's error message) = 0
+
+write the string form of "old" to the file at source
+set original to the file system entry at source
+print lines (original lookup succeeded), (original was found) and (original is a regular file)
+print lines (original is not a directory) and (original is not a symbolic link)
+print lines (original does not have another filesystem kind) and (original supports modification times)
+print line (original's modification time)'s nanoseconds >= 0
+print lines ((original's modification time)'s nanoseconds < 1000000000) and (original's identity is supported)
+print line original's identity is available
+
+if windows:
+    print lines (original's mode is unsupported) and (original's Windows attributes are supported)
+    print lines (original's Windows attributes >= 0) and (original's Windows attributes <= 4294967295)
+else:
+    print lines (original's mode is supported) and (original's Windows attributes are unsupported)
+    print lines (original's mode >= 0) and (original's mode <= 4095)
+
+set unchanged to the file system entry at source
+print line original's identity identifies the same file as unchanged's identity
+
+set exact to a new string buffer containing 2 bytes
+store 0 as a byte into the data of exact at 0
+store 255 as a byte into the data of exact at 1
+set identity to @intrinsic("construct", a file identity, true, true, exact)
+set identical to @intrinsic("construct", a file identity, true, true, exact)
+print line identity identifies the same file as identical
+
+create a staging file beside exact and set invalid to it
+set message to invalid's error message
+print lines (invalid is supported), (invalid failed) and (the length of message > 0)
+
+create a staging file beside source and set staging to it
+write the string form of "refused" to staging and set staging to it
+print lines (staging is supported) and (staging succeeded)
+
+commit staging where overwriting is false and durability is false and set refused to it
+print lines (refused is supported), (refused's commit outcome is known) and (refused was not committed)
+print lines (refused failed) and (refused's cleanup succeeded)
+read the file at source and print line (it succeeded) and ((the contents of it) = "old")
+
+create a staging file beside source and set first to it
+write the string form of "first" to first and set first to it
+write the string form of "second" to first and set second to it
+print lines (first succeeded) and (second succeeded)
+restore metadata from original to second and set restored to it
+print lines (restored is supported) and (restored succeeded)
+commit restored where overwriting is true and durability is false and set committed to it
+if committed failed:
+    print line committed's error message
+print lines (committed is supported), (committed succeeded) and (committed's commit outcome is known)
+print lines (committed was committed), (committed is not durable) and (committed's cleanup succeeded)
+
+set replaced to the file system entry at source
+if windows:
+    print line replaced's restorable Windows attributes = original's restorable Windows attributes
+else:
+    print line replaced's mode = original's mode
+print line (replaced's access time)'s seconds = (original's access time)'s seconds
+print line (replaced's access time)'s nanoseconds = (original's access time)'s nanoseconds
+print line (replaced's modification time)'s seconds = (original's modification time)'s seconds
+print line (replaced's modification time)'s nanoseconds = (original's modification time)'s nanoseconds
+read the file at source and print line it succeeded
+print line ((the contents of it) = "firstsecond")
+
+create a staging file beside copy and set cancellation to it
+set pathname to cancellation's path
+cancel cancellation and set cancelled to it
+print lines (cancelled is supported), (cancelled succeeded) and (cancelled's cleanup succeeded)
+set remnant to the file system entry at pathname
+print lines (remnant is supported), (remnant lookup succeeded) and (remnant was absent)
+print line (the length of remnant's error message) = 0
+
+set replacement to the string form of "new"
+create a staging file beside copy and set temporary to it
+write replacement to temporary and set temporary to it
+commit temporary where overwriting is false and durability is false and set publication to it
+if publication failed:
+    print line publication's error message
+print lines (publication succeeded), (publication was committed) and (publication's cleanup succeeded)
+read the file at copy and print line (it succeeded) and ((the contents of it) = "new")
+
+create a staging file beside destination and set staging to it
+write the string form of "durable" to staging and set staging to it
+commit staging where overwriting is false and durability is true and set commit to it
+if windows:
+    print lines (commit is unsupported), (commit's commit outcome is known) and (commit was not committed)
+    print line commit's cleanup succeeded
+    set metadata to the file system entry at staging's path
+    print line (metadata lookup succeeded) and (metadata was absent)
+else:
+    print lines (commit is supported), (commit succeeded), (commit's commit outcome is known) and (commit is durable)
+    print line commit's cleanup succeeded
+
+remove the filesystem tree at root and set cleaned to it
+print line cleaned succeeded

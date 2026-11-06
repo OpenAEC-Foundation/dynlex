@@ -25,5 +25,5 @@ fi
 "$SCRIPT_DIR/build.sh" --lint=false
 
 exec gdb --args "$PROJECT_DIR/build/dynlex" \
-    "$PROJECT_DIR/tests/required/specificity/main.dl" \
+    "$PROJECT_DIR/tests/integration/specificity/main.dl" \
     -o /tmp/specificity.out

@@ -1,5 +1,3 @@
-import lib/std.dl
-
 class:
     patterns:
         [a|] duplicate managed value

@@ -433,11 +433,14 @@ bool resolvePatterns(ParseContext &context) {
 	};
 
 	auto appendRequeuedReferences = [&]() {
+		if (referencesToRequeue.empty())
+			return false;
 		bool appended = false;
 		std::sort(referencesToRequeue.begin(), referencesToRequeue.end(), referenceComesBefore);
+		std::unordered_set<PatternReference *> queuedReferences(bodyReferences.begin(), bodyReferences.end());
+		queuedReferences.reserve(bodyReferences.size() + referencesToRequeue.size());
 		for (PatternReference *reference : referencesToRequeue) {
-			if (reference->resolved ||
-				std::find(bodyReferences.begin(), bodyReferences.end(), reference) != bodyReferences.end())
+			if (reference->resolved || !queuedReferences.insert(reference).second)
 				continue;
 			bodyReferences.push_back(reference);
 			appended = true;

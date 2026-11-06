@@ -35,7 +35,7 @@ def main() -> int:
         output = Path(temporary)
         wrapper = output / "normal_distribution_abi.o"
         llvm_output = output / "normal_distribution_abi.ll"
-        run([str(compiler), str(root / "tests/required/normal_distribution_native/abi.dl"),
+        run([str(compiler), str(root / "tests/integration/normal_distribution_native/abi.dl"),
              "--emit-llvm", "--no-main", "-O2", "-ffp-contract=off", "-o", str(llvm_output)], root)
         found = abi_symbols(llvm_output.read_text(encoding="utf-8"))
         selected = {
@@ -214,10 +214,10 @@ int main() {{
 }}
 ''', encoding="utf-8")
         for optimization in ("-O0", "-O2", "-O3"):
-            run([str(compiler), str(root / "tests/required/normal_distribution_native/abi.dl"),
+            run([str(compiler), str(root / "tests/integration/normal_distribution_native/abi.dl"),
                  "--emit-object", "--no-main", optimization, "-ffp-contract=off", "-o", str(wrapper)], root)
             llvm_output = output / f"normal_distribution{optimization}.ll"
-            run([str(compiler), str(root / "tests/required/normal_distribution_native/abi.dl"),
+            run([str(compiler), str(root / "tests/integration/normal_distribution_native/abi.dl"),
                  "--emit-llvm", "--no-main", optimization, "-ffp-contract=off", "-o", str(llvm_output)], root)
             llvm_ir = llvm_output.read_text(encoding="utf-8")
             if "@llvm.log.f32" not in llvm_ir or "@llvm.sqrt.f32" not in llvm_ir:

@@ -22,7 +22,7 @@ if [[ ! -f "$SUPPRESSIONS_FILE" ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-    set -- "$PROJECT_DIR/tests/required/precedence/main.dl" -o /tmp/dynlex_asan_leak_check.out
+    set -- "$PROJECT_DIR/tests/integration/precedence/main.dl" -o /tmp/dynlex_asan_leak_check.out
 fi
 
 LSAN_BASE="suppressions=$SUPPRESSIONS_FILE:print_suppressions=1:exitcode=23"

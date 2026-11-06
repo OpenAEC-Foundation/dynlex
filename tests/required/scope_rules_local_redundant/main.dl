@@ -1,5 +1,3 @@
-import lib/std.dl
-
 in this file, by default:
     functions are local
 

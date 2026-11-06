@@ -1,3 +1,0 @@
-partial conics include their analytic extrema
-signed bulges expand the correct side
-collections combine and invalid or unbounded curves fail

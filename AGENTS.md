@@ -149,7 +149,8 @@ Clang 20+ as the bootstrap compiler, and the pinned LLVM 23 fork built by
 - `src/web/ide/`: Browser IDE source (Vite + Monaco)
 - `web/`: Static web root (site/wiki source + deployed assets)
 - `vscode-extension/`: VS Code extension (TypeScript)
-- `tests/required/`: Required test cases
+- `tests/required/`: Focused compiler test cases; the suite has a two-minute budget after the compiler build.
+- `tests/integration/`: Library and application test cases. CAD geometry and its fixtures live in [dynlex-cadkernel](https://github.com/OpenAEC-Foundation/dynlex-cadkernel).
 
 Implementation details are documented in `docs/stages.md`.
 
@@ -166,9 +167,12 @@ Implementation details are documented in `docs/stages.md`.
 
 ```bash
 ./scripts/test.sh
+./scripts/test.sh --integration
 ./build/dynlex tests/required/simple/main.dl -o tests/required/simple/main.out && ./tests/required/simple/main.out
 ```
 - The test script will build as well. so either run the build or the test script.
+- Required fixtures use no application-library imports. Use local helper files for import behavior tests.
+- Run the integration suite when changing a library or compiler behavior exercised by those fixtures.
 - Compiled test binaries use `.out` extension.
 - Tests may include `expected.txt` (output match) or `expected_diagnostics.txt` (exact diagnostics match after source line numbers are removed). Diagnostic expectations must use `path.dl:column-range` locations; including a source line number makes the test invalid.
 

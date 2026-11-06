@@ -1,0 +1,8 @@
+import lib/std.dl
+import tests/integration/scope_rules_function_scope_local/helper.dl
+
+local function the inner value:
+    execute:
+        return 10
+
+print lines (the outer value) and (the inner value)

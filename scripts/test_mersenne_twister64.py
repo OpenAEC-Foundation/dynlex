@@ -40,7 +40,7 @@ def main() -> int:
         run(
             [
                 str(compiler),
-                str(root / "tests/required/mersenne_twister64_native/abi.dl"),
+                str(root / "tests/integration/mersenne_twister64_native/abi.dl"),
                 "--emit-llvm",
                 "--no-main",
                 "-O2",
@@ -207,7 +207,7 @@ int main() {{
             run(
                 [
                     str(compiler),
-                    str(root / "tests/required/mersenne_twister64_native/abi.dl"),
+                    str(root / "tests/integration/mersenne_twister64_native/abi.dl"),
                     "--emit-object",
                     "--no-main",
                     optimization,

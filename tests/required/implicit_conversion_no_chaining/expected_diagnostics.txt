@@ -1,3 +1,0 @@
-tests/required/implicit_conversion_no_chaining/main.dl:13-41: Error: No overload matches call 'the payload unwrapped from 5' for argument types [a 32-bit integer]. Available overloads: 'the payload unwrapped from {second box:value}'
-  note: while inferring call 'the payload unwrapped from 5' with arguments [a 32-bit integer] -> an unresolved value tests/required/implicit_conversion_no_chaining/main.dl:13-41
-  note: while inferring call 'print line (the payload unwrapped from 5' with arguments [an unresolved value] -> an unresolved value tests/required/implicit_conversion_no_chaining/main.dl:1-41

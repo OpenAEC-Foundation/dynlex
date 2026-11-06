@@ -734,9 +734,13 @@ function-local storage. The entry-point checker validates emitted shader modules
 
 The CLI accepts `--incremental <cache-directory>` for native executables and
 `--incremental-stats` to report reuse. A complete verified, optimized LLVM IR result
-is reusable only while every filesystem observation remains identical. Observations
-include source/config contents, canonical source identities and failed lookup candidates;
-a newly created higher-priority import or configuration therefore invalidates the result.
+is reusable while every filesystem observation remains identical. Source edits that
+only add, remove or change comments or trailing whitespace also reuse the result when
+debug locations, execution traces and diagnostics cannot become stale. The semantic
+comparison uses each source file's configured comment prefix and retains line boundaries
+between executable text. Observations include source/config contents, canonical source
+identities and failed lookup candidates; a newly created higher-priority import or
+configuration therefore invalidates the result.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
