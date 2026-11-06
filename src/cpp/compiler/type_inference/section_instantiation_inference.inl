@@ -42,6 +42,8 @@ bool ensureSectionInstantiationInferred(
 	seedInstantiationCompileTimeParameters(
 		inst, paramBindings, argTypes, inst.requiredCompileTimeParameters, evaluateParameterValue
 	);
+	if (!inst.returnType.isDeduced() && parseContext.reuseInferredInstantiation)
+		parseContext.reuseInferredInstantiation(section, instantiationKey, inst);
 	if (inst.returnType.isDeduced() && !inst.needsReinfer)
 		return inst.valid;
 	if (inst.inferring)

@@ -10,6 +10,7 @@ class Type;
 } // namespace llvm
 
 struct LLVMClassLayout {
+	llvm::StructType *structType = nullptr;
 	std::vector<unsigned> fieldIndices;
 	std::vector<uint64_t> fieldOffsets;
 	uint64_t allocationSize = 0;
@@ -17,7 +18,6 @@ struct LLVMClassLayout {
 };
 
 LLVMClassLayout layoutLLVMClass(
-	llvm::LLVMContext &context, const llvm::DataLayout &dataLayout, llvm::StructType &structType,
-	const std::vector<llvm::Type *> &fieldTypes, const std::vector<uint64_t> &requestedFieldAlignments,
-	uint64_t requestedClassAlignment
+	llvm::LLVMContext &context, const llvm::DataLayout &dataLayout, const std::vector<llvm::Type *> &fieldTypes,
+	const std::vector<uint64_t> &requestedFieldAlignments, uint64_t requestedClassAlignment
 );

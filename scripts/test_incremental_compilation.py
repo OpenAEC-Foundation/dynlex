@@ -265,8 +265,119 @@ function left times right:
     assert caller_edit[1:] == build(False, entry=leaf_main)[1:], "reused call chain changed active edit behavior"
     leaf_helper.write_text(leaf_helper.read_text().replace('"helper"', '"replacement"'))
     dependency_edit = build(entry=leaf_main)
-    assert dependency_edit[0]["functions_ir_reused"] > 0, "dependency edit regenerated independent function IR"
+    assert dependency_edit[0]["functions_ir_reused"] > 0, f"dependency edit regenerated independent function IR: {dependency_edit[0]}"
     assert dependency_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee retained stale caller IR"
+
+    library_main = root / "library_main.dl"
+    library_source = ('real means: @intrinsic("type", "float", 64)\n'
+                      'to trig:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "m", "sin", real, 1.0))\n'
+                      'to other:\n'
+                      '    @intrinsic("discard", 1)\n'
+                      'trig\nother\n')
+    library_main.write_text(library_source)
+    build(entry=library_main)
+    library_main.write_text(library_source.replace('"discard", 1)', '"discard", 2)'))
+    library_edit = build(entry=library_main)
+    assert library_edit[0]["functions_ir_reused"] > 0, "external-call function IR was regenerated"
+    assert library_edit[1:] == build(False, entry=library_main)[1:], "reused function lost its link library"
+
+    partition_main = root / "partition_main.dl"
+    partition_main.write_text('integer means: @intrinsic("type", "int")\n' +
+                              ''.join(f'import part{i:02d}.dl\n' for i in range(20)) +
+                              ''.join(f'part{i:02d}\n' for i in range(20)))
+    for index in range(20):
+        (root / f"part{index:02d}.dl").write_text(
+            f"to part{index:02d}:\n" +
+            ''.join('    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, '
+                    f'"part{index:02d}-{line:02d}"))\n' for line in range(5)))
+    build(entry=partition_main)
+    edited_partition = root / "part07.dl"
+    edited_partition.write_text(edited_partition.read_text().replace('"part07-00"', '"changed"'))
+    partition_edit = build(entry=partition_main)
+    assert partition_edit[0]["inference_instantiations_reused"] >= 19, f"unchanged function bodies were re-inferred: {partition_edit[0]}"
+    assert partition_edit[0]["functions_ir_reused"] == 19
+    assert partition_edit[0]["objects_built"] <= 3, f"one function edit rebuilt unrelated object partitions: {partition_edit[0]}"
+    assert partition_edit[1:] == build(False, entry=partition_main)[1:]
+    for index in (8, 9):
+        path = root / f"part{index:02d}.dl"
+        path.write_text(path.read_text().replace(f'"part{index:02d}-00"', f'"updated-{index}"'))
+    multi_file_edit = build(entry=partition_main)
+    assert multi_file_edit[0]["inference_instantiations_reused"] == 18
+    assert multi_file_edit[0]["functions_ir_reused"] == 18
+    assert multi_file_edit[1:] == build(False, entry=partition_main)[1:]
+
+    class_main = root / "class_main.dl"
+    class_source = ('integer means: @intrinsic("type", "int")\n'
+                    'class:\n'
+                    '    patterns:\n'
+                    '        a record\n'
+                    '    members:\n'
+                    '        value\n'
+                    'to alpha:\n'
+                    '    @intrinsic("discard", @intrinsic("construct", a record, 1))\n'
+                    '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                    'to beta:\n'
+                    '    @intrinsic("discard", @intrinsic("construct", a record, 2))\n'
+                    '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                    'alpha\nbeta\n')
+    class_main.write_text(class_source)
+    build(entry=class_main)
+    class_main.write_text(class_source.replace('"alpha"))', '"changed"))'))
+    class_edit = build(entry=class_main)
+    assert class_edit[0]["inference_instantiations_reused"] >= 1, "class program re-inferred unchanged function"
+    assert class_edit[0]["functions_ir_reused"] >= 1, "class program regenerated unchanged function IR"
+    assert class_edit[1:] == build(False, entry=class_main)[1:], "class edit differs from clean build"
+
+    argument_main = root / "argument_main.dl"
+    argument_source = ('integer means: @intrinsic("type", "int")\n'
+                       'to alpha {integer:value}:\n'
+                       '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                       'to beta {integer:value}:\n'
+                       '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                       'alpha 1\nbeta 2\n')
+    argument_main.write_text(argument_source)
+    build(entry=argument_main)
+    argument_main.write_text(argument_source.replace('"alpha"))', '"changed"))'))
+    argument_edit = build(entry=argument_main)
+    assert argument_edit[0]["inference_instantiations_reused"] >= 1, "typed argument function was re-inferred"
+    assert argument_edit[0]["functions_ir_reused"] >= 1, "typed argument function IR was regenerated"
+    assert argument_edit[1:] == build(False, entry=argument_main)[1:], "typed argument edit differs from clean build"
+
+    result_main = root / "result_main.dl"
+    result_source = ('integer means: @intrinsic("type", "int")\n'
+                     'function alpha:\n'
+                     '    execute:\n'
+                     '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                     '        @intrinsic("return", 41)\n'
+                     'function beta:\n'
+                     '    execute:\n'
+                     '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                     '        @intrinsic("return", 42)\n'
+                     '@intrinsic("discard", alpha)\n@intrinsic("discard", beta)\n')
+    result_main.write_text(result_source)
+    build(entry=result_main)
+    result_main.write_text(result_source.replace('"alpha"))', '"changed"))'))
+    result_edit = build(entry=result_main)
+    assert result_edit[0]["inference_instantiations_reused"] >= 1, "runtime result function was re-inferred"
+    assert result_edit[0]["functions_ir_reused"] >= 1, "runtime result function IR was regenerated"
+    assert result_edit[1:] == build(False, entry=result_main)[1:], "runtime result edit differs from clean build"
+
+    warning_code_main = root / "warning_code_main.dl"
+    warning_code_source = ('integer means: @intrinsic("type", "int")\n'
+                           'to show value as the value: @intrinsic("discard", value)\n'
+                           'to alpha:\n'
+                           '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                           'to beta:\n'
+                           '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                           'alpha\nbeta\n')
+    warning_code_main.write_text(warning_code_source)
+    warning_cold = build(entry=warning_code_main)
+    assert "Warning:" in warning_cold[1]
+    warning_code_main.write_text(warning_code_source.replace('"alpha"))', '"changed"))'))
+    warning_edit = build(entry=warning_code_main)
+    assert warning_edit[0]["functions_ir_reused"] >= 1, "warning disabled safe function IR reuse"
+    assert warning_edit[1:] == build(False, entry=warning_code_main)[1:], "warning changed after code edit"
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)

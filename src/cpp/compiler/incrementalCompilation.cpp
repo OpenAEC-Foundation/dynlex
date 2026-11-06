@@ -44,7 +44,7 @@ namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
-constexpr unsigned partitionCount = 32;
+constexpr unsigned partitionCount = 4;
 using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
@@ -318,10 +318,17 @@ Json sourceProjection(const ParseContext &context, const std::unordered_set<cons
 	return sources;
 }
 
-Json captureInactiveProjection(const ParseContext &context, const Json *priorInactive = nullptr) {
+Json captureInactiveProjection(
+	const ParseContext &context, const Json *priorInactive = nullptr,
+	const std::set<std::string> *generatedFunctionPaths = nullptr
+) {
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
 	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(sections);
+	if (generatedFunctionPaths) {
+		for (const std::string &path : *generatedFunctionPaths)
+			inactive.erase(path);
+	}
 	std::unordered_set<const Section *> selected;
 	for (const auto &[path, identity] : inactive.items()) {
 		auto section = sections.find(path);
@@ -431,10 +438,6 @@ eligibleFunctionSections(const ParseContext &context, const Json &previous, cons
 		return eligible;
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
-	if (std::ranges::any_of(sections, [](const auto &entry) {
-		return entry.second->type == SectionType::Class;
-	}))
-		return eligible;
 	Json currentProjection = captureAllFunctionProjection(context);
 	const Json &priorProjection = previous.at("all_function_projection");
 	if (currentProjection.at("declarations") != priorProjection.at("declarations") ||
@@ -450,7 +453,7 @@ eligibleFunctionSections(const ParseContext &context, const Json &previous, cons
 	std::unordered_set<Section *> visiting;
 	for (const auto &[_, section] : sections) {
 		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-			!section->instantiations.empty() && functionDependenciesUnchanged(section, unchanged, memo, visiting))
+			functionDependenciesUnchanged(section, unchanged, memo, visiting))
 			eligible.insert(section);
 	}
 	return eligible;
@@ -642,6 +645,7 @@ struct BuildStatistics {
 	bool reusedFrontend = false;
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
+	size_t reusedInferenceInstantiations = 0;
 	size_t reusedFunctionIR = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
@@ -650,6 +654,9 @@ struct BuildStatistics {
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
+	double irGenerationMilliseconds = 0;
+	double partitionMilliseconds = 0;
+	double linkMilliseconds = 0;
 	std::vector<std::string> objectKeys;
 };
 
@@ -689,56 +696,8 @@ void restoreCachedModule(ParseContext &context, const Json &cached, const fs::pa
 	context.llvmModule = module.release();
 }
 
-bool emitPartitions(
-	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
-	const std::vector<std::string> &libraries, BuildStatistics &statistics
-) {
-	TemporaryObjects temporary;
-	std::vector<std::string> objects;
-	std::string prefix = "__dynlex_" + digest(fs::absolute(context.options.inputPath).lexically_normal().string()) + "_";
-	for (llvm::GlobalValue &value : context.llvmModule->global_values()) {
-		if (value.hasLocalLinkage())
-			value.setName(prefix + value.getName().str());
-	}
-	bool success = true;
-	llvm::SplitModule(*context.llvmModule, partitionCount, [&](std::unique_ptr<llvm::Module> part) {
-		if (!success)
-			return;
-		bool hasDefinition =
-			std::any_of(part->global_values().begin(), part->global_values().end(), [](const llvm::GlobalValue &value) {
-			return !value.isDeclaration();
-		});
-		if (!hasDefinition && part->getModuleInlineAsm().empty())
-			return;
-		llvm::ModuleAnalysisManager analyses;
-		llvm::StripDeadPrototypesPass().run(*part, analyses);
-		std::string ir = renderModule(*part);
-		std::string key = digest(compilerIdentity + options.dump() + ir);
-		statistics.objectKeys.push_back(key);
-		fs::path entry = directory / ("object-" + key + ".entry");
-		fs::path object = temporary.directory / (std::to_string(objects.size()) + ".o");
-		if (std::optional<std::string> cached = readEntry(entry)) {
-			std::ofstream output(object, std::ios::binary);
-			output.write(cached->data(), cached->size());
-			output.close();
-			if (!output)
-				throw std::runtime_error("cannot materialize cached object: " + object.string());
-			statistics.reusedObjects++;
-		} else {
-			if (!emitNativeObjectModule(context, *part, object.string())) {
-				success = false;
-				return;
-			}
-			writeEntry(entry, readFile(object));
-			statistics.builtObjects++;
-		}
-		objects.push_back(object.string());
-	});
-	bool linked = success && emitNativeExecutableWithObjects(context, objects, libraries);
-	fs::remove_all(temporary.directory);
-	temporary.directory.clear();
-	return linked;
-}
+#include "incrementalCompilationPartitions.inl"
+#include "incrementalInferenceReuse.inl"
 } // namespace
 
 bool compileIncrementally(
@@ -819,10 +778,41 @@ bool compileIncrementally(
 			Json inactiveProjection;
 			bool reuseTypeInference =
 				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
+			std::map<const Section *, std::string> sectionPaths;
+			std::unique_ptr<IncrementalIRReuse> functionReuse;
+			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
+			if (compiled && !reuseTypeInference) {
+				std::map<std::string, Section *> sections;
+				collectSections(context.mainSection, "root", sections);
+				for (const auto &[path, section] : sections)
+					sectionPaths.emplace(section, path);
+				if (previous) {
+					std::unordered_set<const Section *> eligible =
+						eligibleFunctionSections(context, *previous, recording->observations);
+					if (!eligible.empty()) {
+						functionReuse = std::make_unique<IncrementalIRReuse>(
+							context, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
+							sectionPaths, eligible
+						);
+						if (previous->at("diagnostics") == "" && context.diagnostics.empty() &&
+							context.scopeRuleWarnings.empty()) {
+							inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
+								context, previous->at("inference_summaries"), *functionReuse, std::move(eligible)
+							);
+							context.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
+																	 Instantiation &instantiation) {
+								return inferenceReuse->reuse(section, key, instantiation);
+							};
+						}
+					}
+				}
+			}
 			stageStart = Clock::now();
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
+			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
+			context.reuseInferredInstantiation = {};
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};
@@ -856,35 +846,22 @@ bool compileIncrementally(
 					writeEntry(programEntry, result.dump());
 				}
 			} else if (compiled) {
-				std::map<std::string, Section *> sections;
-				collectSections(context.mainSection, "root", sections);
-				std::map<const Section *, std::string> sectionPaths;
-				for (const auto &[path, section] : sections)
-					sectionPaths.emplace(section, path);
 				std::map<std::string, std::string> functionSections;
 				context.recordGeneratedFunction = [&](Section *section, llvm::Function *function) {
 					functionSections.emplace(function->getName().str(), sectionPaths.at(section));
 				};
-				std::unique_ptr<IncrementalIRReuse> functionReuse;
-				if (previous) {
-					std::unordered_set<const Section *> eligible =
-						eligibleFunctionSections(context, *previous, recording->observations);
-					if (!eligible.empty()) {
-						functionReuse = std::make_unique<IncrementalIRReuse>(
-							context, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
-							sectionPaths, std::move(eligible)
-						);
-						context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
-															 llvm::Function *function) {
-							return functionReuse->reuse(section, instantiation, function);
-						};
-						context.importReusedFunctions = [&](ParseContext &compiled) {
-							return functionReuse->import(compiled);
-						};
-					}
+				if (functionReuse) {
+					context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
+														 llvm::Function *function) {
+						return functionReuse->reuse(section, instantiation, function);
+					};
+					context.importReusedFunctions = [&](ParseContext &compiled) {
+						return functionReuse->import(compiled);
+					};
 				}
 				stageStart = Clock::now();
 				success = generateCode(context, [&](ParseContext &compiled) {
+					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
@@ -911,13 +888,18 @@ bool compileIncrementally(
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher();
-					result["inactive_projection"] = captureInactiveProjection(compiled);
 					result["all_function_projection"] = captureAllFunctionProjection(compiled);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames())
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
 					}
 					result["function_sections"] = functionSections;
+					std::set<std::string> generatedFunctionPaths;
+					for (const auto &[_, path] : functionSections)
+						generatedFunctionPaths.insert(path);
+					result["inactive_projection"] = captureInactiveProjection(compiled, nullptr, &generatedFunctionPaths);
+					result["inference_summaries"] =
+						inferenceReuse ? inferenceReuse->snapshot(sectionPaths) : captureInferenceSummaries(sectionPaths);
 					recordSemanticSources(result, *recording, compiled);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {
@@ -950,6 +932,7 @@ bool compileIncrementally(
 			std::cerr << "incremental: "
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
 							  {"type_inference_reused", statistics.reusedTypeInference},
+							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
@@ -962,6 +945,9 @@ bool compileIncrementally(
 							  {"resolve_ms", context.frontendStageMilliseconds[2]},
 							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
 							  {"inference_ms", statistics.inferenceMilliseconds},
+							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
+							  {"partition_ms", statistics.partitionMilliseconds},
+							  {"link_ms", statistics.linkMilliseconds},
 							  {"codegen_and_link_ms", statistics.codegenMilliseconds}}
 							 .dump()
 					  << '\n';

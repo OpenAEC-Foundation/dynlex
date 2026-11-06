@@ -10,8 +10,7 @@
 	if (!isPointerCall) {
 		std::string library = getCompileTimeString(context, args[1]);
 		funcName = getCompileTimeString(context, args[2]);
-		if (!library.empty() && library != "libc")
-			context.requiredLibraries.insert(library);
+		recordRequiredLibrary(context, library);
 	}
 
 	llvm::Type *returnLLVMType = getLLVMType(context, returnType);

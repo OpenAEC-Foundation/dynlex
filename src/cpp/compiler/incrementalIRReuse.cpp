@@ -1,4 +1,5 @@
 #include "incrementalIRReuse.h"
+#include "codegen/libraryDependencies.h"
 #include "parseContext.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/Constants.h"
@@ -51,7 +52,7 @@ IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
 	std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections
 )
-	: previousFunctions(previousFunctions), sectionPaths(std::move(sectionPaths)),
+	: currentModule(context.llvmModule), previousFunctions(previousFunctions), sectionPaths(std::move(sectionPaths)),
 	  eligibleSections(std::move(eligibleSections)) {
 	llvm::SMDiagnostic diagnostic;
 	previousModule = llvm::parseAssemblyString(previousIR, diagnostic, *context.llvmContext);
@@ -82,6 +83,25 @@ bool IncrementalIRReuse::reusableClosure(
 			return false;
 	}
 	return true;
+}
+
+bool IncrementalIRReuse::hasReusableIRForSection(const Section *section) const {
+	if (!eligibleSections.contains(section))
+		return false;
+	const std::string &path = sectionPaths.at(section);
+	bool found = false;
+	for (const auto &[name, owner] : previousFunctions.items()) {
+		if (owner != path)
+			continue;
+		const llvm::Function *function = previousModule->getFunction(name);
+		if (!function || function->isDeclaration())
+			return false;
+		std::unordered_set<std::string> closure;
+		if (!reusableClosure(*function, *currentModule, closure))
+			return false;
+		found = true;
+	}
+	return found;
 }
 
 bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function *function) {
@@ -121,6 +141,7 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 		if (!function || function->isDeclaration())
 			throw std::runtime_error("cached function IR was not linked: " + name);
 		function->setLinkage(llvm::GlobalValue::InternalLinkage);
+		restoreRequiredLibraries(context, *function);
 	}
 	return true;
 }

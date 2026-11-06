@@ -83,6 +83,7 @@ struct ParseContext {
 	// Native incremental builds may import a previously generated function body
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
+	std::function<bool(Section *, const InstantiationKey &, Instantiation &)> reuseInferredInstantiation;
 	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};

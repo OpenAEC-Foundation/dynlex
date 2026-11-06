@@ -55,6 +55,12 @@
 	} else {
 		requireCompilerInvariant(inst.argumentTypes == argTypes, "Instantiation argumentTypes diverged from map key");
 	}
+	if (!inst.returnType.isDeduced() && context.parseContext.reuseInferredInstantiation) {
+		if (!inst.body)
+			inst.body = context.cloneSectionBody(matchedSection);
+		seedInstantiationParameterTypes(inst, paramBindings, argTypes);
+		context.parseContext.reuseInferredInstantiation(matchedSection, instantiationKey, inst);
+	}
 	std::optional<InstantiationKey> refinedInstantiationKey;
 	bool hasReusableInstantiation = inst.valid && inst.returnType.isDeduced() && !inst.needsReinfer;
 	if (!inst.inferring && !hasReusableInstantiation) {
