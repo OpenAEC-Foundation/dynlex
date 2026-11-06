@@ -1,4 +1,4 @@
-static llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
+llvm::Value *generateStringConstant(ParseContext &context, const std::string &value) {
 	// Strings are currently i8* pointers to constant data. Runtime string
 	// operations remain the responsibility of the string library.
 	auto &builder = static_cast<llvm::IRBuilder<> &>(*context.llvmBuilder);
@@ -9,7 +9,9 @@ static llvm::Value *generateStringConstant(ParseContext &context, const std::str
 			strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
 		);
 	}
-	std::string globalName = ".str." + std::to_string(context.stringConstants.size());
+	llvm::SHA256 hash;
+	hash.update(llvm::StringRef(value));
+	std::string globalName = ".dynlex.string." + llvm::toHex(hash.final(), true);
 	llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, value, true);
 	llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
 		*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName

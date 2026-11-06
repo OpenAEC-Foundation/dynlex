@@ -2,6 +2,8 @@
 #include "codegen/codegen.h"
 #include "codegen/native.h"
 #include "compiler.h"
+#include "expression.h"
+#include "incrementalIRReuse.h"
 #include "incrementalMatcherCache.h"
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
@@ -326,6 +328,128 @@ Json captureInactiveProjection(const ParseContext &context, const Json *priorIna
 	};
 }
 
+Json captureAllFunctionProjection(const ParseContext &context) {
+	std::map<std::string, Section *> sections;
+	collectSections(context.mainSection, "root", sections);
+	Json selected = Json::object();
+	std::map<const Section *, std::string> bodies;
+	for (const auto &[path, section] : sections) {
+		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
+			if (!containsNestedDefinition(*section))
+				selected[path] = sectionIdentity(*section);
+			bodies.emplace(section, "");
+		}
+	}
+	for (const CodeLine *line : context.codeLines) {
+		for (const Section *section = line->section; section; section = section->parent) {
+			auto body = bodies.find(section);
+			if (body != bodies.end()) {
+				body->second.append(line->rightTrimmedText);
+				body->second += '\n';
+			}
+		}
+	}
+	Json projection = captureInactiveProjection(context, &selected);
+	Json bodyDigests = Json::object();
+	for (const auto &[path, section] : sections) {
+		if (auto body = bodies.find(section); body != bodies.end())
+			bodyDigests[path] = digest(body->second);
+	}
+	projection["bodies"] = std::move(bodyDigests);
+	return projection;
+}
+
+bool functionDependenciesUnchanged(
+	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
+	std::unordered_set<Section *> &visiting
+) {
+	auto cached = memo.find(section);
+	if (cached != memo.end())
+		return cached->second;
+	if (!unchanged.at(section))
+		return memo[section] = false;
+	if (!visiting.insert(section).second)
+		return false;
+	bool safe = true;
+	std::function<void(const PatternMatch &)> checkMatch = [&](const PatternMatch &match) {
+		for (PatternDefinition *definition : match.matchingDefinitions) {
+			if (definition->section != section &&
+				!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting))
+				safe = false;
+		}
+		for (const PatternMatch &subMatch : match.subMatches)
+			checkMatch(subMatch);
+	};
+	std::function<void(Section *)> checkBody = [&](Section *body) {
+		for (PatternReference *reference : body->patternReferences) {
+			if (reference->match)
+				checkMatch(*reference->match);
+		}
+		for (Section *child : body->children) {
+			if (child->patternDefinitions.empty())
+				checkBody(child);
+		}
+	};
+	checkBody(section);
+	for (const auto &[_, instantiation] : section->instantiations) {
+		std::function<void(const InstantiatedSectionBody *)> checkInferredBody = [&](const InstantiatedSectionBody *body) {
+			if (!body)
+				return;
+			for (Expression *expression : body->lineExpressions) {
+				visitExpressionTree(expression, [&](Expression *node) {
+					for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
+						if (definition && definition->section != section &&
+							!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting))
+							safe = false;
+					}
+					return false;
+				});
+			}
+			for (const auto &child : body->childBodies)
+				checkInferredBody(child.get());
+		};
+		checkInferredBody(instantiation.body.get());
+	}
+	visiting.erase(section);
+	return memo[section] = safe;
+}
+
+bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
+
+std::unordered_set<const Section *>
+eligibleFunctionSections(const ParseContext &context, const Json &previous, const Json &currentObservations) {
+	std::unordered_set<const Section *> eligible;
+	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
+		!previous.contains("all_function_projection") || !previous.contains("function_sections") ||
+		!compatibleObservations(previous, currentObservations, context))
+		return eligible;
+	std::map<std::string, Section *> sections;
+	collectSections(context.mainSection, "root", sections);
+	if (std::ranges::any_of(sections, [](const auto &entry) {
+		return entry.second->type == SectionType::Class;
+	}))
+		return eligible;
+	Json currentProjection = captureAllFunctionProjection(context);
+	const Json &priorProjection = previous.at("all_function_projection");
+	if (currentProjection.at("declarations") != priorProjection.at("declarations") ||
+		currentProjection.at("sources") != priorProjection.at("sources") ||
+		currentProjection.at("inactive") != priorProjection.at("inactive"))
+		return eligible;
+	const Json &previousBodies = priorProjection.at("bodies");
+	const Json &currentBodies = currentProjection.at("bodies");
+	std::unordered_map<const Section *, bool> unchanged;
+	for (const auto &[path, section] : sections)
+		unchanged[section] = !currentBodies.contains(path) || currentBodies.at(path) == previousBodies.at(path);
+	std::unordered_map<Section *, bool> memo;
+	std::unordered_set<Section *> visiting;
+	for (const auto &[_, section] : sections) {
+		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
+			!section->instantiations.empty() && functionDependenciesUnchanged(section, unchanged, memo, visiting))
+			eligible.insert(section);
+	}
+	return eligible;
+}
+
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
 	if (before.size() != current.size())
@@ -512,6 +636,7 @@ struct BuildStatistics {
 	bool reusedFrontend = false;
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
+	size_t reusedFunctionIR = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
 	size_t matcherCacheHits = 0;
@@ -718,6 +843,33 @@ bool compileIncrementally(
 					writeEntry(programEntry, result.dump());
 				}
 			} else if (compiled) {
+				std::map<std::string, Section *> sections;
+				collectSections(context.mainSection, "root", sections);
+				std::map<const Section *, std::string> sectionPaths;
+				for (const auto &[path, section] : sections)
+					sectionPaths.emplace(section, path);
+				std::map<std::string, std::string> functionSections;
+				context.recordGeneratedFunction = [&](Section *section, llvm::Function *function) {
+					functionSections.emplace(function->getName().str(), sectionPaths.at(section));
+				};
+				std::unique_ptr<IncrementalIRReuse> functionReuse;
+				if (previous) {
+					std::unordered_set<const Section *> eligible =
+						eligibleFunctionSections(context, *previous, recording->observations);
+					if (!eligible.empty()) {
+						functionReuse = std::make_unique<IncrementalIRReuse>(
+							context, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
+							sectionPaths, std::move(eligible)
+						);
+						context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
+															 llvm::Function *function) {
+							return functionReuse->reuse(section, instantiation, function);
+						};
+						context.importReusedFunctions = [&](ParseContext &compiled) {
+							return functionReuse->import(compiled);
+						};
+					}
+				}
 				success = generateCode(context, [&](ParseContext &compiled) {
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
@@ -746,6 +898,12 @@ bool compileIncrementally(
 					};
 					result["matcher_key"] = saveMatcher();
 					result["inactive_projection"] = captureInactiveProjection(compiled);
+					result["all_function_projection"] = captureAllFunctionProjection(compiled);
+					if (functionReuse) {
+						for (const std::string &name : functionReuse->reusedFunctionNames())
+							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
+					}
+					result["function_sections"] = functionSections;
 					recordSemanticSources(result, *recording, compiled);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {
@@ -766,6 +924,10 @@ bool compileIncrementally(
 					writeEntry(programEntry, result.dump());
 					return true;
 				});
+				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;
+				context.recordGeneratedFunction = {};
+				context.reuseGeneratedFunction = {};
+				context.importReusedFunctions = {};
 			}
 		}
 		trimCache(directory);
@@ -773,6 +935,7 @@ bool compileIncrementally(
 			std::cerr << "incremental: "
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
 							  {"type_inference_reused", statistics.reusedTypeInference},
+							  {"functions_ir_reused", statistics.reusedFunctionIR},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},

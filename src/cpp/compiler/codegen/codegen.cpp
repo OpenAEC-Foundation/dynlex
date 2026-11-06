@@ -19,6 +19,7 @@
 #include "type.h"
 #include "variable.h"
 #include "wasm.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/SHA256.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
@@ -202,6 +204,12 @@ llvm::Function *generateSpecializedFunction(
 
 	llvm::Function *func = llvm::Function::Create(funcType, llvm::Function::InternalLinkage, funcName, context.llvmModule);
 	activeInst.llvmFunctionsByParameterAddressSpaces.emplace(std::move(parameterAddressSpaces), func);
+	if (context.recordGeneratedFunction)
+		context.recordGeneratedFunction(section, func);
+	if (context.reuseGeneratedFunction && context.reuseGeneratedFunction(section, activeInst, func)) {
+		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		return func;
+	}
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {

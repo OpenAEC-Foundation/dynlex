@@ -289,6 +289,7 @@ set(DYNLEX_LLVM_COMMON_COMPONENTS
 # Native builds additionally need the host backend.
 set(DYNLEX_LLVM_NATIVE_COMPONENTS
     ${DYNLEX_LLVM_COMMON_COMPONENTS}
+    linker
     native
     SPIRV
 )
@@ -629,6 +630,7 @@ if(DYNLEX_WEB)
     set(DYNLEX_WEB_SOURCES ${PROJECT_SOURCES})
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalCompilation\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalMatcherCache\\.cpp$")
+    list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/compiler/incrementalIRReuse\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/dap/.*\\.cpp$")
     list(FILTER DYNLEX_WEB_SOURCES EXCLUDE REGEX "src/cpp/lsp/tcpTransport\\.cpp$")

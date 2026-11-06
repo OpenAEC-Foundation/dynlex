@@ -244,6 +244,30 @@ function left times right:
     assert edited[0]["objects_reused"] > 0 and edited[0]["objects_built"] > 0, "edit did not selectively rebuild objects"
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
 
+    leaf_a = root / "leaf_a.dl"
+    leaf_b = root / "leaf_b.dl"
+    leaf_helper = root / "leaf_helper.dl"
+    leaf_types = root / "leaf_types.dl"
+    leaf_main = root / "leaf_main.dl"
+    leaf_types.write_text('integer means: @intrinsic("type", "int")\n')
+    leaf_helper.write_text('to helper:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "helper"))\n')
+    leaf_a.write_text('to alpha:\n    helper\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\nto sibling:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "sibling"))\n')
+    leaf_b.write_text('to beta:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "second"))\n')
+    leaf_main.write_text('import leaf_types.dl\nimport leaf_helper.dl\nimport leaf_a.dl\nimport leaf_b.dl\nalpha\nsibling\nbeta\n')
+    build(entry=leaf_main)
+    leaf_a.write_text(leaf_a.read_text().replace('"first"', '"changed"'))
+    leaf_edit = build(entry=leaf_main)
+    assert leaf_edit[0]["functions_ir_reused"] >= 3, "active edit regenerated independent or same-file function IR"
+    assert leaf_edit[1:] == build(False, entry=leaf_main)[1:], "reused function IR changed active edit behavior"
+    leaf_b.write_text(leaf_b.read_text().replace('"second"', '"updated"'))
+    caller_edit = build(entry=leaf_main)
+    assert caller_edit[0]["functions_ir_reused"] >= 2, "unchanged caller and callee were regenerated"
+    assert caller_edit[1:] == build(False, entry=leaf_main)[1:], "reused call chain changed active edit behavior"
+    leaf_helper.write_text(leaf_helper.read_text().replace('"helper"', '"replacement"'))
+    dependency_edit = build(entry=leaf_main)
+    assert dependency_edit[0]["functions_ir_reused"] > 0, "dependency edit regenerated independent function IR"
+    assert dependency_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee retained stale caller IR"
+
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)
         assert not changed[0]["frontend_reused"], "option change retained frontend result"

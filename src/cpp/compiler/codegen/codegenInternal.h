@@ -60,6 +60,7 @@ std::string getPatternFunctionName(Section *section);
 void allocateSectionVariables(ParseContext &context, Section *section, InstantiatedSectionBody *body = nullptr);
 LValueAddressResult generateLValueAddress(ParseContext &context, Expression *expr);
 llvm::Value *ensureType(ParseContext &context, llvm::Value *val, DataType fromType, DataType toType);
+llvm::Value *generateStringConstant(ParseContext &context, const std::string &value);
 
 // Managed-value lifecycle (managedLifecycle.cpp)
 bool managedExpressionResultIsOwned(ParseContext &context, Expression *expression);

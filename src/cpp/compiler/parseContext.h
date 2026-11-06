@@ -79,6 +79,11 @@ struct ParseContext {
 	// Installed by native incremental builds while the frontend is being compiled.
 	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
 	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
+	// Native incremental builds may import a previously generated function body
+	// after this compilation has inferred its current types and selected calls.
+	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
+	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
+	std::function<bool(ParseContext &)> importReusedFunctions;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;

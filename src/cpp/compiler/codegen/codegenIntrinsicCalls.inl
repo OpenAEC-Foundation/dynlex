@@ -31,15 +31,7 @@
 		DataType argumentType = finalizedExpressionType(context, args[i]);
 		if (args[i]->kind == Expression::Kind::Literal) {
 			if (auto *str = std::get_if<std::string>(&args[i]->literalValue)) {
-				std::string globalName = ".str." + std::to_string(context.stringConstants.size());
-				llvm::Constant *strConst = llvm::ConstantDataArray::getString(*context.llvmContext, *str, true);
-				llvm::GlobalVariable *strGlobal = new llvm::GlobalVariable(
-					*context.llvmModule, strConst->getType(), true, llvm::GlobalValue::PrivateLinkage, strConst, globalName
-				);
-				context.stringConstants[*str] = strGlobal;
-				callArgs.push_back(builder.CreateInBoundsGEP(
-					strGlobal->getValueType(), strGlobal, {builder.getInt64(0), builder.getInt64(0)}, "str_ptr"
-				));
+				callArgs.push_back(generateStringConstant(context, *str));
 				callArgumentTypes.push_back(argumentType);
 				continue;
 			}

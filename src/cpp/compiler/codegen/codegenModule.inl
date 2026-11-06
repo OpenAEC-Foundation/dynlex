@@ -252,6 +252,8 @@ bool generateCode(ParseContext &context, const std::function<bool(ParseContext &
 			context.llvmModule->getOrInsertNamedMetadata("spirv.ExecutionMode")->addOperand(execModeNode);
 		}
 	}
+	if (context.importReusedFunctions && !context.importReusedFunctions(context))
+		return false;
 
 	// Finalize debug info before verification
 	if (context.diBuilder)
