@@ -20,6 +20,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Object/BuildID.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Support/BLAKE3.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/SHA256.h"
 #include "llvm/Support/SourceMgr.h"
@@ -56,7 +57,7 @@ double elapsedMilliseconds(Clock::time_point start) {
 }
 
 std::string digest(std::string_view text) {
-	llvm::SHA256 hash;
+	llvm::BLAKE3 hash;
 	hash.update(llvm::StringRef(text.data(), text.size()));
 	return llvm::toHex(hash.final(), true);
 }
