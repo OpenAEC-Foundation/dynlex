@@ -30,6 +30,19 @@ static bool samePatternMatchSyntax(const PatternMatch &left, const PatternMatch 
 
 using PrecedenceMatchChanges = std::vector<std::pair<PatternReference *, std::unique_ptr<PatternMatch>>>;
 
+static bool matchMayChangeWithPrecedence(const PatternMatch &match) {
+	// The precedence pass only rejects matched definitions that outrank an operand.
+	for (const PatternDefinition *definition : match.matchingDefinitions) {
+		requireCompilerInvariant(definition->family != nullptr, "precedence candidate has no syntax family");
+		if (!definition->family->precedenceSuccessors.empty())
+			return true;
+	}
+	for (const PatternMatch &subMatch : match.subMatches)
+		if (matchMayChangeWithPrecedence(subMatch))
+			return true;
+	return false;
+}
+
 static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatchChanges &changes) {
 	std::list<PatternReference *> bodyReferences, globalReferences;
 	std::list<Section *> sections;
@@ -39,6 +52,8 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 	for (PatternReference *reference : bodyReferences) {
 		if (!reference->match)
 			continue; // Single-variable references have no matched function.
+		if (!matchMayChangeWithPrecedence(*reference->match))
+			continue;
 		auto match = std::unique_ptr<PatternMatch>(context.match(reference));
 		if (!match) {
 			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "unresolved pattern", reference->range()));

@@ -81,7 +81,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
     same_file_edit = build()
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
-    assert same_file_edit[0]["precedence_matcher_cache_hits"] > 0, "code edit reran unchanged precedence matches"
     assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
     repeated_calls = "alpha\nbeta\n" * 20
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
@@ -90,7 +89,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source.replace("alpha\nbeta\n", unrelated_definition + repeated_calls))
     unrelated = build()
     assert unrelated[0]["matcher_cache_hits"] >= 20, "unrelated new pattern invalidated unchanged calls"
-    assert unrelated[0]["precedence_matcher_cache_hits"] >= 20, "unrelated new pattern invalidated precedence calls"
     assert unrelated[1:] == build(False)[1:], "unrelated new pattern changed cached matches"
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
     build()
@@ -186,7 +184,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     changed_string = build()
     assert not changed_string[0]["frontend_reused"], "comment marker inside a string was ignored"
     assert changed_string[0]["matcher_cache_hits"] > 0, "one-line body edit invalidated unrelated matches"
-    assert changed_string[0]["precedence_matcher_cache_hits"] > 0, "one-line body edit invalidated precedence matches"
     assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
     unused_source = source + 'to unused:\n    @intrinsic("discard", 1)\n'
     main.write_text(unused_source)
@@ -227,6 +224,10 @@ function left times right:
 '''
     main.write_text(precedence_source.replace("RULE", "before").replace("EXPECTED", "9"))
     build()
+    main.write_text(precedence_source.replace("RULE", "before").replace("EXPECTED", "9") + '@intrinsic("discard", 1)\n')
+    unchanged_precedence = build()
+    assert unchanged_precedence[0]["precedence_matcher_cache_hits"] > 0, "unchanged precedence calls were not reused"
+    assert unchanged_precedence[1:] == build(False)[1:], "cached precedence calls differ from clean build"
     main.write_text(precedence_source.replace("RULE", "after").replace("EXPECTED", "7"))
     precedence_edit = build()
     assert precedence_edit[0]["precedence_matcher_cache_hits"] == 0, "changed precedence reused stale matches"
