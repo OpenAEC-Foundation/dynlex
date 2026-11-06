@@ -37,6 +37,8 @@ Json sourceProjection(
 	for (const auto &[_, source] : context.importedFiles) {
 		std::string projection;
 		std::string_view content = source->content;
+		const std::string &commentPrefix =
+			source->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
 		size_t start = 0;
 		int lineIndex = 0;
 		bool inMaskedRun = false;
@@ -62,7 +64,21 @@ Json sourceProjection(
 				end = content.size();
 			else
 				end++;
-			std::string_view line = content.substr(start, end - start);
+			std::string_view semanticLine = content.substr(start, end - start);
+			if (semanticLine.ends_with('\n'))
+				semanticLine.remove_suffix(1);
+			if (size_t comment = findCommentStart(semanticLine, commentPrefix); comment != std::string_view::npos)
+				semanticLine = semanticLine.substr(0, comment);
+			while (!semanticLine.empty() && std::isspace(static_cast<unsigned char>(semanticLine.back())))
+				semanticLine.remove_suffix(1);
+			if (semanticLine.empty()) {
+				start = end;
+				lineIndex++;
+				continue;
+			}
+			std::string normalizedLine(semanticLine);
+			normalizedLine.push_back('\n');
+			std::string_view line(normalizedLine);
 			bool hasMask = masked[source].contains(lineIndex);
 			bool hasPreserved = preserved[source].contains(lineIndex);
 			if (hasMask && !hasPreserved) {

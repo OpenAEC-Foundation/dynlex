@@ -262,6 +262,8 @@ function left times right:
     leaf_b.write_text('to beta:\n    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "second"))\n')
     leaf_main.write_text('import leaf_types.dl\nimport leaf_helper.dl\nimport leaf_a.dl\nimport leaf_b.dl\nalpha\nsibling\nbeta\n')
     build(entry=leaf_main)
+    leaf_a.write_text('# comment between executable builds\n' + leaf_a.read_text())
+    assert build(entry=leaf_main)[0]["frontend_reused"]
     leaf_a.write_text(leaf_a.read_text().replace('"first"', '"changed"'))
     leaf_edit = build(entry=leaf_main)
     assert leaf_edit[0]["functions_ir_reused"] >= 3, "active edit regenerated independent or same-file function IR"

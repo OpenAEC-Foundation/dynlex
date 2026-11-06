@@ -819,6 +819,9 @@ function leaves that function's identity and cached inference or IR intact.
 When the declaration and surrounding source projections are stable, an edited
 build carries resolved-match fingerprints forward for unchanged function bodies
 and computes fingerprints only for edited bodies.
+These source projections use the configured comment scanner and ignore blank
+lines and trailing whitespace, so a comment-only build does not invalidate the
+next executable edit.
 
 For active edits, the native cache also persists inference summaries for impure
 functions with primitive scalar or pointer arguments and scalar or no return values.
