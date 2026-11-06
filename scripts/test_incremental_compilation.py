@@ -312,6 +312,76 @@ function left times right:
     assert specific_removed[0]["inference_instantiations_reused"] == 0, "removed specific pattern reused stale caller inference"
     assert specific_removed[2] == b"general edited\n" and specific_removed[1:] == build(False, entry=specific_main)[1:]
 
+    pointer_main = root / "pointer_summary.dl"
+    pointer_source = ('integer means: @intrinsic("type", "int")\n'
+                      'a pointer to pointee means: @intrinsic("add pointer depth", pointee)\n'
+                      'class:\n    patterns:\n        [a|] box\n    members:\n        value\n'
+                      'to get the box pointer from {a pointer to a box:address}:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "touch"))\n'
+                      '    @intrinsic("return", address)\n'
+                      'to unrelated:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                      '@intrinsic("store", instance, @intrinsic("construct", a box, 7))\n'
+                      '@intrinsic("store", result, the box pointer from @intrinsic("address of", instance))\n'
+                      '@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+                      '@intrinsic("property", @intrinsic("dereference", result), "value")))\n'
+                      'unrelated\n')
+    pointer_main.write_text(pointer_source)
+    build(entry=pointer_main)
+    pointer_main.write_text(pointer_source.replace('"before"', '"after"'))
+    pointer_edit = build(entry=pointer_main)
+    assert pointer_edit[0]["inference_instantiations_reused"] >= 1, "class-pointer signature re-inferred after unrelated edit"
+    assert pointer_edit[2] == b"touch\n7\nafter\n", "reused class pointer returned the wrong value"
+    assert pointer_edit[1:] == build(False, entry=pointer_main)[1:], "reused pointer summary changed output"
+
+    recursive_main = root / "recursive_dependency.dl"
+    recursive_source = ('integer means: @intrinsic("type", "int")\n'
+                        'section if condition:\n    replacement:\n        @intrinsic("if", condition)\n'
+                        'to first {integer:depth}:\n'
+                        '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+                        '    if @intrinsic("greater than", depth, 0):\n'
+                        '        second @intrinsic("subtract", depth, 1)\n'
+                        'to second {integer:depth}:\n'
+                        '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "second"))\n'
+                        '    if @intrinsic("greater than", depth, 0):\n'
+                        '        first @intrinsic("subtract", depth, 1)\n'
+                        'to unrelated:\n'
+                        '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                        'first 2\nunrelated\n')
+    recursive_main.write_text(recursive_source)
+    build(entry=recursive_main)
+    recursive_main.write_text(recursive_source.replace('"before"', '"after"'))
+    recursive_edit = build(entry=recursive_main)
+    assert recursive_edit[0]["inference_instantiations_reused"] >= 1, f"unchanged recursive dependency cycle was invalidated: {recursive_edit[0]}"
+    assert recursive_edit[0]["functions_ir_reused"] >= 2, "unchanged recursive IR closure was invalidated"
+    assert recursive_edit[1:] == build(False, entry=recursive_main)[1:]
+
+    type_name_main = root / "type_argument_names.dl"
+    type_name_source = ('type means: @intrinsic("type", "type")\n'
+                        'integer means: @intrinsic("type", "int")\n'
+                        'boolean means: @intrinsic("type", "bool")\n'
+                        'to get value as {type:destination}:\n'
+                        '    @intrinsic("return", @intrinsic("cast", value, destination))\n'
+                        'to use conversions:\n'
+                        '    @intrinsic("store", number, @intrinsic("call", "libc", "puts", integer, "input"))\n'
+                        '    @intrinsic("discard", number as integer)\n'
+                        '    @intrinsic("discard", number as boolean)\n'
+                        'to unrelated:\n'
+                        '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                        'use conversions\nunrelated\n')
+    type_name_main.write_text(type_name_source)
+    build(entry=type_name_main)
+    type_name_main.write_text(type_name_source.replace('"before"', '"after"'))
+    type_name_edit = build(entry=type_name_main)
+    assert type_name_edit[1:] == build(False, entry=type_name_main)[1:]
+    llvm_output = root / "type_argument_names.ll"
+    llvm_build = subprocess.run([str(compiler), str(type_name_main), "--emit-llvm", "-o", str(llvm_output)],
+                                cwd=root, capture_output=True, text=True, timeout=120)
+    assert llvm_build.returncode == 0, llvm_build.stderr
+    llvm_text = llvm_output.read_text()
+    assert "_ct_destination_bool" in llvm_text and "_ct_destination_i32" in llvm_text, \
+        "distinct compile-time type arguments received colliding LLVM names"
+
     bounded_cascade = root / "bounded_cascade.dl"
     bounded_source = ('integer means: @intrinsic("type", "int")\n'
                       'to leaf:\n'

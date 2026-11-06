@@ -88,7 +88,7 @@ static std::string encodeInstantiationKeyForFunctionName(const InstantiationKey 
 		else if (const auto *boolean = std::get_if<bool>(&value))
 			suffix += *boolean ? "true" : "false";
 		else if (const auto *typeRef = std::get_if<TypeReferenceValue>(&value))
-			suffix += encodeLLVMNameComponent(typeRef->type.toString());
+			suffix += encodeLLVMNameComponent(typeRef->type.toReferencedType().toString());
 		else if (const auto *constraint = std::get_if<TypeConstraint>(&value))
 			suffix += encodeLLVMNameComponent(constraint->toInternalString());
 		else if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
@@ -210,6 +210,9 @@ llvm::Function *generateSpecializedFunction(
 		func->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		return func;
 	}
+	requireCompilerInvariant(
+		!activeInst.inferenceReusedFromCache, "cached inference summary lost its reusable LLVM function"
+	);
 
 	size_t argIdx = 0;
 	for (auto &arg : func->args()) {

@@ -813,6 +813,10 @@ cached function imports do not renumber type identities or invalidate unrelated
 object partitions. Reused function IR
 retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
+Dependency reachability handles recursive call cycles; an unchanged cycle remains
+reusable when none of its reachable functions changed. Generated function names
+include the destination of compile-time type arguments so overloads retain stable
+identities across edited builds.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
 function leaves that function's identity and cached inference or IR intact.
@@ -824,9 +828,11 @@ lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.
 
 For active edits, the native cache also persists inference summaries for impure
-functions with primitive scalar or pointer arguments and scalar or no return values.
-Summaries record writes, known constants, address provenance, and address escapes for
-global variables. A summary that accesses globals requires the same structural global
+functions with concrete runtime argument and return types, including class pointers.
+Summaries record return address provenance and storage-parameter relationships, plus
+writes, known constants, address provenance, and address escapes for global variables.
+Class type identities include the current instantiation's field types; a changed layout
+prevents reuse. A summary that accesses globals requires the same structural global
 types as the previous build. A summary
 is reused only if its source body, pattern declarations, every matched function
 dependency and its cached IR closure are unchanged. Other instantiations still

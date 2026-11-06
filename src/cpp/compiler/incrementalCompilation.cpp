@@ -300,24 +300,19 @@ Json captureInactiveProjection(
 
 bool functionDependenciesUnchanged(
 	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
-	std::unordered_set<Section *> &visiting, const std::unordered_set<const Section *> &stableBoundaries = {}
+	const std::unordered_set<const Section *> &stableBoundaries = {}
 ) {
 	if (stableBoundaries.contains(section))
 		return true;
 	auto cached = memo.find(section);
 	if (cached != memo.end())
 		return cached->second;
-	if (!unchanged.at(section))
-		return memo[section] = false;
-	if (!visiting.insert(section).second)
-		return false;
+	std::unordered_set<Section *> visited;
+	std::vector<Section *> pending{section};
 	bool safe = true;
 	std::function<void(const PatternMatch &)> checkMatch = [&](const PatternMatch &match) {
-		for (PatternDefinition *definition : match.matchingDefinitions) {
-			if (definition->section != section &&
-				!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting, stableBoundaries))
-				safe = false;
-		}
+		for (PatternDefinition *definition : match.matchingDefinitions)
+			pending.push_back(definition->section);
 		for (const PatternMatch &subMatch : match.subMatches)
 			checkMatch(subMatch);
 	};
@@ -331,27 +326,42 @@ bool functionDependenciesUnchanged(
 				checkBody(child);
 		}
 	};
-	checkBody(section);
-	for (const auto &[_, instantiation] : section->instantiations) {
-		std::function<void(const InstantiatedSectionBody *)> checkInferredBody = [&](const InstantiatedSectionBody *body) {
-			if (!body)
-				return;
-			for (Expression *expression : body->lineExpressions) {
-				visitExpressionTree(expression, [&](Expression *node) {
-					for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
-						if (definition && definition->section != section &&
-							!functionDependenciesUnchanged(definition->section, unchanged, memo, visiting, stableBoundaries))
-							safe = false;
-					}
-					return false;
-				});
-			}
-			for (const auto &child : body->childBodies)
-				checkInferredBody(child.get());
-		};
-		checkInferredBody(instantiation.body.get());
+	auto checkInstantiations = [&](Section *node) {
+		for (const auto &[_, instantiation] : node->instantiations) {
+			std::function<void(const InstantiatedSectionBody *)> checkInferredBody = [&](const InstantiatedSectionBody *body) {
+				if (!body)
+					return;
+				for (Expression *expression : body->lineExpressions) {
+					visitExpressionTree(expression, [&](Expression *node) {
+						for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
+							if (definition)
+								pending.push_back(definition->section);
+						}
+						return false;
+					});
+				}
+				for (const auto &child : body->childBodies)
+					checkInferredBody(child.get());
+			};
+			checkInferredBody(instantiation.body.get());
+		}
+	};
+	while (!pending.empty() && safe) {
+		Section *node = pending.back();
+		pending.pop_back();
+		if (stableBoundaries.contains(node) || !visited.insert(node).second)
+			continue;
+		if (auto known = memo.find(node); known != memo.end()) {
+			safe = known->second;
+			continue;
+		}
+		if (!unchanged.at(node)) {
+			safe = false;
+			break;
+		}
+		checkBody(node);
+		checkInstantiations(node);
 	}
-	visiting.erase(section);
 	return memo[section] = safe;
 }
 
@@ -377,11 +387,10 @@ std::unordered_set<const Section *> eligibleFunctionSections(
 							 unchangedFunctionSource(path, priorProjection, currentProjection) ||
 							 interfaceStableChanges.contains(section);
 	std::unordered_map<Section *, bool> memo;
-	std::unordered_set<Section *> visiting;
 	for (const auto &[_, section] : sections) {
 		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
 			!interfaceStableChanges.contains(section) &&
-			functionDependenciesUnchanged(section, unchanged, memo, visiting, interfaceStableChanges))
+			functionDependenciesUnchanged(section, unchanged, memo, interfaceStableChanges))
 			eligible.insert(section);
 	}
 	return eligible;
@@ -744,8 +753,7 @@ bool compileIncrementally(
 							while (end < plan.requests.size() && plan.requests[end].section == section)
 								end++;
 							std::unordered_map<Section *, bool> memo;
-							std::unordered_set<Section *> visiting;
-							if (!functionDependenciesUnchanged(section, plan.bodyUnchanged, memo, visiting, stable)) {
+							if (!functionDependenciesUnchanged(section, plan.bodyUnchanged, memo, stable)) {
 								std::vector<ParseContext::IncrementalFunctionRequest> variants(
 									plan.requests.begin() + first, plan.requests.begin() + end
 								);

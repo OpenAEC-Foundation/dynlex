@@ -42,6 +42,7 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 		result.bodyUnchanged[section] = !reusableFunctionDeclaration(*section) ||
 									  unchangedFunctionSource(path, prior, current);
 	const Json &summaries = previous.at("inference_summaries");
+	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	std::map<std::string, size_t> generatedFunctionCounts;
 	for (const auto &[_, owner] : previous.at("function_sections").items())
 		generatedFunctionCounts[owner.get<std::string>()]++;
@@ -49,7 +50,6 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	for (const auto &[section, _] : sectionPaths)
 		globalFree[section] = hasNoGlobalAccess(section);
 	std::unordered_map<Section *, bool> globalFreeClosure;
-	std::unordered_set<Section *> visiting;
 	for (const auto &[section, path] : sectionPaths) {
 		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||
 			!summaries.contains(path) || summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
@@ -58,7 +58,7 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 			!current.at("function_declarations").contains(path) ||
 			prior.at("function_declarations").at(path) != current.at("function_declarations").at(path))
 			continue;
-		if (!functionDependenciesUnchanged(const_cast<Section *>(section), globalFree, globalFreeClosure, visiting))
+		if (!functionDependenciesUnchanged(const_cast<Section *>(section), globalFree, globalFreeClosure))
 			continue;
 		if (generatedFunctionCounts[path] != summaries.at(path).size())
 			continue;
@@ -83,14 +83,17 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 				DataType type{
 					static_cast<DataType::Kind>(encoded.at(0).get<int>()), encoded.at(1).get<int>(), encoded.at(2).get<int>()
 				};
-				if (type.pointerDepth != 0)
+				if (type.pointerDepth != 0 ||
+					(type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float &&
+					 type.kind != DataType::Kind::Int && type.kind != DataType::Kind::UInt))
 					break;
 				request.argumentTypes.push_back(type);
 			}
 			InstantiationKey key;
 			key.argumentTypes = request.argumentTypes;
 			if (request.argumentTypes.size() != summary.at("argument_types").size() ||
-				request.parameterNames.size() != request.argumentTypes.size() || keyText != *inferenceSummaryKey(key))
+				request.parameterNames.size() != request.argumentTypes.size() ||
+				keyText != *inferenceSummaryKey(key, classPaths))
 				break;
 			requests.push_back(std::move(request));
 		}
@@ -122,6 +125,7 @@ std::unordered_set<const Section *> stableIncrementalReplacements(
 	const std::map<const Section *, std::string> &sectionPaths, const Json &currentSummaries, const Json &priorSummaries,
 	std::vector<ParseContext::IncrementalFunctionRequest> &replacements
 ) {
+	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	std::map<Section *, std::vector<ParseContext::IncrementalFunctionRequest>> grouped;
 	for (const auto &request : requests)
 		grouped[request.section].push_back(request);
@@ -129,7 +133,6 @@ std::unordered_set<const Section *> stableIncrementalReplacements(
 	for (const auto &[section, _] : sectionPaths)
 		globalFree[section] = hasNoGlobalAccess(section);
 	std::unordered_map<Section *, bool> globalFreeClosure;
-	std::unordered_set<Section *> visiting;
 	std::unordered_set<const Section *> stable;
 	for (const auto &[section, variants] : grouped) {
 		const std::string &path = sectionPaths.at(section);
@@ -137,14 +140,14 @@ std::unordered_set<const Section *> stableIncrementalReplacements(
 		for (const auto &request : variants) {
 			InstantiationKey key;
 			key.argumentTypes = request.argumentTypes;
-			const std::string keyText = *inferenceSummaryKey(key);
+			const std::string keyText = *inferenceSummaryKey(key, classPaths);
 			if (!same || !currentSummaries.at(path).contains(keyText) ||
 				currentSummaries.at(path).at(keyText) != priorSummaries.at(path).at(keyText)) {
 				same = false;
 				break;
 			}
 		}
-		if (!same || !functionDependenciesUnchanged(section, globalFree, globalFreeClosure, visiting))
+		if (!same || !functionDependenciesUnchanged(section, globalFree, globalFreeClosure))
 			continue;
 		stable.insert(section);
 		replacements.insert(replacements.end(), variants.begin(), variants.end());
