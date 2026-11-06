@@ -15,21 +15,43 @@
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
-constexpr std::string_view matcherCacheHeader = "DynLex matcher results v1\n";
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v2\n";
 
 void appendLength(std::string &output, std::uint64_t value) {
-	for (unsigned index = 0; index < 8; index++) {
-		output.push_back(static_cast<char>(value & 0xff));
-		value >>= 8;
-	}
+	do {
+		unsigned char byte = value & 0x7f;
+		value >>= 7;
+		output.push_back(static_cast<char>(byte | (value ? 0x80 : 0)));
+	} while (value);
 }
 
 std::uint64_t readLength(std::string_view input, size_t &position) {
-	if (input.size() - position < 8)
-		throw std::runtime_error("truncated incremental matcher cache length");
 	std::uint64_t value = 0;
-	for (unsigned index = 0; index < 8; index++)
-		value |= static_cast<std::uint64_t>(static_cast<unsigned char>(input[position++])) << (index * 8);
+	for (unsigned index = 0; index < 10; index++) {
+		if (position == input.size())
+			throw std::runtime_error("truncated incremental matcher cache length");
+		unsigned char byte = input[position++];
+		if (index == 9 && byte > 1)
+			throw std::runtime_error("invalid incremental matcher cache length");
+		value |= static_cast<std::uint64_t>(byte & 0x7f) << (index * 7);
+		if (!(byte & 0x80))
+			return value;
+	}
+	throw std::runtime_error("invalid incremental matcher cache length");
+}
+
+void appendString(std::string &output, std::string_view value) {
+	appendLength(output, value.size());
+	if (!value.empty())
+		output.append(value.data(), value.size());
+}
+
+std::string_view readString(std::string_view input, size_t &position) {
+	std::uint64_t length = readLength(input, position);
+	if (length > input.size() - position)
+		throw std::runtime_error("truncated incremental matcher cache string");
+	std::string_view value = input.substr(position, static_cast<size_t>(length));
+	position += static_cast<size_t>(length);
 	return value;
 }
 
@@ -265,28 +287,42 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	return fingerprint.finish();
 }
 
-Json IncrementalMatcherCache::nodePath(const PatternTreeNode *node) const {
-	Json path = Json::array();
+void IncrementalMatcherCache::appendNode(std::string &output, const PatternTreeNode *node) const {
+	std::vector<const PatternTreeNode *> edges;
 	for (const PatternTreeNode *current = node; current->parentNode; current = current->parentNode)
-		path.push_back(Json::array({static_cast<int>(current->type), current->text, current->isArgumentPack}));
-	std::reverse(path.begin(), path.end());
+		edges.push_back(current);
 	const PatternTreeNode *root = node;
 	while (root->parentNode)
 		root = root->parentNode;
+	size_t rootIndex = std::size(context.patternTrees);
 	for (size_t index = 0; index < std::size(context.patternTrees); index++)
-		if (context.patternTrees[index] == root)
-			return Json::array({index, path});
-	crashCompilerBug("incremental matcher node does not belong to a pattern tree");
+		if (context.patternTrees[index] == root) {
+			rootIndex = index;
+			break;
+		}
+	requireCompilerInvariant(rootIndex < std::size(context.patternTrees), "incremental matcher node is outside its tree");
+	appendLength(output, rootIndex);
+	appendLength(output, edges.size());
+	for (auto edge = edges.rbegin(); edge != edges.rend(); edge++) {
+		appendLength(output, static_cast<int>((*edge)->type));
+		appendString(output, (*edge)->text);
+		appendLength(output, (*edge)->isArgumentPack);
+	}
 }
 
-PatternTreeNode *IncrementalMatcherCache::restoreNode(const Json &path) const {
-	PatternTreeNode *node = context.patternTrees[path.at(0).get<size_t>()];
-	for (const Json &edge : path.at(1)) {
-		PatternElement::Type type = static_cast<PatternElement::Type>(edge.at(0).get<int>());
+PatternTreeNode *IncrementalMatcherCache::restoreNode(std::string_view input, size_t &position) const {
+	std::uint64_t rootIndex = readLength(input, position);
+	requireCompilerInvariant(rootIndex < std::size(context.patternTrees), "cached matcher has an invalid tree index");
+	PatternTreeNode *node = context.patternTrees[rootIndex];
+	std::uint64_t edgeCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < edgeCount; index++) {
+		auto type = static_cast<PatternElement::Type>(readLength(input, position));
+		std::string_view text = readString(input, position);
+		bool isArgumentPack = readLength(input, position) != 0;
 		if (type == PatternElement::Type::Variable)
-			node = edge.at(2).get<bool>() ? node->argumentPackChild : node->argumentChild;
+			node = isArgumentPack ? node->argumentPackChild : node->argumentChild;
 		else {
-			auto found = node->literalChildren.find(edge.at(1).get<std::string>());
+			auto found = node->literalChildren.find(text);
 			node = found == node->literalChildren.end() ? nullptr : found->second;
 		}
 		requireCompilerInvariant(node != nullptr, "cached matcher node missing from an identical pattern tree");
@@ -294,8 +330,11 @@ PatternTreeNode *IncrementalMatcherCache::restoreNode(const Json &path) const {
 	return node;
 }
 
-std::optional<Json> IncrementalMatcherCache::encodeMatch(const PatternReference &reference, const PatternMatch &match) const {
-	Json definitions = Json::array();
+bool IncrementalMatcherCache::appendMatch(
+	std::string &output, const PatternReference &reference, const PatternMatch &match
+) const {
+	appendNode(output, match.matchedEndNode);
+	appendLength(output, match.matchingDefinitions.size());
 	for (const PatternDefinition *definition : match.matchingDefinitions) {
 		auto found = std::find(
 			match.matchedEndNode->matchingDefinitions.begin(), match.matchedEndNode->matchingDefinitions.end(), definition
@@ -304,73 +343,83 @@ std::optional<Json> IncrementalMatcherCache::encodeMatch(const PatternReference 
 			found != match.matchedEndNode->matchingDefinitions.end(),
 			"matcher result contains a definition outside its endpoint"
 		);
-		definitions.push_back(std::distance(match.matchedEndNode->matchingDefinitions.begin(), found));
+		appendLength(output, std::distance(match.matchedEndNode->matchingDefinitions.begin(), found));
 	}
-	Json nodes = Json::array();
+	appendLength(output, match.lineStartPos);
+	appendLength(output, match.lineEndPos);
+	appendLength(output, match.nodesPassed.size());
 	for (const PatternTreeNode *node : match.nodesPassed)
-		nodes.push_back(nodePath(node));
-	Json variables = Json::array();
-	for (const VariableMatch &variable : match.discoveredVariables)
-		variables.push_back(Json::array({variable.name, variable.lineStartPos, variable.lineEndPos}));
-	Json literals = Json::array();
-	for (const AcceptedLiteralMatch &literal : match.acceptedLiterals)
-		literals.push_back(nodePath(literal.node));
-	Json submatches = Json::array();
-	for (const PatternMatch &submatch : match.subMatches) {
-		std::optional<Json> encoded = encodeMatch(reference, submatch);
-		if (!encoded)
-			return std::nullopt;
-		submatches.push_back(std::move(*encoded));
+		appendNode(output, node);
+	appendLength(output, match.discoveredVariables.size());
+	for (const VariableMatch &variable : match.discoveredVariables) {
+		appendString(output, variable.name);
+		appendLength(output, variable.lineStartPos);
+		appendLength(output, variable.lineEndPos);
 	}
-	Json arguments = Json::array();
+	appendLength(output, match.acceptedLiterals.size());
+	for (const AcceptedLiteralMatch &literal : match.acceptedLiterals)
+		appendNode(output, literal.node);
+	appendLength(output, match.subMatches.size());
+	for (const PatternMatch &submatch : match.subMatches)
+		if (!appendMatch(output, reference, submatch))
+			return false;
+	appendLength(output, match.orderedArguments.size());
 	for (const MatchedArgument &argument : match.orderedArguments) {
-		int expressionIndex = -1;
+		appendLength(output, argument.argumentIndex);
+		appendLength(output, static_cast<int>(argument.kind));
+		appendLength(output, argument.expression != nullptr);
 		if (argument.expression) {
 			if (!reference.expression)
-				return std::nullopt;
+				return false;
 			auto found =
 				std::find(reference.expression->arguments.begin(), reference.expression->arguments.end(), argument.expression);
 			if (found == reference.expression->arguments.end())
-				return std::nullopt;
-			expressionIndex = static_cast<int>(std::distance(reference.expression->arguments.begin(), found));
+				return false;
+			appendLength(output, std::distance(reference.expression->arguments.begin(), found));
 		}
-		arguments.push_back(
-			Json::array(
-				{argument.argumentIndex, static_cast<int>(argument.kind), expressionIndex, argument.itemIndex,
-				 argument.isPackElement}
-			)
-		);
+		appendLength(output, argument.itemIndex);
+		appendLength(output, argument.isPackElement);
 	}
-	return Json::array(
-		{nodePath(match.matchedEndNode), definitions, match.lineStartPos, match.lineEndPos, nodes, variables, literals,
-		 submatches, arguments}
-	);
+	return true;
 }
 
-PatternMatch IncrementalMatcherCache::restoreMatch(const PatternReference &reference, const Json &encoded) const {
+PatternMatch
+IncrementalMatcherCache::restoreMatch(std::string_view input, size_t &position, const PatternReference &reference) const {
 	PatternMatch match{};
-	match.matchedEndNode = restoreNode(encoded.at(0));
-	for (const Json &index : encoded.at(1))
-		match.matchingDefinitions.push_back(match.matchedEndNode->matchingDefinitions.at(index.get<size_t>()));
-	match.lineStartPos = encoded.at(2).get<size_t>();
-	match.lineEndPos = encoded.at(3).get<size_t>();
-	for (const Json &path : encoded.at(4))
-		match.nodesPassed.push_back(restoreNode(path));
-	for (const Json &variable : encoded.at(5))
-		match.discoveredVariables.push_back(
-			{variable.at(0).get<std::string>(), variable.at(1).get<size_t>(), variable.at(2).get<size_t>()}
-		);
-	for (const Json &path : encoded.at(6))
-		match.acceptedLiterals.push_back({restoreNode(path)});
-	for (const Json &submatch : encoded.at(7))
-		match.subMatches.push_back(restoreMatch(reference, submatch));
-	for (const Json &argument : encoded.at(8)) {
-		int expressionIndex = argument.at(2).get<int>();
-		Expression *expression = expressionIndex < 0 ? nullptr : reference.expression->arguments.at(expressionIndex);
-		match.orderedArguments.push_back(
-			{argument.at(0).get<size_t>(), static_cast<MatchedArgument::Kind>(argument.at(1).get<int>()), expression,
-			 argument.at(3).get<size_t>(), argument.at(4).get<bool>()}
-		);
+	match.matchedEndNode = restoreNode(input, position);
+	std::uint64_t definitionCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < definitionCount; index++)
+		match.matchingDefinitions.push_back(match.matchedEndNode->matchingDefinitions.at(readLength(input, position)));
+	match.lineStartPos = readLength(input, position);
+	match.lineEndPos = readLength(input, position);
+	std::uint64_t nodeCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < nodeCount; index++)
+		match.nodesPassed.push_back(restoreNode(input, position));
+	std::uint64_t variableCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < variableCount; index++) {
+		std::string name(readString(input, position));
+		size_t start = readLength(input, position);
+		size_t end = readLength(input, position);
+		match.discoveredVariables.push_back({std::move(name), start, end});
+	}
+	std::uint64_t literalCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < literalCount; index++)
+		match.acceptedLiterals.push_back({restoreNode(input, position)});
+	std::uint64_t submatchCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < submatchCount; index++)
+		match.subMatches.push_back(restoreMatch(input, position, reference));
+	std::uint64_t argumentCount = readLength(input, position);
+	for (std::uint64_t index = 0; index < argumentCount; index++) {
+		size_t argumentIndex = readLength(input, position);
+		auto kind = static_cast<MatchedArgument::Kind>(readLength(input, position));
+		Expression *expression = nullptr;
+		if (readLength(input, position) != 0) {
+			requireCompilerInvariant(reference.expression != nullptr, "cached matcher argument has no source expression");
+			expression = reference.expression->arguments.at(readLength(input, position));
+		}
+		size_t itemIndex = readLength(input, position);
+		bool isPackElement = readLength(input, position) != 0;
+		match.orderedArguments.push_back({argumentIndex, kind, expression, itemIndex, isPackElement});
 	}
 	return match;
 }
@@ -383,22 +432,34 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	auto entry = previousEntries.find(cacheKey);
 	if (entry == previousEntries.end())
 		return std::nullopt;
-	recorded[cacheKey] = entry->second;
-	reusedCount++;
-	Json value = Json::from_msgpack(entry->second.begin(), entry->second.end());
-	if (value.contains("failure")) {
+	std::string_view value = entry->second;
+	if (value.empty())
+		throw std::runtime_error("empty incremental matcher cache value");
+	size_t position = 1;
+	if (value[0] == 0) {
 		requireCompilerInvariant(dependencies != nullptr, "cached failure is missing dependency storage");
 		dependencies->clear();
-		for (const Json &dependency : value.at("failure")) {
-			PatternTreeNode *node = restoreNode(dependency.at(1));
-			dependencies->push_back(
-				{static_cast<MatchDependency::Kind>(dependency.at(0).get<int>()), node, node->endpointRevision,
-				 dependency.at(2).get<std::string>()}
-			);
+		std::uint64_t count = readLength(value, position);
+		for (std::uint64_t index = 0; index < count; index++) {
+			auto kind = static_cast<MatchDependency::Kind>(readLength(value, position));
+			PatternTreeNode *node = restoreNode(value, position);
+			std::string literal(readString(value, position));
+			dependencies->push_back({kind, node, node->endpointRevision, std::move(literal)});
 		}
+		if (position != value.size())
+			throw std::runtime_error("trailing incremental matcher cache data");
+		recorded[cacheKey] = value;
+		reusedCount++;
 		return static_cast<PatternMatch *>(nullptr);
 	}
-	return new PatternMatch(restoreMatch(*reference, value.at("match")));
+	if (value[0] != 1)
+		throw std::runtime_error("invalid incremental matcher cache value kind");
+	PatternMatch match = restoreMatch(value, position, *reference);
+	if (position != value.size())
+		throw std::runtime_error("trailing incremental matcher cache data");
+	recorded[cacheKey] = value;
+	reusedCount++;
+	return new PatternMatch(std::move(match));
 }
 
 void IncrementalMatcherCache::record(
@@ -407,19 +468,19 @@ void IncrementalMatcherCache::record(
 	if (!available(options))
 		return;
 	if (match) {
-		if (std::optional<Json> encoded = encodeMatch(*reference, *match)) {
-			std::string packed;
-			Json::to_msgpack(Json{{"match", std::move(*encoded)}}, packed);
+		std::string packed(1, '\1');
+		if (appendMatch(packed, *reference, *match))
 			recorded[key(*reference, dependencies != nullptr)] = std::move(packed);
-		}
 		return;
 	}
 	if (!dependencies)
 		return;
-	Json encoded = Json::array();
-	for (const MatchDependency &dependency : *dependencies)
-		encoded.push_back(Json::array({static_cast<int>(dependency.kind), nodePath(dependency.node), dependency.literal}));
-	std::string packed;
-	Json::to_msgpack(Json{{"failure", std::move(encoded)}}, packed);
+	std::string packed(1, '\0');
+	appendLength(packed, dependencies->size());
+	for (const MatchDependency &dependency : *dependencies) {
+		appendLength(packed, static_cast<int>(dependency.kind));
+		appendNode(packed, dependency.node);
+		appendString(packed, dependency.literal);
+	}
 	recorded[key(*reference, true)] = std::move(packed);
 }

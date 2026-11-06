@@ -42,8 +42,8 @@ class IncrementalMatcherCache {
 	bool available(MatchOptions options);
 	std::string key(const PatternReference &reference, bool trackDependencies);
 	std::string sourceDigest(const lsp::SourceFile *source);
-	Json nodePath(const PatternTreeNode *node) const;
-	PatternTreeNode *restoreNode(const Json &path) const;
-	std::optional<Json> encodeMatch(const PatternReference &reference, const PatternMatch &match) const;
-	PatternMatch restoreMatch(const PatternReference &reference, const Json &encoded) const;
+	void appendNode(std::string &output, const PatternTreeNode *node) const;
+	PatternTreeNode *restoreNode(std::string_view input, size_t &position) const;
+	bool appendMatch(std::string &output, const PatternReference &reference, const PatternMatch &match) const;
+	PatternMatch restoreMatch(std::string_view input, size_t &position, const PatternReference &reference) const;
 };

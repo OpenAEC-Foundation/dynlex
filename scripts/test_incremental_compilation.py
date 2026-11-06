@@ -142,6 +142,14 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert not changed_string[0]["frontend_reused"], "comment marker inside a string was ignored"
     assert changed_string[0]["matcher_cache_hits"] > 0, "one-line body edit invalidated unrelated matches"
     assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
+    pack_source = (project / "tests/required/argument_pack_capture/main.dl").read_text()
+    pack_main = root / "pack.dl"
+    pack_main.write_text(pack_source)
+    build(entry=pack_main)
+    pack_main.write_text(pack_source.replace("count 1, 2 and 3", "count 4, 5 and 6"))
+    edited_pack = build(entry=pack_main)
+    assert edited_pack[0]["matcher_cache_hits"] > 0, "argument pack edit discarded unrelated matches"
+    assert edited_pack[1:] == build(False, entry=pack_main)[1:], "cached argument pack match differs from clean build"
     main.write_text(source)
     build()
     output.unlink()
