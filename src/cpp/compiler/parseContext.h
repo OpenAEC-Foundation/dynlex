@@ -93,7 +93,7 @@ struct ParseContext {
 	std::function<void(ParseContext &, const std::function<bool(const IncrementalFunctionRequest &)> &)>
 		runIncrementalPreinference;
 	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
-	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
+	std::function<void(Section *, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
 	// On-demand signature probes are scoped to this compilation and never committed.

@@ -334,6 +334,53 @@ function left times right:
     assert pointer_edit[2] == b"touch\n7\nafter\n", "reused class pointer returned the wrong value"
     assert pointer_edit[1:] == build(False, entry=pointer_main)[1:], "reused pointer summary changed output"
 
+    generated_closure_main = root / "generated_closure.dl"
+    generated_closure_source = ('integer means: @intrinsic("type", "int")\n'
+                                'class:\n'
+                                '    patterns:\n'
+                                '        token\n'
+                                '    members:\n'
+                                '        value as integer\n'
+                                '    retain:\n'
+                                '        @intrinsic("discard", 1)\n'
+                                '    release:\n'
+                                '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "released"))\n'
+                                'to use managed:\n'
+                                '    @intrinsic("store", item, @intrinsic("construct", token, 1))\n'
+                                '    @intrinsic("store", copied, item)\n'
+                                '    @intrinsic("discard", @intrinsic("property", copied, "value"))\n'
+                                '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "managed"))\n'
+                                'to get callback {integer:value}:\n'
+                                '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "callback body"))\n'
+                                '    @intrinsic("return", @intrinsic("add", value, 1))\n'
+                                'to use callback:\n'
+                                '    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
+                                '@intrinsic("invoke", @intrinsic("function", "callback $"), 7)))\n'
+                                'to unrelated: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                                'use managed\nuse callback\nunrelated\n')
+    generated_closure_main.write_text(generated_closure_source)
+    build(entry=generated_closure_main)
+    generated_closure_main.write_text(generated_closure_source.replace('"before"', '"after"'))
+    generated_closure_edit = build(entry=generated_closure_main)
+    assert generated_closure_edit[0]["inference_instantiations_reused"] >= 2, \
+        f"unchanged managed and callable callers were re-inferred: {generated_closure_edit[0]}"
+    assert generated_closure_edit[0]["functions_ir_reused"] >= 4, \
+        f"unchanged managed and callable IR was regenerated: {generated_closure_edit[0]}"
+    assert generated_closure_edit[1:] == build(False, entry=generated_closure_main)[1:]
+    assert b"8\n" in generated_closure_edit[2], "reused callable wrapper returned the wrong value"
+    generated_closure_main.write_text(generated_closure_main.read_text().replace('"released"', '"released again"'))
+    lifecycle_edit = build(entry=generated_closure_main)
+    assert lifecycle_edit[1:] == build(False, entry=generated_closure_main)[1:], \
+        "changed lifecycle body reused stale caller code"
+    assert b"released again\n" in lifecycle_edit[2], "changed lifecycle body was not executed"
+    generated_closure_main.write_text(generated_closure_main.read_text().replace('"add", value, 1', '"add", value, 2'))
+    callable_edit = build(entry=generated_closure_main)
+    assert callable_edit[0]["preinferred_instantiations"] >= 1, \
+        f"changed callable body was not preinferred with its wrapper present: {callable_edit[0]}"
+    assert callable_edit[1:] == build(False, entry=generated_closure_main)[1:], \
+        "changed callable body reused stale wrapper code"
+    assert b"9\n" in callable_edit[2], "changed callable returned a stale value"
+
     recursive_main = root / "recursive_dependency.dl"
     recursive_source = ('integer means: @intrinsic("type", "int")\n'
                         'section if condition:\n    replacement:\n        @intrinsic("if", condition)\n'

@@ -52,10 +52,11 @@ void collectDependencies(
 
 IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
-	std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
-	std::unordered_set<std::string> replacementPaths
+	const nlohmann::json &previousCallableFunctions, std::map<const Section *, std::string> sectionPaths,
+	std::unordered_set<const Section *> eligibleSections, std::unordered_set<std::string> replacementPaths
 )
-	: currentModule(context.llvmModule), previousFunctions(previousFunctions), sectionPaths(std::move(sectionPaths)),
+	: currentModule(context.llvmModule), previousFunctions(previousFunctions),
+	  previousCallableFunctions(previousCallableFunctions), sectionPaths(std::move(sectionPaths)),
 	  eligibleSections(std::move(eligibleSections)), replacementPaths(std::move(replacementPaths)) {
 	llvm::SMDiagnostic diagnostic;
 	previousModule = llvm::parseAssemblyString(previousIR, diagnostic, *context.llvmContext);
@@ -76,13 +77,14 @@ bool IncrementalIRReuse::reusableClosure(
 	if (!previousFunctions.contains(name))
 		return false;
 	std::string owner = previousFunctions.at(name).get<std::string>();
-	if (replacementPaths.contains(owner)) {
+	bool stableWrapper = replacementPaths.contains(owner) && previousCallableFunctions.contains(name);
+	if (replacementPaths.contains(owner) && !stableWrapper) {
 		llvm::Function *now = current.getFunction(name);
 		return !now || now->getFunctionType() == function.getFunctionType();
 	}
 	if (!names.insert(name).second)
 		return true;
-	if (!eligiblePaths.contains(owner))
+	if (!eligiblePaths.contains(owner) && !stableWrapper)
 		return false;
 	if (llvm::Function *now = current.getFunction(name); now && now->getFunctionType() != function.getFunctionType())
 		return false;
@@ -152,7 +154,8 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 		for (const llvm::Function *dependency : dependencies) {
 			std::string dependencyName = dependency->getName().str();
 			if (!previousFunctions.contains(dependencyName) ||
-				!replacementPaths.contains(previousFunctions.at(dependencyName).get<std::string>()))
+				!replacementPaths.contains(previousFunctions.at(dependencyName).get<std::string>()) ||
+				previousCallableFunctions.contains(dependencyName))
 				continue;
 			llvm::Function *replacement = context.llvmModule->getFunction(dependencyName);
 			if (!replacement || replacement->isDeclaration() || replacement->getFunctionType() != dependency->getFunctionType())
@@ -188,7 +191,7 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 	}
 	std::vector<std::pair<std::string, llvm::GlobalValue::LinkageTypes>> replacementLinkages;
 	for (const auto &[name, owner] : previousFunctions.items()) {
-		if (!replacementPaths.contains(owner.get<std::string>()))
+		if (!replacementPaths.contains(owner.get<std::string>()) || previousCallableFunctions.contains(name))
 			continue;
 		if (llvm::Function *declaration = cached->getFunction(name)) {
 			requireCompilerInvariant(declaration->isDeclaration(), "incremental replacement retained an old function body");

@@ -14,7 +14,9 @@ Json captureAllFunctionProjection(const ParseContext &context, const Json *previ
 				selected[path] = sectionIdentity(*section);
 			bodies.emplace(section, "");
 		}
-		if (reusableFunctionDeclaration(*section)) {
+		if (section->type == SectionType::Retain || section->type == SectionType::Release)
+			bodies.emplace(section, "");
+		if (reusableCodegenSection(*section)) {
 			reusable.insert(section);
 			declarations[path] = sectionDeclaration(*section);
 		}

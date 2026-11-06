@@ -39,13 +39,14 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	if (!compatibleFunctionProjection(prior, current))
 		return result;
 	for (const auto &[section, path] : sectionPaths)
-		result.bodyUnchanged[section] = !reusableFunctionDeclaration(*section) ||
+		result.bodyUnchanged[section] = !reusableCodegenSection(*section) ||
 									  unchangedFunctionSource(path, prior, current);
 	const Json &summaries = previous.at("inference_summaries");
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	std::map<std::string, size_t> generatedFunctionCounts;
-	for (const auto &[_, owner] : previous.at("function_sections").items())
-		generatedFunctionCounts[owner.get<std::string>()]++;
+	for (const auto &[name, owner] : previous.at("function_sections").items())
+		if (!previous.at("callable_functions").contains(name))
+			generatedFunctionCounts[owner.get<std::string>()]++;
 	std::unordered_map<const Section *, bool> globalFree;
 	for (const auto &[section, _] : sectionPaths)
 		globalFree[section] = hasNoGlobalAccess(section);

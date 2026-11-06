@@ -18,8 +18,8 @@ class IncrementalIRReuse {
   public:
 	IncrementalIRReuse(
 		ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
-		std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
-		std::unordered_set<std::string> replacementPaths = {}
+		const nlohmann::json &previousCallableFunctions, std::map<const Section *, std::string> sectionPaths,
+		std::unordered_set<const Section *> eligibleSections, std::unordered_set<std::string> replacementPaths = {}
 	);
 	bool reuse(Section *section, Instantiation &instantiation, llvm::Function *function);
 	bool hasReusableIRForSection(const Section *section, bool allowUnmaterializedGlobals = false) const;
@@ -35,6 +35,7 @@ class IncrementalIRReuse {
 	std::unique_ptr<llvm::Module> previousModule;
 	llvm::Module *currentModule;
 	const nlohmann::json &previousFunctions;
+	const nlohmann::json &previousCallableFunctions;
 	std::map<const Section *, std::string> sectionPaths;
 	std::unordered_set<const Section *> eligibleSections;
 	std::unordered_set<std::string> eligiblePaths;

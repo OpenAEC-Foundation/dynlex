@@ -251,7 +251,9 @@ Json sectionDeclaration(const Section &section) {
 	};
 }
 
-bool reusableFunctionDeclaration(const Section &section) {
+bool reusableCodegenSection(const Section &section) {
+	if (section.type == SectionType::Retain || section.type == SectionType::Release)
+		return !containsNestedDefinition(section);
 	return section.type == SectionType::Function && !section.patternDefinitions.empty() && !section.isFlex &&
 		   !section.isConversion && !containsNestedDefinition(section);
 }
@@ -367,7 +369,7 @@ bool functionDependenciesUnchanged(
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
-std::unordered_set<const Section *> eligibleFunctionSections(
+std::unordered_set<const Section *> eligibleCodegenSections(
 	const ParseContext &context, const Json &previous, const Json &currentObservations, const Json &currentProjection,
 	const std::unordered_set<const Section *> &interfaceStableChanges = {}
 ) {
@@ -383,16 +385,14 @@ std::unordered_set<const Section *> eligibleFunctionSections(
 		return eligible;
 	std::unordered_map<const Section *, bool> unchanged;
 	for (const auto &[path, section] : sections)
-		unchanged[section] = !reusableFunctionDeclaration(*section) ||
+		unchanged[section] = !reusableCodegenSection(*section) ||
 							 unchangedFunctionSource(path, priorProjection, currentProjection) ||
 							 interfaceStableChanges.contains(section);
 	std::unordered_map<Section *, bool> memo;
-	for (const auto &[_, section] : sections) {
-		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-			!interfaceStableChanges.contains(section) &&
+	for (const auto &[_, section] : sections)
+		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&
 			functionDependenciesUnchanged(section, unchanged, memo, interfaceStableChanges))
 			eligible.insert(section);
-	}
 	return eligible;
 }
 
@@ -769,7 +769,7 @@ bool compileIncrementally(
 							}
 							first = end;
 						}
-						std::unordered_set<const Section *> eligible = eligibleFunctionSections(
+						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
 							inferred, *previous, recording->observations, resolvedFunctionProjection, stable
 						);
 						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
@@ -780,7 +780,7 @@ bool compileIncrementally(
 							replacementPaths.insert(sectionPaths.at(section));
 						functionReuse = std::make_unique<IncrementalIRReuse>(
 							inferred, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
-							sectionPaths, eligible, std::move(replacementPaths)
+							previous->at("callable_functions"), sectionPaths, eligible, std::move(replacementPaths)
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
 							inferred, priorSummaries, previous->at("global_types"), *functionReuse, std::move(eligible)
@@ -833,8 +833,12 @@ bool compileIncrementally(
 				}
 			} else if (compiled) {
 				std::map<std::string, std::string> functionSections;
-				context.recordGeneratedFunction = [&](Section *section, llvm::Function *function) {
-					functionSections.emplace(function->getName().str(), sectionPaths.at(section));
+				Json callableFunctions = Json::object();
+				context.recordGeneratedFunction = [&](Section *section, llvm::Function *function, bool callable) {
+					std::string name = function->getName().str();
+					functionSections.emplace(name, sectionPaths.at(section));
+					if (callable)
+						callableFunctions[name] = true;
 				};
 				if (functionReuse) {
 					context.reuseGeneratedFunction = [&](Section *section, Instantiation &instantiation,
@@ -876,10 +880,14 @@ bool compileIncrementally(
 					result["matcher_key"] = saveMatcher();
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					if (functionReuse) {
-						for (const std::string &name : functionReuse->reusedFunctionNames())
+						for (const std::string &name : functionReuse->reusedFunctionNames()) {
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
+							if (previous->at("callable_functions").contains(name))
+								callableFunctions[name] = true;
+						}
 					}
 					result["function_sections"] = functionSections;
+					result["callable_functions"] = callableFunctions;
 					std::set<std::string> generatedFunctionPaths;
 					for (const auto &[_, path] : functionSections)
 						generatedFunctionPaths.insert(path);
