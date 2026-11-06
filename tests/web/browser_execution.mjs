@@ -875,7 +875,7 @@ const mobileMenu = await evaluate(`(() => {
     })
   };
 })()`);
-assert.equal(mobileMenu.background, "rgb(8, 10, 9)", "The open menu must be fully opaque");
+assert.equal(mobileMenu.background, "rgb(42, 42, 50)", "The open menu must be fully opaque");
 assert.ok(mobileMenu.headerHeight >= mobileMenu.viewportHeight, "The open header must cover the viewport");
 assert.ok(mobileMenu.navTop >= 65, "Menu items must start below the mobile header");
 assert.ok(mobileMenu.firstLinkTop >= mobileMenu.navTop + 20, "Menu items need breathing room below the header");
@@ -897,7 +897,7 @@ const documentationMenu = await evaluate(`(() => {
     styledCardBackground: getComputedStyle(document.querySelector('.hero-card')).backgroundColor
   };
 })()`);
-assert.equal(documentationMenu.background, "rgb(8, 10, 9)");
+assert.equal(documentationMenu.background, "rgb(42, 42, 50)");
 assert.equal(documentationMenu.current, "Docs");
 assert.deepEqual(
   documentationMenu.paths,
@@ -912,7 +912,7 @@ assert.deepEqual(
 );
 assert.equal(
   documentationMenu.styledCardBackground,
-  "rgb(13, 16, 14)",
+  "rgb(54, 54, 62)",
   "Documentation must use the homepage surface palette"
 );
 await evaluate("document.querySelector('[data-primary-nav] a[aria-current=\"page\"]').click()");

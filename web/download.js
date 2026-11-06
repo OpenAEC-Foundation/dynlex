@@ -1,3 +1,5 @@
+import { initializeSiteNavigation } from "./site-navigation.js";
+
 const releaseRepository = "OpenAEC-Foundation/dynlex";
 const fallbackReleaseUrl = `https://github.com/${releaseRepository}/releases/latest`;
 
@@ -347,5 +349,6 @@ async function configureDownloadPage() {
 }
 
 if (typeof document !== "undefined") {
+  initializeSiteNavigation();
   configureDownloadPage();
 }

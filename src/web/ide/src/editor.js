@@ -27,10 +27,13 @@ self.MonacoEnvironment = {
 
 monaco.languages.register({ id: "dynlex" });
 
+const themeTokens = getComputedStyle(document.documentElement);
+const themeColor = (name) => themeTokens.getPropertyValue(`--${name}`).trim();
+const tokenColor = (name) => themeColor(name).slice(1);
 const scrollbarThemeColors = Object.freeze({
-  "scrollbarSlider.background": "#3F474199",
-  "scrollbarSlider.hoverBackground": "#59625BCC",
-  "scrollbarSlider.activeBackground": "#707A72E6"
+  "scrollbarSlider.background": "#64646F99",
+  "scrollbarSlider.hoverBackground": "#85858FCC",
+  "scrollbarSlider.activeBackground": "#A1A1AAE6"
 });
 
 const callColorRules = theme => callColors.flatMap((color, depth) =>
@@ -41,28 +44,28 @@ monaco.editor.defineTheme("dynlex-light", {
   inherit: true,
   semanticHighlighting: true,
   rules: [
-    { token: "keyword", foreground: "C53A30", fontStyle: "bold" },
-    { token: "string", foreground: "8A5A00" },
-    { token: "comment", foreground: "74766F", fontStyle: "italic" },
-    { token: "function", foreground: "304FC3" },
-    { token: "section", foreground: "8A5A00", fontStyle: "bold" },
-    { token: "variable", foreground: "1C211E" },
-    { token: "number", foreground: "5C49B5" },
-    { token: "type", foreground: "A33A27" },
-    { token: "intrinsic", foreground: "6543B6", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "2E5797", fontStyle: "bold" },
+    { token: "keyword", foreground: tokenColor("accent-on-light"), fontStyle: "bold" },
+    { token: "string", foreground: tokenColor("success-on-light") },
+    { token: "comment", foreground: tokenColor("muted-on-light"), fontStyle: "italic" },
+    { token: "function", foreground: tokenColor("accent-on-light") },
+    { token: "section", foreground: tokenColor("accent-on-light"), fontStyle: "bold" },
+    { token: "variable", foreground: tokenColor("deep-forge") },
+    { token: "number", foreground: tokenColor("accent-on-light") },
+    { token: "type", foreground: tokenColor("accent-on-light") },
+    { token: "intrinsic", foreground: tokenColor("accent-on-light"), fontStyle: "bold" },
+    { token: "patternDefinition", foreground: tokenColor("accent-on-light"), fontStyle: "bold" },
     ...callColorRules("light")
   ],
   colors: {
     ...scrollbarThemeColors,
-    "editor.background": "#F8F6EF",
-    "editor.foreground": "#1C211E",
-    "editorLineNumber.foreground": "#A19F96",
-    "editorLineNumber.activeForeground": "#30352F",
-    "editorCursor.foreground": "#304FC3",
-    "editor.selectionBackground": "#D9DDFF",
-    "editor.lineHighlightBackground": "#F0EDE4",
-    "editorIndentGuide.background1": "#DDD9CF"
+    "editor.background": themeColor("blueprint-white"),
+    "editor.foreground": themeColor("deep-forge"),
+    "editorLineNumber.foreground": themeColor("muted-on-light"),
+    "editorLineNumber.activeForeground": themeColor("deep-forge"),
+    "editorCursor.foreground": themeColor("accent-on-light"),
+    "editor.selectionBackground": "#D9770633",
+    "editor.lineHighlightBackground": themeColor("concrete"),
+    "editorIndentGuide.background1": "#D6D3D1"
   }
 });
 
@@ -71,28 +74,28 @@ monaco.editor.defineTheme("dynlex-dark", {
   inherit: true,
   semanticHighlighting: true,
   rules: [
-    { token: "keyword", foreground: "FF8B73", fontStyle: "bold" },
-    { token: "string", foreground: "FFD787" },
-    { token: "comment", foreground: "7F8B80", fontStyle: "italic" },
-    { token: "function", foreground: "B8E5FF" },
-    { token: "section", foreground: "FFD787", fontStyle: "bold" },
-    { token: "variable", foreground: "E2E6DF" },
-    { token: "number", foreground: "9AA5FF" },
-    { token: "type", foreground: "FFAD9C" },
-    { token: "intrinsic", foreground: "BFB1FF", fontStyle: "bold" },
-    { token: "patternDefinition", foreground: "C9FF38", fontStyle: "bold" },
+    { token: "keyword", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
+    { token: "string", foreground: tokenColor("success-text") },
+    { token: "comment", foreground: tokenColor("scaffold-gray"), fontStyle: "italic" },
+    { token: "function", foreground: tokenColor("warm-gold") },
+    { token: "section", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
+    { token: "variable", foreground: tokenColor("blueprint-white") },
+    { token: "number", foreground: tokenColor("warm-gold") },
+    { token: "type", foreground: tokenColor("warm-gold") },
+    { token: "intrinsic", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
+    { token: "patternDefinition", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
     ...callColorRules("dark")
   ],
   colors: {
     ...scrollbarThemeColors,
-    "editor.background": "#151816",
-    "editor.foreground": "#E2E6DF",
-    "editorLineNumber.foreground": "#555C56",
-    "editorLineNumber.activeForeground": "#A9B0AA",
-    "editorCursor.foreground": "#C9FF38",
-    "editor.selectionBackground": "#38453A",
-    "editor.lineHighlightBackground": "#1A1E1B",
-    "editorIndentGuide.background1": "#2B302C"
+    "editor.background": themeColor("deep-forge"),
+    "editor.foreground": themeColor("blueprint-white"),
+    "editorLineNumber.foreground": themeColor("scaffold-gray"),
+    "editorLineNumber.activeForeground": themeColor("blueprint-white"),
+    "editorCursor.foreground": themeColor("warm-gold"),
+    "editor.selectionBackground": "#D9770640",
+    "editor.lineHighlightBackground": themeColor("night-build"),
+    "editorIndentGuide.background1": "#56565F"
   }
 });
 
@@ -106,7 +109,7 @@ export function createDynLexEditor(host, { value = "", uri, embedded = false, on
   const model = monaco.editor.createModel(value, "dynlex", monaco.Uri.parse(uri ?? `file:///workspace/editor-${nextDocument++}.dl`));
   const editor = monaco.editor.create(host, {
     model, theme: "dynlex-dark", minimap: { enabled: false }, automaticLayout: true,
-    fontFamily: "'DM Mono', Consolas, Menlo, monospace", fontSize: 14, lineHeight: 23,
+    fontFamily: themeColor("font-code"), fontSize: 14, lineHeight: 23,
     tabSize: 4, insertSpaces: true, autoIndent: "full", scrollBeyondLastLine: false, padding: { top: 14, bottom: 14 },
     renderLineHighlight: "line", smoothScrolling: true, "semanticHighlighting.enabled": true,
     tabCompletion: "on", acceptSuggestionOnEnter: "off", wordBasedSuggestions: "off",

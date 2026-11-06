@@ -407,18 +407,20 @@ if (!context) {
   throw new Error("DynLex homepage requires a 2D canvas context");
 }
 
+const fieldTheme = getComputedStyle(document.documentElement);
+const fieldColor = name => fieldTheme.getPropertyValue(`--${name}`).trim();
 const graphNodes = [
-  { x: 0.06, y: 0.19, label: "words", accent: "#c7ff38" },
+  { x: 0.06, y: 0.19, label: "words", accent: fieldColor("amber") },
   { x: 0.24, y: 0.08, label: "patterns" },
   { x: 0.42, y: 0.25, label: "meaning" },
   { x: 0.63, y: 0.11, label: "name" },
-  { x: 0.82, y: 0.26, label: "reuse", accent: "#85dcff" },
+  { x: 0.82, y: 0.26, label: "reuse", accent: fieldColor("warm-gold") },
   { x: 0.94, y: 0.08, label: "share" },
   { x: 0.14, y: 0.71, label: "read" },
-  { x: 0.36, y: 0.86, label: "shape", accent: "#a58aff" },
+  { x: 0.36, y: 0.86, label: "shape", accent: fieldColor("amber") },
   { x: 0.58, y: 0.68, label: "write" },
   { x: 0.79, y: 0.84, label: "explain" },
-  { x: 0.96, y: 0.65, label: "build", accent: "#ff806d" }
+  { x: 0.96, y: 0.65, label: "build", accent: fieldColor("signal-orange") }
 ];
 
 const graphEdges = [
@@ -467,7 +469,7 @@ function drawField(time = 0) {
     context.stroke();
   }
 
-  context.font = '10px "DM Mono", monospace';
+  context.font = `10px ${fieldColor("font-code")}`;
   context.textBaseline = "middle";
   for (let index = 0; index < graphNodes.length; index += 1) {
     const node = graphNodes[index];

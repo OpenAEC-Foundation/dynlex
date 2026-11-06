@@ -12,6 +12,8 @@ if [[ -z "${DYNLEX_TEST_WEB_SERVER:-}" && -z "${DYNLEX_BROWSER_TEST_ENTRY:-}" ]]
         DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/farm_collection_browser.mjs" "$0"
     DYNLEX_TEST_WEB_SERVER=deployment \
         DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/homepage_navigation_browser.mjs" "$0"
+    DYNLEX_TEST_WEB_SERVER=static DYNLEX_TEST_GRAPHICS=webgl \
+        DYNLEX_BROWSER_TEST_ENTRY="$PROJECT_DIR/tests/web/brand_theme_browser.mjs" "$0"
     DYNLEX_TEST_WEB_SERVER=static "$0"
     DYNLEX_TEST_WEB_SERVER=static \
         DYNLEX_TEST_GRAPHICS=webgl \
