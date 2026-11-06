@@ -298,6 +298,8 @@ Json captureInactiveProjection(
 	};
 }
 
+bool hasNoGlobalAccess(const Section *section);
+
 #include "incrementalFunctionProjection.inl"
 
 bool functionDependenciesUnchanged(
@@ -366,8 +368,6 @@ bool functionDependenciesUnchanged(
 	}
 	return memo[section] = safe;
 }
-
-bool hasNoGlobalAccess(const Section *section);
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 

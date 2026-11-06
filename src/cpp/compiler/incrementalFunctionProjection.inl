@@ -46,9 +46,12 @@ Json captureAllFunctionProjection(const ParseContext &context, const Json *previ
 	bool stableMatchingEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
 									 projection.at("sources") == prior->at("sources") &&
 									 projection.at("inactive") == prior->at("inactive");
+	bool stableGlobalFreeEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
+									 compatibleGlobalFreeProjection(*prior, projection);
 	for (const Section *section : reusable) {
 		const std::string &path = paths.at(section);
-		if (stableMatchingEnvironment && prior->at("bodies").contains(path) &&
+		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section))) &&
+			prior->at("bodies").contains(path) &&
 			prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
 			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path))
 			matches[path] = prior->at("matches").at(path);
