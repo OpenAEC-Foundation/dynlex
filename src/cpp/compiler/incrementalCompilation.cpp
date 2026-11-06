@@ -28,6 +28,7 @@
 #include "llvm/TargetParser/Host.h"
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cctype>
@@ -248,30 +249,41 @@ Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) 
 	return inactive;
 }
 
-std::string declarationDigest(const std::map<std::string, Section *> &sections) {
+Json sectionDeclaration(const Section &section) {
+	Json definitions = Json::array();
+	for (const PatternDefinition *definition : section.patternDefinitions)
+		definitions.push_back(definition->toString());
+	return Json{
+		{"identity", sectionIdentity(section)},
+		{"definitions", definitions},
+		{"local", section.isLocal},
+		{"flex", section.isFlex},
+		{"exposed", section.isExposed},
+		{"conversion", section.isConversion},
+		{"implicit_conversion", section.isImplicitConversion},
+		{"return_contract", static_cast<int>(section.returnContract)},
+		{"before", section.beforePatterns},
+		{"after", section.afterPatterns},
+		{"associativity", static_cast<int>(section.associativity)}
+	};
+}
+
+bool reusableFunctionDeclaration(const Section &section) {
+	return section.type == SectionType::Function && !section.patternDefinitions.empty() && !section.isFlex &&
+		   !section.isConversion && !containsNestedDefinition(section);
+}
+
+#include "incrementalFunctionMatches.inl"
+
+std::string
+declarationDigest(const std::map<std::string, Section *> &sections, const std::unordered_set<const Section *> &excluded = {}) {
 	Json declarations = Json::array();
 	for (const auto &[path, section] : sections) {
-		if (section->patternDefinitions.empty())
+		if (section->patternDefinitions.empty() || excluded.contains(section))
 			continue;
-		Json definitions = Json::array();
-		for (const PatternDefinition *definition : section->patternDefinitions)
-			definitions.push_back(definition->toString());
-		declarations.push_back(
-			Json{
-				{"path", path},
-				{"identity", sectionIdentity(*section)},
-				{"definitions", definitions},
-				{"local", section->isLocal},
-				{"flex", section->isFlex},
-				{"exposed", section->isExposed},
-				{"conversion", section->isConversion},
-				{"implicit_conversion", section->isImplicitConversion},
-				{"return_contract", static_cast<int>(section->returnContract)},
-				{"before", section->beforePatterns},
-				{"after", section->afterPatterns},
-				{"associativity", static_cast<int>(section->associativity)}
-			}
-		);
+		Json entry = sectionDeclaration(*section);
+		entry["path"] = path;
+		declarations.push_back(std::move(entry));
 	}
 	return digest(declarations.dump());
 }
@@ -305,12 +317,21 @@ Json captureAllFunctionProjection(const ParseContext &context) {
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
 	Json selected = Json::object();
+	Json declarations = Json::object();
+	Json matches = Json::object();
 	std::map<const Section *, std::string> bodies;
+	std::map<const Section *, std::string> paths;
+	std::unordered_set<const Section *> reusable;
 	for (const auto &[path, section] : sections) {
+		paths.emplace(section, path);
 		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
 			if (!containsNestedDefinition(*section))
 				selected[path] = sectionIdentity(*section);
 			bodies.emplace(section, "");
+		}
+		if (reusableFunctionDeclaration(*section)) {
+			reusable.insert(section);
+			declarations[path] = sectionDeclaration(*section);
 		}
 	}
 	for (const CodeLine *line : context.codeLines) {
@@ -329,6 +350,12 @@ Json captureAllFunctionProjection(const ParseContext &context) {
 			bodyDigests[path] = digest(body->second);
 	}
 	projection["bodies"] = std::move(bodyDigests);
+	projection["function_declarations"] = std::move(declarations);
+	for (const Section *section : reusable)
+		matches[paths.at(section)] = resolvedFunctionMatches(section, paths);
+	projection["matches"] = std::move(matches);
+	projection["ambient_declarations"] = declarationDigest(sections, reusable);
+	projection["ambient_sources"] = sourceProjection(context, reusable, true, true);
 	return projection;
 }
 
@@ -404,15 +431,12 @@ std::unordered_set<const Section *> eligibleFunctionSections(
 	collectSections(context.mainSection, "root", sections);
 	Json currentProjection = captureAllFunctionProjection(context);
 	const Json &priorProjection = previous.at("all_function_projection");
-	if (currentProjection.at("declarations") != priorProjection.at("declarations") ||
-		currentProjection.at("sources") != priorProjection.at("sources") ||
-		currentProjection.at("inactive") != priorProjection.at("inactive"))
+	if (!compatibleFunctionProjection(priorProjection, currentProjection))
 		return eligible;
-	const Json &previousBodies = priorProjection.at("bodies");
-	const Json &currentBodies = currentProjection.at("bodies");
 	std::unordered_map<const Section *, bool> unchanged;
 	for (const auto &[path, section] : sections)
-		unchanged[section] = !currentBodies.contains(path) || currentBodies.at(path) == previousBodies.at(path) ||
+		unchanged[section] = !reusableFunctionDeclaration(*section) ||
+							 unchangedFunctionSource(path, priorProjection, currentProjection) ||
 							 interfaceStableChanges.contains(section);
 	std::unordered_map<Section *, bool> memo;
 	std::unordered_set<Section *> visiting;
@@ -746,6 +770,7 @@ bool compileIncrementally(
 			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
+			Json resolvedFunctionProjection = compiled ? captureAllFunctionProjection(context) : Json(nullptr);
 			Json inactiveProjection;
 			bool reuseTypeInference =
 				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
@@ -892,7 +917,7 @@ bool compileIncrementally(
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher();
-					result["all_function_projection"] = captureAllFunctionProjection(compiled);
+					result["all_function_projection"] = std::move(resolvedFunctionProjection);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames())
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());

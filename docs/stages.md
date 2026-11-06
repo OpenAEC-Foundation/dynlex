@@ -801,8 +801,11 @@ traverse type inference again; eligible unchanged instantiations reuse cached su
 For native, unoptimized builds without debug or execution tracing, the compiler
 can import cached LLVM bodies of unchanged functions after a code edit. It compares
 each function body separately, so changing one function does not invalidate its
-unchanged neighbors in the same file. Pattern declarations and source outside
-function bodies must remain identical. Calls to other generated functions form a
+unchanged neighbors in the same file. A newly added or removed ordinary function
+does not invalidate an existing function when its own declaration, body, and
+resolved reference matches are unchanged. The cache compares nonfunction
+declarations and executable source outside ordinary function bodies separately;
+changed overloads invalidate functions whose resolved matches change. Calls to other generated functions form a
 reuse closure: every cached callee must also be unchanged. Cached functions that
 read mutable globals are linked to the current globals only when their LLVM types
 and initializers match. Class layouts use structural LLVM structs so

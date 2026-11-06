@@ -279,6 +279,28 @@ function left times right:
     effect_edit = build(entry=leaf_main)
     assert effect_edit[0]["inference_instantiations_reused"] == 2, "changed callee effect reused caller inference"
     assert effect_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee effect kept stale caller code"
+    leaf_b.write_text(leaf_b.read_text() + 'to unused addition:\n    @intrinsic("discard", 3)\n')
+    added_definition = build(entry=leaf_main)
+    assert added_definition[0]["inference_instantiations_reused"] >= 3, f"unrelated definition re-inferred existing functions: {added_definition[0]}"
+    assert added_definition[0]["functions_ir_reused"] >= 3, "unrelated definition regenerated existing function IR"
+    assert added_definition[1:] == build(False, entry=leaf_main)[1:], "unrelated definition changed incremental build behavior"
+
+    specific_main = root / "specific_addition.dl"
+    specific_base = ('integer means: @intrinsic("type", "int")\n'
+                     'to helper {value}: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "general"))\n'
+                     'to caller: helper 1\n'
+                     'caller\n')
+    specific_definition = 'to helper 1: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "specific"))\n'
+    specific_main.write_text(specific_base)
+    build(entry=specific_main)
+    specific_main.write_text(specific_base + specific_definition)
+    specific_added = build(entry=specific_main)
+    assert specific_added[0]["inference_instantiations_reused"] <= 1, "new specific pattern reused stale caller inference"
+    assert specific_added[2] == b"specific\n" and specific_added[1:] == build(False, entry=specific_main)[1:]
+    specific_main.write_text(specific_base)
+    specific_removed = build(entry=specific_main)
+    assert specific_removed[0]["inference_instantiations_reused"] == 0, "removed specific pattern reused stale caller inference"
+    assert specific_removed[2] == b"general\n" and specific_removed[1:] == build(False, entry=specific_main)[1:]
 
     bounded_cascade = root / "bounded_cascade.dl"
     bounded_source = ('integer means: @intrinsic("type", "int")\n'

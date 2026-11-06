@@ -37,12 +37,11 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 		return result;
 	Json current = captureAllFunctionProjection(context);
 	const Json &prior = previous.at("all_function_projection");
-	if (current.at("declarations") != prior.at("declarations") || current.at("sources") != prior.at("sources") ||
-		current.at("inactive") != prior.at("inactive"))
+	if (!compatibleFunctionProjection(prior, current))
 		return result;
 	for (const auto &[section, path] : sectionPaths)
-		result.bodyUnchanged[section] =
-			!current.at("bodies").contains(path) || current.at("bodies").at(path) == prior.at("bodies").at(path);
+		result.bodyUnchanged[section] = !reusableFunctionDeclaration(*section) ||
+									  unchangedFunctionSource(path, prior, current);
 	const Json &summaries = previous.at("inference_summaries");
 	std::map<std::string, size_t> generatedFunctionCounts;
 	for (const auto &[_, owner] : previous.at("function_sections").items())
@@ -55,7 +54,10 @@ IncrementalPreinferPlan scalarArgumentIncrementalCandidates(
 	for (const auto &[section, path] : sectionPaths) {
 		if (section->type != SectionType::Function || section->isFlex || section->isConversion || !globalFree.at(section) ||
 			!summaries.contains(path) || summaries.at(path).empty() || section->patternDefinitions.size() != 1 ||
-			section->patternDefinitions.front()->indexedPaths.size() != 1)
+			section->patternDefinitions.front()->indexedPaths.size() != 1 ||
+			!prior.at("function_declarations").contains(path) ||
+			!current.at("function_declarations").contains(path) ||
+			prior.at("function_declarations").at(path) != current.at("function_declarations").at(path))
 			continue;
 		if (!functionDependenciesUnchanged(const_cast<Section *>(section), globalFree, globalFreeClosure, visiting))
 			continue;
