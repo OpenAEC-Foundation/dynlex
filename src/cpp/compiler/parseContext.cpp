@@ -52,6 +52,16 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 		!dependencies || !options.acceptLiterals,
 		"failed match dependency tracking does not support literal-acceptance ordering"
 	);
+	if (reuseMatcherResult) {
+		if (std::optional<PatternMatch *> reused = reuseMatcherResult(reference, options, dependencies)) {
+			return *reused;
+		}
+	}
+	auto finish = [&](PatternMatch *result) {
+		if (recordMatcherResult)
+			recordMatcherResult(reference, options, result, dependencies);
+		return result;
+	};
 	MatchStorage storage;
 	std::vector<MatchProgress> queue;
 	queue.emplace_back(this, reference, options);
@@ -73,7 +83,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 	while (queue.size()) {
 		if (options.maxSteps > 0 && steps >= options.maxSteps) {
 			recordDependencies();
-			return nullptr;
+			return finish(nullptr);
 		}
 		MatchProgress &currentProgress = queue.back();
 		if (currentProgress.parents)
@@ -130,7 +140,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 			currentProgress.parents->addCompletion(std::move(matchStep.completedSubmatch));
 		}
 		if (currentProgress.isComplete(visibleDefinitions))
-			return new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions));
+			return finish(new PatternMatch(currentProgress.materializeMatch(storage, visibleDefinitions)));
 		queue.pop_back();
 		queue.insert(
 			queue.end(), std::make_move_iterator(matchStep.nextMatches.begin()),
@@ -138,7 +148,7 @@ PatternMatch *ParseContext::match(PatternReference *reference, MatchOptions opti
 		);
 	}
 	recordDependencies();
-	return nullptr;
+	return finish(nullptr);
 }
 
 void ParseContext::registerShaderUniform(std::string uniformName, std::uint32_t binding, Range range) {

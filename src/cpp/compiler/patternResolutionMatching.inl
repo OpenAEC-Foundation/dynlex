@@ -403,8 +403,10 @@ bool resolvePatterns(ParseContext &context) {
 	computeVariableLikeCounts(unResolvedSections);
 
 	// add the roots
-	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), []() {
-		return new PatternTreeNode(PatternElement::Type::Other, "");
+	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), [&]() {
+		auto *root = new PatternTreeNode(PatternElement::Type::Other, "");
+		root->trackMutations = static_cast<bool>(context.reuseMatcherResult);
+		return root;
 	});
 
 	// Phase 1: resolve body references and definitions

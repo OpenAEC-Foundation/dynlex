@@ -2,6 +2,7 @@
 #include "codegen/codegen.h"
 #include "codegen/native.h"
 #include "compiler.h"
+#include "incrementalMatcherCache.h"
 #include "lsp/fileSystem.h"
 #include "pathUtils.h"
 #include "syntaxConfig.h"
@@ -31,7 +32,7 @@
 #include <stdexcept>
 
 namespace {
-using Json = nlohmann::ordered_json;
+using Json = nlohmann::json;
 namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
@@ -279,7 +280,10 @@ void trimCache(const fs::path &directory) {
 		if (file.path().extension() != ".entry")
 			continue;
 		std::string name = file.path().stem().string();
-		size_t prefixLength = name.starts_with("object-") ? 7 : name.starts_with("program-") ? 8 : 0;
+		size_t prefixLength = name.starts_with("object-")	 ? 7
+							  : name.starts_with("program-") ? 8
+							  : name.starts_with("matcher-") ? 8
+															 : 0;
 		if (!prefixLength || name.size() != prefixLength + 64 ||
 			!std::all_of(name.begin() + prefixLength, name.end(), [](char character) {
 			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
@@ -332,6 +336,7 @@ struct BuildStatistics {
 	bool reusedFrontend = false;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
+	size_t matcherCacheHits = 0;
 };
 
 bool emitPartitions(
@@ -400,10 +405,14 @@ bool compileIncrementally(
 		BuildStatistics statistics;
 		bool success = false;
 		std::optional<Json> previous;
+		Json previousMatches = Json::object();
+		std::string previousMatcherKey;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
-			if (!observationsStillEquivalent(*previous, *recording, context.options))
+			if (!observationsStillEquivalent(*previous, *recording, context.options)) {
+				previousMatcherKey = previous->at("matcher_key").get<std::string>();
 				previous.reset();
+			}
 		}
 		if (previous) {
 			statistics.reusedFrontend = true;
@@ -431,7 +440,28 @@ bool compileIncrementally(
 			success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
 		} else {
 			recording->observations = Json::object();
-			if (compile(context.options.inputPath, context)) {
+			if (!previousMatcherKey.empty()) {
+				fs::path matcherEntry = directory / ("matcher-" + previousMatcherKey + ".entry");
+				if (auto cached = readEntry(matcherEntry)) {
+					if (digest(*cached) != previousMatcherKey)
+						throw std::runtime_error("corrupt matcher cache entry: " + matcherEntry.string());
+					previousMatches = Json::parse(*cached);
+				}
+			}
+			IncrementalMatcherCache matcherCache(context, previousMatches);
+			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
+											 MatchDependencies *dependencies) {
+				return matcherCache.reuse(reference, options, dependencies);
+			};
+			context.recordMatcherResult = [&](PatternReference *reference, MatchOptions options, const PatternMatch *match,
+											  const MatchDependencies *dependencies) {
+				matcherCache.record(reference, options, match, dependencies);
+			};
+			bool compiled = compile(context.options.inputPath, context);
+			statistics.matcherCacheHits = matcherCache.hits();
+			context.reuseMatcherResult = {};
+			context.recordMatcherResult = {};
+			if (compiled) {
 				success = generateCode(context, [&](ParseContext &compiled) {
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
@@ -444,6 +474,10 @@ bool compileIncrementally(
 						{"libraries", libraries},
 						{"diagnostics", diagnostics}
 					};
+					std::string matcherPayload = matcherCache.snapshot();
+					std::string matcherKey = digest(matcherPayload);
+					writeEntry(directory / ("matcher-" + matcherKey + ".entry"), matcherPayload);
+					result["matcher_key"] = matcherKey;
 					recordSemanticSources(result, *recording, compiled);
 					writeEntry(programEntry, result.dump());
 					return emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics);
@@ -453,7 +487,8 @@ bool compileIncrementally(
 		trimCache(directory);
 		if (showStatistics)
 			std::cerr << "incremental: " << Json{{"frontend_reused", statistics.reusedFrontend},
-				{"objects_reused", statistics.reusedObjects}, {"objects_built", statistics.builtObjects}}.dump() << '\n';
+				{"objects_reused", statistics.reusedObjects}, {"objects_built", statistics.builtObjects},
+				{"matcher_cache_hits", statistics.matcherCacheHits}}.dump() << '\n';
 		return success;
 	} catch (const std::exception &error) {
 		std::cerr << "Incremental compilation failed: " << error.what() << '\n';

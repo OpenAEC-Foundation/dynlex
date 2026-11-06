@@ -76,6 +76,9 @@ struct ParseContext {
 	// definition-to-reference index. Indexed pattern elements may be changed
 	// only through this transaction.
 	std::function<void(PatternDefinition &, const std::function<void()> &)> indexedPatternDefinitionMutation;
+	// Installed by native incremental builds while the frontend is being compiled.
+	std::function<std::optional<PatternMatch *>(PatternReference *, MatchOptions, MatchDependencies *)> reuseMatcherResult;
+	std::function<void(PatternReference *, MatchOptions, const PatternMatch *, const MatchDependencies *)> recordMatcherResult;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;

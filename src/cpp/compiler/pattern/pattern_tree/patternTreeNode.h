@@ -19,6 +19,11 @@ struct PatternDefinitionOccurrence {
 };
 
 struct PatternTreeNode : public PatternElement {
+	// Root revision for content-addressed matcher results. Child nodes are never removed.
+	bool trackMutations = false;
+	size_t mutationRevision = 0;
+	std::string mutationDigest;
+	PatternTreeNode *parentNode = nullptr;
 	// Incremented whenever active definitions at this endpoint change.
 	size_t endpointRevision = 0;
 	// the pattern definitions that end at this node (multiple when overloaded via type constraints)

@@ -1,8 +1,64 @@
 #include "patternTreeNode.h"
 #include "compilerUtils.h"
+#include "dataSections.h"
+#include "lsp/sourceFile.h"
 #include "patternDefinition.h"
+#include "section.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/SHA256.h"
 #include <algorithm>
 #include <unordered_set>
+
+static void appendMutationField(llvm::SHA256 &hash, std::string_view value) {
+	std::string length = std::to_string(value.size()) + ":";
+	hash.update(llvm::StringRef(length));
+	hash.update(llvm::StringRef(value.data(), value.size()));
+}
+
+static void appendMutationNumber(llvm::SHA256 &hash, size_t value) { appendMutationField(hash, std::to_string(value)); }
+
+static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition, std::string_view action) {
+	if (!root->trackMutations)
+		return;
+	requireCompilerInvariant(
+		definition && definition->section && definition->range.line && definition->range.line->sourceFile,
+		"pattern tree mutation requires a sourced definition"
+	);
+	const CodeLine *line = definition->range.line;
+	const Section *section = definition->section;
+	llvm::SHA256 hash;
+	appendMutationField(hash, root->mutationDigest);
+	appendMutationField(hash, action);
+	appendMutationField(hash, line->sourceFile->uri);
+	appendMutationNumber(hash, line->sourceFileLineIndex);
+	appendMutationNumber(hash, definition->range.start());
+	appendMutationNumber(hash, definition->range.end());
+	appendMutationField(hash, definition->range.subString);
+	appendMutationNumber(hash, static_cast<size_t>(section->type));
+	appendMutationNumber(hash, section->isLocal);
+	appendMutationField(
+		hash, section->dataSection ? std::string_view(section->dataSection->declarationParameter) : std::string_view{}
+	);
+	if (section->dataFieldOwner) {
+		const CodeLine *owner = section->dataFieldOwner->openingLine;
+		requireCompilerInvariant(owner && owner->sourceFile, "data field pattern mutation has no owning source section");
+		appendMutationField(hash, owner->sourceFile->uri);
+		appendMutationNumber(hash, owner->sourceFileLineIndex);
+		appendMutationField(hash, owner->patternText);
+	}
+	appendMutationNumber(hash, definition->indexedPaths.size());
+	for (const auto &path : definition->indexedPaths) {
+		appendMutationNumber(hash, path.size());
+		for (const PatternElement &element : path) {
+			appendMutationNumber(hash, static_cast<size_t>(element.type));
+			appendMutationField(hash, element.text);
+			appendMutationNumber(hash, element.startPos);
+			appendMutationNumber(hash, element.isArgumentPack);
+		}
+	}
+	root->mutationDigest = llvm::toHex(hash.final(), true);
+	root->mutationRevision++;
+}
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {
 	PatternTreeNode *child = nullptr;
@@ -16,6 +72,7 @@ static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &
 
 	if (!child) {
 		child = new PatternTreeNode(element);
+		child->parentNode = parent;
 		if (element.type == PatternElement::Type::Variable)
 			(element.isArgumentPack ? parent->argumentPackChild : parent->argumentChild) = child;
 		else
@@ -240,6 +297,7 @@ void PatternTreeNode::addPatternDefinition(PatternDefinition *definition, Sectio
 		}
 	}
 	requirePatternDefinitionIndexed(definition);
+	recordTreeMutation(this, definition, "add");
 }
 
 // Recursively remove a definition from the tree, walking the element path.
@@ -298,6 +356,7 @@ void PatternTreeNode::removePatternDefinition(PatternDefinition *definition) {
 	requireCompilerInvariant(definition != nullptr, "pattern tree removal requires a definition");
 	requireCompilerInvariant(definition->indexedTree == this, "pattern tree removal used the wrong tree");
 	requirePatternDefinitionIndexed(definition);
+	recordTreeMutation(this, definition, "remove");
 	std::vector<std::vector<PatternElement>> oldPaths = definition->indexedPaths;
 	for (const auto &path : oldPaths)
 		removeDefinitionPath(this, path, definition);

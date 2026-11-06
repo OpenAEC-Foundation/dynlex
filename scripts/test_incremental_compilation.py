@@ -70,12 +70,30 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert warm[0]["frontend_reused"] and warm[0]["objects_built"] == 0
     assert warm[0]["objects_reused"] == cold[0]["objects_built"]
     assert warm[1:] == clean[1:], "warm build differs from clean build"
+    main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
+    same_file_edit = build()
+    assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
+    assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    main.write_text(source)
+    build()
     main.write_text("# A new source comment must not invalidate executable code.\n" + source)
     commented = build()
     assert commented[0]["frontend_reused"], "comment-only edit rebuilt the frontend"
     assert commented[1:] == build(False)[1:], "comment-only reuse differs from clean build"
     main.write_text(source)
     assert build()[0]["frontend_reused"], "removing a source comment rebuilt the frontend"
+    matcher_entries = {entry: entry.read_bytes() for entry in (cache / "native-v1").glob("matcher-*.entry")}
+    assert matcher_entries, "incremental build did not persist its matcher cache separately"
+    for entry, data in matcher_entries.items():
+        entry.write_bytes(data[:-1] + bytes([data[-1] ^ 1]))
+    main.write_text("# Unchanged executable code should not need matcher data.\n" + source)
+    assert build()[0]["frontend_reused"], "comment-only build read the matcher cache"
+    main.write_text(source.replace("alpha\nbeta\n", "beta\nalpha\n"))
+    assert "corrupt cache entry" in build(success=False)[1], "edited build ignored matcher cache corruption"
+    for entry, data in matcher_entries.items():
+        entry.write_bytes(data)
+    main.write_text(source)
+    assert build()[0]["frontend_reused"]
     critical = root / "critical.dl"
     critical.write_text('integer means: @intrinsic("type", "int")\n'
                         'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n')
@@ -85,11 +103,36 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     critical_comment = build()
     assert critical_comment[0]["frontend_reused"], "comment in a used import rebuilt the frontend"
     assert critical_comment[1:] == build(False)[1:], "import comment reuse differs from clean build"
+    critical.write_text(critical.read_text() + "alpha\n")
+    main.write_text("import critical.dl\nalpha\n")
+    build()
+    main.write_text("import critical.dl\nalpha\nalpha\n")
+    body_edit = build()
+    assert body_edit[0]["matcher_cache_hits"] > 0, "code edit did not reuse matches in an unchanged file"
+    assert body_edit[1:] == build(False)[1:], "cached matches changed code edit behavior"
+    main.write_text("import critical.dl\nalpha\n")
+    removed_call = build()
+    assert removed_call[0]["matcher_cache_hits"] > 0, "removed call discarded unrelated cached matches"
+    assert removed_call[1:] == build(False)[1:], "removed call differs from clean build"
+    main.write_text('import critical.dl\n'
+                    'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "other"))\n'
+                    'alpha\n')
+    added_overload = build(success=False)
+    assert added_overload[1] == build(False, success=False)[1], "new overload reused a stale match"
+    data_helper = root / "data_helper.dl"
+    data_helper.write_text((project / "tests/required/deferred_data_sections_nested/main.dl").read_text())
+    main.write_text("import data_helper.dl\n")
+    build()
+    main.write_text('import data_helper.dl\n@intrinsic("discard", 1)\n')
+    data_edit = build()
+    assert data_edit[0]["matcher_cache_hits"] > 0, "data sections disabled all matcher reuse"
+    assert data_edit[1:] == build(False)[1:], "cached data section match differs from clean build"
     main.write_text(source)
     build()
     main.write_text(source.replace('"alpha"))', '"alpha # inside a string"))'))
     changed_string = build()
     assert not changed_string[0]["frontend_reused"], "comment marker inside a string was ignored"
+    assert changed_string[0]["matcher_cache_hits"] > 0, "one-line body edit invalidated unrelated matches"
     assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
     main.write_text(source)
     build()

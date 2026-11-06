@@ -758,13 +758,28 @@ configuration therefore invalidates the result.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
-After source changes the frontend runs again. Native emission divides the finalized IR
+After an executable source edit, the frontend reconstructs sections and pattern trees.
+Before precedence resolution, it reuses pointer-free matcher results from the previous
+build for unchanged references when the pattern-tree mutation history, the reference's
+source line and position mapping, lexical declarations, and syntax configuration have
+the same fingerprints.
+Matcher results live in a separate content-addressed cache entry. An unchanged or
+comment-only build reads only the smaller program entry containing source observations
+and LLVM IR, so it does not parse matcher results merely to relink the executable.
+Successful matches are rebound to the new tree and expression objects. Failed matches
+restore their trie dependencies, so later definition insertions still retry them.
+New or removed overloads change the tree fingerprint and invalidate cached matches
+from that point in resolution.
+Type inference and LLVM generation still run for the full program after a code edit.
+
+Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
 program namespace before LLVM externalizes them. Each partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
 objects are reused and the executable is always linked again, including current runtime
-libraries. This is native partition reuse, not per-function frontend query reuse.
+libraries. This is native partition reuse plus matcher query reuse; section analysis,
+type inference and code generation are not yet incremental per function.
 
 Cache entries carry SHA-256 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
