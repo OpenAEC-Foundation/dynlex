@@ -35,8 +35,6 @@ class IncrementalMatcherCache {
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
 	std::unordered_map<const lsp::SourceFile *, std::string> sourceDigests;
 	std::unordered_map<std::string, Json> configDigests;
-	std::string treeDigest;
-	std::vector<size_t> treeRevisions;
 	size_t reusedCount = 0;
 
 	bool available(MatchOptions options);

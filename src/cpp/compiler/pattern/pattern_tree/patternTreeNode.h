@@ -1,6 +1,8 @@
 #pragma once
 #include "patternElement.h"
 #include "sectionType.h"
+#include <array>
+#include <memory>
 #include <string_view>
 #include <unordered_map>
 
@@ -18,11 +20,14 @@ struct PatternDefinitionOccurrence {
 	bool operator==(const PatternDefinitionOccurrence &) const = default;
 };
 
+struct PatternTreeMutationState {
+	std::array<std::string, 256> literalDigests;
+	std::string wildcardDigest;
+};
+
 struct PatternTreeNode : public PatternElement {
-	// Root revision for content-addressed matcher results. Child nodes are never removed.
-	bool trackMutations = false;
-	size_t mutationRevision = 0;
-	std::string mutationDigest;
+	// Only incremental root nodes allocate mutation state. Child nodes are never removed.
+	std::unique_ptr<PatternTreeMutationState> mutationState;
 	PatternTreeNode *parentNode = nullptr;
 	// Incremented whenever active definitions at this endpoint change.
 	size_t endpointRevision = 0;

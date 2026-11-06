@@ -115,10 +115,17 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 void appendSourcePosition(Fingerprint &key, const Range &range) {
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher source position has no source file");
 	key.string(range.line->sourceFile->uri);
-	key.number(range.line->sourceFileLineIndex);
-	key.number(range.line->mergedLineIndex);
 	key.number(range.start());
 	key.number(range.end());
+}
+
+void appendDeclarationVisibility(Fingerprint &key, const Range &declaration, const Range &reference) {
+	requireCompilerInvariant(declaration.line && reference.line, "incremental matcher declaration has no source line");
+	int declarationLine = declaration.line->mergedLineIndex;
+	int referenceLine = reference.line->mergedLineIndex;
+	key.number(declarationLine < referenceLine ? 0 : declarationLine == referenceLine ? 1 : 2);
+	if (declarationLine == referenceLine)
+		key.number(declaration.start());
 }
 } // namespace
 
@@ -173,18 +180,10 @@ bool IncrementalMatcherCache::available(MatchOptions options) {
 	if (options.acceptLiterals || options.maxSteps ||
 		context.compilationStage >= ParseContext::CompilationStage::ResolvedPatternPrecedence)
 		return false;
-	std::vector<size_t> revisions;
 	for (const PatternTreeNode *root : context.patternTrees) {
 		if (!root)
 			return false;
-		revisions.push_back(root->mutationRevision);
-	}
-	if (revisions != treeRevisions) {
-		std::string state;
-		for (const PatternTreeNode *root : context.patternTrees)
-			state += root->mutationDigest + ":";
-		treeDigest = digest(state);
-		treeRevisions = std::move(revisions);
+		requireCompilerInvariant(root->mutationState != nullptr, "incremental matcher root has no mutation state");
 	}
 	return true;
 }
@@ -192,11 +191,41 @@ bool IncrementalMatcherCache::available(MatchOptions options) {
 std::string IncrementalMatcherCache::key(const PatternReference &reference, bool trackDependencies) {
 	const Range &range = reference.range();
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
+	std::array<bool, 256> possibleStartBytes{};
+	auto includeStartBytes = [&](std::string_view text) {
+		for (unsigned char byte : text)
+			possibleStartBytes[byte] = true;
+	};
+	includeStartBytes(range.line->fullText);
+	includeStartBytes(reference.pattern.text);
+	std::vector<std::optional<std::string>> numericSpellings;
+	if (reference.expression) {
+		numericSpellings.reserve(reference.expression->arguments.size());
+		for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+			numericSpellings.push_back(numericPatternArgumentSpelling(&reference, index));
+			if (numericSpellings.back())
+				includeStartBytes(*numericSpellings.back());
+		}
+	}
+	size_t startByteCount = std::count(possibleStartBytes.begin(), possibleStartBytes.end(), true);
 	Fingerprint fingerprint;
-	fingerprint.string(treeDigest);
+	auto appendTreeState = [&](const PatternTreeNode *root) {
+		fingerprint.string(root->mutationState->wildcardDigest);
+		fingerprint.number(startByteCount);
+		for (size_t byte = 0; byte < possibleStartBytes.size(); byte++) {
+			if (!possibleStartBytes[byte])
+				continue;
+			fingerprint.number(byte);
+			fingerprint.string(root->mutationState->literalDigests[byte]);
+		}
+	};
+	const PatternTreeNode *root = context.patternTrees[static_cast<size_t>(reference.patternType)];
+	const PatternTreeNode *functions = context.patternTrees[static_cast<size_t>(SectionType::Function)];
+	appendTreeState(root);
+	// Nested expression matches and named single-word probes use the function tree.
+	if (functions != root)
+		appendTreeState(functions);
 	fingerprint.string(range.line->sourceFile->uri);
-	fingerprint.number(range.line->sourceFileLineIndex);
-	fingerprint.number(range.line->mergedLineIndex);
 	fingerprint.number(range.start());
 	fingerprint.number(range.end());
 	fingerprint.string(range.line->fullText);
@@ -217,9 +246,8 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	}
 	fingerprint.boolean(reference.expression != nullptr);
 	if (reference.expression) {
-		fingerprint.number(reference.expression->arguments.size());
-		for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
-			std::optional<std::string> spelling = numericPatternArgumentSpelling(&reference, index);
+		fingerprint.number(numericSpellings.size());
+		for (const std::optional<std::string> &spelling : numericSpellings) {
 			fingerprint.boolean(spelling.has_value());
 			if (spelling)
 				fingerprint.string(*spelling);
@@ -246,7 +274,7 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 		fingerprint.number(declarations.size());
 		for (const auto &[name, declaration] : declarations) {
 			fingerprint.string(name);
-			appendSourcePosition(fingerprint, *declaration);
+			appendDeclarationVisibility(fingerprint, *declaration, range);
 		}
 		std::vector<std::string_view> dataVariables;
 		dataVariables.reserve(scope->dataVariableDeclarations.size());

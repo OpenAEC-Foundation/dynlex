@@ -761,8 +761,11 @@ build ID), effective compiler options and host CPU features identify the computa
 After an executable source edit, the frontend reconstructs sections and pattern trees.
 Before precedence resolution, it reuses pointer-free matcher results from the previous
 build for unchanged references when the pattern-tree mutation history, the reference's
-source line and position mapping, lexical declarations, and syntax configuration have
-the same fingerprints.
+source line and position mapping, relative lexical declaration visibility, and syntax
+configuration have the same fingerprints. Matcher keys cover wildcard patterns and
+literal starts that could occur in the reference, in its own pattern tree and the
+function tree used for nested matches. Adding an unrelated pattern can therefore keep
+matches in unchanged calls, even when the added source line shifts their line numbers.
 Matcher results live in a separate content-addressed cache entry with a compact index
 and individually encoded results. An unchanged or comment-only build reads only the
 smaller program entry containing source observations and LLVM IR, so it does not parse
@@ -770,8 +773,8 @@ matcher results merely to relink the executable. An evicted matcher entry causes
 matching to run normally on the next code edit.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.
-New or removed overloads change the tree fingerprint and invalidate cached matches
-from that point in resolution.
+New or removed matching overloads change the relevant tree fingerprint and invalidate
+cached matches from that point in resolution.
 Type inference and LLVM generation still run for the full program after a code edit.
 
 Native emission divides the finalized IR

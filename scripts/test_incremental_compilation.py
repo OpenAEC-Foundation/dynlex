@@ -74,6 +74,14 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     same_file_edit = build()
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
     assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
+    repeated_calls = "alpha\nbeta\n" * 20
+    main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
+    build()
+    unrelated_definition = 'to gamma: @intrinsic("discard", 1)\n'
+    main.write_text(source.replace("alpha\nbeta\n", unrelated_definition + repeated_calls))
+    unrelated = build()
+    assert unrelated[0]["matcher_cache_hits"] >= 20, "unrelated new pattern invalidated unchanged calls"
+    assert unrelated[1:] == build(False)[1:], "unrelated new pattern changed cached matches"
     main.write_text(source)
     build()
     main.write_text("# A new source comment must not invalidate executable code.\n" + source)

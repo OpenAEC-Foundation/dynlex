@@ -18,7 +18,7 @@ static void appendMutationField(llvm::SHA256 &hash, std::string_view value) {
 static void appendMutationNumber(llvm::SHA256 &hash, size_t value) { appendMutationField(hash, std::to_string(value)); }
 
 static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *definition, std::string_view action) {
-	if (!root->trackMutations)
+	if (!root->mutationState)
 		return;
 	requireCompilerInvariant(
 		definition && definition->section && definition->range.line && definition->range.line->sourceFile,
@@ -27,7 +27,6 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	const CodeLine *line = definition->range.line;
 	const Section *section = definition->section;
 	llvm::SHA256 hash;
-	appendMutationField(hash, root->mutationDigest);
 	appendMutationField(hash, action);
 	appendMutationField(hash, line->sourceFile->uri);
 	appendMutationNumber(hash, line->sourceFileLineIndex);
@@ -56,8 +55,26 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 			appendMutationNumber(hash, element.isArgumentPack);
 		}
 	}
-	root->mutationDigest = llvm::toHex(hash.final(), true);
-	root->mutationRevision++;
+	std::string mutation = llvm::toHex(hash.final(), true);
+	std::array<bool, 256> affectedLiterals{};
+	bool affectsWildcard = definition->indexedPaths.empty();
+	for (const auto &path : definition->indexedPaths) {
+		if (path.empty() || path.front().type == PatternElement::Type::Variable || path.front().text.empty())
+			affectsWildcard = true;
+		else
+			affectedLiterals[static_cast<unsigned char>(path.front().text.front())] = true;
+	}
+	auto advance = [&](std::string &state) {
+		llvm::SHA256 next;
+		appendMutationField(next, state);
+		appendMutationField(next, mutation);
+		state = llvm::toHex(next.final(), true);
+	};
+	if (affectsWildcard)
+		advance(root->mutationState->wildcardDigest);
+	for (size_t index = 0; index < affectedLiterals.size(); index++)
+		if (affectedLiterals[index])
+			advance(root->mutationState->literalDigests[index]);
 }
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {

@@ -405,7 +405,8 @@ bool resolvePatterns(ParseContext &context) {
 	// add the roots
 	std::generate(std::begin(context.patternTrees), std::end(context.patternTrees), [&]() {
 		auto *root = new PatternTreeNode(PatternElement::Type::Other, "");
-		root->trackMutations = static_cast<bool>(context.reuseMatcherResult);
+		if (context.reuseMatcherResult)
+			root->mutationState = std::make_unique<PatternTreeMutationState>();
 		return root;
 	});
 
@@ -801,7 +802,8 @@ bool resolvePatterns(ParseContext &context) {
 		appendRequeuedReferences();
 		clearPatternFamilies(context);
 		if (++precedencePass >= context.options.maxResolutionIterations) {
-			context.addDiagnostic(Diagnostic(context, Diagnostic::Level::Error, "pattern resolution did not converge", Range())
+			context.addDiagnostic(
+				Diagnostic(context, Diagnostic::Level::Error, "pattern resolution did not converge", Range())
 			);
 			return false;
 		}
