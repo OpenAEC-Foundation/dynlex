@@ -3,6 +3,7 @@ import lib/time.dl
 import lib/host.dl
 import lib/atomic.dl
 import lib/graphics_native_types.dl
+import lib/graphics_keyboard.dl
 
 to poll window events:
     @intrinsic("call", "glfw", "glfwPollEvents", nothing)
@@ -149,5 +150,6 @@ to get [a graphics window resource with width] {integer:width} [height] {integer
 
 to [destroy graphics window resource] {a pointer to DynlexGraphics:state}:
     @intrinsic("call", "glfw", "glfwDestroyWindow", nothing, state's window)
+    discard graphics key presses in state
     deallocate state
     release the graphics library

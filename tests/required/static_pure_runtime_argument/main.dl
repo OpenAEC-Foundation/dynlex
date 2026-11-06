@@ -1,0 +1,14 @@
+integer means: @intrinsic("type", "int", 32)
+class:
+    patterns:
+        record
+    members:
+        direction as integer
+entry value means: @intrinsic("static reference", @intrinsic("construct", record, value))
+function negative value:
+    execute:
+        @intrinsic("return", @intrinsic("negate", value))
+function use {integer:value}:
+    execute:
+        @intrinsic("return", entry (negative value))
+@intrinsic("discard", use (@intrinsic("call", "libc", "abs", integer, 6)))

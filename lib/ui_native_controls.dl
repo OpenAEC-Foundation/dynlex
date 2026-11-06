@@ -4,12 +4,25 @@ import lib/ui_native_ribbon.dl
 
 to draw UI control {a pointer to UI layout:layout} in {UI bounds:box} with cursor {cursor position:cursor} in {a pointer to native UI view:view} on {graphics frame:frame}:
     set node to layout's node
+    set layout's painted bounds to box
     increment view's control count
     set layout's order to view's control count
+    if node's kind = 38:
+        if (UI ribbon arrow layout is visible in (view's layout) for (view's instance)) = false:
+            # Retain control ordering while skipping hidden arrows in keyboard navigation.
+            if view's focus order = layout's order:
+                increment view's focus order
+            set layout's hover to 0.0
+            return nothing
     set focused to view's focus order = view's control count
     if focused:
         set view's focused to layout
     set inside to ((cursor's x >= box's x) and (cursor's x < (box's x + box's width))) and ((cursor's y >= box's y) and (cursor's y < (box's y + box's height)))
+    set clip to view's hit bounds
+    set inside to inside and (((cursor's x >= clip's x) and (cursor's x < (clip's x + clip's width))) and ((cursor's y >= clip's y) and (cursor's y < (clip's y + clip's height))))
+    if view's popup != @intrinsic("construct", a pointer to UI layout):
+        set inside to false
+        set focused to false
     set ink to view's theme's button ink
     set text to view's theme's text
     set lit to false
@@ -35,7 +48,7 @@ to draw UI control {a pointer to UI layout:layout} in {UI bounds:box} with curso
     else:
         set response to the minimum of 1.0 and (view's frame seconds * 14.0)
         set layout's hover to layout's hover + ((target - layout's hover) * response)
-    if (node's kind = 29) or ((node's kind = 33) or (node's kind = 34)):
+    if ((node's kind = 29) or ((node's kind = 33) or (node's kind = 34))) or (node's kind = 38):
         draw ribbon control layout in box focused focused in view on frame
         return nothing
     set lift to (layout's hover * 16.0) as an integer

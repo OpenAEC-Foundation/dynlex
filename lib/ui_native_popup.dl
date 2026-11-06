@@ -1,0 +1,52 @@
+# Popup drawing imports the renderer; event handling remains independent.
+import lib/ui_native_interaction.dl
+import lib/ui_native_icons.dl
+
+to draw the UI popup with cursor {cursor position:cursor} in {a pointer to native UI view:view} on {graphics frame:frame}:
+    set owner to view's popup
+    if owner = @intrinsic("construct", a pointer to UI layout):
+        return nothing
+    set anchor to owner's painted bounds
+    set width to the maximum of 196.0 and (anchor's width)
+    set child to owner's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        set width to the maximum of width and ((the width of (child's node's text) using (view's small)) + 64.0)
+        set child to child's next
+    set height to (owner's node's count * 32) + 12
+    set limit to view's logical width as a floating-point number
+    set bottom to view's logical height as a floating-point number
+    if view's fitted = false:
+        set limit to (the framebuffer width of view's window) as a floating-point number
+        set bottom to (the framebuffer height of view's window) as a floating-point number
+    require condition ((width <= (limit - 16.0)) and (height <= (bottom - 16.0))) reporting "The popup does not fit in its window"
+    set left to the maximum of 8.0 and (the minimum of (anchor's x) and ((limit - width) - 8.0))
+    set top to (anchor's y + anchor's height) + 4.0
+    if (top + height) > (bottom - 8.0):
+        set top to (anchor's y - height) - 4.0
+    set top to the maximum of 8.0 and top
+    set box to UI box at left top sized width height
+    draw a UI shadow under box with radius 8.0 softness 9.0 strength 24 in (UI ink 35 45 62) on frame
+    draw a rounded UI box box with radius 8.0 in (UI ink 215 219 226) on frame
+    draw a rounded UI box (UI box at (left + 1.0) (top + 1.0) sized (width - 2.0) (height - 2)) with radius 7.0 in (UI ink 255 255 255) on frame
+    set index to 0
+    set child to owner's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        set row to UI box at (left + 5.0) ((top + 6.0) + (index * 32)) sized (width - 10.0) 32
+        set child's painted bounds to row
+        set inside to ((cursor's x >= row's x) and (cursor's x < (row's x + row's width))) and ((cursor's y >= row's y) and (cursor's y < (row's y + row's height)))
+        if inside:
+            set view's hot to child
+            if view's keyboard focus = false:
+                set view's popup index to index
+        if index = view's popup index:
+            draw a rounded UI box row with radius 4.0 in (UI ink 235 239 246) on frame
+        set icon to child's node's variant
+        if owner's node's kind = 34:
+            if ((the UI value for (owner's node) in (view's instance))'s text) = child's node's text:
+                set icon to "check"
+        if icon != "":
+            draw UI icon icon in (UI box at (row's x + 8.0) (row's y + 8.0) sized 16 16) in (view's theme's accent) using (the address of (view's icons)) on frame
+        draw UI text (child's node's text) at (row's x + 33.0) (row's y + 21.0) with (view's small) in (view's theme's text) on frame
+        set child to child's next
+        increment index
+

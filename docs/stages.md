@@ -662,6 +662,21 @@ graphs; the initializer must lower to a constant. `deferred body` uses ordinary 
 callable generation, while the body record and receiver intrinsics use their inferred
 expressions. There is no runtime data-section builder pass.
 
+Calls with an inferred pure, compile-time-known result materialize it directly
+when their runtime operands lower to LLVM constants, using the same scalar emitter
+as fixed parameters. Arguments are evaluated first and their temporary lifetimes
+are released normally, preserving effects from argument expressions. Static
+aggregates can therefore contain values computed by ordinary pure functions.
+Operands requiring loads or runtime instructions retain the selected function call.
+Inference-time loop observations alone do not justify replacing runtime computation.
+
+Class declarations and synthetic section-body records retain their declaration
+ranges for debug information. Debug types are cached per class instantiation;
+temporary composite types allow recursive pointers to refer to the completed
+record. Global variables carry the resulting debug expressions. Entering a new
+generated function clears the caller's instruction location, so an empty or
+fully folded body cannot inherit the caller's debug scope.
+
 Raw pointers are non-owning, regardless of their pointee type or pointer depth. Managed-lifecycle classification checks
 the pointer representation before inspecting array elements or class fields. Owning array values retain elements in forward
 order and release them in reverse order; pointer copies, arguments, returns, and fields do not retain or release their pointees.

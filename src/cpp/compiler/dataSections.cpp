@@ -47,9 +47,9 @@ struct FieldSection : MetadataSection {
 
 struct BodySection : MetadataSection {
 	DataSectionDefinition &definition;
-	BodySection(ParseContext &context, Section *parent, DataSectionDefinition &definition)
+	BodySection(ParseContext &context, Section *parent, DataSectionDefinition &definition, Range declarationRange)
 		: MetadataSection(parent), definition(definition) {
-		auto *record = new ClassSection(context.mainSection);
+		auto *record = new ClassSection(context.mainSection, declarationRange);
 		definition.bodyClass = record->classDefinition;
 		record->classDefinition->patternNames.push_back("section body");
 		record->classDefinition->displayPatternNames.push_back("section body");
@@ -128,7 +128,7 @@ std::optional<Section *> createDataSectionMetadata(ParseContext &context, CodeLi
 			dataSectionDiagnostic(context, Range(line, name), "A section accepts one data body or one deferred body");
 			return static_cast<Section *>(nullptr);
 		}
-		return new BodySection(context, definition, data);
+		return new BodySection(context, definition, data, Range(line, line->patternText));
 	}
 	if (name == syntax.dataDeclaresName)
 		return new BindingSection(definition, data);

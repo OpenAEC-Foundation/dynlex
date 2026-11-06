@@ -1,0 +1,1 @@
+tests/required/static_pure_runtime_argument/main.dl:29-51: Error: A static reference requires a constant aggregate value

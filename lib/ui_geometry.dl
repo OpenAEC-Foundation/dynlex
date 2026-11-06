@@ -29,6 +29,13 @@ UI ink {integer:red} {integer:green} {integer:blue} means: @intrinsic("construct
 UI box at {a value:x} {a value:y} sized {a value:width} {a value:height} means: @intrinsic("construct", UI bounds, x as a floating-point number, y as a floating-point number, width as a floating-point number, height as a floating-point number)
 a UI point at {floating-point number:x} and {floating-point number:y} means: @intrinsic("construct", UI point, x, y)
 
+to get the UI intersection of {UI bounds:first} and {UI bounds:second}:
+    set left to the maximum of (first's x) and (second's x)
+    set top to the maximum of (first's y) and (second's y)
+    set right to the minimum of (first's x + first's width) and (second's x + second's width)
+    set bottom to the minimum of (first's y + first's height) and (second's y + second's height)
+    return UI box at left top sized (the maximum of 0.0 and (right - left)) (the maximum of 0.0 and (bottom - top))
+
 to get UI ink between {UI paint:first} and {UI paint:second} at {floating-point number:amount}:
     set phase to the minimum of 1.0 and (the maximum of 0.0 and amount)
     set red to (first's red as a floating-point number) + (((second's red - first's red) as a floating-point number) * phase)

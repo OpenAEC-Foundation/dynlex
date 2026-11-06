@@ -1,5 +1,5 @@
 # Native renderer state. Kept in DynLex so graphics algorithms can access their data directly.
-import lib/vulkan_types.dl
+import lib/vulkan_frame_types.dl
 
 the graphics upload capacity means: 33554432 as a 64 bit unsigned integer
 
@@ -95,6 +95,13 @@ class:
 
 class:
     patterns:
+        DynlexGraphicsKeyPress
+    members:
+        number as an integer
+        next as a pointer to DynlexGraphicsKeyPress
+
+class:
+    patterns:
         DynlexGraphics
     members:
         window as a pointer
@@ -111,6 +118,7 @@ class:
         swapchain_format as a 32 bit integer
         swapchain_color_space as a 32 bit integer
         swapchain_extent as VkExtent2D
+        clip_rectangle as VkRect2D
         swapchain_images as a pointer to (a pointer)
         swapchain_views as a pointer to (a pointer)
         framebuffers as a pointer to (a pointer)
@@ -147,4 +155,6 @@ class:
         meshes as a pointer to (DynlexGraphicsMesh)
         builtins as (DynlexGraphicsBuiltinPipeline) array of 4 items
         scroll_callback as a pointer
+        first_key_press as a pointer to DynlexGraphicsKeyPress
+        last_key_press as a pointer to DynlexGraphicsKeyPress
         application_state as a pointer

@@ -71,6 +71,7 @@ bool ensureCallableFunctionGenerated(
 	std::vector<ParseContext::ManagedStorageState> savedManagedStorage = std::move(context.managedLocalStorage);
 	context.managedLocalStorage.clear();
 	builder.SetInsertPoint(entry);
+	builder.SetCurrentDebugLocation({});
 
 	std::vector<llvm::Value *> callArguments;
 	std::vector<llvm::Value *> managedParameterStorage;

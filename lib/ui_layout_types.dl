@@ -26,6 +26,12 @@ class:
         node as UI reference
         parent as UI reference
         bounds as UI bounds
+        design bounds as UI bounds
+        horizontal pin as an integer
+        vertical pin as an integer
+        scroll position as a floating-point number
+        scroll target as a floating-point number
+        painted bounds as UI bounds
         hover as a floating-point number
         transition as a floating-point number
         painted as a boolean

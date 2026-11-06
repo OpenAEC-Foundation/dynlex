@@ -1,0 +1,33 @@
+# Key edges are FIFO events; polling held state cannot preserve repeated presses.
+import lib/graphics_native_types.dl
+
+to record graphics key press {integer:number} in {a pointer to DynlexGraphics:state}:
+    set entry to @intrinsic("construct", DynlexGraphicsKeyPress, number, 0 as a pointer to DynlexGraphicsKeyPress)
+    set pending to storage for one slot initialized with entry
+    if state's last_key_press = (0 as a pointer to DynlexGraphicsKeyPress):
+        set state's first_key_press to pending
+    else:
+        set state's last_key_press's next to pending
+    set state's last_key_press to pending
+
+to get the next graphics key press in {a pointer to DynlexGraphics:state}:
+    set pending to state's first_key_press
+    if pending = (0 as a pointer to DynlexGraphicsKeyPress):
+        return -1
+    set number to pending's number
+    set state's first_key_press to pending's next
+    if state's first_key_press = (0 as a pointer to DynlexGraphicsKeyPress):
+        set state's last_key_press to 0 as a pointer to DynlexGraphicsKeyPress
+    deallocate pending
+    return number
+
+to discard graphics key presses in {a pointer to DynlexGraphics:state}:
+    loop while state's first_key_press != (0 as a pointer to DynlexGraphicsKeyPress):
+        ignore the next graphics key press in state
+
+exposed function [handle the graphics key of] {pointer:window} [numbered] {integer:number} [with scan] {integer:scan} [action] {integer:action} [modifiers] {integer:modifiers}:
+    execute:
+        # Unknown keys, release edges and OS repeat are not new physical presses.
+        if (action = 1) and (number >= 0):
+            set state to @intrinsic("call", "glfw", "glfwGetWindowUserPointer", a pointer to DynlexGraphics, window)
+            record graphics key press number in state

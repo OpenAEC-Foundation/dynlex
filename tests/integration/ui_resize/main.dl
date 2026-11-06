@@ -1,0 +1,111 @@
+import examples/ribbon/interface.dl
+import lib/ui_resize.dl
+
+window nested pins:
+    a UI component 12 labeled "Panel" styled "plain" at 20 20 sized 200 by 100 containing [icon command "Inner" with icon "save" at 20 20 sized 30 by 30]
+    icon command "Centered" with icon "save" at 80 20 sized 30 by 30
+    icon command "Footer" with icon "save" at 20 180 sized 30 by 20
+    style:
+        pin "Panel" to all edges
+        pin "Inner" to the bottom right
+        center "Centered" horizontally
+        pin "Footer" to the bottom left
+
+set state to 0
+set instance to an instance of ribbon studio with state (the address of state)
+set layout to a UI layout for ribbon studio inside ribbon studio with width 1280 using (the UI theme for ribbon studio)
+prepare UI layout layout for ribbon studio sized 1280 by 800
+set editor to the UI layout labeled "Editor" in layout
+set ribbon to the UI layout labeled "Main ribbon" in layout
+set share to the UI layout labeled "Share" in layout
+set status to the UI layout labeled "Normal view" in layout
+set font to the UI layout labeled "Aptos (Body)" in layout
+set original to font's bounds
+set the value of "Main ribbon" in (the address of instance) to 2
+set the text of "Aptos (Body)" in (the address of instance) to "Georgia"
+
+resize UI layout layout to 1600 by 800
+require condition ((editor's bounds' width = 1600.0) and (editor's bounds' height = 800.0)) reporting "The canvas did not stretch horizontally"
+require condition ((share's bounds' x = 1436.0) and (share's bounds' y = 14.0)) reporting "The top-right button did not retain its edge margins"
+require condition ((share's bounds' width = 92.0) and (ribbon's bounds' height = 168.0)) reporting "Resizing magnified the controls"
+resize UI layout layout to 1280 by 1000
+require condition ((status's bounds' x = 997.0) and (status's bounds' y = 979.0)) reporting "The status control did not follow the bottom edge"
+require condition ((ribbon's bounds' y = 56.0) and (ribbon's bounds' height = 168.0)) reporting "A height-only resize moved the ribbon"
+resize UI layout layout to 960 by 600
+require condition ((ribbon's bounds' width = 936.0) and (ribbon's bounds' height = 168.0)) reporting "A narrow ribbon changed height instead of scrolling"
+set tab to ribbon's first
+loop while tab != @intrinsic("construct", a pointer to UI layout):
+    set group to tab's first
+    loop while group != @intrinsic("construct", a pointer to UI layout):
+        require condition (group's bounds' y = 0.0) reporting "A ribbon group wrapped to another row"
+        set group to group's next
+    set tab to tab's next
+set home to ribbon's first's next
+set span to the ribbon viewport width for home in ribbon
+set limit to the ribbon scroll limit for home within span
+set earlier to ribbon's first
+loop while earlier's node's kind != 38:
+    set earlier to earlier's next
+set later to earlier's next
+set the value of "Main ribbon" in (the address of instance) to 1
+require condition ((span = 876.0) and (limit > 0.0)) reporting "An overflowing ribbon did not reserve space for its arrows"
+require condition ((UI ribbon arrow earlier is visible in layout for (the address of instance)) = false) reporting "The previous arrow was visible at the start"
+require condition (UI ribbon arrow later is visible in layout for (the address of instance)) reporting "The next arrow was hidden before the final group"
+scroll ribbon tab home in direction 1 within span
+require condition ((home's scroll target > 0.0) and (home's scroll target <= limit)) reporting "The next-group arrow did not advance the strip"
+require condition ((UI ribbon arrow earlier is visible in layout for (the address of instance)) = false) reporting "The previous arrow appeared before the strip moved"
+set position to home's scroll target
+set design to home's next's next
+scroll ribbon tab design in direction 1 within (the ribbon viewport width for design in ribbon)
+require condition (home's scroll target = position) reporting "Scrolling another tab moved the first tab"
+set index to 0
+loop while index < 12:
+    scroll ribbon tab home in direction 1 within span
+    increment index
+require condition (home's scroll target = limit) reporting "Scrolling overshot the final group"
+require condition (UI ribbon arrow later is visible in layout for (the address of instance)) reporting "The next arrow disappeared before the strip reached its target"
+set home's scroll position to limit
+require condition ((UI ribbon arrow later is visible in layout for (the address of instance)) = false) reporting "The next arrow was visible at the end"
+require condition (UI ribbon arrow earlier is visible in layout for (the address of instance)) reporting "The previous arrow was hidden at the end"
+set index to 0
+loop while index < 12:
+    scroll ribbon tab home in direction -1 within span
+    increment index
+require condition (home's scroll target = 0.0) reporting "The previous-group arrow did not return to the start"
+require condition (UI ribbon arrow earlier is visible in layout for (the address of instance)) reporting "The previous arrow disappeared before the strip returned"
+set home's scroll position to 0.0
+require condition ((UI ribbon arrow earlier is visible in layout for (the address of instance)) = false) reporting "The previous arrow was visible after returning to the start"
+set selectedControl to the UI layout labeled "Select" in layout
+set selectedControl's order to 77
+set group to home's first
+loop while group != @intrinsic("construct", a pointer to UI layout):
+    reveal UI control ordered 77 in group at 0.0 within span for home
+    set group to group's next
+require condition ((home's scroll target > 0.0) and (home's scroll target <= limit)) reporting "Keyboard focus did not reveal an offscreen control"
+resize UI layout layout to 2400 by 1200
+require condition ((home's scroll position = 0.0) and (design's scroll target = 0.0)) reporting "Widening the ribbon left an obsolete scroll offset"
+require condition (((UI ribbon arrow earlier is visible in layout for (the address of instance)) = false) and ((UI ribbon arrow later is visible in layout for (the address of instance)) = false)) reporting "An arrow was visible when all groups fit"
+set the value of "Main ribbon" in (the address of instance) to 2
+resize UI layout layout to 960 by 600
+resize UI layout layout to 1280 by 800
+require condition ((share's bounds' x = 1116.0) and (status's bounds' y = 779.0)) reporting "Repeated resizing accumulated position errors"
+require condition ((font's bounds' x = original's x) and (font's bounds' width = original's width)) reporting "A field's geometry changed after restoring the window size"
+require condition ((the selected tab of (ribbon's node) in (the address of instance))'s text = "Insert") reporting "Resizing reset the selected tab"
+require condition (((the UI value for (font's node) in (the address of instance))'s text) = "Georgia") reporting "Resizing reset a selected field value"
+release UI layout layout
+close the address of instance
+set nested to a UI layout for nested pins inside nested pins with width 300 using (the UI theme for nested pins)
+prepare UI layout nested for nested pins sized 300 by 200
+resize UI layout nested to 500 by 400
+set inner to the UI layout labeled "Inner" in nested
+set centered to the UI layout labeled "Centered" in nested
+set footer to the UI layout labeled "Footer" in nested
+require condition ((inner's bounds' x = 220.0) and (inner's bounds' y = 220.0)) reporting "A nested control did not retain its parent-relative margins"
+require condition ((centered's bounds' x = 180.0) and (centered's bounds' y = 20.0)) reporting "A centered control lost its horizontal offset"
+require condition ((footer's bounds' x = 20.0) and (footer's bounds' y = 380.0)) reporting "A bottom-left control moved horizontally"
+resize UI layout nested to 300 by 200
+require condition ((inner's bounds' x = 20.0) and (inner's bounds' y = 20.0)) reporting "Nested resizing accumulated position errors"
+release UI layout nested
+set clipped to the UI intersection of (UI box at -20 10 sized 80 40) and (UI box at 0 0 sized 30 100)
+require condition ((clipped's x = 0.0) and ((clipped's y = 10.0) and ((clipped's width = 30.0) and (clipped's height = 40.0)))) reporting "The clipping region did not intersect the visible bounds"
+print line "UI resize passed"

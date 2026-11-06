@@ -50,6 +50,7 @@ to get [begin a Vulkan frame cleared to red] {floating-point number:red} [green]
     set viewport's maxDepth to 1.0 as a 32 bit floating-point number
     @intrinsic("call", "vulkan", "vkCmdSetViewport", nothing, frame's commands, 0, 1, the address of viewport)
     @intrinsic("call", "vulkan", "vkCmdSetScissor", nothing, frame's commands, 0, 1, the address of area)
+    set state's clip_rectangle to area
     set frame's upload_offset to 0 as a 64 bit unsigned integer
     set state's triangle_vertex_count to 0 as a 32 bit unsigned integer
     set state's triangles_active to false

@@ -1,0 +1,25 @@
+import lib/graphics_keyboard.dl
+import lib/check.dl
+
+set first to a new DynlexGraphics
+set second to a new DynlexGraphics
+set index to 0
+loop while index < 1000:
+    record graphics key press index in (the address of first)
+    increment index
+require condition ((the next graphics key press in (the address of second)) = -1) reporting "Key events crossed window boundaries"
+set index to 0
+loop while index < 1000:
+    require condition ((the next graphics key press in (the address of first)) = index) reporting "A key burst lost its FIFO ordering"
+    increment index
+require condition ((the next graphics key press in (the address of first)) = -1) reporting "An empty key queue retained an event"
+record graphics key press 262 in (the address of first)
+record graphics key press 262 in (the address of first)
+require condition ((the next graphics key press in (the address of first)) = 262) reporting "A repeated key press was lost"
+require condition ((the next graphics key press in (the address of first)) = 262) reporting "Consecutive equal presses were coalesced"
+record graphics key press 256 in (the address of first)
+discard graphics key presses in (the address of first)
+require condition ((the next graphics key press in (the address of first)) = -1) reporting "Discarding queued events retained a key"
+record graphics key press 257 in (the address of first)
+require condition ((the next graphics key press in (the address of first)) = 257) reporting "A discarded key queue could not be reused"
+print line "Graphics key queue passed"
