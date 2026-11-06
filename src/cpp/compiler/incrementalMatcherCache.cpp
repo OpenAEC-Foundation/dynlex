@@ -7,7 +7,7 @@
 #include "patternReference.h"
 #include "section.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/SHA256.h"
+#include "llvm/Support/BLAKE3.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -15,7 +15,7 @@
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
-constexpr std::string_view matcherCacheHeader = "DynLex matcher results v2\n";
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v3\n";
 
 void appendLength(std::string &output, std::uint64_t value) {
 	do {
@@ -56,7 +56,7 @@ std::string_view readString(std::string_view input, size_t &position) {
 }
 
 std::string digest(std::string_view value) {
-	llvm::SHA256 hash;
+	llvm::BLAKE3 hash;
 	hash.update(llvm::StringRef(value.data(), value.size()));
 	return llvm::toHex(hash.final(), true);
 }
