@@ -11,40 +11,42 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <set>
 #include <stdexcept>
+#include <vector>
 
 namespace {
-bool collectDependencies(
+void collectDependencies(
 	const llvm::Value *value, const llvm::Function &owner, std::unordered_set<const llvm::Value *> &visited,
-	std::unordered_set<const llvm::Function *> &dependencies
+	std::unordered_set<const llvm::Function *> &dependencies, std::unordered_set<const llvm::GlobalVariable *> &mutableGlobals
 ) {
 	if (!visited.insert(value).second)
-		return false;
-	if (const auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value))
-		return !global->isConstant();
+		return;
+	if (const auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+		if (!global->isConstant())
+			mutableGlobals.insert(global);
+		return;
+	}
 	if (const auto *function = llvm::dyn_cast<llvm::Function>(value)) {
 		if (function != &owner && !function->isDeclaration())
 			dependencies.insert(function);
-		return false;
+		return;
 	}
 	if (const auto *user = llvm::dyn_cast<llvm::User>(value)) {
-		for (const llvm::Use &operand : user->operands()) {
-			if (collectDependencies(operand.get(), owner, visited, dependencies))
-				return true;
-		}
+		for (const llvm::Use &operand : user->operands())
+			collectDependencies(operand.get(), owner, visited, dependencies, mutableGlobals);
 	}
-	return false;
 }
 
-bool collectDependencies(const llvm::Function &function, std::unordered_set<const llvm::Function *> &dependencies) {
+void collectDependencies(
+	const llvm::Function &function, std::unordered_set<const llvm::Function *> &dependencies,
+	std::unordered_set<const llvm::GlobalVariable *> &mutableGlobals
+) {
 	std::unordered_set<const llvm::Value *> visited;
 	for (const llvm::BasicBlock &block : function) {
-		for (const llvm::Instruction &instruction : block) {
-			if (collectDependencies(&instruction, function, visited, dependencies))
-				return true;
-		}
+		for (const llvm::Instruction &instruction : block)
+			collectDependencies(&instruction, function, visited, dependencies, mutableGlobals);
 	}
-	return false;
 }
 } // namespace
 
@@ -76,8 +78,14 @@ bool IncrementalIRReuse::reusableClosure(
 	if (llvm::Function *now = current.getFunction(name); now && now->getFunctionType() != function.getFunctionType())
 		return false;
 	std::unordered_set<const llvm::Function *> dependencies;
-	if (collectDependencies(function, dependencies))
-		return false;
+	std::unordered_set<const llvm::GlobalVariable *> mutableGlobals;
+	collectDependencies(function, dependencies, mutableGlobals);
+	for (const llvm::GlobalVariable *old : mutableGlobals) {
+		llvm::GlobalVariable *now = current.getGlobalVariable(old->getName(), true);
+		if (!now || now->getValueType() != old->getValueType() || now->getLinkage() != old->getLinkage() ||
+			!now->hasInitializer() || !old->hasInitializer() || now->getInitializer() != old->getInitializer())
+			return false;
+	}
 	for (const llvm::Function *dependency : dependencies) {
 		if (!reusableClosure(*dependency, current, names))
 			return false;
@@ -126,6 +134,14 @@ bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function
 bool IncrementalIRReuse::import(ParseContext &context) {
 	if (reusedNames.empty())
 		return true;
+	std::set<std::string> mutableGlobalNames;
+	for (const std::string &name : reusedNames) {
+		std::unordered_set<const llvm::Function *> dependencies;
+		std::unordered_set<const llvm::GlobalVariable *> mutableGlobals;
+		collectDependencies(*previousModule->getFunction(name), dependencies, mutableGlobals);
+		for (const llvm::GlobalVariable *global : mutableGlobals)
+			mutableGlobalNames.insert(global->getName().str());
+	}
 	llvm::ValueToValueMapTy values;
 	std::unique_ptr<llvm::Module> cached = llvm::CloneModule(*previousModule, values, [&](const llvm::GlobalValue *value) {
 		if (const auto *function = llvm::dyn_cast<llvm::Function>(value))
@@ -134,8 +150,21 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 	});
 	for (const std::string &name : reusedNames)
 		cached->getFunction(name)->setLinkage(llvm::GlobalValue::ExternalLinkage);
+	std::vector<std::pair<std::string, llvm::GlobalValue::LinkageTypes>> globalLinkages;
+	for (const std::string &name : mutableGlobalNames) {
+		llvm::GlobalVariable *old = cached->getGlobalVariable(name, true);
+		llvm::GlobalVariable *now = context.llvmModule->getGlobalVariable(name, true);
+		if (!old || !now)
+			throw std::runtime_error("reused function lost a global variable: " + name);
+		globalLinkages.emplace_back(name, now->getLinkage());
+		old->setInitializer(nullptr);
+		old->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		now->setLinkage(llvm::GlobalValue::ExternalLinkage);
+	}
 	if (llvm::Linker::linkModules(*context.llvmModule, std::move(cached), llvm::Linker::Flags::LinkOnlyNeeded))
 		throw std::runtime_error("failed to import cached function IR");
+	for (const auto &[name, linkage] : globalLinkages)
+		context.llvmModule->getGlobalVariable(name, true)->setLinkage(linkage);
 	for (const std::string &name : reusedNames) {
 		llvm::Function *function = context.llvmModule->getFunction(name);
 		if (!function || function->isDeclaration())

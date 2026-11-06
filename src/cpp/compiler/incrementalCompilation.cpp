@@ -794,16 +794,13 @@ bool compileIncrementally(
 							context, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
 							sectionPaths, eligible
 						);
-						if (previous->at("diagnostics") == "" && context.diagnostics.empty() &&
-							context.scopeRuleWarnings.empty()) {
-							inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-								context, previous->at("inference_summaries"), *functionReuse, std::move(eligible)
-							);
-							context.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
-																	 Instantiation &instantiation) {
-								return inferenceReuse->reuse(section, key, instantiation);
-							};
-						}
+						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
+							context, previous->at("inference_summaries"), *functionReuse, std::move(eligible)
+						);
+						context.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
+																 Instantiation &instantiation) {
+							return inferenceReuse->reuse(section, key, instantiation);
+						};
 					}
 				}
 			}
@@ -898,8 +895,8 @@ bool compileIncrementally(
 					for (const auto &[_, path] : functionSections)
 						generatedFunctionPaths.insert(path);
 					result["inactive_projection"] = captureInactiveProjection(compiled, nullptr, &generatedFunctionPaths);
-					result["inference_summaries"] =
-						inferenceReuse ? inferenceReuse->snapshot(sectionPaths) : captureInferenceSummaries(sectionPaths);
+					result["inference_summaries"] = inferenceReuse ? inferenceReuse->snapshot(sectionPaths, diagnosticSources)
+																   : captureInferenceSummaries(sectionPaths, diagnosticSources);
 					recordSemanticSources(result, *recording, compiled);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {

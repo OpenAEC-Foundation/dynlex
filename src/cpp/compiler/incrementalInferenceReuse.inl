@@ -15,10 +15,11 @@ std::optional<std::string> inferenceSummaryKey(const InstantiationKey &key) {
 		return std::nullopt;
 	std::string result;
 	for (const DataType &type : key.argumentTypes) {
-		if (type.pointerDepth != 0 || (type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float &&
-									   type.kind != DataType::Kind::Int && type.kind != DataType::Kind::UInt))
+		if (type.kind != DataType::Kind::Bool && type.kind != DataType::Kind::Float && type.kind != DataType::Kind::Int &&
+			type.kind != DataType::Kind::UInt)
 			return std::nullopt;
-		result += std::to_string(static_cast<int>(type.kind)) + ":" + std::to_string(type.numericSize) + ";";
+		result += std::to_string(static_cast<int>(type.kind)) + ":" + std::to_string(type.numericSize) + ":" +
+				  std::to_string(type.pointerDepth) + ";";
 	}
 	return result;
 }
@@ -51,9 +52,17 @@ bool canPersistInferenceSummary(const Section *section, const InstantiationKey &
 		   !instantiation.returnPointerStorageAmbiguous && !instantiation.memoryViolation;
 }
 
-Json captureInferenceSummaries(const std::map<const Section *, std::string> &sectionPaths) {
+bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::string> &excludedSources) {
+	return !section->openingLine || excludedSources.contains(section->openingLine->sourceFile->uri);
+}
+
+Json captureInferenceSummaries(
+	const std::map<const Section *, std::string> &sectionPaths, const std::set<std::string> &excludedSources
+) {
 	Json summaries = Json::object();
 	for (const auto &[section, path] : sectionPaths) {
+		if (inferenceSummarySourceExcluded(section, excludedSources))
+			continue;
 		for (const auto &[key, instantiation] : section->instantiations) {
 			if (!canPersistInferenceSummary(section, key, instantiation))
 				continue;
@@ -105,9 +114,11 @@ class IncrementalInferenceReuse {
 	}
 
 	size_t reusedCount() const { return count; }
-	Json snapshot(const std::map<const Section *, std::string> &paths) const {
-		Json result = captureInferenceSummaries(paths);
+	Json snapshot(const std::map<const Section *, std::string> &paths, const std::set<std::string> &excludedSources) const {
+		Json result = captureInferenceSummaries(paths, excludedSources);
 		for (const Section *section : eligible) {
+			if (inferenceSummarySourceExcluded(section, excludedSources))
+				continue;
 			const std::string &path = sectionPaths.at(section);
 			if (summaries.contains(path)) {
 				for (const auto &[key, summary] : summaries.at(path).items()) {

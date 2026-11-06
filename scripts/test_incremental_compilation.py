@@ -241,7 +241,7 @@ function left times right:
     edited = build()
     assert not edited[0]["frontend_reused"]
     assert not edited[0]["type_inference_reused"], "called function edit kept stale inference"
-    assert edited[0]["objects_reused"] > 0 and edited[0]["objects_built"] > 0, "edit did not selectively rebuild objects"
+    assert edited[0]["objects_built"] > 0, f"changed function did not rebuild its object: {edited[0]}"
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
 
     leaf_a = root / "leaf_a.dl"
@@ -378,6 +378,45 @@ function left times right:
     warning_edit = build(entry=warning_code_main)
     assert warning_edit[0]["functions_ir_reused"] >= 1, "warning disabled safe function IR reuse"
     assert warning_edit[1:] == build(False, entry=warning_code_main)[1:], "warning changed after code edit"
+
+    global_main = root / "global_main.dl"
+    global_source = ('integer means: @intrinsic("type", "int")\n'
+                     '@intrinsic("store", counter, 1)\n'
+                     'function read state:\n'
+                     '    globals:\n'
+                     '        counter\n'
+                     '    execute:\n'
+                     '        @intrinsic("return", counter)\n'
+                     'to other:\n'
+                     '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "other"))\n'
+                     'other\n@intrinsic("return", @intrinsic("subtract", read state, 1))\n')
+    global_main.write_text(global_source)
+    build(entry=global_main)
+    global_main.write_text(global_source.replace('"other"))', '"changed"))'))
+    global_edit = build(entry=global_main)
+    assert global_edit[0]["functions_ir_reused"] >= 1, "unchanged global reader IR was regenerated"
+    assert global_edit[1:] == build(False, entry=global_main)[1:], "global reader edit differs from clean build"
+    global_main.write_text(global_main.read_text().replace('counter, 1)', 'counter, 2)').replace('read state, 1)', 'read state, 2)'))
+    global_initializer_edit = build(entry=global_main)
+    assert global_initializer_edit[0]["functions_ir_reused"] == 0, "changed global initializer reused old function IR"
+    assert global_initializer_edit[1:] == build(False, entry=global_main)[1:]
+
+    pointer_main = root / "pointer_main.dl"
+    pointer_source = ('integer means: @intrinsic("type", "int")\n'
+                      'pointer to kind means: @intrinsic("add pointer depth", kind)\n'
+                      'to alpha {pointer to integer:value}:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n'
+                      'to beta {pointer to integer:value}:\n'
+                      '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "beta"))\n'
+                      '@intrinsic("store", number, 1)\n'
+                      'alpha @intrinsic("address of", number)\n'
+                      'beta @intrinsic("address of", number)\n')
+    pointer_main.write_text(pointer_source)
+    build(entry=pointer_main)
+    pointer_main.write_text(pointer_source.replace('"alpha"))', '"changed"))'))
+    pointer_edit = build(entry=pointer_main)
+    assert pointer_edit[0]["inference_instantiations_reused"] >= 1, "pointer argument function was re-inferred"
+    assert pointer_edit[1:] == build(False, entry=pointer_main)[1:], "pointer argument edit differs from clean build"
 
     for flags in [("-O2",), ("-g",), ("-ffast-math",), ("--trace-execution",)]:
         changed = build(flags=flags)

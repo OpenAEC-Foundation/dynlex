@@ -801,19 +801,21 @@ can import cached LLVM bodies of unchanged functions after a code edit. It compa
 each function body separately, so changing one function does not invalidate its
 unchanged neighbors in the same file. Pattern declarations and source outside
 function bodies must remain identical. Calls to other generated functions form a
-reuse closure: every cached callee must also be unchanged. Functions that use
-mutable globals are regenerated. Class layouts use structural LLVM structs so
+reuse closure: every cached callee must also be unchanged. Cached functions that
+read mutable globals are linked to the current globals only when their LLVM types
+and initializers match. Class layouts use structural LLVM structs so
 cached function imports do not renumber type identities or invalidate unrelated
 object partitions. Reused function IR
 retains the native libraries required by external calls, so a caller edit cannot
 drop a link dependency.
 
 For active edits, the native cache also persists inference summaries for impure
-functions with concrete scalar runtime arguments and scalar or no return values
+functions with primitive scalar or pointer arguments and scalar or no return values
 when they do not access globals. A summary
 is reused only if its source body, pattern declarations, every matched function
 dependency and its cached IR closure are unchanged. Other instantiations still
-run ordinary inference. Functions imported from cached IR count as active when
+run ordinary inference. A function in a file with diagnostics gets no inference
+summary, so its warnings are regenerated. Functions imported from cached IR count as active when
 deciding whether an edited body can be ignored. This prevents a later callee edit
 from reusing the preceding build's type inference and executable.
 
