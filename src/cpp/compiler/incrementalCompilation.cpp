@@ -337,6 +337,7 @@ struct BuildStatistics {
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
 	size_t matcherCacheHits = 0;
+	size_t precedenceMatcherCacheHits = 0;
 };
 
 bool emitPartitions(
@@ -459,6 +460,7 @@ bool compileIncrementally(
 			};
 			bool compiled = compile(context.options.inputPath, context);
 			statistics.matcherCacheHits = matcherCache.hits();
+			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
 			if (compiled) {
@@ -488,7 +490,8 @@ bool compileIncrementally(
 		if (showStatistics)
 			std::cerr << "incremental: " << Json{{"frontend_reused", statistics.reusedFrontend},
 				{"objects_reused", statistics.reusedObjects}, {"objects_built", statistics.builtObjects},
-				{"matcher_cache_hits", statistics.matcherCacheHits}}.dump() << '\n';
+				{"matcher_cache_hits", statistics.matcherCacheHits},
+				{"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits}}.dump() << '\n';
 		return success;
 	} catch (const std::exception &error) {
 		std::cerr << "Incremental compilation failed: " << error.what() << '\n';

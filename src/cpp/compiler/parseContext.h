@@ -256,6 +256,8 @@ struct ParseContext {
 	// this is to prevent having to search all pattern trees of every scope, or merging trees per scope.
 	PatternTreeNode *patternTrees[(int)SectionType::Count]{};
 	std::vector<std::unique_ptr<PatternFamily>> patternFamilies;
+	// Incremented when precedence families are rebuilt during pattern resolution.
+	std::uint64_t patternPrecedenceRevision = 0;
 	// variable references that don't correspond to any pattern element
 	std::unordered_map<std::string, std::list<VariableReference *>> unresolvedVariableReferences;
 	// Owns all VariableReference instances for this compilation.

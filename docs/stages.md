@@ -759,8 +759,8 @@ The compiler linker build ID (or executable content digest when the format has n
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
 After an executable source edit, the frontend reconstructs sections and pattern trees.
-Before precedence resolution, it reuses pointer-free matcher results from the previous
-build for unchanged references when the pattern-tree mutation history, the reference's
+It reuses pointer-free matcher results from the previous build in both the initial
+resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, relative lexical declaration visibility, and syntax
 configuration have the same fingerprints. Matcher keys cover wildcard patterns and
 literal starts that could occur in the reference, in its own pattern tree and the
@@ -776,7 +776,9 @@ matching to run normally on the next code edit.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.
 New or removed matching overloads change the relevant tree fingerprint and invalidate
-cached matches from that point in resolution.
+cached matches from that point in resolution. Precedence-pass results also include
+the resolved syntax families, associativity and precedence reachability in their
+fingerprint, so a changed precedence rule cannot reuse a stale grouping.
 Type inference and LLVM generation still run for the full program after a code edit.
 
 Native emission divides the finalized IR

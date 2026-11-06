@@ -174,9 +174,48 @@ std::string IncrementalMatcherCache::sourceDigest(const lsp::SourceFile *source)
 	return it->second;
 }
 
+std::string IncrementalMatcherCache::precedenceDigest() {
+	requireCompilerInvariant(
+		context.patternPrecedenceRevision != 0, "precedence match cache requires resolved syntax families"
+	);
+	if (cachedPrecedenceRevision == context.patternPrecedenceRevision)
+		return cachedPrecedenceDigest;
+	Fingerprint fingerprint;
+	std::unordered_map<const PatternFamily *, size_t> familyIndices;
+	familyIndices.reserve(context.patternFamilies.size());
+	for (size_t index = 0; index < context.patternFamilies.size(); index++)
+		familyIndices.emplace(context.patternFamilies[index].get(), index);
+	fingerprint.number(context.patternFamilies.size());
+	for (const auto &family : context.patternFamilies) {
+		fingerprint.number(static_cast<int>(family->associativity));
+		std::vector<size_t> successors;
+		successors.reserve(family->precedenceSuccessors.size());
+		for (const PatternFamily *successor : family->precedenceSuccessors)
+			successors.push_back(familyIndices.at(successor));
+		std::sort(successors.begin(), successors.end());
+		fingerprint.number(successors.size());
+		for (size_t successor : successors)
+			fingerprint.number(successor);
+	}
+	auto appendSections = [&](auto &&self, const Section *section) -> void {
+		fingerprint.number(section->patternDefinitions.size());
+		for (const PatternDefinition *definition : section->patternDefinitions) {
+			appendDefinition(fingerprint, definition);
+			fingerprint.number(familyIndices.at(definition->family));
+		}
+		fingerprint.number(section->children.size());
+		for (const Section *child : section->children)
+			self(self, child);
+	};
+	appendSections(appendSections, context.mainSection);
+	cachedPrecedenceDigest = fingerprint.finish();
+	cachedPrecedenceRevision = context.patternPrecedenceRevision;
+	return cachedPrecedenceDigest;
+}
+
 bool IncrementalMatcherCache::available(MatchOptions options) {
 	if (options.acceptLiterals || options.maxSteps ||
-		context.compilationStage >= ParseContext::CompilationStage::ResolvedPatternPrecedence)
+		context.compilationStage > ParseContext::CompilationStage::ResolvedPatternPrecedence)
 		return false;
 	for (const PatternTreeNode *root : context.patternTrees) {
 		if (!root)
@@ -207,6 +246,10 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	}
 	size_t startByteCount = std::count(possibleStartBytes.begin(), possibleStartBytes.end(), true);
 	Fingerprint fingerprint;
+	bool precedencePhase = context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence;
+	fingerprint.boolean(precedencePhase);
+	if (precedencePhase)
+		fingerprint.string(precedenceDigest());
 	auto appendTreeState = [&](const PatternTreeNode *root) {
 		fingerprint.string(root->mutationState->wildcardDigest);
 		fingerprint.number(startByteCount);
@@ -476,6 +519,8 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 			throw std::runtime_error("trailing incremental matcher cache data");
 		recorded[cacheKey] = value;
 		reusedCount++;
+		if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
+			reusedPrecedenceCount++;
 		return static_cast<PatternMatch *>(nullptr);
 	}
 	if (value[0] != 1)
@@ -485,6 +530,8 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 		throw std::runtime_error("trailing incremental matcher cache data");
 	recorded[cacheKey] = value;
 	reusedCount++;
+	if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
+		reusedPrecedenceCount++;
 	return new PatternMatch(std::move(match));
 }
 

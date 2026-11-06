@@ -73,6 +73,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
     same_file_edit = build()
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
+    assert same_file_edit[0]["precedence_matcher_cache_hits"] > 0, "code edit reran unchanged precedence matches"
     assert same_file_edit[1:] == build(False)[1:], "same-file match reuse differs from clean build"
     repeated_calls = "alpha\nbeta\n" * 20
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
@@ -155,7 +156,23 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     changed_string = build()
     assert not changed_string[0]["frontend_reused"], "comment marker inside a string was ignored"
     assert changed_string[0]["matcher_cache_hits"] > 0, "one-line body edit invalidated unrelated matches"
+    assert changed_string[0]["precedence_matcher_cache_hits"] > 0, "one-line body edit invalidated precedence matches"
     assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
+    precedence_source = '''function left plus right:
+    RULE: $ times $
+    replacement:
+        @intrinsic("add", left, right)
+function left times right:
+    replacement:
+        @intrinsic("multiply", left, right)
+@intrinsic("return", @intrinsic("subtract", 1 plus 2 times 3, EXPECTED))
+'''
+    main.write_text(precedence_source.replace("RULE", "before").replace("EXPECTED", "9"))
+    build()
+    main.write_text(precedence_source.replace("RULE", "after").replace("EXPECTED", "7"))
+    precedence_edit = build()
+    assert precedence_edit[0]["precedence_matcher_cache_hits"] == 0, "changed precedence reused stale matches"
+    assert precedence_edit[1:] == build(False)[1:], "precedence edit differs from clean build"
     pack_source = (project / "tests/required/argument_pack_capture/main.dl").read_text()
     pack_main = root / "pack.dl"
     pack_main.write_text(pack_source)

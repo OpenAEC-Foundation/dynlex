@@ -1,5 +1,6 @@
 #pragma once
 #include "patternMatch.h"
+#include <cstdint>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -28,6 +29,7 @@ class IncrementalMatcherCache {
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
 	std::string snapshot() const;
 	size_t hits() const { return reusedCount; }
+	size_t precedenceHits() const { return reusedPrecedenceCount; }
 
   private:
 	ParseContext &context;
@@ -35,11 +37,15 @@ class IncrementalMatcherCache {
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
 	std::unordered_map<const lsp::SourceFile *, std::string> sourceDigests;
 	std::unordered_map<std::string, Json> configDigests;
+	std::uint64_t cachedPrecedenceRevision = 0;
+	std::string cachedPrecedenceDigest;
 	size_t reusedCount = 0;
+	size_t reusedPrecedenceCount = 0;
 
 	bool available(MatchOptions options);
 	std::string key(const PatternReference &reference, bool trackDependencies);
 	std::string sourceDigest(const lsp::SourceFile *source);
+	std::string precedenceDigest();
 	void appendNode(std::string &output, const PatternTreeNode *node) const;
 	PatternTreeNode *restoreNode(std::string_view input, size_t &position) const;
 	bool appendMatch(std::string &output, const PatternReference &reference, const PatternMatch &match) const;

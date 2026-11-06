@@ -158,5 +158,6 @@ static bool resolvePatternPrecedence(ParseContext &context) {
 			family->precedenceSuccessors.insert(successor->precedenceSuccessors.begin(), successor->precedenceSuccessors.end());
 		}
 	}
+	context.patternPrecedenceRevision++;
 	return true;
 }
