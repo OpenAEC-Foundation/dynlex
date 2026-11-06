@@ -92,7 +92,6 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 	const CodeLine *line = definition->range.line;
 	const Section *section = definition->section;
 	key.string(line->sourceFile->uri);
-	key.number(line->sourceFileLineIndex);
 	key.number(definition->range.start());
 	key.number(definition->range.end());
 	key.string(line->fullText);
@@ -106,7 +105,6 @@ void appendDefinition(Fingerprint &key, const PatternDefinition *definition) {
 		const CodeLine *opening = section->dataFieldOwner->openingLine;
 		requireCompilerInvariant(opening && opening->sourceFile, "data field matcher definition has no owning source section");
 		key.string(opening->sourceFile->uri);
-		key.number(opening->sourceFileLineIndex);
 		key.string(opening->fullText);
 		key.number(static_cast<int>(section->dataFieldOwner->type));
 	}

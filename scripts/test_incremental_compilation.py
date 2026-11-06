@@ -82,6 +82,12 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     unrelated = build()
     assert unrelated[0]["matcher_cache_hits"] >= 20, "unrelated new pattern invalidated unchanged calls"
     assert unrelated[1:] == build(False)[1:], "unrelated new pattern changed cached matches"
+    main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
+    build()
+    main.write_text('@intrinsic("discard", 1)\n' + source.replace("alpha\nbeta\n", repeated_calls))
+    shifted = build()
+    assert shifted[0]["matcher_cache_hits"] >= 20, "line insertion invalidated unchanged definitions and calls"
+    assert shifted[1:] == build(False)[1:], "line insertion changed cached matches"
     main.write_text(source)
     build()
     main.write_text("# A new source comment must not invalidate executable code.\n" + source)

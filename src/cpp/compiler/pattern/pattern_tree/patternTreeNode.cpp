@@ -29,7 +29,6 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	llvm::SHA256 hash;
 	appendMutationField(hash, action);
 	appendMutationField(hash, line->sourceFile->uri);
-	appendMutationNumber(hash, line->sourceFileLineIndex);
 	appendMutationNumber(hash, definition->range.start());
 	appendMutationNumber(hash, definition->range.end());
 	appendMutationField(hash, definition->range.subString);
@@ -42,7 +41,6 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		const CodeLine *owner = section->dataFieldOwner->openingLine;
 		requireCompilerInvariant(owner && owner->sourceFile, "data field pattern mutation has no owning source section");
 		appendMutationField(hash, owner->sourceFile->uri);
-		appendMutationNumber(hash, owner->sourceFileLineIndex);
 		appendMutationField(hash, owner->patternText);
 	}
 	appendMutationNumber(hash, definition->indexedPaths.size());

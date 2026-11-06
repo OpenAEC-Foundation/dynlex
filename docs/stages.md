@@ -766,6 +766,8 @@ configuration have the same fingerprints. Matcher keys cover wildcard patterns a
 literal starts that could occur in the reference, in its own pattern tree and the
 function tree used for nested matches. Adding an unrelated pattern can therefore keep
 matches in unchanged calls, even when the added source line shifts their line numbers.
+Definition fingerprints use pattern content and order without absolute line numbers, so
+inserting an executable line before unchanged definitions also keeps their matches.
 Matcher results live in a separate content-addressed cache entry with a compact index
 and individually encoded results. An unchanged or comment-only build reads only the
 smaller program entry containing source observations and LLVM IR, so it does not parse
