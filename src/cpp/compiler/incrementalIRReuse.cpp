@@ -52,10 +52,11 @@ void collectDependencies(
 
 IncrementalIRReuse::IncrementalIRReuse(
 	ParseContext &context, const std::string &previousIR, const nlohmann::json &previousFunctions,
-	std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections
+	std::map<const Section *, std::string> sectionPaths, std::unordered_set<const Section *> eligibleSections,
+	std::unordered_set<std::string> replacementPaths
 )
 	: currentModule(context.llvmModule), previousFunctions(previousFunctions), sectionPaths(std::move(sectionPaths)),
-	  eligibleSections(std::move(eligibleSections)) {
+	  eligibleSections(std::move(eligibleSections)), replacementPaths(std::move(replacementPaths)) {
 	llvm::SMDiagnostic diagnostic;
 	previousModule = llvm::parseAssemblyString(previousIR, diagnostic, *context.llvmContext);
 	if (!previousModule)
@@ -72,9 +73,16 @@ bool IncrementalIRReuse::reusableClosure(
 	bool allowUnmaterializedGlobals
 ) const {
 	std::string name = function.getName().str();
+	if (!previousFunctions.contains(name))
+		return false;
+	std::string owner = previousFunctions.at(name).get<std::string>();
+	if (replacementPaths.contains(owner)) {
+		llvm::Function *now = current.getFunction(name);
+		return !now || now->getFunctionType() == function.getFunctionType();
+	}
 	if (!names.insert(name).second)
 		return true;
-	if (!previousFunctions.contains(name) || !eligiblePaths.contains(previousFunctions.at(name).get<std::string>()))
+	if (!eligiblePaths.contains(owner))
 		return false;
 	if (llvm::Function *now = current.getFunction(name); now && now->getFunctionType() != function.getFunctionType())
 		return false;
@@ -137,6 +145,20 @@ bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function
 bool IncrementalIRReuse::import(ParseContext &context) {
 	if (reusedNames.empty())
 		return true;
+	for (const std::string &name : reusedNames) {
+		std::unordered_set<const llvm::Function *> dependencies;
+		std::unordered_set<const llvm::GlobalVariable *> globals;
+		collectDependencies(*previousModule->getFunction(name), dependencies, globals);
+		for (const llvm::Function *dependency : dependencies) {
+			std::string dependencyName = dependency->getName().str();
+			if (!previousFunctions.contains(dependencyName) ||
+				!replacementPaths.contains(previousFunctions.at(dependencyName).get<std::string>()))
+				continue;
+			llvm::Function *replacement = context.llvmModule->getFunction(dependencyName);
+			if (!replacement || replacement->isDeclaration() || replacement->getFunctionType() != dependency->getFunctionType())
+				throw std::runtime_error("reused caller lost its rebuilt callee: " + dependencyName);
+		}
+	}
 	std::set<std::string> mutableGlobalNames;
 	for (const std::string &name : reusedNames) {
 		std::unordered_set<const llvm::Function *> dependencies;
@@ -164,10 +186,26 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 		old->setLinkage(llvm::GlobalValue::ExternalLinkage);
 		now->setLinkage(llvm::GlobalValue::ExternalLinkage);
 	}
+	std::vector<std::pair<std::string, llvm::GlobalValue::LinkageTypes>> replacementLinkages;
+	for (const auto &[name, owner] : previousFunctions.items()) {
+		if (!replacementPaths.contains(owner.get<std::string>()))
+			continue;
+		if (llvm::Function *declaration = cached->getFunction(name)) {
+			requireCompilerInvariant(declaration->isDeclaration(), "incremental replacement retained an old function body");
+			declaration->setLinkage(llvm::GlobalValue::ExternalLinkage);
+		}
+		llvm::Function *function = context.llvmModule->getFunction(name);
+		if (!function || function->isDeclaration())
+			continue;
+		replacementLinkages.emplace_back(name, function->getLinkage());
+		function->setLinkage(llvm::GlobalValue::ExternalLinkage);
+	}
 	if (llvm::Linker::linkModules(*context.llvmModule, std::move(cached), llvm::Linker::Flags::LinkOnlyNeeded))
 		throw std::runtime_error("failed to import cached function IR");
 	for (const auto &[name, linkage] : globalLinkages)
 		context.llvmModule->getGlobalVariable(name, true)->setLinkage(linkage);
+	for (const auto &[name, linkage] : replacementLinkages)
+		context.llvmModule->getFunction(name)->setLinkage(linkage);
 	for (const std::string &name : reusedNames) {
 		llvm::Function *function = context.llvmModule->getFunction(name);
 		if (!function || function->isDeclaration())

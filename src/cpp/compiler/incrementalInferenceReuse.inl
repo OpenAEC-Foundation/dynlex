@@ -72,7 +72,11 @@ Json captureInferenceSummaries(
 									instantiation.externallyEscapedGlobalProvenance != AddressProvenance{};
 			if (needsGlobalTypes && globalTypes.is_null())
 				continue;
+			Json argumentTypes = Json::array();
+			for (const DataType &type : key.argumentTypes)
+				argumentTypes.push_back(Json::array({static_cast<int>(type.kind), type.numericSize, type.pointerDepth}));
 			summaries[path][*inferenceSummaryKey(key)] = Json{
+				{"argument_types", std::move(argumentTypes)},
 				{"return_kind", static_cast<int>(instantiation.returnType.kind)},
 				{"return_size", instantiation.returnType.numericSize},
 				{"has_return_address_provenance", instantiation.hasReturnAddressProvenance},

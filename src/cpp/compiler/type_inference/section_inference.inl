@@ -584,6 +584,22 @@ bool inferTypes(ParseContext &parseContext) {
 		return false;
 	if (!validatePatternDefinitionConflicts(parseContext))
 		return false;
+	for (const auto &request : parseContext.preinferIncrementalFunctions) {
+		Section *section = request.section;
+		requireCompilerInvariant(section->type == SectionType::Function && !section->patternDefinitions.empty(),
+			"incremental preinference requires a function definition");
+		std::vector<std::pair<std::string, Expression *>> bindings;
+		for (const std::string &name : request.parameterNames)
+			bindings.emplace_back(name, nullptr);
+		size_t diagnosticCount = parseContext.diagnostics.size();
+		if (!ensureSectionInstantiationInferred(
+				parseContext, section, section->patternDefinitions.front(), bindings, request.argumentTypes, {}, nullptr,
+				nullptr
+			))
+			parseContext.diagnostics.resize(diagnosticCount);
+	}
+	if (parseContext.finishIncrementalPreinference)
+		parseContext.finishIncrementalPreinference(parseContext);
 	if (parseContext.options.noMain) {
 		for (CodeLine *line : parseContext.mainSection->codeLines) {
 			if (!line || !line->expression)

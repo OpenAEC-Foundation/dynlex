@@ -44,6 +44,12 @@ class TargetMachine;
 } // namespace llvm
 
 struct ParseContext {
+	struct IncrementalFunctionRequest {
+		Section *section;
+		std::vector<std::string> parameterNames;
+		std::vector<DataType> argumentTypes;
+	};
+
 	struct ShaderUniform {
 		std::string name;
 		std::uint32_t binding = 0;
@@ -84,6 +90,9 @@ struct ParseContext {
 	// after this compilation has inferred its current types and selected calls.
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
 	std::function<bool(Section *, const InstantiationKey &, Instantiation &)> reuseInferredInstantiation;
+	std::vector<IncrementalFunctionRequest> preinferIncrementalFunctions;
+	std::function<void(ParseContext &)> finishIncrementalPreinference;
+	std::vector<IncrementalFunctionRequest> incrementalReplacementFunctions;
 	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};

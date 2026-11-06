@@ -265,8 +265,55 @@ function left times right:
     assert caller_edit[1:] == build(False, entry=leaf_main)[1:], "reused call chain changed active edit behavior"
     leaf_helper.write_text(leaf_helper.read_text().replace('"helper"', '"replacement"'))
     dependency_edit = build(entry=leaf_main)
-    assert dependency_edit[0]["functions_ir_reused"] > 0, f"dependency edit regenerated independent function IR: {dependency_edit[0]}"
+    assert dependency_edit[0]["inference_instantiations_reused"] >= 3, f"unchanged caller was re-inferred despite equivalent callee interface: {dependency_edit[0]}"
+    assert dependency_edit[0]["functions_ir_reused"] >= 3, f"unchanged caller IR was regenerated despite equivalent callee interface: {dependency_edit[0]}"
     assert dependency_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee retained stale caller IR"
+    leaf_helper.write_text('to helper:\n    @intrinsic("discard", 1)\n')
+    effect_edit = build(entry=leaf_main)
+    assert effect_edit[0]["inference_instantiations_reused"] == 2, "changed callee effect reused caller inference"
+    assert effect_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee effect kept stale caller code"
+
+    typed_dependency = root / "typed_dependency.dl"
+    typed_dependency_source = ('integer means: @intrinsic("type", "int")\n'
+                               'to helper {integer:value}:\n'
+                               '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+                               'to caller:\n'
+                               '    helper 1\n'
+                               'caller\n')
+    typed_dependency.write_text(typed_dependency_source)
+    build(entry=typed_dependency)
+    typed_dependency.write_text(typed_dependency_source.replace('"first"', '"updated"'))
+    typed_dependency_edit = build(entry=typed_dependency)
+    assert typed_dependency_edit[0]["inference_instantiations_reused"] >= 1, "typed callee edit re-inferred caller"
+    assert typed_dependency_edit[0]["functions_ir_reused"] >= 1, "typed callee edit regenerated caller IR"
+    assert typed_dependency_edit[1:] == build(False, entry=typed_dependency)[1:], "typed replacement differs from clean build"
+
+    multi_dependency = root / "multi_dependency.dl"
+    multi_dependency_source = ('integer means: @intrinsic("type", "int")\n'
+                               'to helper {value}:\n'
+                               '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                               'to caller:\n'
+                               '    helper 1\n'
+                               '    helper 1.0\n'
+                               'caller\n')
+    multi_dependency.write_text(multi_dependency_source)
+    build(entry=multi_dependency)
+    multi_dependency.write_text(multi_dependency_source.replace('"before"', '"after"'))
+    multi_dependency_edit = build(entry=multi_dependency)
+    assert multi_dependency_edit[0]["inference_instantiations_reused"] >= 1, "multi-instantiation callee edit re-inferred caller"
+    assert multi_dependency_edit[0]["functions_ir_reused"] >= 1, "multi-instantiation callee edit regenerated caller IR"
+    assert multi_dependency_edit[1:] == build(False, entry=multi_dependency)[1:], "multi-instantiation replacement differs from clean build"
+
+    invalid_dependency = root / "invalid_dependency.dl"
+    invalid_dependency_source = ('integer means: @intrinsic("type", "int")\n'
+                                 'to helper:\n'
+                                 '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n'
+                                 'to caller: helper\n'
+                                 'caller\n')
+    invalid_dependency.write_text(invalid_dependency_source)
+    build(entry=invalid_dependency)
+    invalid_dependency.write_text(invalid_dependency_source.replace('to caller:', '    @intrinsic("add", 1, "x")\nto caller:'))
+    assert build(success=False, entry=invalid_dependency)[1] == build(False, success=False, entry=invalid_dependency)[1], "failed early inference duplicated or changed the diagnostic"
 
     library_main = root / "library_main.dl"
     library_source = ('real means: @intrinsic("type", "float", 64)\n'
@@ -400,6 +447,24 @@ function left times right:
     global_initializer_edit = build(entry=global_main)
     assert global_initializer_edit[0]["functions_ir_reused"] == 0, "changed global initializer reused old function IR"
     assert global_initializer_edit[1:] == build(False, entry=global_main)[1:]
+
+    indirect_global_main = root / "indirect_global_main.dl"
+    indirect_global_source = ('integer means: @intrinsic("type", "int")\n'
+                              '@intrinsic("store", counter, 1)\n'
+                              'function read state:\n'
+                              '    globals:\n'
+                              '        counter\n'
+                              '    execute:\n'
+                              '        @intrinsic("return", counter)\n'
+                              'to helper:\n'
+                              '    @intrinsic("discard", read state)\n'
+                              '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "old"))\n'
+                              'to caller: helper\n'
+                              'caller\n')
+    indirect_global_main.write_text(indirect_global_source)
+    build(entry=indirect_global_main)
+    indirect_global_main.write_text(indirect_global_source.replace('"old"', '"new"'))
+    assert build(entry=indirect_global_main)[1:] == build(False, entry=indirect_global_main)[1:], "indirect global reader was pre-inferred before global initialization"
 
     writer_main = root / "writer_main.dl"
     writer_source = ('integer means: @intrinsic("type", "int")\n'

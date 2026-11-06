@@ -432,8 +432,10 @@ bool functionDependenciesUnchanged(
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
-std::unordered_set<const Section *>
-eligibleFunctionSections(const ParseContext &context, const Json &previous, const Json &currentObservations) {
+std::unordered_set<const Section *> eligibleFunctionSections(
+	const ParseContext &context, const Json &previous, const Json &currentObservations,
+	const std::unordered_set<const Section *> &interfaceStableChanges = {}
+) {
 	std::unordered_set<const Section *> eligible;
 	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
 		!previous.contains("all_function_projection") || !previous.contains("function_sections") ||
@@ -451,12 +453,13 @@ eligibleFunctionSections(const ParseContext &context, const Json &previous, cons
 	const Json &currentBodies = currentProjection.at("bodies");
 	std::unordered_map<const Section *, bool> unchanged;
 	for (const auto &[path, section] : sections)
-		unchanged[section] = !currentBodies.contains(path) || currentBodies.at(path) == previousBodies.at(path);
+		unchanged[section] = !currentBodies.contains(path) || currentBodies.at(path) == previousBodies.at(path) ||
+							 interfaceStableChanges.contains(section);
 	std::unordered_map<Section *, bool> memo;
 	std::unordered_set<Section *> visiting;
 	for (const auto &[_, section] : sections) {
 		if (section->type == SectionType::Function && !section->isFlex && !section->isConversion &&
-			functionDependenciesUnchanged(section, unchanged, memo, visiting))
+			!interfaceStableChanges.contains(section) && functionDependenciesUnchanged(section, unchanged, memo, visiting))
 			eligible.insert(section);
 	}
 	return eligible;
@@ -704,6 +707,8 @@ void restoreCachedModule(ParseContext &context, const Json &cached, const fs::pa
 
 #include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceReuse.inl"
+
+#include "incrementalInferencePreinfer.inl"
 } // namespace
 
 bool compileIncrementally(
@@ -793,22 +798,34 @@ bool compileIncrementally(
 				for (const auto &[path, section] : sections)
 					sectionPaths.emplace(section, path);
 				if (previous) {
-					std::unordered_set<const Section *> eligible =
-						eligibleFunctionSections(context, *previous, recording->observations);
-					if (!eligible.empty()) {
+					context.preinferIncrementalFunctions =
+						scalarArgumentIncrementalCandidates(context, *previous, recording->observations, sectionPaths);
+					context.finishIncrementalPreinference = [&](ParseContext &inferred) {
+						Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
+						const Json &priorSummaries = previous->at("inference_summaries");
+						std::unordered_set<const Section *> stable = stableIncrementalReplacements(
+							inferred.preinferIncrementalFunctions, sectionPaths, currentSummaries, priorSummaries,
+							inferred.incrementalReplacementFunctions
+						);
+						std::unordered_set<const Section *> eligible =
+							eligibleFunctionSections(inferred, *previous, recording->observations, stable);
+						if (eligible.empty())
+							return;
+						std::unordered_set<std::string> replacementPaths;
+						for (const Section *section : stable)
+							replacementPaths.insert(sectionPaths.at(section));
 						functionReuse = std::make_unique<IncrementalIRReuse>(
-							context, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
-							sectionPaths, eligible
+							inferred, previous->at("ir").get_ref<const std::string &>(), previous->at("function_sections"),
+							sectionPaths, eligible, std::move(replacementPaths)
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							context, previous->at("inference_summaries"), previous->at("global_types"), *functionReuse,
-							std::move(eligible)
+							inferred, priorSummaries, previous->at("global_types"), *functionReuse, std::move(eligible)
 						);
-						context.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
-																 Instantiation &instantiation) {
+						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
+																  Instantiation &instantiation) {
 							return inferenceReuse->reuse(section, key, instantiation);
 						};
-					}
+					};
 				}
 			}
 			stageStart = Clock::now();
@@ -817,6 +834,7 @@ bool compileIncrementally(
 			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.reusedInferenceInstantiations = inferenceReuse ? inferenceReuse->reusedCount() : 0;
 			context.reuseInferredInstantiation = {};
+			context.finishIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};
