@@ -1,7 +1,7 @@
 {
   "schemaVersion": 13,
   "translatorHash": "6ef329ce2b6bf0e635d04e2a83d7158681f2aa2ff14745db18646d3046951673",
-  "compilerHash": "9c315d69f5868815834f28ead1e0065441630caa44edd118dc8cc1b667df573e",
+  "compilerHash": "173abbcbdf69286d734078977ac6f67dfdc6c1d5362ecb4c2e477ee47702200e",
   "semanticLegend": {
     "tokenModifiers": [
       "definition",
@@ -39,11 +39,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/event-horizon.fragment.wgsl",
-              "hash": "81abba96305d1a264d3b4e1dc87cab10ac6fcf5be71f0a892adbbe318704bfba"
+              "hash": "e72cce0c2b8848e2dc77db3344c6eb5597243bae3fad46cfb9690b7760ce6a0a"
             },
             "webgl": {
               "path": "shaders/generated/event-horizon.fragment.glsl",
-              "hash": "0281e6cc1137255df1ed795adf641b905d5e53fa0a6c49a43dd655b416120fbb"
+              "hash": "69b5fb32e040adba6b52c555239ad0b4c67a63bad5b6f11f3a3e88044e5c5768"
             }
           },
           "uniforms": [
@@ -7455,11 +7455,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/endless-terrain.fragment.wgsl",
-              "hash": "44fd1eadeba44776ff25e16c807576df1885e300c8c228b5b36c339e66059192"
+              "hash": "5ccf46edcac50cf320e938e923737e280be8ec5c5b24deb11ebe4eb96fbbc86f"
             },
             "webgl": {
               "path": "shaders/generated/endless-terrain.fragment.glsl",
-              "hash": "0bc9d583d7c613c159bd6b37e21f3a65075718f1b914525dcef1d252c852d715"
+              "hash": "ffdc88d1bc5d5cff94c4b521f4c5276d15330ef920bef570d814eb40e651a52a"
             }
           },
           "uniforms": [
@@ -7484,11 +7484,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/endless-terrain.vertex.wgsl",
-              "hash": "48f3d1604f34cbf89274a07b611fa919d27b911e6387ec3acc227858a51f912d"
+              "hash": "a84350e914b29e6e59945dead57dc87090da4a9612062c76ff403fb317af73f9"
             },
             "webgl": {
               "path": "shaders/generated/endless-terrain.vertex.glsl",
-              "hash": "6df7f83a9e97ab72d76fc0d7198867c954613b71c60bdf01de6f1453f537263d"
+              "hash": "7fac37a76ebba2ddfb54e1f1e6f82f24315d5f490ac13de823256a94938755cd"
             }
           },
           "uniforms": [
@@ -23116,11 +23116,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/nano-choreography.fragment.wgsl",
-              "hash": "d04465a10930eff4015b246c805f5704081b5f979b1285c6aa9ff907d0188671"
+              "hash": "4a4948820a83db6d34b50b984071d537fb2fe0bcda25b88bebcaf60802b3f0a5"
             },
             "webgl": {
               "path": "shaders/generated/nano-choreography.fragment.glsl",
-              "hash": "d6693c805f843782f27849d1bd4c7c1a0b29081309d0d2341a3f737b234b1508"
+              "hash": "6c50952d5dba2ebcb8b54717a17c8751ceb9576f6de776922a321258667e4f18"
             }
           },
           "uniforms": [
@@ -23150,11 +23150,11 @@
           "sources": {
             "webgpu": {
               "path": "shaders/generated/nano-choreography.vertex.wgsl",
-              "hash": "87bd1a80c6e626661afb78c8cc8983fc8e2da1dbc0fba6fdff7d9852c12aadab"
+              "hash": "85f96d0930fed9bbc2aad5fa714ce9c4b2c29641f94370622dbbd27f46acb4fd"
             },
             "webgl": {
               "path": "shaders/generated/nano-choreography.vertex.glsl",
-              "hash": "cc689d504174a821e0934376761c57a7e9eaf374da56b4a22e440dde8b9c97f6"
+              "hash": "990d7d6ac160949818bf384ffde1a3be7c7fbc0c9c6bfdc2959a0173b22e2538"
             }
           },
           "uniforms": [
