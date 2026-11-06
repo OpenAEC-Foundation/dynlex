@@ -411,21 +411,19 @@ dynlex_build_lld() {
 	dynlex_resolve_bootstrap_compilers
 	dynlex_require_command ninja
 	local cmake_command=(cmake)
-	local compiler_arguments=()
 	if [ "$profile" = web ]; then
 		dynlex_require_command emcmake
 		cmake_command=(emcmake cmake)
 	else
-		compiler_arguments=(
+		cmake_command+=(
 			"-DCMAKE_C_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CC"
 			"-DCMAKE_CXX_COMPILER=$DYNLEX_LLVM_BOOTSTRAP_CXX"
 		)
 		while IFS= read -r argument; do
-			compiler_arguments+=("$argument")
+			cmake_command+=("$argument")
 		done < <(dynlex_native_llvm_cmake_arguments)
 	fi
 	"${cmake_command[@]}" -S "$DYNLEX_LLVM_SOURCE_DIR/lld" -B "$build_directory" -G Ninja \
-		"${compiler_arguments[@]}" \
 		-DCMAKE_BUILD_TYPE=Release \
 		"-DCMAKE_INSTALL_PREFIX=$install_directory" \
 		-DCMAKE_INSTALL_LIBDIR=lib \

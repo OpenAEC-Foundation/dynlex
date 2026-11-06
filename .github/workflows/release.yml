@@ -1,19 +1,14 @@
 name: Release
-
 on:
   push:
     tags:
       - 'v*'
-      - '*.*.*'
   workflow_dispatch:
-
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
-
 permissions:
   contents: read
-
 jobs:
   verify-release-ref:
     runs-on: ubuntu-24.04
@@ -26,7 +21,6 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: bash ./scripts/verify-release-ref.sh
-
   build-linux:
     needs: [verify-release-ref]
     strategy:
@@ -50,7 +44,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-
       - name: Restore pinned LLVM toolchain
         uses: actions/cache@v6
         with:
@@ -61,7 +54,9 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Build and test (Release)
-        run: ./scripts/test.sh --release
+        run: |
+          ./scripts/test.sh --release
+          ./scripts/test.sh --integration --release
 
       - name: Package release artifacts
         id: package
@@ -133,7 +128,9 @@ jobs:
 
       - name: Build and test (Release)
         shell: bash
-        run: ./scripts/test.sh --release
+        run: |
+          ./scripts/test.sh --release
+          ./scripts/test.sh --integration --release
 
       - name: Verify Windows executable architecture
         run: python ./scripts/verify-executable-architecture.py build/dynlex.exe ${{ matrix.architecture }}
@@ -330,7 +327,9 @@ jobs:
         run: ./scripts/install.sh
 
       - name: Build and test (Release)
-        run: ./scripts/test.sh --release
+        run: |
+          ./scripts/test.sh --release
+          ./scripts/test.sh --integration --release
 
       - name: Stage architecture payload
         run: |
@@ -650,7 +649,7 @@ jobs:
           "$DYNLEX_BIN" tests/required/simple/main.dl -o "$SMOKE_ROOT/simple"
           "$SMOKE_ROOT/simple" > "$SMOKE_ROOT/simple.out"
           diff -u tests/required/simple/expected.txt "$SMOKE_ROOT/simple.out"
-          "$DYNLEX_BIN" tests/required/graphics_window_should_close_boolean/main.dl \
+          "$DYNLEX_BIN" tests/integration/graphics_window_should_close_boolean/main.dl \
             -o "$SMOKE_ROOT/graphics"
           "$SMOKE_ROOT/graphics"
           "$DYNLEX_BIN" tests/release/font_link_smoke.dl \
@@ -793,7 +792,7 @@ jobs:
           }
           $graphicsExecutable = Join-Path $smokeRoot "graphics.exe"
           & $dynlex.FullName `
-            "tests/required/graphics_window_should_close_boolean/main.dl" `
+            "tests/integration/graphics_window_should_close_boolean/main.dl" `
             -o $graphicsExecutable 2>&1 |
             Tee-Object -FilePath "$env:TEMP\\dynlex-smoke-windows-graphics.log"
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path $graphicsExecutable)) {
@@ -907,7 +906,7 @@ jobs:
           "$SMOKE_ROOT/simple" > "$SMOKE_ROOT/simple.out"
           diff -u tests/required/simple/expected.txt "$SMOKE_ROOT/simple.out"
           env PATH=/usr/bin:/bin:/usr/sbin:/sbin \
-            "$DYNLEX_BIN" tests/required/graphics_window_should_close_boolean/main.dl \
+            "$DYNLEX_BIN" tests/integration/graphics_window_should_close_boolean/main.dl \
               -o "$SMOKE_ROOT/graphics"
           test -f "$SMOKE_ROOT/libglfw.dylib"
           test -f "$SMOKE_ROOT/libfreetype.dylib"

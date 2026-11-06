@@ -1,8 +1,0 @@
-# SPDX-License-Identifier: MPL-2.0
-# Port of cadkernel src/brep/sweep.rs at
-# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-# Module coverage and remaining operations are recorded in the coverage manifest.
-# Profiles are borrowed; constructed bodies own their topology and geometry.
-import lib/bim/brep_sweep_topology.dl
-import lib/bim/brep_sweep_revolve.dl
-import lib/bim/brep_sweep_extrude.dl

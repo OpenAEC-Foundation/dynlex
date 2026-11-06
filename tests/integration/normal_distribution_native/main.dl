@@ -1,0 +1,3 @@
+import tests/integration/normal_distribution_native/abi.dl
+
+print line "native normal-distribution wrappers available"

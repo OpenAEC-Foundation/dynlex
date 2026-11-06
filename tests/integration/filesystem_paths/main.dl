@@ -1,0 +1,8 @@
+import lib/filesystem.dl
+
+set path to the string form of "tests/integration/filesystem_paths/string.tmp"
+delete the filesystem entry at path
+
+write the string form of "string path" to the file at path and print line it succeeded
+delete the filesystem entry at path
+print line it succeeded

@@ -6,7 +6,7 @@ on:
       source_file:
         description: Source file to compile for trace comparison
         required: true
-        default: tests/required/specificity/main.dl
+        default: tests/integration/specificity/main.dl
         type: string
       trace_env:
         description: Trace env var assignment (empty to disable)

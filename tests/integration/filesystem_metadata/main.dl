@@ -1,0 +1,25 @@
+import lib/filesystem.dl
+
+set directory to "tests/integration/filesystem_metadata/directory.tmp"
+set file to "tests/integration/filesystem_metadata/directory.tmp/file.tmp"
+set missing to "tests/integration/filesystem_metadata/missing.tmp"
+
+delete the filesystem entry at file
+delete the filesystem entry at directory
+
+create a directory at directory and print line it succeeded
+print lines (the length of (the error message of it)), (directory is a regular file) and (directory is readable)
+
+write the string form of "metadata" to the file at file and print line it succeeded
+print lines (the length of (the error message of it)) and (file is a regular file)
+set entry to the file system entry at file
+print line (entry's modification time)'s seconds > 0
+
+read the file at missing and print line it succeeded
+print line (the length of the error message of it) > 0
+
+create a directory at directory and print line it succeeded
+print line (the length of the error message of it) > 0
+
+delete the filesystem entry at file and print line it succeeded
+delete the filesystem entry at directory and print line it succeeded

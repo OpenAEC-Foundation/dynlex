@@ -37,5 +37,5 @@ Open `System Settings` -> `Privacy & Security` -> `Developer Tools` and enable y
 That script builds (debug) and starts:
 
 ```text
-gdb --args ./build/dynlex tests/required/specificity/main.dl -o /tmp/specificity.out
+gdb --args ./build/dynlex tests/integration/specificity/main.dl -o /tmp/specificity.out
 ```

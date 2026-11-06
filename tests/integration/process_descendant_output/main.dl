@@ -1,0 +1,32 @@
+import lib/process.dl
+
+to get the descendant process test interpreter:
+    return "python" if the process platform is Windows, else "python3"
+
+set setup to a process command for the descendant process test interpreter
+add "-c" as an argument to setup
+add "import os; os.remove('descendant-finished.tmp') if os.path.exists('descendant-finished.tmp') else None" as an argument to setup
+use "tests/integration/process_descendant_output" as the working directory of setup
+run setup and set preparation to it
+
+set command to a process command for the descendant process test interpreter
+add "-u" as an argument to command
+add "-c" as an argument to command
+add "import subprocess,sys,time\ncode=\"import os\\nchunk=b'D'*4096\\ntry:\\n while True:\\n  os.write(1,chunk)\\n  os.write(2,chunk)\\nexcept OSError:\\n open('descendant-finished.tmp','w').close()\"\nsubprocess.Popen([sys.executable,'-c',code])\ntime.sleep(0.1)" as an argument to command
+use "tests/integration/process_descendant_output" as the working directory of command
+launch command and set child to it
+
+wait for child and set status to it
+read the available standard output of child and set output to it
+read the available standard error of child and set error to it
+clean up child and set cleanup to it
+
+set verification to a process command for the descendant process test interpreter
+add "-c" as an argument to verification
+add "import os,sys,time; time.sleep(1); finished=os.path.exists('descendant-finished.tmp'); sys.stdout.buffer.write(b'True\\n' if finished else b'False\\n'); os.remove('descendant-finished.tmp') if finished else None" as an argument to verification
+use "tests/integration/process_descendant_output" as the working directory of verification
+run verification and set check to it
+
+print lines (preparation succeeded), (child was launched), (status succeeded) and (status reports completion)
+print lines (output succeeded), (output's contents's length > 0), (error succeeded) and (error's contents's length > 0)
+print lines (cleanup succeeded), (check succeeded) and (check's standard output = "True\n")

@@ -63,7 +63,8 @@ static bool isOpaqueGroupingNode(Expression *expression, bool isOnBoundary, bool
 	return !isRoot && (forceLocal || unconvertedExpression(expression)->isExplicitGroup || !isOnBoundary);
 }
 
-static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
+// Keep suspended enumeration state out of recursive inference's native stack.
+[[gnu::noinline]] static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
 	Expression *&expr, InferenceContext &context, bool alreadyOrdered, const BindingFrameStack &flexBindingFrameStack
 );
 
@@ -226,7 +227,35 @@ isEligibleGroupingRoot(int start, int end, int rootIndex, Expression *rootExpres
 	return true;
 }
 
-static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start, int end, GroupingGenerationState &state);
+struct GroupingParentOperand {
+	Expression *parent;
+	bool left;
+};
+
+static bool isBinaryInfixGroupingOperator(Expression *expression) {
+	return startsWithArgument(expression) && endsWithArgument(expression) && groupingArgumentCount(expression) == 2;
+}
+
+static bool permitsGroupingOperand(const std::optional<GroupingParentOperand> &parentOperand, Expression *operand) {
+	if (!parentOperand || !isBinaryInfixGroupingOperator(parentOperand->parent) || !isBinaryInfixGroupingOperator(operand))
+		return true;
+	const PatternFamily *family = expressionPrecedenceFamily(parentOperand->parent);
+	if (!family || family != expressionPrecedenceFamily(operand))
+		return true;
+	switch (family->associativity) {
+	case PatternAssociativity::Left:
+		return parentOperand->left;
+	case PatternAssociativity::Right:
+		return !parentOperand->left;
+	case PatternAssociativity::Unspecified:
+		return true;
+	}
+	crashCompilerBug("unknown pattern associativity");
+}
+
+static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
+	int start, int end, GroupingGenerationState &state, std::optional<GroupingParentOperand> parentOperand = std::nullopt
+);
 
 static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 	Expression *rootExpression, int rootIndex, int end, bool hasRightEdge, int rightArgumentIndex, Expression *savedRight,
@@ -240,7 +269,8 @@ static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 		co_return;
 	}
 
-	auto rightGroupings = generateFlatExpressionGroupings(rootIndex + 1, end, state);
+	auto rightGroupings =
+		generateFlatExpressionGroupings(rootIndex + 1, end, state, GroupingParentOperand{rootExpression, false});
 	while (rightGroupings.next()) {
 		Expression *rightResult = rightGroupings.current();
 		if (expressionContains(rightResult, rootExpression))
@@ -254,7 +284,9 @@ static GroupingGenerator<Expression *> generateRightExpressionGroupings(
 	unconvertedExpression(rootExpression)->arguments[rightArgumentIndex] = savedRight;
 }
 
-static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start, int end, GroupingGenerationState &state) {
+static GroupingGenerator<Expression *> generateFlatExpressionGroupings(
+	int start, int end, GroupingGenerationState &state, std::optional<GroupingParentOperand> parentOperand
+) {
 	if (start > end)
 		co_return;
 	if (start == end) {
@@ -263,6 +295,8 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 			auto opaqueChoices = generateOpaqueGroupingChoices(singleExpression, state);
 			while (opaqueChoices.next()) {
 				auto completedChoices = generateCompletedGroupingChoices(singleExpression, state);
+				// The entire authored operand is opaque to this parent.
+				// Its internal chain was grouped at its own boundary.
 				while (completedChoices.next())
 					co_yield singleExpression;
 			}
@@ -270,13 +304,15 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 		}
 		auto completedChoices = generateCompletedGroupingChoices(singleExpression, state);
 		while (completedChoices.next())
-			co_yield singleExpression;
+			if (permitsGroupingOperand(parentOperand, singleExpression))
+				co_yield singleExpression;
 		co_return;
 	}
 
 	for (int rootIndex = end; rootIndex >= start; rootIndex--) {
 		Expression *rootExpression = state.flatNodes[rootIndex];
-		if (!isEligibleGroupingRoot(start, end, rootIndex, rootExpression, state))
+		if (!isEligibleGroupingRoot(start, end, rootIndex, rootExpression, state) ||
+			!permitsGroupingOperand(parentOperand, rootExpression))
 			continue;
 
 		bool hasLeftEdge = startsWithArgument(rootExpression);
@@ -291,7 +327,8 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 		bool inserted = state.fixedGroupingRoots.insert(rootExpression).second;
 
 		if (hasLeftEdge) {
-			auto leftGroupings = generateFlatExpressionGroupings(start, rootIndex - 1, state);
+			auto leftGroupings =
+				generateFlatExpressionGroupings(start, rootIndex - 1, state, GroupingParentOperand{rootExpression, true});
 			while (leftGroupings.next()) {
 				Expression *leftResult = leftGroupings.current();
 				if (expressionContains(leftResult, rootExpression))
@@ -321,7 +358,7 @@ static GroupingGenerator<Expression *> generateFlatExpressionGroupings(int start
 	}
 }
 
-static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState &state) {
+static void collectFlatGroupingNodes(Expression *expr, GroupingGenerationState &state) {
 	struct CollectionFrame {
 		Expression *expression;
 		bool isOnBoundary;
@@ -331,13 +368,11 @@ static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState
 
 	std::stack<CollectionFrame> pending;
 	pending.push({expr, true, true, false});
-	size_t operatorCount = 0;
 	while (!pending.empty()) {
 		CollectionFrame frame = pending.top();
 		pending.pop();
 		Expression *expression = frame.expression;
 		if (frame.emitOperator) {
-			operatorCount++;
 			state.flatNodes.push_back(expression);
 			continue;
 		}
@@ -366,7 +401,34 @@ static size_t collectFlatGroupingNodes(Expression *expr, GroupingGenerationState
 				pending.push({unconvertedExpression(expression)->arguments[leftArgumentIndex], true, false, false});
 		}
 	}
-	return operatorCount;
+}
+
+static size_t ambiguousGroupingOperatorCount(const GroupingGenerationState &state) {
+	ExpressionNodeSet ambiguous;
+	for (size_t i = 0; i < state.flatNodes.size(); i++) {
+		Expression *left = state.flatNodes[i];
+		if (!expressionHasGroupingShape(left) || state.opaqueNodes.contains(left))
+			continue;
+		for (size_t j = i + 1; j < state.flatNodes.size(); j++) {
+			Expression *right = state.flatNodes[j];
+			if (!expressionHasGroupingShape(right) || state.opaqueNodes.contains(right))
+				continue;
+			const PatternFamily *family = expressionPrecedenceFamily(left);
+			if (expressionMustEvaluateBefore(left, right) || expressionMustEvaluateBefore(right, left) ||
+				(family && family == expressionPrecedenceFamily(right) && isBinaryInfixGroupingOperator(left) &&
+				 isBinaryInfixGroupingOperator(right) && family->associativity != PatternAssociativity::Unspecified))
+				continue;
+			bool leftInfix = startsWithArgument(left) && endsWithArgument(left);
+			bool rightInfix = startsWithArgument(right) && endsWithArgument(right);
+			// A prefix/suffix boundary is one unresolved capture, regardless
+			// of how many associated infix operators it can enclose.
+			if (leftInfix == rightInfix || !leftInfix)
+				ambiguous.insert(left);
+			if (leftInfix == rightInfix || !rightInfix)
+				ambiguous.insert(right);
+		}
+	}
+	return ambiguous.size();
 }
 
 static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates(
@@ -396,7 +458,8 @@ static GroupingGenerator<GroupingCandidate> generateExpressionGroupingCandidates
 		co_return;
 	}
 
-	if (collectFlatGroupingNodes(expr, state) > 8) {
+	collectFlatGroupingNodes(expr, state);
+	if (ambiguousGroupingOperatorCount(state) > 8) {
 		if (!context.hasTypeFailureDiagnostic)
 			context.fail(
 				buildFailureDetailDiagnostic(

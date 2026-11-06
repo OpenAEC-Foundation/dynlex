@@ -45,13 +45,24 @@ jobs:
             linux-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         run: ./scripts/install.sh
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
@@ -86,13 +97,24 @@ jobs:
             macos-ccache-${{ runner.os }}-
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-native-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
 
       - name: Install dependencies
         run: ./scripts/install.sh
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build and test
         run: ./scripts/test.sh --lint=false
@@ -109,7 +131,8 @@ jobs:
           submodules: true
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: |
             .cache/llvm-toolchain
@@ -122,12 +145,26 @@ jobs:
         run: ./scripts/install.ps1
         shell: pwsh
 
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh native
+        shell: bash
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            .cache/llvm-toolchain
+            .cache/llvm-mingw
+            .cache/vcpkg
+            .cache/vcpkg-installed
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
+
       - name: Build and test
         run: ./scripts/test.sh --lint=false
         shell: bash
 
   web-build-smoke:
-    if: ${{ vars.DYNLEX_WEB_CI_ENABLED == '1' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -142,22 +179,25 @@ jobs:
         with:
           version: 6.0.3
 
-      - name: Install pinned WebGPU translator toolchain
-        working-directory: tools/wgsl-translator
-        run: |
-          RUST_VERSION="$(sed -n 's/^channel = "\([^"]*\)"$/\1/p' rust-toolchain.toml)"
-          RUST_PROFILE="$(sed -n 's/^profile = "\([^"]*\)"$/\1/p' rust-toolchain.toml)"
-          RUST_TARGET="$(sed -n 's/^targets = \["\([^"]*\)"\]$/\1/p' rust-toolchain.toml)"
-          test -n "$RUST_VERSION"
-          test -n "$RUST_PROFILE"
-          test -n "$RUST_TARGET"
-          rustup toolchain install "$RUST_VERSION" --profile "$RUST_PROFILE" --target "$RUST_TARGET"
+      - name: Install dependencies
+        run: ./scripts/install.sh
 
       - name: Restore pinned LLVM toolchain
-        uses: actions/cache@v6
+        id: llvm
+        uses: actions/cache/restore@v6
         with:
           path: .cache/llvm-toolchain
           key: llvm-web-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('metadata/LLVM_TOOLCHAIN', 'scripts/llvm_toolchain.sh') }}
+
+      - name: Build pinned LLVM toolchain
+        run: ./scripts/build_llvm.sh web
+
+      - name: Save pinned LLVM toolchain
+        if: steps.llvm.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/llvm-toolchain
+          key: ${{ steps.llvm.outputs.cache-primary-key }}
 
       - name: Build web compiler and run smoke test
         run: ./scripts/test_web_smoke.sh
@@ -179,4 +219,4 @@ jobs:
         run: ./packaging/launchpad/scripts/install-build-deps.sh
 
       - name: Build unsigned Launchpad source package
-        run: ./packaging/launchpad/scripts/build-source-package.sh --series noble --version 0.1.0+ci${{ github.run_number }}.g${GITHUB_SHA::7}
+        run: ./packaging/launchpad/scripts/build-source-package.sh --series noble --version "$(cat metadata/VERSION)+ci${{ github.run_number }}.g${GITHUB_SHA::7}"

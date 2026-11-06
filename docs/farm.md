@@ -188,7 +188,7 @@ node tests/web/game_progress.mjs
 ```
 
 The second command requires the existing `build/dynlex` native compiler. It checks
-the fixture in `tests/required/farm_challenge`, compiles the example plus programs
+the fixture in `tests/integration/farm_challenge`, compiles the example plus programs
 from `tests/web/farm_team_fixture.mjs`, and runs that team through 900 turns and
 the cow quest. Those test programs are outside the served website.
 

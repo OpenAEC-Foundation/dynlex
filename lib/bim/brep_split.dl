@@ -1,7 +1,0 @@
-# SPDX-License-Identifier: MPL-2.0
-# Port of cadkernel src/brep/split.rs at
-# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-# Edge splitting updates every coedge and loop that shares the edge. Face
-# splitting is added below this foundation with its intersection dependency.
-import lib/bim/brep_split_edges.dl
-import lib/bim/brep_split_faces.dl

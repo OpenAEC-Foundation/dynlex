@@ -1,0 +1,1 @@
+tests/integration/missing_return_path/main.dl:8-31: Error: Function 'the value for condition' does not return a value on every reachable path

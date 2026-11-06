@@ -1,0 +1,3 @@
+tests/integration/ownerless_function_reference_recursive_nonconvergent/main.dl:8-43: Error: Recursive type inference did not converge for function 'recursive reference {integer:value}'
+  note: while inferring call 'set reference to the function named "recursive reference $"' with arguments [a pointer to a byte] -> an unresolved value tests/integration/ownerless_function_reference_recursive_nonconvergent/main.dl:18-60
+  note: while inferring call 'set reference to the function named "recursive reference $"' with arguments [an unresolved value, an unresolved value] -> an unresolved value tests/integration/ownerless_function_reference_recursive_nonconvergent/main.dl:1-60

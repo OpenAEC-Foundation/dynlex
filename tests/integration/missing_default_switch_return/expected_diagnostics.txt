@@ -1,0 +1,1 @@
+tests/integration/missing_default_switch_return/main.dl:8-35: Error: Function 'the value chosen for choice' does not return a value on every reachable path

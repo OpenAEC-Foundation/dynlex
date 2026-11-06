@@ -11,6 +11,10 @@ A natural-language-like programming language that compiles to native code via LL
 - Named compile-time values via zero-argument replacement functions (see [`docs/named_compile_time_values.md`](./docs/named_compile_time_values.md))
 - VS Code extension with LSP support
 
+CAD and BIM geometry lives in the separate
+[dynlex-cadkernel](https://github.com/OpenAEC-Foundation/dynlex-cadkernel)
+repository.
+
 ## Build
 
 ```bash
@@ -33,6 +37,18 @@ cache location instead. Build that toolchain independently with:
 The normal build uses `-O2` while retaining debug information and compiler
 invariants. Use `./scripts/build.sh --debug` when an unoptimized executable is
 needed for source-level debugging.
+
+## Tests
+
+```bash
+./scripts/test.sh
+./scripts/test.sh --integration
+```
+
+The required suite checks focused compiler behavior and has a 120-second
+process-tree budget starting after the compiler build. Integration tests cover
+larger library and application programs separately. Release verification runs
+both suites. The CAD fixtures and their verifier live in dynlex-cadkernel.
 
 ## Browser Compiler
 
@@ -203,11 +219,19 @@ when the source passes through the shell.
 
 Compiler/release version source of truth is [`metadata/VERSION`](./metadata/VERSION).
 
-Create and push a release tag with automatic version bump:
+Releases use `YEAR.WEEK.REVISION`, with ISO week numbers and a revision starting
+at zero each week. Compiler, editor extension and WGSL translator share this
+version. Release tags have a `v` prefix. The release clock uses UTC.
+
+Create and push a release tag with the next version for the current week:
 
 ```bash
-./scripts/release.sh patch   # or: minor, major, set X.Y.Z
+./scripts/release.sh         # or an explicit version: ./scripts/release.sh 2026.45.1
 ```
+
+Windows MSI stores the year as an offset from 2000 (`26.45.1` for public version
+`2026.45.1`) because its first version field is limited to 255. The compiler and
+all source package metadata retain the full public version.
 
 ## ASan Leak Check (With Third-Party Suppressions)
 

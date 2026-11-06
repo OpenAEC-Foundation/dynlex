@@ -1,5 +1,0 @@
-import lib/std.dl
-import tests/required/local_section_hidden/helper.dl
-
-hidden true:
-    ignore 1

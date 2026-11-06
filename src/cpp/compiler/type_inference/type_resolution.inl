@@ -364,7 +364,9 @@ resolveKnownExpressionType(Expression *expr, const BindingFrameStack &bindingFra
 			return retTypeRef.toReferencedType();
 		} else if (kind == IntrinsicKind::Function || kind == IntrinsicKind::DeferredBody) {
 			if (resolved->selectedInstantiation)
-				return makeFunctionType(resolved->selectedInstantiation->returnType, resolved->selectedInstantiation->argumentTypes);
+				return makeFunctionType(
+					resolved->selectedInstantiation->returnType, resolved->selectedInstantiation->argumentTypes
+				);
 			return {};
 		} else if (kind == IntrinsicKind::Return) {
 			return {DataType::Kind::Void};

@@ -147,7 +147,7 @@ def assert_formatted_tokens(root: pathlib.Path) -> None:
         assert expected in tagged, tagged
     finally:
         session.close()
-    tagged = tagged_tokens(root, root / "tests/required/syntax_sugar/main.dl")
+    tagged = tagged_tokens(root, root / "tests/integration/syntax_sugar/main.dl")
     assert '<variable>score</variable><function> + </function><number>1</number>' in tagged, tagged
 
 
@@ -155,7 +155,7 @@ def main() -> None:
     root = pathlib.Path(__file__).resolve().parent.parent
     assert_multiline_inline_tokens(root)
     assert_formatted_tokens(root)
-    declaration_document = root / "tests" / "required" / "declaration_shorthands" / "main.dl"
+    declaration_document = root / "tests" / "integration" / "declaration_shorthands" / "main.dl"
     declaration_tokens = tagged_tokens(root, declaration_document)
     expected_comments = {
         "<comment># replacement shorthand comment</comment>",
@@ -166,7 +166,7 @@ def main() -> None:
     if missing_comments:
         raise AssertionError(f"missing shorthand comment tokens: {sorted(missing_comments)!r}")
 
-    mapping_document = root / "tests" / "required" / "declaration_shorthand_source_mapping" / "main.dl"
+    mapping_document = root / "tests" / "integration" / "declaration_shorthand_source_mapping" / "main.dl"
     mapping_tokens = tagged_tokens(root, mapping_document)
     expected_fragments = (
         "<keyword>to</keyword> <patternDefinition>announce </patternDefinition><variable>value</variable>",

@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 project = Path(sys.argv[1]).resolve()
+integration_mode = sys.argv[2:] == ["--integration"]
 compiler = project / "build" / ("dynlex.exe" if os.name == "nt" else "dynlex")
 source = '''integer means: @intrinsic("type", "int")
 to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))
@@ -43,6 +44,24 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
         return stats, diagnostics, runtime.stdout if runtime else None
 
+    if integration_mode:
+        for suite, fixture in (
+            ("integration", "json_serialization"),
+            ("integration", "string_lifecycle_counts"),
+            ("integration", "managed_array_pointer_lifecycle"),
+            ("required", "recursive_store_reinference"),
+            ("required", "overloaded_type_constraint_inference"),
+        ):
+            entry = project / "tests" / suite / fixture / "main.dl"
+            reference = build(False, entry=entry)
+            generated = build(entry=entry)
+            assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
+            reused = build(entry=entry)
+            assert reused[0]["frontend_reused"] and reused[0]["objects_built"] == 0
+            assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
+        print("Incremental native integration builds passed")
+        raise SystemExit(0)
+
     cold = build()
     assert not cold[0]["frontend_reused"] and cold[0]["objects_built"] > 0
     clean = build(False)
@@ -51,6 +70,29 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert warm[0]["frontend_reused"] and warm[0]["objects_built"] == 0
     assert warm[0]["objects_reused"] == cold[0]["objects_built"]
     assert warm[1:] == clean[1:], "warm build differs from clean build"
+    main.write_text("# A new source comment must not invalidate executable code.\n" + source)
+    commented = build()
+    assert commented[0]["frontend_reused"], "comment-only edit rebuilt the frontend"
+    assert commented[1:] == build(False)[1:], "comment-only reuse differs from clean build"
+    main.write_text(source)
+    assert build()[0]["frontend_reused"], "removing a source comment rebuilt the frontend"
+    critical = root / "critical.dl"
+    critical.write_text('integer means: @intrinsic("type", "int")\n'
+                        'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n')
+    main.write_text("import critical.dl\nalpha\n")
+    build()
+    critical.write_text("# Comment in a used imported file.\n" + critical.read_text())
+    critical_comment = build()
+    assert critical_comment[0]["frontend_reused"], "comment in a used import rebuilt the frontend"
+    assert critical_comment[1:] == build(False)[1:], "import comment reuse differs from clean build"
+    main.write_text(source)
+    build()
+    main.write_text(source.replace('"alpha"))', '"alpha # inside a string"))'))
+    changed_string = build()
+    assert not changed_string[0]["frontend_reused"], "comment marker inside a string was ignored"
+    assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
+    main.write_text(source)
+    build()
     output.unlink()
     assert build()[2] == clean[2], "cache failed to recreate a deleted executable"
 
@@ -81,6 +123,11 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     configured = build()
     assert not configured[0]["frontend_reused"], "new syntax config was ignored"
     assert configured[1:] == build(False)[1:]
+    configured_source = main.read_text()
+    main.write_text("// A comment with the configured prefix.\n" + configured_source)
+    assert build()[0]["frontend_reused"], "configured comment syntax rebuilt the frontend"
+    main.write_text(configured_source)
+    assert build()[0]["frontend_reused"], "removing a configured comment rebuilt the frontend"
     config.unlink()
     assert not build()[0]["frontend_reused"], "deleted syntax config was ignored"
 
@@ -111,16 +158,6 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert build(entry=imported_main)[1:] == build(False, entry=imported_main)[1:]
     helper.unlink()
     assert build(success=False, entry=imported_main)[1] == build(False, success=False, entry=imported_main)[1]
-
-    for fixture in ("json_serialization", "string_lifecycle_counts", "managed_array_pointer_lifecycle",
-                    "recursive_store_reinference", "overloaded_type_constraint_inference"):
-        entry = project / "tests" / "required" / fixture / "main.dl"
-        reference = build(False, entry=entry)
-        generated = build(entry=entry)
-        assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
-        reused = build(entry=entry)
-        assert reused[0]["frontend_reused"] and reused[0]["objects_built"] == 0
-        assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
 
     main.write_text(source)
     build()

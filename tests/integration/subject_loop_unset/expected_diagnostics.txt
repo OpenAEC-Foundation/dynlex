@@ -1,0 +1,5 @@
+lib/subject.dl:11-32: Error: the subject depends on which control-flow path executes
+  note: while inferring intrinsic 'subject' in '@intrinsic("subject")' -> an unresolved value lib/subject.dl:11-32
+  note: while inferring call 'print it' -> an unresolved value tests/integration/subject_loop_unset/main.dl:11-13
+  note: while inferring call 'print it' with arguments [an unresolved value] -> an unresolved value tests/integration/subject_loop_unset/main.dl:5-13
+  note: while inferring call 'choose subject in loop false' with arguments [a boolean] -> an unresolved value tests/integration/subject_loop_unset/main.dl:1-29

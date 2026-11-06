@@ -14,7 +14,7 @@ static bool inferExpression(
 	bool requireVoidResult
 );
 static DataType ensureExpressionType(Expression *&expr, InferenceContext &context, const BindingFrameStack &bindingFrameStack);
-static void resetExpressionTypes(Expression *expr);
+[[gnu::noinline]] static void resetExpressionTypes(Expression *expr);
 #include "type_resolution.inl"
 #include <bit>
 #include <memory>
@@ -31,7 +31,7 @@ static bool tryApplyUserConversion(
 );
 
 static void resetSectionExpressionTypes(Section *section, InstantiatedSectionBody *body = nullptr, size_t startLineIndex = 0);
-static void recomputeRanges(Expression *expr);
+[[gnu::noinline]] static void recomputeRanges(Expression *expr);
 static bool startsWithArgument(Expression *expression);
 static bool endsWithArgument(Expression *expression);
 

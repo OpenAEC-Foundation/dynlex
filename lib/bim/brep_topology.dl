@@ -1,8 +1,0 @@
-# SPDX-License-Identifier: MPL-2.0
-# Native foundation from src/brep/{mod,topology}.rs at
-# 953d546b68aef4b6692566a1a9b077fc5bd9fb4f.
-# Nominal keys preserve node kinds; adapters retain arena generation semantics.
-# Ordinary managed copies share owned lists/arenas. Explicit clone duplicates them.
-# Node pointers and list values borrow their owner; removing a node ends its borrow.
-import lib/bim/brep_topology_core.dl
-import lib/bim/brep_topology_validate.dl

@@ -9,6 +9,10 @@ if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
     echo "Validating release builds without publication."
 elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
     tag="${GITHUB_REF#refs/tags/}"
+    if [[ "$tag" != v* ]]; then
+        echo "Release tags must start with v." >&2
+        exit 1
+    fi
     tag_version="${tag#v}"
     file_version="$(tr -d '[:space:]' < metadata/VERSION)"
     if [[ "$tag_version" != "$file_version" ]]; then

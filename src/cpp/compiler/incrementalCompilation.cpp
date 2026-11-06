@@ -4,6 +4,7 @@
 #include "compiler.h"
 #include "lsp/fileSystem.h"
 #include "pathUtils.h"
+#include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/AsmParser/Parser.h"
@@ -21,6 +22,7 @@
 #include "llvm/Transforms/IPO/StripDeadPrototypes.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
 #include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -139,6 +141,27 @@ Json observeFile(const std::string &path, lsp::SourceFile *file) {
 	};
 }
 
+std::string semanticSourceDigest(std::string_view content, std::string_view commentPrefix) {
+	std::string semantic;
+	semantic.reserve(content.size());
+	for (size_t start = 0; start < content.size();) {
+		size_t end = content.find('\n', start);
+		if (end == std::string_view::npos)
+			end = content.size();
+		std::string_view line = content.substr(start, end - start);
+		if (size_t comment = findCommentStart(line, commentPrefix); comment != std::string_view::npos)
+			line = line.substr(0, comment);
+		while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back())))
+			line.remove_suffix(1);
+		if (!line.empty()) {
+			semantic.append(line);
+			semantic.push_back('\n');
+		}
+		start = end + (end < content.size());
+	}
+	return digest(semantic);
+}
+
 class RecordingFileSystem : public lsp::FileSystem {
   public:
 	lsp::SourceFile *getFile(const std::string &path) override {
@@ -146,11 +169,65 @@ class RecordingFileSystem : public lsp::FileSystem {
 		observations[path] = observeFile(path, file);
 		return file;
 	}
+	lsp::SourceFile *cachedFile(const std::string &path) { return files.getFile(path); }
 	Json observations = Json::object();
 
   private:
 	lsp::LocalFileSystem files;
 };
+
+void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
+	result["comment_prefixes"] =
+		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
+	result["config_paths"] = Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath});
+	for (auto &[path, observation] : result["files"].items()) {
+		if (observation.is_null() || fs::path(path).extension() != ".dl" || path == context.builtinSyntaxConfigPath ||
+			path == context.projectSyntaxConfigPath)
+			continue;
+		lsp::SourceFile *file = files.cachedFile(path);
+		if (!file)
+			throw std::runtime_error("recorded source disappeared: " + path);
+		const std::string &prefix =
+			file->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
+		observation["semantic"] = semanticSourceDigest(file->content, prefix);
+	}
+}
+
+bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &files, const ParseContext::Options &options) {
+	std::vector<std::string> changedSources;
+	for (const auto &[path, observation] : previous.at("files").items()) {
+		Json current = observeFile(path, files.getFile(path));
+		Json rawObservation = observation;
+		if (rawObservation.is_object())
+			rawObservation.erase("semantic");
+		if (current == rawObservation)
+			continue;
+		if (current.is_null() || observation.is_null() || fs::path(path).extension() != ".dl" ||
+			!previous.contains("comment_prefixes") || !observation.contains("semantic"))
+			return false;
+		if (current.at("canonical") != observation.at("canonical") || current.at("internal") != observation.at("internal"))
+			return false;
+		changedSources.push_back(path);
+	}
+	if (changedSources.empty())
+		return true;
+	if (options.emitDebugInfo || options.traceExecution || !previous.at("diagnostics").get<std::string>().empty())
+		return false;
+	const Json &configPaths = previous.at("config_paths");
+	const Json &prefixes = previous.at("comment_prefixes");
+	for (const std::string &path : changedSources) {
+		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>())
+			return false;
+		lsp::SourceFile *file = files.cachedFile(path);
+		if (!file)
+			throw std::runtime_error("recorded source disappeared: " + path);
+		const std::string &prefix = file->isInternal ? prefixes.at("builtin").get_ref<const std::string &>()
+													 : prefixes.at("project").get_ref<const std::string &>();
+		if (semanticSourceDigest(file->content, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
+			return false;
+	}
+	return true;
+}
 
 Json optionIdentity(const ParseContext::Options &options) {
 	auto optionalBool = [](std::optional<bool> value) -> Json {
@@ -325,20 +402,17 @@ bool compileIncrementally(
 		std::optional<Json> previous;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
-			bool unchanged = true;
-			for (const auto &[path, observation] : previous->at("files").items()) {
-				if (observeFile(path, recording->getFile(path)) != observation) {
-					unchanged = false;
-					break;
-				}
-			}
-			if (!unchanged)
+			if (!observationsStillEquivalent(*previous, *recording, context.options))
 				previous.reset();
 		}
 		if (previous) {
 			statistics.reusedFrontend = true;
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
 				return false;
+			if (!previous->contains("comment_prefixes")) {
+				recordSemanticSources(*previous, *recording, context);
+				writeEntry(programEntry, previous->dump());
+			}
 			context.llvmContext = new llvm::LLVMContext();
 			llvm::SMDiagnostic diagnostic;
 			std::unique_ptr<llvm::Module> module =
@@ -370,6 +444,7 @@ bool compileIncrementally(
 						{"libraries", libraries},
 						{"diagnostics", diagnostics}
 					};
+					recordSemanticSources(result, *recording, compiled);
 					writeEntry(programEntry, result.dump());
 					return emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics);
 				});

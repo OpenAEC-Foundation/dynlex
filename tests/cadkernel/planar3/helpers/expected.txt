@@ -1,4 +1,0 @@
-nested managed copy, deep clone and independent frame
-affine support ties, inclusive threshold and invalid tolerances
-conic, bulge and straight support semantics
-skew projection, evaluator protocol and angular sampling

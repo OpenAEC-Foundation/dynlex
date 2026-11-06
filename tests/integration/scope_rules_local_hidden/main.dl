@@ -1,0 +1,4 @@
+import lib/std.dl
+import tests/integration/scope_rules_local_hidden/helper.dl
+
+print line hidden helper

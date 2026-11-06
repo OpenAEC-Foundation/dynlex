@@ -61,7 +61,7 @@ ASCII_NOISE = [
 
 def discover_sources(repo_root: Path) -> list[Path]:
     candidates: list[Path] = []
-    for root in (repo_root / "tests" / "games", repo_root / "tests" / "required"):
+    for root in (repo_root / "tests" / "games", repo_root / "tests" / "required", repo_root / "tests" / "integration"):
         if not root.exists():
             continue
         for path in root.rglob("*.dl"):

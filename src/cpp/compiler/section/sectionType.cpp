@@ -31,6 +31,8 @@ SectionType sectionTypeFromString(std::string_view str) {
 		return SectionType::Before;
 	if (str == "after")
 		return SectionType::After;
+	if (str == "associativity")
+		return SectionType::Associativity;
 	return SectionType::Custom;
 }
 
@@ -66,6 +68,8 @@ std::string sectionTypeToString(SectionType type) {
 		return "before";
 	case SectionType::After:
 		return "after";
+	case SectionType::Associativity:
+		return "associativity";
 	case SectionType::ScopeRules:
 		return "scope rules";
 	default:

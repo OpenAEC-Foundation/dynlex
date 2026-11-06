@@ -1,8 +1,7 @@
 #this test tests circular imports
 import other.dl
-import std.dl
 
-to print the imported message: print "printing from main.dl"
+to print the imported message: @intrinsic("discard", @intrinsic("call", "libc", "puts", @intrinsic("type", "int"), "printing from main.dl"))
 
 # We start a relay through the imported file before printing the message.
 to start the imported message relay: relay the imported message
