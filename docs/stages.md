@@ -788,7 +788,12 @@ less-specific patterns only when at least one canonical path can occur in that
 reference's matcher input. Missing literal words exclude a path; numeric arguments
 use their matcher spelling. This keeps unrelated callers resolved during cold and
 edited builds while retaining rematches for genuinely competing patterns.
-Type inference and LLVM generation still run for the full program after a code edit.
+An edit confined to the bodies of ordinary functions that had no inferred
+instantiation in the prior build can stop after pattern resolution and validation.
+The cache compares declarations and all source text outside those bodies, and it
+uses this path only when neither build has diagnostics or pending scope-rule warnings.
+It then reuses the prior inferred result and linked objects. Active function edits
+still infer and generate code for the full program.
 
 Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
@@ -796,12 +801,16 @@ program namespace before LLVM externalizes them. Each partition's complete IR an
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
 objects are reused and the executable is always linked again, including current runtime
-libraries. This is native partition reuse plus matcher query reuse; section analysis,
-type inference and code generation are not yet incremental per function.
+libraries. This is native partition reuse plus matcher query reuse and the
+unused-body fast path; type inference and code generation are not yet incremental
+for active functions.
 The program cache records its ordered object keys. An unchanged or
 comment-only build links those cached objects directly without parsing or splitting
 the LLVM IR. If an object was evicted, the saved IR regenerates the missing partition
 before linking. The linker still runs so changes to native libraries are observed.
+After an executable edit, a successful frontend and code generation pass whose
+LLVM IR is identical to the prior result also links the cached objects directly.
+This still validates the edited source and updates diagnostics and matcher data.
 
 Cache entries carry SHA-256 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary

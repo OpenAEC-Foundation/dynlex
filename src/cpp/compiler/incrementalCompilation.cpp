@@ -4,7 +4,9 @@
 #include "compiler.h"
 #include "incrementalMatcherCache.h"
 #include "lsp/fileSystem.h"
+#include "lsp/sourceFile.h"
 #include "pathUtils.h"
+#include "section.h"
 #include "syntaxConfig.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -31,6 +33,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace {
 using Json = nlohmann::json;
@@ -195,6 +198,175 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 	}
 }
 
+void collectSections(Section *section, const std::string &path, std::map<std::string, Section *> &sections) {
+	sections.emplace(path, section);
+	for (size_t index = 0; index < section->children.size(); index++)
+		collectSections(section->children[index], path + "/" + std::to_string(index), sections);
+}
+
+Json sectionIdentity(const Section &section) {
+	const CodeLine *opening = section.openingLine;
+	if (!opening && !section.patternDefinitions.empty())
+		opening = section.patternDefinitions.front()->range.line;
+	requireCompilerInvariant(opening && opening->sourceFile, "incremental section has no source identity");
+	return Json{
+		{"uri", opening->sourceFile->uri},
+		{"header",
+		 section.openingLine ? std::string(opening->rightTrimmedText) : section.patternDefinitions.front()->toString()},
+		{"type", static_cast<int>(section.type)}
+	};
+}
+
+bool containsNestedDefinition(const Section &section) {
+	for (const Section *child : section.children) {
+		if (!child->patternDefinitions.empty() || containsNestedDefinition(*child))
+			return true;
+	}
+	return false;
+}
+
+Json inactiveFunctionSections(const std::map<std::string, Section *> &sections) {
+	Json inactive = Json::object();
+	for (const auto &[path, section] : sections) {
+		if (section->type != SectionType::Function || section->patternDefinitions.empty() || section->isFlex ||
+			section->isConversion || section->isExposed || !section->instantiations.empty() ||
+			containsNestedDefinition(*section))
+			continue;
+		inactive[path] = sectionIdentity(*section);
+	}
+	return inactive;
+}
+
+std::string declarationDigest(const std::map<std::string, Section *> &sections) {
+	Json declarations = Json::array();
+	for (const auto &[path, section] : sections) {
+		if (section->patternDefinitions.empty())
+			continue;
+		Json definitions = Json::array();
+		for (const PatternDefinition *definition : section->patternDefinitions)
+			definitions.push_back(definition->toString());
+		declarations.push_back(
+			Json{
+				{"path", path},
+				{"identity", sectionIdentity(*section)},
+				{"definitions", definitions},
+				{"local", section->isLocal},
+				{"flex", section->isFlex},
+				{"exposed", section->isExposed},
+				{"conversion", section->isConversion},
+				{"implicit_conversion", section->isImplicitConversion},
+				{"return_contract", static_cast<int>(section->returnContract)},
+				{"before", section->beforePatterns},
+				{"after", section->afterPatterns},
+				{"associativity", static_cast<int>(section->associativity)}
+			}
+		);
+	}
+	return digest(declarations.dump());
+}
+
+Json sourceProjection(const ParseContext &context, const std::unordered_set<const Section *> &inactive) {
+	std::map<const lsp::SourceFile *, std::set<int>> masked;
+	std::map<const lsp::SourceFile *, std::set<int>> preserved;
+	for (const CodeLine *line : context.codeLines) {
+		bool insideInactive = false;
+		for (const Section *section = line->section; section; section = section->parent) {
+			if (inactive.contains(section)) {
+				insideInactive = true;
+				break;
+			}
+		}
+		(insideInactive ? masked : preserved)[line->sourceFile].insert(line->sourceFileLineIndex);
+	}
+	Json sources = Json::object();
+	for (const auto &[_, source] : context.importedFiles) {
+		std::string projection;
+		std::string_view content = source->content;
+		size_t start = 0;
+		int lineIndex = 0;
+		bool inMaskedRun = false;
+		while (start < content.size()) {
+			size_t end = content.find('\n', start);
+			if (end == std::string_view::npos)
+				end = content.size();
+			else
+				end++;
+			bool omit = masked[source].contains(lineIndex) && !preserved[source].contains(lineIndex);
+			if (omit) {
+				if (!inMaskedRun)
+					projection += 'M';
+			} else {
+				projection += 'L';
+				projection += std::to_string(end - start);
+				projection += ':';
+				projection.append(content.data() + start, end - start);
+			}
+			inMaskedRun = omit;
+			start = end;
+			lineIndex++;
+		}
+		sources[source->uri] = digest(projection);
+	}
+	return sources;
+}
+
+Json captureInactiveProjection(const ParseContext &context, const Json *priorInactive = nullptr) {
+	std::map<std::string, Section *> sections;
+	collectSections(context.mainSection, "root", sections);
+	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(sections);
+	std::unordered_set<const Section *> selected;
+	for (const auto &[path, identity] : inactive.items()) {
+		auto section = sections.find(path);
+		if (section == sections.end() || sectionIdentity(*section->second) != identity)
+			return nullptr;
+		selected.insert(section->second);
+	}
+	return Json{
+		{"inactive", inactive}, {"declarations", declarationDigest(sections)}, {"sources", sourceProjection(context, selected)}
+	};
+}
+
+bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
+	const Json &before = previous.at("files");
+	if (before.size() != current.size())
+		return false;
+	std::set<std::string> imported;
+	for (const auto &[canonical, _] : context.importedFiles)
+		imported.insert(canonical);
+	for (const auto &[path, observation] : before.items()) {
+		if (!current.contains(path))
+			return false;
+		Json old = observation;
+		if (old.is_object())
+			old.erase("semantic");
+		if (old == current.at(path))
+			continue;
+		if (!old.is_object() || !current.at(path).is_object() ||
+			!imported.contains(current.at(path).at("canonical").get<std::string>()) ||
+			path == context.builtinSyntaxConfigPath || path == context.projectSyntaxConfigPath)
+			return false;
+		old.erase("content");
+		Json now = current.at(path);
+		now.erase("content");
+		if (old != now)
+			return false;
+	}
+	return true;
+}
+
+bool canReuseInactiveBodies(
+	const Json &previous, const Json &observations, const ParseContext &context, Json &currentProjection
+) {
+	if (!previous.contains("inactive_projection") || previous.at("diagnostics") != "" || context.options.emitDebugInfo ||
+		context.options.traceExecution || !context.diagnostics.empty() || !context.scopeRuleWarnings.empty() ||
+		!compatibleObservations(previous, observations, context))
+		return false;
+	const Json &priorProjection = previous.at("inactive_projection");
+	currentProjection = captureInactiveProjection(context, &priorProjection.at("inactive"));
+	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations") &&
+		   currentProjection.at("sources") == priorProjection.at("sources");
+}
+
 bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &files, const ParseContext::Options &options) {
 	std::vector<std::string> changedSources;
 	for (const auto &[path, observation] : previous.at("files").items()) {
@@ -338,6 +510,7 @@ struct TemporaryObjects {
 
 struct BuildStatistics {
 	bool reusedFrontend = false;
+	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
@@ -368,6 +541,18 @@ std::optional<bool> linkCachedObjects(
 	statistics.reusedObjects = keys.size();
 	statistics.linkedCachedObjects = true;
 	return emitNativeExecutableWithObjects(context, paths, libraries);
+}
+
+void restoreCachedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
+	delete context.llvmModule;
+	context.llvmModule = nullptr;
+	llvm::SMDiagnostic diagnostic;
+	std::unique_ptr<llvm::Module> module =
+		llvm::parseAssemblyString(cached.at("ir").get<std::string>(), diagnostic, *context.llvmContext);
+	if (!module || llvm::verifyModule(*module))
+		throw std::runtime_error("invalid cached LLVM IR: " + entry.string());
+	module->setModuleIdentifier(cached.at("module_id").get<std::string>());
+	context.llvmModule = module.release();
 }
 
 bool emitPartitions(
@@ -437,16 +622,16 @@ bool compileIncrementally(
 		BuildStatistics statistics;
 		bool success = false;
 		std::optional<Json> previous;
+		bool reusePreviousFrontend = false;
 		std::string previousMatches;
 		std::string previousMatcherKey;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
-			if (!observationsStillEquivalent(*previous, *recording, context.options)) {
+			reusePreviousFrontend = observationsStillEquivalent(*previous, *recording, context.options);
+			if (!reusePreviousFrontend)
 				previousMatcherKey = previous->at("matcher_key").get<std::string>();
-				previous.reset();
-			}
 		}
-		if (previous) {
+		if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
 			if (!initializeSyntaxConfigs(context, context.options.inputPath))
 				return false;
@@ -468,15 +653,7 @@ bool compileIncrementally(
 			if (cachedLink) {
 				success = *cachedLink;
 			} else {
-				delete context.llvmModule;
-				context.llvmModule = nullptr;
-				llvm::SMDiagnostic diagnostic;
-				std::unique_ptr<llvm::Module> module =
-					llvm::parseAssemblyString(previous->at("ir").get<std::string>(), diagnostic, *context.llvmContext);
-				if (!module || llvm::verifyModule(*module))
-					throw std::runtime_error("invalid cached LLVM IR: " + programEntry.string());
-				module->setModuleIdentifier(previous->at("module_id").get<std::string>());
-				context.llvmModule = module.release();
+				restoreCachedModule(context, *previous, programEntry);
 				success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
 				if (success) {
 					(*previous)["object_keys"] = statistics.objectKeys;
@@ -502,12 +679,45 @@ bool compileIncrementally(
 											  const MatchDependencies *dependencies) {
 				matcherCache.record(reference, options, match, dependencies);
 			};
-			bool compiled = compile(context.options.inputPath, context);
+			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
+			Json inactiveProjection;
+			bool reuseTypeInference =
+				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
+			if (compiled && !reuseTypeInference)
+				compiled = finishTypeInference(context);
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
-			if (compiled) {
+			auto saveMatcher = [&]() {
+				std::string payload = matcherCache.snapshot();
+				std::string key = digest(payload);
+				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
+				return key;
+			};
+			if (reuseTypeInference) {
+				statistics.reusedTypeInference = true;
+				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
+				context.requiredLibraries.insert(libraries.begin(), libraries.end());
+				std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
+				std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
+				if (cachedLink) {
+					success = *cachedLink;
+					statistics.objectKeys = objectKeys;
+				} else {
+					restoreCachedModule(context, *previous, programEntry);
+					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+				}
+				if (success) {
+					Json result = *previous;
+					result["files"] = recording->observations;
+					result["inactive_projection"] = std::move(inactiveProjection);
+					result["matcher_key"] = saveMatcher();
+					result["object_keys"] = statistics.objectKeys;
+					recordSemanticSources(result, *recording, context);
+					writeEntry(programEntry, result.dump());
+				}
+			} else if (compiled) {
 				success = generateCode(context, [&](ParseContext &compiled) {
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
@@ -534,12 +744,23 @@ bool compileIncrementally(
 						{"diagnostics", diagnostics},
 						{"diagnostic_sources", diagnosticSources}
 					};
-					std::string matcherPayload = matcherCache.snapshot();
-					std::string matcherKey = digest(matcherPayload);
-					writeEntry(directory / ("matcher-" + matcherKey + ".entry"), matcherPayload);
-					result["matcher_key"] = matcherKey;
+					result["matcher_key"] = saveMatcher();
+					result["inactive_projection"] = captureInactiveProjection(compiled);
 					recordSemanticSources(result, *recording, compiled);
-					if (!emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics))
+					bool reusedGeneratedCode = false;
+					if (previous && previous->at("ir") == result.at("ir")) {
+						std::vector<std::string> priorObjects = previous->at("object_keys").get<std::vector<std::string>>();
+						std::optional<bool> cachedLink =
+							linkCachedObjects(compiled, directory, priorObjects, libraries, statistics);
+						if (cachedLink) {
+							if (!*cachedLink)
+								return false;
+							statistics.objectKeys = std::move(priorObjects);
+							reusedGeneratedCode = true;
+						}
+					}
+					if (!reusedGeneratedCode &&
+						!emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics))
 						return false;
 					result["object_keys"] = statistics.objectKeys;
 					writeEntry(programEntry, result.dump());
@@ -551,6 +772,7 @@ bool compileIncrementally(
 		if (showStatistics)
 			std::cerr << "incremental: "
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
+							  {"type_inference_reused", statistics.reusedTypeInference},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},

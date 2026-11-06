@@ -188,6 +188,27 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert changed_string[0]["matcher_cache_hits"] > 0, "one-line body edit invalidated unrelated matches"
     assert changed_string[0]["precedence_matcher_cache_hits"] > 0, "one-line body edit invalidated precedence matches"
     assert changed_string[1:] == build(False)[1:], "string edit differs from clean build"
+    unused_source = source + 'to unused:\n    @intrinsic("discard", 1)\n'
+    main.write_text(unused_source)
+    build()
+    main.write_text(unused_source.replace('"discard", 1', '"discard", 2'))
+    unused_edit = build()
+    assert not unused_edit[0]["frontend_reused"], "unused body edit skipped source validation"
+    assert unused_edit[0]["type_inference_reused"], "unused body edit repeated whole-program type inference"
+    assert unused_edit[0]["linked_cached_objects"], "identical generated code did not reuse cached objects directly"
+    assert unused_edit[0]["objects_built"] == 0
+    assert unused_edit[1:] == build(False)[1:], "unused body edit differs from clean build"
+    main.write_text(unused_source.replace('"discard", 1)', '"discard", 2)\n    @intrinsic("discard", 3)'))
+    inserted_unused = build()
+    assert inserted_unused[0]["type_inference_reused"], "unused body insertion repeated type inference"
+    assert inserted_unused[1:] == build(False)[1:], "unused body insertion differs from clean build"
+    main.write_text(unused_source)
+    removed_unused = build()
+    assert removed_unused[0]["type_inference_reused"], "unused body deletion repeated type inference"
+    assert removed_unused[1:] == build(False)[1:], "unused body deletion differs from clean build"
+    main.write_text(unused_source.replace('@intrinsic("discard", 1)', 'unresolved function call'))
+    invalid_unused = build(success=False)
+    assert invalid_unused[1] == build(False, success=False)[1], "unused body edit hid a resolution error"
     precedence_source = '''function left plus right:
     RULE: $ times $
     replacement:
@@ -219,6 +240,7 @@ function left times right:
     main.write_text(source.replace('"alpha"))', '"gamma"))'))
     edited = build()
     assert not edited[0]["frontend_reused"]
+    assert not edited[0]["type_inference_reused"], "called function edit kept stale inference"
     assert edited[0]["objects_reused"] > 0 and edited[0]["objects_built"] > 0, "edit did not selectively rebuild objects"
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
 

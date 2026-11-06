@@ -13,6 +13,8 @@ struct PatternDefinition;
 struct InferenceContext;
 
 bool compile(const std::string &path, ParseContext &context);
+bool compileBeforeTypeInference(const std::string &path, ParseContext &context);
+bool finishTypeInference(ParseContext &context);
 enum class SourceLoadPurpose { Compilation, Dependencies };
 bool loadSourceFiles(
 	const std::string &path, ParseContext &context, SourceLoadPurpose purpose = SourceLoadPurpose::Compilation
