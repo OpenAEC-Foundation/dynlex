@@ -48,7 +48,7 @@ namespace fs = std::filesystem;
 constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
-constexpr unsigned partitionCount = 4;
+constexpr unsigned partitionCount = 16;
 using Clock = std::chrono::steady_clock;
 
 double elapsedMilliseconds(Clock::time_point start) {
