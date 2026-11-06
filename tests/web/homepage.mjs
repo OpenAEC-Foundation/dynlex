@@ -28,7 +28,7 @@ for (const filePath of Object.values(files)) {
 const html = fs.readFileSync(files.html, "utf8");
 const navigation = fs.readFileSync(files.navigation, "utf8");
 assert.match(html, /<a[^>]+class="skip-link"[^>]+href="#main-content"/);
-assert.match(html, /<header class="site-header" data-site-header><\/header>/);
+assert.match(html, /<header class="site-header" data-site-header data-theme="dark"><\/header>/);
 assert.match(html, /<main[^>]+id="main-content"/);
 assert.equal((html.match(/<h1\b/g) ?? []).length, 1, "Homepage must have exactly one h1");
 assert.match(html, /<script type="module" src="homepage\.js"><\/script>/);

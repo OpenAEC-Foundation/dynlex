@@ -18,7 +18,7 @@ const required = (scope, selector) => {
 const inventoryText = actor => actor.inventory.length ? actor.inventory.map(item => `${itemInfo(item.kind).label}${item.kind === "bucket" ? ` (${item.water}/4 water)` : item.count > 1 ? ` ×${item.count}` : ""}`).join(" · ") : "Two free hands";
 
 function markup() {
-  return `<article class="farm-game" data-farm-game aria-label="Programmable farm">
+  return `<article class="farm-game" data-theme="dark" data-farm-game aria-label="Programmable farm">
     <header class="farm-header"><div><span>CHALLENGE 02 · A FARM OF YOUR OWN</span><h3>Meadow Farm</h3></div>
       <div class="farm-weather"><b data-farm-weather>☀ CLEAR SKIES</b><small data-farm-day>DAY 1</small></div></header>
     <div class="farm-layout">

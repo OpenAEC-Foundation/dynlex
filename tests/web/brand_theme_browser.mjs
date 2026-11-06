@@ -46,6 +46,29 @@ try {
     await viewport(1440);
     await navigate(page);
     await waitFor("document.querySelector('.nav-launch') && document.fonts.status === 'loaded'", `${name} navigation and fonts`);
+    assert.equal(await evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(241, 238, 234)",
+      "Website pages use OpenAEC's warm pale background");
+    await checkText("body");
+    await checkText(".brand-name", ".site-header");
+    if (name === "homepage") {
+      for (const [text, background] of [
+        ["#hero-title", "body"], [".section-title h2", ".challenge-section"],
+        [".language-copy > span", ".language-section"], [".studio-copy > span", ".studio-section"],
+        [".install-card strong", ".install-card"]
+      ]) await checkText(text, background);
+      for (const id of ["playground", "challenges", "language", "studio", "install"]) {
+        await evaluate(`document.querySelector('#${id}').scrollIntoView({block:'start',behavior:'instant'})`);
+        await evaluate("new Promise(resolve => setTimeout(resolve, 250))");
+        await checkLayout();
+        await captureScreenshot(`brand-${id}-desktop`);
+      }
+      await evaluate("scrollTo({top:0,behavior:'instant'})");
+    } else {
+      const card = name === "docs" ? ".hero-card" : ".download-main";
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('${card}')).backgroundColor`),
+        "rgb(255, 255, 255)", "Content cards use white surfaces");
+      await checkText(name === "docs" ? ".hero-card h1" : "#hero-title", card);
+    }
     await checkText(".nav-launch");
     const hoverPoint = await evaluate(`(() => {
       const box = document.querySelector('.nav-launch').getBoundingClientRect();
@@ -90,6 +113,14 @@ try {
     await checkText(".ide-brand-name", ".app-header");
     await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
     await checkText(".monaco-editor .view-lines", ".monaco-editor-background");
+    if (theme === "dark") {
+      const editorColors = await evaluate(`({
+        background: getComputedStyle(document.querySelector('.monaco-editor-background')).backgroundColor,
+        activeLine: getComputedStyle(document.querySelector('.monaco-editor .view-overlays .current-line')).backgroundColor
+      })`);
+      assert.deepEqual(editorColors, {background:"rgb(42, 42, 50)", activeLine:"rgb(54, 54, 62)"},
+        "The dark editor uses a darker canvas with a lighter active line");
+    }
     await checkLayout();
     await captureScreenshot(`brand-ide-${theme}`);
     await viewport(390);

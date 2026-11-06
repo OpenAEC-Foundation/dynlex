@@ -53,7 +53,7 @@ for (const pagePath of documentationPages) {
 
   assert.match(html, /<body class="docs-page">/);
   assert.match(html, /<a class="skip-link" href="#main-content">Skip to content<\/a>/);
-  assert.match(html, /<header class="site-header" data-site-header><\/header>/);
+  assert.match(html, /<header class="site-header" data-site-header data-theme="dark"><\/header>/);
   assert.match(html, /<main class="wiki-shell" id="main-content">/);
   assert.match(
     html,

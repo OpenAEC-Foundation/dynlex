@@ -120,7 +120,7 @@ normal.crop.growth = fertilized.crop.growth = 0;
 updateEnvironment(animals);
 assert.equal(fertilized.crop.growth, normal.crop.growth * 2);
 
-const plan = parseFarmPlan(readFileSync(new URL("../required/farm_challenge/expected.txt", import.meta.url), "utf8"));
+const plan = parseFarmPlan(readFileSync(new URL("../integration/farm_challenge/expected.txt", import.meta.url), "utf8"));
 const routine = newRoutine();
 const calls = [];
 for (let i = 0; i < 8; i++) advanceRoutine(routine, plan, () => true, ({key}) => { calls.push(key); return { done: true, message: key }; });

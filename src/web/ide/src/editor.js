@@ -75,7 +75,7 @@ monaco.editor.defineTheme("dynlex-dark", {
   semanticHighlighting: true,
   rules: [
     { token: "keyword", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
-    { token: "string", foreground: tokenColor("success-text") },
+    { token: "string", foreground: tokenColor("success-on-dark") },
     { token: "comment", foreground: tokenColor("scaffold-gray"), fontStyle: "italic" },
     { token: "function", foreground: tokenColor("warm-gold") },
     { token: "section", foreground: tokenColor("warm-gold"), fontStyle: "bold" },
@@ -88,13 +88,13 @@ monaco.editor.defineTheme("dynlex-dark", {
   ],
   colors: {
     ...scrollbarThemeColors,
-    "editor.background": themeColor("deep-forge"),
+    "editor.background": themeColor("night-build"),
     "editor.foreground": themeColor("blueprint-white"),
     "editorLineNumber.foreground": themeColor("scaffold-gray"),
     "editorLineNumber.activeForeground": themeColor("blueprint-white"),
     "editorCursor.foreground": themeColor("warm-gold"),
     "editor.selectionBackground": "#D9770640",
-    "editor.lineHighlightBackground": themeColor("night-build"),
+    "editor.lineHighlightBackground": themeColor("deep-forge"),
     "editorIndentGuide.background1": "#56565F"
   }
 });

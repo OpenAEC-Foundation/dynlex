@@ -5,4 +5,4 @@
   link.href = new URL("./assets/editor-DDu0Mcob.css", import.meta.url).href;
   document.head.append(link);
 }
-export * from "./assets/editor-TTQdRRvc.js";
+export * from "./assets/editor-DOIsBOW6.js";

@@ -146,7 +146,7 @@
     right: -150px;
     width: 780px;
     height: 780px;
-    border: 1px solid rgba(250, 250, 249, 0.24);
+    border: 1px solid var(--border-subtle);
     border-radius: 50%;
     content: "";
 }
@@ -165,7 +165,7 @@
 }
 
 .language-copy > p {
-    color: rgba(250, 250, 249, 0.64);
+    color: var(--text-muted);
 }
 
 .language-copy > span,
@@ -173,13 +173,13 @@
     display: block;
     max-width: 500px;
     margin-top: 30px;
-    color: rgba(250, 250, 249, 0.72);
+    color: var(--text-muted);
     font-size: 0.94rem;
     line-height: 1.75;
 }
 
 .language-board {
-    border: 1px solid rgba(250, 250, 249, 0.6);
+    border: 1px solid var(--border);
     background: var(--surface);
     box-shadow: var(--shadow-lg);
     border-radius: var(--radius-lg);
@@ -545,7 +545,7 @@
     gap: 9px 28px;
     padding: 24px 28px;
     border: 1px solid var(--border);
-    background: rgba(42, 42, 50, 0.92);
+    background: var(--surface);
     border-radius: var(--radius-lg);
     transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }

@@ -133,12 +133,13 @@ code {
     padding: 0 40px;
     border-bottom: 2px solid transparent;
     border-image: var(--brand-gradient) 1;
-    background: rgba(42, 42, 50, 0.84);
+    background: var(--deep-forge);
+    color: var(--text-primary);
     backdrop-filter: blur(14px);
 }
 
 .site-header.is-scrolled {
-    background: rgba(42, 42, 50, 0.96);
+    background: var(--deep-forge);
 }
 
 .scroll-progress {
@@ -239,8 +240,8 @@ code {
     position: absolute;
     inset: 0;
     opacity: 0.16;
-    background-image: linear-gradient(rgba(250, 250, 249, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(250, 250, 249, 0.1) 1px, transparent 1px);
+    background-image: linear-gradient(var(--border-subtle) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
     background-size: 64px 64px;
     pointer-events: none;
 }

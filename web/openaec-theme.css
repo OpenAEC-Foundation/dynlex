@@ -1,9 +1,9 @@
-/* OpenAEC Foundation design tokens:
-   https://github.com/OpenAEC-Foundation/OpenAEC-style-book/blob/main/brandbook/DESIGN-SYSTEM.md */
+/* OpenAEC Foundation design tokens and current website surfaces:
+   https://github.com/OpenAEC-Foundation/OpenAEC-style-book/blob/main/brandbook/DESIGN-SYSTEM.md
+   https://open-aec.com/shared/style.css */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap");
 
 :root {
-    color-scheme: dark;
     --amber: #D97706;
     --deep-forge: #36363E;
     --signal-orange: #EA580C;
@@ -12,6 +12,10 @@
     --blueprint-white: #FAFAF9;
     --concrete: #F5F5F4;
     --night-build: #2A2A32;
+    --surface-dark-top: #33333C;
+    --surface-light-top: #F7F5F2;
+    --surface-light-bottom: #F1EEEA;
+    --success-on-dark: #86EFAC;
     --success: #16A34A;
     --error: #DC2626;
     --info: #2563EB;
@@ -27,7 +31,11 @@
     --radius-sm: 4px;
     --radius-md: 8px;
     --radius-lg: 12px;
+}
 
+:root,
+[data-theme="dark"] {
+    color-scheme: dark;
     --page-bg: var(--night-build);
     --surface: var(--deep-forge);
     --surface-alt: #303038;
@@ -47,7 +55,7 @@
     --danger-soft: rgba(220, 38, 38, 0.12);
     --warning-text: #FCD34D;
     --info-text: #93C5FD;
-    --success-text: #86EFAC;
+    --success-text: var(--success-on-dark);
     --header-bg: var(--deep-forge);
     --header-text: var(--blueprint-white);
     --header-muted: #B8B8C0;
@@ -60,15 +68,16 @@
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.24);
 }
 
-:root[data-theme="light"] {
+:root[data-theme="light"],
+[data-theme="light"] {
     color-scheme: light;
-    --page-bg: var(--concrete);
-    --surface: var(--blueprint-white);
-    --surface-alt: #E7E5E4;
+    --page-bg: var(--surface-light-bottom);
+    --surface: #FFFFFF;
+    --surface-alt: var(--surface-light-top);
     --surface-hover: #EDEBE8;
-    --text-primary: var(--deep-forge);
+    --text-primary: var(--night-build);
     --text-muted: var(--muted-on-light);
-    --border: #D6D3D1;
+    --border: #E7E5E4;
     --border-strong: #A1A1AA;
     --border-subtle: rgba(54, 54, 62, 0.12);
     --accent-text: var(--accent-on-light);
@@ -80,6 +89,12 @@
     --scroll-track: var(--concrete);
     --scroll-thumb: #A1A1AA;
     --scroll-thumb-hover: #71717A;
+    --shadow-md: 0 1px 2px rgba(42, 42, 50, 0.06), 0 12px 28px -14px rgba(42, 42, 50, 0.22);
+    --shadow-lg: 0 20px 40px -20px rgba(42, 42, 50, 0.25);
+}
+
+[data-theme] {
+    color: var(--text-primary);
 }
 
 h1, h2, h3, h4, h5, h6,

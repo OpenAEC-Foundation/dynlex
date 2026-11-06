@@ -912,7 +912,7 @@ assert.deepEqual(
 );
 assert.equal(
   documentationMenu.styledCardBackground,
-  "rgb(54, 54, 62)",
+  "rgb(255, 255, 255)",
   "Documentation must use the homepage surface palette"
 );
 await evaluate("document.querySelector('[data-primary-nav] a[aria-current=\"page\"]').click()");

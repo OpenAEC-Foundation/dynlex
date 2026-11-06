@@ -465,7 +465,7 @@ function drawField(time = 0) {
     context.beginPath();
     context.moveTo(positions[from].x, positions[from].y);
     context.lineTo(positions[to].x, positions[to].y);
-    context.strokeStyle = "rgba(255, 255, 255, 0.09)";
+    context.strokeStyle = fieldColor("border-subtle");
     context.stroke();
   }
 
@@ -476,10 +476,10 @@ function drawField(time = 0) {
     const position = positions[index];
     context.beginPath();
     context.arc(position.x, position.y, node.accent ? 3.5 : 2, 0, Math.PI * 2);
-    context.fillStyle = node.accent || "rgba(255, 255, 255, 0.45)";
+    context.fillStyle = node.accent || fieldColor("text-muted");
     context.fill();
     context.globalAlpha = node.accent ? 0.62 : 1;
-    context.fillStyle = node.accent || "rgba(255, 255, 255, 0.22)";
+    context.fillStyle = node.accent || fieldColor("text-muted");
     context.fillText(node.label.toUpperCase(), position.x + 10, position.y);
     context.globalAlpha = 1;
   }
