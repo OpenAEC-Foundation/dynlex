@@ -1,0 +1,66 @@
+# Resize retained geometry without recreating controls, focus or UI values.
+import lib/ui_native_layout.dl
+import lib/ui_resizing.dl
+
+to get the UI layout labeled {C string:label} in {a pointer to UI layout:layout}:
+    if layout's node's text = label:
+        return layout
+    set child to layout's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        set found to the UI layout labeled label in child
+        if found != @intrinsic("construct", a pointer to UI layout):
+            return found
+        set child to child's next
+    return @intrinsic("construct", a pointer to UI layout)
+
+to remember the UI geometry in {a pointer to UI layout:layout}:
+    set layout's design bounds to layout's bounds
+    set child to layout's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        remember the UI geometry in child
+        set child to child's next
+
+to apply UI pins from {UI reference:node} to {a pointer to UI layout:layout}:
+    if node's kind = 36:
+        set target to the UI layout labeled (node's text) in layout
+        require condition (target != @intrinsic("construct", a pointer to UI layout)) reporting "The pinned UI element does not exist"
+        set target's horizontal pin to node's columns
+        set target's vertical pin to node's rows
+    set index to 0
+    loop while index < node's count:
+        apply UI pins from (the UI child at index in node) to layout
+        increment index
+
+to prepare UI layout {a pointer to UI layout:layout} for {UI reference:description} sized {integer:width} by {integer:height}:
+    set layout's bounds to UI box at 0 0 sized width height
+    remember the UI geometry in layout
+    apply UI pins from description to layout
+
+to resize UI children of {a pointer to UI layout:layout}:
+    set horizontal to layout's bounds' width - layout's design bounds' width
+    set vertical to layout's bounds' height - layout's design bounds' height
+    set child to layout's first
+    loop while child != @intrinsic("construct", a pointer to UI layout):
+        set box to child's design bounds
+        if child's horizontal pin = 1:
+            set box's x to box's x + horizontal
+        else if child's horizontal pin = 2:
+            set box's width to box's width + horizontal
+        else if child's horizontal pin = 3:
+            set box's x to box's x + (horizontal / 2.0)
+        if child's vertical pin = 1:
+            set box's y to box's y + vertical
+        else if child's vertical pin = 2:
+            set box's height to box's height + vertical
+        else if child's vertical pin = 3:
+            set box's y to box's y + (vertical / 2.0)
+        set child's bounds to box
+        resize UI children of child
+        if child's node's kind = 28:
+            constrain ribbon scrolling in child
+        set child to child's next
+
+to resize UI layout {a pointer to UI layout:layout} to {integer:width} by {integer:height}:
+    set layout's bounds' width to width as a floating-point number
+    set layout's bounds' height to height as a floating-point number
+    resize UI children of layout

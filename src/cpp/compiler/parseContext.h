@@ -36,6 +36,7 @@ class SwitchInst;
 class BasicBlock;
 class DIBuilder;
 class DICompileUnit;
+class DICompositeType;
 class DIFile;
 class DIScope;
 class TargetMachine;
@@ -165,6 +166,7 @@ struct ParseContext {
 	llvm::DIBuilder *diBuilder{};
 	llvm::DICompileUnit *diCompileUnit{};
 	std::unordered_map<std::string, llvm::DIFile *> diFiles;
+	std::map<std::pair<ClassDefinition *, int>, llvm::DICompositeType *> classDebugTypes;
 	llvm::DIScope *currentDebugScope{};
 
 	// Temporary codegen bindings (pushed/popped during generation).

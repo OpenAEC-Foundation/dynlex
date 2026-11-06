@@ -1,0 +1,19 @@
+integer means: @intrinsic("type", "int", 32)
+
+function identity {integer:value}:
+    execute:
+        @intrinsic("return", value)
+
+flex function announced {integer:value}:
+    replacement:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "argument"))
+        @intrinsic("cast", value, integer)
+
+function reported {integer:value}:
+    execute:
+        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "callee"))
+        @intrinsic("return", value)
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", identity (announced 7)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", identity (reported 9)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", identity (@intrinsic("call", "libc", "abs", integer, @intrinsic("negate", 6)))))

@@ -1,5 +1,6 @@
 # Natural command sizes compose horizontally in groups and vertically in columns.
 import lib/ui_native_layout.dl
+import lib/ui_ribbon_scroll.dl
 
 to arrange ribbon UI layout {a pointer to UI layout:layout} using {UI theme:theme}:
     set node to layout's node
@@ -11,9 +12,30 @@ to arrange ribbon UI layout {a pointer to UI layout:layout} using {UI theme:them
             set width to 30.0
         if node's rows = 3:
             set width to 104.0
+        if node's width > 0:
+            set width to node's width as a floating-point number
+        if node's count > 0:
+            if node's rows = 0:
+                set width to width + 18.0
         set layout's bounds' width to width
-        return nothing
-    if node's kind = 34:
+    if (node's kind = 33) or (node's kind = 34):
+        set index to 0
+        set last to @intrinsic("construct", a pointer to UI layout)
+        loop while index < node's count:
+            set item to the UI child at index in node
+            require condition (item's kind = 35) reporting "A dropdown contains menu items"
+            set record to a new UI layout
+            set record's node to item
+            set record's parent to node
+            set child to storage for one slot initialized with record
+            if last = @intrinsic("construct", a pointer to UI layout):
+                set layout's first to child
+            else:
+                set last's next to child
+            set last to child
+            increment index
+        if node's kind = 34:
+            require condition (node's count > 0) reporting "A tool field requires options"
         return nothing
     set horizontal to 0.0
     set vertical to 0.0
@@ -60,3 +82,8 @@ to arrange ribbon UI layout {a pointer to UI layout:layout} using {UI theme:them
         set layout's bounds to UI box at 0 0 sized (the maximum of 0.0 and (horizontal - gap)) height
     if node's kind = 32:
         set layout's bounds to UI box at 0 0 sized width (the maximum of 0.0 and (vertical - 3.0))
+    if node's kind = 28:
+        set earlier to a UI layout for (a ribbon scroll arrow -1) inside node with width 24 using theme
+        set later to a UI layout for (a ribbon scroll arrow 1) inside node with width 24 using theme
+        set last's next to earlier
+        set earlier's next to later

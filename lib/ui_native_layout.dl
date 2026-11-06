@@ -3,7 +3,7 @@ import lib/ui_native_theme.dl
 import lib/ui_native_ribbon_layout.dl
 
 to get a UI layout for {UI reference:node} inside {UI reference:parent} with [width] {integer:available} using {UI theme:theme}:
-    if ((node's kind >= 6) and (node's kind <= 10)) or ((node's kind = 25) or (node's kind = 26)):
+    if (((node's kind >= 6) and (node's kind <= 10)) or ((node's kind = 25) or (node's kind = 26))) or ((node's kind = 36) or (node's kind = 37)):
         return @intrinsic("construct", a pointer to UI layout)
     set record to a new UI layout
     set record's node to node
@@ -27,7 +27,7 @@ to get a UI layout for {UI reference:node} inside {UI reference:parent} with [wi
         set result's bounds' width to (node's columns * theme's cell width) as a floating-point number
         set result's bounds' height to (node's rows * theme's cell height) as a floating-point number
         return result
-    if (node's kind = 20) or (node's kind = 16):
+    if ((node's kind = 20) or (node's kind = 16)) or (node's kind = 38):
         return result
     set height to 0
     if node's kind = 11:

@@ -1,0 +1,13 @@
+boolean means: @intrinsic("type", "bool")
+false means: @intrinsic("cast", 0, boolean)
+section if condition:
+    replacement:
+        @intrinsic("if", condition)
+function empty:
+    execute:
+        if false:
+            @intrinsic("discard", 0)
+function outer:
+    execute:
+        empty
+outer

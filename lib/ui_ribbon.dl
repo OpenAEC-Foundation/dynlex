@@ -1,6 +1,8 @@
 # Ribbon descriptions compose ordinary static UI data. Tabs own their selection.
 import lib/ui_components.dl
 
+a ribbon scroll arrow {fixed integer:direction} means: UI node 38 with "" colored "" sized direction by 0 bordered 0 containing no UI children acting no UI action at 0 0 measuring 24 by 108 styled "chevron"
+
 section ribbon {C string:name} at {integer:left} {integer:top} sized {integer:width} by {integer:height}:
     result: UI reference
     body:
@@ -39,8 +41,37 @@ section tool column:
 tool {C string:name} with icon {C string:icon} means: a UI component 33 labeled name styled icon at 0 0 sized 0 by 28 containing no UI children
 large tool {C string:name} with icon {C string:icon} means: UI node 33 with name colored "" sized 0 by 1 bordered 0 containing no UI children acting no UI action at 0 0 measuring 0 by 84 styled icon
 icon tool {C string:name} with icon {C string:icon} means: UI node 33 with name colored "" sized 0 by 2 bordered 0 containing no UI children acting no UI action at 0 0 measuring 30 by 28 styled icon
-tool field {C string:text} sized {integer:width} means: a UI component 34 labeled text styled "" at 0 0 sized width by 28 containing no UI children
 theme preview {C string:name} in {C string:color} means: UI node 33 with name colored color sized 0 by 3 bordered 0 containing no UI children acting no UI action at 0 0 measuring 104 by 84 styled ""
+
+section large menu {C string:name} with icon {C string:icon}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        UI node 33 with name colored "" sized 0 by 1 bordered 0 containing (the body's children) acting no UI action at 0 0 measuring 0 by 84 styled icon
+
+section tool menu {C string:name} with icon {C string:icon}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI component 33 labeled name styled icon at 0 0 sized 0 by 28 containing (the body's children)
+
+section tool field {C string:text} sized {integer:width}:
+    result: UI reference
+    body:
+        children: many UI reference
+    value:
+        a UI component 34 labeled text styled "" at 0 0 sized width by 28 containing (the body's children)
+
+menu item {C string:text} with icon {C string:icon} means: a UI component 35 labeled text styled icon at 0 0 sized 0 by 32 containing no UI children
+menu item {C string:text} means: menu item text with icon ""
+
+icon command {C string:name} with icon {C string:icon} at {integer:left} {integer:top} sized {integer:width} by {integer:height} means: UI node 33 with name colored "" sized 0 by 2 bordered 0 containing no UI children acting no UI action at left top measuring width by height styled icon
+command {C string:name} with icon {C string:icon} at {integer:left} {integer:top} sized {integer:width} by {integer:height} means: UI node 33 with name colored "" sized 0 by 4 bordered 0 containing no UI children acting no UI action at left top measuring width by height styled icon
+accent command {C string:name} with icon {C string:icon} at {integer:left} {integer:top} sized {integer:width} by {integer:height} means: UI node 33 with name colored "orange" sized 0 by 4 bordered 0 containing no UI children acting no UI action at left top measuring width by height styled icon
+profile command {C string:name} at {integer:left} {integer:top} means: UI node 33 with name colored "" sized 0 by 5 bordered 0 containing no UI children acting no UI action at left top measuring 30 by 30 styled ""
+search command {C string:name} at {integer:left} {integer:top} sized {integer:width} means: UI node 33 with name colored "" sized 0 by 6 bordered 0 containing no UI children acting no UI action at left top measuring width by 32 styled "search"
 
 to get the selected tab of {UI reference:ribbon} in {a pointer to UI instance:instance}:
     require condition ((ribbon's kind = 28) and (ribbon's count > 0)) reporting "A ribbon requires at least one tab"

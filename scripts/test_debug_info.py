@@ -52,29 +52,38 @@ def main() -> int:
         print(f"required pinned DWARF verifier not found: {dwarf_verifier}", file=sys.stderr)
         return 2
 
-    source = repo_root / "tests/required/simple/main.dl"
+    sources = [repo_root / "tests/required" / name / "main.dl" for name in (
+        "simple", "debug_class_globals", "debug_empty_function", "recursive_class_pointer", "recursive_class_double_pointer",
+    )]
     with tempfile.TemporaryDirectory(prefix="dynlex-debug-info-") as temporary_directory:
-        executable = Path(temporary_directory) / "simple.out"
-        compile_result = subprocess.run(
-            [str(compiler), str(source), "-g", "-o", str(executable)],
-            cwd=repo_root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if compile_result.returncode != 0:
-            print(compile_result.stdout + compile_result.stderr, file=sys.stderr)
-            return 1
-
-        verify_result = subprocess.run(
-            [str(dwarf_verifier), "--verify", str(executable)],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if verify_result.returncode != 0:
-            print(verify_result.stdout + verify_result.stderr, file=sys.stderr)
-            return 1
+        for source in sources:
+            executable = Path(temporary_directory) / (source.parent.name + ".out")
+            compile_result = subprocess.run(
+                [str(compiler), str(source), "-g", "-o", str(executable)],
+                cwd=repo_root, text=True, capture_output=True, check=False,
+            )
+            if compile_result.returncode != 0:
+                print(compile_result.stdout + compile_result.stderr, file=sys.stderr)
+                return 1
+            verify_result = subprocess.run(
+                [str(dwarf_verifier), "--verify", str(executable)],
+                text=True, capture_output=True, check=False,
+            )
+            if verify_result.returncode != 0:
+                print(verify_result.stdout + verify_result.stderr, file=sys.stderr)
+                return 1
+            if source.parent.name == "debug_class_globals":
+                ir = executable.with_suffix(".ll")
+                subprocess.run([str(compiler), str(source), "-g", "--emit-llvm", "-o", str(ir)],
+                               cwd=repo_root, check=True, capture_output=True, text=True)
+                metadata = ir.read_text()
+                for name in ("global", "chain"):
+                    definition = next(line for line in metadata.splitlines() if line.startswith(f"@{name} ="))
+                    if "!dbg" not in definition:
+                        raise AssertionError(f"{name} has no attached debug information")
+                for name in ("record", "node"):
+                    if f'DICompositeType(tag: DW_TAG_structure_type, name: "{name}"' not in metadata:
+                        raise AssertionError(f"The {name} structure has no debug type")
 
     return 0
 

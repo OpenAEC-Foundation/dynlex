@@ -1,0 +1,23 @@
+integer means: @intrinsic("type", "int", 32)
+pointer to kind means: @intrinsic("add pointer depth", kind)
+class:
+    patterns:
+        record
+    members:
+        value as integer
+class:
+    patterns:
+        node
+    members:
+        next as pointer to node
+        value as integer
+@intrinsic("store", global, @intrinsic("construct", record, 42))
+@intrinsic("store", chain, @intrinsic("construct", node))
+function touch:
+    globals:
+        global
+        chain
+    execute:
+        @intrinsic("discard", global)
+        @intrinsic("discard", chain)
+touch

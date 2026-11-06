@@ -151,8 +151,9 @@ to get the window dimensions of {pointer:window}:
     @intrinsic("call", "glfw", "glfwGetWindowSize", nothing, the GLFW window of window, the address of horizontal, the address of vertical)
     return @intrinsic("construct", window dimensions, horizontal, vertical)
 
-to keep {pointer:window} at aspect {integer:width} by {integer:height}:
-    @intrinsic("call", "glfw", "glfwSetWindowAspectRatio", nothing, the GLFW window of window, width, height)
+to set the minimum size of {pointer:window} to {integer:width} by {integer:height}:
+    require condition ((width > 0) and (height > 0)) reporting "A minimum window size requires positive dimensions"
+    @intrinsic("call", "glfw", "glfwSetWindowSizeLimits", nothing, the GLFW window of window, width, height, -1, -1)
 
 to get {mouse button:button} is pressed in {pointer:window}:
 	return @intrinsic("call", "glfw", "glfwGetMouseButton", an integer, the GLFW window of window, button's number) != 0
@@ -171,6 +172,10 @@ to preserve mouse clicks in {pointer:window}:
 
 to preserve key presses in {pointer:window}:
 	@intrinsic("call", "glfw", "glfwSetInputMode", nothing, the GLFW window of window, 208898, 1)
+	ignore @intrinsic("call", "glfw", "glfwSetKeyCallback", a pointer, the GLFW window of window, the function named "handle the graphics key of $ numbered $ with scan $ action $ modifiers $")
+
+to get the next key press in {pointer:window}:
+	return the next graphics key press in (window as a pointer to DynlexGraphics)
 
 to [set the application state of] {pointer:window} [to] {pointer:data}:
 	set state to window as a pointer to DynlexGraphics
@@ -242,6 +247,21 @@ flex function display {graphics frame:frame}:
 		else:
 			poll window events
 		set frame's drawable to false
+
+to get the clipping rectangle of {graphics frame:frame}:
+    require condition (frame's drawable) reporting "Reading clipping requires a drawable graphics frame"
+    set state to frame's window as a pointer to DynlexGraphics
+    return state's clip_rectangle
+
+to set the clipping rectangle of {graphics frame:frame} to {VkRect2D:rectangle}:
+    require condition (frame's drawable) reporting "Setting clipping requires a drawable graphics frame"
+    set state to frame's window as a pointer to DynlexGraphics
+    require condition (state's triangles_active = false) reporting "Clipping cannot change during a triangle stream"
+    require condition ((rectangle's offset' x >= 0) and (rectangle's offset' y >= 0)) reporting "A clipping rectangle requires nonnegative offsets"
+    require condition ((rectangle's extent' width <= ((2147483647 - rectangle's offset' x) as a 32 bit unsigned integer)) and (rectangle's extent' height <= ((2147483647 - rectangle's offset' y) as a 32 bit unsigned integer))) reporting "A clipping rectangle exceeds the coordinate range"
+    set commands to (the address of (the item at (state's frame_index) in (state's frames)))'s commands
+    @intrinsic("call", "vulkan", "vkCmdSetScissor", nothing, commands, 0, 1, the address of rectangle)
+    set state's clip_rectangle to rectangle
 
 to use screen coordinates in {graphics frame:frame}:
 	if frame's drawable:

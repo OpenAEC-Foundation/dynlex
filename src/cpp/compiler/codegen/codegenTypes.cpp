@@ -131,18 +131,26 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 	case DataType::Kind::Class: {
 		if (!type.classDefinition || type.classInstIndex < 0)
 			return nullptr;
+		auto key = std::pair(type.classDefinition, type.classInstIndex);
+		if (auto found = context.classDebugTypes.find(key); found != context.classDebugTypes.end())
+			return found->second;
 		ClassInstantiation &inst = type.classDefinition->instantiations[type.classInstIndex];
 		auto &fields = type.classDefinition->fields;
-		llvm::DIFile *file = nullptr;
-		if (!type.classDefinition->range.line)
-			return nullptr;
-		file = getOrCreateDIFile(context, type.classDefinition->range.line->sourceFile);
+		requireCompilerInvariant(type.classDefinition->range.line, "class debug type has no declaration location");
+		llvm::DIFile *file = getOrCreateDIFile(context, type.classDefinition->range.line->sourceFile);
+		unsigned line = type.classDefinition->range.line->sourceFileLineIndex + 1;
+		std::string className = type.classDefinition->patternNames.front();
+		auto *forward = context.diBuilder->createReplaceableCompositeType(
+			llvm::dwarf::DW_TAG_structure_type, className, nullptr, file, line
+		);
+		context.classDebugTypes.emplace(key, forward);
 
 		llvm::StructType *llvmStruct = llvm::cast<llvm::StructType>(getLLVMType(context, type));
 		const llvm::DataLayout &dataLayout = context.llvmModule->getDataLayout();
 		const llvm::StructLayout *structLayout = dataLayout.getStructLayout(llvmStruct);
 		std::vector<llvm::Metadata *> members;
-		for (size_t i = 0; i < fields.size() && i < inst.fieldTypes.size(); i++) {
+		requireCompilerInvariant(fields.size() == inst.fieldTypes.size(), "class debug layout has missing field types");
+		for (size_t i = 0; i < fields.size(); i++) {
 			llvm::DIType *fieldDIType = getDIType(context, inst.fieldTypes[i]);
 			llvm::Type *llvmFieldType = getLLVMType(context, inst.fieldTypes[i]);
 			llvm::TypeSize fieldSize = dataLayout.getTypeSizeInBits(llvmFieldType);
@@ -152,18 +160,21 @@ llvm::DIType *getDIType(ParseContext &context, DataType type) {
 				std::max<uint64_t>(inst.fieldTypes[i].getABIAlignment(dataLayout, *context.llvmContext), fields[i].alignment) *
 				8;
 			uint64_t offsetBits = structLayout->getElementOffset(inst.llvmFieldIndices[i]) * 8;
+			requireCompilerInvariant(fields[i].range.line, "class debug member has no declaration location");
+			auto *memberFile = getOrCreateDIFile(context, fields[i].range.line->sourceFile);
 			auto *member = context.diBuilder->createMemberType(
-				nullptr, fields[i].name, file, 0, fieldSizeBits, fieldAlignmentBits, offsetBits, llvm::DINode::FlagZero,
-				fieldDIType
+				forward, fields[i].name, memberFile, fields[i].range.line->sourceFileLineIndex + 1, fieldSizeBits,
+				fieldAlignmentBits, offsetBits, llvm::DINode::FlagZero, fieldDIType
 			);
 			members.push_back(member);
 		}
-		std::string className = type.classDefinition->patternNames.empty() ? "class" : type.classDefinition->patternNames[0];
-		return context.diBuilder->createStructType(
-			nullptr, className, file, 0, structLayout->getSizeInBytes() * 8,
+		auto *complete = context.diBuilder->createStructType(
+			nullptr, className, file, line, structLayout->getSizeInBytes() * 8,
 			type.getABIAlignment(dataLayout, *context.llvmContext) * 8, llvm::DINode::FlagZero, nullptr,
 			context.diBuilder->getOrCreateArray(members)
 		);
+		context.classDebugTypes[key] = complete;
+		return context.diBuilder->replaceTemporary(llvm::TempDICompositeType(forward), complete);
 	}
 	default:
 		return nullptr;
@@ -401,9 +412,9 @@ void allocateSectionVariables(ParseContext &context, Section *section, Instantia
 					unsigned line = varDef->range.line->sourceFileLineIndex + 1;
 					llvm::DIType *diType = getDIType(context, varType);
 					auto *gvExpr = context.diBuilder->createExpression();
-					context.diBuilder->createGlobalVariableExpression(
+					globalVar->addDebugInfo(context.diBuilder->createGlobalVariableExpression(
 						context.diCompileUnit, name, name, diFile, line, diType, /*IsLocalToUnit=*/true, gvExpr
-					);
+					));
 				}
 			}
 			context.variableStorage[storageKey] = context.globalLLVMVariables.at(name);

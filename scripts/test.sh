@@ -695,6 +695,7 @@ run_auxiliary_test "command_line_argument_targets" 10 python3 -B "$SCRIPT_DIR/te
 run_auxiliary_test "shader_intrinsic_targets" 20 python3 -B "$SCRIPT_DIR/test_shader_intrinsic_targets.py" "$COMPILER"
 run_auxiliary_test "command_line_source" 120 python3 -B "$SCRIPT_DIR/test_command_line.py" "$COMPILER"
 run_auxiliary_test "debug_info" 10 python3 -B "$SCRIPT_DIR/test_debug_info.py" "$COMPILER"
+run_auxiliary_test "ui_svg_import" 10 python3 -B "$SCRIPT_DIR/test_ui_svg.py"
 run_auxiliary_test "native_platform_targets" 30 python3 -B "$SCRIPT_DIR/test_native_platform_targets.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "nested_operand_grouping" 30 python3 -B "$SCRIPT_DIR/test_nested_operand_grouping.py" "$PROJECT_DIR" "$COMPILER"
 run_auxiliary_test "string_literal_boundaries" 10 python3 -B "$SCRIPT_DIR/test_string_literal_boundaries.py" "$PROJECT_DIR" "$COMPILER"

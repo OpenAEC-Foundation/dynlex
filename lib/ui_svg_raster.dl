@@ -1,0 +1,132 @@
+# FreeType supplies subpixel coverage, curved strokes and round joins/caps.
+# It is already the native font dependency on every supported platform.
+import lib/ui_icons.dl
+import lib/font.dl
+
+class:
+    patterns:
+        SVG FT point
+    members:
+        x as a C long integer
+        y as a C long integer
+
+class:
+    patterns:
+        SVG FT outline
+    members:
+        contour count as a 16 bit integer
+        point count as a 16 bit integer
+        points as a pointer to SVG FT point
+        tags as a pointer
+        contours as a pointer
+        flags as an integer
+
+class:
+    patterns:
+        SVG FT bitmap
+    members:
+        rows as an integer
+        width as an integer
+        pitch as an integer
+        buffer as a pointer
+        levels as a 16 bit integer
+        mode as a byte
+        palette mode as a byte
+        palette as a pointer
+
+to get the rounded SVG coordinate {floating-point number:value}:
+    set offset to 0.5 if value >= 0.0, else -0.5
+    return (value + offset) as a C long integer
+
+to get the SVG FT point at {floating-point number:x} {floating-point number:y}:
+    # Keep 12 fractional bits in SVG space while stroking. In particular, a
+    # small round-capped bullet must not collapse into an empty subpath.
+    return @intrinsic("construct", SVG FT point, the rounded SVG coordinate (x * 4096.0), the rounded SVG coordinate ((24.0 - y) * 4096.0))
+
+# Each subpath is painted separately. Combining stroke outlines before filling
+# can cancel overlapping paths with opposite winding directions.
+to paint SVG stroke {a pointer:stroker} at size {integer:span} using {a pointer:library} into {a pointer to a byte:destination}:
+    set points to 0
+    set contours to 0
+    set error to @intrinsic("call", "freetype", "FT_Stroker_GetCounts", an integer, stroker, the address of points, the address of contours)
+    require condition (error = 0) reporting "Measuring the SVG outline failed"
+    set outline to a new SVG FT outline
+    set error to @intrinsic("call", "freetype", "FT_Outline_New", an integer, library, points, contours, the address of outline)
+    require condition (error = 0) reporting "Allocating the SVG outline failed"
+    set outline's point count to 0 as a 16 bit integer
+    set outline's contour count to 0 as a 16 bit integer
+    @intrinsic("call", "freetype", "FT_Stroker_Export", nothing, stroker, the address of outline)
+    # Only the finished outline is converted to FreeType's 26.6 pixel units.
+    set factor to (span as a floating-point number) / 1536.0
+    set index to 0
+    loop while index < (outline's point count as an integer):
+        set point to the address of (the item at index in (outline's points))
+        set point's x to the rounded SVG coordinate ((point's x as a floating-point number) * factor)
+        set point's y to the rounded SVG coordinate ((point's y as a floating-point number) * factor)
+        increment index
+    set pixels to a new string buffer containing (span * span) bytes
+    ignore @intrinsic("call", "libc", "memset", a pointer, the data of pixels, 0, span * span)
+    set bitmap to @intrinsic("construct", SVG FT bitmap, span, span, span, (the data of pixels) as a pointer, 256 as a 16 bit integer, 2 as a byte, 0 as a byte, @intrinsic("construct", a pointer))
+    set error to @intrinsic("call", "freetype", "FT_Outline_Get_Bitmap", an integer, library, the address of outline, the address of bitmap)
+    require condition (error = 0) reporting "Rasterizing the SVG outline failed"
+    set error to @intrinsic("call", "freetype", "FT_Outline_Done", an integer, library, the address of outline)
+    require condition (error = 0) reporting "Releasing the SVG outline failed"
+    set index to 0
+    loop while index < (span * span):
+        set alpha to ((the item at index in (the data of pixels)) as an integer) bitwise and 255
+        set previous to ((the item at index in destination) as an integer) bitwise and 255
+        set composed to alpha + (((previous * (255 - alpha)) + 127) / 255)
+        store (composed as a byte) into destination at index
+        increment index
+
+to get the coverage of SVG {UI SVG icon:icon} at pixel size {integer:size} using {a pointer:library}:
+    require condition (size > 0) reporting "An SVG raster size must be positive"
+    # Supersampling keeps subpixel circles accurate at small toolbar sizes;
+    # FreeType's curve-flattening tolerance is measured in raster pixels.
+    set span to size * 4
+    set pixels to a new string buffer containing (span * span) bytes
+    ignore @intrinsic("call", "libc", "memset", a pointer, the data of pixels, 0, span * span)
+    set stroker to @intrinsic("construct", a pointer)
+    set error to @intrinsic("call", "freetype", "FT_Stroker_New", an integer, library, the address of stroker)
+    require condition (error = 0) reporting "Creating the SVG stroker failed"
+    # SVG stroke-width 2 in a 24-unit viewBox; round caps and joins.
+    @intrinsic("call", "freetype", "FT_Stroker_Set", nothing, stroker, 4096 as a C long integer, 1, 0, 0 as a C long integer)
+    set index to 0
+    loop while index < icon's count:
+        set op to the item at index in (icon's operations)
+        set first to the SVG FT point at (op's first x) (op's first y)
+        if (op's kind = 0) or (op's kind = 4):
+            @intrinsic("call", "freetype", "FT_Stroker_Rewind", nothing, stroker)
+            set open to (1 if op's kind = 0, else 0) as a byte
+            set error to @intrinsic("call", "freetype", "FT_Stroker_BeginSubPath", an integer, stroker, the address of first, open)
+        else if op's kind = 1:
+            set error to @intrinsic("call", "freetype", "FT_Stroker_LineTo", an integer, stroker, the address of first)
+        else if op's kind = 2:
+            set second to the SVG FT point at (op's second x) (op's second y)
+            set end to the SVG FT point at (op's end x) (op's end y)
+            set error to @intrinsic("call", "freetype", "FT_Stroker_CubicTo", an integer, stroker, the address of first, the address of second, the address of end)
+        else:
+            set error to @intrinsic("call", "freetype", "FT_Stroker_EndSubPath", an integer, stroker)
+        require condition (error = 0) reporting "Stroking an SVG path failed"
+        if op's kind = 3:
+            paint SVG stroke stroker at size span using library into (the data of pixels)
+        increment index
+    @intrinsic("call", "freetype", "FT_Stroker_Done", nothing, stroker)
+    set result to a new string buffer containing (size * size) bytes
+    set row to 0
+    loop while row < size:
+        set column to 0
+        loop while column < size:
+            set sum to 0
+            set vertical to 0
+            loop while vertical < 4:
+                set horizontal to 0
+                loop while horizontal < 4:
+                    set offset to ((((row * 4) + vertical) * span) + (column * 4)) + horizontal
+                    set sum to sum + (((the item at offset in (the data of pixels)) as an integer) bitwise and 255)
+                    increment horizontal
+                increment vertical
+            store (((sum + 8) / 16) as a byte) into (the data of result) at ((row * size) + column)
+            increment column
+        increment row
+    return result

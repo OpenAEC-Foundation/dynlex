@@ -1,0 +1,14 @@
+# Renderer-independent resize descriptions. The original size is the design space.
+import lib/ui_components.dl
+
+the interface adapts from {integer:width} by {integer:height} pixels means: a UI component 26 labeled "" styled "adaptive" at 0 0 sized width by height containing no UI children
+the window is at least {integer:width} by {integer:height} pixels means: a UI component 37 labeled "" styled "" at 0 0 sized width by height containing no UI children
+
+# Axis modes: keep the near edge, keep the far edge, stretch, or center.
+a UI pin for {C string:label} horizontally {integer:horizontal} vertically {integer:vertical} means: UI node 36 with label colored "" sized horizontal by vertical bordered 0 containing no UI children acting no UI action
+pin {C string:label} to all edges means: a UI pin for label horizontally 2 vertically 2
+pin {C string:label} to the left and right means: a UI pin for label horizontally 2 vertically 0
+pin {C string:label} to the top right means: a UI pin for label horizontally 1 vertically 0
+pin {C string:label} to the bottom right means: a UI pin for label horizontally 1 vertically 1
+pin {C string:label} to the bottom left means: a UI pin for label horizontally 0 vertically 1
+center {C string:label} horizontally means: a UI pin for label horizontally 3 vertically 0

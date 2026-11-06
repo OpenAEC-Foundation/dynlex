@@ -3,7 +3,10 @@
 #include "definitionSection.h"
 
 struct ClassSection : public DefinitionSection {
-	ClassSection(Section *parent) : DefinitionSection(SectionType::Class, parent) { classDefinition = new ClassDefinition(); }
+	ClassSection(Section *parent, Range declarationRange) : DefinitionSection(SectionType::Class, parent) {
+		classDefinition = new ClassDefinition();
+		classDefinition->range = declarationRange;
+	}
 
 	ClassDefinition *classDefinition;
 
