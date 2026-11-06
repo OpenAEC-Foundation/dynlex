@@ -206,6 +206,13 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     removed_unused = build()
     assert removed_unused[0]["type_inference_reused"], "unused body deletion repeated type inference"
     assert removed_unused[1:] == build(False)[1:], "unused body deletion differs from clean build"
+    inline_unused_source = source + 'to unused: @intrinsic("discard", 1)\n'
+    main.write_text(inline_unused_source)
+    build()
+    main.write_text(inline_unused_source.replace('"discard", 1', '"discard", 2'))
+    inline_unused_edit = build()
+    assert inline_unused_edit[0]["type_inference_reused"], "inline unused body edit repeated type inference"
+    assert inline_unused_edit[1:] == build(False)[1:], "inline unused body edit differs from clean build"
     main.write_text(unused_source.replace('@intrinsic("discard", 1)', 'unresolved function call'))
     invalid_unused = build(success=False)
     assert invalid_unused[1] == build(False, success=False)[1], "unused body edit hid a resolution error"
@@ -272,6 +279,22 @@ function left times right:
     effect_edit = build(entry=leaf_main)
     assert effect_edit[0]["inference_instantiations_reused"] == 2, "changed callee effect reused caller inference"
     assert effect_edit[1:] == build(False, entry=leaf_main)[1:], "changed callee effect kept stale caller code"
+
+    first_helper = root / "first_helper.dl"
+    second_helper = root / "second_helper.dl"
+    two_caller = root / "two_caller.dl"
+    first_helper.write_text('integer means: @intrinsic("type", "int")\n'
+                            'to first helper: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n')
+    second_helper.write_text('to second helper: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "second"))\n')
+    two_caller.write_text('import first_helper.dl\nimport second_helper.dl\n'
+                          'to caller:\n    first helper\n    second helper\ncaller\n')
+    build(entry=two_caller)
+    first_helper.write_text(first_helper.read_text().replace('"first"', '"updated first"'))
+    second_helper.write_text(second_helper.read_text().replace('"second"', '"updated second"'))
+    two_file_edit = build(entry=two_caller)
+    assert two_file_edit[0]["inference_instantiations_reused"] >= 1, f"two callee edits re-inferred the caller: {two_file_edit[0]}"
+    assert two_file_edit[0]["functions_ir_reused"] >= 1, "two callee edits regenerated the caller IR"
+    assert two_file_edit[1:] == build(False, entry=two_caller)[1:], "two rebuilt callees differ from clean build"
 
     typed_dependency = root / "typed_dependency.dl"
     typed_dependency_source = ('integer means: @intrinsic("type", "int")\n'

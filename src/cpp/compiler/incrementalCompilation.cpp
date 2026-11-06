@@ -276,50 +276,7 @@ std::string declarationDigest(const std::map<std::string, Section *> &sections) 
 	return digest(declarations.dump());
 }
 
-Json sourceProjection(const ParseContext &context, const std::unordered_set<const Section *> &inactive) {
-	std::map<const lsp::SourceFile *, std::set<int>> masked;
-	std::map<const lsp::SourceFile *, std::set<int>> preserved;
-	for (const CodeLine *line : context.codeLines) {
-		bool insideInactive = false;
-		for (const Section *section = line->section; section; section = section->parent) {
-			if (inactive.contains(section)) {
-				insideInactive = true;
-				break;
-			}
-		}
-		(insideInactive ? masked : preserved)[line->sourceFile].insert(line->sourceFileLineIndex);
-	}
-	Json sources = Json::object();
-	for (const auto &[_, source] : context.importedFiles) {
-		std::string projection;
-		std::string_view content = source->content;
-		size_t start = 0;
-		int lineIndex = 0;
-		bool inMaskedRun = false;
-		while (start < content.size()) {
-			size_t end = content.find('\n', start);
-			if (end == std::string_view::npos)
-				end = content.size();
-			else
-				end++;
-			bool omit = masked[source].contains(lineIndex) && !preserved[source].contains(lineIndex);
-			if (omit) {
-				if (!inMaskedRun)
-					projection += 'M';
-			} else {
-				projection += 'L';
-				projection += std::to_string(end - start);
-				projection += ':';
-				projection.append(content.data() + start, end - start);
-			}
-			inMaskedRun = omit;
-			start = end;
-			lineIndex++;
-		}
-		sources[source->uri] = digest(projection);
-	}
-	return sources;
-}
+#include "incrementalSourceProjection.inl"
 
 Json captureInactiveProjection(
 	const ParseContext &context, const Json *priorInactive = nullptr,
