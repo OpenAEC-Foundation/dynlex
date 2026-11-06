@@ -405,7 +405,7 @@ bool compileIncrementally(
 		BuildStatistics statistics;
 		bool success = false;
 		std::optional<Json> previous;
-		Json previousMatches = Json::object();
+		std::string previousMatches;
 		std::string previousMatcherKey;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
@@ -445,7 +445,7 @@ bool compileIncrementally(
 				if (auto cached = readEntry(matcherEntry)) {
 					if (digest(*cached) != previousMatcherKey)
 						throw std::runtime_error("corrupt matcher cache entry: " + matcherEntry.string());
-					previousMatches = Json::parse(*cached);
+					previousMatches = std::move(*cached);
 				}
 			}
 			IncrementalMatcherCache matcherCache(context, previousMatches);

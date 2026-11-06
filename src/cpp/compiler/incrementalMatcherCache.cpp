@@ -15,6 +15,23 @@
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v1\n";
+
+void appendLength(std::string &output, std::uint64_t value) {
+	for (unsigned index = 0; index < 8; index++) {
+		output.push_back(static_cast<char>(value & 0xff));
+		value >>= 8;
+	}
+}
+
+std::uint64_t readLength(std::string_view input, size_t &position) {
+	if (input.size() - position < 8)
+		throw std::runtime_error("truncated incremental matcher cache length");
+	std::uint64_t value = 0;
+	for (unsigned index = 0; index < 8; index++)
+		value |= static_cast<std::uint64_t>(static_cast<unsigned char>(input[position++])) << (index * 8);
+	return value;
+}
 
 std::string digest(std::string_view value) {
 	llvm::SHA256 hash;
@@ -83,27 +100,42 @@ void appendSourcePosition(Fingerprint &key, const Range &range) {
 }
 } // namespace
 
-IncrementalMatcherCache::IncrementalMatcherCache(ParseContext &context, const Json &previous)
-	: context(context), previous(previous) {
-	if (!previous.is_object())
-		throw std::runtime_error("invalid incremental matcher cache entries");
+IncrementalMatcherCache::IncrementalMatcherCache(ParseContext &context, std::string_view previous) : context(context) {
+	if (previous.empty())
+		return;
+	if (!previous.starts_with(matcherCacheHeader))
+		throw std::runtime_error("invalid incremental matcher cache header");
+	size_t position = matcherCacheHeader.size();
+	while (position < previous.size()) {
+		if (previous.size() - position < 64)
+			throw std::runtime_error("truncated incremental matcher cache key");
+		std::string_view cacheKey = previous.substr(position, 64);
+		position += 64;
+		if (!std::all_of(cacheKey.begin(), cacheKey.end(), [](char character) {
+			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
+		}))
+			throw std::runtime_error("invalid incremental matcher cache key");
+		std::uint64_t length = readLength(previous, position);
+		if (length > previous.size() - position)
+			throw std::runtime_error("truncated incremental matcher cache value");
+		auto [_, inserted] = previousEntries.emplace(cacheKey, previous.substr(position, static_cast<size_t>(length)));
+		if (!inserted)
+			throw std::runtime_error("duplicate incremental matcher cache key");
+		position += static_cast<size_t>(length);
+	}
 }
 
 std::string IncrementalMatcherCache::snapshot() const {
-	std::string result;
+	std::string result(matcherCacheHeader);
 	result.reserve(recorded.size() * 256);
-	result.push_back('{');
 	for (const auto &[key, value] : recorded) {
-		if (result.size() > 1)
-			result.push_back(',');
-		result.push_back('"');
 		result += key;
-		result += "\":";
-		const Json *entry =
-			std::holds_alternative<const Json *>(value) ? std::get<const Json *>(value) : &std::get<Json>(value);
-		result += entry->dump();
+		std::string_view entry = std::holds_alternative<std::string_view>(value)
+									 ? std::get<std::string_view>(value)
+									 : std::string_view(std::get<std::string>(value));
+		appendLength(result, entry.size());
+		result.append(entry.data(), entry.size());
 	}
-	result.push_back('}');
 	return result;
 }
 
@@ -348,24 +380,25 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	if (!available(options))
 		return std::nullopt;
 	std::string cacheKey = key(*reference, dependencies != nullptr);
-	auto entry = previous.find(cacheKey);
-	if (entry == previous.end())
+	auto entry = previousEntries.find(cacheKey);
+	if (entry == previousEntries.end())
 		return std::nullopt;
-	recorded[cacheKey] = &*entry;
+	recorded[cacheKey] = entry->second;
 	reusedCount++;
-	if (entry->contains("failure")) {
+	Json value = Json::from_msgpack(entry->second.begin(), entry->second.end());
+	if (value.contains("failure")) {
 		requireCompilerInvariant(dependencies != nullptr, "cached failure is missing dependency storage");
 		dependencies->clear();
-		for (const Json &value : entry->at("failure")) {
-			PatternTreeNode *node = restoreNode(value.at(1));
+		for (const Json &dependency : value.at("failure")) {
+			PatternTreeNode *node = restoreNode(dependency.at(1));
 			dependencies->push_back(
-				{static_cast<MatchDependency::Kind>(value.at(0).get<int>()), node, node->endpointRevision,
-				 value.at(2).get<std::string>()}
+				{static_cast<MatchDependency::Kind>(dependency.at(0).get<int>()), node, node->endpointRevision,
+				 dependency.at(2).get<std::string>()}
 			);
 		}
 		return static_cast<PatternMatch *>(nullptr);
 	}
-	return new PatternMatch(restoreMatch(*reference, entry->at("match")));
+	return new PatternMatch(restoreMatch(*reference, value.at("match")));
 }
 
 void IncrementalMatcherCache::record(
@@ -374,8 +407,11 @@ void IncrementalMatcherCache::record(
 	if (!available(options))
 		return;
 	if (match) {
-		if (std::optional<Json> encoded = encodeMatch(*reference, *match))
-			recorded[key(*reference, dependencies != nullptr)] = Json{{"match", std::move(*encoded)}};
+		if (std::optional<Json> encoded = encodeMatch(*reference, *match)) {
+			std::string packed;
+			Json::to_msgpack(Json{{"match", std::move(*encoded)}}, packed);
+			recorded[key(*reference, dependencies != nullptr)] = std::move(packed);
+		}
 		return;
 	}
 	if (!dependencies)
@@ -383,5 +419,7 @@ void IncrementalMatcherCache::record(
 	Json encoded = Json::array();
 	for (const MatchDependency &dependency : *dependencies)
 		encoded.push_back(Json::array({static_cast<int>(dependency.kind), nodePath(dependency.node), dependency.literal}));
-	recorded[key(*reference, true)] = Json{{"failure", std::move(encoded)}};
+	std::string packed;
+	Json::to_msgpack(Json{{"failure", std::move(encoded)}}, packed);
+	recorded[key(*reference, true)] = std::move(packed);
 }

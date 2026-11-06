@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -21,7 +22,7 @@ struct SourceFile;
 class IncrementalMatcherCache {
   public:
 	using Json = nlohmann::json;
-	IncrementalMatcherCache(ParseContext &context, const Json &previous);
+	IncrementalMatcherCache(ParseContext &context, std::string_view previous);
 	std::optional<PatternMatch *> reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies);
 	void
 	record(PatternReference *reference, MatchOptions options, const PatternMatch *match, const MatchDependencies *dependencies);
@@ -30,8 +31,8 @@ class IncrementalMatcherCache {
 
   private:
 	ParseContext &context;
-	const Json &previous;
-	std::map<std::string, std::variant<Json, const Json *>> recorded;
+	std::unordered_map<std::string_view, std::string_view> previousEntries;
+	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
 	std::unordered_map<const lsp::SourceFile *, std::string> sourceDigests;
 	std::unordered_map<std::string, Json> configDigests;
 	std::string treeDigest;

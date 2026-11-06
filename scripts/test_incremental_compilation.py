@@ -94,6 +94,14 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         entry.write_bytes(data)
     main.write_text(source)
     assert build()[0]["frontend_reused"]
+    for entry in matcher_entries:
+        entry.unlink()
+    main.write_text(source.replace("alpha\nbeta\n", "beta\nalpha\n"))
+    evicted = build()
+    assert evicted[0]["matcher_cache_hits"] == 0, "evicted matcher results were reused"
+    assert evicted[1:] == build(False)[1:], "evicted matcher cache changed compilation behavior"
+    main.write_text(source)
+    build()
     critical = root / "critical.dl"
     critical.write_text('integer means: @intrinsic("type", "int")\n'
                         'to alpha: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "alpha"))\n')

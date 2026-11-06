@@ -763,9 +763,11 @@ Before precedence resolution, it reuses pointer-free matcher results from the pr
 build for unchanged references when the pattern-tree mutation history, the reference's
 source line and position mapping, lexical declarations, and syntax configuration have
 the same fingerprints.
-Matcher results live in a separate content-addressed cache entry. An unchanged or
-comment-only build reads only the smaller program entry containing source observations
-and LLVM IR, so it does not parse matcher results merely to relink the executable.
+Matcher results live in a separate content-addressed cache entry with a compact index
+and individually encoded results. An unchanged or comment-only build reads only the
+smaller program entry containing source observations and LLVM IR, so it does not parse
+matcher results merely to relink the executable. An evicted matcher entry causes
+matching to run normally on the next code edit.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.
 New or removed overloads change the tree fingerprint and invalidate cached matches
