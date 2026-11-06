@@ -457,8 +457,12 @@ if(NOT EMSCRIPTEN)
 
     endif()
 
-    add_executable (${PROJECT_NAME} ${DYNLEX_NATIVE_SOURCES} ${PROJECT_HEADERS}
-                                    ${PROJECT_CONFIGS})
+    set(DYNLEX_COMPILER_TEST_SOURCES ${DYNLEX_NATIVE_SOURCES})
+    list(FILTER DYNLEX_COMPILER_TEST_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
+    add_library(dynlex_compiler_objects OBJECT ${DYNLEX_COMPILER_TEST_SOURCES})
+    add_dependencies(dynlex_compiler_objects dynlex_runtime)
+    add_executable (${PROJECT_NAME} src/cpp/main.cpp $<TARGET_OBJECTS:dynlex_compiler_objects>
+                                    ${PROJECT_HEADERS} ${PROJECT_CONFIGS})
     add_dependencies(${PROJECT_NAME} dynlex_runtime)
     target_compile_definitions(${PROJECT_NAME} PRIVATE
         DYNLEX_RUNTIME_LIBRARY_BUILD_PATH="${DYNLEX_RUNTIME_LIBRARY_BUILD_PATH}"
@@ -493,13 +497,20 @@ if(NOT EMSCRIPTEN)
         DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE DYNLEX_VERSION="${PROJECT_VERSION}")
+    target_compile_definitions(dynlex_compiler_objects PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
+    )
+    target_compile_options(dynlex_compiler_objects PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_OPTIONS>
+    )
+    target_link_libraries(dynlex_compiler_objects PRIVATE
+        $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>
+    )
 
-    set(DYNLEX_COMPILER_TEST_SOURCES ${DYNLEX_NATIVE_SOURCES})
-    list(FILTER DYNLEX_COMPILER_TEST_SOURCES EXCLUDE REGEX "src/cpp/main\\.cpp$")
     add_executable(
         dynlex_address_provenance_test EXCLUDE_FROM_ALL
         tests/cpp/addressProvenanceTest.cpp
-        ${DYNLEX_COMPILER_TEST_SOURCES}
+        $<TARGET_OBJECTS:dynlex_compiler_objects>
     )
     target_compile_definitions(dynlex_address_provenance_test PRIVATE
         $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>
@@ -525,7 +536,7 @@ if(NOT EMSCRIPTEN)
     add_executable(
         dynlex_expression_ownership_test EXCLUDE_FROM_ALL
         tests/cpp/expressionOwnershipTest.cpp
-        ${DYNLEX_COMPILER_TEST_SOURCES}
+        $<TARGET_OBJECTS:dynlex_compiler_objects>
     )
     target_compile_definitions(dynlex_expression_ownership_test PRIVATE
         $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>

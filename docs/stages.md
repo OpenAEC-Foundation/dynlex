@@ -755,6 +755,9 @@ comparison uses each source file's configured comment prefix and retains line bo
 between executable text. Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
+The cache records files named by warning and note ranges. A comment edit in one of
+those files rebuilds diagnostics so source locations stay correct; comments in other
+files can reuse the frontend even when the program has warnings.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
@@ -795,6 +798,10 @@ inlined callees, globals and debug metadata are reflected in that identity. Unch
 objects are reused and the executable is always linked again, including current runtime
 libraries. This is native partition reuse plus matcher query reuse; section analysis,
 type inference and code generation are not yet incremental per function.
+The program cache records its ordered object keys. An unchanged or
+comment-only build links those cached objects directly without parsing or splitting
+the LLVM IR. If an object was evicted, the saved IR regenerates the missing partition
+before linking. The linker still runs so changes to native libraries are observed.
 
 Cache entries carry SHA-256 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary

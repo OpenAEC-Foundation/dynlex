@@ -57,19 +57,27 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
             generated = build(entry=entry)
             assert generated[1:] == reference[1:], f"partitioned code changed behavior: {fixture}"
             reused = build(entry=entry)
-            assert reused[0]["frontend_reused"] and reused[0]["objects_built"] == 0
+            assert reused[0]["frontend_reused"] and reused[0]["linked_cached_objects"]
+            assert reused[0]["objects_built"] == 0
             assert reused[1:] == reference[1:], f"cached code changed behavior: {fixture}"
         print("Incremental native integration builds passed")
         raise SystemExit(0)
 
     cold = build()
-    assert not cold[0]["frontend_reused"] and cold[0]["objects_built"] > 0
+    assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
+    assert cold[0]["objects_built"] > 0
     clean = build(False)
     assert cold[1:] == clean[1:], "cold build differs from clean build"
     warm = build()
-    assert warm[0]["frontend_reused"] and warm[0]["objects_built"] == 0
+    assert warm[0]["frontend_reused"] and warm[0]["linked_cached_objects"]
+    assert warm[0]["objects_built"] == 0
     assert warm[0]["objects_reused"] == cold[0]["objects_built"]
     assert warm[1:] == clean[1:], "warm build differs from clean build"
+    next((cache / "native-v1").glob("object-*.entry")).unlink()
+    recovered = build()
+    assert recovered[0]["frontend_reused"] and not recovered[0]["linked_cached_objects"]
+    assert recovered[0]["objects_built"] == 1, "evicted object was not rebuilt from cached IR"
+    assert recovered[1:] == clean[1:], "evicted object changed compilation behavior"
     main.write_text(source.replace("alpha\nbeta\n", "beta\nbeta\n"))
     same_file_edit = build()
     assert same_file_edit[0]["matcher_cache_hits"] > 0, "code edit discarded unchanged same-file matches"
@@ -95,6 +103,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text("# A new source comment must not invalidate executable code.\n" + source)
     commented = build()
     assert commented[0]["frontend_reused"], "comment-only edit rebuilt the frontend"
+    assert commented[0]["linked_cached_objects"], "comment-only edit reparsed LLVM IR"
     assert commented[1:] == build(False)[1:], "comment-only reuse differs from clean build"
     main.write_text(source)
     assert build()[0]["frontend_reused"], "removing a source comment rebuilt the frontend"
@@ -127,6 +136,26 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     critical_comment = build()
     assert critical_comment[0]["frontend_reused"], "comment in a used import rebuilt the frontend"
     assert critical_comment[1:] == build(False)[1:], "import comment reuse differs from clean build"
+    warning_helper = root / "warning_helper.dl"
+    warning_main = root / "warning_main.dl"
+    helper_source = 'to greet: @intrinsic("discard", 1)\n'
+    warning_source = ('import warning_helper.dl\n'
+                      'integer means: @intrinsic("type", "int")\n'
+                      'to show value as the value: @intrinsic("discard", value)\n'
+                      'show 1 as the value\n'
+                      'greet\n')
+    warning_helper.write_text(helper_source)
+    warning_main.write_text(warning_source)
+    warning_cold = build(entry=warning_main)
+    assert "Warning:" in warning_cold[1], "diagnostic dependency test produced no warning"
+    warning_helper.write_text("# Comment in a used file with no diagnostic ranges.\n" + helper_source)
+    warning_comment = build(entry=warning_main)
+    assert warning_comment[0]["frontend_reused"] and warning_comment[0]["linked_cached_objects"]
+    assert warning_comment[1:] == warning_cold[1:], "unrelated comment changed cached diagnostics"
+    warning_main.write_text("# Comment before the warning.\n" + warning_source)
+    moved_warning = build(entry=warning_main)
+    assert not moved_warning[0]["frontend_reused"], "shifted warning kept its old source location"
+    assert moved_warning[1:] == build(False, entry=warning_main)[1:]
     critical.write_text(critical.read_text() + "alpha\n")
     main.write_text("import critical.dl\nalpha\n")
     build()

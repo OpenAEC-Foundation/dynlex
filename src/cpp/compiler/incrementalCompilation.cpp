@@ -29,6 +29,7 @@
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <set>
 #include <stdexcept>
 
 namespace {
@@ -212,12 +213,15 @@ bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &file
 	}
 	if (changedSources.empty())
 		return true;
-	if (options.emitDebugInfo || options.traceExecution || !previous.at("diagnostics").get<std::string>().empty())
+	if (options.emitDebugInfo || options.traceExecution)
 		return false;
 	const Json &configPaths = previous.at("config_paths");
 	const Json &prefixes = previous.at("comment_prefixes");
+	std::set<std::string> diagnosticSources = previous.at("diagnostic_sources").get<std::set<std::string>>();
 	for (const std::string &path : changedSources) {
 		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>())
+			return false;
+		if (diagnosticSources.contains(path))
 			return false;
 		lsp::SourceFile *file = files.cachedFile(path);
 		if (!file)
@@ -334,11 +338,37 @@ struct TemporaryObjects {
 
 struct BuildStatistics {
 	bool reusedFrontend = false;
+	bool linkedCachedObjects = false;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
+	std::vector<std::string> objectKeys;
 };
+
+std::optional<bool> linkCachedObjects(
+	ParseContext &context, const fs::path &directory, const std::vector<std::string> &keys,
+	const std::vector<std::string> &libraries, BuildStatistics &statistics
+) {
+	TemporaryObjects temporary;
+	std::vector<std::string> paths;
+	paths.reserve(keys.size());
+	for (size_t index = 0; index < keys.size(); index++) {
+		std::optional<std::string> object = readEntry(directory / ("object-" + keys[index] + ".entry"));
+		if (!object)
+			return std::nullopt;
+		fs::path path = temporary.directory / (std::to_string(index) + ".o");
+		std::ofstream output(path, std::ios::binary);
+		output.write(object->data(), object->size());
+		output.close();
+		if (!output)
+			throw std::runtime_error("cannot materialize cached object: " + path.string());
+		paths.push_back(path.string());
+	}
+	statistics.reusedObjects = keys.size();
+	statistics.linkedCachedObjects = true;
+	return emitNativeExecutableWithObjects(context, paths, libraries);
+}
 
 bool emitPartitions(
 	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
@@ -365,6 +395,7 @@ bool emitPartitions(
 		llvm::StripDeadPrototypesPass().run(*part, analyses);
 		std::string ir = renderModule(*part);
 		std::string key = digest(compilerIdentity + options.dump() + ir);
+		statistics.objectKeys.push_back(key);
 		fs::path entry = directory / ("object-" + key + ".entry");
 		fs::path object = temporary.directory / (std::to_string(objects.size()) + ".o");
 		if (std::optional<std::string> cached = readEntry(entry)) {
@@ -423,14 +454,9 @@ bool compileIncrementally(
 				recordSemanticSources(*previous, *recording, context);
 				writeEntry(programEntry, previous->dump());
 			}
+			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
 			context.llvmContext = new llvm::LLVMContext();
-			llvm::SMDiagnostic diagnostic;
-			std::unique_ptr<llvm::Module> module =
-				llvm::parseAssemblyString(previous->at("ir").get<std::string>(), diagnostic, *context.llvmContext);
-			if (!module || llvm::verifyModule(*module))
-				throw std::runtime_error("invalid cached LLVM IR: " + programEntry.string());
-			module->setModuleIdentifier(previous->at("module_id").get<std::string>());
-			context.llvmModule = module.release();
+			context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
 			std::string error;
 			context.targetMachine = createNativeTargetMachine(context, error);
 			if (!context.targetMachine)
@@ -438,7 +464,25 @@ bool compileIncrementally(
 			std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 			context.requiredLibraries.insert(libraries.begin(), libraries.end());
 			std::cerr << previous->at("diagnostics").get<std::string>();
-			success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+			std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
+			if (cachedLink) {
+				success = *cachedLink;
+			} else {
+				delete context.llvmModule;
+				context.llvmModule = nullptr;
+				llvm::SMDiagnostic diagnostic;
+				std::unique_ptr<llvm::Module> module =
+					llvm::parseAssemblyString(previous->at("ir").get<std::string>(), diagnostic, *context.llvmContext);
+				if (!module || llvm::verifyModule(*module))
+					throw std::runtime_error("invalid cached LLVM IR: " + programEntry.string());
+				module->setModuleIdentifier(previous->at("module_id").get<std::string>());
+				context.llvmModule = module.release();
+				success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+				if (success) {
+					(*previous)["object_keys"] = statistics.objectKeys;
+					writeEntry(programEntry, previous->dump());
+				}
+			}
 		} else {
 			recording->observations = Json::object();
 			if (!previousMatcherKey.empty()) {
@@ -467,31 +511,53 @@ bool compileIncrementally(
 				success = generateCode(context, [&](ParseContext &compiled) {
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
-					for (const Diagnostic &diagnostic : compiled.diagnostics)
+					std::set<std::string> diagnosticSources;
+					auto recordDiagnosticSource = [&](const Range &range) {
+						SourceLocation start = range.sourceStart();
+						SourceLocation end = range.sourceEnd();
+						if (start.sourceFile)
+							diagnosticSources.insert(start.sourceFile->uri);
+						if (end.sourceFile)
+							diagnosticSources.insert(end.sourceFile->uri);
+					};
+					for (const Diagnostic &diagnostic : compiled.diagnostics) {
 						diagnostics += diagnostic.toString() + "\n";
+						recordDiagnosticSource(diagnostic.range);
+						for (const RelatedInfo &related : diagnostic.relatedInfo)
+							recordDiagnosticSource(related.range);
+					}
 					Json result{
 						{"files", recording->observations},
 						{"ir", renderModule(*compiled.llvmModule)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
-						{"diagnostics", diagnostics}
+						{"diagnostics", diagnostics},
+						{"diagnostic_sources", diagnosticSources}
 					};
 					std::string matcherPayload = matcherCache.snapshot();
 					std::string matcherKey = digest(matcherPayload);
 					writeEntry(directory / ("matcher-" + matcherKey + ".entry"), matcherPayload);
 					result["matcher_key"] = matcherKey;
 					recordSemanticSources(result, *recording, compiled);
+					if (!emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics))
+						return false;
+					result["object_keys"] = statistics.objectKeys;
 					writeEntry(programEntry, result.dump());
-					return emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics);
+					return true;
 				});
 			}
 		}
 		trimCache(directory);
 		if (showStatistics)
-			std::cerr << "incremental: " << Json{{"frontend_reused", statistics.reusedFrontend},
-				{"objects_reused", statistics.reusedObjects}, {"objects_built", statistics.builtObjects},
-				{"matcher_cache_hits", statistics.matcherCacheHits},
-				{"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits}}.dump() << '\n';
+			std::cerr << "incremental: "
+					  << Json{{"frontend_reused", statistics.reusedFrontend},
+							  {"linked_cached_objects", statistics.linkedCachedObjects},
+							  {"objects_reused", statistics.reusedObjects},
+							  {"objects_built", statistics.builtObjects},
+							  {"matcher_cache_hits", statistics.matcherCacheHits},
+							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits}}
+							 .dump()
+					  << '\n';
 		return success;
 	} catch (const std::exception &error) {
 		std::cerr << "Incremental compilation failed: " << error.what() << '\n';
