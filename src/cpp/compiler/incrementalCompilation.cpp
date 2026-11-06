@@ -28,6 +28,7 @@
 #include "llvm/Transforms/Utils/SplitModule.h"
 #include <array>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -44,6 +45,11 @@ constexpr std::string_view cacheHeader = "DynLex incremental cache v1\n";
 constexpr uintmax_t maximumEntryBytes = 256 * 1024 * 1024;
 constexpr uintmax_t maximumCacheBytes = 512 * 1024 * 1024;
 constexpr unsigned partitionCount = 32;
+using Clock = std::chrono::steady_clock;
+
+double elapsedMilliseconds(Clock::time_point start) {
+	return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+}
 
 std::string digest(std::string_view text) {
 	llvm::SHA256 hash;
@@ -641,6 +647,9 @@ struct BuildStatistics {
 	size_t builtObjects = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
+	double frontendMilliseconds = 0;
+	double inferenceMilliseconds = 0;
+	double codegenMilliseconds = 0;
 	std::vector<std::string> objectKeys;
 };
 
@@ -804,12 +813,16 @@ bool compileIncrementally(
 											  const MatchDependencies *dependencies) {
 				matcherCache.record(reference, options, match, dependencies);
 			};
+			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
+			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			Json inactiveProjection;
 			bool reuseTypeInference =
 				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
+			stageStart = Clock::now();
 			if (compiled && !reuseTypeInference)
 				compiled = finishTypeInference(context);
+			statistics.inferenceMilliseconds = elapsedMilliseconds(stageStart);
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			context.reuseMatcherResult = {};
@@ -870,6 +883,7 @@ bool compileIncrementally(
 						};
 					}
 				}
+				stageStart = Clock::now();
 				success = generateCode(context, [&](ParseContext &compiled) {
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
@@ -924,6 +938,7 @@ bool compileIncrementally(
 					writeEntry(programEntry, result.dump());
 					return true;
 				});
+				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
 				statistics.reusedFunctionIR = functionReuse ? functionReuse->reusedCount() : 0;
 				context.recordGeneratedFunction = {};
 				context.reuseGeneratedFunction = {};
@@ -940,7 +955,14 @@ bool compileIncrementally(
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},
 							  {"matcher_cache_hits", statistics.matcherCacheHits},
-							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits}}
+							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
+							  {"frontend_ms", statistics.frontendMilliseconds},
+							  {"import_ms", context.frontendStageMilliseconds[0]},
+							  {"parse_ms", context.frontendStageMilliseconds[1]},
+							  {"resolve_ms", context.frontendStageMilliseconds[2]},
+							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
+							  {"inference_ms", statistics.inferenceMilliseconds},
+							  {"codegen_and_link_ms", statistics.codegenMilliseconds}}
 							 .dump()
 					  << '\n';
 		return success;

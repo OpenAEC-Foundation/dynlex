@@ -24,6 +24,7 @@
 #include "type.h"
 #include <cassert>
 #include <cctype>
+#include <chrono>
 #include <climits>
 #include <cmath>
 #include <filesystem>
@@ -589,6 +590,13 @@ void destroyTypeConstraintExpression(Expression *root) {
 }
 
 bool compileBeforeTypeInference(const std::string &path, ParseContext &context) {
+	auto stageStart = std::chrono::steady_clock::now();
+	size_t stageIndex = 0;
+	auto finishStage = [&]() {
+		context.frontendStageMilliseconds.at(stageIndex++) =
+			std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - stageStart).count();
+		stageStart = std::chrono::steady_clock::now();
+	};
 	context.compilationStage = ParseContext::CompilationStage::NotStarted;
 	if (!loadSourceFiles(path, context))
 		return false;
@@ -597,16 +605,19 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context) 
 	if (!expandDefinitionShorthands(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ImportedFiles;
+	finishStage();
 
 	if (!analyzeSections(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::AnalyzedSections;
+	finishStage();
 
 	if (!resolvePatterns(context))
 		return false;
 	if (!prepareDataSectionCalls(context))
 		return false;
 	context.compilationStage = ParseContext::CompilationStage::ResolvedPatterns;
+	finishStage();
 
 	if (!validate(context))
 		return false;
@@ -614,6 +625,7 @@ bool compileBeforeTypeInference(const std::string &path, ParseContext &context) 
 
 	if (!initializeTargetLayout(context))
 		return false;
+	finishStage();
 	return true;
 }
 

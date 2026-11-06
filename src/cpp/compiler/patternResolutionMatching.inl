@@ -96,7 +96,7 @@ static std::vector<Section *> unresolveReference(
 	reference->match = nullptr;
 	reference->resolved = false;
 	reference->range().section()->incrementUnresolved();
-	traceResolution("unresolve " + referenceTraceId(reference));
+	TRACE_RESOLUTION("unresolve " + referenceTraceId(reference));
 
 	return affectedSections;
 }
@@ -262,7 +262,7 @@ static bool resolveReferences(
 			reference->range().section()->addVariableReference(
 				context, context.createVariableReference(variableRange, *explicitVariableName)
 			);
-			traceResolution(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
+			TRACE_RESOLUTION(std::string(phase) + " resolved-as-explicit-variable " + referenceTraceId(reference));
 			return reference->resolved;
 		}
 		PatternMatch *match = nullptr;
@@ -332,7 +332,7 @@ static bool resolveReferences(
 				decrementVariableLikeCounts(reference);
 			if (defToRefs)
 				trackMatchDefinitions(*match, reference, *defToRefs);
-			traceResolution(std::string(phase) + " resolved " + referenceTraceId(reference));
+			TRACE_RESOLUTION(std::string(phase) + " resolved " + referenceTraceId(reference));
 			if (activeReferenceNeedsRematch && *activeReferenceNeedsRematch) {
 				requireCompilerInvariant(
 					defToRefs && deferredActiveRematch && pendingPromotionCleanupSections,
@@ -368,7 +368,7 @@ static bool resolveReferences(
 			);
 			if (decrementCounts)
 				decrementVariableLikeCounts(reference);
-			traceResolution(std::string(phase) + " resolved-as-variable " + referenceTraceId(reference));
+			TRACE_RESOLUTION(std::string(phase) + " resolved-as-variable " + referenceTraceId(reference));
 		} else if (shouldRetry) {
 			failedMatchDependencies.emplace(reference, std::move(dependencies));
 		}
@@ -386,7 +386,7 @@ bool resolvePatterns(ParseContext &context) {
 	std::list<PatternReference *> globalReferences;
 	std::list<Section *> unResolvedSections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, unResolvedSections);
-	traceResolution(
+	TRACE_RESOLUTION(
 		"start sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" + std::to_string(bodyReferences.size()) +
 		" global_refs=" + std::to_string(globalReferences.size())
 	);
@@ -496,7 +496,7 @@ bool resolvePatterns(ParseContext &context) {
 			}
 		}
 		std::sort(lessSpecific.begin(), lessSpecific.end(), patternDefinitionComesBefore);
-		traceResolution(
+		TRACE_RESOLUTION(
 			"invalidate base=" + definitionTraceId(definition) + " candidates=" + std::to_string(lessSpecific.size())
 		);
 		for (PatternDefinition *lessDef : lessSpecific) {
@@ -532,7 +532,7 @@ bool resolvePatterns(ParseContext &context) {
 	// Helper: add a definition to the pattern tree.
 	auto addDefinitionToTree = [&](PatternDefinition *definition, SectionType treeType) {
 		context.patternTrees[(size_t)treeType]->addPatternDefinition(definition, treeType);
-		traceResolution("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
+		TRACE_RESOLUTION("add " + definitionTraceId(definition) + " tree=" + std::to_string((int)treeType));
 		invalidateStaleMatches(definition, treeType);
 	};
 
@@ -563,7 +563,7 @@ bool resolvePatterns(ParseContext &context) {
 		tree->removePatternDefinition(&definition);
 		mutation();
 		tree->addPatternDefinition(&definition, treeType);
-		traceResolution("reindex " + definitionTraceId(&definition) + " tree=" + std::to_string((int)treeType));
+		TRACE_RESOLUTION("reindex " + definitionTraceId(&definition) + " tree=" + std::to_string((int)treeType));
 		invalidateStaleMatches(&definition, treeType);
 		staleInvalidationOccurred = true;
 	};
@@ -579,7 +579,7 @@ bool resolvePatterns(ParseContext &context) {
 			bool madeProgress = false;
 			staleInvalidationOccurred = false;
 			size_t sectionsBefore = unResolvedSections.size();
-			traceResolution(
+			TRACE_RESOLUTION(
 				"iter " + std::to_string(resolutionIteration) + " begin sections=" + std::to_string(unResolvedSections.size()) +
 				" body_refs=" + std::to_string(bodyReferences.size())
 			);
@@ -590,7 +590,7 @@ bool resolvePatterns(ParseContext &context) {
 				sectionList << "iter " << resolutionIteration << " section-list";
 				for (Section *section : debugSections)
 					sectionList << " | " << sectionTraceId(section);
-				traceResolution(sectionList.str());
+				TRACE_RESOLUTION(sectionList.str());
 			}
 
 			// each iteration, we go over all sections first
@@ -699,7 +699,7 @@ bool resolvePatterns(ParseContext &context) {
 							continue;
 						if (promotePatternNameInSectionChain(context, referenceSection, element.text, reference->range())) {
 							promotedCyclicParameter = true;
-							traceResolution(
+							TRACE_RESOLUTION(
 								"iter " + std::to_string(resolutionIteration) + " cyclic promote '" + element.text + "' from " +
 								referenceTraceId(reference)
 							);
@@ -710,7 +710,7 @@ bool resolvePatterns(ParseContext &context) {
 					computeVariableLikeCounts(unResolvedSections);
 					continue;
 				}
-				traceResolution("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
+				TRACE_RESOLUTION("iter " + std::to_string(resolutionIteration) + " deadlock force-resolve");
 				if (unResolvedSections.empty())
 					break; // no sections to force-resolve and no progress — truly stuck
 				// Force-resolve all remaining sections by adding their definitions as-is.
@@ -733,7 +733,7 @@ bool resolvePatterns(ParseContext &context) {
 		}
 
 		auto emitUnresolvedPatternDiagnostics = [&]() {
-			traceResolution(
+			TRACE_RESOLUTION(
 				"failed sections=" + std::to_string(unResolvedSections.size()) + " body_refs=" +
 				std::to_string(bodyReferences.size()) + " global_refs=" + std::to_string(globalReferences.size())
 			);

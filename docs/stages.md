@@ -793,7 +793,18 @@ instantiation in the prior build can stop after pattern resolution and validatio
 The cache compares declarations and all source text outside those bodies, and it
 uses this path only when neither build has diagnostics or pending scope-rule warnings.
 It then reuses the prior inferred result and linked objects. Active function edits
-still infer and generate code for the full program.
+still infer the full program.
+
+For native, unoptimized builds without debug or execution tracing, the compiler
+can import cached LLVM bodies of unchanged functions after a code edit. It compares
+each function body separately, so changing one function does not invalidate its
+unchanged neighbors in the same file. Pattern declarations and source outside
+function bodies must remain identical. Calls to other generated functions form a
+reuse closure: every cached callee must also be unchanged. Functions that use
+mutable globals are regenerated. This path is currently disabled for programs
+with classes because linking old and new LLVM modules renumbers identified struct
+types and invalidates otherwise unchanged object partitions. Type inference still
+runs for every active edit.
 
 Native emission divides the finalized IR
 into deterministic, independently linkable partitions. Local symbols receive a stable
@@ -801,9 +812,9 @@ program namespace before LLVM externalizes them. Each partition's complete IR an
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
 objects are reused and the executable is always linked again, including current runtime
-libraries. This is native partition reuse plus matcher query reuse and the
-unused-body fast path; type inference and code generation are not yet incremental
-for active functions.
+libraries. This is native partition reuse, matcher query reuse, the unused-body
+fast path, and function IR reuse. The last path skips code generation for eligible
+unchanged functions, while type inference remains whole-program for active edits.
 The program cache records its ordered object keys. An unchanged or
 comment-only build links those cached objects directly without parsing or splitting
 the LLVM IR. If an object was evicted, the saved IR regenerates the missing partition

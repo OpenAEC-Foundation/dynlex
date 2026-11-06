@@ -288,12 +288,6 @@ static std::string sectionTraceId(const Section *section) {
 	return out.str();
 }
 
-static void traceResolution(const std::string &message) {
-	if (!resolutionTraceEnabled())
-		return;
-	std::cerr << "[res] " << message << '\n';
-}
-
 static bool sectionContainsOrIsAncestorOf(Section *section, Section *candidate) {
 	for (Section *current = candidate; current; current = current->parent) {
 		if (current == section)
@@ -848,4 +842,10 @@ findAlternativePatternSuggestion(PatternReference *reference, PatternMatch *matc
 
 #include "patternPrecedence.inl"
 #include "patternResolutionExpansion.inl"
+#define TRACE_RESOLUTION(...)                                                                                                  \
+	do {                                                                                                                       \
+		if (resolutionTraceEnabled())                                                                                          \
+			std::cerr << "[res] " << (__VA_ARGS__) << '\n';                                                                    \
+	} while (false)
 #include "patternResolutionMatching.inl"
+#undef TRACE_RESOLUTION

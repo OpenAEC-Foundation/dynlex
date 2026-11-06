@@ -10,6 +10,7 @@
 #include "syntaxConfig.h"
 #include "variableStorage.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <list>
@@ -84,6 +85,7 @@ struct ParseContext {
 	std::function<bool(Section *, Instantiation &, llvm::Function *)> reuseGeneratedFunction;
 	std::function<void(Section *, llvm::Function *)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
+	std::array<double, 4> frontendStageMilliseconds{};
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;
