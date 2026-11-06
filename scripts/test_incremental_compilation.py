@@ -252,8 +252,10 @@ function left times right:
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
 
     outer_main = root / "outer_edit.dl"
-    outer_source = ('integer means: @intrinsic("type", "int")\n'
-                    'to independent: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "function"))\n'
+    outer_leaf = root / "outer_leaf.dl"
+    outer_leaf.write_text('to independent: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "function"))\n')
+    outer_source = ('import outer_leaf.dl\n'
+                    'integer means: @intrinsic("type", "int")\n'
                     'independent\n'
                     '@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "before"))\n')
     outer_main.write_text(outer_source)
