@@ -60,7 +60,7 @@ to [create the Vulkan swapchain replacing] {pointer:previous} [in] {a pointer to
     loop while (capabilities' supportedCompositeAlpha bitwise and alpha) = 0:
         set alpha to alpha shifted left by 1
     set creation to a new VkSwapchainCreateInfoKHR
-    set creation's sType to 1000001000
+    set creation's sType to the Vulkan swapchain create info khr tag
     set creation's surface to state's surface
     set creation's minImageCount to imageCount
     set creation's imageFormat to chosen's format
@@ -119,7 +119,7 @@ to [create the Vulkan render pass in] {a pointer to DynlexGraphics:state}:
     set dependency's srcStageMask and dependency's dstStageMask to 1280 as a 32 bit unsigned integer
     set dependency's dstAccessMask to 1280 as a 32 bit unsigned integer
     set creation to a new VkRenderPassCreateInfo
-    set creation's sType to 38
+    set creation's sType to the Vulkan render pass create info tag
     set creation's attachmentCount to 2 as a 32 bit unsigned integer
     set creation's pAttachments to attachments + 0
     set creation's subpassCount to 1 as a 32 bit unsigned integer
@@ -132,7 +132,7 @@ to [create Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
     set index to 0 as a 32 bit unsigned integer
     loop while index < state's swapchain_image_count:
         set colorView to a new VkImageViewCreateInfo
-        set colorView's sType to 15
+        set colorView's sType to the Vulkan image view create info tag
         set colorView's image to @intrinsic("dereference", state's swapchain_images + index)
         set colorView's viewType to 1
         set colorView's format to state's swapchain_format
@@ -140,7 +140,7 @@ to [create Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
         set colorView's subresourceRange's levelCount to 1 as a 32 bit unsigned integer
         set colorView's subresourceRange's layerCount to 1 as a 32 bit unsigned integer
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateImageView", an integer, state's device, the address of colorView, 0 as a pointer, state's swapchain_views + index) for "Creating a swapchain image view"
-        set depth to a Vulkan image of width (state's swapchain_extent's width) height (state's swapchain_extent's height) format (state's depth_format) usage (32 as a 32 bit unsigned integer) in state
+        set depth to a Vulkan image of width (state's swapchain_extent's width) height (state's swapchain_extent's height) format (state's depth_format) usage (the Vulkan depth stencil image usage) in state
         @intrinsic("store at", state's depth_images + index, depth's handle)
         @intrinsic("store at", state's depth_memories + index, depth's memory)
         set depthView to colorView
@@ -150,7 +150,7 @@ to [create Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateImageView", an integer, state's device, the address of depthView, 0 as a pointer, state's depth_views + index) for "Creating a depth image view"
         set attachments to [@intrinsic("dereference", state's swapchain_views + index), @intrinsic("dereference", state's depth_views + index)]
         set framebuffer to a new VkFramebufferCreateInfo
-        set framebuffer's sType to 37
+        set framebuffer's sType to the Vulkan framebuffer create info tag
         set framebuffer's renderPass to state's render_pass
         set framebuffer's attachmentCount to 2 as a 32 bit unsigned integer
         set framebuffer's pAttachments to attachments + 0
@@ -159,7 +159,7 @@ to [create Vulkan swapchain attachments in] {a pointer to DynlexGraphics:state}:
         set framebuffer's layers to 1 as a 32 bit unsigned integer
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateFramebuffer", an integer, state's device, the address of framebuffer, 0 as a pointer, state's framebuffers + index) for "Creating a Vulkan framebuffer"
         set semaphore to a new VkSemaphoreCreateInfo
-        set semaphore's sType to 9
+        set semaphore's sType to the Vulkan semaphore create info tag
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateSemaphore", an integer, state's device, the address of semaphore, 0 as a pointer, state's presentation_ready + index) for "Creating Vulkan presentation synchronization"
         increment index
 

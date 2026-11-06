@@ -26,12 +26,20 @@ block.
 - A **rule block** fills in the same way. Explicit code that contradicts the rule still wins, but produces a warning
   pointing at the rule.
 
-The scope phrase is checked against the block's position. `in this file` must be a
-top-level line, `in this class` a direct child of a class definition and
-`in this function` a direct child of a function, conversion or section definition.
-A block must precede every other line of its scope; only imports may precede a file
-block. Each scope has at most one rule block and one default block. The two blocks
-of a scope cannot state the same property.
+The scope phrase identifies the source file or nearest enclosing class or function,
+conversion or section definition. An ordinary `execute` or `replacement` body is
+transparent: function rules may be written directly in that body, including with
+`to` and `to get` shorthand.
+
+Rules apply to their entire named scope, including code and definitions preceding
+the block. They are collected before locality and number constraints are applied;
+they are never executed. A rule inside a loop, conditional or other executable
+nesting produces a warning and still applies even if that code is never reached.
+A file rule inside a function also warns and still applies to the whole source file.
+A class or function rule without a corresponding enclosing definition is an error.
+
+Each scope has at most one rule block and one default block. The two blocks of a
+scope cannot state the same property, even when declared in different nested bodies.
 
 Rules are lexical. Inner scopes override outer scopes per property: function, then
 class, then file. A rule never affects an imported file, and flex replacements keep
@@ -51,7 +59,8 @@ ordinary patterns in `lib/std.dl`.
 | `conversions are local` | conversions are local unless marked `public` |
 | `everything is local` | all four of the above |
 
-Locality is decided while parsing, so these lines are syntax rather than patterns.
+Locality is decided after section parsing collects all rules, so these lines are
+syntax rather than patterns.
 
 - `public` marks a definition visible from other files. It is an error when no rule makes that kind of definition local:
   the modifier would be redundant.

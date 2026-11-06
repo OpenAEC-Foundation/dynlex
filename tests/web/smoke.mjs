@@ -554,6 +554,15 @@ const capturedStorageSource = await readFile(
 );
 assert.equal(await compileAndRun(capturedStorageSource), "");
 
+// Exercise the rebuilt compiler and its embedded standard library with the
+// same numeric and scope-rule regressions as the native compiler.
+for (const fixture of ["scope_rules_function_body", "numeric_library_patterns"]) {
+  const fixtureRoot = new URL(`../integration/${fixture}/`, import.meta.url);
+  const source = await readFile(new URL("main.dl", fixtureRoot), "utf8");
+  const expected = await readFile(new URL("expected.txt", fixtureRoot), "utf8");
+  assert.equal(await compileAndRun(source), expected, fixture);
+}
+
 const writeOutput = await compileAndRun(`import lib/filesystem.dl
 
 write the string form of "saved" to the file at "session.txt" and print line it succeeded

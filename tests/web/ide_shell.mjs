@@ -30,7 +30,6 @@ for (const filePath of Object.values(files)) {
 
 const html = fs.readFileSync(files.html, "utf8");
 const javascript = fs.readFileSync(files.javascript, "utf8")+fs.readFileSync(files.editor,"utf8");
-const packageJson = JSON.parse(fs.readFileSync(files.packageJson, "utf8"));
 const lspIntegration = fs.readFileSync(files.lspIntegration, "utf8");
 const lspClient = fs.readFileSync(files.lspClient, "utf8");
 const languageJavascript = `${javascript}\n${lspIntegration}\n${fs.readFileSync(files.connection,"utf8")}`;
@@ -38,9 +37,6 @@ const compilerWorker = fs.readFileSync(files.compilerWorker, "utf8");
 const runtimeImports = fs.readFileSync(files.runtimeImports, "utf8");
 const browserDriver = fs.readFileSync(files.browserDriver, "utf8");
 const viteConfig = fs.readFileSync(files.viteConfig, "utf8");
-assert.equal(packageJson.dependencies["monaco-editor"], "^0.56.0");
-assert.equal(packageJson.devDependencies.vite, "^8.2.2");
-assert.equal(packageJson.overrides["monaco-editor"].dompurify, "3.4.14");
 assert.match(html, /<a[^>]+class="ide-brand"[^>]+href="\/"/);
 assert.match(html, /<img[^>]+class="ide-logo"[^>]+src="\/icons\/dynlex-icon\.svg"/);
 assert.doesNotMatch(html, /LLVM|WebAssembly|WASM|compiler runs/i);

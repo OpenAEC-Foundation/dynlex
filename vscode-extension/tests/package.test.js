@@ -18,12 +18,16 @@ test('nested call colors use the shared palette and stay scoped to DynLex', () =
     }
 });
 
-test('extension manifest includes the DynLex icon at marketplace resolution', () => {
+test('extension uses the shared SVG file icon and a marketplace-resolution PNG', () => {
     assert.equal(manifest.icon, 'icons/dynlex.png');
     assert.deepEqual(manifest.contributes.languages[0].icon, {
-        light: './icons/dynlex.png',
-        dark: './icons/dynlex.png',
+        light: './icons/dynlex.svg',
+        dark: './icons/dynlex.svg',
     });
+    assert.deepEqual(
+        fs.readFileSync(path.join(extensionRoot, 'icons/dynlex.svg')),
+        fs.readFileSync(path.join(extensionRoot, '../web/icons/dynlex-icon.svg')),
+    );
 
     const icon = fs.readFileSync(path.join(extensionRoot, manifest.icon));
     assert.deepEqual(icon.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
@@ -32,7 +36,7 @@ test('extension manifest includes the DynLex icon at marketplace resolution', ()
     assert.equal(icon.readUInt32BE(20), 256);
     assert.equal(
         crypto.createHash('sha256').update(icon).digest('hex'),
-        '50943a596e4bea48c7e48edf04efa1f71425972bd2a8ccaedafa720c28df5fbd',
+        '39c0d5767becb525ebd8d8d24d74bd8f12d1d12894791e9d6d32c2f6ed83902f',
     );
 });
 

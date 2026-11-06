@@ -367,6 +367,16 @@ function increment value:
 function decrement value:
 	replacement:
 		set value to value - 1
+# Shared IEEE bounds and angular constants. CPU literals are binary64; GPU
+# literals use the target's normal floating-point precision.
+the largest 64 bit floating-point number means: 1.7976931348623157e308 as a 64 bit floating-point number
+the radians in a full turn means: 6.283185307179586
+the radians in a half turn means: 3.141592653589793
+the radians in a quarter turn means: 1.5707963267948966
+
+to get {floating-point number:value} is finite:
+    return (value - value) = 0.0
+
 # --- Clamping ---
 
 function clamp value between low and high:

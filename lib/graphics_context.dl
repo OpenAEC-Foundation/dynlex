@@ -2,20 +2,20 @@ import lib/vulkan_swapchain.dl
 
 to [create Vulkan frame resources in] {a pointer to DynlexGraphics:state}:
     set pool to a new VkCommandPoolCreateInfo
-    set pool's sType to 39
+    set pool's sType to the Vulkan command pool create info tag
     set pool's flags to 2 as a 32 bit unsigned integer
     set pool's queueFamilyIndex to state's graphics_queue_family
     require Vulkan status @intrinsic("call", "vulkan", "vkCreateCommandPool", an integer, state's device, the address of pool, 0 as a pointer, the address of (state's command_pool)) for "Creating the Vulkan command pool"
     set commands to a new (pointer array of 2 items)
     set allocation to a new VkCommandBufferAllocateInfo
-    set allocation's sType to 40
+    set allocation's sType to the Vulkan command buffer allocate info tag
     set allocation's commandPool to state's command_pool
     set allocation's commandBufferCount to (the length of commands) as a 32 bit unsigned integer
     require Vulkan status @intrinsic("call", "vulkan", "vkAllocateCommandBuffers", an integer, state's device, the address of allocation, commands + 0) for "Allocating Vulkan frame commands"
     set semaphore to a new VkSemaphoreCreateInfo
-    set semaphore's sType to 9
+    set semaphore's sType to the Vulkan semaphore create info tag
     set fence to a new VkFenceCreateInfo
-    set fence's sType to 8
+    set fence's sType to the Vulkan fence create info tag
     set fence's flags to 1 as a 32 bit unsigned integer
     set index to 0
     loop while index < (the length of state's frames):
@@ -23,8 +23,8 @@ to [create Vulkan frame resources in] {a pointer to DynlexGraphics:state}:
         set frame's commands to the item at index in commands
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateSemaphore", an integer, state's device, the address of semaphore, 0 as a pointer, the address of (frame's image_available)) for "Creating frame synchronization"
         require Vulkan status @intrinsic("call", "vulkan", "vkCreateFence", an integer, state's device, the address of fence, 0 as a pointer, the address of (frame's completed)) for "Creating frame completion synchronization"
-        set size to 33554432 as a 64 bit unsigned integer
-        set buffer to a Vulkan buffer of size bytes with usage (128 as a 32 bit unsigned integer) and memory flags (6 as a 32 bit unsigned integer) in state
+        set size to the graphics upload capacity
+        set buffer to a Vulkan buffer of size bytes with usage (the Vulkan vertex buffer usage) and memory flags (the Vulkan host visible coherent memory flags) in state
         set frame's upload_buffer to buffer's handle
         set frame's upload_memory to buffer's memory
         set frame's upload to (Vulkan memory buffer's memory mapped for size bytes in state) as a pointer to a byte
@@ -37,7 +37,7 @@ to [create Vulkan frame resources in] {a pointer to DynlexGraphics:state}:
     set textures' descriptorCount to 1024 as a 32 bit unsigned integer
     set sizes to [uniforms, textures]
     set descriptors to a new VkDescriptorPoolCreateInfo
-    set descriptors' sType to 33
+    set descriptors' sType to the Vulkan descriptor pool create info tag
     set descriptors' flags to 1 as a 32 bit unsigned integer
     set descriptors' maxSets to 2048 as a 32 bit unsigned integer
     set descriptors' poolSizeCount to (the length of sizes) as a 32 bit unsigned integer

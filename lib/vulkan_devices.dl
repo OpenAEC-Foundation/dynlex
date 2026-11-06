@@ -50,7 +50,7 @@ to [create the Vulkan instance in] {a pointer to DynlexGraphics:state}:
     if the build target is macOS:
         require condition portable reporting "MoltenVK requires the Vulkan portability enumeration extension"
     set creation to a new VkInstanceCreateInfo
-    set creation's sType to 1
+    set creation's sType to the Vulkan instance create info tag
     if portable:
         set creation's flags to 1 as a 32 bit unsigned integer
         if portabilityEnabled = false:
@@ -148,7 +148,7 @@ to [create the Vulkan device in] {a pointer to DynlexGraphics:state}:
     require condition (best > 0) reporting "No Vulkan 1.3 device supports graphics, presentation, and swapchains for this window"
     set priority to 1.0 as a 32 bit floating-point number
     set graphicsQueue to a new VkDeviceQueueCreateInfo
-    set graphicsQueue's sType to 2
+    set graphicsQueue's sType to the Vulkan device queue create info tag
     set graphicsQueue's queueFamilyIndex to state's graphics_queue_family
     set graphicsQueue's queueCount to 1 as a 32 bit unsigned integer
     set graphicsQueue's pQueuePriorities to the address of priority
@@ -157,7 +157,7 @@ to [create the Vulkan device in] {a pointer to DynlexGraphics:state}:
     set queues to [graphicsQueue, presentQueue]
     set extensions to ["VK_KHR_swapchain", "VK_KHR_portability_subset"]
     set creation to a new VkDeviceCreateInfo
-    set creation's sType to 3
+    set creation's sType to the Vulkan device create info tag
     set creation's queueCreateInfoCount to (1 if state's graphics_queue_family = state's present_queue_family, else 2) as a 32 bit unsigned integer
     set creation's pQueueCreateInfos to queues + 0
     set creation's enabledExtensionCount to (2 if state's portability_enabled, else 1) as a 32 bit unsigned integer

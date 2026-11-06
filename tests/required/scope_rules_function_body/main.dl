@@ -1,0 +1,15 @@
+numbers are properties means: @intrinsic("number rule", properties)
+floating-point means: @intrinsic("type", "float")
+
+function explicit half:
+    execute:
+        in this function, by default:
+            numbers are floating-point
+        @intrinsic("return", @intrinsic("divide", 1, 2))
+
+to get shorthand half:
+    in this function, by default:
+        numbers are floating-point
+    @intrinsic("return", @intrinsic("divide", 1, 2))
+
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", @intrinsic("type", "int", 32), 1, "%.1f %.1f\n", explicit half, shorthand half))

@@ -1,0 +1,11 @@
+import lib/std.dl
+
+to get private amount:
+    return 7
+
+public function shared late amount:
+    execute:
+        return private amount
+
+in this file, by default:
+    functions are local

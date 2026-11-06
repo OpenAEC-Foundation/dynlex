@@ -53,8 +53,10 @@ to get the next 32 bit unsigned integer from {a pointer to a Mersenne Twister 32
 # Keep the largest float below one when the integer conversion rounds upward.
 # This is distinct from discarding the low eight random bits before conversion.
 to get the next 32 bit unit fraction from {a pointer to a Mersenne Twister 32 engine:engine}:
+    in this function, by default:
+        numbers are 32 bit
     set bits to the next 32 bit unsigned integer from engine
-    set unitValue to (bits as a 32 bit floating-point number) / (4294967296.0 as a 32 bit floating-point number)
-    if unitValue >= (1.0 as a 32 bit floating-point number):
-        return 0.999999940395355224609375 as a 32 bit floating-point number
+    set unitValue to (bits as a 32 bit floating-point number) / 4294967296.0
+    if unitValue >= 1.0:
+        return 0.999999940395355224609375
     return unitValue

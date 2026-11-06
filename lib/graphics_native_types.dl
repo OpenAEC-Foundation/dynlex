@@ -1,6 +1,8 @@
 # Native renderer state. Kept in DynLex so graphics algorithms can access their data directly.
 import lib/vulkan_frame_types.dl
 
+the graphics upload capacity means: 33554432 as a 64 bit unsigned integer
+
 class:
     patterns:
         DynlexGraphicsVertex

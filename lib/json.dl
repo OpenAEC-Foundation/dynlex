@@ -543,12 +543,12 @@ a successful JSON unsigned 64 bit integer result with value {a 64 bit unsigned i
 
 to get the signed 64 bit integer value of {JSON signed 64 bit integer result:result}:
     if result failed:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return result's value
 
 to get the unsigned 64 bit integer value of {JSON unsigned 64 bit integer result:result}:
     if result failed:
-        @intrinsic("call", "libc", "abort", nothing)
+        abort the program
     return result's value
 
 local function the bounded JSON decimal magnitude in {string:text} starting at {integer:start} not exceeding {a 64 bit unsigned integer:maximum}:
@@ -861,7 +861,7 @@ to get the compact JSON form of {a pointer to a JSON value:value}:
 
 to free {a pointer to a JSON value:node}:
     if node = (0 as a pointer to a JSON value):
-        @intrinsic("return")
+        return nothing
     if the kind of node = the JSON array kind:
         set index to 0
         loop while index < the length of node:

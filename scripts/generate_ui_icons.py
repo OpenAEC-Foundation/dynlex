@@ -221,7 +221,10 @@ def generate():
             else:
                 expression = 'SVG end'
             expressions.append(expression)
-        lines += [f'    if name = "{name}":', '        return a UI SVG icon from [' + ', '.join(expressions) + ']']
+        lines += [f'    if name = "{name}":', '        return a UI SVG icon from [']
+        lines += [f'            {expression}{"," if index + 1 < len(expressions) else ""}'
+                  for index, expression in enumerate(expressions)]
+        lines.append('        ]')
     lines += ['    print line ("Unknown UI icon: " + (the string form of name))',
               '    abort the program', '    return a new UI SVG icon', '']
     return '\n'.join(lines)

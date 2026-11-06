@@ -26,15 +26,18 @@ to get [begin a Vulkan frame cleared to red] {floating-point number:red} [green]
         require Vulkan status result for "Acquiring a swapchain image"
     require Vulkan status @intrinsic("call", "vulkan", "vkResetCommandBuffer", an integer, frame's commands, 0) for "Resetting graphics commands"
     set commandBegin to a new VkCommandBufferBeginInfo
-    set commandBegin's sType to 42
+    set commandBegin's sType to the Vulkan command buffer begin info tag
     require Vulkan status @intrinsic("call", "vulkan", "vkBeginCommandBuffer", an integer, frame's commands, the address of commandBegin) for "Beginning graphics commands"
     # VkClearValue contains four 32-bit words. The second value clears
     # depth to 1.0 and stencil to zero; its remaining words are unused.
-    set clearValues to [red as a 32 bit floating-point number, green as a 32 bit floating-point number, blue as a 32 bit floating-point number, alpha as a 32 bit floating-point number, 1.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number, 0.0 as a 32 bit floating-point number]
+    set clearValues to [
+        red, green, blue, alpha,
+        1.0, 0.0, 0.0, 0.0
+    ] as a 32 bit floating-point number array of 8 items
     set area to a new VkRect2D
     set area's extent to state's swapchain_extent
     set renderBegin to a new VkRenderPassBeginInfo
-    set renderBegin's sType to 43
+    set renderBegin's sType to the Vulkan render pass begin info tag
     set renderBegin's renderPass to state's render_pass
     set renderBegin's framebuffer to @intrinsic("dereference", state's framebuffers + state's image_index)
     set renderBegin's renderArea to area
@@ -62,7 +65,7 @@ to [present the Vulkan frame in] {a pointer to DynlexGraphics:state}:
     set waitStage to 1024 as a 32 bit unsigned integer
     set ready to @intrinsic("dereference", state's presentation_ready + state's image_index)
     set submission to a new VkSubmitInfo
-    set submission's sType to 4
+    set submission's sType to the Vulkan submit info tag
     set submission's waitSemaphoreCount to 1 as a 32 bit unsigned integer
     set submission's pWaitSemaphores to (the address of (frame's image_available)) as a pointer
     set submission's pWaitDstStageMask to (the address of waitStage) as a pointer
@@ -73,7 +76,7 @@ to [present the Vulkan frame in] {a pointer to DynlexGraphics:state}:
     require Vulkan status @intrinsic("call", "vulkan", "vkResetFences", an integer, state's device, 1, the address of (frame's completed)) for "Resetting frame completion"
     require Vulkan status @intrinsic("call", "vulkan", "vkQueueSubmit", an integer, state's graphics_queue, 1, the address of submission, frame's completed) for "Submitting a graphics frame"
     set presentation to a new VkPresentInfoKHR
-    set presentation's sType to 1000001001
+    set presentation's sType to the Vulkan present info khr tag
     set presentation's waitSemaphoreCount to 1 as a 32 bit unsigned integer
     set presentation's pWaitSemaphores to (the address of ready) as a pointer
     set presentation's swapchainCount to 1 as a 32 bit unsigned integer

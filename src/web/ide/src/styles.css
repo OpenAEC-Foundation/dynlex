@@ -388,17 +388,10 @@ a:focus-visible {
   border-color: var(--blue);
 }
 
-.file-item i {
-  display: grid;
-  place-items: center;
+.file-item img {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  background: var(--lime);
-  color: #101310;
-  font-style: normal;
-  font-size: 0.63rem;
-  font-weight: 700;
+  object-fit: contain;
 }
 
 .file-item b {

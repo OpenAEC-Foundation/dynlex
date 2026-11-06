@@ -90,7 +90,7 @@ local function the YAML child index named {string:name} in {a pointer to a YAML 
 
 to free {a pointer to a YAML mapping node:document}:
     if document = (0 as a pointer to a YAML mapping node):
-        @intrinsic("return")
+        return nothing
     set index to 0
     loop while index < the length of document:
         free the item at index in the children of document

@@ -14,6 +14,7 @@ for dependency in node npm; do
 done
 
 (cd "$IDE_DIR" && npm ci)
+(cd "$IDE_DIR" && npm test)
 
 node "$PROJECT_DIR/tools/homepage-shaders/generate.mjs"
 (cd "$IDE_DIR" && npm run build)

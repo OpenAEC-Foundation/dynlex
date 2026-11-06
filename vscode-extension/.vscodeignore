@@ -2,6 +2,7 @@
 .vscode-test/**
 src/**
 scripts/**
+patches/**
 tests/**
 out/**
 node_modules/**

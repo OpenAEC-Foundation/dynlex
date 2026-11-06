@@ -1,0 +1,9 @@
+import lib/std.dl
+
+to get loop half:
+    loop while false:
+        in this function, by default:
+            numbers are floating-point
+    return 1 / 2
+
+print line loop half
