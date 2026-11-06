@@ -213,7 +213,7 @@ bool IncrementalIRReuse::import(ParseContext &context) {
 		llvm::Function *function = context.llvmModule->getFunction(name);
 		if (!function || function->isDeclaration())
 			throw std::runtime_error("cached function IR was not linked: " + name);
-		function->setLinkage(llvm::GlobalValue::InternalLinkage);
+		function->setLinkage(previousModule->getFunction(name)->getLinkage());
 		restoreRequiredLibraries(context, *function);
 	}
 	return true;

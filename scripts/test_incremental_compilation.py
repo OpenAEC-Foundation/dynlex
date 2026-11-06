@@ -350,9 +350,10 @@ function left times right:
                                 '    @intrinsic("store", copied, item)\n'
                                 '    @intrinsic("discard", @intrinsic("property", copied, "value"))\n'
                                 '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "managed"))\n'
-                                'to get callback {integer:value}:\n'
-                                '    @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "callback body"))\n'
-                                '    @intrinsic("return", @intrinsic("add", value, 1))\n'
+                                'exposed function callback {integer:value}:\n'
+                                '    execute:\n'
+                                '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "callback body"))\n'
+                                '        @intrinsic("return", @intrinsic("add", value, 1))\n'
                                 'to use callback:\n'
                                 '    @intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\\n", '
                                 '@intrinsic("invoke", @intrinsic("function", "callback $"), 7)))\n'
@@ -366,6 +367,8 @@ function left times right:
         f"unchanged managed and callable callers were re-inferred: {generated_closure_edit[0]}"
     assert generated_closure_edit[0]["functions_ir_reused"] >= 4, \
         f"unchanged managed and callable IR was regenerated: {generated_closure_edit[0]}"
+    assert generated_closure_edit[0]["objects_reused"] >= 1, \
+        f"unchanged exposed callable disabled object cache reuse: {generated_closure_edit[0]}"
     assert generated_closure_edit[1:] == build(False, entry=generated_closure_main)[1:]
     assert b"8\n" in generated_closure_edit[2], "reused callable wrapper returned the wrong value"
     generated_closure_main.write_text(generated_closure_main.read_text().replace('"released"', '"released again"'))
