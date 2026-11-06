@@ -88,9 +88,12 @@ if true:
     print line 1
 """
 
+# Keep an observable effect so constant emission cannot remove the specialization
+# whose symbol escaping this fixture verifies.
 NEGATIVE_FIXED_VALUE_SOURCE = '''import lib/std.dl
 
 to get the fixed value {fixed integer:value}:
+    print line value
     return value
 
 ignore the fixed value -1

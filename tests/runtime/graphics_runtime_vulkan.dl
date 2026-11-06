@@ -39,6 +39,22 @@ set scrollCallback to @intrinsic("call", "glfw", "glfwSetScrollCallback", a poin
 ignore @intrinsic("call", "glfw", "glfwSetScrollCallback", a pointer, state's window, scrollCallback)
 @intrinsic("call pointer", scrollCallback, nothing, state's window, 2.0, -3.0)
 require condition (reading's horizontal = 2.0 and reading's vertical = -3.0) reporting "The GLFW scroll callback did not forward the context and offsets"
+preserve key presses in window
+set keyCallback to @intrinsic("call", "glfw", "glfwSetKeyCallback", a pointer, state's window, 0 as a pointer)
+require condition (keyCallback != (0 as a pointer)) reporting "Preserving key presses did not install the event callback"
+ignore @intrinsic("call", "glfw", "glfwSetKeyCallback", a pointer, state's window, keyCallback)
+set keys to [258, 262, 262, 263, 257, 256]
+for each key in keys:
+    @intrinsic("call pointer", keyCallback, nothing, state's window, key, 0, 1, 0)
+    @intrinsic("call pointer", keyCallback, nothing, state's window, key, 0, 2, 0)
+    @intrinsic("call pointer", keyCallback, nothing, state's window, key, 0, 0, 0)
+@intrinsic("call pointer", keyCallback, nothing, state's window, -1, 0, 1, 0)
+for each key in keys:
+    require condition ((the next key press in window) = key) reporting "Key presses were lost, reordered or duplicated"
+require condition ((the next key press in window) = -1) reporting "Key repeat, release or unknown keys created extra press events"
+@intrinsic("call pointer", keyCallback, nothing, state's window, 80, 0, 1, 0)
+require condition ((the next key press in window) = 80) reporting "An emptied key queue could not be reused"
+require condition ((the next key press in window) = -1) reporting "Draining a reused queue retained an event"
 set started to the time since start for window
 sleep for 20 milliseconds
 require condition (((the time since start for window) - started) >= 0.015) reporting "Sleep returned too early"
@@ -68,6 +84,21 @@ set rgbTexture to @intrinsic("construct", a graphics texture, rgbResource as a p
 
 set frame to a new graphics frame in window
 require condition frame's drawable reporting "A hidden window did not begin a frame"
+set originalClip to the clipping rectangle of frame
+require condition ((originalClip's offset' x = 0) and ((originalClip's offset' y = 0) and ((originalClip's extent' width = 64) and (originalClip's extent' height = 64)))) reporting "A new frame did not start with full clipping bounds"
+set restrictedClip to originalClip
+set restrictedClip's offset' x to 8
+set restrictedClip's offset' y to 4
+set restrictedClip's extent' width to 16 as a 32 bit unsigned integer
+set restrictedClip's extent' height to 12 as a 32 bit unsigned integer
+if scenario = "negative-clip-offset":
+    set restrictedClip's offset' x to -1
+if scenario = "overflowing-clip-offset":
+    set restrictedClip's offset' x to 2147483647
+set the clipping rectangle of frame to restrictedClip
+set actualClip to the clipping rectangle of frame
+require condition ((actualClip's offset' x = 8) and ((actualClip's offset' y = 4) and ((actualClip's extent' width = 16) and (actualClip's extent' height = 12)))) reporting "The clipping rectangle was not retained"
+set the clipping rectangle of frame to originalClip
 use screen coordinates in frame
 save the model transform in frame
 move the model in frame by x 1.0, y 2.0 and z 0.0
@@ -82,6 +113,8 @@ if scenario = "release-active-mesh":
     release mesh
 draw mesh from vertex 0 for 3 vertices in color red 64, green 128 and blue 255 in frame
 start triangles using redTexture in frame
+if scenario = "clip-active-triangles":
+    set the clipping rectangle of frame to originalClip
 if scenario = "release-active-texture":
     release redTexture
 set index to 0
@@ -97,10 +130,13 @@ draw redTexture from x 24, y 1 to x 34, y 11 in color red 0, green 0 and blue 25
 draw rgbTexture from x 36, y 1 to x 46, y 11 in color red 255, green 255 and blue 255 in frame
 set resizedRGB to [0 as a byte, 127 as a byte, 255 as a byte, 255 as a byte, 255 as a byte, 255 as a byte]
 update graphics texture resource rgbResource with pixels at (resizedRGB + 0) width 2 height 1
+set the clipping rectangle of frame to restrictedClip
 display frame
 set index to 0
 loop while index < 3:
     set frame to a new graphics frame in window
+    set actualClip to the clipping rectangle of frame
+    require condition ((actualClip's offset' x = 0) and ((actualClip's offset' y = 0) and ((actualClip's extent' width = 64) and (actualClip's extent' height = 64)))) reporting "Clipping leaked from the preceding frame"
     require condition frame's drawable reporting "A reused frame was not drawable"
     draw a rectangle at x 1 and y 1 with width 2 and height 2 in color red 255, green 255 and blue 255 in frame
     display frame
@@ -132,6 +168,10 @@ release mesh
 # Leave a mesh owned by the window to exercise automatic destruction.
 ignore a graphics mesh containing 3 vertices at (vertices + 0) for window
 set secondWindow to a new hidden window with width 48 and height 48
+preserve key presses in secondWindow
+@intrinsic("call pointer", keyCallback, nothing, state's window, 262, 0, 1, 0)
+require condition ((the next key press in secondWindow) = -1) reporting "Key presses leaked into another window"
+# Close with an unconsumed event to exercise queue destruction.
 close window
 set secondState to secondWindow as a pointer to DynlexGraphics
 @intrinsic("call", "glfw", "glfwSetWindowSize", nothing, secondState's window, 80, 40)
@@ -144,6 +184,8 @@ require condition secondState's swapchain_dirty reporting "The framebuffer resiz
 set resizedFrame to a new graphics frame in secondWindow
 require condition resizedFrame's drawable reporting "Closing the first window prevented the second from drawing"
 require condition ((secondState's swapchain_extent' width = 80) and (secondState's swapchain_extent' height = 40)) reporting "The swapchain was not recreated at the resized framebuffer dimensions"
+set actualClip to the clipping rectangle of resizedFrame
+require condition ((actualClip's extent' width = 80) and (actualClip's extent' height = 40)) reporting "Clipping did not follow the resized framebuffer"
 display resizedFrame
 close secondWindow
 set fullscreen to a new fullscreen window

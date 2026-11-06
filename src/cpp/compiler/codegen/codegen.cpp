@@ -250,6 +250,7 @@ llvm::Function *generateSpecializedFunction(
 	context.flexCallSiteRangeStack.clear();
 
 	builder.SetInsertPoint(entry);
+	builder.SetCurrentDebugLocation({});
 
 	// Set up parameter bindings by declaration identity.
 	context.codegenParameterBindings.clear();
@@ -718,12 +719,14 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			return result;
 		}
 
-		// Non-flex pattern: emit the exact monomorphized function selected by inference.
+		// Pure calls with constant operands can materialize their inferred result.
 		Instantiation *inst = expr->selectedInstantiation;
 		requireCompilerInvariant(inst != nullptr, "non-flex call reached codegen without its selected instantiation");
+		CompileTimeValue knownResult = inst->purity == InstantiationPurity::Pure
+										   ? resolveStoredCompileTimeValue(expr, context.flexBindingFrames)
+										   : CompileTimeValue{};
 		if (inst->returnType.isMetaType()) {
-			if (inst->purity == InstantiationPurity::Pure &&
-				isCompileTimeKnown(resolveStoredCompileTimeValue(expr, context.flexBindingFrames)))
+			if (isCompileTimeKnown(knownResult))
 				return nullptr;
 			context.diagnostics.push_back(
 				Diagnostic(context, Diagnostic::Level::Error, "compile time type value used at runtime", expr->range)
@@ -739,12 +742,14 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 		std::vector<llvm::Value *> args;
 		std::vector<llvm::Value *> managedTemporaryArguments;
 		args.reserve(runtimeParameterIndices.size());
+		bool constantArguments = true;
 		for (size_t runtimeParameterIndex : runtimeParameterIndices) {
 			Expression *argExpr = paramBindings[runtimeParameterIndex].second;
 			LValueAddressResult lvalue = generateLValueAddress(context, argExpr);
 			if (lvalue.status == LValueAddressStatus::Failed)
 				return CodegenResult::failure();
 			if (lvalue.status == LValueAddressStatus::Addressable) {
+				constantArguments = false;
 				requireCompilerInvariant(lvalue.address != nullptr, "addressable call argument produced no address");
 				args.push_back(lvalue.address);
 			} else {
@@ -753,6 +758,7 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 					return generatedArgument;
 				llvm::Value *argVal = generatedArgument.value;
 				requireCompilerInvariant(argVal != nullptr, "runtime call argument produced no value");
+				constantArguments &= llvm::isa<llvm::Constant>(argVal);
 				llvm::AllocaInst *tempAlloca = createEntryAlloca(context, "tmp", argTypes[runtimeParameterIndex]);
 				const DataType &argumentType = argTypes[runtimeParameterIndex];
 				if (typeHasManagedLifecycle(argumentType)) {
@@ -770,16 +776,22 @@ CodegenResult generateExpressionCode(ParseContext &context, Expression *expr) {
 			}
 		}
 
-		llvm::Function *func = generateSpecializedFunction(context, matchedSection, paramBindings, *inst, args);
-		if (!func)
-			return CodegenResult::failure();
-		if (finalizedExpressionType(context, expr).kind == DataType::Kind::Void)
-			emitExecutionTrace(context, expr->range);
-		llvm::CallInst *call = builder.CreateCall(func, args);
+		llvm::Value *result = nullptr;
+		if (constantArguments && isCompileTimeKnown(knownResult)) {
+			// Argument evaluation above still owns its effects and temporary lifetimes.
+			result = generateCompileTimeRuntimeValue(context, knownResult, finalizedExpressionType(context, expr));
+		} else {
+			llvm::Function *func = generateSpecializedFunction(context, matchedSection, paramBindings, *inst, args);
+			if (!func)
+				return CodegenResult::failure();
+			if (finalizedExpressionType(context, expr).kind == DataType::Kind::Void)
+				emitExecutionTrace(context, expr->range);
+			result = builder.CreateCall(func, args);
+		}
 		for (auto iterator = managedTemporaryArguments.rbegin(); iterator != managedTemporaryArguments.rend(); iterator++)
 			if (!releaseManagedTemporaryStorage(context, *iterator))
 				return CodegenResult::failure();
-		return call;
+		return result;
 	}
 
 	case Expression::Kind::IntrinsicCall: {

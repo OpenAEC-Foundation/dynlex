@@ -1,0 +1,52 @@
+integer means: @intrinsic("type", "int", 32)
+real means: @intrinsic("type", "float", 64)
+boolean means: @intrinsic("type", "bool")
+text means: @intrinsic("add pointer depth", @intrinsic("type", "int", 8))
+address means: @intrinsic("add pointer depth", integer)
+bits means: @intrinsic("type", "uint", 64)
+fixed value means: @intrinsic("fix", value)
+
+class:
+    patterns:
+        record
+    members:
+        direction as integer
+        scale as real
+        enabled as boolean
+        caption as text
+        location as address
+        callback as address
+
+function negative value:
+    execute:
+        @intrinsic("return", @intrinsic("negate", value))
+function ratio:
+    execute:
+        @intrinsic("return", 2.5)
+function equal value:
+    execute:
+        @intrinsic("return", @intrinsic("equal", value, value))
+function arrow title:
+    execute:
+        @intrinsic("return", "arrow")
+function origin:
+    execute:
+        @intrinsic("return", @intrinsic("cast", 17, address))
+
+function below {integer:value}:
+    execute:
+        @intrinsic("return", @intrinsic("less than", value, 3))
+section while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+function counter:
+    execute:
+        @intrinsic("store", index, 0)
+        while below index:
+            @intrinsic("store", index, @intrinsic("add", index, 1))
+        @intrinsic("return", index)
+
+entry {fixed integer:value} means: @intrinsic("static reference", @intrinsic("construct", record, value, ratio, equal 1, arrow title, origin, @intrinsic("cast", @intrinsic("function", "counter"), address)))
+@intrinsic("store", description, entry (negative 1))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d %.1f %d %s %llu\n", description's direction, description's scale, @intrinsic("cast", description's enabled, integer), description's caption, @intrinsic("cast", description's location, bits)))
+@intrinsic("discard", @intrinsic("variadic call", "libc", "printf", integer, 1, "%d\n", @intrinsic("call pointer", description's callback, integer)))

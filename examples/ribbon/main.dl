@@ -9,7 +9,7 @@ set view to a native view of (the address of interface) sized 1280 by 800 using 
 set state's view to the address of view
 loop while view's window remains open:
     render the address of view
-    if key (the escape key) is down in view's window:
+    if the UI close key was pressed in (the address of view):
         request that view's window close
     sleep for 4 milliseconds
 close the address of view

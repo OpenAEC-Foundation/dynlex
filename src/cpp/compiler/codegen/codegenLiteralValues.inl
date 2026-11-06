@@ -64,5 +64,5 @@ generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &v
 		requireCompilerInvariant(type.isBytePointer(), "string compile-time value has non-string runtime type");
 		return generateStringConstant(context, *text);
 	}
-	crashCompilerBug("compile-time parameter value cannot be represented at runtime");
+	crashCompilerBug("compile-time value cannot be represented at runtime");
 }

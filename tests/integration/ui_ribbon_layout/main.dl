@@ -5,7 +5,14 @@ import lib/ui_icons.dl
 to check ribbon command {a pointer to UI layout:layout}:
     if (layout's node's kind = 33) and (layout's node's rows != 3):
         set icon to the UI icon named (layout's node's variant)
-        require condition (icon's count > 0) reporting "A ribbon command has no icon geometry"
+        require condition (icon's count > 0) reporting "A ribbon command has no SVG path data"
+    if layout's node's kind = 34:
+        require condition (layout's node's count > 0) reporting "A ribbon field has no options"
+    if (layout's node's kind = 33) or (layout's node's kind = 34):
+        set index to 0
+        loop while index < layout's node's count:
+            require condition ((the UI child at index in (layout's node))'s kind = 35) reporting "A dropdown contains a non-menu item"
+            increment index
     set child to layout's first
     loop while child != @intrinsic("construct", a pointer to UI layout):
         check ribbon command child
@@ -16,6 +23,8 @@ set instance to an instance of ribbon studio with state (the address of state)
 set ribbon to the control labeled "Main ribbon" in (the address of instance)
 require condition (ribbon's count = 9) reporting "The example is missing a ribbon tab"
 require condition ((the selected tab of ribbon in (the address of instance))'s text = "Home") reporting "The ribbon did not select its declared initial tab"
+require condition ((the control labeled "New slide" in (the address of instance))'s count = 4) reporting "The New slide menu has no layouts"
+require condition ((the control labeled "20" in (the address of instance))'s count >= 6) reporting "Font sizes are missing"
 set theme to the UI theme for ribbon studio
 set layout to a UI layout for ribbon inside ribbon studio with width 1256 using theme
 set tab to layout's first

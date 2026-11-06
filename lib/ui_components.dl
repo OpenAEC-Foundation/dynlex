@@ -68,6 +68,18 @@ to get the control labeled {C string:label} in {a pointer to UI instance:instanc
     require condition (found != @intrinsic("construct", UI reference)) reporting "The UI control does not exist"
     return found
 
+to get the position of UI option {string:text} in {UI reference:node}:
+    set index to 0
+    loop while (index < node's count) and ((the UI child at index in node)'s text != text):
+        increment index
+    require condition (index < node's count) reporting "The tool field value must match one of its options"
+    return index
+
+to select UI option {integer:index} from {UI reference:node} into {a pointer to UI value:value}:
+    set chosen to the UI child at index in node
+    set value's number to index
+    set value's text to chosen's text
+
 to get the UI value for {UI reference:node} in {a pointer to UI instance:instance}:
     set entry to instance's values
     loop while entry != @intrinsic("construct", a pointer to UI value):
@@ -77,6 +89,9 @@ to get the UI value for {UI reference:node} in {a pointer to UI instance:instanc
     set {new entry} to a new UI value
     set new entry's target to node
     set new entry's text to node's text
+    if node's kind = 34:
+        set index to the position of UI option (the string form of (node's text)) in node
+        select UI option index from node into (the address of new entry)
     if node's kind = 21:
         set new entry's text to "0"
     set new entry's next to instance's values
@@ -86,12 +101,18 @@ to get the UI value for {UI reference:node} in {a pointer to UI instance:instanc
 to set the text of {C string:label} in {a pointer to UI instance:instance} to {a value:text}:
     set node to the control labeled label in instance
     set entry to the UI value for node in instance
-    set entry's text to the string form of text
+    if node's kind = 34:
+        select UI option (the position of UI option (the string form of text) in node) from node into entry
+    else:
+        set entry's text to the string form of text
 
 to set the value of {C string:label} in {a pointer to UI instance:instance} to {integer:number}:
     set node to the control labeled label in instance
     set entry to the UI value for node in instance
-    set entry's number to number
+    if node's kind = 34:
+        select UI option number from node into entry
+    else:
+        set entry's number to number
 
 to get the value of {C string:label} in {a pointer to UI instance:instance}:
     return (the UI value for (the control labeled label in instance) in instance)'s number

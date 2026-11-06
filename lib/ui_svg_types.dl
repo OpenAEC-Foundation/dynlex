@@ -1,0 +1,28 @@
+# SVG pen operations and cubic Beziers, never flattened line art.
+import lib/sections.dl
+
+class:
+    patterns:
+        UI SVG operation
+    members:
+        kind as an integer
+        first x as a floating-point number
+        first y as a floating-point number
+        second x as a floating-point number
+        second y as a floating-point number
+        end x as a floating-point number
+        end y as a floating-point number
+
+class:
+    patterns:
+        UI SVG icon
+    members:
+        operations as a pointer to UI SVG operation
+        count as an integer
+
+SVG open {floating-point number:x} {floating-point number:y} means: @intrinsic("construct", UI SVG operation, 0, x, y, 0.0, 0.0, 0.0, 0.0)
+SVG closed {floating-point number:x} {floating-point number:y} means: @intrinsic("construct", UI SVG operation, 4, x, y, 0.0, 0.0, 0.0, 0.0)
+SVG line {floating-point number:x} {floating-point number:y} means: @intrinsic("construct", UI SVG operation, 1, x, y, 0.0, 0.0, 0.0, 0.0)
+SVG curve {floating-point number:x1} {floating-point number:y1} {floating-point number:x2} {floating-point number:y2} {floating-point number:x} {floating-point number:y} means: @intrinsic("construct", UI SVG operation, 2, x1, y1, x2, y2, x, y)
+SVG end means: @intrinsic("construct", UI SVG operation, 3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+a UI SVG icon from {an array:operations} means: @intrinsic("construct", UI SVG icon, @intrinsic("cast", a static reference to operations, a pointer to UI SVG operation), the length of operations)

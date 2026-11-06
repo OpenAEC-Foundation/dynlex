@@ -1,0 +1,18 @@
+# The presentation retains its own proportions inside the resizable editor.
+import lib/ui_native.dl
+
+to paint the example slide using {a pointer to native UI view:view} on {graphics frame:frame}:
+    set ink to UI ink 47 51 59
+    set muted to UI ink 107 113 122
+    set orange to UI ink 184 65 38
+    draw UI text "STUDIO / QUARTERLY UPDATE" at 48 56 with (view's small) in orange on frame
+    draw UI text "A brighter way" at 44 146 with (view's display) in ink on frame
+    draw UI text "forward." at 44 203 with (view's display) in ink on frame
+    draw UI text "Good ideas. Clear direction. Lasting impact." at 48 251 with (view's typeface) in muted on frame
+    draw a flat UI box (UI box at 48 286 sized 54 3) in orange on frame
+    draw UI text "NOVEMBER 2026" at 48 415 with (view's small) in muted on frame
+    draw a rounded UI box (UI box at 576 78 sized 120 252) with radius 60.0 in (UI ink 220 231 225) on frame
+    draw a rounded UI box (UI box at 713 130 sized 120 252) with radius 60.0 in (UI ink 246 218 201) on frame
+    draw a UI disc at (a UI point at 773.0 and 138.0) with radius 60.0 from (UI ink 205 109 71) to (UI ink 205 109 71) opacity 255 on frame
+    draw a flat UI box (UI box at 576 340 sized 120 42) in (UI ink 65 91 108) on frame
+    draw UI text "01 / OUR NEXT CHAPTER" at 576 415 with (view's small) in muted on frame

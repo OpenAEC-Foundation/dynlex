@@ -41,6 +41,14 @@ class XImage(c.Structure):
     ]
 
 
+class XSizeHints(c.Structure):
+    _fields_ = [("flags", c.c_long)] + [(name, c.c_int) for name in (
+        "x", "y", "width", "height", "min_width", "min_height", "max_width", "max_height",
+        "width_inc", "height_inc", "min_aspect_x", "min_aspect_y", "max_aspect_x", "max_aspect_y",
+        "base_width", "base_height", "win_gravity",
+    )]
+
+
 def x11_library():
     library = ctypes.util.find_library("X11")
     if library is None:
@@ -59,6 +67,10 @@ def x11_library():
         "XKeysymToKeycode": ([c.c_void_p, c.c_ulong], c.c_uint),
         "XSetInputFocus": ([c.c_void_p, c.c_ulong, c.c_int, c.c_ulong], c.c_int),
         "XResizeWindow": ([c.c_void_p, c.c_ulong, c.c_uint, c.c_uint], c.c_int),
+        "XMoveResizeWindow": ([c.c_void_p, c.c_ulong, c.c_int, c.c_int, c.c_uint, c.c_uint], c.c_int),
+        "XGetWMNormalHints": ([c.c_void_p, c.c_ulong, c.POINTER(XSizeHints), c.POINTER(c.c_long)], c.c_int),
+        "XGetGeometry": ([c.c_void_p, c.c_ulong, c.POINTER(c.c_ulong), c.POINTER(c.c_int), c.POINTER(c.c_int), c.POINTER(c.c_uint), c.POINTER(c.c_uint), c.POINTER(c.c_uint), c.POINTER(c.c_uint)], c.c_int),
+        "XTranslateCoordinates": ([c.c_void_p, c.c_ulong, c.c_ulong, c.c_int, c.c_int, c.POINTER(c.c_int), c.POINTER(c.c_int), c.POINTER(c.c_ulong)], c.c_int),
         "XInternAtom": ([c.c_void_p, c.c_char_p, c.c_int], c.c_ulong),
         "XGetImage": ([c.c_void_p, c.c_ulong, c.c_int, c.c_int, c.c_uint, c.c_uint, c.c_ulong, c.c_int], c.POINTER(XImage)),
         "XGetPixel": ([c.POINTER(XImage), c.c_int, c.c_int], c.c_ulong),
@@ -68,6 +80,24 @@ def x11_library():
         function = getattr(x, name)
         function.argtypes, function.restype = arguments, result
     return x
+
+
+def window_geometry(x, display, window):
+    root, child = c.c_ulong(), c.c_ulong()
+    left, top = c.c_int(), c.c_int()
+    width, height, border, depth = (c.c_uint() for _ in range(4))
+    if not x.XGetGeometry(display, window, c.byref(root), c.byref(left), c.byref(top), c.byref(width), c.byref(height), c.byref(border), c.byref(depth)):
+        raise RuntimeError("Could not read the UI window geometry")
+    if not x.XTranslateCoordinates(display, window, root.value, 0, 0, c.byref(left), c.byref(top), c.byref(child)):
+        raise RuntimeError("Could not locate the UI window")
+    return left.value, top.value, width.value, height.value
+
+
+def window_size_hints(x, display, window):
+    hints, supplied = XSizeHints(), c.c_long()
+    if not x.XGetWMNormalHints(display, window, c.byref(hints), c.byref(supplied)):
+        raise RuntimeError("The UI window has no normal size hints")
+    return hints
 
 
 def named_window(x, display, root, title):
@@ -134,7 +164,10 @@ def press_key(x, display, root, window, keysym, release=True, interval=0.2):
         raise RuntimeError(f"The private X server has no key for {keysym}")
     for kind in ((2, 3) if release else (2,)):
         event = XEvent()
-        event.key = XKey(kind, 0, 1, display, window, root, 0, 0, 0, 0, 0, 0, 0, keycode, 1)
+        # X11 autorepeat detection compares adjacent release/press timestamps.
+        # Timestamp zero makes distinct synthetic taps look like key repeat.
+        timestamp = int(time.monotonic() * 1000) & 0xFFFFFFFF
+        event.key = XKey(kind, 0, 1, display, window, root, 0, timestamp, 0, 0, 0, 0, 0, keycode, 1)
         if not x.XSendEvent(display, window, 0, 1 << (kind - 2), c.byref(event)):
             raise RuntimeError("Could not send a key event to the private UI window")
         if interval:

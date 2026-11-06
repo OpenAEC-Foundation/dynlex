@@ -171,7 +171,7 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 				newSection = new SectionSection(this);
 				break;
 			} else if (current == syntax.className) {
-				newSection = new ClassSection(this);
+				newSection = new ClassSection(this, Range(line, line->patternText));
 				break;
 			} else {
 				// Unknown keyword - not a section definition

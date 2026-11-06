@@ -1,11 +1,13 @@
 # Native view and canvas data. Layout data is renderer-independent.
 import lib/ui_layout_types.dl
-import lib/ui_native_shapes.dl
+import lib/font.dl
+import lib/ui_native_icon_types.dl
 
 class:
     patterns:
         native UI view
     members:
+        icons as UI icon cache
         window as a pointer
         instance as a pointer to UI instance
         typeface as a font
@@ -21,18 +23,21 @@ class:
         hot as a pointer to UI layout
         pressed as a pointer to UI layout
         was down as a boolean
-        was tab as a boolean
-        was enter as a boolean
-        was left as a boolean
-        was right as a boolean
+        key press as an integer
         focus order as an integer
         control count as an integer
         focused as a pointer to UI layout
         keyboard focus as a boolean
         page as UI reference
         fitted as a boolean
+        adaptive as a boolean
         logical width as an integer
         logical height as an integer
+        popup as a pointer to UI layout
+        popup index as an integer
+        last cursor as cursor position
+        content bounds as UI bounds
+        hit bounds as UI bounds
 
 class:
     patterns:

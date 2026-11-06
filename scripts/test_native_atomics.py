@@ -182,17 +182,20 @@ def require_failure(result: subprocess.CompletedProcess[str], expected: str) -> 
 
 
 def require_atomic_ir(llvm_ir: str) -> None:
+    # Constant conversions can lower directly; neither storage width nor memory
+    # ordering depends on whether the operand uses a literal or an SSA register.
+    one = r"(?:1|%[-a-zA-Z$._0-9]+)"
     patterns = (
-        r"atomicrmw add ptr %slot_val, i8 %\d+ monotonic, align 1",
-        r"atomicrmw sub ptr %slot_val, i8 %\d+ seq_cst, align 1",
-        r"atomicrmw add ptr %slot_val, i16 %\d+ monotonic, align 2",
-        r"atomicrmw sub ptr %slot_val, i16 %\d+ seq_cst, align 2",
-        r"atomicrmw add ptr %slot_val, i32 %\d+ acquire, align 4",
-        r"atomicrmw sub ptr %slot_val, i32 %\d+ release, align 4",
-        r"atomicrmw add ptr %value_val, i64 %\d+ acq_rel, align 8",
-        r"atomicrmw add ptr %slot_val, i64 %\d+ seq_cst, align 8",
+        rf"atomicrmw add ptr %slot_val, i8 {one} monotonic, align 1",
+        rf"atomicrmw sub ptr %slot_val, i8 {one} seq_cst, align 1",
+        rf"atomicrmw add ptr %slot_val, i16 {one} monotonic, align 2",
+        rf"atomicrmw sub ptr %slot_val, i16 {one} seq_cst, align 2",
+        rf"atomicrmw add ptr %slot_val, i32 {one} acquire, align 4",
+        rf"atomicrmw sub ptr %slot_val, i32 {one} release, align 4",
+        rf"atomicrmw add ptr %value_val, i64 {one} acq_rel, align 8",
+        rf"atomicrmw add ptr %slot_val, i64 {one} seq_cst, align 8",
         r"load atomic i64, ptr %value_val acquire, align 8",
-        r"store atomic i8 %atomic_bool_store, ptr %ready_val release, align 1",
+        rf"store atomic i8 {one}, ptr %ready_val release, align 1",
         r"load atomic i8, ptr %ready_val acquire, align 1",
         r"atomicrmw xchg ptr %slot_val, i8 %atomic_bool_store seq_cst, align 1",
         r"atomicrmw xchg ptr %slot_val, float %value_val seq_cst, align 4",

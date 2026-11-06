@@ -1,0 +1,87 @@
+import lib/ui_ribbon.dl
+import lib/ui_native_layout.dl
+import lib/ui_native_interaction.dl
+
+window menu example:
+    ribbon "Example ribbon" at 0 0 sized 400 by 168:
+        tab "Font":
+            ribbon group "Selection":
+                tool field "Aptos" sized 140:
+                    menu item "Aptos"
+                    menu item "Georgia"
+                tool menu "Create" with icon "slide":
+                    menu item "New sheet" with icon "slide"
+                    menu item "Unbound option"
+                tool field "20" sized 48:
+                    menu item "16"
+                    menu item "20"
+                    menu item "24"
+        tab "Other":
+            ribbon group "Other":
+                tool "Unbound command" with icon "check"
+    code:
+        when the "Aptos" control changes:
+            set count to this window's state as a pointer to an integer
+            set the value at count to (the value at count) + 1
+        when the "New sheet" control changes:
+            set count to this window's state as a pointer to an integer
+            set the value at count to (the value at count) + 10
+
+set count to 0
+set instance to an instance of menu example with state (the address of count)
+set theme to the UI theme for menu example
+set layout to a UI layout for menu example inside menu example with width 400 using theme
+set ribbon to layout's first
+set home to ribbon's first
+set field to home's first's first
+set menu to field's next
+require condition (((the UI value for (menu's next's node) in (the address of instance))'s number) = 1) reporting "A field's default text did not select its matching option"
+set view to a new native UI view
+set view's instance to the address of instance
+activate UI layout field in (the address of view)
+require condition ((view's popup = field) and (count = 0)) reporting "Opening a field invoked its callback"
+set view's popup index to 1
+activate UI layout (field's first's next) in (the address of view)
+require condition (((the UI value for (field's node) in (the address of instance))'s text) = "Georgia") reporting "The field did not retain its selected text"
+require condition (((the UI value for (field's node) in (the address of instance))'s number) = 1) reporting "The field did not retain its selected index"
+require condition ((view's popup = @intrinsic("construct", a pointer to UI layout)) and (count = 1)) reporting "A field selection did not close and invoke its callback once"
+activate (home's next's node) belonging to (ribbon's node) in (the address of instance)
+require condition (((the UI value for (field's node) in (the address of instance))'s text) = "Georgia") reporting "Leaving a tab changed the field's value"
+activate (home's node) belonging to (ribbon's node) in (the address of instance)
+require condition (((the UI value for (field's node) in (the address of instance))'s text) = "Georgia") reporting "Returning to a tab lost its field's value"
+activate UI layout menu in (the address of view)
+require condition (count = 1) reporting "Opening a command menu invoked an action"
+activate UI layout (menu's first) in (the address of view)
+require condition (count = 11) reporting "Selecting a command did not invoke its own callback"
+activate UI layout menu in (the address of view)
+activate UI layout (menu's first's next) in (the address of view)
+require condition (count = 11) reporting "An unbound option invoked an action"
+activate UI layout field in (the address of view)
+require condition (view's popup index = 1) reporting "Reopening a field lost its current option"
+activate UI layout field in (the address of view)
+require condition (view's popup = @intrinsic("construct", a pointer to UI layout)) reporting "Reopening a popup did not toggle it closed"
+set the text of "Aptos" in (the address of instance) to "Georgia"
+require condition ((the value of "Aptos" in (the address of instance)) = 1) reporting "Setting a field's text left its index unchanged"
+set the value of "Aptos" in (the address of instance) to 0
+require condition (((the UI value for (field's node) in (the address of instance))'s text) = "Aptos") reporting "Setting a field's index left its text unchanged"
+activate UI layout menu in (the address of view)
+set view's key press to 264
+handle UI popup keys in (the address of view)
+require condition ((view's popup index = 1) and (view's key press = -1)) reporting "The popup did not consume its down key"
+set view's key press to 264
+handle UI popup keys in (the address of view)
+require condition (view's popup index = 0) reporting "Consecutive down key presses were coalesced"
+set view's key press to 257
+handle UI popup keys in (the address of view)
+require condition ((count = 21) and (view's key press = -1)) reporting "Confirming a popup did not consume its Enter event once"
+activate UI layout menu in (the address of view)
+set view's key press to 256
+require condition ((the UI close key was pressed in (the address of view)) = false) reporting "Escape closed the window while its popup was open"
+require condition (view's popup = @intrinsic("construct", a pointer to UI layout)) reporting "Escape did not dismiss the popup"
+require condition ((the UI close key was pressed in (the address of view)) = false) reporting "Escape was handled twice in one frame"
+set view's key press to 256
+require condition (the UI close key was pressed in (the address of view)) reporting "A second Escape press did not request a close"
+require condition ((the UI close key was pressed in (the address of view)) = false) reporting "A close request reused its key event"
+release UI layout layout
+close the address of instance
+print line "Ribbon events passed"
