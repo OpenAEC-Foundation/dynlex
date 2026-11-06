@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { checkSanitizer } from "./ide_sanitizer_browser.mjs";
 import {
   closeBrowserSession,
   evaluate,
@@ -38,5 +39,6 @@ const workerRequest = requestedUrls.find(
 assert.equal(new URL(workerRequest).search, "", "Local workers must resolve without deployment versioning");
 assert.deepEqual(runtimeExceptions, [], "The Vite-served IDE must not raise browser exceptions");
 
+await checkSanitizer();
 closeBrowserSession();
 console.log("The Vite development server initializes the IDE compiler worker in Chrome.");

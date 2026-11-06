@@ -45,6 +45,13 @@ function serveCompilerAssets() {
 
 export default defineConfig({
   base: process.env.DYNLEX_WEB_BASE ?? "/",
+  resolve: {
+    alias: [{
+      // Monaco ships a separate sanitizer copy that npm overrides cannot replace.
+      find: /^(?:.*\/)dompurify\/dompurify\.js$/,
+      replacement: fileURLToPath(import.meta.resolve("dompurify"))
+    }]
+  },
   plugins: [serveCompilerAssets()],
   build: {
     manifest: true,
