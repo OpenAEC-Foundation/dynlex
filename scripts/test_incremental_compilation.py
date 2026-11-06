@@ -298,6 +298,9 @@ function left times right:
     specific_definition = 'to helper 1: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "specific"))\n'
     specific_main.write_text(specific_base)
     build(entry=specific_main)
+    specific_base = specific_base.replace('"general"', '"general edited"')
+    specific_main.write_text(specific_base)
+    assert build(entry=specific_main)[2] == b"general edited\n"
     specific_main.write_text(specific_base + specific_definition)
     specific_added = build(entry=specific_main)
     assert specific_added[0]["inference_instantiations_reused"] <= 1, "new specific pattern reused stale caller inference"
@@ -305,7 +308,7 @@ function left times right:
     specific_main.write_text(specific_base)
     specific_removed = build(entry=specific_main)
     assert specific_removed[0]["inference_instantiations_reused"] == 0, "removed specific pattern reused stale caller inference"
-    assert specific_removed[2] == b"general\n" and specific_removed[1:] == build(False, entry=specific_main)[1:]
+    assert specific_removed[2] == b"general edited\n" and specific_removed[1:] == build(False, entry=specific_main)[1:]
 
     bounded_cascade = root / "bounded_cascade.dl"
     bounded_source = ('integer means: @intrinsic("type", "int")\n'

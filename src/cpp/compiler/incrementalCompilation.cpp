@@ -296,51 +296,7 @@ Json captureInactiveProjection(
 	};
 }
 
-Json captureAllFunctionProjection(const ParseContext &context) {
-	std::map<std::string, Section *> sections;
-	collectSections(context.mainSection, "root", sections);
-	Json selected = Json::object();
-	Json declarations = Json::object();
-	Json matches = Json::object();
-	std::map<const Section *, std::string> bodies;
-	std::map<const Section *, std::string> paths;
-	std::unordered_set<const Section *> reusable;
-	for (const auto &[path, section] : sections) {
-		paths.emplace(section, path);
-		if (section->type == SectionType::Function && !section->patternDefinitions.empty()) {
-			if (!containsNestedDefinition(*section))
-				selected[path] = sectionIdentity(*section);
-			bodies.emplace(section, "");
-		}
-		if (reusableFunctionDeclaration(*section)) {
-			reusable.insert(section);
-			declarations[path] = sectionDeclaration(*section);
-		}
-	}
-	for (const CodeLine *line : context.codeLines) {
-		for (const Section *section = line->section; section; section = section->parent) {
-			auto body = bodies.find(section);
-			if (body != bodies.end()) {
-				body->second.append(line->rightTrimmedText);
-				body->second += '\n';
-			}
-		}
-	}
-	Json projection = captureInactiveProjection(context, &selected);
-	Json bodyDigests = Json::object();
-	for (const auto &[path, section] : sections) {
-		if (auto body = bodies.find(section); body != bodies.end())
-			bodyDigests[path] = digest(body->second);
-	}
-	projection["bodies"] = std::move(bodyDigests);
-	projection["function_declarations"] = std::move(declarations);
-	for (const Section *section : reusable)
-		matches[paths.at(section)] = resolvedFunctionMatches(section, paths);
-	projection["matches"] = std::move(matches);
-	projection["ambient_declarations"] = declarationDigest(sections, reusable);
-	projection["ambient_sources"] = sourceProjection(context, reusable, true, true);
-	return projection;
-}
+#include "incrementalFunctionProjection.inl"
 
 bool functionDependenciesUnchanged(
 	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
@@ -618,6 +574,7 @@ struct BuildStatistics {
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
 	size_t reusedInferenceInstantiations = 0;
+	size_t preinferredInstantiations = 0;
 	size_t reusedFunctionIR = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
@@ -625,6 +582,8 @@ struct BuildStatistics {
 	size_t precedenceMatcherCacheHits = 0;
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
+	double projectionMilliseconds = 0;
+	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;
 	double partitionMilliseconds = 0;
@@ -752,7 +711,10 @@ bool compileIncrementally(
 			auto stageStart = Clock::now();
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
-			Json resolvedFunctionProjection = compiled ? captureAllFunctionProjection(context) : Json(nullptr);
+			stageStart = Clock::now();
+			Json resolvedFunctionProjection =
+				compiled ? captureAllFunctionProjection(context, previous ? &*previous : nullptr) : Json(nullptr);
+			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			Json inactiveProjection;
 			bool reuseTypeInference =
 				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
@@ -773,6 +735,7 @@ bool compileIncrementally(
 							ParseContext &inferred,
 							const std::function<bool(const ParseContext::IncrementalFunctionRequest &)> &inferRequest
 						) {
+						auto preinferStart = Clock::now();
 						const Json &priorSummaries = previous->at("inference_summaries");
 						std::unordered_set<const Section *> stable;
 						for (size_t first = 0; first < plan.requests.size();) {
@@ -787,7 +750,8 @@ bool compileIncrementally(
 									plan.requests.begin() + first, plan.requests.begin() + end
 								);
 								for (const auto &request : variants)
-									inferRequest(request);
+									if (inferRequest(request))
+										statistics.preinferredInstantiations++;
 								Json currentSummaries = captureInferenceSummaries(sectionPaths, {}, Json(nullptr));
 								auto newlyStable = stableIncrementalReplacements(
 									variants, sectionPaths, currentSummaries, priorSummaries,
@@ -800,6 +764,7 @@ bool compileIncrementally(
 						std::unordered_set<const Section *> eligible = eligibleFunctionSections(
 							inferred, *previous, recording->observations, resolvedFunctionProjection, stable
 						);
+						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
 						if (eligible.empty())
 							return;
 						std::unordered_set<std::string> replacementPaths;
@@ -949,6 +914,7 @@ bool compileIncrementally(
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
 							  {"type_inference_reused", statistics.reusedTypeInference},
 							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
+							  {"preinferred_instantiations", statistics.preinferredInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
@@ -961,6 +927,8 @@ bool compileIncrementally(
 							  {"resolve_ms", context.frontendStageMilliseconds[2]},
 							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
 							  {"inference_ms", statistics.inferenceMilliseconds},
+							  {"projection_ms", statistics.projectionMilliseconds},
+							  {"preinference_ms", statistics.preinferenceMilliseconds},
 							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
 							  {"partition_ms", statistics.partitionMilliseconds},
 							  {"link_ms", statistics.linkMilliseconds},
