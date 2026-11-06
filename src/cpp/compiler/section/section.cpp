@@ -182,8 +182,9 @@ Section *Section::createSection(ParseContext &context, CodeLine *line) {
 
 	if (newSection) {
 		newSection->isFlex = isFlex;
-		if (!applyDefinitionLocality(context, line, this, newSection, localModifier, publicModifier))
-			return nullptr;
+		auto *definition = static_cast<DefinitionSection *>(newSection);
+		definition->localModifier = localModifier;
+		definition->publicModifier = publicModifier;
 		newSection->isExposed = isExposed;
 		if (isImplicit && !newSection->isConversion) {
 			context.addDiagnostic(Diagnostic(

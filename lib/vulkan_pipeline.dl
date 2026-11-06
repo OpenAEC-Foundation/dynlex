@@ -4,7 +4,7 @@ import lib/graphics_spirv.dl
 
 to get [a Vulkan shader module for] {a graphics SPIR-V module:code} [in] {a pointer to DynlexGraphics:state}:
     set creation to a new VkShaderModuleCreateInfo
-    set creation's sType to 16
+    set creation's sType to the Vulkan shader module create info tag
     set creation's codeSize to code's count * 4
     set creation's pCode to code's words
     set result to 0 as a pointer
@@ -17,7 +17,7 @@ to get [a Vulkan pipeline for vertex] {a graphics SPIR-V module:vertex} [fragmen
     set vertexModule to a Vulkan shader module for vertex in state
     set fragmentModule to a Vulkan shader module for fragment in state
     set vertexStage to a new VkPipelineShaderStageCreateInfo
-    set vertexStage's sType to 18
+    set vertexStage's sType to the Vulkan pipeline shader stage create info tag
     set vertexStage's stage to 1
     set vertexStage's module to vertexModule
     set vertexStage's pName to "main"
@@ -28,26 +28,26 @@ to get [a Vulkan pipeline for vertex] {a graphics SPIR-V module:vertex} [fragmen
     set binding to a new VkVertexInputBindingDescription
     set binding's stride to stride
     set input to a new VkPipelineVertexInputStateCreateInfo
-    set input's sType to 19
+    set input's sType to the Vulkan pipeline vertex input state create info tag
     set input's vertexBindingDescriptionCount to 1 as a 32 bit unsigned integer
     set input's pVertexBindingDescriptions to the address of binding
     set input's vertexAttributeDescriptionCount to count
     set input's pVertexAttributeDescriptions to attributes
     set assembly to a new VkPipelineInputAssemblyStateCreateInfo
-    set assembly's sType to 20
+    set assembly's sType to the Vulkan pipeline input assembly state create info tag
     set assembly's topology to topology
     set viewport to a new VkPipelineViewportStateCreateInfo
-    set viewport's sType to 22
+    set viewport's sType to the Vulkan pipeline viewport state create info tag
     set viewport's viewportCount and viewport's scissorCount to 1 as a 32 bit unsigned integer
     set raster to a new VkPipelineRasterizationStateCreateInfo
-    set raster's sType to 23
+    set raster's sType to the Vulkan pipeline rasterization state create info tag
     set raster's frontFace to 1
     set raster's lineWidth to 1.0 as a 32 bit floating-point number
     set samples to a new VkPipelineMultisampleStateCreateInfo
-    set samples' sType to 24
+    set samples' sType to the Vulkan pipeline multisample state create info tag
     set samples' rasterizationSamples to 1
     set depthState to a new VkPipelineDepthStencilStateCreateInfo
-    set depthState's sType to 25
+    set depthState's sType to the Vulkan pipeline depth stencil state create info tag
     set depthState's depthTestEnable to depth as a 32 bit unsigned integer
     set depthState's depthWriteEnable to depth as a 32 bit unsigned integer
     set depthState's depthCompareOp to 1
@@ -59,16 +59,16 @@ to get [a Vulkan pipeline for vertex] {a graphics SPIR-V module:vertex} [fragmen
     set blend's dstAlphaBlendFactor to 7
     set blend's colorWriteMask to 15 as a 32 bit unsigned integer
     set blending to a new VkPipelineColorBlendStateCreateInfo
-    set blending's sType to 26
+    set blending's sType to the Vulkan pipeline color blend state create info tag
     set blending's attachmentCount to 1 as a 32 bit unsigned integer
     set blending's pAttachments to the address of blend
     set dynamicValues to [0, 1]
     set dynamicState to a new VkPipelineDynamicStateCreateInfo
-    set dynamicState's sType to 27
+    set dynamicState's sType to the Vulkan pipeline dynamic state create info tag
     set dynamicState's dynamicStateCount to 2 as a 32 bit unsigned integer
     set dynamicState's pDynamicStates to dynamicValues + 0
     set creation to a new VkGraphicsPipelineCreateInfo
-    set creation's sType to 28
+    set creation's sType to the Vulkan graphics pipeline create info tag
     set creation's stageCount to 2 as a 32 bit unsigned integer
     set creation's pStages to stages + 0
     set creation's pVertexInputState to the address of input

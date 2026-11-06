@@ -1,6 +1,6 @@
 # Vulkan ABI structures used by the native graphics library.
 # Field order and scalar widths follow the Khronos Vulkan registry.
-import lib/std.dl
+import lib/vulkan_constants.dl
 
 class:
     patterns:

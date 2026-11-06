@@ -15,7 +15,7 @@ to get [an uploaded graphics mesh containing] {integer:count} [vertices at] {a p
     set mesh's owner to state
     set mesh's count to count as a 32 bit unsigned integer
     set size to (count as a 64 bit unsigned integer) * (the size of DynlexGraphicsVertex)
-    set allocation to a Vulkan buffer of size bytes with usage (128 as a 32 bit unsigned integer) and memory flags (6 as a 32 bit unsigned integer) in state
+    set allocation to a Vulkan buffer of size bytes with usage (the Vulkan vertex buffer usage) and memory flags (the Vulkan host visible coherent memory flags) in state
     set mesh's buffer to allocation's handle
     set mesh's memory to allocation's memory
     set mapped to Vulkan memory mesh's memory mapped for size bytes in state

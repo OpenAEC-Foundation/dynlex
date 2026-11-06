@@ -54,7 +54,7 @@ local function append ordered name {string:value} to {a pointer to an ordered na
 local function the ordered name at {integer:position} in {a pointer to an ordered name collection:collection}:
     execute:
         if position < 0 or position >= the length of collection:
-            @intrinsic("call", "libc", "abort", nothing)
+            abort the program
         return the item at position in the items of collection
 
 local function free {a pointer to an ordered name collection:collection}:
@@ -371,10 +371,10 @@ local function the workspace document change parsed from {a pointer to a JSON va
 local function parse workspace annotations from {a pointer to a JSON value:root} into {a pointer to a parsed workspace edit:edit} using {a pointer to a workspace edit parser state:state}:
     execute:
         if root lacks JSON member named "changeAnnotations":
-            @intrinsic("return")
+            return nothing
         set collection to the workspace JSON member the string form of "changeAnnotations" of root
         if collection violates the workspace JSON object requirement reporting the string form of "changeAnnotations must be an object" using state:
-            @intrinsic("return")
+            return nothing
         set position to 0
         set members to collection's members
         loop while position < the length of collection and not the failure of state:

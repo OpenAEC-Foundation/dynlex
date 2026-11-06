@@ -1,0 +1,8 @@
+import lib/std.dl
+import tests/integration/scope_rules_late_locality/helper.dl
+
+local function private amount:
+    execute:
+        return 3
+
+print lines (shared late amount) and (private amount)

@@ -1,0 +1,11 @@
+import lib/std.dl
+
+to show nested number scopes:
+    to get inner half:
+        in this function, by default:
+            numbers are floating-point
+        return 1 / 2
+    print line inner half
+    print line 1 / 2
+
+show nested number scopes

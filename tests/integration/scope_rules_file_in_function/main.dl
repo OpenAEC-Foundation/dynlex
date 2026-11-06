@@ -1,0 +1,8 @@
+import lib/std.dl
+
+# A never-called function still declares a file-wide number rule.
+to declare the file number rule:
+    in this file, by default:
+        numbers are floating-point
+
+print line 1 / 2

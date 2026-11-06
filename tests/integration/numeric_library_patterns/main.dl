@@ -1,0 +1,30 @@
+import lib/std.dl
+
+# Finite tests must reject NaN and both infinities at either precision.
+to require {boolean:condition}:
+    if not condition:
+        abort the program
+
+to check {floating-point number:value} is finite with expectation {boolean:expected}:
+    require ((value is finite) = expected)
+
+check 0.0 is finite with expectation true
+check -1.0 is finite with expectation true
+check 1.7976931348623157e308 is finite with expectation true
+check -1.7976931348623157e308 is finite with expectation true
+check (1.0 / 0.0) is finite with expectation false
+check (-1.0 / 0.0) is finite with expectation false
+check (0.0 / 0.0) is finite with expectation false
+check (3.4028234663852886e38 as a 32 bit floating-point number) is finite with expectation true
+check ((1.0 / 0.0) as a 32 bit floating-point number) is finite with expectation false
+check ((0.0 / 0.0) as a 32 bit floating-point number) is finite with expectation false
+require ((the radians in a full turn) = 6.283185307179586)
+require ((the radians in a half turn) = 3.141592653589793)
+require ((the radians in a quarter turn) = 1.5707963267948966)
+require ((the largest 64 bit floating-point number) = 1.7976931348623157e308)
+set values to [0.4, 0.3, -1.0, 1.0] as a 32 bit floating-point number array of 4 items
+require ((the size of the type of values) = 16)
+require ((the item at 0 in values) = (0.4 as a 32 bit floating-point number))
+require ((the item at 1 in values) = (0.3 as a 32 bit floating-point number))
+require ((the item at 2 in values) = -1.0)
+print line "numeric library patterns passed"

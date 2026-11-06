@@ -93,17 +93,17 @@ local function snapshot workspace resource at {string:path} identified by {strin
                 if not existing's descendant scan completion:
                     set existing's descendant scan completion to true
                     snapshot workspace directory descendants of existing for change protocol using context in plan
-            @intrinsic("return")
+            return nothing
         set entry to the file system entry at path
         if entry lookup failed:
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace resource could not be inspected" at change protocol)
-            @intrinsic("return")
+            return nothing
         if entry is a symbolic link:
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace edit paths may not traverse symbolic links" at change protocol)
-            @intrinsic("return")
+            return nothing
         if entry has another filesystem kind:
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace resource must be a regular file or directory" at change protocol)
-            @intrinsic("return")
+            return nothing
         set kind to 0
         if entry is a regular file:
             set kind to the workspace regular file resource kind
@@ -114,7 +114,7 @@ local function snapshot workspace resource at {string:path} identified by {strin
             read the file at path and set reading to it
             if reading failed:
                 invalidate plan with (a failed workspace edit result reporting the string form of "Workspace file could not be read" at change protocol)
-                @intrinsic("return")
+                return nothing
             set contents to the contents of reading
         set document to the workspace open document identified by identity in context
         set opened to (document != (0 as a pointer to a workspace open document))
@@ -169,7 +169,7 @@ local function snapshot workspace directory descendants of {a pointer to a works
         open the directory at directory's original path and set enumeration to it
         if enumeration failed:
             invalidate plan with (a failed workspace edit result reporting the string form of "Workspace directory could not be read" at change protocol)
-            @intrinsic("return")
+            return nothing
         set reading to true
         loop while reading and plan is valid:
             read the next directory entry from enumeration and set child to it

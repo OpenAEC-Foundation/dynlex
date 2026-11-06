@@ -1,3 +1,5 @@
+import lib/std.dl
+
 print line 1
 
 in this file, by default:

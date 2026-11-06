@@ -22,91 +22,807 @@ import lib/ui_svg_types.dl
 
 to get the UI icon named {C string:name}:
     if name = "align-center":
-        return a UI SVG icon from [SVG open 17.0 12.0, SVG line 7.0 12.0, SVG end, SVG open 19.0 18.0, SVG line 5.0 18.0, SVG end, SVG open 21.0 6.0, SVG line 3.0 6.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 17.0 12.0,
+            SVG line 7.0 12.0,
+            SVG end,
+            SVG open 19.0 18.0,
+            SVG line 5.0 18.0,
+            SVG end,
+            SVG open 21.0 6.0,
+            SVG line 3.0 6.0,
+            SVG end
+        ]
     if name = "align-left":
-        return a UI SVG icon from [SVG open 15.0 12.0, SVG line 3.0 12.0, SVG end, SVG open 17.0 18.0, SVG line 3.0 18.0, SVG end, SVG open 21.0 6.0, SVG line 3.0 6.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 15.0 12.0,
+            SVG line 3.0 12.0,
+            SVG end,
+            SVG open 17.0 18.0,
+            SVG line 3.0 18.0,
+            SVG end,
+            SVG open 21.0 6.0,
+            SVG line 3.0 6.0,
+            SVG end
+        ]
     if name = "audio":
-        return a UI SVG icon from [SVG closed 11.0 4.702, SVG curve 10.99958819 4.41717099 10.82782548 4.16057066 10.5646544 4.05162702, SVG curve 10.30148332 3.94268338 9.99861039 4.00280113 9.797 4.204, SVG line 6.413 7.587, SVG curve 6.14921021 7.85236726 5.79017059 8.0010968 5.416 8.0, SVG line 3.0 8.0, SVG curve 2.44771525 8.0 2.0 8.44771525 2.0 9.0, SVG line 2.0 15.0, SVG curve 2.0 15.55228475 2.44771525 16.0 3.0 16.0, SVG line 5.416 16.0, SVG curve 5.79017059 15.9989032 6.14921021 16.14763274 6.413 16.413, SVG line 9.796 19.797, SVG curve 9.99764535 19.99904267 10.30122514 20.05955167 10.56492495 19.9502608, SVG curve 10.82862476 19.84096993 11.00039704 19.58345039 11.0 19.298, SVG end, SVG open 16.0 9.0, SVG curve 17.33333333 10.77777778 17.33333333 13.22222222 16.0 15.0, SVG end, SVG open 19.364 18.364, SVG curve 21.05185125 16.67616943 22.00007794 14.38696751 22.00007794 12.0, SVG curve 22.00007794 9.61303249 21.05185125 7.32383057 19.364 5.636, SVG end]
+        return a UI SVG icon from [
+            SVG closed 11.0 4.702,
+            SVG curve 10.99958819 4.41717099 10.82782548 4.16057066 10.5646544 4.05162702,
+            SVG curve 10.30148332 3.94268338 9.99861039 4.00280113 9.797 4.204,
+            SVG line 6.413 7.587,
+            SVG curve 6.14921021 7.85236726 5.79017059 8.0010968 5.416 8.0,
+            SVG line 3.0 8.0,
+            SVG curve 2.44771525 8.0 2.0 8.44771525 2.0 9.0,
+            SVG line 2.0 15.0,
+            SVG curve 2.0 15.55228475 2.44771525 16.0 3.0 16.0,
+            SVG line 5.416 16.0,
+            SVG curve 5.79017059 15.9989032 6.14921021 16.14763274 6.413 16.413,
+            SVG line 9.796 19.797,
+            SVG curve 9.99764535 19.99904267 10.30122514 20.05955167 10.56492495 19.9502608,
+            SVG curve 10.82862476 19.84096993 11.00039704 19.58345039 11.0 19.298,
+            SVG end,
+            SVG open 16.0 9.0,
+            SVG curve 17.33333333 10.77777778 17.33333333 13.22222222 16.0 15.0,
+            SVG end,
+            SVG open 19.364 18.364,
+            SVG curve 21.05185125 16.67616943 22.00007794 14.38696751 22.00007794 12.0,
+            SVG curve 22.00007794 9.61303249 21.05185125 7.32383057 19.364 5.636,
+            SVG end
+        ]
     if name = "background":
-        return a UI SVG icon from [SVG closed 19.0 11.0, SVG line 11.0 3.0, SVG line 2.4 11.6, SVG curve 1.63771425 12.37768702 1.63771425 13.62231298 2.4 14.4, SVG line 7.6 19.6, SVG curve 8.4 20.4 9.6 20.4 10.4 19.6, SVG line 19.0 11.0, SVG end, SVG open 5.0 2.0, SVG line 10.0 7.0, SVG end, SVG open 2.0 13.0, SVG line 17.0 13.0, SVG end, SVG closed 22.0 20.0, SVG curve 22.0 21.1045695 21.1045695 22.0 20.0 22.0, SVG curve 18.8954305 22.0 18.0 21.1045695 18.0 20.0, SVG curve 18.0 18.4 19.7 17.6 20.0 16.0, SVG curve 20.3 17.6 22.0 18.4 22.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 19.0 11.0,
+            SVG line 11.0 3.0,
+            SVG line 2.4 11.6,
+            SVG curve 1.63771425 12.37768702 1.63771425 13.62231298 2.4 14.4,
+            SVG line 7.6 19.6,
+            SVG curve 8.4 20.4 9.6 20.4 10.4 19.6,
+            SVG line 19.0 11.0,
+            SVG end,
+            SVG open 5.0 2.0,
+            SVG line 10.0 7.0,
+            SVG end,
+            SVG open 2.0 13.0,
+            SVG line 17.0 13.0,
+            SVG end,
+            SVG closed 22.0 20.0,
+            SVG curve 22.0 21.1045695 21.1045695 22.0 20.0 22.0,
+            SVG curve 18.8954305 22.0 18.0 21.1045695 18.0 20.0,
+            SVG curve 18.0 18.4 19.7 17.6 20.0 16.0,
+            SVG curve 20.3 17.6 22.0 18.4 22.0 20.0,
+            SVG end
+        ]
     if name = "bold":
-        return a UI SVG icon from [SVG open 6.0 12.0, SVG line 15.0 12.0, SVG curve 17.209139 12.0 19.0 13.790861 19.0 16.0, SVG curve 19.0 18.209139 17.209139 20.0 15.0 20.0, SVG line 7.0 20.0, SVG curve 6.44771525 20.0 6.0 19.55228475 6.0 19.0, SVG line 6.0 5.0, SVG curve 6.0 4.44771525 6.44771525 4.0 7.0 4.0, SVG line 14.0 4.0, SVG curve 16.209139 4.0 18.0 5.790861 18.0 8.0, SVG curve 18.0 10.209139 16.209139 12.0 14.0 12.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 6.0 12.0,
+            SVG line 15.0 12.0,
+            SVG curve 17.209139 12.0 19.0 13.790861 19.0 16.0,
+            SVG curve 19.0 18.209139 17.209139 20.0 15.0 20.0,
+            SVG line 7.0 20.0,
+            SVG curve 6.44771525 20.0 6.0 19.55228475 6.0 19.0,
+            SVG line 6.0 5.0,
+            SVG curve 6.0 4.44771525 6.44771525 4.0 7.0 4.0,
+            SVG line 14.0 4.0,
+            SVG curve 16.209139 4.0 18.0 5.790861 18.0 8.0,
+            SVG curve 18.0 10.209139 16.209139 12.0 14.0 12.0,
+            SVG end
+        ]
     if name = "brush":
-        return a UI SVG icon from [SVG open 14.622 17.897, SVG line 3.942 14.984, SVG end, SVG closed 18.376 2.622, SVG curve 18.91225565 2.08574433 19.69386529 1.87631265 20.42640415 2.07259584, SVG curve 21.158943 2.26887903 21.73112097 2.841057 21.92740416 3.57359585, SVG curve 22.12368735 4.30613471 21.91425567 5.08774435 21.378 5.624, SVG line 17.36 9.643, SVG curve 17.16480903 9.83824993 17.16480903 10.15475007 17.36 10.35, SVG line 18.304 11.294, SVG curve 19.24499377 12.2351344 19.24499377 13.7608656 18.304 14.702, SVG line 17.36 15.646, SVG curve 17.16475007 15.84119097 16.84824993 15.84119097 16.653 15.646, SVG line 8.354 7.348, SVG curve 8.15880903 7.15275007 8.15880903 6.83624993 8.354 6.641, SVG line 9.298 5.697, SVG curve 10.2391344 4.75600623 11.7648656 4.75600623 12.706 5.697, SVG line 13.65 6.641, SVG curve 13.84524993 6.83619097 14.16175007 6.83619097 14.357 6.641, SVG end, SVG open 9.0 8.0, SVG curve 7.196 10.71 5.03 11.46 2.417 11.948, SVG curve 2.24063704 11.98019787 2.09439051 12.10314236 2.03236556 12.27134908, SVG curve 1.97034061 12.43955581 2.00176006 12.62801327 2.115 12.767, SVG line 9.435 21.65, SVG curve 9.7404401 21.97440689 10.22366342 22.0575947 10.62 21.854, SVG curve 12.735 20.405 16.0 16.792 16.0 15.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 14.622 17.897,
+            SVG line 3.942 14.984,
+            SVG end,
+            SVG closed 18.376 2.622,
+            SVG curve 18.91225565 2.08574433 19.69386529 1.87631265 20.42640415 2.07259584,
+            SVG curve 21.158943 2.26887903 21.73112097 2.841057 21.92740416 3.57359585,
+            SVG curve 22.12368735 4.30613471 21.91425567 5.08774435 21.378 5.624,
+            SVG line 17.36 9.643,
+            SVG curve 17.16480903 9.83824993 17.16480903 10.15475007 17.36 10.35,
+            SVG line 18.304 11.294,
+            SVG curve 19.24499377 12.2351344 19.24499377 13.7608656 18.304 14.702,
+            SVG line 17.36 15.646,
+            SVG curve 17.16475007 15.84119097 16.84824993 15.84119097 16.653 15.646,
+            SVG line 8.354 7.348,
+            SVG curve 8.15880903 7.15275007 8.15880903 6.83624993 8.354 6.641,
+            SVG line 9.298 5.697,
+            SVG curve 10.2391344 4.75600623 11.7648656 4.75600623 12.706 5.697,
+            SVG line 13.65 6.641,
+            SVG curve 13.84524993 6.83619097 14.16175007 6.83619097 14.357 6.641,
+            SVG end,
+            SVG open 9.0 8.0,
+            SVG curve 7.196 10.71 5.03 11.46 2.417 11.948,
+            SVG curve 2.24063704 11.98019787 2.09439051 12.10314236 2.03236556 12.27134908,
+            SVG curve 1.97034061 12.43955581 2.00176006 12.62801327 2.115 12.767,
+            SVG line 9.435 21.65,
+            SVG curve 9.7404401 21.97440689 10.22366342 22.0575947 10.62 21.854,
+            SVG curve 12.735 20.405 16.0 16.792 16.0 15.0,
+            SVG end
+        ]
     if name = "chart":
-        return a UI SVG icon from [SVG open 3.0 3.0, SVG line 3.0 19.0, SVG curve 3.0 20.1045695 3.8954305 21.0 5.0 21.0, SVG line 21.0 21.0, SVG end, SVG open 18.0 17.0, SVG line 18.0 9.0, SVG end, SVG open 13.0 17.0, SVG line 13.0 5.0, SVG end, SVG open 8.0 17.0, SVG line 8.0 14.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 3.0 3.0,
+            SVG line 3.0 19.0,
+            SVG curve 3.0 20.1045695 3.8954305 21.0 5.0 21.0,
+            SVG line 21.0 21.0,
+            SVG end,
+            SVG open 18.0 17.0,
+            SVG line 18.0 9.0,
+            SVG end,
+            SVG open 13.0 17.0,
+            SVG line 13.0 5.0,
+            SVG end,
+            SVG open 8.0 17.0,
+            SVG line 8.0 14.0,
+            SVG end
+        ]
     if name = "check":
-        return a UI SVG icon from [SVG open 20.0 6.0, SVG line 9.0 17.0, SVG line 4.0 12.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 20.0 6.0,
+            SVG line 9.0 17.0,
+            SVG line 4.0 12.0,
+            SVG end
+        ]
     if name = "chevron":
-        return a UI SVG icon from [SVG open 9.0 18.0, SVG line 15.0 12.0, SVG line 9.0 6.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 9.0 18.0,
+            SVG line 15.0 12.0,
+            SVG line 9.0 6.0,
+            SVG end
+        ]
     if name = "clock":
-        return a UI SVG icon from [SVG closed 22.0 12.0, SVG curve 22.0 17.5228475 17.5228475 22.0 12.0 22.0, SVG curve 6.4771525 22.0 2.0 17.5228475 2.0 12.0, SVG curve 2.0 6.4771525 6.4771525 2.0 12.0 2.0, SVG curve 17.5228475 2.0 22.0 6.4771525 22.0 12.0, SVG end, SVG open 12.0 6.0, SVG line 12.0 12.0, SVG line 16.0 14.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 22.0 12.0,
+            SVG curve 22.0 17.5228475 17.5228475 22.0 12.0 22.0,
+            SVG curve 6.4771525 22.0 2.0 17.5228475 2.0 12.0,
+            SVG curve 2.0 6.4771525 6.4771525 2.0 12.0 2.0,
+            SVG curve 17.5228475 2.0 22.0 6.4771525 22.0 12.0,
+            SVG end,
+            SVG open 12.0 6.0,
+            SVG line 12.0 12.0,
+            SVG line 16.0 14.0,
+            SVG end
+        ]
     if name = "colors":
-        return a UI SVG icon from [SVG closed 11.0 17.0, SVG curve 11.0 19.209139 9.209139 21.0 7.0 21.0, SVG curve 4.790861 21.0 3.0 19.209139 3.0 17.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG line 9.0 3.0, SVG curve 10.1045695 3.0 11.0 3.8954305 11.0 5.0, SVG end, SVG open 16.7 13.0, SVG line 19.0 13.0, SVG curve 20.1045695 13.0 21.0 13.8954305 21.0 15.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 7.0 21.0, SVG end, SVG open 7.0 17.0, SVG line 7.01 17.0, SVG end, SVG open 11.0 8.0, SVG line 13.3 5.7, SVG curve 13.75101541 5.24740962 14.36388554 4.99334659 15.00283185 4.99409741, SVG curve 15.64177816 4.99484823 16.2540495 5.2503509 16.704 5.704, SVG line 18.6 7.6, SVG curve 19.06585147 8.04809791 19.33126046 8.66516156 19.3361543 9.31152475, SVG curve 19.34104814 9.95788794 19.08501304 10.57889962 18.626 11.034, SVG line 9.9 19.8, SVG end]
+        return a UI SVG icon from [
+            SVG closed 11.0 17.0,
+            SVG curve 11.0 19.209139 9.209139 21.0 7.0 21.0,
+            SVG curve 4.790861 21.0 3.0 19.209139 3.0 17.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG line 9.0 3.0,
+            SVG curve 10.1045695 3.0 11.0 3.8954305 11.0 5.0,
+            SVG end,
+            SVG open 16.7 13.0,
+            SVG line 19.0 13.0,
+            SVG curve 20.1045695 13.0 21.0 13.8954305 21.0 15.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 7.0 21.0,
+            SVG end,
+            SVG open 7.0 17.0,
+            SVG line 7.01 17.0,
+            SVG end,
+            SVG open 11.0 8.0,
+            SVG line 13.3 5.7,
+            SVG curve 13.75101541 5.24740962 14.36388554 4.99334659 15.00283185 4.99409741,
+            SVG curve 15.64177816 4.99484823 16.2540495 5.2503509 16.704 5.704,
+            SVG line 18.6 7.6,
+            SVG curve 19.06585147 8.04809791 19.33126046 8.66516156 19.3361543 9.31152475,
+            SVG curve 19.34104814 9.95788794 19.08501304 10.57889962 18.626 11.034,
+            SVG line 9.9 19.8,
+            SVG end
+        ]
     if name = "comment":
-        return a UI SVG icon from [SVG closed 21.0 15.0, SVG curve 21.0 16.1045695 20.1045695 17.0 19.0 17.0, SVG line 7.0 17.0, SVG line 3.0 21.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 21.0 15.0,
+            SVG curve 21.0 16.1045695 20.1045695 17.0 19.0 17.0,
+            SVG line 7.0 17.0,
+            SVG line 3.0 21.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG end
+        ]
     if name = "copy":
-        return a UI SVG icon from [SVG closed 10.0 8.0, SVG line 20.0 8.0, SVG curve 21.1045695 8.0 22.0 8.8954305 22.0 10.0, SVG line 22.0 20.0, SVG curve 22.0 21.1045695 21.1045695 22.0 20.0 22.0, SVG line 10.0 22.0, SVG curve 8.8954305 22.0 8.0 21.1045695 8.0 20.0, SVG line 8.0 10.0, SVG curve 8.0 8.8954305 8.8954305 8.0 10.0 8.0, SVG end, SVG open 4.0 16.0, SVG curve 2.9 16.0 2.0 15.1 2.0 14.0, SVG line 2.0 4.0, SVG curve 2.0 2.9 2.9 2.0 4.0 2.0, SVG line 14.0 2.0, SVG curve 15.1 2.0 16.0 2.9 16.0 4.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 10.0 8.0,
+            SVG line 20.0 8.0,
+            SVG curve 21.1045695 8.0 22.0 8.8954305 22.0 10.0,
+            SVG line 22.0 20.0,
+            SVG curve 22.0 21.1045695 21.1045695 22.0 20.0 22.0,
+            SVG line 10.0 22.0,
+            SVG curve 8.8954305 22.0 8.0 21.1045695 8.0 20.0,
+            SVG line 8.0 10.0,
+            SVG curve 8.0 8.8954305 8.8954305 8.0 10.0 8.0,
+            SVG end,
+            SVG open 4.0 16.0,
+            SVG curve 2.9 16.0 2.0 15.1 2.0 14.0,
+            SVG line 2.0 4.0,
+            SVG curve 2.0 2.9 2.9 2.0 4.0 2.0,
+            SVG line 14.0 2.0,
+            SVG curve 15.1 2.0 16.0 2.9 16.0 4.0,
+            SVG end
+        ]
     if name = "cut":
-        return a UI SVG icon from [SVG closed 9.0 6.0, SVG curve 9.0 7.65685425 7.65685425 9.0 6.0 9.0, SVG curve 4.34314575 9.0 3.0 7.65685425 3.0 6.0, SVG curve 3.0 4.34314575 4.34314575 3.0 6.0 3.0, SVG curve 7.65685425 3.0 9.0 4.34314575 9.0 6.0, SVG end, SVG open 8.12 8.12, SVG line 12.0 12.0, SVG end, SVG open 20.0 4.0, SVG line 8.12 15.88, SVG end, SVG closed 9.0 18.0, SVG curve 9.0 19.65685425 7.65685425 21.0 6.0 21.0, SVG curve 4.34314575 21.0 3.0 19.65685425 3.0 18.0, SVG curve 3.0 16.34314575 4.34314575 15.0 6.0 15.0, SVG curve 7.65685425 15.0 9.0 16.34314575 9.0 18.0, SVG end, SVG open 14.8 14.8, SVG line 20.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 9.0 6.0,
+            SVG curve 9.0 7.65685425 7.65685425 9.0 6.0 9.0,
+            SVG curve 4.34314575 9.0 3.0 7.65685425 3.0 6.0,
+            SVG curve 3.0 4.34314575 4.34314575 3.0 6.0 3.0,
+            SVG curve 7.65685425 3.0 9.0 4.34314575 9.0 6.0,
+            SVG end,
+            SVG open 8.12 8.12,
+            SVG line 12.0 12.0,
+            SVG end,
+            SVG open 20.0 4.0,
+            SVG line 8.12 15.88,
+            SVG end,
+            SVG closed 9.0 18.0,
+            SVG curve 9.0 19.65685425 7.65685425 21.0 6.0 21.0,
+            SVG curve 4.34314575 21.0 3.0 19.65685425 3.0 18.0,
+            SVG curve 3.0 16.34314575 4.34314575 15.0 6.0 15.0,
+            SVG curve 7.65685425 15.0 9.0 16.34314575 9.0 18.0,
+            SVG end,
+            SVG open 14.8 14.8,
+            SVG line 20.0 20.0,
+            SVG end
+        ]
     if name = "down":
-        return a UI SVG icon from [SVG open 6.0 9.0, SVG line 12.0 15.0, SVG line 18.0 9.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 6.0 9.0,
+            SVG line 12.0 15.0,
+            SVG line 18.0 9.0,
+            SVG end
+        ]
     if name = "eye":
-        return a UI SVG icon from [SVG open 2.062 12.348, SVG curve 1.97865938 12.12348455 1.97865938 11.87651545 2.062 11.652, SVG curve 3.72202302 7.62690779 7.64603127 5.00061635 12.0 5.00061635, SVG curve 16.35396873 5.00061635 20.27797698 7.62690779 21.938 11.652, SVG curve 22.02134062 11.87651545 22.02134062 12.12348455 21.938 12.348, SVG curve 20.27797698 16.37309221 16.35396873 18.99938365 12.0 18.99938365, SVG curve 7.64603127 18.99938365 3.72202302 16.37309221 2.062 12.348, SVG end, SVG closed 15.0 12.0, SVG curve 15.0 13.65685425 13.65685425 15.0 12.0 15.0, SVG curve 10.34314575 15.0 9.0 13.65685425 9.0 12.0, SVG curve 9.0 10.34314575 10.34314575 9.0 12.0 9.0, SVG curve 13.65685425 9.0 15.0 10.34314575 15.0 12.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 2.062 12.348,
+            SVG curve 1.97865938 12.12348455 1.97865938 11.87651545 2.062 11.652,
+            SVG curve 3.72202302 7.62690779 7.64603127 5.00061635 12.0 5.00061635,
+            SVG curve 16.35396873 5.00061635 20.27797698 7.62690779 21.938 11.652,
+            SVG curve 22.02134062 11.87651545 22.02134062 12.12348455 21.938 12.348,
+            SVG curve 20.27797698 16.37309221 16.35396873 18.99938365 12.0 18.99938365,
+            SVG curve 7.64603127 18.99938365 3.72202302 16.37309221 2.062 12.348,
+            SVG end,
+            SVG closed 15.0 12.0,
+            SVG curve 15.0 13.65685425 13.65685425 15.0 12.0 15.0,
+            SVG curve 10.34314575 15.0 9.0 13.65685425 9.0 12.0,
+            SVG curve 9.0 10.34314575 10.34314575 9.0 12.0 9.0,
+            SVG curve 13.65685425 9.0 15.0 10.34314575 15.0 12.0,
+            SVG end
+        ]
     if name = "find":
-        return a UI SVG icon from [SVG closed 19.0 11.0, SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0, SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0, SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0, SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0, SVG end, SVG open 21.0 21.0, SVG line 16.7 16.7, SVG end]
+        return a UI SVG icon from [
+            SVG closed 19.0 11.0,
+            SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0,
+            SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0,
+            SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0,
+            SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0,
+            SVG end,
+            SVG open 21.0 21.0,
+            SVG line 16.7 16.7,
+            SVG end
+        ]
     if name = "grid":
-        return a UI SVG icon from [SVG open 12.0 3.0, SVG line 12.0 21.0, SVG end, SVG open 3.0 12.0, SVG line 21.0 12.0, SVG end, SVG closed 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 12.0 3.0,
+            SVG line 12.0 21.0,
+            SVG end,
+            SVG open 3.0 12.0,
+            SVG line 21.0 12.0,
+            SVG end,
+            SVG closed 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end
+        ]
     if name = "italic":
-        return a UI SVG icon from [SVG open 19.0 4.0, SVG line 10.0 4.0, SVG end, SVG open 14.0 20.0, SVG line 5.0 20.0, SVG end, SVG open 15.0 4.0, SVG line 9.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 19.0 4.0,
+            SVG line 10.0 4.0,
+            SVG end,
+            SVG open 14.0 20.0,
+            SVG line 5.0 20.0,
+            SVG end,
+            SVG open 15.0 4.0,
+            SVG line 9.0 20.0,
+            SVG end
+        ]
     if name = "layout":
-        return a UI SVG icon from [SVG closed 4.0 3.0, SVG line 20.0 3.0, SVG curve 20.55228475 3.0 21.0 3.44771525 21.0 4.0, SVG line 21.0 9.0, SVG curve 21.0 9.55228475 20.55228475 10.0 20.0 10.0, SVG line 4.0 10.0, SVG curve 3.44771525 10.0 3.0 9.55228475 3.0 9.0, SVG line 3.0 4.0, SVG curve 3.0 3.44771525 3.44771525 3.0 4.0 3.0, SVG end, SVG closed 4.0 14.0, SVG line 9.0 14.0, SVG curve 9.55228475 14.0 10.0 14.44771525 10.0 15.0, SVG line 10.0 20.0, SVG curve 10.0 20.55228475 9.55228475 21.0 9.0 21.0, SVG line 4.0 21.0, SVG curve 3.44771525 21.0 3.0 20.55228475 3.0 20.0, SVG line 3.0 15.0, SVG curve 3.0 14.44771525 3.44771525 14.0 4.0 14.0, SVG end, SVG closed 15.0 14.0, SVG line 20.0 14.0, SVG curve 20.55228475 14.0 21.0 14.44771525 21.0 15.0, SVG line 21.0 20.0, SVG curve 21.0 20.55228475 20.55228475 21.0 20.0 21.0, SVG line 15.0 21.0, SVG curve 14.44771525 21.0 14.0 20.55228475 14.0 20.0, SVG line 14.0 15.0, SVG curve 14.0 14.44771525 14.44771525 14.0 15.0 14.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 4.0 3.0,
+            SVG line 20.0 3.0,
+            SVG curve 20.55228475 3.0 21.0 3.44771525 21.0 4.0,
+            SVG line 21.0 9.0,
+            SVG curve 21.0 9.55228475 20.55228475 10.0 20.0 10.0,
+            SVG line 4.0 10.0,
+            SVG curve 3.44771525 10.0 3.0 9.55228475 3.0 9.0,
+            SVG line 3.0 4.0,
+            SVG curve 3.0 3.44771525 3.44771525 3.0 4.0 3.0,
+            SVG end,
+            SVG closed 4.0 14.0,
+            SVG line 9.0 14.0,
+            SVG curve 9.55228475 14.0 10.0 14.44771525 10.0 15.0,
+            SVG line 10.0 20.0,
+            SVG curve 10.0 20.55228475 9.55228475 21.0 9.0 21.0,
+            SVG line 4.0 21.0,
+            SVG curve 3.44771525 21.0 3.0 20.55228475 3.0 20.0,
+            SVG line 3.0 15.0,
+            SVG curve 3.0 14.44771525 3.44771525 14.0 4.0 14.0,
+            SVG end,
+            SVG closed 15.0 14.0,
+            SVG line 20.0 14.0,
+            SVG curve 20.55228475 14.0 21.0 14.44771525 21.0 15.0,
+            SVG line 21.0 20.0,
+            SVG curve 21.0 20.55228475 20.55228475 21.0 20.0 21.0,
+            SVG line 15.0 21.0,
+            SVG curve 14.44771525 21.0 14.0 20.55228475 14.0 20.0,
+            SVG line 14.0 15.0,
+            SVG curve 14.0 14.44771525 14.44771525 14.0 15.0 14.0,
+            SVG end
+        ]
     if name = "link":
-        return a UI SVG icon from [SVG open 10.0 13.0, SVG curve 10.86895549 14.16169292 12.1996273 14.88870043 13.64664987 14.99233334, SVG curve 15.09367243 15.09596626 16.5143658 14.56600613 17.54 13.54, SVG line 20.54 10.54, SVG curve 22.43486105 8.57810557 22.40776187 5.45957611 20.47909288 3.53090712, SVG curve 18.55042389 1.60223813 15.43189443 1.57513895 13.47 3.47, SVG line 11.75 5.18, SVG end, SVG open 14.0 11.0, SVG curve 13.13104451 9.83830708 11.8003727 9.11129957 10.35335013 9.00766666, SVG curve 8.90632757 8.90403374 7.4856342 9.43399387 6.46 10.46, SVG line 3.46 13.46, SVG curve 1.56513895 15.42189443 1.59223813 18.54042389 3.52090712 20.46909288, SVG curve 5.44957611 22.39776187 8.56810557 22.42486105 10.53 20.53, SVG line 12.24 18.82, SVG end]
+        return a UI SVG icon from [
+            SVG open 10.0 13.0,
+            SVG curve 10.86895549 14.16169292 12.1996273 14.88870043 13.64664987 14.99233334,
+            SVG curve 15.09367243 15.09596626 16.5143658 14.56600613 17.54 13.54,
+            SVG line 20.54 10.54,
+            SVG curve 22.43486105 8.57810557 22.40776187 5.45957611 20.47909288 3.53090712,
+            SVG curve 18.55042389 1.60223813 15.43189443 1.57513895 13.47 3.47,
+            SVG line 11.75 5.18,
+            SVG end,
+            SVG open 14.0 11.0,
+            SVG curve 13.13104451 9.83830708 11.8003727 9.11129957 10.35335013 9.00766666,
+            SVG curve 8.90632757 8.90403374 7.4856342 9.43399387 6.46 10.46,
+            SVG line 3.46 13.46,
+            SVG curve 1.56513895 15.42189443 1.59223813 18.54042389 3.52090712 20.46909288,
+            SVG curve 5.44957611 22.39776187 8.56810557 22.42486105 10.53 20.53,
+            SVG line 12.24 18.82,
+            SVG end
+        ]
     if name = "list":
-        return a UI SVG icon from [SVG open 3.0 12.0, SVG line 3.01 12.0, SVG end, SVG open 3.0 18.0, SVG line 3.01 18.0, SVG end, SVG open 3.0 6.0, SVG line 3.01 6.0, SVG end, SVG open 8.0 12.0, SVG line 21.0 12.0, SVG end, SVG open 8.0 18.0, SVG line 21.0 18.0, SVG end, SVG open 8.0 6.0, SVG line 21.0 6.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 3.0 12.0,
+            SVG line 3.01 12.0,
+            SVG end,
+            SVG open 3.0 18.0,
+            SVG line 3.01 18.0,
+            SVG end,
+            SVG open 3.0 6.0,
+            SVG line 3.01 6.0,
+            SVG end,
+            SVG open 8.0 12.0,
+            SVG line 21.0 12.0,
+            SVG end,
+            SVG open 8.0 18.0,
+            SVG line 21.0 18.0,
+            SVG end,
+            SVG open 8.0 6.0,
+            SVG line 21.0 6.0,
+            SVG end
+        ]
     if name = "paste":
-        return a UI SVG icon from [SVG closed 15.0 2.0, SVG line 9.0 2.0, SVG curve 8.44771525 2.0 8.0 2.44771525 8.0 3.0, SVG line 8.0 5.0, SVG curve 8.0 5.6 8.4 6.0 9.0 6.0, SVG line 15.0 6.0, SVG curve 15.6 6.0 16.0 5.6 16.0 5.0, SVG line 16.0 3.0, SVG curve 16.0 2.4 15.6 2.0 15.0 2.0, SVG end, SVG open 8.0 4.0, SVG line 6.0 4.0, SVG curve 4.8954305 4.0 4.0 4.8954305 4.0 6.0, SVG line 4.0 20.0, SVG curve 4.0 21.1045695 4.8954305 22.0 6.0 22.0, SVG line 18.0 22.0, SVG curve 19.1045695 22.0 20.0 21.1045695 20.0 20.0, SVG end, SVG open 16.0 4.0, SVG line 18.0 4.0, SVG curve 19.1045695 4.0 20.0 4.8954305 20.0 6.0, SVG line 20.0 8.0, SVG end, SVG open 11.0 14.0, SVG line 21.0 14.0, SVG end, SVG open 17.0 10.0, SVG line 21.0 14.0, SVG line 17.0 18.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 15.0 2.0,
+            SVG line 9.0 2.0,
+            SVG curve 8.44771525 2.0 8.0 2.44771525 8.0 3.0,
+            SVG line 8.0 5.0,
+            SVG curve 8.0 5.6 8.4 6.0 9.0 6.0,
+            SVG line 15.0 6.0,
+            SVG curve 15.6 6.0 16.0 5.6 16.0 5.0,
+            SVG line 16.0 3.0,
+            SVG curve 16.0 2.4 15.6 2.0 15.0 2.0,
+            SVG end,
+            SVG open 8.0 4.0,
+            SVG line 6.0 4.0,
+            SVG curve 4.8954305 4.0 4.0 4.8954305 4.0 6.0,
+            SVG line 4.0 20.0,
+            SVG curve 4.0 21.1045695 4.8954305 22.0 6.0 22.0,
+            SVG line 18.0 22.0,
+            SVG curve 19.1045695 22.0 20.0 21.1045695 20.0 20.0,
+            SVG end,
+            SVG open 16.0 4.0,
+            SVG line 18.0 4.0,
+            SVG curve 19.1045695 4.0 20.0 4.8954305 20.0 6.0,
+            SVG line 20.0 8.0,
+            SVG end,
+            SVG open 11.0 14.0,
+            SVG line 21.0 14.0,
+            SVG end,
+            SVG open 17.0 10.0,
+            SVG line 21.0 14.0,
+            SVG line 17.0 18.0,
+            SVG end
+        ]
     if name = "picture":
-        return a UI SVG icon from [SVG closed 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end, SVG closed 11.0 9.0, SVG curve 11.0 10.1045695 10.1045695 11.0 9.0 11.0, SVG curve 7.8954305 11.0 7.0 10.1045695 7.0 9.0, SVG curve 7.0 7.8954305 7.8954305 7.0 9.0 7.0, SVG curve 10.1045695 7.0 11.0 7.8954305 11.0 9.0, SVG end, SVG open 21.0 15.0, SVG line 17.914 11.914, SVG curve 17.1330003 11.13323612 15.8669997 11.13323612 15.086 11.914, SVG line 6.0 21.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end,
+            SVG closed 11.0 9.0,
+            SVG curve 11.0 10.1045695 10.1045695 11.0 9.0 11.0,
+            SVG curve 7.8954305 11.0 7.0 10.1045695 7.0 9.0,
+            SVG curve 7.0 7.8954305 7.8954305 7.0 9.0 7.0,
+            SVG curve 10.1045695 7.0 11.0 7.8954305 11.0 9.0,
+            SVG end,
+            SVG open 21.0 15.0,
+            SVG line 17.914 11.914,
+            SVG curve 17.1330003 11.13323612 15.8669997 11.13323612 15.086 11.914,
+            SVG line 6.0 21.0,
+            SVG end
+        ]
     if name = "play":
-        return a UI SVG icon from [SVG closed 6.0 3.0, SVG line 20.0 12.0, SVG line 6.0 21.0, SVG line 6.0 3.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 6.0 3.0,
+            SVG line 20.0 12.0,
+            SVG line 6.0 21.0,
+            SVG line 6.0 3.0,
+            SVG end
+        ]
     if name = "redo":
-        return a UI SVG icon from [SVG open 15.0 14.0, SVG line 20.0 9.0, SVG line 15.0 4.0, SVG end, SVG open 20.0 9.0, SVG line 9.5 9.0, SVG curve 6.46243388 9.0 4.0 11.46243388 4.0 14.5, SVG curve 4.0 17.53756612 6.46243388 20.0 9.5 20.0, SVG line 13.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 15.0 14.0,
+            SVG line 20.0 9.0,
+            SVG line 15.0 4.0,
+            SVG end,
+            SVG open 20.0 9.0,
+            SVG line 9.5 9.0,
+            SVG curve 6.46243388 9.0 4.0 11.46243388 4.0 14.5,
+            SVG curve 4.0 17.53756612 6.46243388 20.0 9.5 20.0,
+            SVG line 13.0 20.0,
+            SVG end
+        ]
     if name = "replace":
-        return a UI SVG icon from [SVG open 14.0 4.0, SVG curve 14.0 2.8954305 14.8954305 2.0 16.0 2.0, SVG end, SVG open 16.0 10.0, SVG curve 14.8954305 10.0 14.0 9.1045695 14.0 8.0, SVG end, SVG open 20.0 2.0, SVG curve 21.1045695 2.0 22.0 2.8954305 22.0 4.0, SVG end, SVG open 22.0 8.0, SVG curve 22.0 9.1045695 21.1045695 10.0 20.0 10.0, SVG end, SVG open 3.0 7.0, SVG line 6.0 10.0, SVG line 9.0 7.0, SVG end, SVG open 6.0 10.0, SVG line 6.0 5.0, SVG curve 6.0 3.34314575 7.34314575 2.0 9.0 2.0, SVG line 10.0 2.0, SVG end, SVG closed 4.0 14.0, SVG line 8.0 14.0, SVG curve 9.1045695 14.0 10.0 14.8954305 10.0 16.0, SVG line 10.0 20.0, SVG curve 10.0 21.1045695 9.1045695 22.0 8.0 22.0, SVG line 4.0 22.0, SVG curve 2.8954305 22.0 2.0 21.1045695 2.0 20.0, SVG line 2.0 16.0, SVG curve 2.0 14.8954305 2.8954305 14.0 4.0 14.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 14.0 4.0,
+            SVG curve 14.0 2.8954305 14.8954305 2.0 16.0 2.0,
+            SVG end,
+            SVG open 16.0 10.0,
+            SVG curve 14.8954305 10.0 14.0 9.1045695 14.0 8.0,
+            SVG end,
+            SVG open 20.0 2.0,
+            SVG curve 21.1045695 2.0 22.0 2.8954305 22.0 4.0,
+            SVG end,
+            SVG open 22.0 8.0,
+            SVG curve 22.0 9.1045695 21.1045695 10.0 20.0 10.0,
+            SVG end,
+            SVG open 3.0 7.0,
+            SVG line 6.0 10.0,
+            SVG line 9.0 7.0,
+            SVG end,
+            SVG open 6.0 10.0,
+            SVG line 6.0 5.0,
+            SVG curve 6.0 3.34314575 7.34314575 2.0 9.0 2.0,
+            SVG line 10.0 2.0,
+            SVG end,
+            SVG closed 4.0 14.0,
+            SVG line 8.0 14.0,
+            SVG curve 9.1045695 14.0 10.0 14.8954305 10.0 16.0,
+            SVG line 10.0 20.0,
+            SVG curve 10.0 21.1045695 9.1045695 22.0 8.0 22.0,
+            SVG line 4.0 22.0,
+            SVG curve 2.8954305 22.0 2.0 21.1045695 2.0 20.0,
+            SVG line 2.0 16.0,
+            SVG curve 2.0 14.8954305 2.8954305 14.0 4.0 14.0,
+            SVG end
+        ]
     if name = "reset":
-        return a UI SVG icon from [SVG open 3.0 12.0, SVG curve 3.0 16.97056275 7.02943725 21.0 12.0 21.0, SVG curve 16.97056275 21.0 21.0 16.97056275 21.0 12.0, SVG curve 21.0 7.02943725 16.97056275 3.0 12.0 3.0, SVG curve 9.48395193 3.0094651 7.06896905 3.99122372 5.26 5.74, SVG line 3.0 8.0, SVG end, SVG open 3.0 3.0, SVG line 3.0 8.0, SVG line 8.0 8.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 3.0 12.0,
+            SVG curve 3.0 16.97056275 7.02943725 21.0 12.0 21.0,
+            SVG curve 16.97056275 21.0 21.0 16.97056275 21.0 12.0,
+            SVG curve 21.0 7.02943725 16.97056275 3.0 12.0 3.0,
+            SVG curve 9.48395193 3.0094651 7.06896905 3.99122372 5.26 5.74,
+            SVG line 3.0 8.0,
+            SVG end,
+            SVG open 3.0 3.0,
+            SVG line 3.0 8.0,
+            SVG line 8.0 8.0,
+            SVG end
+        ]
     if name = "ruler":
-        return a UI SVG icon from [SVG closed 21.3 15.3, SVG curve 21.75189084 15.75032449 22.00589257 16.36203645 22.00589257 17.0, SVG curve 22.00589257 17.63796355 21.75189084 18.24967551 21.3 18.7, SVG line 18.7 21.3, SVG curve 18.24967551 21.75189084 17.63796355 22.00589257 17.0 22.00589257, SVG curve 16.36203645 22.00589257 15.75032449 21.75189084 15.3 21.3, SVG line 2.7 8.7, SVG curve 1.76432628 7.75978842 1.76432628 6.24021158 2.7 5.3, SVG line 5.3 2.7, SVG curve 6.24021158 1.76432628 7.75978842 1.76432628 8.7 2.7, SVG end, SVG open 14.5 12.5, SVG line 16.5 10.5, SVG end, SVG open 11.5 9.5, SVG line 13.5 7.5, SVG end, SVG open 8.5 6.5, SVG line 10.5 4.5, SVG end, SVG open 17.5 15.5, SVG line 19.5 13.5, SVG end]
+        return a UI SVG icon from [
+            SVG closed 21.3 15.3,
+            SVG curve 21.75189084 15.75032449 22.00589257 16.36203645 22.00589257 17.0,
+            SVG curve 22.00589257 17.63796355 21.75189084 18.24967551 21.3 18.7,
+            SVG line 18.7 21.3,
+            SVG curve 18.24967551 21.75189084 17.63796355 22.00589257 17.0 22.00589257,
+            SVG curve 16.36203645 22.00589257 15.75032449 21.75189084 15.3 21.3,
+            SVG line 2.7 8.7,
+            SVG curve 1.76432628 7.75978842 1.76432628 6.24021158 2.7 5.3,
+            SVG line 5.3 2.7,
+            SVG curve 6.24021158 1.76432628 7.75978842 1.76432628 8.7 2.7,
+            SVG end,
+            SVG open 14.5 12.5,
+            SVG line 16.5 10.5,
+            SVG end,
+            SVG open 11.5 9.5,
+            SVG line 13.5 7.5,
+            SVG end,
+            SVG open 8.5 6.5,
+            SVG line 10.5 4.5,
+            SVG end,
+            SVG open 17.5 15.5,
+            SVG line 19.5 13.5,
+            SVG end
+        ]
     if name = "save":
-        return a UI SVG icon from [SVG closed 15.2 3.0, SVG curve 15.72753853 3.0075141 16.23073908 3.22317147 16.6 3.6, SVG line 20.4 7.4, SVG curve 20.77682853 7.76926092 20.9924859 8.27246147 21.0 8.8, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end, SVG open 17.0 21.0, SVG line 17.0 14.0, SVG curve 17.0 13.44771525 16.55228475 13.0 16.0 13.0, SVG line 8.0 13.0, SVG curve 7.44771525 13.0 7.0 13.44771525 7.0 14.0, SVG line 7.0 21.0, SVG end, SVG open 7.0 3.0, SVG line 7.0 7.0, SVG curve 7.0 7.55228475 7.44771525 8.0 8.0 8.0, SVG line 15.0 8.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 15.2 3.0,
+            SVG curve 15.72753853 3.0075141 16.23073908 3.22317147 16.6 3.6,
+            SVG line 20.4 7.4,
+            SVG curve 20.77682853 7.76926092 20.9924859 8.27246147 21.0 8.8,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end,
+            SVG open 17.0 21.0,
+            SVG line 17.0 14.0,
+            SVG curve 17.0 13.44771525 16.55228475 13.0 16.0 13.0,
+            SVG line 8.0 13.0,
+            SVG curve 7.44771525 13.0 7.0 13.44771525 7.0 14.0,
+            SVG line 7.0 21.0,
+            SVG end,
+            SVG open 7.0 3.0,
+            SVG line 7.0 7.0,
+            SVG curve 7.0 7.55228475 7.44771525 8.0 8.0 8.0,
+            SVG line 15.0 8.0,
+            SVG end
+        ]
     if name = "search":
-        return a UI SVG icon from [SVG closed 19.0 11.0, SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0, SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0, SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0, SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0, SVG end, SVG open 21.0 21.0, SVG line 16.7 16.7, SVG end]
+        return a UI SVG icon from [
+            SVG closed 19.0 11.0,
+            SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0,
+            SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0,
+            SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0,
+            SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0,
+            SVG end,
+            SVG open 21.0 21.0,
+            SVG line 16.7 16.7,
+            SVG end
+        ]
     if name = "shapes":
-        return a UI SVG icon from [SVG closed 8.3 10.0, SVG curve 8.03715009 10.01434608 7.78847476 9.88001381 7.65637351 9.65231852, SVG curve 7.52427226 9.42462323 7.53108253 9.14206669 7.674 8.921, SVG line 11.4 3.0, SVG curve 11.51908568 2.78555716 11.74172865 2.64909172 11.98686069 2.64029316, SVG curve 12.23199272 2.6314946 12.46384652 2.75164671 12.598 2.957, SVG line 16.3 8.9, SVG curve 16.44872223 9.11358263 16.46667066 9.39204319 16.34659849 9.62295121, SVG curve 16.22652632 9.85385924 15.98825951 9.99908787 15.728 10.0, SVG end, SVG closed 4.0 14.0, SVG line 9.0 14.0, SVG curve 9.55228475 14.0 10.0 14.44771525 10.0 15.0, SVG line 10.0 20.0, SVG curve 10.0 20.55228475 9.55228475 21.0 9.0 21.0, SVG line 4.0 21.0, SVG curve 3.44771525 21.0 3.0 20.55228475 3.0 20.0, SVG line 3.0 15.0, SVG curve 3.0 14.44771525 3.44771525 14.0 4.0 14.0, SVG end, SVG closed 21.0 17.5, SVG curve 21.0 19.43299662 19.43299662 21.0 17.5 21.0, SVG curve 15.56700338 21.0 14.0 19.43299662 14.0 17.5, SVG curve 14.0 15.56700338 15.56700338 14.0 17.5 14.0, SVG curve 19.43299662 14.0 21.0 15.56700338 21.0 17.5, SVG end]
+        return a UI SVG icon from [
+            SVG closed 8.3 10.0,
+            SVG curve 8.03715009 10.01434608 7.78847476 9.88001381 7.65637351 9.65231852,
+            SVG curve 7.52427226 9.42462323 7.53108253 9.14206669 7.674 8.921,
+            SVG line 11.4 3.0,
+            SVG curve 11.51908568 2.78555716 11.74172865 2.64909172 11.98686069 2.64029316,
+            SVG curve 12.23199272 2.6314946 12.46384652 2.75164671 12.598 2.957,
+            SVG line 16.3 8.9,
+            SVG curve 16.44872223 9.11358263 16.46667066 9.39204319 16.34659849 9.62295121,
+            SVG curve 16.22652632 9.85385924 15.98825951 9.99908787 15.728 10.0,
+            SVG end,
+            SVG closed 4.0 14.0,
+            SVG line 9.0 14.0,
+            SVG curve 9.55228475 14.0 10.0 14.44771525 10.0 15.0,
+            SVG line 10.0 20.0,
+            SVG curve 10.0 20.55228475 9.55228475 21.0 9.0 21.0,
+            SVG line 4.0 21.0,
+            SVG curve 3.44771525 21.0 3.0 20.55228475 3.0 20.0,
+            SVG line 3.0 15.0,
+            SVG curve 3.0 14.44771525 3.44771525 14.0 4.0 14.0,
+            SVG end,
+            SVG closed 21.0 17.5,
+            SVG curve 21.0 19.43299662 19.43299662 21.0 17.5 21.0,
+            SVG curve 15.56700338 21.0 14.0 19.43299662 14.0 17.5,
+            SVG curve 14.0 15.56700338 15.56700338 14.0 17.5 14.0,
+            SVG curve 19.43299662 14.0 21.0 15.56700338 21.0 17.5,
+            SVG end
+        ]
     if name = "share":
-        return a UI SVG icon from [SVG open 21.0 15.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 15.0, SVG end, SVG open 17.0 8.0, SVG line 12.0 3.0, SVG line 7.0 8.0, SVG end, SVG open 12.0 3.0, SVG line 12.0 15.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 21.0 15.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 15.0,
+            SVG end,
+            SVG open 17.0 8.0,
+            SVG line 12.0 3.0,
+            SVG line 7.0 8.0,
+            SVG end,
+            SVG open 12.0 3.0,
+            SVG line 12.0 15.0,
+            SVG end
+        ]
     if name = "slide":
-        return a UI SVG icon from [SVG closed 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end, SVG open 3.0 9.0, SVG line 21.0 9.0, SVG end, SVG open 9.0 21.0, SVG line 9.0 9.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end,
+            SVG open 3.0 9.0,
+            SVG line 21.0 9.0,
+            SVG end,
+            SVG open 9.0 21.0,
+            SVG line 9.0 9.0,
+            SVG end
+        ]
     if name = "star":
-        return a UI SVG icon from [SVG closed 11.525 2.295, SVG curve 11.61439394 2.11439187 11.79847935 2.00010636 12.0 2.00010636, SVG curve 12.20152065 2.00010636 12.38560606 2.11439187 12.475 2.295, SVG line 14.785 6.974, SVG curve 15.0939039 7.599141 15.69009547 8.03273487 16.38 8.134, SVG line 21.546 8.89, SVG curve 21.74568225 8.91893129 21.91161704 9.05873165 21.97401888 9.25060669, SVG curve 22.03642072 9.44248174 21.98446414 9.65314499 21.84 9.794, SVG line 18.104 13.432, SVG curve 17.60384326 13.91940137 17.37538295 14.62160833 17.493 15.31, SVG line 18.375 20.45, SVG curve 18.4102544 20.64962253 18.32855694 20.85186881 18.16454313 20.97099688, SVG curve 18.00052931 21.09012494 17.78293153 21.1052656 17.604 21.01, SVG line 12.986 18.582, SVG curve 12.36832018 18.25766673 11.63067982 18.25766673 11.013 18.582, SVG line 6.396 21.01, SVG curve 6.21713834 21.10468813 5.99996669 21.08925263 5.83629533 20.97021892, SVG curve 5.67262398 20.85118521 5.59102705 20.64933446 5.626 20.45, SVG line 6.507 15.311, SVG curve 6.62514101 14.62226922 6.39662728 13.91952406 5.896 13.432, SVG line 2.16 9.795, SVG curve 2.01431246 9.65428797 1.96156126 9.44284703 2.02407874 9.25019112, SVG curve 2.08659623 9.05753521 2.25344915 8.91735652 2.454 8.889, SVG line 7.619 8.134, SVG curve 8.30971439 8.03351456 8.90684222 7.59978363 9.216 6.974, SVG end]
+        return a UI SVG icon from [
+            SVG closed 11.525 2.295,
+            SVG curve 11.61439394 2.11439187 11.79847935 2.00010636 12.0 2.00010636,
+            SVG curve 12.20152065 2.00010636 12.38560606 2.11439187 12.475 2.295,
+            SVG line 14.785 6.974,
+            SVG curve 15.0939039 7.599141 15.69009547 8.03273487 16.38 8.134,
+            SVG line 21.546 8.89,
+            SVG curve 21.74568225 8.91893129 21.91161704 9.05873165 21.97401888 9.25060669,
+            SVG curve 22.03642072 9.44248174 21.98446414 9.65314499 21.84 9.794,
+            SVG line 18.104 13.432,
+            SVG curve 17.60384326 13.91940137 17.37538295 14.62160833 17.493 15.31,
+            SVG line 18.375 20.45,
+            SVG curve 18.4102544 20.64962253 18.32855694 20.85186881 18.16454313 20.97099688,
+            SVG curve 18.00052931 21.09012494 17.78293153 21.1052656 17.604 21.01,
+            SVG line 12.986 18.582,
+            SVG curve 12.36832018 18.25766673 11.63067982 18.25766673 11.013 18.582,
+            SVG line 6.396 21.01,
+            SVG curve 6.21713834 21.10468813 5.99996669 21.08925263 5.83629533 20.97021892,
+            SVG curve 5.67262398 20.85118521 5.59102705 20.64933446 5.626 20.45,
+            SVG line 6.507 15.311,
+            SVG curve 6.62514101 14.62226922 6.39662728 13.91952406 5.896 13.432,
+            SVG line 2.16 9.795,
+            SVG curve 2.01431246 9.65428797 1.96156126 9.44284703 2.02407874 9.25019112,
+            SVG curve 2.08659623 9.05753521 2.25344915 8.91735652 2.454 8.889,
+            SVG line 7.619 8.134,
+            SVG curve 8.30971439 8.03351456 8.90684222 7.59978363 9.216 6.974,
+            SVG end
+        ]
     if name = "table":
-        return a UI SVG icon from [SVG open 12.0 3.0, SVG line 12.0 21.0, SVG end, SVG closed 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end, SVG open 3.0 9.0, SVG line 21.0 9.0, SVG end, SVG open 3.0 15.0, SVG line 21.0 15.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 12.0 3.0,
+            SVG line 12.0 21.0,
+            SVG end,
+            SVG closed 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end,
+            SVG open 3.0 9.0,
+            SVG line 21.0 9.0,
+            SVG end,
+            SVG open 3.0 15.0,
+            SVG line 21.0 15.0,
+            SVG end
+        ]
     if name = "text":
-        return a UI SVG icon from [SVG open 4.0 7.0, SVG line 4.0 4.0, SVG line 20.0 4.0, SVG line 20.0 7.0, SVG end, SVG open 9.0 20.0, SVG line 15.0 20.0, SVG end, SVG open 12.0 4.0, SVG line 12.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 4.0 7.0,
+            SVG line 4.0 4.0,
+            SVG line 20.0 4.0,
+            SVG line 20.0 7.0,
+            SVG end,
+            SVG open 9.0 20.0,
+            SVG line 15.0 20.0,
+            SVG end,
+            SVG open 12.0 4.0,
+            SVG line 12.0 20.0,
+            SVG end
+        ]
     if name = "theme":
-        return a UI SVG icon from [SVG closed 5.0 3.0, SVG line 19.0 3.0, SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0, SVG line 21.0 19.0, SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0, SVG line 5.0 21.0, SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0, SVG line 3.0 5.0, SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0, SVG end, SVG open 3.0 9.0, SVG line 21.0 9.0, SVG end, SVG open 9.0 21.0, SVG line 9.0 9.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 5.0 3.0,
+            SVG line 19.0 3.0,
+            SVG curve 20.1045695 3.0 21.0 3.8954305 21.0 5.0,
+            SVG line 21.0 19.0,
+            SVG curve 21.0 20.1045695 20.1045695 21.0 19.0 21.0,
+            SVG line 5.0 21.0,
+            SVG curve 3.8954305 21.0 3.0 20.1045695 3.0 19.0,
+            SVG line 3.0 5.0,
+            SVG curve 3.0 3.8954305 3.8954305 3.0 5.0 3.0,
+            SVG end,
+            SVG open 3.0 9.0,
+            SVG line 21.0 9.0,
+            SVG end,
+            SVG open 9.0 21.0,
+            SVG line 9.0 9.0,
+            SVG end
+        ]
     if name = "transition":
-        return a UI SVG icon from [SVG open 18.0 8.0, SVG line 22.0 12.0, SVG line 18.0 16.0, SVG end, SVG open 2.0 12.0, SVG line 22.0 12.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 18.0 8.0,
+            SVG line 22.0 12.0,
+            SVG line 18.0 16.0,
+            SVG end,
+            SVG open 2.0 12.0,
+            SVG line 22.0 12.0,
+            SVG end
+        ]
     if name = "underline":
-        return a UI SVG icon from [SVG open 6.0 4.0, SVG line 6.0 10.0, SVG curve 6.0 13.3137085 8.6862915 16.0 12.0 16.0, SVG curve 15.3137085 16.0 18.0 13.3137085 18.0 10.0, SVG line 18.0 4.0, SVG end, SVG open 4.0 20.0, SVG line 20.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 6.0 4.0,
+            SVG line 6.0 10.0,
+            SVG curve 6.0 13.3137085 8.6862915 16.0 12.0 16.0,
+            SVG curve 15.3137085 16.0 18.0 13.3137085 18.0 10.0,
+            SVG line 18.0 4.0,
+            SVG end,
+            SVG open 4.0 20.0,
+            SVG line 20.0 20.0,
+            SVG end
+        ]
     if name = "undo":
-        return a UI SVG icon from [SVG open 9.0 14.0, SVG line 4.0 9.0, SVG line 9.0 4.0, SVG end, SVG open 4.0 9.0, SVG line 14.5 9.0, SVG curve 17.53756612 9.0 20.0 11.46243388 20.0 14.5, SVG curve 20.0 17.53756612 17.53756612 20.0 14.5 20.0, SVG line 11.0 20.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 9.0 14.0,
+            SVG line 4.0 9.0,
+            SVG line 9.0 4.0,
+            SVG end,
+            SVG open 4.0 9.0,
+            SVG line 14.5 9.0,
+            SVG curve 17.53756612 9.0 20.0 11.46243388 20.0 14.5,
+            SVG curve 20.0 17.53756612 17.53756612 20.0 14.5 20.0,
+            SVG line 11.0 20.0,
+            SVG end
+        ]
     if name = "video":
-        return a UI SVG icon from [SVG open 16.0 13.0, SVG line 21.223 16.482, SVG curve 21.37641272 16.58408886 21.57354332 16.59351912 21.73600056 16.50654072, SVG curve 21.89845781 16.41956232 21.99990481 16.25027586 22.0 16.066, SVG line 22.0 7.87, SVG curve 22.00005307 7.69092758 21.90433695 7.5254994 21.74906225 7.43629904, SVG curve 21.59378756 7.34709868 21.40266551 7.34774749 21.248 7.438, SVG line 16.0 10.5, SVG end, SVG closed 4.0 6.0, SVG line 14.0 6.0, SVG curve 15.1045695 6.0 16.0 6.8954305 16.0 8.0, SVG line 16.0 16.0, SVG curve 16.0 17.1045695 15.1045695 18.0 14.0 18.0, SVG line 4.0 18.0, SVG curve 2.8954305 18.0 2.0 17.1045695 2.0 16.0, SVG line 2.0 8.0, SVG curve 2.0 6.8954305 2.8954305 6.0 4.0 6.0, SVG end]
+        return a UI SVG icon from [
+            SVG open 16.0 13.0,
+            SVG line 21.223 16.482,
+            SVG curve 21.37641272 16.58408886 21.57354332 16.59351912 21.73600056 16.50654072,
+            SVG curve 21.89845781 16.41956232 21.99990481 16.25027586 22.0 16.066,
+            SVG line 22.0 7.87,
+            SVG curve 22.00005307 7.69092758 21.90433695 7.5254994 21.74906225 7.43629904,
+            SVG curve 21.59378756 7.34709868 21.40266551 7.34774749 21.248 7.438,
+            SVG line 16.0 10.5,
+            SVG end,
+            SVG closed 4.0 6.0,
+            SVG line 14.0 6.0,
+            SVG curve 15.1045695 6.0 16.0 6.8954305 16.0 8.0,
+            SVG line 16.0 16.0,
+            SVG curve 16.0 17.1045695 15.1045695 18.0 14.0 18.0,
+            SVG line 4.0 18.0,
+            SVG curve 2.8954305 18.0 2.0 17.1045695 2.0 16.0,
+            SVG line 2.0 8.0,
+            SVG curve 2.0 6.8954305 2.8954305 6.0 4.0 6.0,
+            SVG end
+        ]
     if name = "zoom":
-        return a UI SVG icon from [SVG closed 19.0 11.0, SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0, SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0, SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0, SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0, SVG end, SVG open 21.0 21.0, SVG line 16.65 16.65, SVG end, SVG open 11.0 8.0, SVG line 11.0 14.0, SVG end, SVG open 8.0 11.0, SVG line 14.0 11.0, SVG end]
+        return a UI SVG icon from [
+            SVG closed 19.0 11.0,
+            SVG curve 19.0 15.418278 15.418278 19.0 11.0 19.0,
+            SVG curve 6.581722 19.0 3.0 15.418278 3.0 11.0,
+            SVG curve 3.0 6.581722 6.581722 3.0 11.0 3.0,
+            SVG curve 15.418278 3.0 19.0 6.581722 19.0 11.0,
+            SVG end,
+            SVG open 21.0 21.0,
+            SVG line 16.65 16.65,
+            SVG end,
+            SVG open 11.0 8.0,
+            SVG line 11.0 14.0,
+            SVG end,
+            SVG open 8.0 11.0,
+            SVG line 14.0 11.0,
+            SVG end
+        ]
     print line ("Unknown UI icon: " + (the string form of name))
     abort the program
     return a new UI SVG icon

@@ -8,7 +8,7 @@ import lib/callbacks.dl
 # a negative, zero, or positive 32-bit integer for its two record pointers.
 to sort native array at {pointer:values} with {a word sized unsigned integer:count} items of {a word sized unsigned integer:stride} bytes using {@intrinsic("function type", a 32 bit integer, a pointer, a pointer):comparator}:
     if count < 2:
-        @intrinsic("return")
+        return nothing
     @intrinsic("call", "libc", "qsort", nothing, values, count, stride, comparator)
 
 
@@ -82,7 +82,7 @@ local function apply the stable ordering in {a pointer to a list:permutation} to
 
 to sort {a pointer to a list:strings} stably in bytewise order:
     if the length of strings = 0:
-        @intrinsic("return")
+        return nothing
     set permutation to the stable bytewise order for strings
     apply the stable ordering in permutation to strings
     free permutation
@@ -91,7 +91,7 @@ to sort {a pointer to a list:records} stably in the bytewise order of {a pointer
     if the length of records != the length of keys:
         abort the program
     if the length of records = 0:
-        @intrinsic("return")
+        return nothing
     set permutation to the stable bytewise order for keys
     apply the stable ordering in permutation to records
     apply the stable ordering in permutation to keys
