@@ -91,7 +91,8 @@ const homepageCss = [
 assert.match(homepageJavascript, /new URL\("\.\/compiler\/compiler-worker\.js", import\.meta\.url\)/);
 assert.doesNotMatch(homepageJavascript, /compiler\/manifest\.json|searchParams\.set\("revision"/);
 assert.match(homepageJavascript, /new Worker\(workerUrl/);
-assert.match(homepageJavascript, /from "\.\/editor\.js"/);
+assert.match(homepageJavascript, /import\("\.\/editor\.js"\)/);
+assert.doesNotMatch(homepageJavascript, /from "\.\/editor\.js"/, "Editor downloads must not block site controls");
 assert.match(homepageJavascript, /createDynLexEditor/);
 assert.doesNotMatch(homepageJavascript, /setRangeText|scheduleSemanticHighlight|textDocument\/completion/);
 assert.match(lspClientJavascript, /dynlex\/activeCursorChanged/);

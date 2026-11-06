@@ -38,6 +38,22 @@ async function checkLayout() {
   "The brand fonts used by the page must load");
 }
 
+async function checkVocabularyLayout() {
+  for (const width of [390, 680, 940, 1024, 1180, 1280, 1440, 1920, 2560]) {
+    await viewport(width);
+    const overflow = await evaluate(`(() => {
+      const heading = document.querySelector('#language-title');
+      const bounds = heading.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      return [...range.getClientRects()].some(rect =>
+        rect.left < bounds.left - 1 || rect.right > bounds.right + 1);
+    })()`);
+    assert.equal(overflow, false, `The vocabulary heading must fit its column at ${width}px`);
+  }
+  await viewport(1440);
+}
+
 try {
   // Exercise the release error UI without navigating away to an actual download.
   await command("Network.enable");
@@ -51,6 +67,7 @@ try {
     await checkText("body");
     await checkText(".brand-name", ".site-header");
     if (name === "homepage") {
+      await checkVocabularyLayout();
       for (const selector of ["#hero-title em", "#challenges-title span", "#install-title em"]) {
         assert.equal(await evaluate(`getComputedStyle(document.querySelector('${selector}')).color`),
           "rgb(217, 119, 6)", "Large headline accents use OpenAEC's exact brand amber");

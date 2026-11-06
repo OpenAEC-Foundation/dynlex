@@ -85,8 +85,8 @@
                             <span>SKETCH_00</span>
                             <strong>square-field.dl</strong>
                         </div>
-                        <div class="workbench-state"><i aria-hidden="true"></i> <span data-snippet-status>READY</span></div>
-                        <button class="snippet-run" type="button" data-snippet-run>RUN ▶</button>
+                        <div class="workbench-state"><i aria-hidden="true"></i> <span data-snippet-status>LOADING</span></div>
+                        <button class="snippet-run" type="button" data-snippet-run disabled>RUN ▶</button>
                     </div>
                     <div class="workbench-body">
                         <div class="workbench-code">
@@ -190,7 +190,7 @@ print line square 8</div>
                         <button id="tab-use" type="button" role="tab" aria-selected="false" aria-controls="panel-use" data-lab-tab="use" tabindex="-1">CALL</button>
                         <button id="tab-reuse" type="button" role="tab" aria-selected="false" aria-controls="panel-reuse" data-lab-tab="reuse" tabindex="-1">REMIX</button>
                     </div>
-                    <div class="language-execute"><span data-snippet-status>READY</span><button type="button" data-snippet-run>RUN CURRENT ▶</button></div>
+                    <div class="language-execute"><span data-snippet-status>LOADING</span><button type="button" data-snippet-run disabled>RUN CURRENT ▶</button></div>
 
                     <div class="lab-panel" id="panel-define" role="tabpanel" aria-labelledby="tab-define" data-lab-panel="define">
                         <span class="panel-tag">A PHRASE ENTERS THE PROJECT</span>
@@ -234,7 +234,7 @@ announce line "The sketch is alive."</div>
                     <div class="studio-bar">
                         <span><img src="icons/dynlex-icon.svg" alt=""> DYNLEX IDE</span>
                         <i>main.dl</i>
-                        <button type="button" data-snippet-run>RUN ▶</button>
+                        <button type="button" data-snippet-run disabled>RUN ▶</button>
                     </div>
                     <div class="studio-body">
                         <div class="studio-files"><span>FILES</span><strong>● main.dl</strong></div>
@@ -246,7 +246,7 @@ double value means: value * 2
 print line double 21</div>
                             <div class="snippet-diagnostics studio-diagnostics" data-snippet-diagnostics hidden></div>
                         </div>
-                        <div class="studio-output"><span>OUTPUT</span><strong data-snippet-output aria-live="polite">42</strong><small data-snippet-status>READY</small></div>
+                        <div class="studio-output"><span>OUTPUT</span><strong data-snippet-output aria-live="polite">42</strong><small data-snippet-status>LOADING</small></div>
                     </div>
                 </div>
 

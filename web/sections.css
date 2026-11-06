@@ -159,9 +159,13 @@
     align-items: center;
 }
 
+.language-copy {
+    container-type: inline-size;
+}
+
 .language-copy h2 {
     margin-top: 24px;
-    font-size: clamp(3.6rem, 5.9vw, 6.8rem);
+    font-size: clamp(2.8rem, 17cqi, 6.8rem);
 }
 
 .language-copy > p {

@@ -63,6 +63,15 @@ export function command(method, params = {}) {
   });
 }
 
+export function onProtocolEvent(method, handler) {
+  const listener = event => {
+    const message = JSON.parse(event.data);
+    if (message.method === method) handler(message.params);
+  };
+  socket.addEventListener("message", listener);
+  return () => socket.removeEventListener("message", listener);
+}
+
 export async function evaluate(expression) {
   const response = await command("Runtime.evaluate", {
     expression,
