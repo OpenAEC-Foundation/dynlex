@@ -301,7 +301,7 @@ code {
 }
 
 .hero-heading h2 em {
-    color: var(--accent-text);
+    color: var(--amber);
     font-style: normal;
 }
 

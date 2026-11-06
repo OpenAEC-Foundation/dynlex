@@ -40,7 +40,7 @@
 }
 
 .section-title h2 span {
-    color: var(--accent-text);
+    color: var(--amber);
 }
 
 .section-title > small {
@@ -520,7 +520,7 @@
 }
 
 .install-copy h2 em {
-    color: var(--accent-text);
+    color: var(--amber);
     font-style: normal;
 }
 

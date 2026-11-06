@@ -51,6 +51,10 @@ try {
     await checkText("body");
     await checkText(".brand-name", ".site-header");
     if (name === "homepage") {
+      for (const selector of ["#hero-title em", "#challenges-title span", "#install-title em"]) {
+        assert.equal(await evaluate(`getComputedStyle(document.querySelector('${selector}')).color`),
+          "rgb(217, 119, 6)", "Large headline accents use OpenAEC's exact brand amber");
+      }
       for (const [text, background] of [
         ["#hero-title", "body"], [".section-title h2", ".challenge-section"],
         [".language-copy > span", ".language-section"], [".studio-copy > span", ".studio-section"],
