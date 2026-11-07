@@ -30,6 +30,8 @@ class IncrementalMatcherCache {
 	std::string snapshot() const;
 	size_t hits() const { return reusedCount; }
 	size_t precedenceHits() const { return reusedPrecedenceCount; }
+	double keyTimeMilliseconds() const { return keyMilliseconds; }
+	double restoreTimeMilliseconds() const { return restoreMilliseconds; }
 
   private:
 	ParseContext &context;
@@ -41,6 +43,8 @@ class IncrementalMatcherCache {
 	std::string cachedPrecedenceDigest;
 	size_t reusedCount = 0;
 	size_t reusedPrecedenceCount = 0;
+	double keyMilliseconds = 0;
+	double restoreMilliseconds = 0;
 
 	bool available(MatchOptions options);
 	std::string key(const PatternReference &reference, bool trackDependencies);

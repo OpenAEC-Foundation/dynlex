@@ -583,6 +583,8 @@ struct BuildStatistics {
 	size_t builtObjects = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
+	double matcherKeyMilliseconds = 0;
+	double matcherRestoreMilliseconds = 0;
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
@@ -796,6 +798,8 @@ bool compileIncrementally(
 			context.runIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
+			statistics.matcherKeyMilliseconds = matcherCache.keyTimeMilliseconds();
+			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
 			auto saveMatcher = [&]() {
@@ -920,6 +924,8 @@ bool compileIncrementally(
 							  {"objects_built", statistics.builtObjects},
 							  {"matcher_cache_hits", statistics.matcherCacheHits},
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
+							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
+							  {"matcher_restore_ms", statistics.matcherRestoreMilliseconds},
 							  {"frontend_ms", statistics.frontendMilliseconds},
 							  {"import_ms", context.frontendStageMilliseconds[0]},
 							  {"parse_ms", context.frontendStageMilliseconds[1]},

@@ -10,6 +10,7 @@
 #include "llvm/Support/BLAKE3.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 
@@ -252,6 +253,7 @@ bool IncrementalMatcherCache::available(MatchOptions options) {
 }
 
 std::string IncrementalMatcherCache::key(const PatternReference &reference, bool trackDependencies) {
+	auto started = std::chrono::steady_clock::now();
 	const Range &range = reference.range();
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
 	std::array<bool, 256> possibleStartBytes{};
@@ -379,7 +381,9 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	fingerprint.boolean(trackDependencies);
 	appendConfigDigest(context.builtinSyntaxConfigPath);
 	appendConfigDigest(context.projectSyntaxConfigPath);
-	return fingerprint.finish();
+	std::string result = fingerprint.finish();
+	keyMilliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+	return result;
 }
 
 void IncrementalMatcherCache::appendNode(std::string &output, const PatternTreeNode *node) const {
@@ -551,7 +555,9 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	}
 	if (value[0] != 1)
 		throw std::runtime_error("invalid incremental matcher cache value kind");
+	auto restoreStarted = std::chrono::steady_clock::now();
 	PatternMatch match = restoreMatch(value, position, *reference);
+	restoreMilliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - restoreStarted).count();
 	if (position != value.size())
 		throw std::runtime_error("trailing incremental matcher cache data");
 	recorded[cacheKey] = value;
