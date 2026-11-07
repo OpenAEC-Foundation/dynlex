@@ -159,27 +159,6 @@ Json observeFile(const std::string &path, lsp::SourceFile *file) {
 	};
 }
 
-std::string semanticSourceDigest(std::string_view content, std::string_view commentPrefix) {
-	std::string semantic;
-	semantic.reserve(content.size());
-	for (size_t start = 0; start < content.size();) {
-		size_t end = content.find('\n', start);
-		if (end == std::string_view::npos)
-			end = content.size();
-		std::string_view line = content.substr(start, end - start);
-		if (size_t comment = findCommentStart(line, commentPrefix); comment != std::string_view::npos)
-			line = line.substr(0, comment);
-		while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back())))
-			line.remove_suffix(1);
-		if (!line.empty()) {
-			semantic.append(line);
-			semantic.push_back('\n');
-		}
-		start = end + (end < content.size());
-	}
-	return digest(semantic);
-}
-
 class RecordingFileSystem : public lsp::FileSystem {
   public:
 	lsp::SourceFile *getFile(const std::string &path) override {
@@ -193,6 +172,8 @@ class RecordingFileSystem : public lsp::FileSystem {
   private:
 	lsp::LocalFileSystem files;
 };
+
+#include "incrementalDiagnosticCache.inl"
 
 void recordSemanticSources(Json &result, RecordingFileSystem &files, const ParseContext &context) {
 	result["comment_prefixes"] =
@@ -338,7 +319,8 @@ bool functionDependenciesUnchanged(
 					return;
 				for (Expression *expression : body->lineExpressions) {
 					visitExpressionTree(expression, [&](Expression *node) {
-						for (PatternDefinition *definition : {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
+						for (PatternDefinition *definition :
+							 {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
 							if (definition)
 								pending.push_back(definition->section);
 						}
@@ -443,7 +425,9 @@ bool canReuseInactiveBodies(
 		   currentProjection.at("sources") == priorProjection.at("sources");
 }
 
-bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &files, const ParseContext::Options &options) {
+bool observationsStillEquivalent(
+	const Json &previous, RecordingFileSystem &files, const ParseContext::Options &options, std::string &cachedDiagnostics
+) {
 	std::vector<std::string> changedSources;
 	for (const auto &[path, observation] : previous.at("files").items()) {
 		Json current = observeFile(path, files.getFile(path));
@@ -459,17 +443,16 @@ bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &file
 			return false;
 		changedSources.push_back(path);
 	}
-	if (changedSources.empty())
+	if (changedSources.empty()) {
+		cachedDiagnostics = previous.at("diagnostics").get<std::string>();
 		return true;
+	}
 	if (options.emitDebugInfo || options.traceExecution)
 		return false;
 	const Json &configPaths = previous.at("config_paths");
 	const Json &prefixes = previous.at("comment_prefixes");
-	std::set<std::string> diagnosticSources = previous.at("diagnostic_sources").get<std::set<std::string>>();
 	for (const std::string &path : changedSources) {
 		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>())
-			return false;
-		if (diagnosticSources.contains(path))
 			return false;
 		lsp::SourceFile *file = files.cachedFile(path);
 		if (!file)
@@ -479,6 +462,11 @@ bool observationsStillEquivalent(const Json &previous, RecordingFileSystem &file
 		if (semanticSourceDigest(file->content, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
 			return false;
 	}
+	std::optional<std::string> relocated =
+		relocateCachedDiagnostics(previous, files, std::set<std::string>(changedSources.begin(), changedSources.end()));
+	if (!relocated)
+		return false;
+	cachedDiagnostics = std::move(*relocated);
 	return true;
 }
 
@@ -667,11 +655,12 @@ bool compileIncrementally(
 		bool success = false;
 		std::optional<Json> previous;
 		bool reusePreviousFrontend = false;
+		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
-			reusePreviousFrontend = observationsStillEquivalent(*previous, *recording, context.options);
+			reusePreviousFrontend = observationsStillEquivalent(*previous, *recording, context.options, cachedDiagnostics);
 			if (!reusePreviousFrontend)
 				previousMatcherKey = previous->at("matcher_key").get<std::string>();
 		}
@@ -692,7 +681,7 @@ bool compileIncrementally(
 				throw std::runtime_error(error);
 			std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
 			context.requiredLibraries.insert(libraries.begin(), libraries.end());
-			std::cerr << previous->at("diagnostics").get<std::string>();
+			std::cerr << cachedDiagnostics;
 			std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
 			if (cachedLink) {
 				success = *cachedLink;
@@ -861,26 +850,14 @@ bool compileIncrementally(
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
-					auto recordDiagnosticSource = [&](const Range &range) {
-						SourceLocation start = range.sourceStart();
-						SourceLocation end = range.sourceEnd();
-						if (start.sourceFile)
-							diagnosticSources.insert(start.sourceFile->uri);
-						if (end.sourceFile)
-							diagnosticSources.insert(end.sourceFile->uri);
-					};
-					for (const Diagnostic &diagnostic : compiled.diagnostics) {
-						diagnostics += diagnostic.toString() + "\n";
-						recordDiagnosticSource(diagnostic.range);
-						for (const RelatedInfo &related : diagnostic.relatedInfo)
-							recordDiagnosticSource(related.range);
-					}
+					Json diagnosticLocations = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
 					Json result{
 						{"files", recording->observations},
 						{"ir", renderModule(*compiled.llvmModule)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},
+						{"diagnostic_locations", diagnosticLocations},
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher();

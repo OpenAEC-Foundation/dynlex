@@ -3,6 +3,7 @@
 #include "sourceFile.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
+#include <functional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -53,6 +54,7 @@ struct Diagnostic {
 
 	static Diagnostic configParseError(std::string_view message, Range range);
 	std::string toString() const;
+	std::string toString(const std::function<void(std::string &, const Range &)> &appendRange) const;
 
   private:
 	template <typename T> static std::string_view requireStringView(T &&value) {

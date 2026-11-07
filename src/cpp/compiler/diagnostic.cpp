@@ -13,8 +13,18 @@ Diagnostic Diagnostic::configParseError(std::string_view diagnosticMessage, Rang
 }
 
 std::string Diagnostic::toString() const {
-	std::string result = range.toString() + ": " + enumToString(level) + ": " + message;
-	for (const auto &related : relatedInfo)
-		result += "\n  note: " + related.message + " " + related.range.toString();
+	return toString([](std::string &output, const Range &location) {
+		output += location.toString();
+	});
+}
+
+std::string Diagnostic::toString(const std::function<void(std::string &, const Range &)> &appendRange) const {
+	std::string result;
+	appendRange(result, range);
+	result += ": " + enumToString(level) + ": " + message;
+	for (const auto &related : relatedInfo) {
+		result += "\n  note: " + related.message + " ";
+		appendRange(result, related.range);
+	}
 	return result;
 }

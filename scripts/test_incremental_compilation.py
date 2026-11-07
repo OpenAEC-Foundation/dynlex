@@ -152,7 +152,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert warning_comment[1:] == warning_cold[1:], "unrelated comment changed cached diagnostics"
     warning_main.write_text("# Comment before the warning.\n" + warning_source)
     moved_warning = build(entry=warning_main)
-    assert not moved_warning[0]["frontend_reused"], "shifted warning kept its old source location"
+    assert moved_warning[0]["frontend_reused"], "shifted warning rebuilt the frontend"
     assert moved_warning[1:] == build(False, entry=warning_main)[1:]
     critical.write_text(critical.read_text() + "alpha\n")
     main.write_text("import critical.dl\nalpha\n")
@@ -654,6 +654,14 @@ function left times right:
     warning_code_main.write_text(warning_code_source)
     warning_cold = build(entry=warning_code_main)
     assert "Warning:" in warning_cold[1]
+    warning_code_main.write_text("# inserted before a warning\n" + warning_code_source)
+    warning_comment = build(entry=warning_code_main)
+    assert warning_comment[0]["frontend_reused"], "comment shifted a warning but rebuilt the frontend"
+    assert warning_comment[1:] == build(False, entry=warning_code_main)[1:], "cached warning location differs from clean build"
+    warning_code_main.write_text("# first comment\n# second comment\n" + warning_code_source)
+    warning_comment_again = build(entry=warning_code_main)
+    assert warning_comment_again[0]["frontend_reused"], "a second comment edit rebuilt the frontend"
+    assert warning_comment_again[1:] == build(False, entry=warning_code_main)[1:], "second cached warning location differs from clean build"
     warning_code_main.write_text(warning_code_source.replace('"alpha"))', '"changed"))'))
     warning_edit = build(entry=warning_code_main)
     assert warning_edit[0]["functions_ir_reused"] >= 1, "warning disabled safe function IR reuse"
