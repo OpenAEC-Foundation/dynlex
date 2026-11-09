@@ -1,18 +1,25 @@
 void prepareDeferredMatchReplay(
-	ParseContext &context, const Json &previous, const Json &observations,
+	ParseContext &context, const Json &previous, const Json &observations, std::string_view initialMatcherTree,
 	const std::list<PatternReference *> &deferredReferences
 ) {
 	if (!previous.contains("all_function_projection") || !compatibleObservations(previous, observations, context))
 		return;
 	const Json &prior = previous.at("all_function_projection");
+	if (prior.at("initial_matcher_tree").get_ref<const std::string &>() != initialMatcherTree)
+		return;
 	std::map<std::string, Section *> sections;
 	collectSections(context.mainSection, "root", sections);
-	if (declarationDigest(sections) != prior.at("declarations").get<std::string>())
-		return;
 	std::unordered_set<const Section *> reusable;
 	for (const auto &[_, section] : sections)
 		if (reusableCodegenSection(*section))
 			reusable.insert(section);
+	const Json &priorDeclarations = prior.at("function_declarations");
+	if (reusable.size() != priorDeclarations.size())
+		return;
+	for (const auto &[path, section] : sections)
+		if (reusable.contains(section) &&
+			(!priorDeclarations.contains(path) || sectionDeclaration(*section) != priorDeclarations.at(path)))
+			return;
 	Json ambient = sourceProjection(context, observations, reusable, true, true, false, &prior.at("ambient_sources"));
 	if (!sourceProjectionsEqual(ambient, prior.at("ambient_sources")))
 		return;
@@ -20,9 +27,7 @@ void prepareDeferredMatchReplay(
 	std::unordered_set<const PatternReference *> deferred(deferredReferences.begin(), deferredReferences.end());
 	for (const auto &[path, section] : sections) {
 		if (!reusable.contains(section) || !prior.at("bodies").contains(path) || !bodies.contains(path) ||
-			bodies.at(path) != prior.at("bodies").at(path) || !prior.at("function_declarations").contains(path) ||
-			sectionDeclaration(*section) != prior.at("function_declarations").at(path) ||
-			!prior.at("match_entries").contains(path))
+			bodies.at(path) != prior.at("bodies").at(path) || !prior.at("match_entries").contains(path))
 			continue;
 		const Json &entries = prior.at("match_entries").at(path);
 		size_t index = 0;

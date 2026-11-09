@@ -8,6 +8,7 @@
 #include "lsp/fileSystem.h"
 #include "lsp/sourceFile.h"
 #include "pathUtils.h"
+#include "patternTreeNode.h"
 #include "section.h"
 #include "section/classSection.h"
 #include "section/variable.h"
@@ -229,6 +230,7 @@ bool reusableCodegenSection(const Section &section) {
 bool sourceProjectionsEqual(const Json &left, const Json &right);
 
 #include "incrementalFunctionMatches.inl"
+#include "incrementalMatcherTreeSignature.inl"
 
 std::string
 declarationDigest(const std::map<std::string, Section *> &sections, const std::unordered_set<const Section *> &excluded = {}) {
@@ -583,6 +585,7 @@ bool compileIncrementally(
 				parserCache.recordDefinition(range, elements);
 			};
 			IncrementalMatcherCache matcherCache(context, previousMatches);
+			std::string initialMatcherTree;
 			context.reuseMatcherResult = [&](PatternReference *reference, MatchOptions options,
 											 MatchDependencies *dependencies) {
 				return matcherCache.reuse(reference, options, dependencies);
@@ -592,8 +595,9 @@ bool compileIncrementally(
 				matcherCache.record(reference, options, match, dependencies);
 			};
 			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
+				initialMatcherTree = matcherTreeSignature(context);
 				if (previous)
-					prepareDeferredMatchReplay(context, *previous, recording->observations, references);
+					prepareDeferredMatchReplay(context, *previous, recording->observations, initialMatcherTree, references);
 			};
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
@@ -653,7 +657,7 @@ bool compileIncrementally(
 				resolvedFunctionProjection = std::move(*refreshedProjection);
 			else if (compiled)
 				resolvedFunctionProjection = captureAllFunctionProjection(
-					context, recording->observations, sections, matcherCache, previous ? &*previous : nullptr,
+					context, recording->observations, sections, matcherCache, initialMatcherTree, previous ? &*previous : nullptr,
 					&statistics.sourceProjectionWork
 				);
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);

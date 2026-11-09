@@ -401,11 +401,20 @@ def check_deferred_match_key_replay(root, build):
               'caller\n')
     main.write_text(source)
     build(entry=main)
+    assert projection_for(root / "cache", main)["initial_matcher_tree"], \
+        "the indexed pattern tree signature was not persisted"
     main.write_text(source.replace('"discard", 3', '"discard", 4'))
     edited = build(entry=main)
     assert edited[0]["deferred_match_keys_replayed"] >= 1, \
         "unchanged body matched after definitions were indexed instead of replaying its resolved reference"
     assert edited[1:] == build(False, entry=main)[1:]
-    main.write_text(main.read_text().replace('to independent:', 'to first: @intrinsic("discard", 5)\nto independent:'))
+    main.write_text(main.read_text().replace('to independent:', 'to renamed independent:'))
+    renamed = build(entry=main)
+    assert renamed[0]["deferred_match_keys_replayed"] == 0, \
+        "declaration edit replayed matches against a different pattern tree"
+    assert renamed[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace(
+        'to renamed independent:',
+        'to first: @intrinsic("discard", 5)\nto renamed independent:'))
     changed_tree = build(entry=main, success=False)
     assert changed_tree[1] == build(False, entry=main, success=False)[1]
