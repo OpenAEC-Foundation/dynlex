@@ -124,8 +124,8 @@ enum class IntrinsicTargets { All, Native, NativeOrWasm };
 	X(VariadicCall, "variadic call", 5, -1, IntrinsicReturnKind::Custom, 1, 4, IntrinsicPurityKind::Impure,                    \
 	  IntrinsicTargets::NativeOrWasm)                                                                                          \
 	X(CallPointer, "call pointer", 3, -1, IntrinsicReturnKind::Custom, 2, 2, IntrinsicPurityKind::Impure,                      \
-	  IntrinsicTargets::Native)                                                                                                \
-	X(Invoke, "invoke", 2, -1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure, IntrinsicTargets::Native)       \
+	  IntrinsicTargets::NativeOrWasm)                                                                                          \
+	X(Invoke, "invoke", 2, -1, IntrinsicReturnKind::Custom, 0, 0, IntrinsicPurityKind::Impure, IntrinsicTargets::NativeOrWasm) \
 	X(FunctionType, "function type", 1, -1, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure,                     \
 	  IntrinsicTargets::All)                                                                                                   \
 	X(Type, "type", 2, 3, IntrinsicReturnKind::Custom, 1, -1, IntrinsicPurityKind::Pure, IntrinsicTargets::All)                \

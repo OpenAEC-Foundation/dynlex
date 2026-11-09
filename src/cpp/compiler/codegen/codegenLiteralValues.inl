@@ -20,10 +20,20 @@ static llvm::Value *generateStringConstant(ParseContext &context, const std::str
 	);
 }
 
-static llvm::Value *
+static CodegenResult
 generateCompileTimeRuntimeValue(ParseContext &context, const CompileTimeValue &value, const DataType &type) {
 	requireCompilerInvariant(type.isRuntimeValueType(), "compile-time-only type reached runtime value codegen");
 	llvm::Type *llvmType = getLLVMType(context, type);
+	if (const auto *function = std::get_if<CompileTimeFunction>(&value)) {
+		requireCompilerInvariant(type.isAddress(), "constant callable has a non-address runtime type");
+		llvm::Function *generated = nullptr;
+		if (!ensureCallableFunctionGenerated(
+				context, {function->definition, function->pathIndex}, *function->instantiation,
+				function->definition->section->isExposed, generated
+			))
+			return CodegenResult::failure();
+		return generated;
+	}
 	if (const auto *pointer = std::get_if<CompileTimePointer>(&value)) {
 		requireCompilerInvariant(type.isAddress(), "constant pointer has a non-address runtime type");
 		auto *addressType = context.llvmModule->getDataLayout().getIntPtrType(*context.llvmContext);

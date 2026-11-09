@@ -22,6 +22,20 @@ static std::optional<std::string> explicitWholeVariableSourceName(const PatternR
 	return result.substr(first, last - first + 1);
 }
 
+static bool indexDataDeclarationNames(ParseContext &context, const std::list<PatternReference *> &references) {
+	bool changed = false;
+	for (PatternReference *reference : references) {
+		if (reference->patternType != SectionType::Section || !reference->range().line->sectionOpening)
+			continue;
+		// Discover names through the same metadata and matcher as the final
+		// header resolution, without resolving or executing the declaration.
+		std::unique_ptr<PatternMatch> match(context.match(reference));
+		if (match)
+			changed |= reference->indexDataDeclarationNames(*match);
+	}
+	return changed;
+}
+
 static const std::string *findVisibleExplicitWholeVariableName(const PatternReference *reference) {
 	if (!reference || !reference->range().line)
 		return nullptr;

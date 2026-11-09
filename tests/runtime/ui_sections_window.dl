@@ -1,4 +1,0 @@
-import examples/sections/project.dl
-
-print line state's count
-print line instance's status

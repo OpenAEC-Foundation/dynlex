@@ -28,6 +28,8 @@ void ExpressionInferenceSupport::inferIntrinsic() {
 	}
 	if (kind == IntrinsicKind::DeferredBody) {
 		inferDeferredSectionBody(expr, context, flexBindingFrameStack);
+		if (context.typesValid)
+			context.setExpressionValue(expr, inferIntrinsicCompileTimeValue(expr, context, flexBindingFrameStack));
 		return;
 	}
 	if (kind == IntrinsicKind::Receiver) {

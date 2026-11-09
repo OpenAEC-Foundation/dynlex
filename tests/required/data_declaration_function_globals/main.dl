@@ -1,0 +1,21 @@
+integer means: @intrinsic("type", "int", 32)
+section answer {name}:
+    declares: name
+    result: integer
+    value:
+        42
+
+function inspect:
+    globals:
+        sample entry
+    execute:
+        @intrinsic("return", sample entry)
+
+answer sample entry:
+
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+if @intrinsic("not equal", inspect, 42):
+    @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))

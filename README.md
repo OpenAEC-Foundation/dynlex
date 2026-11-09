@@ -2,6 +2,9 @@
 
 A natural-language-like programming language that compiles to native code via LLVM.
 
+UI libraries and the native/browser ribbon, Snake and editor demos live in the separate
+`dynlex-ui` repository. This compiler supplies their generic section and callback facilities.
+
 ## Features
 
 - Pattern-based syntax that reads like English

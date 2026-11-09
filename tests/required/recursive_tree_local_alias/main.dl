@@ -1,0 +1,35 @@
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+flex section loop while condition:
+    replacement:
+        @intrinsic("loop while", condition)
+
+class:
+    patterns:
+        tree node
+    members:
+        child as node pointer
+        next as node pointer
+        selected as flag
+node pointer means: @intrinsic("add pointer depth", tree node)
+flag means: @intrinsic("type", "bool")
+
+function search {node pointer:root}:
+    execute:
+        @intrinsic("store", found, @intrinsic("construct", node pointer))
+        if root's selected:
+            @intrinsic("store", found, root)
+        @intrinsic("store", child, root's child)
+        loop while @intrinsic("not equal", child, @intrinsic("construct", node pointer)):
+            @intrinsic("store", candidate, search child)
+            if @intrinsic("not equal", candidate, @intrinsic("construct", node pointer)):
+                @intrinsic("store", found, candidate)
+            @intrinsic("store", child, child's next)
+        @intrinsic("return", found)
+
+@intrinsic("store", leaf, @intrinsic("construct", tree node, @intrinsic("construct", node pointer), @intrinsic("construct", node pointer), @intrinsic("equal", 1, 1)))
+@intrinsic("store", branch, @intrinsic("construct", tree node, @intrinsic("address of", leaf), @intrinsic("construct", node pointer), @intrinsic("equal", 1, 0)))
+@intrinsic("store", root, @intrinsic("construct", tree node, @intrinsic("address of", branch), @intrinsic("construct", node pointer), @intrinsic("equal", 1, 0)))
+if @intrinsic("not equal", search @intrinsic("address of", root), @intrinsic("address of", leaf)):
+    @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))

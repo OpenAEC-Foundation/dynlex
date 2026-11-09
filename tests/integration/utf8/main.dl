@@ -1,0 +1,34 @@
+import lib/utf8.dl
+
+set text to the string form of "Aé🙂"
+set expected to [65, 233, 128578]
+set offset to 0
+set index to 0
+loop while offset < text's length:
+    set decoded to the UTF8 character at offset in text
+    require condition decoded's valid reporting "Valid UTF-8 was rejected"
+    require condition (decoded's code = (the item at index in expected)) reporting "A UTF-8 scalar was decoded incorrectly"
+    require condition ((the previous UTF8 boundary before (decoded's next) in text) = offset) reporting "Backward UTF-8 navigation split a scalar"
+    set offset to decoded's next
+    increment index
+require condition (index = 3) reporting "UTF-8 counted bytes as characters"
+set codes to [0, 127, 128, 2047, 2048, 55295, 57344, 65535, 65536, 1114111]
+set index to 0
+loop while index < the length of codes:
+    set code to the item at index in codes
+    set encoded to UTF8 text for code point code
+    set decoded to the UTF8 character at 0 in encoded
+    require condition (decoded's valid and (decoded's code = code)) reporting "A Unicode boundary failed to round trip"
+    increment index
+set invalid to a new string buffer containing 4 bytes
+set octets to [240, 128, 128, 128]
+set index to 0
+loop while index < 4:
+    store ((the item at index in octets) as a byte) into (the data of invalid) at index
+    increment index
+require condition ((the UTF8 character at 0 in invalid)'s valid = false) reporting "Overlong UTF-8 was accepted"
+store (237 as a byte) into (the data of invalid) at 0
+store (160 as a byte) into (the data of invalid) at 1
+require condition ((the UTF8 character at 0 in invalid)'s valid = false) reporting "A UTF-8 surrogate was accepted"
+require condition ((the UTF8 character at 2 in invalid)'s valid = false) reporting "A continuation byte was accepted as a leading byte"
+print line "UTF-8 scalars, encoding and byte boundaries passed."

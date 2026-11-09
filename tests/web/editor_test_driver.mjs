@@ -13,9 +13,8 @@ export function withEditor(selector, script) {
 export const readCode = selector => withEditor(selector, 'return model.getValue();');
 export const editCode = (selector, value) => withEditor(selector, `editor.executeEdits('test', [{range:model.getFullModelRange(),text:${JSON.stringify(value)}}]);`);
 
-// Test-only access to Monaco's public registry, also installed after reloads.
+// Test-only access belongs to the current document. Call again after a reload.
 export async function installEditorAccess() {
-  const {command} = await import('./browser_test_driver.mjs');
   const source = `(async () => {
     const {monaco} = await import('/editor.js');
     window.editorFor = selector => monaco.editor.getEditors().find(editor => editor.getContainerDomNode() === document.querySelector(selector));
@@ -30,6 +29,5 @@ export async function installEditorAccess() {
     };
     window.editorMarkers = selector => monaco.editor.getModelMarkers({resource:editorFor(selector).getModel().uri});
   })()`;
-  await command('Page.addScriptToEvaluateOnNewDocument',{source});
   await evaluate(source);
 }

@@ -48,7 +48,7 @@ function loadImage(url) {
 
 function riverMarkup() {
   return `
-    <article class="river-game" data-river-game aria-label="Wolf, sheep, and hay coding challenge">
+    <article class="river-game" data-theme="dark" data-river-game aria-label="Wolf, sheep, and hay coding challenge">
       <header class="river-game-header">
         <span>CHALLENGE_01</span>
         <strong>river-crossing.dl</strong>

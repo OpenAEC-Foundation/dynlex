@@ -1,6 +1,5 @@
 import { createShaderBanner } from "./shader-banner.js";
 import { initializeSiteNavigation } from "./site-navigation.js";
-import { createDynLexEditor, DynLexConnection } from "./editor.js";
 import { initializeGameAccount } from "./game-account.js";
 
 function required(selector, scope = document) {
@@ -30,7 +29,7 @@ function selectTab(selectedTab) {
   }
   const selectedSource = required(`[data-lab-panel="${selectedName}"] [data-snippet-source]`);
   const sketch = selectedTab.closest("[data-runnable-sketch]");
-  if (sketch) {
+  if (sketch && !required("[data-snippet-run]", sketch).disabled) {
     setSketchState(sketch, selectedSource.dataset.edited === "true" ? "edited" : "ready");
   }
 }
@@ -58,7 +57,6 @@ tabList.addEventListener("keydown", (event) => {
 });
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-await createShaderBanner(required("[data-live-shader-banner]"));
 
 const reveals = [...document.querySelectorAll(".reveal")];
 const revealObserver = new IntersectionObserver((entries, observer) => {
@@ -78,6 +76,7 @@ let snippetWorker = null;
 let snippetWorkerReady = null;
 let snippetWorkerInitialized = false;
 let languageConnection = null;
+let editorModule = null;
 let nextSnippetRequestId = 1;
 let nextSnippetVersion = 1;
 let snippetCompilerQueue = Promise.resolve();
@@ -159,8 +158,10 @@ function ensureSnippetWorker() {
 }
 
 async function createSiteEditor(host, { prefix = "", ...options }) {
-  await ensureSnippetWorker();
+  editorModule ??= import("./editor.js");
+  const [{ createDynLexEditor, DynLexConnection }] = await Promise.all([editorModule, ensureSnippetWorker()]);
   languageConnection ??= new DynLexConnection(message => queueCompilerTask(() => callSnippetWorker("lsp.exchange", { message })));
+  host.replaceChildren();
   const editor = createDynLexEditor(host, { embedded: true, ...options });
   try { await editor.connect({ connection: languageConnection, prefix }); }
   catch (error) { editor.dispose(); throw error; }
@@ -385,19 +386,40 @@ for (const sketch of runnableSketches) {
   const button = required("[data-snippet-run]", sketch);
   const status = required("[data-snippet-status]", sketch);
   status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  button.disabled = true;
+  setSketchState(sketch, "loading");
   button.addEventListener("click", () => queueSketch(sketch));
-  for (const source of sketch.querySelectorAll("[data-snippet-source]")) {
-    const value = source.textContent;
-    source.replaceChildren();
-    const editor = await createSiteEditor(source, {
-      value, ariaLabel: source.getAttribute("aria-label"),
-      onRun: () => { if (!button.disabled) queueSketch(sketch); },
-      onChange: () => {
-        source.dataset.edited = "true";
-        if (source === activeSnippetSource(sketch)) setSketchState(sketch, "edited");
+}
+
+async function initializeSnippetEditors() {
+  try {
+    for (const sketch of runnableSketches) {
+      const button = required("[data-snippet-run]", sketch);
+      for (const source of sketch.querySelectorAll("[data-snippet-source]")) {
+        const value = source.textContent;
+        const editor = await createSiteEditor(source, {
+          value, ariaLabel: source.getAttribute("aria-label"),
+          onRun: () => { if (!button.disabled) queueSketch(sketch); },
+          onChange: () => {
+            source.dataset.edited = "true";
+            if (source === activeSnippetSource(sketch) && !button.disabled) setSketchState(sketch, "edited");
+          }
+        });
+        snippetEditors.set(source, editor);
       }
-    });
-    snippetEditors.set(source, editor);
+      setSketchState(sketch, activeSnippetSource(sketch).dataset.edited === "true" ? "edited" : "ready");
+      button.disabled = false;
+    }
+  } catch (error) {
+    console.error("Homepage editor initialization failed", error);
+    for (const sketch of runnableSketches) {
+      required("[data-snippet-run]", sketch).disabled = true;
+      setSketchState(sketch, "error");
+      const diagnostics = required("[data-snippet-diagnostics]", sketch);
+      diagnostics.textContent = "An error occurred. Check the browser log.";
+      diagnostics.hidden = false;
+    }
+    throw error;
   }
 }
 
@@ -407,18 +429,20 @@ if (!context) {
   throw new Error("DynLex homepage requires a 2D canvas context");
 }
 
+const fieldTheme = getComputedStyle(document.documentElement);
+const fieldColor = name => fieldTheme.getPropertyValue(`--${name}`).trim();
 const graphNodes = [
-  { x: 0.06, y: 0.19, label: "words", accent: "#c7ff38" },
+  { x: 0.06, y: 0.19, label: "words", accent: fieldColor("amber") },
   { x: 0.24, y: 0.08, label: "patterns" },
   { x: 0.42, y: 0.25, label: "meaning" },
   { x: 0.63, y: 0.11, label: "name" },
-  { x: 0.82, y: 0.26, label: "reuse", accent: "#85dcff" },
+  { x: 0.82, y: 0.26, label: "reuse", accent: fieldColor("warm-gold") },
   { x: 0.94, y: 0.08, label: "share" },
   { x: 0.14, y: 0.71, label: "read" },
-  { x: 0.36, y: 0.86, label: "shape", accent: "#a58aff" },
+  { x: 0.36, y: 0.86, label: "shape", accent: fieldColor("amber") },
   { x: 0.58, y: 0.68, label: "write" },
   { x: 0.79, y: 0.84, label: "explain" },
-  { x: 0.96, y: 0.65, label: "build", accent: "#ff806d" }
+  { x: 0.96, y: 0.65, label: "build", accent: fieldColor("signal-orange") }
 ];
 
 const graphEdges = [
@@ -463,21 +487,21 @@ function drawField(time = 0) {
     context.beginPath();
     context.moveTo(positions[from].x, positions[from].y);
     context.lineTo(positions[to].x, positions[to].y);
-    context.strokeStyle = "rgba(255, 255, 255, 0.09)";
+    context.strokeStyle = fieldColor("border-subtle");
     context.stroke();
   }
 
-  context.font = '10px "DM Mono", monospace';
+  context.font = `10px ${fieldColor("font-code")}`;
   context.textBaseline = "middle";
   for (let index = 0; index < graphNodes.length; index += 1) {
     const node = graphNodes[index];
     const position = positions[index];
     context.beginPath();
     context.arc(position.x, position.y, node.accent ? 3.5 : 2, 0, Math.PI * 2);
-    context.fillStyle = node.accent || "rgba(255, 255, 255, 0.45)";
+    context.fillStyle = node.accent || fieldColor("text-muted");
     context.fill();
     context.globalAlpha = node.accent ? 0.62 : 1;
-    context.fillStyle = node.accent || "rgba(255, 255, 255, 0.22)";
+    context.fillStyle = node.accent || fieldColor("text-muted");
     context.fillText(node.label.toUpperCase(), position.x + 10, position.y);
     context.globalAlpha = 1;
   }
@@ -536,14 +560,16 @@ window.addEventListener("pagehide", (event) => {
   // A cached page resumes with the same compiler worker and animation state.
   if (event.persisted) return;
   cancelAnimationFrame(frameHandle);
-  const editorCleanup = [...snippetEditors.values()].map(editor => editor.dispose());
-  editorCleanup.push(farmChallengeInstance?.destroy(), riverChallengeInstance?.destroy());
-  if (languageConnection) {
-    void Promise.all(editorCleanup).then(async () => {
-      await languageConnection.stop();
-      snippetWorker.terminate();
-    }).catch((error) => {
-      console.error("Homepage DynLex language server shutdown failed", error);
-    });
-  }
+  void Promise.allSettled([editorInitialization]).then(async () => {
+    const editorCleanup = [...snippetEditors.values()].map(editor => editor.dispose());
+    editorCleanup.push(farmChallengeInstance?.destroy(), riverChallengeInstance?.destroy());
+    await Promise.all(editorCleanup);
+    if (languageConnection) await languageConnection.stop();
+    snippetWorker?.terminate();
+  }).catch((error) => {
+    console.error("Homepage DynLex language server shutdown failed", error);
+  });
 });
+
+const editorInitialization = initializeSnippetEditors();
+await Promise.all([editorInitialization, createShaderBanner(required("[data-live-shader-banner]"))]);

@@ -2,6 +2,7 @@ import lib/font_bitmap.dl
 # DynLex Font Library - TrueType rendering through the graphics renderer
 
 import lib/string.dl
+import lib/utf8.dl
 import lib/graphics.dl
 
 # --- FreeType struct definitions ---
@@ -444,25 +445,32 @@ to get the advance of character {integer:code} using {font:typeface}:
     return ((slot's advance x as a floating-point number) / 64.0) / typeface's scale
 
 to get the width of {a value:message} using {font:typeface}:
+    set content to the string form of message
     set extent to 0.0
     set position to 0
-    loop while position < the length of message:
-        set extent to extent + (the advance of character (the character at position in message) using typeface)
-        increment position
+    loop while position < content's length:
+        set decoded to the UTF8 character at position in content
+        require condition decoded's valid reporting "Font text contains invalid UTF-8"
+        set extent to extent + (the advance of character (decoded's code) using typeface)
+        set position to decoded's next
     return extent
 
 to get the result of drawing {a value:message} as text at x {a value:horizontal} and y {a value:vertical} using {font:typeface} in color red {integer:red}, green {integer:green} and blue {integer:blue} in {graphics frame:frame}:
+    set content to the string form of message
     set cursor to horizontal as a floating-point number
     set position to 0
-    loop while position < the length of message:
-        set loading to the result of caching character (the character at position in message) using typeface
+    loop while position < content's length:
+        set decoded to the UTF8 character at position in content
+        require condition decoded's valid reporting "Font text contains invalid UTF-8"
+        set loading to the result of caching character (decoded's code) using typeface
         if loading's status failed:
             return a failed font rendering at horizontal position cursor in (loading's status's operation) with error code (loading's status's error code)
-        increment position
+        set position to decoded's next
     set started to false
     set position to 0
-    loop while position < the length of message:
-        set code to (the character at position in message) as a word sized integer
+    loop while position < content's length:
+        set decoded to the UTF8 character at position in content
+        set code to decoded's code as a word sized integer
         set glyph to the cached font glyph for code in (typeface's cache)
         require condition (glyph != (0 as a pointer to font glyph)) reporting "A prepared font glyph is missing from the cache"
         if (glyph's width > 0) and (glyph's height > 0):
@@ -473,7 +481,7 @@ to get the result of drawing {a value:message} as text at x {a value:horizontal}
                 set started to true
             append cached glyph glyph at x cursor y (vertical as a floating-point number) using typeface on frame
         set cursor to cursor + glyph's advance
-        increment position
+        set position to decoded's next
     if started:
         finish triangles in frame
     return a successful font rendering at horizontal position cursor

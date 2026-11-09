@@ -182,7 +182,7 @@ function getInitialTheme() {
   if (persisted === "dark" || persisted === "light") {
     return persisted;
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  return "dark";
 }
 
 function requiredElement(id) {
@@ -413,9 +413,9 @@ function renderOpenFiles(openModels) {
     item.type = "button";
     item.setAttribute("aria-current", openModel === currentModel ? "page" : "false");
 
-    const icon = document.createElement("i");
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "D";
+    const icon = document.createElement("img");
+    icon.src = releaseAssetUrl("icons/dynlex-icon.svg").href;
+    icon.alt = "";
     const label = document.createElement("span");
     label.dataset.fileUri = openModel.uri.toString();
     label.textContent = documentName(openModel);

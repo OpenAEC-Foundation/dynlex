@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,7 +11,7 @@
 </head>
 <body class="docs-page">
     <a class="skip-link" href="#main-content">Skip to content</a>
-    <header class="site-header" data-site-header></header>
+    <header class="site-header" data-site-header data-theme="dark"></header>
     <main class="wiki-shell" id="main-content">
         <section class="hero-card">
             <h1>Getting Started with DynLex</h1>
@@ -45,7 +45,7 @@
                     Make a file named <code>hello.dl</code>. Start by
                     <a class="inline-link" href="terms.html#import">importing</a> the standard library:
                 </p>
-                <div class="code-block">
+                <div class="code-block" data-theme="dark">
 <pre><code>import lib/std.dl
 
 print line "Hello, world!"</code></pre>
@@ -68,7 +68,7 @@ print line "Hello, world!"</code></pre>
                 <p>
                     Build the file into a program and run it:
                 </p>
-                <div class="code-block">
+                <div class="code-block" data-theme="dark">
 <pre><code>dynlex hello.dl -o hello
 ./hello</code></pre>
                 </div>
@@ -83,7 +83,7 @@ print line "Hello, world!"</code></pre>
                 <p>
                     A <a class="inline-link" href="terms.html#variable">variable</a> lets you keep a value and use it again later:
                 </p>
-                <div class="code-block">
+                <div class="code-block" data-theme="dark">
 <pre><code>import lib/std.dl
 
 set apples to 3
@@ -112,7 +112,7 @@ print line total</code></pre>
                     behavior. The words on the first line are its
                     <a class="inline-link" href="terms.html#pattern">pattern</a>.
                 </p>
-                <div class="code-block">
+                <div class="code-block" data-theme="dark">
 <pre><code>import lib/std.dl
 
 to get value squared:
@@ -149,7 +149,7 @@ print line 5 squared</code></pre>
                     A loop lets you repeat a block of code. The loop body is another
                     <a class="inline-link" href="terms.html#section">section</a>.
                 </p>
-                <div class="code-block">
+                <div class="code-block" data-theme="dark">
 <pre><code>import lib/std.dl
 
 set count to 1

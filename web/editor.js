@@ -2,7 +2,7 @@
 {
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href = new URL("./assets/editor-C3aiza2j.css", import.meta.url).href;
+  link.href = new URL("./assets/editor-DDu0Mcob.css", import.meta.url).href;
   document.head.append(link);
 }
-export * from "./assets/editor-DSQU5Ko3.js";
+export * from "./assets/editor-DOIsBOW6.js";

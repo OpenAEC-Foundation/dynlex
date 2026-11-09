@@ -1,8 +1,0 @@
-import tests/games/geometry_dash/generator.dl
-
-set course to an empty dash level
-generate (the address of course) using seed 1337
-loop index from 0 to (course's jumps):
-    set action to the item at index in (course's actions)
-    print line formatted "jump={index} takeoff_tick={action's tick} landing_tick={action's landing} level={action's level} motif={action's motif}"
-close the address of course

@@ -51,6 +51,7 @@ await captureScreenshot("farm-coding-tools");
 let oldOrigin=await evaluate("performance.timeOrigin");
 await navigate("/");
 await waitFor(`performance.timeOrigin!==${oldOrigin} && document.querySelector('[data-game-resume]')?.hidden===false`,"saved farm available");
+await installEditorAccess();
 await clickElement("[data-game-resume]");
 await waitFor("document.querySelector('[data-river-challenge-mount]').dataset.challengeLoaded==='farm'","farm restored");
 assert.deepEqual(await evaluate(`${farm}.world.areas[0]`),area);
@@ -78,6 +79,7 @@ await evaluate(`(() => {
 await command("Page.addScriptToEvaluateOnNewDocument",{source:"const old=sessionStorage.getItem('old-save-fixture');if(old){localStorage.setItem('dynlex.games.guest',old);sessionStorage.removeItem('old-save-fixture');}"});
 oldOrigin=await evaluate("performance.timeOrigin"); await navigate("/");
 await waitFor(`performance.timeOrigin!==${oldOrigin} && document.querySelector('[data-game-resume]')?.hidden===false`,"old save migrated");
+await installEditorAccess();
 await clickElement("[data-game-resume]");
 await waitFor("document.querySelector('[data-river-challenge-mount]').dataset.challengeLoaded==='farm'","source maps rebuilt");
 assert.equal(await evaluate(`${saved}.version`),SAVE_VERSION);

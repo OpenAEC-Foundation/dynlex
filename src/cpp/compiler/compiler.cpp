@@ -162,6 +162,8 @@ static std::string formatCompileTimeValueForPurityReport(const CompileTimeValue 
 		return typeToUserName(*constraint);
 	if (const auto *pointer = std::get_if<CompileTimePointer>(&value))
 		return "pointer(" + std::to_string(pointer->address) + ")";
+	if (const auto *function = std::get_if<CompileTimeFunction>(&value))
+		return "function(" + std::string(function->definition->range.subString) + ")";
 	crashCompilerBug("unknown compile-time value alternative in purity report");
 }
 

@@ -244,11 +244,11 @@ int main(void) {{
 
             target_source = temporary / "target.dl"
             target_source.write_text(TARGET_SOURCE, encoding="utf-8")
-            for arguments in (("--emit-wasm",), ("--emit-spirv", "--shader-stage=fragment")):
-                require_failure(
-                    run([str(compiler), str(target_source), *arguments], repo_root),
-                    "Intrinsic 'call pointer' is only available when emitting native CPU code",
-                )
+            require_success(run([str(compiler), str(target_source), "--emit-wasm"], repo_root))
+            require_failure(
+                run([str(compiler), str(target_source), "--emit-spirv", "--shader-stage=fragment"], repo_root),
+                "Intrinsic 'call pointer' is only available when emitting native CPU or WebAssembly code",
+            )
     except RuntimeError as error:
         print(error, file=sys.stderr)
         return 1

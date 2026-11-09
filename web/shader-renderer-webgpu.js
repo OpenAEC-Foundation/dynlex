@@ -4,6 +4,7 @@ import {
 } from "./terrain-geometry.js";
 import { validateShaderGeometryDescriptor } from "./shader-renderer-shared.js";
 import { createTransitionCompositor } from "./shader-transition-compositor.js";
+import { requestGraphicsBackend } from "./graphics-backend.js";
 
 const fullscreenVertexSource = `
 @vertex
@@ -19,29 +20,14 @@ fn main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4<f32>
 
 const depthFormat = "depth24plus-stencil8";
 const maximumPendingSubmissions = 2;
-let sharedDevicePromise = null;
+let sharedGraphicsPromise = null;
 let sharedDevice = null;
 const deviceLossObservers = new Set();
 
-async function createWebGpuDevice() {
-  let adapter;
-  try {
-    adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
-  } catch (error) {
-    console.error("WebGPU adapter request failed", error);
-    throw new Error("Shader preview could not initialize WebGPU. Check the browser log.");
-  }
-  if (!adapter) {
-    throw new Error("This browser could not find a compatible WebGPU adapter");
-  }
-
-  let device;
-  try {
-    device = await adapter.requestDevice();
-  } catch (error) {
-    console.error("WebGPU device request failed", error);
-    throw new Error("Shader preview could not initialize WebGPU. Check the browser log.");
-  }
+async function createShaderGraphics() {
+  const graphics = await requestGraphicsBackend();
+  if (graphics.backend === "webgl") return graphics;
+  const { device } = graphics;
   sharedDevice = device;
   device.addEventListener("uncapturederror", (event) => {
     console.error("Uncaptured WebGPU device error", event.error.message, event.error);
@@ -50,39 +36,20 @@ async function createWebGpuDevice() {
     console.error("WebGPU device was lost", information);
     if (sharedDevice === device) {
       sharedDevice = null;
-      sharedDevicePromise = null;
+      sharedGraphicsPromise = null;
     }
     const observers = [...deviceLossObservers];
     deviceLossObservers.clear();
     for (const observer of observers) observer();
   });
-  return device;
+  return graphics;
 }
 
-async function requestWebGpuDevice() {
-  if (!navigator.gpu) {
-    throw new Error("This browser does not provide WebGPU");
+export function requestShaderGraphics() {
+  if (!sharedGraphicsPromise) {
+    sharedGraphicsPromise = createShaderGraphics();
   }
-  if (!sharedDevicePromise) {
-    sharedDevicePromise = createWebGpuDevice();
-  }
-  try {
-    return await sharedDevicePromise;
-  } catch (error) {
-    sharedDevice = null;
-    sharedDevicePromise = null;
-    throw error;
-  }
-}
-
-export async function hasWebGpuDevice() {
-  if (!navigator.gpu) return false;
-  try {
-    await requestWebGpuDevice();
-    return true;
-  } catch {
-    return false;
-  }
+  return sharedGraphicsPromise;
 }
 
 function observeWebGpuDeviceLoss(device, observer) {
@@ -371,7 +338,7 @@ function validateProgramDescriptor(programDescriptor) {
   }
 }
 
-export async function createWebGpuShaderPreview(canvas, options = {}) {
+export async function createWebGpuShaderPreview(canvas, device, options = {}) {
   if (!(canvas instanceof HTMLCanvasElement)) {
     throw new Error("Shader preview requires a canvas");
   }
@@ -379,7 +346,6 @@ export async function createWebGpuShaderPreview(canvas, options = {}) {
   if (!context) {
     throw new Error("This canvas does not provide a WebGPU context");
   }
-  const device = await requestWebGpuDevice();
   const format = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
 

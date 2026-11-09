@@ -1,13 +1,13 @@
 .docs-page {
-    background: var(--ink);
-    color: var(--white);
+    background: var(--page-bg);
+    color: var(--text-primary);
 }
 
 .docs-page::before {
     position: fixed;
     z-index: 0;
     inset: var(--header-height) 0 0;
-    border-top: 1px solid rgba(199, 255, 56, 0.18);
+    border-top: 1px solid rgba(217, 119, 6, 0.18);
     content: "";
     pointer-events: none;
 }
@@ -35,15 +35,17 @@
 .section-link-card,
 .term-card {
     position: relative;
-    border: 1px solid var(--line);
-    background: var(--ink-1);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
 }
 
 .hero-card,
 .wiki-header {
     margin-bottom: 20px;
     padding: clamp(28px, 6vw, 64px);
-    border-top: 2px solid var(--acid);
+    border-top: 2px solid var(--accent);
 }
 
 .hero-card::after,
@@ -51,9 +53,9 @@
     position: absolute;
     right: 24px;
     bottom: 20px;
-    color: var(--line);
+    color: var(--border);
     content: "DYNLEX / DOCS";
-    font: 500 0.6rem/1 var(--mono);
+    font: 500 0.6rem/1 var(--font-code);
     letter-spacing: 0.14em;
 }
 
@@ -62,9 +64,9 @@
     display: inline-flex;
     margin-bottom: 16px;
     padding: 5px 8px;
-    border: 1px solid #66705f;
-    color: var(--acid);
-    font: 500 0.66rem/1 var(--mono);
+    border: 1px solid var(--border);
+    color: var(--accent-text);
+    font: 500 0.66rem/1 var(--font-code);
     letter-spacing: 0.1em;
     text-transform: uppercase;
 }
@@ -73,17 +75,17 @@
 .wiki-header h1 {
     max-width: 760px;
     margin-bottom: 18px;
-    color: var(--white);
+    color: var(--text-primary);
     font-size: clamp(2.6rem, 8vw, 5.8rem);
     line-height: 0.94;
-    letter-spacing: -0.07em;
+    letter-spacing: -0.035em;
 }
 
 .hero-card p,
 .wiki-header p {
     max-width: 710px;
     margin-bottom: 0;
-    color: #b2b7b0;
+    color: var(--text-muted);
     font-size: clamp(1rem, 2vw, 1.18rem);
     line-height: 1.75;
 }
@@ -123,7 +125,7 @@
     left: -1px;
     width: 34px;
     height: 2px;
-    background: var(--sky);
+    background: var(--accent-text);
     content: "";
 }
 
@@ -131,7 +133,7 @@
 .section-link-card h2,
 .term-card h2 {
     margin-bottom: 12px;
-    color: var(--white);
+    color: var(--text-primary);
     font-size: 1.45rem;
     letter-spacing: -0.035em;
 }
@@ -139,7 +141,7 @@
 .doc-card h3,
 .try-card h3 {
     margin-bottom: 10px;
-    color: var(--white);
+    color: var(--text-primary);
     font-size: 1.05rem;
 }
 
@@ -150,7 +152,7 @@
 .tldr-card li,
 .term-card p,
 .section-link-card p {
-    color: #aeb4ac;
+    color: var(--text-muted);
     line-height: 1.75;
 }
 
@@ -180,8 +182,8 @@
 
 .tldr-card {
     margin-top: 16px;
-    border-left: 3px solid var(--acid);
-    background: var(--ink-2);
+    border-left: 3px solid var(--accent);
+    background: var(--surface-alt);
 }
 
 .tldr-list {
@@ -193,7 +195,7 @@
 }
 
 .try-card {
-    border-left: 3px solid var(--violet);
+    border-left: 3px solid var(--accent);
 }
 
 .section-links {
@@ -217,8 +219,9 @@
     margin: 0;
     padding: 18px;
     overflow-x: auto;
-    border: 1px solid var(--line);
-    background: #090c0a;
+    border: 1px solid var(--border);
+    background: var(--page-bg);
+    border-radius: var(--radius-md);
 }
 
 .code-block pre,
@@ -229,7 +232,7 @@
 
 .code-block code,
 .pattern-box code {
-    color: var(--paper);
+    color: var(--text-primary);
     font-size: 0.86rem;
     line-height: 1.7;
 }
@@ -247,44 +250,44 @@
     align-items: center;
     justify-content: center;
     padding: 0 11px;
-    border: 1px solid #626a62;
-    background: var(--ink-2);
-    color: var(--white);
-    font: 500 0.68rem/1 var(--mono);
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-primary);
+    font: 500 0.68rem/1 var(--font-code);
     letter-spacing: 0.04em;
     text-decoration: none;
     transition: border-color 140ms ease, background-color 140ms ease;
 }
 
 .wiki-code-btn:hover {
-    border-color: var(--sky);
-    background: var(--ink-3);
+    border-color: var(--accent-text);
+    background: var(--surface-hover);
 }
 
 .wiki-code-btn-run {
-    border-color: var(--acid);
-    color: var(--acid);
+    border-color: var(--accent);
+    color: var(--accent-text);
 }
 
 .wiki-code-btn-run:hover {
-    border-color: var(--white);
-    color: var(--white);
+    border-color: var(--text-primary);
+    color: var(--text-primary);
 }
 
 a.inline-link,
 .section-link-card a,
 .related-grid a {
-    color: var(--sky);
+    color: var(--accent-text);
     text-decoration: underline;
-    text-decoration-color: rgba(133, 220, 255, 0.35);
+    text-decoration-color: rgba(245, 158, 11, 0.35);
     text-underline-offset: 3px;
 }
 
 a.inline-link:hover,
 .section-link-card a:hover,
 .related-grid a:hover {
-    color: var(--white);
-    text-decoration-color: var(--white);
+    color: var(--text-primary);
+    text-decoration-color: var(--text-primary);
 }
 
 .note {

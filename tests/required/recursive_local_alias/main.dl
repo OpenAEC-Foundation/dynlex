@@ -1,0 +1,15 @@
+flex section if condition:
+    replacement:
+        @intrinsic("if", condition)
+
+function walk value:
+    execute:
+        @intrinsic("store", result, value)
+        if @intrinsic("greater than", value, 0):
+            @intrinsic("store", candidate, walk @intrinsic("subtract", value, 1))
+            @intrinsic("store", alias, candidate)
+            @intrinsic("store", result, alias)
+        @intrinsic("return", result)
+
+if @intrinsic("not equal", walk 3, 0):
+    @intrinsic("call", "libc", "abort", @intrinsic("type", "nothing"))

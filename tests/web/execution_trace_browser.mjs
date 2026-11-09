@@ -25,6 +25,7 @@ assert.equal(await evaluate("editorFeedback('[data-farm-editor]','active')"), nu
 
 await navigate("/");
 await waitFor("document.querySelectorAll('[data-snippet-source][data-language-ready=true]').length===5", "site ready for river");
+await installEditorAccess();
 await clickElement("[data-river-challenge-load]");
 await waitFor("document.querySelector('[data-river-editor-shell][data-language-ready=true]')", "river ready");
 await editCode("[data-river-editor-shell]", `to load a passenger: get the sheep in the boat

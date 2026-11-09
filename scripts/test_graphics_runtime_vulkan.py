@@ -8,8 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from find_vulkan_icd import find_vulkan_icd, vulkan_driver_environment
-from native_ui_test import isolated_x11_environment
+from find_vulkan_icd import find_vulkan_icd, isolated_x11_environment, vulkan_driver_environment
 
 
 if len(sys.argv) != 3:
@@ -39,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
     subprocess.run(
         [
             str(compiler),
-            str(project / "tests/games/passthrough_vertex.dl"),
+            str(project / "tests/runtime/graphics_shaders/vertex.dl"),
             "--emit-spirv",
             "--shader-stage=vertex",
             "-o",
@@ -51,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-vulkan-runtime-") as temporary_d
     subprocess.run(
         [
             str(compiler),
-            str(project / "tests/games/plasma_shader.dl"),
+            str(project / "tests/runtime/graphics_shaders/fragment.dl"),
             "--emit-spirv",
             "--shader-stage=fragment",
             "-o",

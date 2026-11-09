@@ -1,17 +1,10 @@
 .river-game {
-    --river-panel: #0c110e;
-    --river-panel-raised: #121a15;
-    --river-border: rgba(229, 240, 226, 0.2);
-    --river-text: #f5f2e8;
-    --river-muted: #9fa9a0;
-    --river-green: #c7ff38;
-    --river-blue: #85dcff;
-    --river-red: #ff6f5e;
     overflow: hidden;
-    border: 1px solid #58645b;
-    background: var(--river-panel);
-    color: var(--river-text);
-    box-shadow: 12px 12px 0 #152d26;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: var(--page-bg);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-lg);
 }
 
 .river-game button {
@@ -24,9 +17,9 @@
     min-height: 52px;
     grid-template-columns: auto 1fr auto;
     align-items: center;
-    border-bottom: 1px solid var(--river-border);
-    background: #090d0b;
-    font: 500 0.61rem/1 var(--mono);
+    border-bottom: 1px solid var(--border);
+    background: var(--page-bg);
+    font: 500 0.61rem/1 var(--font-code);
     letter-spacing: 0.08em;
 }
 
@@ -37,16 +30,16 @@
 }
 
 .river-game-header span {
-    color: var(--river-green);
+    color: var(--accent-text);
 }
 
 .river-game-header strong {
-    color: #ccd3cc;
+    color: var(--text-primary);
     font-weight: 400;
 }
 
 .river-game-header i {
-    color: var(--river-blue);
+    color: var(--accent-text);
     font-style: normal;
 }
 
@@ -63,10 +56,10 @@
 .river-editor-panel {
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--river-border);
+    border-right: 1px solid var(--border);
     background:
-        radial-gradient(circle at 0 100%, rgba(102, 115, 255, 0.12), transparent 42%),
-        var(--river-panel);
+        radial-gradient(circle at 0 100%, rgba(217, 119, 6, 0.12), transparent 42%),
+        var(--page-bg);
 }
 
 .river-panel-label {
@@ -75,14 +68,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 17px;
-    border-bottom: 1px solid var(--river-border);
-    color: var(--river-muted);
-    font: 500 0.56rem/1 var(--mono);
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font: 500 0.56rem/1 var(--font-code);
     letter-spacing: 0.09em;
 }
 
 .river-panel-label small {
-    color: #667068;
+    color: var(--text-muted);
     font: inherit;
     letter-spacing: 0;
 }
@@ -94,10 +87,10 @@
 .river-diagnostics {
     min-height: 48px;
     padding: 12px 17px;
-    border-top: 1px solid rgba(255, 111, 94, 0.48);
-    background: rgba(255, 111, 94, 0.1);
-    color: #ffafa2;
-    font: 400 0.61rem/1.5 var(--mono);
+    border-top: 1px solid var(--danger-text);
+    background: var(--danger-soft);
+    color: var(--text-primary);
+    font: 400 0.61rem/1.5 var(--font-code);
     white-space: pre-wrap;
 }
 
@@ -110,34 +103,34 @@
     min-height: 55px;
     grid-template-columns: 1fr auto;
     align-items: center;
-    border-top: 1px solid var(--river-border);
+    border-top: 1px solid var(--border);
 }
 
 .river-editor-actions > span {
     padding: 0 17px;
-    color: #657067;
-    font: 500 0.53rem/1 var(--mono);
+    color: var(--text-muted);
+    font: 500 0.53rem/1 var(--font-code);
 }
 
 .river-editor-actions button {
     align-self: stretch;
     min-width: 118px;
     border: 0;
-    border-left: 1px solid var(--river-border);
-    background: var(--river-green);
-    color: #0a0d0a;
+    border-left: 1px solid var(--border);
+    background: var(--accent);
+    color: var(--on-accent);
     cursor: pointer;
-    font: 600 0.61rem/1 var(--mono);
+    font: 600 0.61rem/1 var(--font-code);
 }
 
 .river-editor-actions button i {
     margin-left: 8px;
-    color: #3a4919;
+    color: inherit;
     font-style: normal;
 }
 
 .river-editor-actions button:hover:not(:disabled) {
-    background: var(--river-blue);
+    background: var(--accent-hover);
 }
 
 .river-editor-actions button:disabled {
@@ -147,11 +140,11 @@
 
 .river-world-panel {
     position: relative;
-    background: #071513;
+    background: var(--page-bg);
 }
 
 .river-world-label {
-    background: #0a100d;
+    background: var(--page-bg);
 }
 
 .river-stage {
@@ -207,7 +200,7 @@
     background: rgba(7, 22, 18, 0.62);
     color: rgba(249, 244, 222, 0.86);
     backdrop-filter: blur(5px);
-    font: 500 clamp(0.42rem, 0.7vw, 0.58rem)/1 var(--mono);
+    font: 500 clamp(0.42rem, 0.7vw, 0.58rem)/1 var(--font-code);
     letter-spacing: 0.1em;
 }
 
@@ -551,24 +544,24 @@
     min-height: 50px;
     grid-template-columns: repeat(4, auto);
     justify-content: end;
-    border-top: 1px solid var(--river-border);
-    background: #09100d;
+    border-top: 1px solid var(--border);
+    background: var(--page-bg);
 }
 
 .river-playback button {
     min-width: 100px;
     padding: 0 14px;
     border: 0;
-    border-left: 1px solid var(--river-border);
+    border-left: 1px solid var(--border);
     background: transparent;
-    color: #adb7af;
+    color: var(--text-muted);
     cursor: pointer;
-    font: 500 0.56rem/1 var(--mono);
+    font: 500 0.56rem/1 var(--font-code);
 }
 
 .river-playback button:hover:not(:disabled) {
-    background: #14251d;
-    color: var(--river-green);
+    background: var(--surface-hover);
+    color: var(--accent-text);
 }
 
 .river-playback button:disabled {
@@ -577,29 +570,29 @@
 }
 
 .river-playback [data-river-playback-toggle] {
-    color: var(--river-blue);
+    color: var(--accent-text);
 }
 
 .river-playback [data-river-mute][aria-pressed="true"] {
-    color: #757d77;
+    color: var(--text-muted);
 }
 
 .river-program-message {
     min-height: 43px;
     margin: 0;
     padding: 13px 17px;
-    border-top: 1px solid var(--river-border);
-    color: #a9b3ab;
-    font: 400 0.61rem/1.45 var(--mono);
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font: 400 0.61rem/1.45 var(--font-code);
 }
 
 .river-game[data-playback-state="failure"] .river-program-message,
 .river-game[data-playback-state="error"] .river-program-message {
-    color: #ffafa2;
+    color: var(--danger-text);
 }
 
 .river-game[data-playback-state="success"] .river-program-message {
-    color: var(--river-green);
+    color: var(--success-text);
 }
 
 .river-game-credit {
@@ -609,19 +602,19 @@
     justify-content: space-between;
     gap: 20px;
     padding: 8px 17px;
-    border-top: 1px solid var(--river-border);
-    background: #070a08;
-    color: #59635b;
-    font: 500 0.51rem/1.4 var(--mono);
+    border-top: 1px solid var(--border);
+    background: var(--page-bg);
+    color: var(--text-muted);
+    font: 500 0.51rem/1.4 var(--font-code);
     letter-spacing: 0.04em;
 }
 
 .river-game-credit a {
-    color: #849087;
+    color: var(--text-muted);
 }
 
 .river-game-credit a:hover {
-    color: var(--river-blue);
+    color: var(--accent-text);
 }
 
 @keyframes river-character-scuffle {
@@ -650,7 +643,7 @@
 
     .river-editor-panel {
         order: 2;
-        border-top: 1px solid var(--river-border);
+        border-top: 1px solid var(--border);
         border-right: 0;
     }
 
@@ -661,7 +654,7 @@
 
 @media (max-width: 680px) {
     .river-game {
-        box-shadow: 7px 7px 0 #152d26;
+        box-shadow: var(--shadow-lg);
     }
 
     .river-game-header {
@@ -704,7 +697,7 @@
 
     .river-playback button {
         min-height: 42px;
-        border-bottom: 1px solid var(--river-border);
+        border-bottom: 1px solid var(--border);
     }
 
     .river-editor-shell {

@@ -1,0 +1,1 @@
+tests/required/uninitialized_function_local/main.dl:30-37: Error: Variable 'sample' has no type (never assigned a value)

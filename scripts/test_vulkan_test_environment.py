@@ -8,16 +8,17 @@ from pathlib import Path
 from unittest import mock
 
 import find_vulkan_icd as vulkan
-from native_ui_test import isolated_x11_environment
+from find_vulkan_icd import isolated_x11_environment
 
 
 class VulkanManifestTests(unittest.TestCase):
     def test_private_x_display_is_used_on_a_wayland_desktop(self) -> None:
-        desktop = {"DISPLAY": ":99", "WAYLAND_DISPLAY": "wayland-0", "XDG_SESSION_TYPE": "wayland"}
+        desktop = {"DISPLAY": ":99", "WAYLAND_DISPLAY": "wayland-0", "WAYLAND_SOCKET": "4", "XDG_SESSION_TYPE": "wayland"}
         private = isolated_x11_environment(desktop)
         self.assertEqual(private["DISPLAY"], ":99")
         self.assertEqual(private["XDG_SESSION_TYPE"], "x11")
         self.assertNotIn("WAYLAND_DISPLAY", private)
+        self.assertNotIn("WAYLAND_SOCKET", private)
         self.assertEqual(desktop["WAYLAND_DISPLAY"], "wayland-0")
 
     def setUp(self) -> None:

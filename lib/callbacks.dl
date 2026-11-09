@@ -1,4 +1,4 @@
-# Native callbacks keep their full parameter and result signature.
+# Callbacks keep their full parameter and result signature on native and WebAssembly targets.
 import lib/std.dl
 
 a callback means: @intrinsic("function type")

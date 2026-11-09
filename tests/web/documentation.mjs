@@ -39,9 +39,9 @@ assert.match(wikiActionsSource, /initializeSiteNavigation\(\)/);
 assert.match(wikiActionsSource, /from "\.\.\/site-navigation\.js"/);
 
 const wikiStyle = fs.readFileSync(wikiStylePath, "utf8");
-assert.match(wikiStyle, /var\(--ink-1\)/);
-assert.match(wikiStyle, /var\(--acid\)/);
-assert.match(wikiStyle, /var\(--line\)/);
+assert.match(wikiStyle, /var\(--surface\)/);
+assert.match(wikiStyle, /var\(--accent\)/);
+assert.match(wikiStyle, /var\(--border\)/);
 assert.doesNotMatch(wikiStyle, /--text-secondary|--code-bg|glass-card|bg-orbs|linear-gradient/);
 
 for (const pagePath of documentationPages) {
@@ -53,7 +53,7 @@ for (const pagePath of documentationPages) {
 
   assert.match(html, /<body class="docs-page">/);
   assert.match(html, /<a class="skip-link" href="#main-content">Skip to content<\/a>/);
-  assert.match(html, /<header class="site-header" data-site-header><\/header>/);
+  assert.match(html, /<header class="site-header" data-site-header data-theme="dark"><\/header>/);
   assert.match(html, /<main class="wiki-shell" id="main-content">/);
   assert.match(
     html,

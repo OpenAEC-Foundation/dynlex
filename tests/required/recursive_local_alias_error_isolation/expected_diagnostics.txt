@@ -1,0 +1,1 @@
+tests/required/recursive_local_alias_error_isolation/main.dl:38-65: Error: address of requires an addressable value

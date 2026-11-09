@@ -26,4 +26,3 @@ class:
 		[a|] shader program
 	members:
 		resource as a pointer
-

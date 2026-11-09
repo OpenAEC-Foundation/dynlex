@@ -81,7 +81,15 @@ void ExpressionInferenceSupport::inferVoidIntrinsic(IntrinsicKind kind) {
 	}
 	if ((kind == IntrinsicKind::If || kind == IntrinsicKind::ElseIf || kind == IntrinsicKind::LoopWhile) &&
 		expr->arguments.size() > 1) {
+		ScopedRecursiveInferenceObservation conditionObservation(context, context.currentInstantiation);
 		DataType operandType = ensureExpressionType(expr->arguments[1], context, flexBindingFrameStack);
+		if (!operandType.isDeduced() && conditionObservation.ownerObserved()) {
+			// Keep traversing the body so a later return can resolve this
+			// recursive condition. The owning pass retries its type check.
+			expr->sectionOutcome = sectionOutcomeForIntrinsic(kind);
+			expr->type = {DataType::Kind::Void};
+			return;
+		}
 		if (!isLogicalOperandType(operandType)) {
 			std::string operatorLabel = kind == IntrinsicKind::If		? "if condition"
 										: kind == IntrinsicKind::ElseIf ? "else if condition"
