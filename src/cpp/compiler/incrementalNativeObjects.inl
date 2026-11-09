@@ -21,6 +21,7 @@ struct BuildStatistics {
 	bool reusedTypeInference = false;
 	bool linkedCachedObjects = false;
 	size_t reusedInferenceInstantiations = 0;
+	size_t reusedInferenceSummarySections = 0;
 	size_t preinferredInstantiations = 0;
 	size_t reusedFunctionIR = 0;
 	size_t reusedObjects = 0;
@@ -37,6 +38,10 @@ struct BuildStatistics {
 	SourceProjectionWork sourceProjectionWork;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;
+	double cacheLoadMilliseconds = 0;
+	double cacheRestoreMilliseconds = 0;
+	double cacheFinalizeMilliseconds = 0;
+	double totalMilliseconds = 0;
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
@@ -44,6 +49,8 @@ struct BuildStatistics {
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;
+	double snapshotMilliseconds = 0;
+	double cacheWriteMilliseconds = 0;
 	double partitionMilliseconds = 0;
 	double linkMilliseconds = 0;
 	std::vector<std::string> objectKeys;

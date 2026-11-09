@@ -488,6 +488,7 @@ bool compileIncrementally(
 	ParseContext &context, const std::string &cacheDirectory, const std::string &compilerPath, bool showStatistics
 ) {
 	try {
+		auto compileStart = Clock::now();
 		fs::path directory = fs::absolute(cacheDirectory) / "native-v1";
 		fs::create_directories(directory);
 		std::string compilerIdentity = compilerBuildIdentity(compilerPath);
@@ -533,6 +534,7 @@ bool compileIncrementally(
 					previousParserKey = previous->at("parser_key").get<std::string>();
 			}
 		}
+		statistics.cacheLoadMilliseconds = elapsedMilliseconds(compileStart);
 		if (reuseFailedFrontend) {
 			statistics.reusedFrontend = true;
 			std::cerr << cachedDiagnostics;
@@ -582,6 +584,7 @@ bool compileIncrementally(
 					writeEntry(programEntry, previous->dump());
 			}
 		} else {
+			auto restoreStart = Clock::now();
 			recording->observations = Json::object();
 			if (!previousMatcherKey.empty()) {
 				fs::path matcherEntry = directory / ("matcher-" + previousMatcherKey + ".entry");
@@ -622,6 +625,7 @@ bool compileIncrementally(
 											  const MatchDependencies *dependencies) {
 				matcherCache.record(reference, options, match, dependencies);
 			};
+			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
 				std::string payload = matcherCache.snapshot();
 				std::string key = digest(payload);
@@ -791,6 +795,7 @@ bool compileIncrementally(
 				stageStart = Clock::now();
 				success = generateCode(context, [&](ParseContext &compiled) {
 					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					auto snapshotStart = Clock::now();
 					sortModuleSymbols(*compiled.llvmModule);
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
@@ -828,8 +833,11 @@ bool compileIncrementally(
 					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
 					result["inference_summaries"] =
-						inferenceReuse ? inferenceReuse->snapshot(sectionPaths, diagnosticSources, globalTypes)
-									   : captureInferenceSummaries(sectionPaths, diagnosticSources, globalTypes);
+						inferenceReuse
+							? inferenceReuse->snapshot(
+								  sectionPaths, diagnosticSources, globalTypes, &statistics.reusedInferenceSummarySections
+							  )
+							: captureInferenceSummaries(sectionPaths, diagnosticSources, globalTypes);
 					auto graphStart = Clock::now();
 					result["section_dependency_graph"] = captureSectionDependencyGraph(
 						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
@@ -837,6 +845,7 @@ bool compileIncrementally(
 					);
 					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					recordSemanticSources(result, *recording, compiled);
+					statistics.snapshotMilliseconds = elapsedMilliseconds(snapshotStart);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {
 						std::vector<std::string> priorObjects = previous->at("object_keys").get<std::vector<std::string>>();
@@ -861,7 +870,9 @@ bool compileIncrementally(
 						return false;
 					result["object_keys"] = statistics.objectKeys;
 					result["linked_output"] = linkedOutputIdentity(compiled);
+					auto writeStart = Clock::now();
 					writeEntry(programEntry, result.dump());
+					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
 				});
 				statistics.codegenMilliseconds = elapsedMilliseconds(stageStart);
@@ -886,14 +897,18 @@ bool compileIncrementally(
 				writeEntry(failedEntry, result.dump());
 			}
 		}
+		auto finalizeStart = Clock::now();
 		if (success)
 			fs::remove(failedEntry);
 		trimCache(directory);
+		statistics.cacheFinalizeMilliseconds = elapsedMilliseconds(finalizeStart);
+		statistics.totalMilliseconds = elapsedMilliseconds(compileStart);
 		if (showStatistics)
 			std::cerr << "incremental: "
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
 							  {"type_inference_reused", statistics.reusedTypeInference},
 							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
+							  {"inference_summary_sections_reused", statistics.reusedInferenceSummarySections},
 							  {"preinferred_instantiations", statistics.preinferredInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
 							  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
@@ -922,6 +937,10 @@ bool compileIncrementally(
 							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},
 							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
 							  {"matcher_restore_ms", statistics.matcherRestoreMilliseconds},
+							  {"cache_load_ms", statistics.cacheLoadMilliseconds},
+							  {"cache_restore_ms", statistics.cacheRestoreMilliseconds},
+							  {"cache_finalize_ms", statistics.cacheFinalizeMilliseconds},
+							  {"total_ms", statistics.totalMilliseconds},
 							  {"frontend_ms", statistics.frontendMilliseconds},
 							  {"import_ms", context.frontendStageMilliseconds[0]},
 							  {"parse_ms", context.frontendStageMilliseconds[1]},
@@ -932,6 +951,8 @@ bool compileIncrementally(
 							  {"dependency_graph_ms", statistics.dependencyGraphMilliseconds},
 							  {"preinference_ms", statistics.preinferenceMilliseconds},
 							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
+							  {"snapshot_ms", statistics.snapshotMilliseconds},
+							  {"cache_write_ms", statistics.cacheWriteMilliseconds},
 							  {"partition_ms", statistics.partitionMilliseconds},
 							  {"link_ms", statistics.linkMilliseconds},
 							  {"codegen_and_link_ms", statistics.codegenMilliseconds}}

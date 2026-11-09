@@ -465,6 +465,8 @@ function left times right:
     assert leaf_edit[0]["source_projections_reused"] >= 3, "unchanged imported files were reprojected"
     assert leaf_edit[0]["preinfer_dependency_graph_sections_checked"] >= 2, \
         "preinference traversed unchanged function bodies instead of saved dependencies"
+    assert leaf_edit[0]["inference_summary_sections_reused"] >= 2, \
+        "cached function inference summaries were re-encoded"
     assert leaf_edit[0]["dependency_graph_sections_reused"] >= 3, "unchanged sections ignored saved dependencies"
     assert leaf_edit[0]["dependency_graph_entries_reused"] >= 2, "reused inference dependencies were captured again"
     assert leaf_edit[0]["functions_ir_reused"] >= 3, "active edit regenerated independent or same-file function IR"

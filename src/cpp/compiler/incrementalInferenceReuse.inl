@@ -53,12 +53,12 @@ bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::
 
 Json captureInferenceSummaries(
 	const std::map<const Section *, std::string> &sectionPaths, const std::set<std::string> &excludedSources,
-	const Json &globalTypes
+	const Json &globalTypes, const std::unordered_set<const Section *> *skipped = nullptr
 ) {
 	Json summaries = Json::object();
 	ClassIdentityPaths classPaths = classIdentityPaths(sectionPaths);
 	for (const auto &[section, path] : sectionPaths) {
-		if (inferenceSummarySourceExcluded(section, excludedSources))
+		if (inferenceSummarySourceExcluded(section, excludedSources) || (skipped && skipped->contains(section)))
 			continue;
 		for (const auto &[key, instantiation] : section->instantiations) {
 			if (!canPersistInferenceSummary(section, key, instantiation, classPaths))
@@ -154,20 +154,32 @@ class IncrementalInferenceReuse {
 	size_t reusedCount() const { return count; }
 	Json snapshot(
 		const std::map<const Section *, std::string> &paths, const std::set<std::string> &excludedSources,
-		const Json &globalTypes
+		const Json &globalTypes, size_t *reusedSections = nullptr
 	) const {
-		Json result = captureInferenceSummaries(paths, excludedSources, globalTypes);
+		std::unordered_set<const Section *> skipped;
+		if (globalTypes == priorGlobalTypes)
+			for (const Section *section : eligible)
+				if (std::ranges::all_of(section->instantiations, [](const auto &entry) {
+					return entry.second.inferenceReusedFromCache;
+				}))
+					skipped.insert(section);
+		Json result = captureInferenceSummaries(paths, excludedSources, globalTypes, &skipped);
 		for (const Section *section : eligible) {
 			if (inferenceSummarySourceExcluded(section, excludedSources))
 				continue;
 			const std::string &path = sectionPaths.at(section);
 			if (summaries.contains(path)) {
+				bool copied = false;
 				for (const auto &[key, summary] : summaries.at(path).items()) {
 					if (summary.at("needs_global_types").get<bool>() && globalTypes != priorGlobalTypes)
 						continue;
-					if (!result[path].contains(key))
+					if (!result[path].contains(key)) {
 						result[path][key] = summary;
+						copied = true;
+					}
 				}
+				if (copied && skipped.contains(section) && reusedSections)
+					(*reusedSections)++;
 			}
 		}
 		return result;
