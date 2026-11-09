@@ -8,3 +8,7 @@ set entry to a JSON object containing [
 ]
 print line the compact JSON form of entry
 free entry
+set name to the string form of "entry.dl"
+set entry to a JSON object containing [JSON text name is "source"]
+require condition ((the JSON text named name in entry) = "source") reporting "A JSON builder lost its dynamic member name"
+free entry

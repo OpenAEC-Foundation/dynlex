@@ -19,21 +19,21 @@ to get a JSON array containing {an array:values}:
         increment index
     return result
 
-to get JSON text {C string:name} is {a value:value}:
+to get JSON text {a value:name} is {a value:value}:
     set node to a new JSON value of kind the JSON text kind
     set node's text to the string form of value
     return @intrinsic("construct", JSON member, the string form of name, node)
 
-to get JSON number {C string:name} is {a number:value}:
+to get JSON number {a value:name} is {a number:value}:
     require condition ((value as a floating-point number) is finite) reporting "JSON numbers must be finite"
     set node to a new JSON value of kind the JSON number kind
     set node's text to the string form of value
     set node's number to value as a floating-point number
     return @intrinsic("construct", JSON member, the string form of name, node)
 
-to get JSON flag {C string:name} is {boolean:value}:
+to get JSON flag {a value:name} is {boolean:value}:
     set node to a new JSON value of kind the JSON boolean kind
     set node's boolean to value
     return @intrinsic("construct", JSON member, the string form of name, node)
 
-JSON child {C string:name} is {a pointer to JSON value:value} means: @intrinsic("construct", JSON member, the string form of name, value)
+JSON child {a value:name} is {a pointer to JSON value:value} means: @intrinsic("construct", JSON member, the string form of name, value)

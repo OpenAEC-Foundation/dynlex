@@ -1,0 +1,98 @@
+# RFC 4648 sections 4 and 5: https://www.rfc-editor.org/rfc/rfc4648.html
+# Decoders reject non-alphabet characters, invalid padding and nonzero pad bits.
+import lib/string.dl
+
+class:
+    patterns:
+        Base64 result
+    members:
+        success as a boolean
+        value as a string
+        error offset as an integer
+
+the Base64 alphabet means: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+the Base64 URL alphabet means: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+local function encode Base64 bytes {string:source} with alphabet {C string:alphabet} padded {boolean:padded}:
+    execute:
+        set required to ((source's length as a 64 bit integer) / 3) * 4
+        set remainder to source's length mod 3
+        if remainder > 0:
+            set required to required + remainder + 1
+            if padded:
+                set required to (required + 3) - remainder
+        if required > the maximum string buffer length:
+            abort the program
+        set count to required as an integer
+        set result to a new string buffer containing count bytes
+        set input, output, bits and pending to 0
+        loop while input < source's length:
+            set octet to ((the character at input in source) as an integer) bitwise and 255
+            set pending to (pending shifted left by 8) bitwise or octet
+            set bits to bits + 8
+            loop while bits >= 6:
+                set bits to bits - 6
+                set code to (pending shifted right by bits) bitwise and 63
+                store (the item at code in alphabet) into (the data of result) at output
+                increment output
+            set pending to pending bitwise and ((1 shifted left by bits) - 1)
+            increment input
+        if bits > 0:
+            set code to pending shifted left by (6 - bits)
+            store (the item at code in alphabet) into (the data of result) at output
+            increment output
+        loop while output < count:
+            store (61 as a byte) into (the data of result) at output
+            increment output
+        return result
+
+local function decode Base64 bytes {string:source} with alphabet {C string:alphabet} allowing unpadded {boolean:unpadded}:
+    execute:
+        set size to source's length
+        set padding to 0
+        set scanning to true
+        loop while (size > 0) and scanning:
+            if (the character at (size - 1) in source) = (61 as a byte):
+                decrement size
+                increment padding
+            else:
+                set scanning to false
+        set invalid to @intrinsic("construct", Base64 result, false, the string form of "", size)
+        set remainder to size mod 4
+        if (padding > 2) or (remainder = 1):
+            return invalid
+        if padding > 0:
+            if ((source's length mod 4) != 0) or (padding != ((4 - remainder) mod 4)):
+                return invalid
+        else if (unpadded = false) and (remainder != 0):
+            return invalid
+        set count to (size / 4) * 3
+        if remainder > 0:
+            set count to (count + remainder) - 1
+        set result to a new string buffer containing count bytes
+        set input, output, bits and pending to 0
+        loop while input < size:
+            set octet to the character at input in source
+            set code to 0
+            loop while (code < 64) and ((the item at code in alphabet) != octet):
+                increment code
+            if code = 64:
+                set invalid's error offset to input
+                return invalid
+            set pending to (pending shifted left by 6) bitwise or code
+            set bits to bits + 6
+            if bits >= 8:
+                set bits to bits - 8
+                store ((pending shifted right by bits) as a byte) into (the data of result) at output
+                increment output
+                set pending to pending bitwise and ((1 shifted left by bits) - 1)
+            increment input
+        if pending != 0:
+            set invalid's error offset to size - 1
+            return invalid
+        return @intrinsic("construct", Base64 result, true, result, -1)
+
+the Base64 form of {string:source} means: encode Base64 bytes source with alphabet the Base64 alphabet padded true
+the Base64 URL form of {string:source} means: encode Base64 bytes source with alphabet the Base64 URL alphabet padded false
+the Base64 decoding of {string:source} means: decode Base64 bytes source with alphabet the Base64 alphabet allowing unpadded false
+the Base64 URL decoding of {string:source} means: decode Base64 bytes source with alphabet the Base64 URL alphabet allowing unpadded true
