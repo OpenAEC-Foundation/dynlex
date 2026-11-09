@@ -115,7 +115,7 @@ try {
       platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
   });
   await command('Page.addScriptToEvaluateOnNewDocument', { source: `
-    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [] };
+    window.siteProbe = { paints: 0, api: '', texts: [], visible: [], diagnostics: [], compilations: [], builds: [], downloads: [], programOutput: '' };
     const instantiate = WebAssembly.instantiate.bind(WebAssembly);
     WebAssembly.instantiate = function(bytes, imports, ...args) {
       const env = imports?.env;
@@ -151,6 +151,7 @@ try {
       constructor(...args) {
         super(...args);
         this.addEventListener('message', ({ data }) => {
+          if (data.event?.output) window.siteProbe.programOutput += data.event.output;
           if (data.result?.status !== undefined) window.siteProbe.builds.push({
             status: data.result.status, stages: Object.keys(data.result.stages || {})
           });
@@ -225,6 +226,15 @@ try {
   await command('Input.insertText',{text:'import lib/std.dl\nprint line 7'});
   await click(237,287);
   await waitFor('window.siteProbe.texts.includes("7")');
+  await click(120,480); await key('KeyA','a',65,2);
+  await command('Input.insertText', { text:'import lib/std.dl\nprint line ""' });
+  await key('End','End',35,2); await key('ArrowLeft','ArrowLeft',37);
+  await command('Input.imeSetComposition', { text:'とうきょう', selectionStart:5, selectionEnd:5 });
+  await waitFor('window.siteProbe.visible.some(text => text.includes("とうきょう"))');
+  await command('Input.insertText', { text:'東京' });
+  await evaluate('window.siteProbe.programOutput = ""');
+  await click(237,287);
+  await waitFor('window.siteProbe.programOutput.includes("東京\\n")');
   await capture('ide-executed');
   await click(120,480); await key('KeyA','a',65,2);
   await command('Input.insertText',{text:'unrecognized instruction'});
