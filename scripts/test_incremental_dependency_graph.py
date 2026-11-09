@@ -13,6 +13,16 @@ def graph_for(cache, entry):
     return matches[0]
 
 
+def projection_for(cache, entry):
+    matches = []
+    for path in (cache / "native-v1").glob("program-*.entry"):
+        program = json.loads(path.read_text().split("\n", 2)[2])
+        if str(entry) in program["files"]:
+            matches.append(program["all_function_projection"])
+    assert len(matches) == 1, "expected one cached program projection"
+    return matches[0]
+
+
 def assert_reverse_edges(graph):
     expected = {}
     for caller, dependencies in graph["forward"].items():
@@ -109,3 +119,76 @@ def check_leaf_dependency_cascade(root, build):
     assert_reverse_edges(float_graph)
     assert variant_edit[1:] == build(False, entry=variant_main)[1:], \
         "cached inference reused a specialization whose LLVM function was removed"
+
+
+def check_inactive_projection_refresh(root, build):
+    main = root / "inactive_projection_refresh.dl"
+    integer = 'integer means: @intrinsic("type", "int")\n'
+    live = 'to live: @intrinsic("discard", 1)\n'
+    messages = ('to old message: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "old"))\n'
+                'to new message: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "new"))\n')
+    old = 'to spare: old message\n'
+    new = 'to spare: new message\n'
+    main.write_text(integer + live + messages + old + 'live\n')
+    build(entry=main)
+    before = projection_for(root / "cache", main)
+    main.write_text(integer + live + messages + new + 'live\n')
+    edited = build(entry=main)
+    assert edited[0]["type_inference_reused"], "inactive body edit reran type inference"
+    assert edited[0]["inactive_projection_matches_rechecked"] == 1, \
+        "inactive projection rematched unchanged function bodies"
+    after = projection_for(root / "cache", main)
+    changed = [path for path in after["bodies"] if after["bodies"][path] != before["bodies"][path]]
+    assert len(changed) == 1 and after["matches"][changed[0]] != before["matches"][changed[0]], \
+        "inactive body edit kept a stale body or match fingerprint"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(integer + live + messages + new + 'live\nspare\n')
+    called = build(entry=main)
+    assert called[1:] == build(False, entry=main)[1:], "later call used the prior inactive body"
+
+
+def check_inactive_edit_with_unrelated_warning(root, build):
+    helper = root / "warn_inactive_helper.dl"
+    main = root / "warn_inactive_main.dl"
+    helper.write_text('to unused: @intrinsic("discard", 1)\n')
+    main.write_text('import warn_inactive_helper.dl\n'
+                    'integer means: @intrinsic("type", "int")\n'
+                    'to show value as the value: @intrinsic("discard", value)\n'
+                    'show 1 as the value\n')
+    cold = build(entry=main)
+    assert "Warning:" in cold[1], "fixture did not produce a warning"
+    helper.write_text('to unused: @intrinsic("discard", 2)\n')
+    edited = build(entry=main)
+    assert edited[0]["type_inference_reused"], "unrelated warning disabled inactive-body inference reuse"
+    assert edited[0]["diagnostic_records_reused"] > 0, "unrelated warning was not carried forward"
+    assert edited[1:] == build(False, entry=main)[1:], "inactive edit lost or changed an unrelated warning"
+    helper.write_text('to unused: nonexistent call\n')
+    invalid = build(entry=main, success=False)
+    assert invalid[1] == build(False, entry=main, success=False)[1], \
+        "a new diagnostic in the edited body was hidden by cached warnings"
+
+
+def check_inactive_edit_after_warning_wording(root, build):
+    folder = root / "warn_inactive_config"
+    folder.mkdir()
+    helper = folder / "helper.dl"
+    main = folder / "main.dl"
+    config = folder / "config.dl"
+    helper.write_text('to unused: @intrinsic("discard", 1)\n')
+    main.write_text('import helper.dl\n'
+                    'integer means: @intrinsic("type", "int")\n'
+                    'value means: 1\n'
+                    'to show {integer:value}: @intrinsic("discard", value)\n'
+                    'show 2\n')
+    wording = lambda name: ('dynlex options:\n    messages:\n'
+                            f'        explicit parameter ambiguity: "{name} warning for {{parameter}}"\n')
+    config.write_text(wording("First"))
+    first = build(entry=main)
+    assert "First warning" in first[1]
+    config.write_text(wording("Second"))
+    changed_wording = build(entry=main)
+    assert changed_wording[0]["frontend_reused"] and "Second warning" in changed_wording[1]
+    helper.write_text('to unused: @intrinsic("discard", 2)\n')
+    edited = build(entry=main)
+    assert edited[0]["type_inference_reused"], "warning wording invalidated an unrelated inactive body"
+    assert edited[1:] == build(False, entry=main)[1:], "edited build used old diagnostic wording"

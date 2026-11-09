@@ -809,11 +809,14 @@ use their matcher spelling. This keeps unrelated callers resolved during cold an
 edited builds while retaining rematches for genuinely competing patterns.
 An edit confined to the bodies of ordinary functions that had no inferred
 instantiation in the prior build can stop after pattern resolution and validation.
-The cache compares declarations and all source text outside those bodies, and it
-uses this path only when neither build has diagnostics or pending scope-rule warnings.
+The cache compares declarations and all source text outside those bodies. It
+compares the current preinference diagnostics with their saved records and
+reuses later warnings when their source files were not edited; pending scope-rule
+warnings still prevent this path.
 For inline functions, the source projection masks the mapped body span while retaining
 the declaration on the same physical line.
-It then reuses the prior inferred result and linked objects. Active function edits
+It refreshes body and resolved-match fingerprints for edited inactive functions,
+then reuses the prior inferred result and linked objects. Active function edits
 traverse type inference again; eligible unchanged instantiations reuse cached summaries.
 
 For native, unoptimized builds without debug or execution tracing, the compiler

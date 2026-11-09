@@ -30,6 +30,8 @@ struct BuildStatistics {
 	size_t preinferDependencyGraphSectionsChecked = 0;
 	size_t dependencyGraphEntriesReused = 0;
 	size_t dependencyGraphReverseNodesUpdated = 0;
+	size_t inactiveProjectionMatchesRechecked = 0;
+	size_t reusedDiagnosticRecords = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
@@ -46,6 +48,9 @@ struct BuildStatistics {
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
+	double inactiveProjectionMilliseconds = 0;
+	double parserSnapshotMilliseconds = 0;
+	double matcherSnapshotMilliseconds = 0;
 	double dependencyGraphMilliseconds = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;

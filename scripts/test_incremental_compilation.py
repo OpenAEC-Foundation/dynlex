@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_leaf_dependency_cascade
+from test_incremental_dependency_graph import check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_leaf_dependency_cascade
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -349,6 +349,9 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     main.write_text(unused_source.replace('@intrinsic("discard", 1)', 'unresolved function call'))
     invalid_unused = build(success=False)
     assert invalid_unused[1] == build(False, success=False)[1], "unused body edit hid a resolution error"
+    check_inactive_projection_refresh(root, build)
+    check_inactive_edit_with_unrelated_warning(root, build)
+    check_inactive_edit_after_warning_wording(root, build)
     precedence_source = '''function left plus right:
     RULE: $ times $
     replacement:

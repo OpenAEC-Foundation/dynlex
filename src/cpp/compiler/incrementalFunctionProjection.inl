@@ -1,3 +1,22 @@
+Json functionBodyDigests(const ParseContext &context, const std::map<std::string, Section *> &sections) {
+	std::map<const Section *, std::string> bodies;
+	for (const auto &[_, section] : sections)
+		if ((section->type == SectionType::Function && !section->patternDefinitions.empty()) ||
+			section->type == SectionType::Retain || section->type == SectionType::Release)
+			bodies.emplace(section, "");
+	for (const CodeLine *line : context.codeLines)
+		for (const Section *section = line->section; section; section = section->parent)
+			if (auto body = bodies.find(section); body != bodies.end()) {
+				body->second.append(line->rightTrimmedText);
+				body->second += '\n';
+			}
+	Json result = Json::object();
+	for (const auto &[path, section] : sections)
+		if (auto body = bodies.find(section); body != bodies.end())
+			result[path] = digest(body->second);
+	return result;
+}
+
 Json captureAllFunctionProjection(
 	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
 	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
@@ -8,7 +27,6 @@ Json captureAllFunctionProjection(
 	Json selected = Json::object();
 	Json declarations = Json::object();
 	Json matches = Json::object();
-	std::map<const Section *, std::string> bodies;
 	std::map<const Section *, std::string> paths;
 	std::unordered_set<const Section *> reusable;
 	std::unordered_set<const Section *> selectedSections;
@@ -19,10 +37,7 @@ Json captureAllFunctionProjection(
 				selected[path] = sectionIdentity(*section);
 				selectedSections.insert(section);
 			}
-			bodies.emplace(section, "");
 		}
-		if (section->type == SectionType::Retain || section->type == SectionType::Release)
-			bodies.emplace(section, "");
 		if (reusableCodegenSection(*section)) {
 			reusable.insert(section);
 			declarations[path] = sectionDeclaration(*section);
@@ -31,15 +46,7 @@ Json captureAllFunctionProjection(
 	if (projectionWork)
 		projectionWork->setupMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
-	for (const CodeLine *line : context.codeLines) {
-		for (const Section *section = line->section; section; section = section->parent) {
-			auto body = bodies.find(section);
-			if (body != bodies.end()) {
-				body->second.append(line->rightTrimmedText);
-				body->second += '\n';
-			}
-		}
-	}
+	Json bodyDigests = functionBodyDigests(context, sections);
 	if (projectionWork)
 		projectionWork->bodyMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
@@ -53,12 +60,7 @@ Json captureAllFunctionProjection(
 	};
 	if (projectionWork)
 		projectionWork->inactiveMilliseconds += elapsedMilliseconds(phaseStart);
-	Json bodyDigests = Json::object();
 	phaseStart = Clock::now();
-	for (const auto &[path, section] : sections) {
-		if (auto body = bodies.find(section); body != bodies.end())
-			bodyDigests[path] = digest(body->second);
-	}
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
 	projection["ambient_declarations"] = declarationDigest(sections, reusable);

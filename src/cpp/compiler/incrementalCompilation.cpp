@@ -364,23 +364,7 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 	return true;
 }
 
-bool canReuseInactiveBodies(
-	const Json &previous, const Json &observations, const ParseContext &context,
-	const std::map<std::string, Section *> &sections, Json &currentProjection, SourceProjectionWork *projectionWork
-) {
-	if (!previous.contains("inactive_projection") || previous.at("diagnostics") != "" || context.options.emitDebugInfo ||
-		context.options.traceExecution || !context.diagnostics.empty() || !context.scopeRuleWarnings.empty() ||
-		!compatibleObservations(previous, observations, context))
-		return false;
-	const Json &priorProjection = previous.at("inactive_projection");
-	currentProjection = captureInactiveProjection(
-		context, observations, &priorProjection.at("inactive"), nullptr, &sections, &priorProjection.at("sources"),
-		projectionWork
-	);
-	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations") &&
-		   sourceProjectionsEqual(currentProjection.at("sources"), priorProjection.at("sources"));
-}
-
+#include "incrementalInactiveFunctionProjection.inl"
 #include "incrementalObservationReuse.inl"
 
 Json optionIdentity(const ParseContext::Options &options) {
@@ -627,15 +611,19 @@ bool compileIncrementally(
 			};
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
+				auto saveStart = Clock::now();
 				std::string payload = matcherCache.snapshot();
 				std::string key = digest(payload);
 				writeEntry(directory / ("matcher-" + key + ".entry"), payload);
+				statistics.matcherSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
 			auto saveParser = [&]() {
+				auto saveStart = Clock::now();
 				std::string payload = parserCache.snapshot();
 				std::string key = digest(payload);
 				writeEntry(directory / ("parser-" + key + ".entry"), payload);
+				statistics.parserSnapshotMilliseconds += elapsedMilliseconds(saveStart);
 				return key;
 			};
 			auto stageStart = Clock::now();
@@ -649,22 +637,38 @@ bool compileIncrementally(
 			context.recordParsedExpression = {};
 			context.reuseParsedDefinition = {};
 			context.recordParsedDefinition = {};
-			stageStart = Clock::now();
 			std::map<std::string, Section *> sections;
 			if (compiled)
 				collectSections(context.mainSection, "root", sections);
-			Json resolvedFunctionProjection = compiled ? captureAllFunctionProjection(
-															 context, recording->observations, sections,
-															 previous ? &*previous : nullptr, &statistics.sourceProjectionWork
-														 )
-													   : Json(nullptr);
-			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
+			std::string frontendDiagnosticText;
+			std::set<std::string> frontendDiagnosticSources;
+			Json frontendDiagnosticRecords = compiled
+				? captureCachedDiagnostics(context, frontendDiagnosticText, frontendDiagnosticSources)
+				: Json::array();
 			Json inactiveProjection;
+			stageStart = Clock::now();
 			bool reuseTypeInference =
 				compiled && previous &&
 				canReuseInactiveBodies(
-					*previous, recording->observations, context, sections, inactiveProjection, &statistics.sourceProjectionWork
+					*previous, recording->observations, context, sections, frontendDiagnosticRecords, inactiveProjection,
+					&statistics.sourceProjectionWork
 				);
+			statistics.inactiveProjectionMilliseconds = elapsedMilliseconds(stageStart);
+			stageStart = Clock::now();
+			std::optional<Json> refreshedProjection;
+			if (reuseTypeInference)
+				refreshedProjection = refreshInactiveFunctionProjection(
+					context, recording->observations, sections, previous->at("all_function_projection"),
+					previous->at("inactive_projection"), statistics.inactiveProjectionMatchesRechecked
+				);
+			Json resolvedFunctionProjection = nullptr;
+			if (compiled && refreshedProjection)
+				resolvedFunctionProjection = std::move(*refreshedProjection);
+			else if (compiled)
+				resolvedFunctionProjection = captureAllFunctionProjection(
+					context, recording->observations, sections, previous ? &*previous : nullptr, &statistics.sourceProjectionWork
+				);
+			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			std::map<const Section *, std::string> sectionPaths;
 			for (const auto &[path, section] : sections)
 				sectionPaths.emplace(section, path);
@@ -765,15 +769,22 @@ bool compileIncrementally(
 					}
 				}
 				if (success) {
+					std::cerr << previous->at("diagnostics").get_ref<const std::string &>();
+					context.diagnostics.clear();
+					statistics.reusedDiagnosticRecords = previous->at("diagnostic_records").size();
 					Json result = *previous;
 					result["files"] = recording->observations;
 					result["inactive_projection"] = std::move(inactiveProjection);
+					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					result["matcher_key"] = saveMatcher();
 					result["parser_key"] = saveParser();
 					result["object_keys"] = statistics.objectKeys;
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
+					auto writeStart = Clock::now();
 					writeEntry(programEntry, result.dump());
+					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 				}
 			} else if (compiled) {
 				std::map<std::string, std::string> functionSections;
@@ -822,6 +833,7 @@ bool compileIncrementally(
 					result["matcher_key"] = saveMatcher();
 					result["parser_key"] = saveParser();
 					result["all_function_projection"] = std::move(resolvedFunctionProjection);
+					result["frontend_diagnostic_records"] = std::move(frontendDiagnosticRecords);
 					if (functionReuse) {
 						for (const std::string &name : functionReuse->reusedFunctionNames()) {
 							functionSections.emplace(name, previous->at("function_sections").at(name).get<std::string>());
@@ -927,6 +939,7 @@ bool compileIncrementally(
 							  {"preinfer_dependency_graph_sections_checked", statistics.preinferDependencyGraphSectionsChecked},
 							  {"dependency_graph_entries_reused", statistics.dependencyGraphEntriesReused},
 							  {"dependency_graph_reverse_nodes_updated", statistics.dependencyGraphReverseNodesUpdated},
+							  {"diagnostic_records_reused", statistics.reusedDiagnosticRecords},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},
@@ -961,6 +974,10 @@ bool compileIncrementally(
 							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
 							  {"inference_ms", statistics.inferenceMilliseconds},
 							  {"projection_ms", statistics.projectionMilliseconds},
+							  {"inactive_projection_ms", statistics.inactiveProjectionMilliseconds},
+							  {"inactive_projection_matches_rechecked", statistics.inactiveProjectionMatchesRechecked},
+							  {"parser_snapshot_ms", statistics.parserSnapshotMilliseconds},
+							  {"matcher_snapshot_ms", statistics.matcherSnapshotMilliseconds},
 							  {"dependency_graph_ms", statistics.dependencyGraphMilliseconds},
 							  {"preinference_ms", statistics.preinferenceMilliseconds},
 							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
