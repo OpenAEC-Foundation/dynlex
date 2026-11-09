@@ -250,48 +250,53 @@ bool IncrementalMatcherCache::available(MatchOptions options) {
 	return true;
 }
 
-std::string IncrementalMatcherCache::key(const PatternReference &reference, bool trackDependencies) {
+std::string IncrementalMatcherCache::key(PatternReference &reference, bool trackDependencies) {
 	auto started = std::chrono::steady_clock::now();
 	const Range &range = reference.range();
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
-	std::vector<std::string_view> possibleStartLiterals;
-	auto includeStartLiterals = [&](std::string_view text) {
-		for (size_t runStart = 0; runStart < text.size();) {
-			auto category = [](unsigned char character) {
-				if (std::isalnum(character) || character == '_')
-					return 0;
-				return character == ' ' ? 1 : 2;
-			};
-			int runCategory = category(static_cast<unsigned char>(text[runStart]));
-			size_t runEnd = runStart + 1;
-			while (runEnd < text.size() && category(static_cast<unsigned char>(text[runEnd])) == runCategory)
-				runEnd++;
-			if (runCategory == 0) {
-				// Word elements are atomic; only Other elements can split during matching.
-				possibleStartLiterals.push_back(text.substr(runStart, runEnd - runStart));
-			} else {
-				for (size_t start = runStart; start < runEnd; start++)
-					for (size_t end = start + 1; end <= runEnd; end++)
-						possibleStartLiterals.push_back(text.substr(start, end - start));
+	if (!reference.matcherKeyLiterals) {
+		auto literals = std::make_unique<MatcherKeyLiterals>();
+		std::vector<std::string_view> candidates;
+		auto includeStartLiterals = [&](std::string_view text) {
+			for (size_t runStart = 0; runStart < text.size();) {
+				auto category = [](unsigned char character) {
+					if (std::isalnum(character) || character == '_')
+						return 0;
+					return character == ' ' ? 1 : 2;
+				};
+				int runCategory = category(static_cast<unsigned char>(text[runStart]));
+				size_t runEnd = runStart + 1;
+				while (runEnd < text.size() && category(static_cast<unsigned char>(text[runEnd])) == runCategory)
+					runEnd++;
+				if (runCategory == 0) {
+					// Word elements are atomic; only Other elements can split during matching.
+					candidates.push_back(text.substr(runStart, runEnd - runStart));
+				} else {
+					for (size_t start = runStart; start < runEnd; start++)
+						for (size_t end = start + 1; end <= runEnd; end++)
+							candidates.push_back(text.substr(start, end - start));
+				}
+				runStart = runEnd;
 			}
-			runStart = runEnd;
+		};
+		includeStartLiterals(range.line->fullText);
+		includeStartLiterals(reference.pattern.text);
+		if (reference.expression) {
+			literals->numericSpellings.reserve(reference.expression->arguments.size());
+			for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
+				literals->numericSpellings.push_back(numericPatternArgumentSpelling(&reference, index));
+				if (literals->numericSpellings.back())
+					includeStartLiterals(*literals->numericSpellings.back());
+			}
 		}
-	};
-	includeStartLiterals(range.line->fullText);
-	includeStartLiterals(reference.pattern.text);
-	std::vector<std::optional<std::string>> numericSpellings;
-	if (reference.expression) {
-		numericSpellings.reserve(reference.expression->arguments.size());
-		for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
-			numericSpellings.push_back(numericPatternArgumentSpelling(&reference, index));
-			if (numericSpellings.back())
-				includeStartLiterals(*numericSpellings.back());
-		}
+		std::sort(candidates.begin(), candidates.end());
+		candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+		literals->possibleStartLiterals.reserve(candidates.size());
+		for (std::string_view candidate : candidates)
+			literals->possibleStartLiterals.emplace_back(candidate);
+		reference.matcherKeyLiterals = std::move(literals);
 	}
-	std::sort(possibleStartLiterals.begin(), possibleStartLiterals.end());
-	possibleStartLiterals.erase(
-		std::unique(possibleStartLiterals.begin(), possibleStartLiterals.end()), possibleStartLiterals.end()
-	);
+	const MatcherKeyLiterals &literals = *reference.matcherKeyLiterals;
 	Fingerprint fingerprint;
 	bool precedencePhase = context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence;
 	fingerprint.boolean(precedencePhase);
@@ -299,7 +304,7 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 		fingerprint.string(precedenceDigest());
 	auto appendTreeState = [&](const PatternTreeNode *root) {
 		fingerprint.string(root->mutationState->wildcardDigest);
-		for (std::string_view literal : possibleStartLiterals) {
+		for (const std::string &literal : literals.possibleStartLiterals) {
 			auto found = root->mutationState->literalDigests.find(literal);
 			if (found == root->mutationState->literalDigests.end())
 				continue;
@@ -334,8 +339,8 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	}
 	fingerprint.boolean(reference.expression != nullptr);
 	if (reference.expression) {
-		fingerprint.number(numericSpellings.size());
-		for (const std::optional<std::string> &spelling : numericSpellings) {
+		fingerprint.number(literals.numericSpellings.size());
+		for (const std::optional<std::string> &spelling : literals.numericSpellings) {
 			fingerprint.boolean(spelling.has_value());
 			if (spelling)
 				fingerprint.string(*spelling);

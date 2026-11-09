@@ -42,7 +42,7 @@ class IncrementalMatcherCache {
 	double restoreMilliseconds = 0;
 
 	bool available(MatchOptions options);
-	std::string key(const PatternReference &reference, bool trackDependencies);
+	std::string key(PatternReference &reference, bool trackDependencies);
 	std::string precedenceDigest();
 	void appendNode(std::string &output, const PatternTreeNode *node) const;
 	PatternTreeNode *restoreNode(std::string_view input, size_t &position) const;

@@ -4,8 +4,14 @@
 #include "range.h"
 #include "sectionType.h"
 #include "transformedPattern.h"
+#include <memory>
 #include <optional>
 struct Section;
+// Parsed spellings stay fixed while the matcher revisits a reference.
+struct MatcherKeyLiterals {
+	std::vector<std::optional<std::string>> numericSpellings;
+	std::vector<std::string> possibleStartLiterals;
+};
 struct PatternReference {
 	enum class Purpose {
 		Expression,
@@ -19,6 +25,7 @@ struct PatternReference {
 	PatternMatch *match{};
 	// Dependency key of the match currently attached to this reference.
 	std::string incrementalMatcherKey;
+	std::unique_ptr<MatcherKeyLiterals> matcherKeyLiterals;
 	// for extracting arguments
 	Expression *expression;
 	// Lexical scope used for matching explicit variable names. Synthetic references,

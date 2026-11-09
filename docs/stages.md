@@ -126,6 +126,10 @@ Adding a definition wakes a waiting reference only when one of those conditions 
 deadlock recovery still sees all waiting references. This avoids rescanning every failed
 reference on each resolution pass.
 
+Incremental matcher keys reuse each parsed reference's candidate literal spellings and numeric literal arguments.
+The pattern tree and lexical scope are fingerprinted again for every lookup, so a newly indexed overload or a
+new declaration can invalidate the previous match.
+
 We discover what is a variable based on these principles:
 
 - A single-word function pattern is never a variable. Therefore, all functions with single-word patterns are parsed in the first round.
