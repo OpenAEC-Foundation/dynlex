@@ -66,6 +66,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
 
     cold = build()
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
+    assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
+    assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
     assert cold[0]["objects_built"] > 0
     clean = build(False)
     assert cold[1:] == clean[1:], "cold build differs from clean build"

@@ -1,6 +1,15 @@
 struct SourceProjectionWork {
 	size_t reused = 0;
 	size_t scanned = 0;
+	double maskMilliseconds = 0;
+	double sourceMilliseconds = 0;
+	double setupMilliseconds = 0;
+	double bodyMilliseconds = 0;
+	double declarationMilliseconds = 0;
+	double matchMilliseconds = 0;
+	double inactiveMilliseconds = 0;
+	double ambientMilliseconds = 0;
+	double compatibilityMilliseconds = 0;
 };
 
 Json sourceProjection(
@@ -8,6 +17,7 @@ Json sourceProjection(
 	bool maskOpeningLines = false, bool ignoreMaskedRuns = false, bool maskGlobalExecution = false,
 	const Json *priorSources = nullptr, SourceProjectionWork *work = nullptr
 ) {
+	auto maskStart = Clock::now();
 	using SourceRanges = std::map<const lsp::SourceFile *, std::map<int, std::vector<std::pair<size_t, size_t>>>>;
 	std::map<const lsp::SourceFile *, std::set<int>> masked;
 	std::map<const lsp::SourceFile *, std::set<int>> preserved;
@@ -75,6 +85,9 @@ Json sourceProjection(
 			appendNumber(sliceTrace, sourceStart + to - from);
 		}
 	}
+	if (work)
+		work->maskMilliseconds += elapsedMilliseconds(maskStart);
+	auto sourceStart = Clock::now();
 	Json sources = Json::object();
 	for (const auto &[_, source] : context.importedFiles) {
 		const std::string &commentPrefix =
@@ -161,6 +174,8 @@ Json sourceProjection(
 		sources[source->uri] =
 			Json{{"digest", digest(projection)}, {"content", contentDigest}, {"mask", std::move(maskDigest)}};
 	}
+	if (work)
+		work->sourceMilliseconds += elapsedMilliseconds(sourceStart);
 	return sources;
 }
 
