@@ -68,6 +68,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert not cold[0]["frontend_reused"] and not cold[0]["linked_cached_objects"]
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
     assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
+    assert cold[0]["dependency_graph_ms"] >= 0
     assert cold[0]["objects_built"] > 0
     clean = build(False)
     assert cold[1:] == clean[1:], "cold build differs from clean build"
@@ -459,6 +460,8 @@ function left times right:
     leaf_a.write_text(leaf_a.read_text().replace('"first"', '"changed"'))
     leaf_edit = build(entry=leaf_main)
     assert leaf_edit[0]["source_projections_reused"] >= 3, "unchanged imported files were reprojected"
+    assert leaf_edit[0]["dependency_graph_sections_reused"] >= 3, "unchanged sections ignored saved dependencies"
+    assert leaf_edit[0]["dependency_graph_entries_reused"] >= 2, "reused inference dependencies were captured again"
     assert leaf_edit[0]["functions_ir_reused"] >= 3, "active edit regenerated independent or same-file function IR"
     assert leaf_edit[1:] == build(False, entry=leaf_main)[1:], "reused function IR changed active edit behavior"
     leaf_b.write_text(leaf_b.read_text().replace('"second"', '"updated"'))

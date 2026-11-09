@@ -298,6 +298,8 @@ bool hasNoGlobalAccess(const Section *section);
 
 #include "incrementalFunctionProjection.inl"
 
+#include "incrementalSectionDependencies.inl"
+
 bool functionDependenciesUnchanged(
 	Section *section, const std::unordered_map<const Section *, bool> &unchanged, std::unordered_map<Section *, bool> &memo,
 	const std::unordered_set<const Section *> &stableBoundaries = {}
@@ -310,43 +312,6 @@ bool functionDependenciesUnchanged(
 	std::unordered_set<Section *> visited;
 	std::vector<Section *> pending{section};
 	bool safe = true;
-	std::function<void(const PatternMatch &)> checkMatch = [&](const PatternMatch &match) {
-		for (PatternDefinition *definition : match.matchingDefinitions)
-			pending.push_back(definition->section);
-		for (const PatternMatch &subMatch : match.subMatches)
-			checkMatch(subMatch);
-	};
-	std::function<void(Section *)> checkBody = [&](Section *body) {
-		for (PatternReference *reference : body->patternReferences) {
-			if (reference->match)
-				checkMatch(*reference->match);
-		}
-		for (Section *child : body->children) {
-			if (child->patternDefinitions.empty())
-				checkBody(child);
-		}
-	};
-	auto checkInstantiations = [&](Section *node) {
-		for (const auto &[_, instantiation] : node->instantiations) {
-			std::function<void(const InstantiatedSectionBody *)> checkInferredBody = [&](const InstantiatedSectionBody *body) {
-				if (!body)
-					return;
-				for (Expression *expression : body->lineExpressions) {
-					visitExpressionTree(expression, [&](Expression *node) {
-						for (PatternDefinition *definition :
-							 {node->selectedPatternDefinition, node->selectedCallableDefinition}) {
-							if (definition)
-								pending.push_back(definition->section);
-						}
-						return false;
-					});
-				}
-				for (const auto &child : body->childBodies)
-					checkInferredBody(child.get());
-			};
-			checkInferredBody(instantiation.body.get());
-		}
-	};
 	while (!pending.empty() && safe) {
 		Section *node = pending.back();
 		pending.pop_back();
@@ -360,8 +325,9 @@ bool functionDependenciesUnchanged(
 			safe = false;
 			break;
 		}
-		checkBody(node);
-		checkInstantiations(node);
+		collectMatchedSectionDependencies(node, pending);
+		for (const auto &[_, instantiation] : node->instantiations)
+			collectInferredSectionDependencies(instantiation.body.get(), pending);
 	}
 	return memo[section] = safe;
 }
@@ -512,6 +478,8 @@ void trimCache(const fs::path &directory) {
 
 #include "incrementalInferenceEffects.inl"
 #include "incrementalInferenceReuse.inl"
+
+#include "incrementalDependencyGraph.inl"
 
 #include "incrementalInferencePreinfer.inl"
 } // namespace
@@ -698,6 +666,7 @@ bool compileIncrementally(
 				sectionPaths.emplace(section, path);
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
+			std::unordered_set<const Section *> graphStable;
 			if (compiled && !reuseTypeInference) {
 				if (previous) {
 					IncrementalPreinferPlan plan = scalarArgumentIncrementalCandidates(
@@ -734,11 +703,13 @@ bool compileIncrementally(
 							first = end;
 						}
 						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
-							inferred, *previous, recording->observations, resolvedFunctionProjection, sections, stable
+							inferred, *previous, recording->observations, resolvedFunctionProjection, sections, stable,
+							&statistics.dependencyGraphSectionsReused
 						);
 						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
 						if (eligible.empty())
 							return;
+						graphStable = eligible;
 						std::unordered_set<std::string> replacementPaths;
 						for (const Section *section : stable)
 							replacementPaths.insert(sectionPaths.at(section));
@@ -857,6 +828,12 @@ bool compileIncrementally(
 					result["inference_summaries"] =
 						inferenceReuse ? inferenceReuse->snapshot(sectionPaths, diagnosticSources, globalTypes)
 									   : captureInferenceSummaries(sectionPaths, diagnosticSources, globalTypes);
+					auto graphStart = Clock::now();
+					result["section_dependency_graph"] = captureSectionDependencyGraph(
+						sectionPaths, previous ? &previous->at("section_dependency_graph") : nullptr, graphStable,
+						&statistics.dependencyGraphEntriesReused
+					);
+					statistics.dependencyGraphMilliseconds = elapsedMilliseconds(graphStart);
 					recordSemanticSources(result, *recording, compiled);
 					bool reusedGeneratedCode = false;
 					if (previous && previous->at("ir") == result.at("ir")) {
@@ -917,6 +894,8 @@ bool compileIncrementally(
 							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
 							  {"preinferred_instantiations", statistics.preinferredInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
+							  {"dependency_graph_sections_reused", statistics.dependencyGraphSectionsReused},
+							  {"dependency_graph_entries_reused", statistics.dependencyGraphEntriesReused},
 							  {"linked_cached_objects", statistics.linkedCachedObjects},
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},
@@ -947,6 +926,7 @@ bool compileIncrementally(
 							  {"validate_target_ms", context.frontendStageMilliseconds[3]},
 							  {"inference_ms", statistics.inferenceMilliseconds},
 							  {"projection_ms", statistics.projectionMilliseconds},
+							  {"dependency_graph_ms", statistics.dependencyGraphMilliseconds},
 							  {"preinference_ms", statistics.preinferenceMilliseconds},
 							  {"ir_generation_ms", statistics.irGenerationMilliseconds},
 							  {"partition_ms", statistics.partitionMilliseconds},

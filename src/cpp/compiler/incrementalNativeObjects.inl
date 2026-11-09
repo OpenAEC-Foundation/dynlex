@@ -25,6 +25,8 @@ struct BuildStatistics {
 	size_t reusedFunctionIR = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
+	size_t dependencyGraphSectionsReused = 0;
+	size_t dependencyGraphEntriesReused = 0;
 	size_t matcherCacheHits = 0;
 	size_t precedenceMatcherCacheHits = 0;
 	size_t expressionParseHits = 0;
@@ -37,6 +39,7 @@ struct BuildStatistics {
 	double frontendMilliseconds = 0;
 	double inferenceMilliseconds = 0;
 	double projectionMilliseconds = 0;
+	double dependencyGraphMilliseconds = 0;
 	double preinferenceMilliseconds = 0;
 	double codegenMilliseconds = 0;
 	double irGenerationMilliseconds = 0;

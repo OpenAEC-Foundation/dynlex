@@ -835,6 +835,14 @@ Dependency reachability handles recursive call cycles; an unchanged cycle remain
 reusable when none of its reachable functions changed. Generated function names
 include the destination of compile-time type arguments so overloads retain stable
 identities across edited builds.
+Successful native builds persist direct section dependencies from resolved matches
+and inferred call selections, with reverse edges for invalidation. When the next
+build has the same matching environment, an edited section marks only its reverse
+reachable callers dirty; a preinferred section with an unchanged interface stops
+that propagation. Missing graph entries use the current expression walk. Inference
+variants restored from cache carry their prior call dependencies forward, while
+newly inferred variants capture current calls. The graph currently speeds codegen
+eligibility checks; section parsing and resolution still rebuild their state.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
 function leaves that function's identity and cached inference or IR intact.
