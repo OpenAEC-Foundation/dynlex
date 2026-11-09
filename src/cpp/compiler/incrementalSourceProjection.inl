@@ -1,11 +1,38 @@
+struct SourceProjectionWork {
+	size_t reused = 0;
+	size_t scanned = 0;
+};
+
 Json sourceProjection(
-	const ParseContext &context, const std::unordered_set<const Section *> &inactive, bool maskOpeningLines = false,
-	bool ignoreMaskedRuns = false, bool maskGlobalExecution = false
+	const ParseContext &context, const Json &observations, const std::unordered_set<const Section *> &inactive,
+	bool maskOpeningLines = false, bool ignoreMaskedRuns = false, bool maskGlobalExecution = false,
+	const Json *priorSources = nullptr, SourceProjectionWork *work = nullptr
 ) {
 	using SourceRanges = std::map<const lsp::SourceFile *, std::map<int, std::vector<std::pair<size_t, size_t>>>>;
 	std::map<const lsp::SourceFile *, std::set<int>> masked;
 	std::map<const lsp::SourceFile *, std::set<int>> preserved;
 	SourceRanges maskedRanges;
+	std::unordered_map<const lsp::SourceFile *, std::string> maskTraces;
+	auto appendNumber = [](std::string &output, std::uint64_t value) {
+		for (size_t index = 0; index < 8; index++) {
+			output.push_back(static_cast<char>(value & 0xff));
+			value >>= 8;
+		}
+	};
+	auto traceFor = [&](const lsp::SourceFile *source) -> std::string & {
+		auto [found, inserted] = maskTraces.try_emplace(source);
+		if (inserted) {
+			std::string &trace = found->second;
+			trace += maskOpeningLines ? '1' : '0';
+			trace += ignoreMaskedRuns ? '1' : '0';
+			trace += maskGlobalExecution ? '1' : '0';
+			const std::string &commentPrefix =
+				source->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
+			appendNumber(trace, commentPrefix.size());
+			trace += commentPrefix;
+		}
+		return found->second;
+	};
 	std::unordered_set<const CodeLine *> openings;
 	if (maskOpeningLines)
 		for (const Section *section : inactive)
@@ -27,6 +54,9 @@ Json sourceProjection(
 			}
 		}
 		(insideInactive ? masked : preserved)[line->sourceFile].insert(line->sourceFileLineIndex);
+		std::string &lineTrace = traceFor(line->sourceFile);
+		lineTrace.push_back(insideInactive ? 'M' : 'P');
+		appendNumber(lineTrace, static_cast<std::uint64_t>(line->sourceFileLineIndex));
 		if (!insideInactive)
 			continue;
 		int bodyStart = line->hasIndentOverride ? static_cast<int>(line->indentOverride.size()) : 0;
@@ -38,14 +68,32 @@ Json sourceProjection(
 				continue;
 			size_t sourceStart = static_cast<size_t>(slice.sourceColumnStart + from - slice.transformedStart);
 			maskedRanges[slice.sourceFile][slice.sourceFileLineIndex].emplace_back(sourceStart, sourceStart + to - from);
+			std::string &sliceTrace = traceFor(slice.sourceFile);
+			sliceTrace.push_back('R');
+			appendNumber(sliceTrace, static_cast<std::uint64_t>(slice.sourceFileLineIndex));
+			appendNumber(sliceTrace, sourceStart);
+			appendNumber(sliceTrace, sourceStart + to - from);
 		}
 	}
 	Json sources = Json::object();
 	for (const auto &[_, source] : context.importedFiles) {
-		std::string projection;
-		std::string_view content = source->content;
 		const std::string &commentPrefix =
 			source->isInternal ? context.builtinSyntax.commentPrefix : context.projectSyntax.commentPrefix;
+		std::string maskDigest = digest(traceFor(source));
+		const std::string &contentDigest = observations.at(source->uri).at("content").get_ref<const std::string &>();
+		if (priorSources && priorSources->contains(source->uri)) {
+			const Json &prior = priorSources->at(source->uri);
+			if (prior.at("content") == contentDigest && prior.at("mask") == maskDigest) {
+				sources[source->uri] = prior;
+				if (work)
+					work->reused++;
+				continue;
+			}
+		}
+		if (work)
+			work->scanned++;
+		std::string projection;
+		std::string_view content = source->content;
 		size_t start = 0;
 		int lineIndex = 0;
 		bool inMaskedRun = false;
@@ -110,7 +158,17 @@ Json sourceProjection(
 			start = end;
 			lineIndex++;
 		}
-		sources[source->uri] = digest(projection);
+		sources[source->uri] =
+			Json{{"digest", digest(projection)}, {"content", contentDigest}, {"mask", std::move(maskDigest)}};
 	}
 	return sources;
+}
+
+bool sourceProjectionsEqual(const Json &left, const Json &right) {
+	if (left.size() != right.size())
+		return false;
+	for (const auto &[uri, entry] : left.items())
+		if (!right.contains(uri) || entry.at("digest") != right.at(uri).at("digest"))
+			return false;
+	return true;
 }

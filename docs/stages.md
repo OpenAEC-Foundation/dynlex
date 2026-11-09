@@ -833,6 +833,11 @@ and computes fingerprints only for edited bodies.
 These source projections use the configured comment scanner and ignore blank
 lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.
+Each file's projection also stores its source digest and the section-mask
+fingerprint. An edited build reuses the projection of an unchanged imported file
+when both fingerprints match. `--incremental-stats` reports reused and scanned
+source projections; semantic compatibility compares the projected text digest,
+so a comment insertion does not invalidate the next executable edit.
 
 For active edits, the native cache also persists inference summaries for impure
 functions and pure functions returning `nothing`, with concrete runtime argument

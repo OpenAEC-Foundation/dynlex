@@ -1,6 +1,9 @@
 Json captureAllFunctionProjection(
-	const ParseContext &context, const std::map<std::string, Section *> &sections, const Json *previous = nullptr
+	const ParseContext &context, const Json &observations, const std::map<std::string, Section *> &sections,
+	const Json *previous = nullptr, SourceProjectionWork *projectionWork = nullptr
 ) {
+	const Json *prior =
+		previous && previous->contains("all_function_projection") ? &previous->at("all_function_projection") : nullptr;
 	Json selected = Json::object();
 	Json declarations = Json::object();
 	Json matches = Json::object();
@@ -30,7 +33,9 @@ Json captureAllFunctionProjection(
 			}
 		}
 	}
-	Json projection = captureInactiveProjection(context, &selected, nullptr, &sections);
+	Json projection = captureInactiveProjection(
+		context, observations, &selected, nullptr, &sections, prior ? &prior->at("sources") : nullptr, projectionWork
+	);
 	Json bodyDigests = Json::object();
 	for (const auto &[path, section] : sections) {
 		if (auto body = bodies.find(section); body != bodies.end())
@@ -39,12 +44,15 @@ Json captureAllFunctionProjection(
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
 	projection["ambient_declarations"] = declarationDigest(sections, reusable);
-	projection["ambient_sources"] = sourceProjection(context, reusable, true, true);
-	projection["ambient_nonexecution_sources"] = sourceProjection(context, reusable, true, true, true);
-	const Json *prior =
-		previous && previous->contains("all_function_projection") ? &previous->at("all_function_projection") : nullptr;
+	projection["ambient_sources"] = sourceProjection(
+		context, observations, reusable, true, true, false, prior ? &prior->at("ambient_sources") : nullptr, projectionWork
+	);
+	projection["ambient_nonexecution_sources"] = sourceProjection(
+		context, observations, reusable, true, true, true, prior ? &prior->at("ambient_nonexecution_sources") : nullptr,
+		projectionWork
+	);
 	bool stableMatchingEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
-									 projection.at("sources") == prior->at("sources") &&
+									 sourceProjectionsEqual(projection.at("sources"), prior->at("sources")) &&
 									 projection.at("inactive") == prior->at("inactive");
 	bool stableGlobalFreeEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
 									   compatibleGlobalFreeProjection(*prior, projection);

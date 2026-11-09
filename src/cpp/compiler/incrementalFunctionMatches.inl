@@ -30,10 +30,12 @@ Json resolvedMatchIdentity(const PatternMatch &match, const std::map<const Secti
 				{argument.expression->range.start(), argument.expression->range.end(),
 				 std::string(argument.expression->range.subString)}
 			);
-		arguments.push_back(Json::array(
-			{argument.argumentIndex, static_cast<int>(argument.kind), argument.itemIndex, argument.isPackElement,
-			 expression}
-		));
+		arguments.push_back(
+			Json::array(
+				{argument.argumentIndex, static_cast<int>(argument.kind), argument.itemIndex, argument.isPackElement,
+				 expression}
+			)
+		);
 	}
 	return Json{
 		{"end", patternNodeIdentity(match.matchedEndNode)},
@@ -52,12 +54,14 @@ std::string resolvedFunctionMatches(const Section *section, const std::map<const
 	Json references = Json::array();
 	std::function<void(const Section *)> visit = [&](const Section *body) {
 		for (const PatternReference *reference : body->patternReferences) {
-			references.push_back(Json{
-				{"text", reference->pattern.text},
-				{"type", static_cast<int>(reference->patternType)},
-				{"purpose", static_cast<int>(reference->purpose)},
-				{"match", reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr)}
-			});
+			references.push_back(
+				Json{
+					{"text", reference->pattern.text},
+					{"type", static_cast<int>(reference->patternType)},
+					{"purpose", static_cast<int>(reference->purpose)},
+					{"match", reference->match ? resolvedMatchIdentity(*reference->match, paths) : Json(nullptr)}
+				}
+			);
 		}
 		for (const Section *child : body->children)
 			if (child->patternDefinitions.empty())
@@ -68,16 +72,16 @@ std::string resolvedFunctionMatches(const Section *section, const std::map<const
 }
 
 bool compatibleFunctionProjection(const Json &prior, const Json &current) {
-	if (current.at("declarations") == prior.at("declarations") && current.at("sources") == prior.at("sources") &&
-		current.at("inactive") == prior.at("inactive"))
+	if (current.at("declarations") == prior.at("declarations") &&
+		sourceProjectionsEqual(current.at("sources"), prior.at("sources")) && current.at("inactive") == prior.at("inactive"))
 		return true;
 	return current.at("ambient_declarations") == prior.at("ambient_declarations") &&
-		   current.at("ambient_sources") == prior.at("ambient_sources");
+		   sourceProjectionsEqual(current.at("ambient_sources"), prior.at("ambient_sources"));
 }
 
 bool compatibleGlobalFreeProjection(const Json &prior, const Json &current) {
 	return current.at("ambient_declarations") == prior.at("ambient_declarations") &&
-		   current.at("ambient_nonexecution_sources") == prior.at("ambient_nonexecution_sources");
+		   sourceProjectionsEqual(current.at("ambient_nonexecution_sources"), prior.at("ambient_nonexecution_sources"));
 }
 
 bool unchangedFunctionSource(const std::string &path, const Json &prior, const Json &current) {
