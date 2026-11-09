@@ -852,6 +852,10 @@ the declaration on the same physical line.
 It refreshes body and resolved-match fingerprints for edited inactive functions,
 then reuses the prior inferred result and linked objects. Active function edits
 traverse type inference again; eligible unchanged instantiations reuse cached summaries.
+A compile-time-folded function may have no emitted LLVM body. When its caller's
+LLVM body is reused, the snapshot retains the folded callee as active through
+the saved section-dependency graph, even if that callee was not instantiated
+again during the current build.
 
 For native, unoptimized builds without debug or execution tracing, the compiler
 can import cached LLVM bodies of unchanged functions after a code edit. It compares
@@ -878,7 +882,10 @@ build has the same matching environment, an edited section marks only its revers
 reachable callers dirty; a preinferred section with an unchanged interface stops
 that propagation. Missing graph entries use the current expression walk. Inference
 variants restored from cache carry their prior call dependencies forward, while
-newly inferred variants capture current calls. The graph speeds preinference and codegen
+newly inferred variants capture current calls. Imported LLVM functions also retain
+their prior variant dependencies when their bodies were not re-inferred. Functions
+without a serializable variant key remain unknown to graph-based invalidation.
+The graph speeds preinference and codegen
 eligibility checks; section parsing and resolution still rebuild their state.
 Section cache identities use source URI, normalized header, section type, and a
 same-identity sibling ordinal. Inserting a different definition before an existing
@@ -898,6 +905,11 @@ If top-level execution changes but its global declarations keep the same names
 and locations, directly declared functions also retain their resolved-match
 fingerprints. Their inference and generated code still follow the ordinary
 dependency checks for changed global values.
+When only top-level execution changes, the all-function projection first compares
+function-body digests, indexed pattern-tree signatures, precedence, global declaration
+identity, and source with top-level execution masked. If those inputs agree, it
+retains saved declaration and match fingerprints and refreshes only source views
+that include execution. The reuse count is reported by `projection_top_level_sections_reused`.
 These source projections use the configured comment scanner and ignore blank
 lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.

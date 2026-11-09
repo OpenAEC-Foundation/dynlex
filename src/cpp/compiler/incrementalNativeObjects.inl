@@ -24,6 +24,7 @@ struct BuildStatistics {
 	size_t reusedInferenceSummarySections = 0;
 	size_t preinferredInstantiations = 0;
 	size_t reusedFunctionIR = 0;
+	size_t topLevelProjectionSectionsReused = 0;
 	size_t reusedObjects = 0;
 	size_t builtObjects = 0;
 	size_t dependencyGraphSectionsReused = 0;

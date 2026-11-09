@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_precedence_match_key_replay, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_runtime_pure_value_summary
+from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_top_level_projection_reuse
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -356,7 +356,9 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_inactive_edit_after_warning_wording(root, build)
     check_runtime_pure_value_summary(root, build)
     check_global_match_reuse_after_execution_edit(root, build)
+    check_top_level_projection_reuse(root, build)
     check_known_pure_return_summary(root, build)
+    check_folded_value_remains_active(root, build)
     check_local_match_projection_reuse(root, build)
     precedence_source = '''function left plus right:
     RULE: $ times $
@@ -458,6 +460,7 @@ function left times right:
     assert scope_edit[1:] == build(False, entry=scope_main)[1:], "file number-rule edit differs from clean build"
 
     check_cross_file_typed_overload(root, build)
+    check_reused_ir_dependency_graph_variants(root, build)
     check_leaf_dependency_cascade(root, build)
 
     specific_main = root / "specific_addition.dl"

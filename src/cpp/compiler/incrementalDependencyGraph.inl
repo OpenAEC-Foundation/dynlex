@@ -1,6 +1,30 @@
+struct RetainedGraphVariants {
+	std::map<std::string, std::set<std::string>> keysByPath;
+	std::set<std::string> unkeyedPaths;
+};
+
+RetainedGraphVariants retainedGraphVariants(const IncrementalIRReuse *reuse, const Json *previous) {
+	RetainedGraphVariants result;
+	if (!reuse)
+		return result;
+	requireCompilerInvariant(previous != nullptr, "reused IR has no previous dependency graph");
+	const Json &owners = previous->at("function_sections");
+	const Json &keys = previous->at("function_instantiations");
+	const Json &callables = previous->at("callable_functions");
+	for (const std::string &name : reuse->reusedFunctionNames()) {
+		std::string path = owners.at(name).get<std::string>();
+		if (keys.contains(name))
+			result.keysByPath[path].insert(keys.at(name).get<std::string>());
+		else if (!callables.contains(name))
+			result.unkeyedPaths.insert(std::move(path));
+	}
+	return result;
+}
+
 Json captureSectionDependencyGraph(
 	const std::map<const Section *, std::string> &paths, Json *previous = nullptr,
-	const std::unordered_set<const Section *> &stable = {}, size_t *reused = nullptr, size_t *reverseUpdated = nullptr
+	const std::unordered_set<const Section *> &stable = {}, const RetainedGraphVariants &retained = {},
+	size_t *reused = nullptr, size_t *reverseUpdated = nullptr
 ) {
 	const bool hadPrevious = previous != nullptr;
 	Json graph = hadPrevious ? std::move(*previous)
@@ -80,6 +104,21 @@ Json captureSectionDependencyGraph(
 			if (keyText)
 				variants[*keyText] = std::move(selected);
 		}
+		if (auto retainedKeys = retained.keysByPath.find(path); retainedKeys != retained.keysByPath.end()) {
+			for (const std::string &key : retainedKeys->second) {
+				if (variants.contains(key))
+					continue;
+				if (!hadPrevious || !instantiations.contains(path) || !instantiations.at(path).contains(key)) {
+					incomplete = true;
+					continue;
+				}
+				const Json &selected = instantiations.at(path).at(key);
+				for (const Json &dependency : selected)
+					direct.insert(dependency.get<std::string>());
+				variants[key] = selected;
+			}
+		}
+		incomplete |= retained.unkeyedPaths.contains(path);
 		if (incomplete)
 			unknown.push_back(path);
 		std::set<std::string> before = forward.contains(path) ? dependencySet(forward.at(path)) : std::set<std::string>{};

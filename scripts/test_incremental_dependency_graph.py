@@ -23,6 +23,16 @@ def projection_for(cache, entry):
     return matches[0]
 
 
+def inactive_for(cache, entry):
+    matches = []
+    for path in (cache / "native-v1").glob("program-*.entry"):
+        program = json.loads(path.read_text().split("\n", 2)[2])
+        if str(entry) in program["files"]:
+            matches.append(program["inactive_projection"]["inactive"])
+    assert len(matches) == 1, "expected one cached inactive projection"
+    return matches[0]
+
+
 def assert_reverse_edges(graph):
     expected = {}
     for caller, dependencies in graph["forward"].items():
@@ -46,6 +56,10 @@ def check_cross_file_typed_overload(root, build):
     initial = build(entry=main)
     assert initial[2] == b"generic\n"
     assert initial[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text() + '@intrinsic("discard", 1)\n')
+    execution_edit = build(entry=main)
+    assert execution_edit[0]["projection_top_level_sections_reused"] >= 1
+    assert execution_edit[1:] == build(False, entry=main)[1:]
     overloads.write_text(generic + typed)
     added = build(entry=main)
     assert added[2] == b"typed\n", "new cross-file overload did not invalidate its caller"
@@ -54,6 +68,32 @@ def check_cross_file_typed_overload(root, build):
     removed = build(entry=main)
     assert removed[2] == b"generic\n", "removed cross-file overload remained selected"
     assert removed[1:] == build(False, entry=main)[1:]
+
+
+def check_reused_ir_dependency_graph_variants(root, build):
+    main = root / "reused_ir_graph.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to leaf: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "leaf"))\n'
+              'to caller: leaf\ncaller\n@intrinsic("discard", 1)\n')
+    main.write_text(source)
+    build(entry=main)
+    projection = projection_for(root / "cache", main)
+    leaf_path = next(path for path, declaration in projection["function_declarations"].items()
+                     if declaration["identity"]["header"] == "leaf:")
+    prior = graph_for(root / "cache", main)
+    assert prior["instantiations"][leaf_path]
+    main.write_text(source.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    assert edited[0]["functions_ir_reused"] >= 2
+    current = graph_for(root / "cache", main)
+    assert current["instantiations"][leaf_path] == prior["instantiations"][leaf_path], \
+        "reused IR lost its inferred dependency variants"
+    assert_reverse_edges(current)
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('"leaf"', '"changed"'))
+    changed = build(entry=main)
+    assert changed[2] == b"changed\n"
+    assert changed[1:] == build(False, entry=main)[1:]
 
 
 def check_leaf_dependency_cascade(root, build):
@@ -292,7 +332,7 @@ def check_global_match_reuse_after_execution_edit(root, build):
     main.write_text(prefix.replace('value, 1', 'value, 2') +
                     '@intrinsic("return", @intrinsic("subtract", read global, 2))\n')
     edited = build(entry=main)
-    assert edited[0]["projection_global_matches_reused"] >= 1, \
+    assert edited[0]["projection_global_matches_reused"] + edited[0]["projection_top_level_sections_reused"] >= 1, \
         "unchanged global-reading function rebuilt its match projection after a value edit"
     assert edited[1:] == build(False, entry=main)[1:]
     main.write_text(definition + '@intrinsic("store", other, 2)\n' +
@@ -300,6 +340,32 @@ def check_global_match_reuse_after_execution_edit(root, build):
     missing_global = build(entry=main, success=False)
     assert missing_global[1:] == build(False, entry=main, success=False)[1:], \
         "a removed global declaration retained its prior function match"
+
+
+def check_top_level_projection_reuse(root, build):
+    main = root / "top_level_projection_reuse.dl"
+    declarations = ('integer means: @intrinsic("type", "int")\n'
+                    'to report: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "stable"))\n')
+    execution = ('@intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+                 'report\n')
+    main.write_text(declarations + execution)
+    build(entry=main)
+    main.write_text(declarations + execution.replace('"first"', '"second"'))
+    edited = build(entry=main)
+    assert edited[0]["projection_top_level_sections_reused"] >= 1, \
+        "top-level executable edit rebuilt unchanged function projections"
+    assert edited[2] == b"second\nstable\n"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(declarations + execution.replace('"first"', '"third"'))
+    edited_again = build(entry=main)
+    assert edited_again[0]["projection_top_level_sections_reused"] >= 1
+    assert edited_again[2] == b"third\nstable\n"
+    assert edited_again[1:] == build(False, entry=main)[1:]
+    main.write_text(declarations.replace('"stable"', '"updated"') + execution.replace('"first"', '"third"'))
+    changed_function = build(entry=main)
+    assert changed_function[0]["projection_top_level_sections_reused"] == 0, \
+        "changed function body reused its old projection"
+    assert changed_function[1:] == build(False, entry=main)[1:]
 
 
 def check_known_pure_return_summary(root, build):
@@ -324,6 +390,30 @@ def check_known_pure_return_summary(root, build):
                     '@intrinsic("return", @intrinsic("subtract", identity 4, 5))\n')
     changed_body = build(entry=main)
     assert changed_body[1:] == build(False, entry=main)[1:], "changed pure body retained a cached result"
+
+
+def check_folded_value_remains_active(root, build):
+    main = root / "folded_value_remains_active.dl"
+    declarations = ('integer means: @intrinsic("type", "int")\n'
+                    'function greeting:\n'
+                    '    execute:\n'
+                    '        @intrinsic("return", "first")\n'
+                    'function print greeting:\n'
+                    '    execute:\n'
+                    '        @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, greeting))\n')
+    execution = 'print greeting\n@intrinsic("discard", 1)\n'
+    main.write_text(declarations + execution)
+    build(entry=main)
+    before = inactive_for(root / "cache", main)
+    main.write_text(declarations + execution.replace('"discard", 1', '"discard", 2'))
+    edited = build(entry=main)
+    after = inactive_for(root / "cache", main)
+    assert after == before, "a folded function became inactive when its caller reused IR"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text((declarations + execution.replace('"discard", 1', '"discard", 2'))
+                    .replace('"first"', '"second"'))
+    changed = build(entry=main)
+    assert changed[1:] == build(False, entry=main)[1:], "folded value edit retained old caller output"
 
 
 def check_local_match_projection_reuse(root, build):

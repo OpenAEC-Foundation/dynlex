@@ -85,4 +85,6 @@ for name, samples in results.items():
                          "snapshot_ms", "codegen_and_link_ms")},
         "frontend_reused": all(sample[2]["frontend_reused"] for sample in samples),
         "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
+        "projection_top_level_sections_reused": round(statistics.median(
+            sample[2]["projection_top_level_sections_reused"] for sample in samples)),
     }, sort_keys=True))
