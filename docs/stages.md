@@ -868,8 +868,12 @@ so a comment insertion does not invalidate the next executable edit.
 For active edits, the native cache also persists inference summaries for functions
 with concrete runtime argument and return types, including class pointers. A pure
 function returning a value reuses its summary when its call arguments are not all
-known at compile time. A call with known arguments infers the function body so
-compile-time evaluation has the inferred expressions it needs.
+known at compile time. A call with known arguments uses a saved return value when
+available; otherwise it infers the body for compile-time evaluation.
+For a pure function without global access or matched function dependencies, the
+cache also stores scalar return values by scalar argument values. A repeated
+known-argument call can use that value without reinferring the body; a new
+argument still infers the body and evaluates the call normally.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Class type identities include the current instantiation's field types; a changed layout

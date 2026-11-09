@@ -10,6 +10,49 @@ bool hasNoGlobalAccess(const Section *section) {
 	return true;
 }
 
+bool hasNoPatternDependencies(const Section *section) {
+	if (std::ranges::any_of(section->patternReferences, [](const PatternReference *reference) {
+		return reference->match != nullptr;
+	}))
+		return false;
+	for (const Section *child : section->children)
+		if (child->runsInEnclosingBody() && !hasNoPatternDependencies(child))
+			return false;
+	return true;
+}
+
+bool isPortablePureValue(const CompileTimeValue &value) {
+	return std::holds_alternative<std::int64_t>(value) || std::holds_alternative<std::uint64_t>(value) ||
+		   std::holds_alternative<double>(value) || std::holds_alternative<std::string>(value) ||
+		   std::holds_alternative<bool>(value);
+}
+
+Json encodePureReturnValues(const Section *section, const Instantiation &instantiation) {
+	Json results = Json::array();
+	if (instantiation.purity != InstantiationPurity::Pure || !hasNoGlobalAccess(section) ||
+		!hasNoPatternDependencies(section))
+		return results;
+	for (const auto &[arguments, value] : instantiation.pureReturnValuesByArguments) {
+		if (!isPortablePureValue(value) ||
+			!std::ranges::all_of(arguments, [](const CompileTimeValue &argument) { return isPortablePureValue(argument); }))
+			continue;
+		Json encodedArguments = Json::array();
+		for (const CompileTimeValue &argument : arguments)
+			encodedArguments.push_back(*encodeGlobalConstant(argument));
+		results.push_back(Json::array({std::move(encodedArguments), *encodeGlobalConstant(value)}));
+	}
+	return results;
+}
+
+void decodePureReturnValues(const Json &encoded, Instantiation &instantiation) {
+	for (const Json &entry : encoded) {
+		std::vector<CompileTimeValue> arguments;
+		for (const Json &argument : entry.at(0))
+			arguments.push_back(decodeGlobalConstant(argument));
+		instantiation.pureReturnValuesByArguments.emplace(std::move(arguments), decodeGlobalConstant(entry.at(1)));
+	}
+}
+
 std::optional<std::string> inferenceSummaryKey(const InstantiationKey &key, const ClassIdentityPaths &classPaths) {
 	if (!key.compileTimeParameters.empty())
 		return std::nullopt;
@@ -93,6 +136,7 @@ Json captureInferenceSummaries(
 				{"unknown_write", instantiation.writesThroughUnknownAddress},
 				{"unknown_escape", instantiation.externallyEscapesUnknownAddress},
 				{"needs_global_types", needsGlobalTypes},
+				{"pure_values", encodePureReturnValues(section, instantiation)},
 				{"global_effects", std::move(*globalEffects)}
 			};
 		}
@@ -145,6 +189,7 @@ class IncrementalInferenceReuse {
 		instantiation.writesThroughUnknownAddress = summary.at("unknown_write").get<bool>();
 		instantiation.externallyEscapesUnknownAddress = summary.at("unknown_escape").get<bool>();
 		decodeGlobalEffects(section, summary.at("global_effects"), instantiation);
+		decodePureReturnValues(summary.at("pure_values"), instantiation);
 		instantiation.inferenceReusedFromCache = true;
 		count++;
 		return true;

@@ -100,6 +100,7 @@ for name, samples in results.items():
         "diagnostic_records_reused": round(statistics.median(sample[2]["diagnostic_records_reused"] for sample in samples)),
         "inactive_projection_matches_rechecked": round(statistics.median(sample[2]["inactive_projection_matches_rechecked"] for sample in samples)),
         "inference_instantiations_reused": round(statistics.median(sample[2]["inference_instantiations_reused"] for sample in samples)),
+        "pure_value_summary_hits": round(statistics.median(sample[2]["pure_value_summary_hits"] for sample in samples)),
         "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
         "body_resolution_reference_visits": round(statistics.median(sample[2]["body_resolution_reference_visits"] for sample in samples)),
         "matcher_cache_hits": round(statistics.median(sample[2]["matcher_cache_hits"] for sample in samples)),

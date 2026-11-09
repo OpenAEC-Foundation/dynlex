@@ -103,6 +103,7 @@ struct ParseContext {
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
 	size_t bodyResolutionReferenceVisits = 0;
+	size_t pureValueSummaryHits = 0;
 	// On-demand signature probes are scoped to this compilation and never committed.
 	std::set<std::tuple<PatternDefinition *, size_t, size_t>> activePatternConstraintProbes;
 	std::map<std::tuple<PatternDefinition *, size_t, size_t>, TypeConstraint> provisionalConstraintDomains;

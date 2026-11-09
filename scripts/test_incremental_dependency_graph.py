@@ -239,3 +239,27 @@ def check_global_match_reuse_after_execution_edit(root, build):
     missing_global = build(entry=main, success=False)
     assert missing_global[1:] == build(False, entry=main, success=False)[1:], \
         "a removed global declaration retained its prior function match"
+
+
+def check_known_pure_return_summary(root, build):
+    main = root / "known_pure_return_summary.dl"
+    definition = ('integer means: @intrinsic("type", "int")\n'
+                  'function identity {integer:value}:\n'
+                  '    execute:\n'
+                  '        @intrinsic("return", value)\n')
+    runtime = '@intrinsic("discard", identity (@intrinsic("call", "libc", "rand", integer)))\n'
+    main.write_text(definition + runtime + '@intrinsic("return", @intrinsic("subtract", identity 4, 4))\n')
+    build(entry=main)
+    main.write_text(definition + runtime +
+                    '@intrinsic("return", @intrinsic("subtract", identity 4, @intrinsic("add", 2, 2)))\n')
+    reused = build(entry=main)
+    assert reused[0]["pure_value_summary_hits"] >= 1, "known pure result re-inferred despite an identical argument"
+    assert reused[1:] == build(False, entry=main)[1:]
+    main.write_text(definition + runtime + '@intrinsic("return", @intrinsic("subtract", identity 5, 5))\n')
+    new_argument = build(entry=main)
+    assert new_argument[1:] == build(False, entry=main)[1:], "new pure argument used a stale cached result"
+    changed_definition = definition.replace('"return", value', '"return", @intrinsic("add", value, 1)')
+    main.write_text(changed_definition + runtime +
+                    '@intrinsic("return", @intrinsic("subtract", identity 4, 5))\n')
+    changed_body = build(entry=main)
+    assert changed_body[1:] == build(False, entry=main)[1:], "changed pure body retained a cached result"

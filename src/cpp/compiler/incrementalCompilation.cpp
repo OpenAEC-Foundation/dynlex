@@ -932,6 +932,7 @@ bool compileIncrementally(
 					  << Json{{"frontend_reused", statistics.reusedFrontend},
 							  {"type_inference_reused", statistics.reusedTypeInference},
 							  {"inference_instantiations_reused", statistics.reusedInferenceInstantiations},
+							  {"pure_value_summary_hits", context.pureValueSummaryHits},
 							  {"inference_summary_sections_reused", statistics.reusedInferenceSummarySections},
 							  {"preinferred_instantiations", statistics.preinferredInstantiations},
 							  {"functions_ir_reused", statistics.reusedFunctionIR},
