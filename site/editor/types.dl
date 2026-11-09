@@ -1,0 +1,12 @@
+import lib/sections.dl
+import lib/json.dl
+
+class:
+    patterns:
+        website language state
+    members:
+        phase as an integer
+        version as an integer
+        snapshot as a string
+        edited at as a floating-point number
+        token types as a pointer to JSON value

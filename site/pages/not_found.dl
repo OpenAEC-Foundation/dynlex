@@ -1,0 +1,10 @@
+import ../appearance.dl
+
+website page missing page at "/404.html" titled "Page not found — DynLex" described "The requested DynLex page could not be found.":
+    region "Missing page" using content appearance:
+        paragraph "404 / PAGE NOT FOUND" using signal appearance
+        paragraph "This page has\nno definition." using title appearance
+        paragraph "The address may have changed. Continue with the language guide or return to the homepage." using body appearance
+        region "Continue exploring" using columns appearance:
+            link "Return to DynLex →" to "/index.html" using primary link appearance
+            link "Open the documentation →" to "/wiki/index.html" using link appearance

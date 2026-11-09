@@ -1,0 +1,103 @@
+import ../../documentation.dl
+
+website page documentation terms page at "/wiki/terms.html" titled "DynLex Wiki - Terms" described "These pages use the same words in the same way. If a word feels new, come back here.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Terms" using title appearance
+        paragraph "These pages use the same words in the same way. If a word feels new, come back here." using body appearance
+        region "terms block 1" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 2" using body appearance:
+                words "• A "
+                words "pattern" using inline code appearance
+                words " is the sentence shape DynLex understands."
+            paragraph "Passage 3" using body appearance:
+                words "• A "
+                words "parameter" using inline code appearance
+                words " is a named slot in that pattern."
+            paragraph "Passage 4" using body appearance:
+                words "• An "
+                words "argument" using inline code appearance
+                words " is the real value you put into that slot."
+            paragraph "Passage 5" using body appearance:
+                words "• A "
+                words "section" using inline code appearance
+                words " is a grouped block with deeper-indented child lines."
+        region "pattern" using card appearance:
+            paragraph "Pattern" using heading appearance
+            paragraph "Passage 7" using body appearance:
+                words "A pattern is the shape of a line of DynLex code. For example, "
+                words "print message" using inline code appearance
+                words " is a pattern. DynLex matches your code against patterns to decide what it means."
+        region "parameter" using card appearance:
+            paragraph "Parameter" using heading appearance
+            paragraph "Passage 9" using body appearance:
+                words "A parameter is a named slot in a pattern. In "
+                words "to get value squared:" using inline code appearance
+                words ", the word "
+                words "value" using inline code appearance
+                words " is that slot."
+            paragraph "In plain-word patterns, DynLex finds these by usage. If your function body uses a pattern word, that word becomes a parameter." using body appearance
+        region "argument" using card appearance:
+            paragraph "Argument" using heading appearance
+            paragraph "Passage 11" using body appearance:
+                words "An argument is the real value you put into a parameter slot. In "
+                words "5 squared" using inline code appearance
+                words ", the argument is "
+                words "5" using inline code appearance
+                words " because it fills the "
+                words "value" using inline code appearance
+                words " slot."
+        region "condition" using card appearance:
+            paragraph "Condition" using heading appearance
+            paragraph "Passage 13" using body appearance:
+                words "A condition is a piece of code that answers yes or no. DynLex uses conditions in places like "
+                words "if" using inline code appearance
+                words " and "
+                words "while" using inline code appearance
+                words "."
+        region "section" using card appearance:
+            paragraph "Section" using heading appearance
+            paragraph "A section is a grouped block. Lines that are indented one level deeper belong to that section." using body appearance
+        region "function" using card appearance:
+            paragraph "Function" using heading appearance
+            paragraph "Passage 16" using body appearance:
+                words "A function is a named piece of behavior. Define an action with "
+                words "to" using inline code appearance
+                words ", a multi-line value function with "
+                words "to get" using inline code appearance
+                words ", or a one-line replacement with "
+                words "means:" using inline code appearance
+                words ". The full "
+                words "function" using inline code appearance
+                words " form remains available for declarations with metadata sections."
+        region "variable" using card appearance:
+            paragraph "Variable" using heading appearance
+            paragraph "A variable stores a value so you can use that value again later." using body appearance
+        region "flex" using card appearance:
+            paragraph "Flex" using heading appearance
+            paragraph "Passage 19" using body appearance:
+                words "A flex is a function that uses a "
+                words "replacement:" using inline code appearance
+                words " section. A "
+                words "means:" using inline code appearance
+                words " declaration creates this form implicitly. It replaces one piece of code with another piece of code."
+        region "class" using card appearance:
+            paragraph "Class" using heading appearance
+            paragraph "Passage 21" using body appearance:
+                words "A class is a data shape with named members such as "
+                words "x" using inline code appearance
+                words " and "
+                words "y" using inline code appearance
+                words "."
+        region "type" using card appearance:
+            paragraph "Type" using heading appearance
+            paragraph "A type tells DynLex what kind of value something is, such as an integer, a floating-point number, a string, or a class." using body appearance
+        region "import" using card appearance:
+            paragraph "Import" using heading appearance
+            paragraph "Passage 24" using body appearance:
+                words "An import brings code from another file into the current file. You write it with "
+                words "import" using inline code appearance
+                words "."
+        region "intrinsic" using card appearance:
+            paragraph "Intrinsic" using heading appearance
+            paragraph "An intrinsic is a built-in low-level operation. Most everyday DynLex code should use normal patterns from the standard library instead of writing intrinsics directly." using body appearance

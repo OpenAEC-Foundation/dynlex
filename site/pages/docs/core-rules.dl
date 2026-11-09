@@ -1,0 +1,60 @@
+import ../../documentation.dl
+
+website page documentation core rules page at "/wiki/core-rules.html" titled "DynLex Wiki - Core Rules" described "This page is the short version of how DynLex works. Start here when code feels confusing.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Wiki" using signal appearance
+        paragraph "Core Rules" using title appearance
+        paragraph "This page is the short version of how DynLex works. Start here when code feels confusing." using body appearance
+        region "core-rules block 1" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "• DynLex code reads like clear sentences." using body appearance
+            paragraph "Passage 2" using body appearance:
+                words "• Each sentence shape is a "
+                link "pattern" to "/wiki/terms.html#pattern" using inline link appearance
+                words "."
+            paragraph "Passage 3" using body appearance:
+                words "• Use "
+                link "imports" to "/wiki/terms.html#import" using inline link appearance
+                words " to bring in more patterns."
+            paragraph "Passage 4" using body appearance:
+                words "• A "
+                link "function" to "/wiki/terms.html#function" using inline link appearance
+                words " gives a reusable name to a pattern."
+            paragraph "• If a plain word from a function pattern is used in that function body, that word becomes a variable." using body appearance
+            paragraph "Passage 5" using body appearance:
+                link "• Sections" to "/wiki/terms.html#section" using inline link appearance
+                words " group lines. Child lines are indented deeper."
+            paragraph "• Some short sections can be written on one line." using body appearance
+            paragraph "• Keep one variable as one value kind (type) during its lifetime." using body appearance
+            paragraph "• Be specific with wording so your line has one clear meaning." using body appearance
+        region "core-rules block 6" using card appearance:
+            paragraph "Pattern Words Become Variables" using signal appearance
+            paragraph "In a plain-word function pattern, DynLex decides variable words by usage. If you use a pattern word inside the function body, DynLex treats that word as a variable." using body appearance
+            code example "Example 7" containing "to get value squared:\n    return value * value"
+            paragraph "Passage 8" using body appearance:
+                words "Here, "
+                words "value" using inline code appearance
+                words " becomes a variable because it is used in the body."
+        region "core-rules block 9" using card appearance:
+            paragraph "Argument, In Simple Words" using signal appearance
+            paragraph "An argument is the real value you give to that variable slot when calling a function." using body appearance
+            code example "Example 10" containing "5 squared"
+            paragraph "Passage 11" using body appearance:
+                words "In this call, "
+                words "5" using inline code appearance
+                words " is the argument for "
+                words "value" using inline code appearance
+                words "."
+        region "core-rules block 12" using card appearance:
+            paragraph "Not Core, But Useful" using signal appearance
+            paragraph "Passage 13" using body appearance:
+                words "These are common tools you will use often: "
+                link "loop" to "/wiki/sections/loop.html" using inline link appearance
+                words ", "
+                link "if" to "/wiki/sections/if.html" using inline link appearance
+                words ", "
+                link "match" to "/wiki/sections/match.html" using inline link appearance
+                words ", and "
+                link "class" to "/wiki/terms.html#class" using inline link appearance
+                words "."
+            paragraph "Open those pages when troubleshooting specific behavior." using body appearance

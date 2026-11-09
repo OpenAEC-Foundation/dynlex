@@ -1,0 +1,1 @@
+Release manifests, platform hints and package selection work.

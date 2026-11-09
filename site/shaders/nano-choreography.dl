@@ -1,3 +1,4 @@
+# Color output is linear; the shared renderer supplies sRGB encoding.
 import lib/shader_art.dl
 
 # NANO CHOREOGRAPHY
@@ -103,14 +104,14 @@ if this is a vertex shader:
     set clip to a planar coordinate with x ((assembled's x + corner's x) * depth) and y ((assembled's y + corner's y) * depth)
     if visibility < 0.001:
         set the x coordinate of clip to depth * 3.0
-    set the output position with x clip's x, y clip's y, z (depth * 0.42) and w depth
+    set the output position with x clip's x, y -clip's y, z (depth * 0.42) and w depth
 else:
     set pixel to a planar coordinate with x the fragment x coordinate and y the fragment y coordinate
     set time to the shader time
     set frame to a planar coordinate with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
     set pass to the shader render pass
     set aspect to frame's x / frame's y
-    set screen to a planar coordinate with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (((pixel's y / frame's y) * 2.0) - 1.0)
+    set screen to a planar coordinate with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (1.0 - ((pixel's y / frame's y) * 2.0))
     set radial to the square root of (screen's x * screen's x + screen's y * screen's y)
     set moment to the minimum of time and 10.40
 
@@ -169,7 +170,7 @@ else:
         set the blue channel of color to color's blue + light * 1.24
 
         set vignette to (0.18 + ((1.0 - the smooth transition from 0.52 to 1.62 at radial) * 0.82))
-        set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red))
-        set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green))
-        set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue))
+        set the red channel of color to ((color's red * vignette) / (1.0 + color's red))
+        set the green channel of color to ((color's green * vignette) / (1.0 + color's green))
+        set the blue channel of color to ((color's blue * vignette) / (1.0 + color's blue))
         set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

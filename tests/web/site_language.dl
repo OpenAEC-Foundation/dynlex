@@ -1,0 +1,54 @@
+import ../../site/editor/language.dl
+
+set instance to an instance of dynlex website
+set view to a new UI view
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set state's route to "/ide/index.html"
+set instance's state to (the address of state) as a pointer
+set source to "import lib/std.dl\nprint line \"😀\""
+set the text of "IDE source" in (the address of instance) to source
+start website language analysis in (the address of state)
+require condition (state's language's phase = 1) reporting "Language analysis did not install the source project"
+set response to a new JSON-RPC null
+receive website language reply response at step 1 in (the address of state)
+free response
+set provider to a JSON object containing [JSON child "legend" is (a JSON object containing [JSON child "tokenTypes" is (a JSON array containing [a new JSON-RPC text for "string"])])]
+set capabilities to a JSON object containing [JSON child "semanticTokensProvider" is provider]
+set response to a JSON array containing [a JSON object containing [JSON number "id" is 2, JSON child "result" is (a JSON object containing [JSON child "capabilities" is capabilities])]]
+receive website language reply response at step 2 in (the address of state)
+free response
+set response to a new JSON-RPC array
+receive website language reply response at step 3 in (the address of state)
+free response
+require condition (state's language's snapshot = source) reporting "The opened document lost the editor source"
+set diagnostics to a JSON object containing [JSON text "uri" is the website source URI, JSON child "diagnostics" is (a new JSON-RPC array)]
+set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is diagnostics]]
+receive website language reply response at step 4 in (the address of state)
+free response
+require condition ((the UI value for (the control labeled "IDE diagnostics" in (the address of instance)) in (the address of instance))'s text = "No problems found.") reporting "A successful analysis did not clear diagnostics"
+set tokens to a JSON array containing [a new JSON-RPC integer for 1, a new JSON-RPC integer for 11, a new JSON-RPC integer for 4, a new JSON-RPC integer for 0, a new JSON-RPC integer for 0]
+set response to a JSON array containing [a JSON object containing [JSON number "id" is 6, JSON child "result" is (a JSON object containing [JSON child "data" is tokens])]]
+receive website language reply response at step 6 in (the address of state)
+free response
+set entry to the UI value for (the control labeled "IDE source" in (the address of instance)) in (the address of instance)
+require condition ((entry's colors' end - entry's colors' start) = 6) reporting "UTF-16 semantic tokens did not convert to UTF-8 bytes"
+set the text of "IDE source" in (the address of instance) to "newer text"
+set the text of "IDE diagnostics" in (the address of instance) to "Newer diagnostics"
+set response to a JSON array containing [a JSON object containing [JSON text "method" is "textDocument/publishDiagnostics", JSON child "params" is (a JSON object containing [JSON text "uri" is the website source URI, JSON child "diagnostics" is (a new JSON-RPC array)])]]
+receive website diagnostics in response in (the address of state)
+free response
+require condition ((the UI value for (the control labeled "IDE diagnostics" in (the address of instance)) in (the address of instance))'s text = "Newer diagnostics") reporting "An old analysis replaced diagnostics for newer source"
+set view's seconds to 1.0
+advance website language analysis in (the address of state)
+require condition (state's language's phase = 5) reporting "A changed document was not synchronized"
+require condition (state's language's version = 2) reporting "Document changes did not advance their version"
+free state's language's token types
+set pending to state's requests
+loop while pending != @intrinsic("construct", a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+close the address of instance
+print line "Website analysis synchronizes documents, converts Unicode tokens and ignores stale diagnostics."

@@ -1,0 +1,38 @@
+import ../../site/programs/controller.dl
+
+set instance to an instance of dynlex website
+set view to a new UI view
+set view's instance to the address of instance
+set state to a new website state
+set state's view to the address of view
+set instance's state to (the address of state) as a pointer
+run website program 0 in (the address of state)
+require condition ((the item at 0 in (state's programs))'s phase = 1) reporting "Run did not start compilation"
+set reply to a JSON object containing [JSON number "status" is 0, JSON number "artifact" is 42, JSON number "milliseconds" is 0.5]
+receive website compilation reply for 0 in (the address of state)
+free reply
+require condition ((the item at 0 in (state's programs))'s phase = 2) reporting "A successful compilation did not start execution"
+set reply to a JSON object containing [JSON number "invocation" is 1, JSON text "output" is "64\n"]
+receive website program output reply in (the address of state)
+free reply
+require condition ((the UI value for (the control labeled "Square field output" in (the address of instance)) in (the address of instance))'s text = "64\n") reporting "The output did not reach its named panel"
+set reply to a JSON object containing [JSON number "milliseconds" is 0.25]
+receive website execution reply for 0 in (the address of state)
+free reply
+require condition ((the item at 0 in (state's programs))'s phase = 0) reporting "Execution did not finish"
+run website program 1 in (the address of state)
+stop website program 1 in (the address of state)
+require condition (state's requests' id = 2) reporting "Stopping did not remove the cancelled request"
+run website program 0 in (the address of state)
+stop website program 0 in (the address of state)
+require condition (state's requests' cancelled) reporting "An already queued reply lost its ownership on cancellation"
+set reply to a JSON object containing [JSON number "artifact" is 99]
+discard website reply reply in (the address of state)
+free reply
+set pending to state's requests
+loop while pending != @intrinsic("construct", a pointer to website request):
+    set next to pending's next
+    deallocate pending
+    set pending to next
+close the address of instance
+print line "Website compilation, streaming output, Stop and queued-reply ownership work."

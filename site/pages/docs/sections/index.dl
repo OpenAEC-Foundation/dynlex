@@ -1,0 +1,56 @@
+import ../../../documentation.dl
+
+website page documentation sections index page at "/wiki/sections/index.html" titled "DynLex Wiki - Sections" described "A section is a grouped block of code. Child lines are indented deeper and run as part of that block.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "Section Guide" using title appearance
+        paragraph "A section is a grouped block of code. Child lines are indented deeper and run as part of that block." using body appearance
+        paragraph "These pages explain the main section forms you will write in everyday DynLex code." using body appearance
+        region "index block 1" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 2" using body appearance:
+                words "• Use "
+                link "to" to "/wiki/sections/function.html" using inline link appearance
+                link " and " to "/wiki/sections/function.html" using inline link appearance
+                link "to get" to "/wiki/sections/function.html" using inline link appearance
+                words " to name reusable behavior."
+            paragraph "Passage 3" using body appearance:
+                words "• Use "
+                link "loop" to "/wiki/sections/loop.html" using inline link appearance
+                words " to repeat actions."
+            paragraph "Passage 4" using body appearance:
+                words "• Use "
+                link "if" to "/wiki/sections/if.html" using inline link appearance
+                words " for yes/no choices."
+            paragraph "Passage 5" using body appearance:
+                words "• Use "
+                link "match" to "/wiki/sections/match.html" using inline link appearance
+                words " and "
+                link "case" to "/wiki/sections/case.html" using inline link appearance
+                words " for multi-choice branching."
+        region "index block 6" using cards appearance:
+            region "index block 7" using card appearance:
+                paragraph "Passage 8" using heading appearance:
+                    link "Function" to "/wiki/sections/function.html" using inline link appearance
+                paragraph "Define a named piece of behavior you can call later." using body appearance
+                code example "Example 9" containing "to action pattern:\n    ...\n\nto get value pattern:\n    return ..."
+            region "index block 10" using card appearance:
+                paragraph "Passage 11" using heading appearance:
+                    link "While Loop" to "/wiki/sections/loop.html" using inline link appearance
+                paragraph "Repeat a section while a condition stays true." using body appearance
+                code example "Example 12" containing "while condition:\n    ..."
+            region "index block 13" using card appearance:
+                paragraph "Passage 14" using heading appearance:
+                    link "If" to "/wiki/sections/if.html" using inline link appearance
+                paragraph "Run a section only when a condition is true." using body appearance
+                code example "Example 15" containing "if condition:\n    ..."
+            region "index block 16" using card appearance:
+                paragraph "Passage 17" using heading appearance:
+                    link "Match / Switch" to "/wiki/sections/match.html" using inline link appearance
+                paragraph "Choose one branch by comparing a value against several cases." using body appearance
+                code example "Example 18" containing "match based on value:\n    ..."
+            region "index block 19" using card appearance:
+                paragraph "Passage 20" using heading appearance:
+                    link "Case" to "/wiki/sections/case.html" using inline link appearance
+                paragraph "Define one branch inside a match or switch section." using body appearance
+                code example "Example 21" containing "case value:\n    ..."

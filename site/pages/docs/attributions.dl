@@ -1,0 +1,57 @@
+import ../../documentation.dl
+
+website page documentation attributions page at "/wiki/attributions.html" titled "DynLex Wiki - Attributions" described "Creators and licenses for third-party material presented by DynLex.":
+    region "Documentation" using content appearance:
+        paragraph "Asset Attributions" using title appearance
+        paragraph "Creators and licenses for third-party material presented by DynLex." using body appearance
+        region "attributions block 1" using card appearance:
+            paragraph "The Vitruvian Man" using heading appearance
+            paragraph "Passage 2" using body appearance:
+                link "Fri" to "https://sketchfab.com/manhiac" using inline link appearance
+                words " created "
+                link "The Vitruvian Man" to "https://sketchfab.com/3d-models/the-vitruvian-man-6c0b99ce8463468fbd00f304dbe7e105" using inline link appearance
+                words ", licensed under "
+                link "CC BY 4.0" to "https://creativecommons.org/licenses/by/4.0/" using inline link appearance
+                words "."
+            paragraph "DynLex centers and uniformly scales the model, converts its surface and shallow interior into a deterministic density point cloud, spatially pairs neighboring regions with a procedural motorcycle point cloud, and expands the shared points into micro-triangles for live WebGPU rendering. The original model geometry is not included in the repository." using body appearance
+        region "attributions block 3" using card appearance:
+            paragraph "Puzzle & Casual Game Music" using heading appearance
+            paragraph "Passage 4" using body appearance:
+                link "SounovaMusic" to "https://pixabay.com/users/sounovamusic-51943437/" using inline link appearance
+                words " created "
+                link "Puzzle & Casual Game Music" to "https://pixabay.com/music/happy-childrens-tunes-puzzle-amp-casual-game-music-460543/" using inline link appearance
+                words ", used in the wolf, sheep, and hay challenge under the "
+                link "Pixabay Content License" to "https://pixabay.com/service/license-summary/" using inline link appearance
+                words "."
+        region "attributions block 5" using card appearance:
+            paragraph "River Challenge Sound Effects" using heading appearance
+            paragraph "Passage 6" using body appearance:
+                words "The ambient forest and river bed is a compact, circularly crossfaded edit of Garuda1982's "
+                link "Forest with small river birds and nature field recording" to "https://pixabay.com/sound-effects/nature-forest-with-small-river-birds-and-nature-field-recording-6735/" using inline link appearance
+                words ", used under the "
+                link "Pixabay Content License" to "https://pixabay.com/service/license-summary/" using inline link appearance
+                words ". The 3:41 source recording was reduced to a 30-second loop for the challenge."
+            paragraph "Passage 7" using body appearance:
+                words "The boat uses DRAGON-STUDIO's "
+                link "Simple Whoosh" to "https://pixabay.com/sound-effects/film-special-effects-simple-whoosh-382724/" using inline link appearance
+                words "; the sheep's idle call is Universfield's "
+                link "Sheep Bleat" to "https://pixabay.com/sound-effects/nature-sheep-bleat-122256/" using inline link appearance
+                words "; and the win cue is Tithuh's "
+                link "Level up! 03" to "https://pixabay.com/sound-effects/film-special-effects-level-up-03-523644/" using inline link appearance
+                words ". These sounds are used under the "
+                link "Pixabay Content License" to "https://pixabay.com/service/license-summary/" using inline link appearance
+                words "."
+            paragraph "Passage 8" using body appearance:
+                words "The anxious call is the "
+                link "Pixabay distribution" to "https://pixabay.com/sound-effects/nature-baby-lamb-calling-his-mother-104063/" using inline link appearance
+                words " of EduFigueres's "
+                link "Baby lamb calling his mother" to "https://freesound.org/people/EduFigueres/sounds/266689/" using inline link appearance
+                words ", distributed under "
+                link "CC0 1.0" to "https://creativecommons.org/publicdomain/zero/1.0/" using inline link appearance
+                words ". The challenge trims the call and raises its pitch by three semitones during playback."
+            paragraph "Passage 9" using body appearance:
+                words "The rowing cue is the first stroke from Joseph Sardin's "
+                link "Rowing slowly" to "https://bigsoundbank.com/rowing-slowly-s1514.html" using inline link appearance
+                words " recording, also distributed under "
+                link "CC0 1.0" to "https://creativecommons.org/publicdomain/zero/1.0/" using inline link appearance
+                words ". The source recordings were trimmed and faded to match their animations."

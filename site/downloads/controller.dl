@@ -1,0 +1,89 @@
+import ../state.dl
+
+to get the detected website platform in {a pointer to website state:state}:
+    set environment to state's environment
+    set hint to the string form of ""
+    set hints to the JSON member named "hints" in environment
+    if hints is not JSON null:
+        set hint to the JSON text named "architecture" in hints
+    return the website platform for (the JSON text named "userAgent" in environment) with architecture hint and ((the JSON number named "touchPoints" in environment) as an integer) touch points
+
+to start website download {a pointer to website package:package} in {a pointer to website state:state}:
+    set the text of "Release status" in (state's view's instance) to ("Downloading " + package's name + ".")
+    request "open" containing (a JSON object containing [JSON text "url" is (package's url), JSON flag "newTab" is false]) for purpose 0 indexed 0 in state
+    set state's download started to true
+
+to report website release failure in {a pointer to website state:state}:
+    set the text of "Finding the latest release…" in (state's view's instance) to "Download DynLex"
+    set the text of "Release status" in (state's view's instance) to "An error occurred. Check the log."
+    request "log" containing (a JSON object containing [JSON text "level" is "error", JSON text "message" is (state's release's error)]) for purpose 0 indexed 0 in state
+
+to refresh website downloads in {a pointer to website state:state}:
+    set instance to state's view's instance
+    set release to state's release
+    if release = @intrinsic("construct", a pointer to website release):
+        return nothing
+    if release's error's length > 0:
+        set the text of "Finding the latest release…" in instance to "Download DynLex"
+        set the text of "Release status" in instance to "An error occurred. Check the log."
+        return nothing
+    set the text of "Finding the latest release…" in instance to ("DynLex " + release's version)
+    set the text of "Release status" in instance to "Choose the download for your platform below."
+    if state's environment = @intrinsic("construct", a pointer to JSON value):
+        return nothing
+    set platform to the detected website platform in state
+    set package to the primary website package in release for platform
+    if release's error's length > 0:
+        report website release failure in state
+        return nothing
+    if package = @intrinsic("construct", a pointer to website package):
+        return nothing
+    set the text of "Finding the latest release…" in instance to ("DynLex for " + platform's label)
+    set the text of "Release status" in instance to (release's version + " · " + package's name)
+    if (state's route = "/download.html") and (state's download started = false):
+        start website download package in state
+
+to load website downloads in {a pointer to website state:state}:
+    if state's release loading:
+        return nothing
+    if state's release != @intrinsic("construct", a pointer to website release):
+        free state's release
+        set state's release to @intrinsic("construct", a pointer to website release)
+    set state's release loading to true
+    set the text of "Release status" in (state's view's instance) to "Preparing the platform downloads…"
+    request "fetch" containing (a JSON object containing [JSON text "url" is "https://api.github.com/repos/OpenAEC-Foundation/dynlex/releases/latest", JSON child "headers" is (a JSON object containing [JSON text "Accept" is "application/vnd.github+json"])]) for purpose 5 indexed 0 in state
+
+to receive website release {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set state's release loading to false
+    if (the JSON number named "status" in response) != 200.0:
+        set state's release to storage for one slot initialized with (a new website release)
+        set state's release's error to "The release metadata request failed"
+    else:
+        parse (the JSON text named "text" in response) as JSON and set parsed to it
+        if parsed failed:
+            free parsed's value
+            set state's release to storage for one slot initialized with (a new website release)
+            set state's release's error to "The release metadata is invalid JSON"
+        else:
+            set state's release to the website release described by (the value of parsed)
+            free the value of parsed
+    if state's release's error's length > 0:
+        report website release failure in state
+    refresh website downloads in state
+
+to follow website download {string:destination} in {a pointer to website state:state}:
+    if (state's release = @intrinsic("construct", a pointer to website release)) or (destination = "action:retry-downloads"):
+        load website downloads in state
+        return nothing
+    if state's release's error's length > 0:
+        load website downloads in state
+        return nothing
+    set package to @intrinsic("construct", a pointer to website package)
+    if destination = "action:download":
+        set package to the primary website package in (state's release) for (the detected website platform in state)
+    else:
+        set identifier to the substring of destination from 16 spanning (destination's length - 16) bytes
+        set package to the website package named identifier in (state's release)
+        require condition (package != @intrinsic("construct", a pointer to website package)) reporting "The download link names a package absent from the release manifest"
+    if package != @intrinsic("construct", a pointer to website package):
+        start website download package in state

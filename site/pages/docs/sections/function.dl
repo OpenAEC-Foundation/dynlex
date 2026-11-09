@@ -1,0 +1,85 @@
+import ../../../documentation.dl
+
+website page documentation sections function page at "/wiki/sections/function.html" titled "DynLex Wiki - Function" described "Use a function when you want to give a name to a piece of behavior and call it again later.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "Function" using title appearance
+        paragraph "Use a function when you want to give a name to a piece of behavior and call it again later." using body appearance
+        region "function block 1" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "• A function is a reusable named pattern." using body appearance
+            paragraph "Passage 2" using body appearance:
+                words "• Use "
+                words "to" using inline code appearance
+                words " for actions and "
+                words "to get" using inline code appearance
+                words " for multi-line value functions."
+            paragraph "Passage 3" using body appearance:
+                words "• Use "
+                words "means:" using inline code appearance
+                words " for a value defined by one replacement expression."
+            paragraph "• Plain pattern words used in the body become variables." using body appearance
+            paragraph "• Call the function by writing the same pattern words." using body appearance
+        region "function block 4" using card appearance:
+            paragraph "Pattern" using signal appearance
+            code example "Example 5" containing "to action pattern:\n    ...\n\nto get value pattern:\n    return ...\n\nvalue pattern means: expression"
+            paragraph "Passage 6" using body appearance:
+                words "The declaration line contains the function "
+                link "pattern" to "/wiki/terms.html#pattern" using inline link appearance
+                words ". Names inside that pattern can be "
+                link "parameters" to "/wiki/terms.html#parameter" using inline link appearance
+                words "."
+            paragraph "Passage 7" using body appearance:
+                words "to" using inline code appearance
+                words " declares an action and implicitly opens its "
+                words "execute:" using inline code appearance
+                words " body. An action must return nothing. "
+                words "to get" using inline code appearance
+                words " also opens an implicit "
+                words "execute:" using inline code appearance
+                words " body, but it must return a value on every reachable path."
+            paragraph "Passage 8" using body appearance:
+                words "means:" using inline code appearance
+                words " declares a flex replacement that produces a value. Its expression is required on the same line. Use the full "
+                words "function pattern:" using inline code appearance
+                words " form when the declaration needs metadata child sections such as "
+                words "patterns:" using inline code appearance
+                words ", "
+                words "before:" using inline code appearance
+                words ", or "
+                words "after:" using inline code appearance
+                words "."
+            paragraph "For plain words, DynLex detects parameters by usage. If the function body uses a plain pattern word, that word becomes a parameter variable." using body appearance
+        region "function block 9" using card appearance:
+            paragraph "Example" using signal appearance
+            code example "Example 10" containing "import lib/std.dl\n\nto get value squared:\n    return value * value\n\nprint line 5 squared"
+            paragraph "Passage 11" using body appearance:
+                words "In this example, "
+                words "value" using inline code appearance
+                words " is a parameter variable. When you write "
+                words "5 squared" using inline code appearance
+                words ", the number "
+                words "5" using inline code appearance
+                words " is the "
+                link "argument" to "/wiki/terms.html#argument" using inline link appearance
+                words " (the real value passed in)."
+            region "function block 12" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 13" using body appearance:
+                    words "Change "
+                    words "squared" using inline code appearance
+                    words " into "
+                    words "doubled" using inline code appearance
+                    words ". Then return "
+                    words "value + value" using inline code appearance
+                    words "."
+        region "function block 14" using card appearance:
+            paragraph "Use It When" using signal appearance
+            paragraph "Use a function when the same idea appears more than once, or when you want a long piece of code to have a clear name." using body appearance
+            region "function block 15" using cards appearance:
+                paragraph "Passage 16" using body appearance:
+                    link "While Loop" to "/wiki/sections/loop.html" using inline link appearance
+                paragraph "Passage 17" using body appearance:
+                    link "If" to "/wiki/sections/if.html" using inline link appearance
+                paragraph "Passage 18" using body appearance:
+                    link "Getting Started" to "/wiki/getting-started.html" using inline link appearance

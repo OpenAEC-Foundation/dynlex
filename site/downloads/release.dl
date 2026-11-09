@@ -1,0 +1,203 @@
+import platform.dl
+import lib/json_builders.dl
+
+class:
+    patterns:
+        website package
+    members:
+        identifier as a string
+        system as a string
+        architectures as a string
+        format as a string
+        name as a string
+        url as a string
+        next as a pointer to website package
+
+class:
+    patterns:
+        website release
+    members:
+        version as a string
+        error as a string
+        schema as an integer
+        repository as a string
+        count as an integer
+        packages as a pointer to website package
+
+to free {a pointer to website release:release}:
+    set package to release's packages
+    loop while package != @intrinsic("construct", a pointer to website package):
+        set next to package's next
+        destroy the value at package
+        deallocate package
+        set package to next
+    destroy the value at release
+    deallocate release
+
+to get {string:text} is a release identifier allowing dots {boolean:dots}:
+    if text's length = 0:
+        return false
+    set index to 0
+    loop while index < text's length:
+        set character to the character at index in text
+        set allowed to ((character >= 48) and (character <= 57)) or ((character >= 97) and (character <= 122))
+        if dots:
+            set allowed to allowed or ((character >= 65) and (character <= 90))
+        if index > 0:
+            set allowed to allowed or (character = 45)
+            if dots:
+                set allowed to allowed or ((character = 46) or (character = 95))
+        if allowed = false:
+            return false
+        increment index
+    return true
+
+to get the error reading [release] record {a pointer to list:fields} into {a pointer to website release:release}:
+    set count to the length of fields
+    if count = 0:
+        return the string form of ""
+    set tag to the item at 0 in fields
+    if tag has "#" at offset 0:
+        return the string form of ""
+    if tag = "schema":
+        if ((count != 2) or (release's schema != 0)) or ((the item at 1 in fields) != "1"):
+            return the string form of "Invalid or duplicate release schema"
+        set release's schema to 1
+        return the string form of ""
+    if tag = "repository":
+        if (count != 2) or (release's repository's length != 0):
+            return the string form of "Invalid or duplicate release repository"
+        set release's repository to the item at 1 in fields
+        return the string form of ""
+    if (tag != "asset") or (count != 6):
+        return the string form of "Invalid release manifest record"
+    set package to a new website package
+    set package's identifier to the item at 1 in fields
+    set package's system to the item at 2 in fields
+    set package's architectures to the item at 3 in fields
+    set package's format to the item at 4 in fields
+    set package's name to the item at 5 in fields
+    if ((package's identifier is a release identifier allowing dots false) = false) or ((package's name is a release identifier allowing dots true) = false):
+        return the string form of "Invalid release package identifier or filename"
+    if ((package's system != "linux") and (package's system != "windows")) and (package's system != "macos"):
+        return the string form of "Invalid release operating system"
+    if (((package's architectures != "arm64") and (package's architectures != "x64")) and (package's architectures != "arm64,x64")) and (package's architectures != "x64,arm64"):
+        return the string form of "Invalid release architectures"
+    if (((package's format != "deb") and (package's format != "tar.gz")) and (package's format != "msi")) and (package's format != "pkg"):
+        return the string form of "Invalid release package format"
+    set previous to release's packages
+    loop while previous != @intrinsic("construct", a pointer to website package):
+        if (previous's identifier = package's identifier) or (previous's name = package's name):
+            return the string form of "Duplicate release package identifier or filename"
+        set previous to previous's next
+    set package's next to release's packages
+    set release's packages to storage for one slot initialized with package
+    increment release's count
+    return the string form of ""
+
+to read [release] [manifest] {string:manifest} into {a pointer to website release:release}:
+    set cursor to 0
+    loop while cursor < manifest's length:
+        set end to the position of "\n" in manifest starting at cursor
+        if end < 0:
+            set end to manifest's length
+        set fields to the whitespace words in (the substring of manifest from cursor spanning (end - cursor) bytes)
+        set release's error to the error reading release record fields into release
+        free fields
+        if release's error's length > 0:
+            return nothing
+        set cursor to end + 1
+    if ((release's schema != 1) or (release's repository != "OpenAEC-Foundation/dynlex")) or (release's count = 0):
+        set release's error to "The manifest needs schema 1, the expected repository and at least one package"
+
+to get {a pointer to JSON value:object} has release text {C string:name}:
+    if object has JSON member named name:
+        return (the JSON member named name in object)'s kind = the JSON text kind
+    return false
+
+to get the website [release] described by {a pointer to JSON value:document}:
+    set release to storage for one slot initialized with (a new website release)
+    if document is not a JSON object:
+        set release's error to "Release metadata is not an object"
+        return release
+    if ((document has release text "body") = false) or ((document has release text "tag_name") = false):
+        set release's error to "Release metadata is missing its text fields"
+        return release
+    if (document has JSON member named "assets") = false:
+        set release's error to "Release metadata is missing its assets"
+        return release
+    set assets to the JSON member named "assets" in document
+    if assets is not a JSON array:
+        set release's error to "Release assets are not an array"
+        return release
+    set release's version to the JSON text named "tag_name" in document
+    set body to the JSON text named "body" in document
+    set marker to "<!-- dynlex-release-manifest\n"
+    set start to the position of marker in body starting at 0
+    if start < 0:
+        set release's error to "The release has no embedded manifest"
+        return release
+    set start to start + the length of marker
+    set end to the position of "\n-->" in body starting at start
+    if (end < 0) or ((the position of marker in body starting at start) >= 0):
+        set release's error to "The release needs exactly one complete manifest"
+        return release
+    read release manifest (the substring of body from start spanning (end - start) bytes) into release
+    if release's error's length > 0:
+        return release
+    set manifests to 0
+    set index to 0
+    loop while index < assets's length:
+        set asset to the JSON value at index index in assets
+        if asset is not a JSON object:
+            set release's error to "A release asset is not an object"
+            return release
+        if ((asset has release text "name") = false) or ((asset has release text "browser_download_url") = false):
+            set release's error to "A release asset is missing its filename or URL"
+            return release
+        set name to the JSON text named "name" in asset
+        set url to the JSON text named "browser_download_url" in asset
+        if name = "release-manifest.txt":
+            increment manifests
+        set package to release's packages
+        loop while package != @intrinsic("construct", a pointer to website package):
+            if package's name = name:
+                if (package's url's length > 0) or ((url has "https://" at offset 0) = false):
+                    set release's error to "A release package has duplicate assets or an invalid URL"
+                    return release
+                set package's url to url
+            set package to package's next
+        increment index
+    if manifests != 1:
+        set release's error to "The release needs exactly one manifest asset"
+    set package to release's packages
+    loop while package != @intrinsic("construct", a pointer to website package):
+        if package's url's length = 0:
+            set release's error to "A package named in the manifest has no release asset"
+        set package to package's next
+    return release
+
+to get the primary website [package] in {a pointer to website release:release} for {website platform:platform}:
+    set result to @intrinsic("construct", a pointer to website package)
+    if platform's supported = false:
+        return result
+    set package to release's packages
+    loop while package != @intrinsic("construct", a pointer to website package):
+        set compatible to package's architectures contains ","
+        if platform's architecture != "unknown":
+            set compatible to package's architectures contains (platform's architecture)
+        if ((package's system = platform's system) and (package's format = platform's format)) and compatible:
+            if result != @intrinsic("construct", a pointer to website package):
+                set release's error to "Several packages match the detected platform"
+                return @intrinsic("construct", a pointer to website package)
+            set result to package
+        set package to package's next
+    return result
+
+to get the website [package] named {string:identifier} in {a pointer to website release:release}:
+    set package to release's packages
+    loop while package != @intrinsic("construct", a pointer to website package):
+        if package's identifier = identifier:
+            return package
+        set package to package's next
+    return @intrinsic("construct", a pointer to website package)

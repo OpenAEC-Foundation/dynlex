@@ -1,0 +1,51 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        shader geometry
+    members:
+        kind as an integer
+        path as a C string
+        metadata as a C string
+        reference width as an integer
+        near as a floating-point number
+        far as a floating-point number
+        terrain rows as an integer
+        terrain near columns as an integer
+        terrain far columns as an integer
+        water rows as an integer
+        water near columns as an integer
+        water far columns as an integer
+
+full screen means: @intrinsic("construct", shader geometry, 0, "", "", 0, 0.0, 0.0, 0, 0, 0, 0, 0, 0)
+point cloud from {C string:path} described by {C string:metadata} means: @intrinsic("construct", shader geometry, 2, path, metadata, 0, 0.0, 0.0, 0, 0, 0, 0, 0, 0)
+camera grid at {integer:reference} pixels from {floating-point number:near plane} to {floating-point number:far plane} with terrain {integer:ground rows} rows, {integer:near columns} near and {integer:far columns} far columns, and water {integer:water rows} rows, {integer:water near} near and {integer:water far} far columns means: @intrinsic("construct", shader geometry, 1, "", "", reference, near plane, far plane, ground rows, near columns, far columns, water rows, water near, water far)
+
+class:
+    patterns:
+        live shader
+    members:
+        id as a C string
+        title as a C string
+        source as a C string
+        duration as an integer
+        geometry as shader geometry
+
+section shader {name} with id {C string:id} titled {C string:title} from {C string:source} lasting {integer:duration} seconds:
+    declares: name
+    result: live shader
+    body:
+        geometry: shader geometry
+    value:
+        @intrinsic("construct", live shader, id, title, source, duration, the body's geometry)
+
+shader event horizon with id "event-horizon" titled "Into the Event Horizon" from "site/shaders/event-horizon.dl" lasting 11 seconds:
+    full screen
+
+shader endless terrain with id "endless-terrain" titled "Endless Terrain" from "site/shaders/endless-terrain.dl" lasting 11 seconds:
+    camera grid at 1440 pixels from 0.45 to 377.8 with terrain 200 rows, 896 near and 68 far columns, and water 104 rows, 448 near and 56 far columns
+
+shader nano choreography with id "nano-choreography" titled "Nano Choreography" from "site/shaders/nano-choreography.dl" lasting 11 seconds:
+    point cloud from "assets/shaders/geometry/vitruvian-points.f32" described by "assets/shaders/geometry/vitruvian-points.json"
+
+the site's shaders means: [event horizon, endless terrain, nano choreography]

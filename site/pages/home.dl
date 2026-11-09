@@ -1,0 +1,100 @@
+import ../appearance.dl
+
+website page home page at "/index.html" titled "DynLex — Make the language part of the work" described "Explore working sketches, invent project vocabulary, and run DynLex in the browser.":
+    region "motion" using hero appearance:
+        surface "Live shader" using shader appearance
+        region "Shader introduction" using hero copy appearance:
+            region "Opening space" using hero space appearance:
+            paragraph "DYNLEX / LIVE GPU" using hero signal appearance
+            paragraph "Code becomes\nlight." using hero title appearance
+            paragraph "Compilation measurement" containing "Run a sketch to measure compilation\non this device." using hero signal appearance
+            region "Shader actions" using columns appearance:
+                link "Next shader →" to "action:next-shader" using navigation link appearance
+                link "Open this shader ↗" to "/ide/index.html?shader=event-horizon" using navigation link appearance
+
+    region "playground" using content appearance:
+        paragraph "DYNLEX / OPEN SKETCH" using signal appearance
+        region "The language and the work" using columns appearance:
+            paragraph "Make the language\npart of the work." using title appearance
+            region "Introduction" using card appearance:
+                paragraph "Code can sound like the thing it describes. In DynLex, a useful phrase becomes part of the language of the project." using body appearance
+                link "Open the playground ↗" to "/ide/index.html" using primary link appearance
+                link "Open the first challenge ↓" to "#challenges" using link appearance
+        region "Square field sketch" using columns appearance:
+            region "Square field source" using card appearance:
+                paragraph "SKETCH_00 / square-field.dl" using signal appearance
+                editor "Square field" containing "import lib/std.dl\n\nsquare value means: value * value\n\nprint line square 8" using code appearance
+                link "Run square field ▶" to "action:run-square" using primary link appearance
+                link "Stop square field ■" to "action:stop-square" using link appearance
+            region "Square field result" using card appearance:
+                paragraph "RESULT / LIVE" using signal appearance
+                paragraph "Square field output" containing "Run the sketch to see its output." using output appearance
+                paragraph "Square field status" containing "Ready." using signal appearance
+
+    region "challenges" using content appearance:
+        paragraph "CODING CHALLENGES" using signal appearance
+        paragraph "Think in words.\nMove the world." using title appearance
+        paragraph "Write a short plan in plain English, then watch every instruction play out." using body appearance
+        region "Choose a challenge" using columns appearance:
+            region "River crossing" using card appearance:
+                paragraph "01 / THE RIVER" using signal appearance
+                paragraph "Wolf, sheep, and hay" using heading appearance
+                paragraph "Help a farmer cross the river. Keep the sheep safe from the wolf, and the hay safe from the sheep." using body appearance
+                link "Open the river challenge →" to "action:river" using primary link appearance
+            region "Farm challenge" using card appearance:
+                paragraph "02 / THE FARM" using signal appearance
+                paragraph "Grow your own farm" using heading appearance
+                paragraph "Turn a plan into a working farm. Write instructions, watch the world respond, and build your vocabulary as you go." using body appearance
+                link "Open the farm challenge →" to "action:farm" using primary link appearance
+
+    region "language" using content appearance:
+        paragraph "PROJECT VOCABULARY" using signal appearance
+        paragraph "The vocabulary\nis in the program." using title appearance
+        paragraph "Useful words do not stay trapped in comments or conventions. They can become callable phrases." using body appearance
+        region "Vocabulary lab" using card appearance:
+            tab group "Vocabulary" using vocabulary tabs appearance:
+                tab "Define":
+                    editor "Vocabulary definition" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
+                tab "Call":
+                    editor "Vocabulary call" containing "import lib/std.dl\n\nto show line message: print line message\n\nshow line \"The sketch is alive.\"" using code appearance
+                tab "Remix":
+                    editor "Vocabulary remix" containing "import lib/std.dl\n\nto show line message: print line message\n\nto announce line message: show line message\n\nannounce line \"The sketch is alive.\"" using code appearance
+            link "Run vocabulary ▶" to "action:run-vocabulary" using primary link appearance
+            link "Stop vocabulary ■" to "action:stop-vocabulary" using link appearance
+            paragraph "Vocabulary output" containing "Run the vocabulary example to see its output." using output appearance
+            paragraph "Vocabulary status" containing "Ready." using signal appearance
+
+    region "studio" using content appearance:
+        paragraph "DYNLEX STUDIO" using signal appearance
+        paragraph "A workspace for\nworking ideas." using title appearance
+        paragraph "A browser editor, a native compiler, and vocabulary you can shape around the project." using body appearance
+        region "Studio sketch" using columns appearance:
+            region "Studio sketch source" using card appearance:
+                paragraph "main.dl" using signal appearance
+                editor "Studio source" containing "import lib/std.dl\n\ndouble value means: value * 2\n\nprint line double 21" using code appearance
+                link "Run studio sketch ▶" to "action:run-studio" using primary link appearance
+                link "Stop studio sketch ■" to "action:stop-studio" using link appearance
+            region "Studio sketch result" using card appearance:
+                paragraph "OUTPUT / LIVE" using signal appearance
+                paragraph "Studio output" containing "Run the sketch to see its output." using output appearance
+                paragraph "Studio status" containing "Ready." using signal appearance
+        region "Studio tools" using cards appearance:
+            region "Editor" using card appearance:
+                paragraph "Write and run" using heading appearance
+                paragraph "Explore diagnostics, completions, and live execution in the browser." using body appearance
+                link "Open IDE ↗" to "/ide/index.html" using link appearance
+            region "Documentation" using card appearance:
+                paragraph "Read the language" using heading appearance
+                paragraph "Start with the core rules, then build a language for the work in front of you." using body appearance
+                link "Explore the docs →" to "/wiki/index.html" using link appearance
+            region "Native compiler" using card appearance:
+                paragraph "Take it with you" using heading appearance
+                paragraph "Compile to native programs, WebAssembly, and GPU shaders." using body appearance
+                link "Download DynLex ↓" to "/download.html" using link appearance
+
+appearance vocabulary tabs appearance:
+    font is bold
+    font size is 14
+    gap is 16
+    text is UI ink 146 64 14
+    corner radius is 6

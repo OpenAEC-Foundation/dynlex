@@ -1,3 +1,4 @@
+# Color output is linear; the shared renderer supplies sRGB encoding.
 import lib/shader_art.dl
 
 # ENDLESS TERRAIN
@@ -131,14 +132,15 @@ if this is a vertex shader:
         set the shader interpolant named "terrain position" with an x coordinate of world's x, a y coordinate of elevation, a z coordinate of world's z and a w coordinate of surface
         set the shader interpolant named "terrain normal" with an x coordinate of normal's x, a y coordinate of normal's y, a z coordinate of normal's z and a w coordinate of distance
         set the shader interpolant named "terrain material" with an x coordinate of variation, a y coordinate of detail, a z coordinate of submersion and a w coordinate of 0.0
-        set the output position with x clip's x, y clip's y, z clip's z and w view's y
+        # DynLex clip-space Y points down; the world and camera use Y up.
+        set the output position with x clip's x, y -clip's y, z clip's z and w view's y
 
 if this is a fragment shader:
     set pixel to a point with x the fragment x coordinate and y the fragment y coordinate
     set time to the shader time
     set frame to a point with x (the maximum of the shader width and 1.0) and y (the maximum of the shader height and 1.0)
     set aspect to frame's x / frame's y
-    set screen to a point with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (((pixel's y / frame's y) * 2.0) - 1.0)
+    set screen to a point with x ((((pixel's x / frame's x) * 2.0) - 1.0) * aspect) and y (1.0 - ((pixel's y / frame's y) * 2.0))
 
     set world to a spatial coordinate with x (the shader interpolant x named "terrain position"), y (the shader interpolant y named "terrain position") and z (the shader interpolant z named "terrain position")
     set surface to the shader interpolant w named "terrain position"
@@ -273,7 +275,7 @@ if this is a fragment shader:
 
     set edge to the square root of (((screen's x / aspect) * (screen's x / aspect)) + screen's y * screen's y)
     set vignette to (0.38 + ((1.0 - the smooth transition from 0.58 to 1.34 at edge) * 0.62))
-    set the red channel of color to the square root of ((color's red * vignette) / (1.0 + color's red * 0.38))
-    set the green channel of color to the square root of ((color's green * vignette) / (1.0 + color's green * 0.38))
-    set the blue channel of color to the square root of ((color's blue * vignette) / (1.0 + color's blue * 0.38))
+    set the red channel of color to ((color's red * vignette) / (1.0 + color's red * 0.38))
+    set the green channel of color to ((color's green * vignette) / (1.0 + color's green * 0.38))
+    set the blue channel of color to ((color's blue * vignette) / (1.0 + color's blue * 0.38))
     set the fragment color with a red channel of color's red, a green channel of color's green, a blue channel of color's blue and an alpha channel of 1.0

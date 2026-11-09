@@ -1,0 +1,160 @@
+import patterns.dl
+
+appearance page appearance:
+    background is UI ink 250 250 249
+    text is UI ink 42 42 50
+    font size is 17
+    line spacing is 1.6
+
+appearance content appearance:
+    maximum width is 1320
+    padding is 48
+    gap is 32
+    when viewport is below 700:
+        padding is 20
+        gap is 24
+
+appearance header appearance:
+    background is UI ink 42 42 50
+    text is UI ink 250 250 249
+    position is sticky
+
+appearance header content appearance:
+    maximum width is 1320
+    padding is 10
+    columns are 2
+    stack below 900
+    gap is 12
+
+appearance brand appearance:
+    font is "assets/fonts/SpaceGrotesk-700.ttf"
+    font size is 28
+    text is UI ink 245 198 91
+    padding is 6
+    line spacing is 1.1
+
+appearance navigation appearance:
+    columns are 6
+    gap is 4
+    when viewport is below 700:
+        columns are 3
+
+appearance navigation link appearance:
+    font size is 13
+    text is UI ink 250 250 249
+    padding is 4
+    line spacing is 1.2
+    lines do not wrap
+    text is centered
+    corner radius is 6
+
+appearance title appearance:
+    font is "assets/fonts/SpaceGrotesk-700.ttf"
+    font size is 64
+    line spacing is 1.08
+    when viewport is below 700:
+        font size is 40
+
+appearance heading appearance:
+    use title appearance
+    font size is 40
+    when viewport is below 700:
+        font size is 30
+
+appearance body appearance:
+    font size is 17
+    text is UI ink 98 98 109
+
+appearance signal appearance:
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 12
+    text is UI ink 146 64 14
+
+appearance columns appearance:
+    columns are 2
+    stack below 840
+    gap is 32
+
+appearance cards appearance:
+    columns are 3
+    stack below 900
+    gap is 24
+
+appearance card appearance:
+    background is UI ink 255 255 255
+    border is UI ink 220 218 213
+    border width is 1
+    corner radius is 12
+    padding is 24
+    gap is 16
+
+appearance link appearance:
+    font is bold
+    font size is 15
+    padding is 12
+    corner radius is 6
+    text is UI ink 146 64 14
+
+appearance primary link appearance:
+    use link appearance
+    background is UI ink 245 158 11
+    text is UI ink 24 24 27
+    text is centered
+
+appearance code appearance:
+    background is UI ink 42 42 50
+    text is UI ink 250 250 249
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 14
+    line spacing is 1.7
+    corner radius is 12
+    padding is 24
+    height is 260
+    lines do not wrap
+
+appearance output appearance:
+    font is "assets/fonts/JetBrainsMono-400.ttf"
+    font size is 14
+    line spacing is 1.7
+    minimum height is 80
+
+appearance hero appearance:
+    background is UI ink 9 11 18
+    text is UI ink 250 250 249
+    flow is overlay
+    minimum height is 680
+    when viewport is below 700:
+        minimum height is 560
+
+appearance shader appearance:
+    height is 680
+    when viewport is below 700:
+        height is 560
+
+appearance hero copy appearance:
+    use content appearance
+    gap is 32
+
+appearance hero title appearance:
+    use title appearance
+    font size is 88
+    text is UI ink 250 250 249
+    when viewport is below 700:
+        font size is 56
+
+appearance hero signal appearance:
+    use signal appearance
+    text is UI ink 245 198 91
+
+appearance hero space appearance:
+    height is 128
+    when viewport is below 700:
+        height is 64
+
+appearance footer appearance:
+    use content appearance
+    background is UI ink 42 42 50
+    text is UI ink 184 184 192
+
+appearance invisible appearance:
+    content is hidden

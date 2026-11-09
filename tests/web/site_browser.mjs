@@ -1,0 +1,254 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import http from 'node:http';
+import { spawn } from 'node:child_process';
+import { setTimeout as pause } from 'node:timers/promises';
+
+const directory = path.resolve(process.argv[2] || 'build/site');
+const graphicsMode = process.argv[3] || 'system';
+assert(['system', 'webgpu', 'webgl-no-adapter', 'webgl-no-api'].includes(graphicsMode));
+const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'dynlex-ui-chrome-'));
+await fs.mkdir('.cache', { recursive: true });
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json',
+  '.wasm': 'application/wasm', '.ttf': 'font/ttf' };
+const server = http.createServer(async (request, response) => {
+  try {
+    if (request.url === '/__tests__/workers.mjs') {
+      response.setHeader('Content-Type', 'text/javascript');
+      response.end(await fs.readFile(new URL('./site_worker_checks.mjs', import.meta.url)));
+      return;
+    }
+    if (request.url === '/__tests__/delayed-worker.mjs') {
+      response.setHeader('Content-Type', 'text/javascript');
+      response.end(await fs.readFile(new URL('./fixtures/delayed-worker.mjs', import.meta.url)));
+      return;
+    }
+    const filename = path.resolve(directory, '.' + new URL(request.url, 'http://localhost').pathname);
+    if (!filename.startsWith(directory + '/') && filename !== directory) throw new Error('Path');
+    const resolved = filename === directory ? path.join(filename, 'index.html') : filename;
+    response.setHeader('Content-Type', mime[path.extname(resolved)] || 'application/octet-stream');
+    response.end(await fs.readFile(resolved));
+  } catch { response.writeHead(404); response.end(); }
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const chrome = spawn(process.env.CHROME || 'google-chrome', [
+  ...(process.env.DYNLEX_BACKGROUND_BROWSER ? ['--ozone-platform=x11'] : ['--headless=new']),
+  ...(graphicsMode === 'webgpu' ? ['--enable-gpu', '--enable-unsafe-webgpu',
+    '--enable-features=Vulkan', '--use-angle=vulkan', '--use-vulkan=swiftshader',
+    '--use-webgpu-adapter=swiftshader', '--disable-vulkan-surface'] : []),
+  ...(graphicsMode.startsWith('webgl-') ? ['--use-gl=angle', '--use-angle=swiftshader'] : []),
+  '--mute-audio', '--no-first-run', '--disable-background-networking',
+  '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'
+], { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, WAYLAND_DISPLAY: '', WAYLAND_SOCKET: '' } });
+let stderr = ''; chrome.stderr.on('data', data => { stderr += data; });
+let socket;
+try {
+  let port;
+  for (let count = 0; count < 150; count++) {
+    try { port = Number((await fs.readFile(path.join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]); break; }
+    catch { await pause(100); }
+  }
+  assert(port, `Chrome did not start: ${stderr}`);
+  const targets = await fetch(`http://127.0.0.1:${port}/json/list`).then(response => response.json());
+  socket = new WebSocket(targets.find(target => target.type === 'page').webSocketDebuggerUrl);
+  await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
+  let sequence = 0; const pending = new Map(), errors = [];
+  let intercept;
+  socket.addEventListener('message', event => {
+    const message = JSON.parse(event.data);
+    if (message.id) {
+      const operation = pending.get(message.id); pending.delete(message.id);
+      if (message.error) operation.reject(new Error(message.error.message)); else operation.resolve(message.result);
+    } else if (message.method === 'Fetch.requestPaused') {
+      intercept(message.params).catch(error => errors.push(String(error)));
+    } else if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails);
+    else if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
+      errors.push(message.params.args.map(arg => arg.description || arg.value));
+    }
+  });
+  const command = (method, params = {}) => new Promise((resolve, reject) => {
+    const id = ++sequence; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params }));
+  });
+  const evaluate = async expression => {
+    const result = await command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    assert(!result.exceptionDetails, JSON.stringify(result.exceptionDetails));
+    return result.result.value;
+  };
+  const waitFor = async expression => {
+    for (let count = 0; count < 300; count++) {
+      assert.equal(errors.length, 0, JSON.stringify(errors));
+      if (await evaluate(expression)) return;
+      await pause(100);
+    }
+    const screenshot = await command('Page.captureScreenshot', { format: 'png' });
+    await fs.writeFile(`.cache/site-failed-${graphicsMode}.png`, Buffer.from(screenshot.data, 'base64'));
+    throw new Error(`Timed out: ${expression}\n${await evaluate('JSON.stringify({text:document.body.innerText,drawn:window.siteProbe.texts.slice(-20)})')}\n${stderr}`);
+  };
+  await command('Runtime.enable'); await command('Page.enable');
+  await command('Browser.setDownloadBehavior', { behavior: 'deny' });
+  const manifest = await fs.readFile(new URL('../../metadata/release-manifest.txt', import.meta.url), 'utf8');
+  const assets = manifest.split('\n').filter(line => line.startsWith('asset ')).map(line => ({
+    name: line.split(/\s+/)[5], browser_download_url: 'https://downloads.invalid/' + line.split(/\s+/)[5]
+  }));
+  assets.push({ name: 'release-manifest.txt', browser_download_url: 'https://downloads.invalid/release-manifest.txt' });
+  const release = { tag_name: 'v0.0-browser-test', body: `<!-- dynlex-release-manifest\n${manifest.trimEnd()}\n-->`, assets };
+  const downloads = [];
+  intercept = async ({ requestId, request }) => {
+    const headers = [{ name: 'Access-Control-Allow-Origin', value: '*' }];
+    let body;
+    if (request.url.startsWith('https://api.github.com/')) {
+      headers.push({ name: 'Content-Type', value: 'application/json' }); body = JSON.stringify(release);
+    } else {
+      downloads.push(request.url); body = 'Test package; downloads are denied in this private browser.\n';
+      headers.push({ name: 'Content-Disposition', value: 'attachment; filename="test-package.deb"' });
+    }
+    await command('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: headers,
+      body: Buffer.from(body).toString('base64') });
+  };
+  await command('Fetch.enable', { patterns: [{ urlPattern: 'https://api.github.com/*' }, { urlPattern: 'https://downloads.invalid/*' }] });
+  await command('Emulation.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36',
+    userAgentMetadata: { brands: [{ brand: 'Chromium', version: '140' }],
+      fullVersionList: [{ brand: 'Chromium', version: '140.0.0.0' }], platform: 'Linux',
+      platformVersion: '6.0.0', architecture: 'x86', model: '', mobile: false, bitness: '64', wow64: false }
+  });
+  await command('Page.addScriptToEvaluateOnNewDocument', { source: `
+    window.siteProbe = { paints: 0, api: '', texts: [], diagnostics: [] };
+    const BrowserWorker = window.Worker;
+    window.Worker = class extends BrowserWorker {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener('message', ({ data }) => {
+          if (!Array.isArray(data.result)) return;
+          for (const message of data.result) if (message.method === 'textDocument/publishDiagnostics')
+            window.siteProbe.diagnostics.push(message.params);
+        });
+      }
+    };
+    for (const prototype of [CanvasRenderingContext2D.prototype, OffscreenCanvasRenderingContext2D.prototype]) {
+      const paintText = prototype.fillText;
+      prototype.fillText = function(text, ...args) {
+        window.siteProbe.texts.push(text); return paintText.call(this, text, ...args);
+      };
+    }
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(kind, ...args) {
+      const result = original.call(this, kind, ...args);
+      if (kind === 'webgpu' || kind === 'webgl2') window.siteProbe.api = kind;
+      if (kind === 'webgl2' && result) {
+        const clear = result.clear.bind(result);
+        result.clear = bits => { window.siteProbe.paints++; clear(bits); };
+      }
+      return result;
+    };
+    if (typeof GPUQueue !== 'undefined') {
+      const submit = GPUQueue.prototype.submit;
+      GPUQueue.prototype.submit = function(...args) { window.siteProbe.paints++; return submit.apply(this,args); };
+    }
+    if (${JSON.stringify(graphicsMode)}.startsWith('webgl-')) {
+      Object.defineProperty(Navigator.prototype, 'gpu', { configurable: true,
+        get: () => ({ requestAdapter: async () => null }) });
+    }
+  ` });
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
+  await waitFor('window.siteProbe?.paints > 2');
+  await pause(1800);
+  assert.equal(errors.length,0,JSON.stringify(errors));
+  const capture = async name => {
+    const result = await command('Page.captureScreenshot', { format: 'png' });
+    await fs.writeFile(`.cache/site-${name}-${graphicsMode}.png`,Buffer.from(result.data,'base64'));
+  };
+  await capture('desktop');
+  console.log(JSON.stringify(await evaluate('({title:document.title,api:window.siteProbe.api,paints:window.siteProbe.paints})')));
+  const click = async (x,y) => {
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x,y});
+    await command('Input.dispatchMouseEvent',{type:'mousePressed',x,y,button:'left',clickCount:1});
+    await command('Input.dispatchMouseEvent',{type:'mouseReleased',x,y,button:'left',clickCount:1});
+  };
+  await click(335,627); await pause(1500); await capture('terrain');
+  await click(335,627); await pause(1500); await capture('nano');
+  await click(1115,22);
+  await waitFor('location.pathname === "/wiki/index.html" && document.title === "DynLex Wiki"');
+  await pause(1600); await capture('docs');
+  const idle = await evaluate('window.siteProbe.paints');
+  await pause(800);
+  assert.equal(await evaluate('window.siteProbe.paints'),idle,'An unchanged documentation page kept repainting');
+  console.log('Worker checks:', await evaluate("import('/__tests__/workers.mjs').then(module => module.verifyWorkers())"));
+  await click(1009,22);
+  await waitFor('location.pathname === "/ide/index.html" && document.title === "DynLex Studio"');
+  await waitFor('window.siteProbe.texts.includes("No problems found.")');
+  await pause(500); await capture('ide');
+  await click(237,287);
+  await waitFor('window.siteProbe.texts.includes("Hello from DynLex.")');
+  await click(120,421);
+  const key = async (code,key,number,modifiers=0) => {
+    await command('Input.dispatchKeyEvent',{type:'keyDown',code,key,windowsVirtualKeyCode:number,modifiers});
+    await command('Input.dispatchKeyEvent',{type:'keyUp',code,key,windowsVirtualKeyCode:number,modifiers});
+  };
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'import lib/std.dl\nprint line 7'});
+  await click(237,287);
+  await waitFor('window.siteProbe.texts.includes("7")');
+  await capture('ide-executed');
+  await click(120,421); await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'unrecognized instruction'});
+  await waitFor('window.siteProbe.texts.some(text => text.includes("This pattern couldn"))');
+  const beforeValid = await evaluate('window.siteProbe.diagnostics.length');
+  await click(120,421); await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'import lib/std.dl\nprint line "😀"'});
+  await waitFor(`window.siteProbe.diagnostics.slice(${beforeValid}).some(result => result.diagnostics.length === 0)`);
+  await capture('ide-analysis');
+  await pause(1000);
+  const analyzed = await evaluate('window.siteProbe.paints');
+  await pause(500);
+  assert.equal(await evaluate('window.siteProbe.paints'), analyzed, 'An idle analyzed editor kept repainting');
+  await click(120,421); await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'import lib/std.dl\nloop while true:\n    ignore 1'});
+  await click(237,287); await pause(1800); await click(640,287);
+  await waitFor('window.siteProbe.texts.includes("Stopped.")');
+  await click(1115,22);
+  await waitFor('location.pathname === "/wiki/index.html"');
+  await evaluate('history.back()'); await waitFor('location.pathname === "/ide/index.html"');
+  await evaluate('history.back()'); await waitFor('location.pathname === "/wiki/index.html"');
+  await evaluate('history.back()'); await waitFor('location.pathname === "/"'); await pause(500);
+  await click(905,22);
+  await waitFor('location.hash === "#language"'); await pause(1000);
+  await capture('vocabulary');
+  await click(1024,437); await click(120,510);
+  await key('Enter','Enter',13,2);
+  await command('Input.dispatchMouseEvent',{type:'mouseWheel',x:1100,y:700,deltaX:0,deltaY:300});
+  await waitFor('window.siteProbe.texts.includes("The sketch is alive.")');
+  await click(905,22); await pause(1000); await click(256,437); await click(120,510);
+  await key('KeyA','a',65,2);
+  await command('Input.insertText',{text:'import lib/std.dl\nprint line "Retained definition"'});
+  await click(1024,437); await click(256,437); await click(640,774);
+  await command('Input.dispatchMouseEvent',{type:'mouseWheel',x:1100,y:700,deltaX:0,deltaY:300});
+  await waitFor('window.siteProbe.texts.includes("Retained definition")');
+  await capture('vocabulary-executed');
+  await click(60,37); await waitFor('location.pathname === "/index.html"'); await pause(700);
+  await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:600,y:650});
+  await command('Input.dispatchMouseEvent',{type:'mouseWheel',x:600,y:650,deltaX:0,deltaY:720});
+  await pause(900); await capture('scrolled');
+  await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+  await pause(900); await capture('mobile');
+  await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+  await pause(500); await click(1220,22);
+  await waitFor('location.pathname === "/download.html" && window.siteProbe.texts.includes("DynLex for Linux")');
+  for (let index = 0; index < 100 && downloads.length === 0; index++) await pause(50);
+  assert.deepEqual(downloads, ['https://downloads.invalid/dynlex-linux-x64.deb']);
+  await capture('download');
+  assert.equal(errors.length,0,JSON.stringify(errors));
+  console.log('Site background preview passed.');
+} finally {
+  socket?.close();
+  if (chrome.exitCode === null) {
+    const stopped = new Promise(resolve => chrome.once('exit', resolve));
+    process.kill(-chrome.pid, 'SIGTERM');
+    await stopped;
+  }
+  await new Promise(resolve => server.close(resolve));
+  await fs.rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}

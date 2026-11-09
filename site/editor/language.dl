@@ -1,0 +1,111 @@
+# Async language service lifecycle and editor state belong to DynLex.
+import tokens.dl
+import lib/lsp_json.dl
+
+the website source URI means: "file:///workspace/main.dl"
+
+to send website language {C string:method} with {a pointer to JSON value:parameters} requesting {boolean:request} at step {integer:step} in {a pointer to website state:state}:
+    set message to a JSON object containing [JSON text "jsonrpc" is "2.0", JSON text "method" is method, JSON child "params" is parameters]
+    if request:
+        add a JSON member named "id" with value (a new JSON-RPC integer for step) to message
+    set state's language's phase to step
+    request "language" containing (a JSON object containing [JSON text "operation" is "exchange", JSON child "message" is message]) for purpose 8 indexed step in state
+
+to start website language analysis in {a pointer to website state:state}:
+    if state's language's phase != 0:
+        return nothing
+    set source to (the UI value for (the control labeled "IDE source" in (state's view's instance)) in (state's view's instance))'s text
+    set state's language's phase to 1
+    set the text of "IDE analysis" in (state's view's instance) to "Starting language service…"
+    request "language" containing (a JSON object containing [JSON text "operation" is "project", JSON child "sources" is (a JSON object containing [JSON text "main.dl" is source])]) for purpose 8 indexed 1 in state
+
+to get the website language result numbered {integer:id} in {a pointer to JSON value:response}:
+    set index to 0
+    loop while index < response's length:
+        set message to the JSON value at index index in response
+        if message has JSON member named "id":
+            if (the JSON number named "id" in message) = (id as a floating-point number):
+                require condition ((message has JSON member named "error") = false) reporting "The language server rejected an editor request"
+                return the JSON member named "result" in message
+        increment index
+    require condition false reporting "The language server did not answer its request"
+    return a new JSON-RPC null
+
+to receive website diagnostics in {a pointer to JSON value:response} in {a pointer to website state:state}:
+    set instance to state's view's instance
+    if (the UI value for (the control labeled "IDE source" in instance) in instance)'s text != state's language's snapshot:
+        return nothing
+    set index to 0
+    loop while index < response's length:
+        set message to the JSON value at index index in response
+        if message has JSON member named "method":
+            if (the JSON text named "method" in message) = "textDocument/publishDiagnostics":
+                set parameters to the JSON member named "params" in message
+                if (the JSON text named "uri" in parameters) = the website source URI:
+                    set entries to the JSON member named "diagnostics" in parameters
+                    set text to the string form of ""
+                    set cursor to 0
+                    loop while cursor < entries's length:
+                        set diagnostic to the JSON value at index cursor in entries
+                        set position to the JSON member named "start" in (the JSON member named "range" in diagnostic)
+                        set line to ((the JSON number named "line" in position) as an integer) + 1
+                        set column to ((the JSON number named "character" in position) as an integer) + 1
+                        set detail to the JSON text named "message" in diagnostic
+                        set text to text + (formatted "main.dl:{line}:{column}: {detail}\n")
+                        increment cursor
+                    if entries's length = 0:
+                        set text to "No problems found."
+                    set the text of "IDE diagnostics" in instance to text
+                    set count to entries's length
+                    set the text of "IDE analysis" in instance to (formatted "{count} problems · language service ready")
+        increment index
+
+to receive website language reply {a pointer to JSON value:response} at step {integer:step} in {a pointer to website state:state}:
+    require condition (state's language's phase = step) reporting "A language-service reply arrived out of order"
+    if step = 1:
+        set capabilities to the default LSP client capabilities
+        set parameters to the LSP initialization parameters rooted at (the string form of "file:///workspace") with capabilities
+        free capabilities
+        send website language "initialize" with parameters requesting true at step 2 in state
+    else if step = 2:
+        set result to the website language result numbered 2 in response
+        set provider to the JSON member named "semanticTokensProvider" in (the JSON member named "capabilities" in result)
+        set state's language's token types to a copy of JSON-RPC node (the JSON member named "tokenTypes" in (the JSON member named "legend" in provider))
+        send website language "initialized" with (a new JSON-RPC object) requesting false at step 3 in state
+    else if step = 3:
+        set state's language's snapshot to (the UI value for (the control labeled "IDE source" in (state's view's instance)) in (state's view's instance))'s text
+        set state's language's version to 1
+        set parameters to the LSP document opening parameters for URI (the string form of the website source URI), language (the string form of "dynlex"), version 1 and text (state's language's snapshot)
+        send website language "textDocument/didOpen" with parameters requesting false at step 4 in state
+    else if (step = 4) or (step = 5):
+        receive website diagnostics in response in state
+        set parameters to a JSON object containing [JSON child "textDocument" is (an LSP text document identifier for (the string form of the website source URI))]
+        send website language "textDocument/semanticTokens/full" with parameters requesting true at step 6 in state
+    else if step = 6:
+        receive website diagnostics in response in state
+        apply website semantic tokens (the website language result numbered 6 in response) in state
+        set state's language's phase to 7
+        animate UI view (state's view)
+
+to advance website language analysis in {a pointer to website state:state}:
+    if state's route != "/ide/index.html":
+        return nothing
+    start website language analysis in state
+    if state's language's phase != 7:
+        return nothing
+    set source to (the UI value for (the control labeled "IDE source" in (state's view's instance)) in (state's view's instance))'s text
+    if source = state's language's snapshot:
+        return nothing
+    if state's view's seconds < (state's language's edited at + 0.18):
+        animate UI view (state's view)
+        return nothing
+    set state's language's snapshot to source
+    increment state's language's version
+    set parameters to the LSP document change parameters for (the string form of the website source URI) at (state's language's version) containing (a full LSP content change containing source)
+    send website language "textDocument/didChange" with parameters requesting false at step 5 in state
+
+to notice website source edit {a pointer to UI instance:instance}:
+    set state to the website state in instance
+    set state's language's edited at to state's view's seconds
+    set the text of "IDE analysis" in instance to "Analyzing…"
+    animate UI view (state's view)

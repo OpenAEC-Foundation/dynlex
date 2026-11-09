@@ -1,0 +1,50 @@
+import navigation.dl
+import shaders/hero.dl
+import programs/controller.dl
+import editor/language.dl
+
+to follow website link {a pointer to UI instance:instance}:
+    set state to the website state in instance
+    set destination to (the UI value for (instance's event target) in instance)'s destination
+    if destination = "action:next-shader":
+        advance to the next website shader in state
+        return nothing
+    set runs to ["action:run-square", "action:run-vocabulary", "action:run-ide", "action:run-studio"]
+    set stops to ["action:stop-square", "action:stop-vocabulary", "action:stop-ide", "action:stop-studio"]
+    set index to 0
+    loop while index < the length of runs:
+        if destination = (the item at index in runs):
+            run website program index in state
+            return nothing
+        if destination = (the item at index in stops):
+            stop website program index in state
+            return nothing
+        increment index
+    if destination = "action:save-source":
+        set source to (the UI value for (the control labeled "IDE source" in instance) in instance)'s text
+        request "download" containing (a JSON object containing [JSON text "name" is "main.dl", JSON text "type" is "text/plain;charset=utf-8", JSON text "content" is source]) for purpose 0 indexed 0 in state
+        return nothing
+    if destination = "action:open-example":
+        set parent to the parent of (instance's event target) within (instance's description)
+        set the text of "IDE source" in instance to (parent's content)
+        navigate to (the string form of "/ide/index.html") in state
+        return nothing
+    if (destination has "action:download" at offset 0) or (destination = "action:retry-downloads"):
+        follow website download destination in state
+        return nothing
+    if destination has "action:" at offset 0:
+        if destination = "action:copy-example":
+            set parent to the parent of (instance's event target) within (instance's description)
+            set source to the string form of (parent's content)
+            @intrinsic("call pointer", state's view's driver's copy, nothing, state's view, the data of source, source's length)
+            return nothing
+        require condition false reporting "This website action has not been registered"
+    navigate to destination in state
+
+to bind website links in {UI reference:node} for {a pointer to UI instance:instance}:
+    if node's kind = 43:
+        bind node in instance to (the function named "follow website link $") for event 0
+    set index to 0
+    loop while index < node's count:
+        bind website links in (the UI child at index in node) for instance
+        increment index

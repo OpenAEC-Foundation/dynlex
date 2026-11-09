@@ -1,0 +1,41 @@
+import pages/home.dl
+import pages/download.dl
+import pages/documentation.dl
+import pages/ide.dl
+import pages/not_found.dl
+
+# Page data is shared by the renderer, route lookup and generated metadata.
+the site's pages means: [home page, download page, IDE page, missing page, documentation attributions page, documentation core rules page, documentation getting started page, documentation index page, documentation sections case page, documentation sections function page, documentation sections if page, documentation sections index page, documentation sections loop page, documentation sections match page, documentation terms page]
+
+document dynlex website using page appearance:
+    region "Site header" using header appearance:
+        region "Navigation" using header content appearance:
+            link "DynLex" to "/index.html" using brand appearance
+            region "Main navigation" using navigation appearance:
+                link "Playground" to "/index.html#playground" using navigation link appearance
+                link "Challenges" to "/index.html#challenges" using navigation link appearance
+                link "Language" to "/index.html#language" using navigation link appearance
+                link "IDE ↗" to "/ide/index.html" using navigation link appearance
+                link "Docs" to "/wiki/index.html" using navigation link appearance
+                link "Download ↓" to "/download.html" using navigation link appearance
+    home page
+    download page
+    IDE page
+    missing page
+    documentation attributions page
+    documentation core rules page
+    documentation getting started page
+    documentation index page
+    documentation sections case page
+    documentation sections function page
+    documentation sections if page
+    documentation sections index page
+    documentation sections loop page
+    documentation sections match page
+    documentation terms page
+    region "Site footer" using footer appearance:
+        paragraph "Make the language part of the work." using heading appearance
+        region "Footer links" using cards appearance:
+            link "Source code ↗" to "https://github.com/OpenAEC-Foundation/dynlex" using navigation link appearance
+            link "OpenAEC Foundation ↗" to "https://openaec.org" using navigation link appearance
+            link "Asset attributions" to "/wiki/attributions.html" using navigation link appearance

@@ -1,0 +1,23 @@
+# These page sections belong to this application, not to the compiler.
+import packages/dynlex-ui/ui/document_declarations.dl
+
+class:
+    patterns:
+        website page
+    members:
+        path as a C string
+        title as a C string
+        description as a C string
+        content as UI reference
+
+section website page {name} at {C string:path} titled {C string:title} described {C string:description}:
+    declares: name
+    result: website page
+    body:
+        children: many UI reference
+    value:
+        @intrinsic("construct", website page, path, title, description, a UI container of kind 22 containing (the body's children) named path)
+
+implicitly convert {website page:page}:
+    replacement:
+        page's content

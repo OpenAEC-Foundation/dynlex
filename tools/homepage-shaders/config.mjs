@@ -6,7 +6,7 @@ function scene(id, title, geometry = null) {
   return Object.freeze({
     id,
     title,
-    source: `tools/homepage-shaders/shaders/${id}.dl`,
+    source: `site/shaders/${id}.dl`,
     fragment: stagePaths("fragment"),
     ...(geometry
       ? {

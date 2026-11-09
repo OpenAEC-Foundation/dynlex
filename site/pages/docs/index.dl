@@ -1,0 +1,61 @@
+import ../../documentation.dl
+
+website page documentation index page at "/wiki/index.html" titled "DynLex Wiki" described "DynLex is a programming language that lets you write code in clear words.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Wiki" using signal appearance
+        paragraph "Learn DynLex" using title appearance
+        paragraph "DynLex is a programming language that lets you write code in clear words." using body appearance
+        paragraph "Start with the first guide, then move into the section pages and the terms page whenever you need a word explained." using body appearance
+        region "index block 1" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 2" using body appearance:
+                words "• Start with "
+                link "Core Rules" to "/wiki/core-rules.html" using inline link appearance
+                words " for fast troubleshooting."
+            paragraph "Passage 3" using body appearance:
+                words "• Use "
+                link "Getting Started" to "/wiki/getting-started.html" using inline link appearance
+                words " for your first working file."
+            paragraph "Passage 4" using body appearance:
+                words "• Use "
+                link "Terms" to "/wiki/terms.html" using inline link appearance
+                words " and "
+                link "Sections" to "/wiki/sections/index.html" using inline link appearance
+                words " as quick lookups."
+        region "index block 5" using cards appearance:
+            region "index block 6" using card appearance:
+                paragraph "Passage 7" using heading appearance:
+                    link "Core Rules" to "/wiki/core-rules.html" using inline link appearance
+                paragraph "Read the short, practical rules first. Great for quick troubleshooting." using body appearance
+            region "index block 8" using card appearance:
+                paragraph "Passage 9" using heading appearance:
+                    link "Getting Started" to "/wiki/getting-started.html" using inline link appearance
+                paragraph "Write your first file, run it, and learn the smallest useful steps first." using body appearance
+            region "index block 10" using card appearance:
+                paragraph "Passage 11" using heading appearance:
+                    link "Sections" to "/wiki/sections/index.html" using inline link appearance
+                paragraph "Passage 12" using body appearance:
+                    words "Learn the main DynLex section forms such as "
+                    words "function" using inline code appearance
+                    words ", "
+                    words "while" using inline code appearance
+                    words ", and "
+                    words "if" using inline code appearance
+                    words "."
+            region "index block 13" using card appearance:
+                paragraph "Passage 14" using heading appearance:
+                    link "Terms" to "/wiki/terms.html" using inline link appearance
+                paragraph "Passage 15" using body appearance:
+                    words "Look up words such as "
+                    words "pattern" using inline code appearance
+                    words ", "
+                    words "parameter" using inline code appearance
+                    words ", "
+                    words "argument" using inline code appearance
+                    words ", and "
+                    words "section" using inline code appearance
+                    words "."
+            region "index block 16" using card appearance:
+                paragraph "Passage 17" using heading appearance:
+                    link "Attributions" to "/wiki/attributions.html" using inline link appearance
+                paragraph "Review the creators and licenses of third-party visual assets used by the site." using body appearance

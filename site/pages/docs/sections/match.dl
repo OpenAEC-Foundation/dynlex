@@ -1,0 +1,57 @@
+import ../../../documentation.dl
+
+website page documentation sections match page at "/wiki/sections/match.html" titled "DynLex Wiki - Match / Switch" described "Use match or switch when you want to compare one value against several choices.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "Match / Switch" using title appearance
+        paragraph "Passage 1" using body appearance:
+            words "Use "
+            words "match" using inline code appearance
+            words " or "
+            words "switch" using inline code appearance
+            words " when you want to compare one value against several choices."
+        region "match block 2" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 3" using body appearance:
+                words "• match" using inline code appearance
+                words " compares one value against many options."
+            paragraph "Passage 4" using body appearance:
+                words "• Each "
+                link "case" to "/wiki/sections/case.html" using inline link appearance
+                words " is one option branch."
+            paragraph "• Use this when many choices depend on the same value." using body appearance
+        region "match block 5" using card appearance:
+            paragraph "Pattern" using signal appearance
+            code example "Example 6" containing "[match|switch] [based|] [on|] value:"
+            paragraph "Passage 7" using body appearance:
+                words "This is the exact pattern from "
+                words "std.dl" using inline code appearance
+                words ". The clearest everyday spelling is usually "
+                words "match based on value:" using inline code appearance
+                words "."
+        region "match block 8" using card appearance:
+            paragraph "Example" using signal appearance
+            code example "Example 9" containing "import lib/std.dl\n\nset day to 2\n\nmatch based on day:\n    case 1:\n        print line \"Monday\"\n    case 2:\n        print line \"Tuesday\"\n    case 3:\n        print line \"Wednesday\""
+            paragraph "Passage 10" using body appearance:
+                words "Each "
+                words "case" using inline code appearance
+                words " checks the same value. The branch that matches runs."
+            region "match block 11" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 12" using body appearance:
+                    words "Change "
+                    words "day" using inline code appearance
+                    words " to "
+                    words "3" using inline code appearance
+                    words ". Then add a new "
+                    words "case 4:" using inline code appearance
+                    words " branch."
+        region "match block 13" using card appearance:
+            paragraph "Related" using signal appearance
+            region "match block 14" using cards appearance:
+                paragraph "Passage 15" using body appearance:
+                    link "Case" to "/wiki/sections/case.html" using inline link appearance
+                paragraph "Passage 16" using body appearance:
+                    link "If" to "/wiki/sections/if.html" using inline link appearance
+                paragraph "Passage 17" using body appearance:
+                    link "Section" to "/wiki/terms.html#section" using inline link appearance

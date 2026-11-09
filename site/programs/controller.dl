@@ -1,0 +1,123 @@
+import ../state.dl
+
+to stop website [program] {integer:index} in {a pointer to website state:state}:
+    set program to state's programs + index
+    if program's phase = 0:
+        return nothing
+    cancel website request (program's request) in state
+    set program's phase to 0
+    set program's request to 0
+    set description to the item at index in (the website program descriptions)
+    set the text of (description's status) in (state's view's instance) to "Stopped."
+
+to run website [program] {integer:index} in {a pointer to website state:state}:
+    set other to 0
+    loop while other < the length of (the website program descriptions):
+        stop website program other in state
+        increment other
+    set program to state's programs + index
+    set description to the item at index in (the website program descriptions)
+    set instance to state's view's instance
+    set editor to the active UI editor within (the control labeled (description's source) in instance) in instance
+    require condition (editor != @intrinsic("construct", UI reference)) reporting "The program source has no active editor"
+    set source to (the UI value for editor in instance)'s text
+    set program's output to ""
+    increment state's invocation
+    set program's invocation to state's invocation
+    set program's phase to 1
+    set the text of (description's output) in instance to ""
+    set the text of (description's status) in instance to "Compiling…"
+    request "compiler" containing (a JSON object containing [
+        JSON text "operation" is "compile", JSON text "target" is "wasm", JSON text "entry" is "main.dl",
+        JSON flag "traced" is false,
+        JSON child "sources" is (a JSON object containing [JSON text "main.dl" is source])
+    ]) for purpose 6 indexed index in state
+    set program's request to state's requests' id
+
+to get the website [diagnostic] text in {a pointer to JSON value:response}:
+    set result to the string form of ""
+    set diagnostics to the JSON member named "diagnostics" in response
+    set index to 0
+    loop while index < diagnostics's length:
+        set diagnostic to the JSON value at index index in diagnostics
+        set file to the JSON text named "file" in diagnostic
+        set line to (the JSON number named "line" in diagnostic) as an integer
+        set column to (the JSON number named "column" in diagnostic) as an integer
+        set message to the JSON text named "message" in diagnostic
+        set result to formatted "{result}{file}:{line}:{column}: {message}\n"
+        increment index
+    return result
+
+to receive website compilation {a pointer to JSON value:response} for {integer:index} in {a pointer to website state:state}:
+    set program to state's programs + index
+    require condition (program's phase = 1) reporting "A compilation reply arrived outside the compilation phase"
+    set description to the item at index in (the website program descriptions)
+    set instance to state's view's instance
+    set program's request to 0
+    set program's compile milliseconds to the JSON number named "milliseconds" in response
+    set the text of "Compilation measurement" in instance to (formatted "LAST COMPILE / {program's compile milliseconds} MS")
+    if (the JSON number named "status" in response) != 0.0:
+        set program's phase to 0
+        set program's output to the website diagnostic text in response
+        set the text of (description's output) in instance to (program's output)
+        set the text of (description's status) in instance to "Compilation failed."
+        return nothing
+    set program's phase to 2
+    set the text of (description's status) in instance to "Running…"
+    request "program" containing (a JSON object containing [
+        JSON number "artifact" is (the JSON number named "artifact" in response),
+        JSON number "invocation" is (program's invocation), JSON number "outputLimit" is 1048576
+    ]) for purpose 7 indexed index in state
+    set program's request to state's requests' id
+
+to receive website execution {a pointer to JSON value:response} for {integer:index} in {a pointer to website state:state}:
+    set program to state's programs + index
+    require condition (program's phase = 2) reporting "An execution reply arrived outside the running phase"
+    set program's phase to 0
+    set program's request to 0
+    set description to the item at index in (the website program descriptions)
+    set elapsed to the JSON number named "milliseconds" in response
+    set status to formatted "Compiled in {program's compile milliseconds} ms · ran in {elapsed} ms"
+    set the text of (description's status) in (state's view's instance) to status
+
+to receive website [program] output {a pointer to JSON value:message} in {a pointer to website state:state}:
+    set invocation to (the JSON number named "invocation" in message) as an integer
+    require condition ((invocation > 0) and (invocation <= state's invocation)) reporting "Program output has an unknown invocation"
+    set index to 0
+    loop while index < the length of (the website program descriptions):
+        set program to state's programs + index
+        if (program's invocation = invocation) and (program's phase = 2):
+            set program's output to program's output + (the JSON text named "output" in message)
+            set description to the item at index in (the website program descriptions)
+            set the text of (description's output) in (state's view's instance) to (program's output)
+            return nothing
+        increment index
+    # Output emitted immediately before cancellation can already be queued.
+
+to fail website [program] {integer:index} in {a pointer to website state:state}:
+    set program to state's programs + index
+    set program's phase to 0
+    set program's request to 0
+    set description to the item at index in (the website program descriptions)
+    set the text of (description's status) in (state's view's instance) to "An error occurred. Check the log."
+
+to discard website reply {a pointer to JSON value:response} in {a pointer to website state:state}:
+    if response has JSON member named "artifact":
+        request "compiler" containing (a JSON object containing [JSON text "operation" is "release", JSON number "artifact" is (the JSON number named "artifact" in response)]) for purpose 0 indexed 0 in state
+
+to handle website program shortcut in {a pointer to UI view:view}:
+    if (view's input kind != 3) or (view's input code != 257):
+        return nothing
+    if (view's modifiers bitwise and 10) = 0:
+        return nothing
+    set source to view's selection's caret source
+    if source = @intrinsic("construct", a pointer to UI text source):
+        return nothing
+    set index to 0
+    loop while index < the length of (the website program descriptions):
+        set description to the item at index in (the website program descriptions)
+        if source's element = (the active UI editor within (the control labeled (description's source) in (view's instance)) in (view's instance)):
+            run website program index in (the website state in (view's instance))
+            set view's key press to -1
+            return nothing
+        increment index

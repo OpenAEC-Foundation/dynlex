@@ -1,0 +1,13 @@
+import ../../../site/shaders/terrain.dl
+
+for each width in [390, 1440, 2560]:
+    set mesh to a perspective terrain mesh from (endless terrain's geometry) at width pixels
+    set checksum to 2166136261 as a 32 bit unsigned integer
+    set index to 0
+    loop while index < mesh's index count:
+        set value to the item at index in (mesh's indices)
+        require condition (value < mesh's vertex count) reporting "A terrain triangle refers to a missing vertex"
+        set checksum to ((checksum bitwise xor value) * (16777619 as a 32 bit unsigned integer)) as a 32 bit unsigned integer
+        increment index
+    print lines (mesh's vertex count), (mesh's index count) and checksum
+    release mesh

@@ -1,0 +1,49 @@
+import ../../../documentation.dl
+
+website page documentation sections loop page at "/wiki/sections/loop.html" titled "DynLex Wiki - While Loop" described "Use a while loop when you want to repeat a section while a condition stays true.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "While Loop" using title appearance
+        paragraph "Passage 1" using body appearance:
+            words "Use a while loop when you want to repeat a section while a "
+            link "condition" to "/wiki/terms.html#condition" using inline link appearance
+            words " stays true."
+        region "loop block 2" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "• A loop repeats while its condition is true." using body appearance
+            paragraph "• Change a value inside the loop so it can stop." using body appearance
+            paragraph "• Use this when you want to do the same step many times." using body appearance
+        region "loop block 3" using card appearance:
+            paragraph "Pattern" using signal appearance
+            code example "Example 4" containing "[loop |]while condition:"
+            paragraph "Passage 5" using body appearance:
+                words "This is the exact pattern from "
+                words "std.dl" using inline code appearance
+                words ". Both "
+                words "while condition:" using inline code appearance
+                words " and "
+                words "loop while condition:" using inline code appearance
+                words " are valid."
+        region "loop block 6" using card appearance:
+            paragraph "Example" using signal appearance
+            code example "Example 7" containing "import lib/std.dl\n\nset count to 1\n\nwhile count <= 3:\n    print line count\n    increment count"
+            paragraph "DynLex checks the condition before each round. When the condition becomes false, the loop stops." using body appearance
+            region "loop block 8" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 9" using body appearance:
+                    words "Change "
+                    words "3" using inline code appearance
+                    words " to "
+                    words "5" using inline code appearance
+                    words ". Then change the start value to "
+                    words "2" using inline code appearance
+                    words "."
+        region "loop block 10" using card appearance:
+            paragraph "Related" using signal appearance
+            region "loop block 11" using cards appearance:
+                paragraph "Passage 12" using body appearance:
+                    link "If" to "/wiki/sections/if.html" using inline link appearance
+                paragraph "Passage 13" using body appearance:
+                    link "Function" to "/wiki/sections/function.html" using inline link appearance
+                paragraph "Passage 14" using body appearance:
+                    link "Condition" to "/wiki/terms.html#condition" using inline link appearance

@@ -1,6 +1,9 @@
 import lib/std.dl
 
 # Fragment shader I/O
+# Coordinates follow Vulkan: fragment origin is the upper left, clip-space Y
+# points down, and clip-space depth runs from zero to W. Project a world whose
+# Y points up by negating its projected Y before writing the output position.
 
 the fragment coordinates means: @intrinsic("shader input", "FragCoord")
 the fragment x coordinate means: the element at 0 in @intrinsic("shader input", "FragCoord")

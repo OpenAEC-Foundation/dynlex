@@ -1,0 +1,55 @@
+import ../../../documentation.dl
+
+website page documentation sections if page at "/wiki/sections/if.html" titled "DynLex Wiki - If" described "Use if when a section should run only when a condition is true.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "If" using title appearance
+        paragraph "Passage 1" using body appearance:
+            words "Use "
+            words "if" using inline code appearance
+            words " when a section should run only when a "
+            link "condition" to "/wiki/terms.html#condition" using inline link appearance
+            words " is true."
+        region "if block 2" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 3" using body appearance:
+                words "• Use "
+                words "if" using inline code appearance
+                words " for yes/no decisions."
+            paragraph "• Branches are checked top to bottom." using body appearance
+            paragraph "• The first true branch runs." using body appearance
+        region "if block 4" using card appearance:
+            paragraph "Pattern" using signal appearance
+            code example "Example 5" containing "if condition:"
+            code example "Example 6" containing "else if condition:"
+            code example "Example 7" containing "else:"
+            paragraph "Passage 8" using body appearance:
+                words "else if" using inline code appearance
+                words " and "
+                words "else" using inline code appearance
+                words " belong to the same chain as "
+                words "if" using inline code appearance
+                words "."
+        region "if block 9" using card appearance:
+            paragraph "Example" using signal appearance
+            code example "Example 10" containing "import lib/std.dl\n\nset score to 6\n\nif score > 8:\n    print line \"High score\"\nelse if score > 5:\n    print line \"Nice work\"\nelse:\n    print line \"Keep going\""
+            paragraph "DynLex checks the branches from top to bottom. The first branch that matches runs." using body appearance
+            region "if block 11" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 12" using body appearance:
+                    words "Change "
+                    words "6" using inline code appearance
+                    words " to "
+                    words "9" using inline code appearance
+                    words ". Then change it to "
+                    words "2" using inline code appearance
+                    words "."
+        region "if block 13" using card appearance:
+            paragraph "Related" using signal appearance
+            region "if block 14" using cards appearance:
+                paragraph "Passage 15" using body appearance:
+                    link "Match / Switch" to "/wiki/sections/match.html" using inline link appearance
+                paragraph "Passage 16" using body appearance:
+                    link "Condition" to "/wiki/terms.html#condition" using inline link appearance
+                paragraph "Passage 17" using body appearance:
+                    link "While Loop" to "/wiki/sections/loop.html" using inline link appearance

@@ -1,0 +1,51 @@
+import ../../../documentation.dl
+
+website page documentation sections case page at "/wiki/sections/case.html" titled "DynLex Wiki - Case" described "Use case inside a match or switch section to define one branch.":
+    region "Documentation" using content appearance:
+        paragraph "DynLex Sections" using signal appearance
+        paragraph "Case" using title appearance
+        paragraph "Passage 1" using body appearance:
+            words "Use "
+            words "case" using inline code appearance
+            words " inside a "
+            words "match" using inline code appearance
+            words " or "
+            words "switch" using inline code appearance
+            words " section to define one branch."
+        region "case block 2" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 3" using body appearance:
+                words "• A "
+                words "case" using inline code appearance
+                words " is one branch inside "
+                link "match/switch" to "/wiki/sections/match.html" using inline link appearance
+                words "."
+            paragraph "• It checks one value and runs only when that value matches." using body appearance
+            paragraph "Passage 4" using body appearance:
+                words "• Do not use "
+                words "case" using inline code appearance
+                words " on its own outside match/switch."
+        region "case block 5" using card appearance:
+            paragraph "Pattern" using signal appearance
+            code example "Example 6" containing "case value:"
+        region "case block 7" using card appearance:
+            paragraph "Example" using signal appearance
+            code example "Example 8" containing "import lib/std.dl\n\nset number to 3\n\nmatch based on number:\n    case 1:\n        print line \"one\"\n    case 3:\n        print line \"three\""
+            paragraph "A case belongs inside a match or switch section. It is not used on its own." using body appearance
+            region "case block 9" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 10" using body appearance:
+                    words "Add a new case for "
+                    words "2" using inline code appearance
+                    words ". Then change "
+                    words "number" using inline code appearance
+                    words " and run the file again."
+        region "case block 11" using card appearance:
+            paragraph "Related" using signal appearance
+            region "case block 12" using cards appearance:
+                paragraph "Passage 13" using body appearance:
+                    link "Match / Switch" to "/wiki/sections/match.html" using inline link appearance
+                paragraph "Passage 14" using body appearance:
+                    link "If" to "/wiki/sections/if.html" using inline link appearance
+                paragraph "Passage 15" using body appearance:
+                    link "Section" to "/wiki/terms.html#section" using inline link appearance

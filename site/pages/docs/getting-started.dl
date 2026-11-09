@@ -1,0 +1,163 @@
+import ../../documentation.dl
+
+website page documentation getting started page at "/wiki/getting-started.html" titled "DynLex Wiki - Getting Started" described "DynLex lets you write code in clear words. You write your program in a .dl file, build it, and then run it.":
+    region "Documentation" using content appearance:
+        paragraph "Getting Started with DynLex" using title appearance
+        paragraph "Passage 1" using body appearance:
+            words "DynLex lets you write code in clear words. You write your program in a "
+            words ".dl" using inline code appearance
+            words " file, build it, and then run it."
+        paragraph "Passage 2" using body appearance:
+            words "This page shows the smallest steps first. It uses the same words you will see in the rest of the documentation, such as "
+            link "pattern" to "/wiki/terms.html#pattern" using inline link appearance
+            words ", "
+            link "parameter" to "/wiki/terms.html#parameter" using inline link appearance
+            words ", and "
+            link "section" to "/wiki/terms.html#section" using inline link appearance
+            words "."
+        region "getting-started block 3" using card appearance:
+            paragraph "TL;DR" using signal appearance
+            paragraph "Passage 4" using body appearance:
+                words "• Start every file by importing what you need, usually "
+                words "lib/std.dl" using inline code appearance
+                words "."
+            paragraph "• Write code as readable patterns, then run often." using body appearance
+            paragraph "• In function patterns, words used in the body become variable words." using body appearance
+            paragraph "Passage 5" using body appearance:
+                words "• Use "
+                link "Core Rules" to "/wiki/core-rules.html" using inline link appearance
+                words " when a behavior feels unclear."
+        region "getting-started block 6" using card appearance:
+            paragraph "Step 1" using signal appearance
+            paragraph "Write your first DynLex file" using heading appearance
+            paragraph "Passage 7" using body appearance:
+                words "Make a file named "
+                words "hello.dl" using inline code appearance
+                words ". Start by "
+                link "importing" to "/wiki/terms.html#import" using inline link appearance
+                words " the standard library:"
+            code example "Example 8" containing "import lib/std.dl\n\nprint line \"Hello, world!\""
+            paragraph "Passage 9" using body appearance:
+                words "The line "
+                words "print line \"Hello, world!\"" using inline code appearance
+                words " matches a "
+                link "pattern" to "/wiki/terms.html#pattern" using inline link appearance
+                words " from the standard library."
+            region "getting-started block 10" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Change the text and run the file again. Try your name, a question, or a full sentence." using body appearance
+        region "getting-started block 11" using card appearance:
+            paragraph "Step 2" using signal appearance
+            paragraph "Build and run your file" using heading appearance
+            paragraph "Build the file into a program and run it:" using body appearance
+            code example "Example 12" containing "dynlex hello.dl -o hello\n./hello"
+            paragraph "Passage 13" using body appearance:
+                words "If you are on Windows, your output file may be named "
+                words "hello.exe" using inline code appearance
+                words "."
+        region "getting-started block 14" using card appearance:
+            paragraph "Step 3" using signal appearance
+            paragraph "Store values in variables" using heading appearance
+            paragraph "Passage 15" using body appearance:
+                words "A "
+                link "variable" to "/wiki/terms.html#variable" using inline link appearance
+                words " lets you keep a value and use it again later:"
+            code example "Example 16" containing "import lib/std.dl\n\nset apples to 3\nset oranges to 2\nset total to apples + oranges\n\nprint line total"
+            paragraph "Passage 17" using body appearance:
+                words "Here, "
+                words "set ... to ..." using inline code appearance
+                words " and "
+                words "..." using inline code appearance
+                words " "
+                words "+" using inline code appearance
+                words " "
+                words "..." using inline code appearance
+                words " are both standard DynLex patterns."
+            region "getting-started block 18" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 19" using body appearance:
+                    words "Change the numbers. Then add one more line that prints "
+                    words "total + 10" using inline code appearance
+                    words "."
+        region "getting-started block 20" using card appearance:
+            paragraph "Step 4" using signal appearance
+            paragraph "Write your first function" using heading appearance
+            paragraph "Passage 21" using body appearance:
+                words "A "
+                link "function" to "/wiki/terms.html#function" using inline link appearance
+                words " gives a name to a piece of behavior. The words on the first line are its "
+                link "pattern" to "/wiki/terms.html#pattern" using inline link appearance
+                words "."
+            code example "Example 22" containing "import lib/std.dl\n\nto get value squared:\n    return value * value\n\nprint line 5 squared"
+            paragraph "Passage 23" using body appearance:
+                words "In this example, "
+                words "value" using inline code appearance
+                words " is the variable word in the pattern. When you write "
+                words "5 squared" using inline code appearance
+                words ", the number "
+                words "5" using inline code appearance
+                words " is the real value passed to that slot (called an "
+                link "argument" to "/wiki/terms.html#argument" using inline link appearance
+                words ")."
+            paragraph "DynLex also detects plain-word variables by usage: if a plain word from a function pattern is used in the body, that word becomes a variable." using body appearance
+            paragraph "Passage 24" using body appearance:
+                words "to get" using inline code appearance
+                words " implicitly opens the function's "
+                words "execute:" using inline code appearance
+                words " "
+                link "section" to "/wiki/terms.html#section" using inline link appearance
+                words ". Its indented body must return a value on every reachable path."
+            region "getting-started block 25" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 26" using body appearance:
+                    words "Change "
+                    words "squared" using inline code appearance
+                    words " into "
+                    words "doubled" using inline code appearance
+                    words ". Then make it return "
+                    words "value + value" using inline code appearance
+                    words "."
+        region "getting-started block 27" using card appearance:
+            paragraph "Step 5" using signal appearance
+            paragraph "Passage 28" using heading appearance:
+                words "Use a "
+                link "loop" to "/wiki/sections/loop.html" using inline link appearance
+            paragraph "Passage 29" using body appearance:
+                words "A loop lets you repeat a block of code. The loop body is another "
+                link "section" to "/wiki/terms.html#section" using inline link appearance
+                words "."
+            code example "Example 30" containing "import lib/std.dl\n\nset count to 1\n\nloop while count <= 3:\n    print line count\n    increment count"
+            paragraph "Passage 31" using body appearance:
+                words "This prints the numbers 1, 2, and 3. The line under "
+                words "loop while" using inline code appearance
+                words " runs again and again until the condition becomes false."
+            region "getting-started block 32" using card appearance:
+                paragraph "Try yourself" using subheading appearance
+                paragraph "Passage 33" using body appearance:
+                    words "Change "
+                    words "3" using inline code appearance
+                    words " to "
+                    words "5" using inline code appearance
+                    words ". Then change the start value from "
+                    words "1" using inline code appearance
+                    words " to "
+                    words "2" using inline code appearance
+                    words "."
+        region "getting-started block 34" using card appearance:
+            paragraph "Step 6" using signal appearance
+            paragraph "Stay with the standard library at first" using heading appearance
+            paragraph "Passage 35" using body appearance:
+                words "You may notice "
+                words "@intrinsic(...)" using inline code appearance
+                words " in some library code. That is an "
+                link "intrinsic" to "/wiki/terms.html#intrinsic" using inline link appearance
+                words "."
+            paragraph "For normal DynLex programs, use standard library patterns first. They read better, and they are the usual way to write DynLex code." using body appearance
+        region "getting-started block 36" using card appearance:
+            paragraph "Next" using signal appearance
+            paragraph "What to read after this" using heading appearance
+            paragraph "Passage 37" using body appearance:
+                words "If a word feels unclear, open the "
+                link "terms page" to "/wiki/terms.html" using inline link appearance
+                words "."
+            paragraph "After that, the next useful step is to read more examples and build small functions of your own." using body appearance

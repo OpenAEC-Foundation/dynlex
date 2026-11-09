@@ -1,0 +1,134 @@
+import actions.dl
+
+# Replies have explicit owners and purposes. Browser services do not decide UI state.
+to get receive website reply {a pointer to JSON value:response} for {integer:job} indexed {integer:index} in {a pointer to website state:state}:
+    if job = 1:
+        set state's environment to response
+        set state's view's instance's reduced motion to the JSON boolean named "reducedMotion" in response
+        apply location (the JSON member named "location" in response) to state
+        return true
+    if job = 2:
+        if response is not JSON null:
+            apply location response to state
+    if job = 3:
+        require condition ((the JSON number named "status" in response) = 200.0) reporting "The shader catalog could not be loaded"
+        parse (the JSON text named "text" in response) as JSON and set parsed to it
+        set state's shader catalog to the value of parsed
+        set cursor to 0
+        loop while cursor < state's shader catalog's length:
+            set entry to the JSON value at index cursor in (state's shader catalog)
+            set payload to the compact JSON form of (the JSON member named "program" in entry)
+            request "graphics" with JSON data payload for purpose 4 indexed cursor in state
+            increment cursor
+    if job = 4:
+        set resource to ((the JSON number named "resource" in response) as an integer) as a pointer
+        store resource into (state's shader resources) at index
+        if index = 1:
+            prepare the website terrain in state
+        request a UI redraw in (state's view)
+    if job = 5:
+        receive website release response in state
+    if job = 6:
+        receive website compilation response for index in state
+    if job = 7:
+        receive website execution response for index in state
+    if job = 8:
+        receive website language reply response at step index in state
+    return false
+
+to read website input {a pointer to UI view:view}:
+    handle website program shortcut in view
+    if view's input kind = 7:
+        set (the website state in (view's instance))'s shader active to false
+    if (view's input kind != 11) and (view's input kind != 12):
+        return nothing
+    set state to the website state in (view's instance)
+    parse (view's message) as JSON and set parsed to it
+    set document to the value of parsed
+    if view's input kind = 12:
+        set kind to the JSON text named "type" in document
+        if kind = "location":
+            apply location document to state
+        else if kind = "program-output":
+            receive website program output document in state
+        else:
+            require condition false reporting "The website received an unknown platform notification"
+        free document
+        return nothing
+    set pending to state's requests
+    set previous to @intrinsic("construct", a pointer to website request)
+    loop while pending != @intrinsic("construct", a pointer to website request):
+        if pending's id = view's input code:
+            if previous = @intrinsic("construct", a pointer to website request):
+                set state's requests to pending's next
+            else:
+                set previous's next to pending's next
+            set retained to false
+            if pending's cancelled:
+                if view's modifiers = 0:
+                    discard website reply document in state
+            else if view's modifiers = 0:
+                set retained to receive website reply document for (pending's purpose) indexed (pending's index) in state
+            else:
+                set view's instance's status to "An error occurred. Check the log."
+                if pending's purpose = 5:
+                    set state's release loading to false
+                    set the text of "Release status" in (view's instance) to "An error occurred. Check the log."
+                if (pending's purpose = 6) or (pending's purpose = 7):
+                    fail website program (pending's index) in state
+                if pending's purpose = 8:
+                    set state's language's phase to 8
+                    set the text of "IDE analysis" in (view's instance) to "An error occurred. Check the log."
+            deallocate pending
+            if retained = false:
+                free document
+            return nothing
+        set previous to pending
+        set pending to pending's next
+    require condition false reporting "The website received a reply without a request"
+
+to close the website {a pointer to UI view:view}:
+    set instance to view's instance
+    set state to the website state in instance
+    close view
+    close instance
+    set pending to state's requests
+    loop while pending != @intrinsic("construct", a pointer to website request):
+        set next to pending's next
+        deallocate pending
+        set pending to next
+    free state's environment
+    free state's shader catalog
+    if state's language's token types != @intrinsic("construct", a pointer to JSON value):
+        free state's language's token types
+    if state's release != @intrinsic("construct", a pointer to website release):
+        free state's release
+    destroy the value at state
+    deallocate state
+    destroy the value at view
+    deallocate view
+    destroy the value at instance
+    deallocate instance
+
+function open the DynLex website using {a pointer to UI driver:driver}:
+    globals:
+        dynlex website
+    execute:
+        set instance to storage for one slot initialized with (an instance of dynlex website)
+        set state to storage for one slot initialized with (a new website state)
+        set instance's state to state as a pointer
+        show page "/index.html" in instance
+        set view to storage for one slot initialized with (a UI view of instance sized 1280 by 900 using fonts "assets/fonts/Inter-400.ttf" and "assets/fonts/Inter-600.ttf" with driver)
+        set state's view to view
+        store 1.0 into (state's shader weights) at 0
+        set state's route to "/index.html"
+        set view's close action to (the function named "close the website $") as a pointer
+        bind website links in (instance's description) for instance
+        bind (the control labeled "IDE source" in instance) in instance to (the function named "notice website source edit $") for event 0
+        bind (the control labeled "Live shader" in instance) in instance to (the function named "paint the website shader $") for event 1
+        watch UI input in view using (the function named "read website input $")
+        update UI frames in view using (the function named "advance the website frame $")
+        request "environment" containing (a new JSON value of kind the JSON null kind) for purpose 1 indexed 0 in state
+        request "location" containing (a JSON object containing [JSON text "action" is "watch"]) for purpose 0 indexed 0 in state
+        request "fetch" containing (a JSON object containing [JSON text "url" is "assets/shaders/index.json"]) for purpose 3 indexed 0 in state
+        run view

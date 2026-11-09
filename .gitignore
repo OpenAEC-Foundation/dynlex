@@ -43,6 +43,8 @@ vscode-extension/LICENSE.md
 
 __pycache__/
 assets/
+!/site/assets/
+!/site/assets/**
 
 user/
 

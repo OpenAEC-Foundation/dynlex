@@ -1,0 +1,49 @@
+import ../../../site/downloads/release.dl
+import ../../../site/downloads/platform.dl
+import lib/check.dl
+
+set body to "Notes\n<!-- dynlex-release-manifest\nschema 1\nrepository OpenAEC-Foundation/dynlex\nasset linux-x64-deb linux x64 deb dynlex-linux-x64.deb\nasset windows-arm64-msi windows arm64 msi dynlex-windows-arm64.msi\nasset macos-universal-pkg macos arm64,x64 pkg dynlex-macos-universal.pkg\n-->\n"
+set assets to a JSON array containing [
+    a JSON object containing [JSON text "name" is "release-manifest.txt", JSON text "browser_download_url" is "https://example.org/manifest"],
+    a JSON object containing [JSON text "name" is "dynlex-linux-x64.deb", JSON text "browser_download_url" is "https://example.org/linux"],
+    a JSON object containing [JSON text "name" is "dynlex-windows-arm64.msi", JSON text "browser_download_url" is "https://example.org/windows"],
+    a JSON object containing [JSON text "name" is "dynlex-macos-universal.pkg", JSON text "browser_download_url" is "https://example.org/macos"]
+]
+set document to a JSON object containing [JSON text "tag_name" is "v1.2.3", JSON text "body" is body, JSON child "assets" is assets]
+set release to the website release described by document
+require condition (release's error's length = 0) reporting "A valid release was rejected"
+require condition (release's count = 3) reporting "The manifest lost packages"
+set platform to the website platform for "Mozilla Linux x86_64" with architecture "" and 0 touch points
+set package to the primary website package in release for platform
+require condition (package's url = "https://example.org/linux") reporting "Linux selected the wrong download"
+set platform to the website platform for "Mozilla Windows NT 10.0" with architecture "arm64" and 0 touch points
+set package to the primary website package in release for platform
+require condition (package's identifier = "windows-arm64-msi") reporting "Client architecture hints were ignored"
+set platform to the website platform for "Mozilla Macintosh Intel Mac OS X" with architecture "" and 0 touch points
+require condition ((the primary website package in release for platform)'s identifier = "macos-universal-pkg") reporting "A Mac with undisclosed architecture lost the universal package"
+set platform to the website platform for "Mozilla Macintosh" with architecture "arm64" and 5 touch points
+require condition (platform's supported = false) reporting "An iPad was offered a desktop package"
+free release
+
+set value to the JSON member named "body" in document
+set value's text to body + body
+set release to the website release described by document
+require condition (release's error's length > 0) reporting "Duplicate embedded manifests were accepted"
+free release
+set value's text to body
+set asset to the JSON value at index 2 in assets
+set name to the JSON member named "name" in asset
+set name's text to "wrong-name.msi"
+set release to the website release described by document
+require condition (release's error's length > 0) reporting "A missing release package was accepted"
+free release
+set malformed to ["schema", "schema 2", "schema 1\nschema 1", "schema 1\nrepository unexpected/repository\nasset test linux x64 deb test.deb", "schema 1\nrepository OpenAEC-Foundation/dynlex\nasset test linux x64,x64 deb test.deb", "schema 1\nrepository OpenAEC-Foundation/dynlex\nasset test linux x64 deb test.deb\nasset test linux x64 deb second.deb"]
+set index to 0
+loop while index < the length of malformed:
+    set invalid to storage for one slot initialized with (a new website release)
+    read release manifest (the string form of (the item at index in malformed)) into invalid
+    require condition (invalid's error's length > 0) reporting "A malformed manifest was accepted"
+    free invalid
+    increment index
+free document
+print line "Release manifests, platform hints and package selection work."

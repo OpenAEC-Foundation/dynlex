@@ -117,7 +117,7 @@ assert.deepEqual(publishedDiagnostics.params.diagnostics, []);
 
 const nestedImportUri = "file:///workspace/nested-import.dl";
 const nestedImportSource = await readFile(
-  path.resolve(import.meta.dirname, "../../tools/homepage-shaders/shaders/nano-choreography.dl"),
+  path.resolve(import.meta.dirname, "../../site/shaders/nano-choreography.dl"),
   "utf8"
 );
 const nestedImportMessages = notifyLsp("textDocument/didOpen", {

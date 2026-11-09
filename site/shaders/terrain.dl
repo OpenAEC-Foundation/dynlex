@@ -1,0 +1,149 @@
+# Perspective sampling follows the camera's distance instead of a uniform world grid.
+import catalog.dl
+import lib/check.dl
+
+class:
+    patterns:
+        terrain row
+    members:
+        distance as a floating-point number
+        columns as an integer
+        offset as an integer
+
+class:
+    patterns:
+        terrain surface
+    members:
+        entries as a pointer to terrain row
+        segments as an integer
+        vertices as an integer
+        indices as an integer
+
+class:
+    patterns:
+        terrain mesh
+    members:
+        vertices as a pointer to a 32 bit floating-point number
+        vertex count as an integer
+        indices as a pointer to a 32 bit unsigned integer
+        index count as an integer
+
+class:
+    patterns:
+        terrain index writer
+    members:
+        values as a pointer to a 32 bit unsigned integer
+        position as an integer
+
+to get a terrain surface with {integer:segments} rows from {floating-point number:near} to {floating-point number:far} thinning from {integer:near columns} to {integer:far columns} after {integer:offset}:
+    allocate (segments + 1) slots of terrain row and set entries to it
+    set {column decay} to (far columns as a floating-point number) / near columns
+    set {distance growth} to far / near
+    set next to offset
+    set triangles to 0
+    set index to 0
+    loop while index <= segments:
+        set fraction to (index as a floating-point number) / segments
+        set columns to (the rounded value of (near columns * (column decay to the power of fraction))) as an integer
+        set distance to near * (distance growth to the power of fraction)
+        if index = segments:
+            set columns to far columns
+            set distance to far
+        @intrinsic("initialize at", entries + index, @intrinsic("construct", terrain row, distance, columns, next))
+        if index > 0:
+            set previous to the item at (index - 1) in entries
+            set triangles to triangles + previous's columns + columns
+        set next to next + columns + 1
+        increment index
+    return @intrinsic("construct", terrain surface, entries, segments, next - offset, triangles * 3)
+
+to write terrain vertex {integer:index} with ray {floating-point number:ray} distance {floating-point number:depth} and surface {integer:kind} into {a pointer to a 32 bit floating-point number:values}:
+    set offset to index * 4
+    store (ray as a 32 bit floating-point number) into values at offset
+    store (depth as a 32 bit floating-point number) into values at (offset + 1)
+    store (0.0 as a 32 bit floating-point number) into values at (offset + 2)
+    store (kind as a 32 bit floating-point number) into values at (offset + 3)
+
+to fill {terrain surface:surface} marked {integer:kind} into {a pointer to a 32 bit floating-point number:values}:
+    set index to 0
+    loop while index <= surface's segments:
+        set row to the item at index in (surface's entries)
+        set column to 0
+        loop while column <= row's columns:
+            set ray to ((column as a floating-point number) / row's columns) * 2.0 - 1.0
+            write terrain vertex (row's offset + column) with ray ray distance (row's distance) and surface kind into values
+            increment column
+        increment index
+
+to append triangle {integer:first} {integer:second} {integer:third} using {a pointer to terrain index writer:writer}:
+    store (first as a 32 bit unsigned integer) into (writer's values) at (writer's position)
+    store (second as a 32 bit unsigned integer) into (writer's values) at (writer's position + 1)
+    store (third as a 32 bit unsigned integer) into (writer's values) at (writer's position + 2)
+    set writer's position to writer's position + 3
+
+to connect {terrain row:near} to {terrain row:far} on band {integer:stripe} using {a pointer to terrain index writer:writer}:
+    set {near column} to 0
+    set {far column} to 0
+    loop while (near column < near's columns) or (far column < far's columns):
+        set {near step} to 1.0e30
+        set {far step} to 1.0e30
+        if near column < near's columns:
+            set near step to ((near column + 1) * far's columns) as a floating-point number
+        if far column < far's columns:
+            set far step to ((far column + 1) * near's columns) as a floating-point number
+        set {near vertex} to near's offset + near column
+        set {far vertex} to far's offset + far column
+        if near step < far step:
+            append triangle near vertex (near vertex + 1) far vertex using writer
+            increment near column
+        else if far step < near step:
+            append triangle near vertex (far vertex + 1) far vertex using writer
+            increment far column
+        else:
+            if (stripe + near column + far column) mod 2 = 0:
+                append triangle near vertex (near vertex + 1) (far vertex + 1) using writer
+                append triangle near vertex (far vertex + 1) far vertex using writer
+            else:
+                append triangle near vertex (near vertex + 1) far vertex using writer
+                append triangle (near vertex + 1) (far vertex + 1) far vertex using writer
+            increment near column
+            increment far column
+
+to triangulate {terrain surface:surface} using {a pointer to terrain index writer:writer}:
+    set index to 0
+    loop while index < surface's segments:
+        connect (the item at index in (surface's entries)) to (the item at (index + 1) in (surface's entries)) on band index using writer
+        increment index
+
+to get a perspective terrain mesh from {shader geometry:description} at {integer:width} pixels:
+    set scale to (width as a floating-point number) / description's reference width
+    set {terrain rows} to the maximum of 1 and ((the rounded value of (description's terrain rows * scale)) as an integer)
+    set {terrain far} to the maximum of 1 and ((the rounded value of (description's terrain far columns * scale)) as an integer)
+    set {terrain near} to the maximum of (terrain far + 1) and ((the rounded value of (description's terrain near columns * scale)) as an integer)
+    set {water rows} to the maximum of 1 and ((the rounded value of (description's water rows * scale)) as an integer)
+    set {water far} to the maximum of 1 and ((the rounded value of (description's water far columns * scale)) as an integer)
+    set {water near} to the maximum of (water far + 1) and ((the rounded value of (description's water near columns * scale)) as an integer)
+    set ground to a terrain surface with terrain rows rows from (description's near) to (description's far) thinning from terrain near to terrain far after 3
+    set water to a terrain surface with water rows rows from (description's near) to (description's far) thinning from water near to water far after (3 + ground's vertices)
+    set count to 3 + ground's vertices + water's vertices
+    set indices to 3 + ground's indices + water's indices
+    allocate (count * 4) slots of a 32 bit floating-point number and set vertices to it
+    allocate indices slots of a 32 bit unsigned integer and set buffer to it
+    set result to @intrinsic("construct", terrain mesh, vertices, count, buffer, indices)
+    write terrain vertex 0 with ray -1.0 distance -1.0 and surface 0 into (result's vertices)
+    write terrain vertex 1 with ray 3.0 distance -1.0 and surface 0 into (result's vertices)
+    write terrain vertex 2 with ray -1.0 distance 3.0 and surface 0 into (result's vertices)
+    fill ground marked 1 into (result's vertices)
+    fill water marked 2 into (result's vertices)
+    set writer to @intrinsic("construct", terrain index writer, result's indices, 0)
+    append triangle 0 1 2 using (the address of writer)
+    triangulate ground using (the address of writer)
+    triangulate water using (the address of writer)
+    require condition (writer's position = result's index count) reporting "Terrain topology emitted an inconsistent number of indices"
+    deallocate ground's entries
+    deallocate water's entries
+    return result
+
+to release {terrain mesh:mesh}:
+    deallocate mesh's vertices
+    deallocate mesh's indices

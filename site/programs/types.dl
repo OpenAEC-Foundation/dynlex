@@ -1,0 +1,26 @@
+import lib/sections.dl
+
+class:
+    patterns:
+        website program description
+    members:
+        source as a C string
+        output as a C string
+        status as a C string
+
+the website program descriptions means: [
+    @intrinsic("construct", website program description, "Square field", "Square field output", "Square field status"),
+    @intrinsic("construct", website program description, "Vocabulary", "Vocabulary output", "Vocabulary status"),
+    @intrinsic("construct", website program description, "IDE source", "IDE output", "IDE status"),
+    @intrinsic("construct", website program description, "Studio source", "Studio output", "Studio status")
+]
+
+class:
+    patterns:
+        website program state
+    members:
+        phase as an integer
+        request as an integer
+        invocation as an integer
+        output as a string
+        compile milliseconds as a floating-point number

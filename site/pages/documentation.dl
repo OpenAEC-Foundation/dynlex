@@ -1,0 +1,13 @@
+import docs/attributions.dl
+import docs/core-rules.dl
+import docs/getting-started.dl
+import docs/index.dl
+import docs/sections/case.dl
+import docs/sections/function.dl
+import docs/sections/if.dl
+import docs/sections/index.dl
+import docs/sections/loop.dl
+import docs/sections/match.dl
+import docs/terms.dl
+
+the site's documentation pages means: [documentation attributions page, documentation core rules page, documentation getting started page, documentation index page, documentation sections case page, documentation sections function page, documentation sections if page, documentation sections index page, documentation sections loop page, documentation sections match page, documentation terms page]

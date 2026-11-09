@@ -1,0 +1,4 @@
+import packages/dynlex-ui/ui/browser.dl
+import application.dl
+
+open the DynLex website using the browser UI driver

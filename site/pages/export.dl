@@ -1,0 +1,18 @@
+# Routing and search metadata use the same page records as the running site.
+import ../interface.dl
+import lib/json_builders.dl
+
+set result to a new JSON value of kind the JSON array kind
+set pages to the site's pages
+set index to 0
+loop while index < the length of pages:
+    set entry to the item at index in pages
+    set metadata to a JSON object containing [
+        JSON text "path" is (entry's path),
+        JSON text "title" is (entry's title),
+        JSON text "description" is (entry's description)
+    ]
+    add metadata to the JSON array result
+    increment index
+print line the compact JSON form of result
+free result

@@ -1,0 +1,51 @@
+import lib/text_scan.dl
+
+class:
+    patterns:
+        website platform
+    members:
+        supported as a boolean
+        system as a string
+        architecture as a string
+        label as a string
+        format as a string
+
+to get the website architecture of {string:text}:
+    set value to the ASCII lowercase form of text
+    if (value contains "arm") or (value contains "aarch64"):
+        return the string form of "arm64"
+    if ((value contains "x86") or (value contains "x64")) or (value contains "amd64"):
+        return the string form of "x64"
+    return the string form of ""
+
+to get the website platform for {a value:agent} with architecture {a value:hint} and {integer:touches} touch points:
+    set result to a new website platform
+    set text to the ASCII lowercase form of (the string form of agent)
+    if (((text contains "android") or (text contains "iphone")) or ((text contains "ipad") or (text contains "ipod"))) or (text contains "cros"):
+        return result
+    set mac to (text contains "macintosh") or (text contains "mac os")
+    if mac and (touches > 1):
+        return result
+    set result's architecture to the website architecture of (the string form of hint)
+    if result's architecture's length = 0:
+        set result's architecture to the website architecture of text
+    if text contains "windows":
+        set result's system to "windows"
+        set result's label to "Windows"
+        set result's format to "msi"
+    else if mac:
+        set result's system to "macos"
+        set result's label to "macOS"
+        set result's format to "pkg"
+        if result's architecture != "arm64":
+            set result's architecture to "unknown"
+    else if text contains "linux":
+        set result's system to "linux"
+        set result's label to "Linux"
+        set result's format to "deb"
+    else:
+        return result
+    if result's architecture's length = 0:
+        set result's architecture to "x64"
+    set result's supported to true
+    return result

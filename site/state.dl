@@ -1,0 +1,85 @@
+import interface.dl
+import packages/dynlex-ui/ui/application.dl
+import packages/dynlex-ui/platform/browser/requests.dl
+import lib/json_builders.dl
+import downloads/release.dl
+import programs/types.dl
+import editor/types.dl
+
+class:
+    patterns:
+        website request
+    members:
+        id as an integer
+        purpose as an integer
+        index as an integer
+        next as a pointer to website request
+        cancelled as a boolean
+
+class:
+    patterns:
+        website state
+    members:
+        view as a pointer to UI view
+        requests as a pointer to website request
+        route as a string
+        fragment as a string
+        environment as a pointer to JSON value
+        shader catalog as a pointer to JSON value
+        shader resources as a pointer array of 3 items
+        shader index as an integer
+        shader times as a floating-point number array of 3 items
+        shader weights as a floating-point number array of 3 items
+        shader width as an integer
+        shader last seconds as a floating-point number
+        shader active as a boolean
+        release as a pointer to website release
+        release loading as a boolean
+        download started as a boolean
+        programs as website program state array of (the length of (the website program descriptions)) items
+        invocation as an integer
+        language as website language state
+
+[the|] website state in {a pointer to UI instance:instance} means: instance's state as a pointer to website state
+
+to request {C string:service} containing {a pointer to JSON value:payload} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
+    set data to the compact JSON form of payload
+    free payload
+    request service with JSON data data for purpose job indexed index in state
+
+to request {C string:service} with JSON data {string:data} for purpose {integer:job} indexed {integer:index} in {a pointer to website state:state}:
+    set id to a browser UI request named service containing data in (state's view)
+    set pending to @intrinsic("construct", website request, id, job, index, state's requests, false)
+    set state's requests to storage for one slot initialized with pending
+
+to cancel website request {integer:id} in {a pointer to website state:state}:
+    set pending to state's requests
+    set previous to @intrinsic("construct", a pointer to website request)
+    loop while pending != @intrinsic("construct", a pointer to website request):
+        if pending's id = id:
+            if cancel browser UI request id:
+                if previous = @intrinsic("construct", a pointer to website request):
+                    set state's requests to pending's next
+                else:
+                    set previous's next to pending's next
+                deallocate pending
+            else:
+                # The reply is already in the input queue and still owns its
+                # result. Consume it normally, releasing any unused artifact.
+                set pending's cancelled to true
+            return nothing
+        set previous to pending
+        set pending to pending's next
+    require condition false reporting "The cancelled website request has no owner"
+
+to get the parent of {UI reference:target} within {UI reference:root}:
+    set index to 0
+    loop while index < root's count:
+        set child to the UI child at index in root
+        if child = target:
+            return root
+        set found to the parent of target within child
+        if found != @intrinsic("construct", UI reference):
+            return found
+        increment index
+    return @intrinsic("construct", UI reference)

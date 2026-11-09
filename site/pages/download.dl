@@ -1,0 +1,30 @@
+import ../documentation.dl
+
+website page download page at "/download.html" titled "Download DynLex" described "Install the native DynLex compiler for Linux, macOS and Windows.":
+    region "Download" using content appearance:
+        paragraph "DYNLEX / NATIVE" using signal appearance
+        paragraph "Your next idea,\non your machine." using title appearance
+        paragraph "Compile DynLex to native programs, WebAssembly and GPU shaders. Choose the release for your platform." using body appearance
+        region "Recommended download" using card appearance:
+            paragraph "Finding the latest release…" using heading appearance
+            paragraph "Release status" using body appearance
+            link "Download DynLex ↓" to "action:download" using primary link appearance
+            link "Open the latest release ↗" to "https://github.com/OpenAEC-Foundation/dynlex/releases/latest" using link appearance
+            link "Retry downloads" to "action:retry-downloads" using link appearance
+        region "Other platforms" using cards appearance:
+            region "Windows" using card appearance:
+                paragraph "Windows" using heading appearance
+                link "Windows · x64 · MSI ↓" to "action:download-windows-x64-msi" using link appearance
+                link "Windows · arm64 · MSI ↓" to "action:download-windows-arm64-msi" using link appearance
+            region "macOS" using card appearance:
+                paragraph "macOS" using heading appearance
+                link "macOS · universal · PKG ↓" to "action:download-macos-universal-pkg" using link appearance
+            region "Linux" using card appearance:
+                paragraph "Linux" using heading appearance
+                link "Linux · x64 · DEB ↓" to "action:download-linux-x64-deb" using link appearance
+                link "Linux · arm64 · DEB ↓" to "action:download-linux-arm64-deb" using link appearance
+                link "Linux · x64 · tar.gz ↓" to "action:download-linux-x64-tar" using link appearance
+                link "Linux · arm64 · tar.gz ↓" to "action:download-linux-arm64-tar" using link appearance
+        paragraph "Linux quick install" using heading appearance
+        paragraph "curl -fsSL https://dynlex.com/install.sh | sh" using code block appearance
+        link "Read the getting started guide →" to "/wiki/getting-started.html" using link appearance
