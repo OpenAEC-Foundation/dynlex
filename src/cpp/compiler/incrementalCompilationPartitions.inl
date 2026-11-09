@@ -1,3 +1,20 @@
+void sortModuleSymbols(llvm::Module &module) {
+	auto byName = [](const auto &left, const auto &right) {
+		return left.getName() < right.getName();
+	};
+	std::vector<llvm::GlobalVariable *> globals;
+	for (llvm::GlobalVariable &global : module.globals())
+		globals.push_back(&global);
+	std::sort(globals.begin(), globals.end(), [&](const auto *left, const auto *right) {
+		return byName(*left, *right);
+	});
+	for (llvm::GlobalVariable *global : globals)
+		module.removeGlobalVariable(global);
+	for (llvm::GlobalVariable *global : globals)
+		module.insertGlobalVariable(global);
+	module.getFunctionList().sort(byName);
+}
+
 bool emitPartitions(
 	ParseContext &context, const fs::path &directory, const std::string &compilerIdentity, const Json &options,
 	const std::vector<std::string> &libraries, BuildStatistics &statistics, const Json *previous = nullptr
@@ -9,22 +26,9 @@ bool emitPartitions(
 		if (value.hasLocalLinkage())
 			value.setName(prefix + value.getName().str());
 	}
-	// Cached functions enter the module through the LLVM linker, so their insertion
-	// order differs from freshly generated functions. Keep partition IR stable.
-	auto byName = [](const auto &left, const auto &right) {
-		return left.getName() < right.getName();
-	};
-	std::vector<llvm::GlobalVariable *> globals;
-	for (llvm::GlobalVariable &global : context.llvmModule->globals())
-		globals.push_back(&global);
-	std::sort(globals.begin(), globals.end(), [&](const auto *left, const auto *right) {
-		return byName(*left, *right);
-	});
-	for (llvm::GlobalVariable *global : globals)
-		context.llvmModule->removeGlobalVariable(global);
-	for (llvm::GlobalVariable *global : globals)
-		context.llvmModule->insertGlobalVariable(global);
-	context.llvmModule->getFunctionList().sort(byName);
+	// Cached functions enter through the LLVM linker in a different insertion
+	// order. Normalize it for stable partition keys, including restored modules.
+	sortModuleSymbols(*context.llvmModule);
 	bool success = true;
 	auto partitionStart = Clock::now();
 	llvm::SplitModule(*context.llvmModule, partitionCount, [&](std::unique_ptr<llvm::Module> part) {

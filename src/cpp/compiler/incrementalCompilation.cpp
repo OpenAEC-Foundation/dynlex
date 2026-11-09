@@ -790,6 +790,7 @@ bool compileIncrementally(
 				stageStart = Clock::now();
 				success = generateCode(context, [&](ParseContext &compiled) {
 					statistics.irGenerationMilliseconds = elapsedMilliseconds(stageStart);
+					sortModuleSymbols(*compiled.llvmModule);
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;

@@ -409,9 +409,12 @@ function left times right:
                    'unrelated\n')
     pure_main.write_text(pure_source)
     build(entry=pure_main)
+    pure_output_time = output.stat().st_mtime_ns
     pure_main.write_text(pure_source.replace('"discard", 2', '"discard", 3'))
     pure_edit = build(entry=pure_main)
     assert pure_edit[0]["inference_instantiations_reused"] >= 1, "unchanged pure void function was re-inferred"
+    assert pure_edit[0]["partition_ms"] == 0 and pure_edit[0]["link_ms"] == 0, "identical IR was repartitioned"
+    assert output.stat().st_mtime_ns == pure_output_time, "identical code rewrote the executable"
     assert pure_edit[1:] == build(False, entry=pure_main)[1:]
 
     implicit_main = root / "implicit_parameter_edit.dl"
