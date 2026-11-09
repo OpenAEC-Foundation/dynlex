@@ -78,12 +78,29 @@ void prepareDeferredMatchReplay(
 
 void preparePrecedenceMatchReplay(
 	ParseContext &context, const Json &prior, IncrementalMatcherCache &matcherCache, const PriorMatchKeys &precedenceKeys,
-	const std::vector<PatternReference *> &candidates
+	const std::vector<PatternReference *> &candidates, double &treeMilliseconds, double &precedenceMilliseconds,
+	double &ruleMilliseconds, size_t &signaturesReused
 ) {
-	if (precedenceKeys.empty() || context.patternPrecedenceRevision != 1 ||
-		matcherTreeSignature(context) != prior.at("final_matcher_tree").get<std::string>() ||
-		matcherCache.precedenceSignature() != prior.at("precedence_signature").get<std::string>())
+	if (precedenceKeys.empty() || context.patternPrecedenceRevision != 1)
 		return;
+	auto started = Clock::now();
+	std::string tree = matcherTreeSignature(context);
+	treeMilliseconds += elapsedMilliseconds(started);
+	if (tree != prior.at("final_matcher_tree").get<std::string>())
+		return;
+	started = Clock::now();
+	std::string rules = precedenceRulesSignature(*context.mainSection);
+	ruleMilliseconds += elapsedMilliseconds(started);
+	if (rules == prior.at("precedence_rules").get<std::string>()) {
+		matcherCache.reusePrecedenceSignature(prior.at("precedence_signature").get_ref<const std::string &>());
+		signaturesReused++;
+	} else {
+		started = Clock::now();
+		std::string precedence = matcherCache.precedenceSignature();
+		precedenceMilliseconds += elapsedMilliseconds(started);
+		if (precedence != prior.at("precedence_signature").get<std::string>())
+			return;
+	}
 	for (PatternReference *reference : candidates) {
 		auto old = precedenceKeys.find(reference);
 		if (old == precedenceKeys.end())

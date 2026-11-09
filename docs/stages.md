@@ -901,6 +901,10 @@ per reference and the matcher dependency key that produced it. A reference with
 the same key after a later edit reuses its fingerprint; changed references are
 fingerprinted again. The function fingerprint is assembled from those reference
 fingerprints, so a later overload addition can still compare the edited body.
+Precedence matcher-key replay compares the current matcher tree and a compact
+signature of precedence-bearing declarations with their saved versions. When
+both agree, it carries forward the saved full precedence fingerprint. A rule
+edit recomputes the full fingerprint before any saved final matcher key is used.
 If top-level execution changes but its global declarations keep the same names
 and locations, directly declared functions also retain their resolved-match
 fingerprints. Their inference and generated code still follow the ordinary

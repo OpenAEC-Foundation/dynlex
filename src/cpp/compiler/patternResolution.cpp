@@ -13,6 +13,7 @@
 #include "variable.h"
 #include "llvm/Support/Process.h"
 #include <algorithm>
+#include <chrono>
 #include <climits>
 #include <functional>
 #include <iostream>
@@ -25,6 +26,10 @@
 #include <unordered_set>
 
 namespace {
+using ResolutionClock = std::chrono::steady_clock;
+double resolutionMilliseconds(ResolutionClock::time_point start) {
+	return std::chrono::duration<double, std::milli>(ResolutionClock::now() - start).count();
+}
 enum class ClassPropertyAccessorSyntax {
 	NonPossessive,
 	SingularPossessive,

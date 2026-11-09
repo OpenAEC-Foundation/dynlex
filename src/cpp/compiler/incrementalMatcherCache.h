@@ -30,6 +30,7 @@ class IncrementalMatcherCache {
 	size_t deferredKeyReplays() const { return prevalidatedCount - prevalidatedPrecedenceCount; }
 	size_t precedenceKeyReplays() const { return prevalidatedPrecedenceCount; }
 	std::string precedenceSignature() { return precedenceDigest(); }
+	void reusePrecedenceSignature(std::string_view signature);
 	double keyTimeMilliseconds() const { return keyMilliseconds; }
 	double restoreTimeMilliseconds() const { return restoreMilliseconds; }
 

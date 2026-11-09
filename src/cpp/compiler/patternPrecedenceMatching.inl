@@ -44,6 +44,7 @@ static bool matchMayChangeWithPrecedence(const PatternMatch &match) {
 }
 
 static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatchChanges &changes) {
+	auto collectionStart = ResolutionClock::now();
 	std::list<PatternReference *> bodyReferences, globalReferences;
 	std::list<Section *> sections;
 	context.mainSection->collectPatternReferencesAndSections(bodyReferences, globalReferences, sections);
@@ -54,9 +55,15 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 		if (reference->match && matchMayChangeWithPrecedence(*reference->match))
 			candidates.push_back(reference);
 	}
+	context.resolutionCandidateCollectionMilliseconds += resolutionMilliseconds(collectionStart);
+	auto sortStart = ResolutionClock::now();
 	std::stable_sort(candidates.begin(), candidates.end(), referenceComesBefore);
+	context.resolutionCandidateSortMilliseconds += resolutionMilliseconds(sortStart);
+	auto replayStart = ResolutionClock::now();
 	if (context.preparePrecedenceMatcherReplay)
 		context.preparePrecedenceMatcherReplay(candidates);
+	context.resolutionReplaySetupMilliseconds += resolutionMilliseconds(replayStart);
+	auto matchStart = ResolutionClock::now();
 	for (PatternReference *reference : candidates) {
 		auto match = std::unique_ptr<PatternMatch>(context.match(reference));
 		if (!match) {
@@ -66,6 +73,7 @@ static bool collectPrecedenceMatchChanges(ParseContext &context, PrecedenceMatch
 		if (!samePatternMatchSyntax(*reference->match, *match))
 			changes.emplace_back(reference, std::move(match));
 	}
+	context.resolutionCandidateMatchMilliseconds += resolutionMilliseconds(matchStart);
 	return true;
 }
 

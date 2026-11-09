@@ -23,6 +23,7 @@ struct BuildStatistics {
 	size_t reusedInferenceInstantiations = 0;
 	size_t reusedInferenceSummarySections = 0;
 	size_t preinferredInstantiations = 0;
+	size_t precedenceSignaturesReused = 0;
 	size_t reusedFunctionIR = 0;
 	size_t topLevelProjectionSectionsReused = 0;
 	size_t reusedObjects = 0;
@@ -44,6 +45,9 @@ struct BuildStatistics {
 	SourceProjectionWork sourceProjectionWork;
 	double matcherKeyMilliseconds = 0;
 	double matcherRestoreMilliseconds = 0;
+	double precedenceTreeSignatureMilliseconds = 0;
+	double precedenceSignatureMilliseconds = 0;
+	double precedenceRuleSignatureMilliseconds = 0;
 	double cacheLoadMilliseconds = 0;
 	double cacheRestoreMilliseconds = 0;
 	double cacheFinalizeMilliseconds = 0;

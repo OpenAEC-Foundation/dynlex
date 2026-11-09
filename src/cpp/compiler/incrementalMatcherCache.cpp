@@ -174,6 +174,16 @@ std::optional<std::string_view> IncrementalMatcherCache::resultKey(const Pattern
 													: std::optional<std::string_view>(reference->incrementalMatcherKey);
 }
 
+void IncrementalMatcherCache::reusePrecedenceSignature(std::string_view signature) {
+	requireCompilerInvariant(context.patternPrecedenceRevision != 0, "precedence signature reuse needs resolved families");
+	requireCompilerInvariant(
+		cachedPrecedenceRevision != context.patternPrecedenceRevision || cachedPrecedenceDigest == signature,
+		"cached precedence signature disagrees with the reusable signature"
+	);
+	cachedPrecedenceDigest = signature;
+	cachedPrecedenceRevision = context.patternPrecedenceRevision;
+}
+
 std::string IncrementalMatcherCache::precedenceDigest() {
 	requireCompilerInvariant(
 		context.patternPrecedenceRevision != 0, "precedence match cache requires resolved syntax families"

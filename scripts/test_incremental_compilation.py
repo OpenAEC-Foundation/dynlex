@@ -70,6 +70,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert cold[0]["source_projection_mask_ms"] >= 0 and cold[0]["source_projection_files_ms"] >= 0
     assert cold[0]["projection_declarations_ms"] >= 0 and cold[0]["projection_matches_ms"] >= 0
     assert cold[0]["dependency_graph_ms"] >= 0
+    assert all(cold[0][key] >= 0 for key in ("resolution_setup_ms", "resolution_definition_ms", "resolution_body_ms", "resolution_precedence_ms", "resolution_rematch_ms", "resolution_candidate_collection_ms", "resolution_candidate_sort_ms", "resolution_replay_setup_ms", "resolution_candidate_match_ms", "precedence_tree_signature_ms", "precedence_signature_ms"))
     assert cold[0]["objects_built"] > 0
     clean = build(False)
     assert cold[1:] == clean[1:], "cold build differs from clean build"

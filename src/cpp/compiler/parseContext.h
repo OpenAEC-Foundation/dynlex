@@ -104,6 +104,15 @@ struct ParseContext {
 	std::function<void(Section *, const InstantiationKey *, llvm::Function *, bool)> recordGeneratedFunction;
 	std::function<bool(ParseContext &)> importReusedFunctions;
 	std::array<double, 4> frontendStageMilliseconds{};
+	double resolutionSetupMilliseconds = 0;
+	double resolutionDefinitionMilliseconds = 0;
+	double resolutionBodyMilliseconds = 0;
+	double resolutionPrecedenceMilliseconds = 0;
+	double resolutionRematchMilliseconds = 0;
+	double resolutionCandidateCollectionMilliseconds = 0;
+	double resolutionCandidateSortMilliseconds = 0;
+	double resolutionReplaySetupMilliseconds = 0;
+	double resolutionCandidateMatchMilliseconds = 0;
 	size_t bodyResolutionReferenceVisits = 0;
 	size_t patternPrecedenceGraphEdges = 0;
 	size_t pureValueSummaryHits = 0;

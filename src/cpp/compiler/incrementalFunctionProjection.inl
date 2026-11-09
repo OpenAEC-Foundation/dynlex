@@ -86,6 +86,7 @@ Json captureAllFunctionProjection(
 		{"initial_matcher_tree", initialMatcherTree},
 		{"final_matcher_tree", matcherTreeSignature(context)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
+		{"precedence_rules", precedenceRulesSignature(*context.mainSection)},
 		{"inactive", std::move(selected)},
 		{"declarations", digest(allDeclarationEntries.dump())},
 		{"global_resolution", globalResolutionIdentity(*context.mainSection)},

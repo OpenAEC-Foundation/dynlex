@@ -11,6 +11,7 @@ std::optional<Json> refreshTopLevelExecutionProjection(
 		return std::nullopt;
 	if (initialMatcherTree != prior.at("initial_matcher_tree").get<std::string>() ||
 		matcherTreeSignature(context) != prior.at("final_matcher_tree").get<std::string>() ||
+		precedenceRulesSignature(*context.mainSection) != prior.at("precedence_rules").get<std::string>() ||
 		matcherCache.precedenceSignature() != prior.at("precedence_signature").get<std::string>() ||
 		globalResolutionIdentity(*context.mainSection) != prior.at("global_resolution"))
 		return std::nullopt;

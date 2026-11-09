@@ -409,6 +409,7 @@ static bool resolveReferences(
 
 // step 3: loop over code, resolve patterns and build up a pattern tree until all patterns are resolved
 bool resolvePatterns(ParseContext &context) {
+	auto setupStart = ResolutionClock::now();
 	prepareDataSectionDefinitions(context);
 	generateClassPropertyPatterns(context);
 	std::list<PatternReference *> bodyReferences;
@@ -616,6 +617,7 @@ bool resolvePatterns(ParseContext &context) {
 		ParseContext &context;
 		~IndexedPatternMutationScope() { context.indexedPatternDefinitionMutation = {}; }
 	} indexedPatternMutationScope{context};
+	context.resolutionSetupMilliseconds += resolutionMilliseconds(setupStart);
 
 	auto resolveReferencesAndDefinitions = [&]() -> bool {
 		for (int resolutionIteration = 0; resolutionIteration < context.options.maxResolutionIterations;
@@ -639,6 +641,7 @@ bool resolvePatterns(ParseContext &context) {
 			}
 
 			// each iteration, we go over all sections first
+			auto definitionStart = ResolutionClock::now();
 			std::erase_if(unResolvedSections, [&](Section *section) {
 				section->patternDefinitionsResolved = true;
 				for (PatternDefinition *definition : section->patternDefinitions) {
@@ -675,6 +678,7 @@ bool resolvePatterns(ParseContext &context) {
 				}
 				return section->patternDefinitionsResolved;
 			});
+			context.resolutionDefinitionMilliseconds += resolutionMilliseconds(definitionStart);
 			if (unResolvedSections.size() < sectionsBefore) {
 				madeProgress = true;
 			}
@@ -691,11 +695,13 @@ bool resolvePatterns(ParseContext &context) {
 			activeResolvingMatch = nullptr;
 			activeReferenceNeedsRematch = false;
 			bool deferredActiveRematch = false;
+			auto bodyStart = ResolutionClock::now();
 			bool resolvedReference = resolveReferences(
 				context, bodyReferences, true, unResolvedSections.empty(), failedBodyMatchDependencies, &definitionToReferences,
 				"body", &activeResolvingReference, &activeResolvingMatch, &activeReferenceNeedsRematch, &deferredActiveRematch,
 				&pendingPromotionCleanupSections, &failedBodyWorklist
 			);
+			context.resolutionBodyMilliseconds += resolutionMilliseconds(bodyStart);
 			activeResolvingReference = nullptr;
 			activeResolvingMatch = nullptr;
 			activeReferenceNeedsRematch = false;
@@ -828,10 +834,13 @@ bool resolvePatterns(ParseContext &context) {
 			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
 			 iteration++) {
-			if (!resolveReferences(
-					context, deferredBodyReferences, true, true, failedBodyMatchDependencies, &definitionToReferences,
-					"deferred-body"
-				))
+			auto bodyStart = ResolutionClock::now();
+			bool resolved = resolveReferences(
+				context, deferredBodyReferences, true, true, failedBodyMatchDependencies, &definitionToReferences,
+				"deferred-body"
+			);
+			context.resolutionBodyMilliseconds += resolutionMilliseconds(bodyStart);
+			if (!resolved)
 				break;
 		}
 		if (!deferredBodyReferences.empty()) {
@@ -876,13 +885,17 @@ bool resolvePatterns(ParseContext &context) {
 		}
 		if (precedencePass == 0 && !prepareDeferredSectionBodies(context))
 			return false;
+		auto precedenceStart = ResolutionClock::now();
 		if (!resolvePatternPrecedence(context))
 			return false;
+		context.resolutionPrecedenceMilliseconds += resolutionMilliseconds(precedenceStart);
 		context.compilationStage = ParseContext::CompilationStage::ResolvedPatternPrecedence;
 		precedenceNeedsRebuild = false;
 		PrecedenceMatchChanges changes;
+		auto rematchStart = ResolutionClock::now();
 		if (!collectPrecedenceMatchChanges(context, changes))
 			return false;
+		context.resolutionRematchMilliseconds += resolutionMilliseconds(rematchStart);
 		for (auto &[reference, match] : changes) {
 			std::vector<Section *> affectedSections;
 			removeVariableReferencesFromMatch(context, reference, *reference->match, affectedSections, false);

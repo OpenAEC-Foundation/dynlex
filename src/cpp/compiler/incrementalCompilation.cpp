@@ -234,6 +234,7 @@ bool sourceProjectionsEqual(const Json &left, const Json &right);
 // clang-format off
 #include "incrementalFunctionMatches.inl"
 #include "incrementalMatcherTreeSignature.inl"
+#include "incrementalPrecedenceRules.inl"
 #include "incrementalDeclarationDigest.inl"
 #include "incrementalSourceProjection.inl"
 #include "incrementalInactiveProjection.inl"
@@ -568,7 +569,9 @@ bool compileIncrementally(
 			context.preparePrecedenceMatcherReplay = [&](const std::vector<PatternReference *> &references) {
 				if (previous)
 					preparePrecedenceMatchReplay(
-						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, references
+						context, previous->at("all_function_projection"), matcherCache, precedenceKeys, references,
+						statistics.precedenceTreeSignatureMilliseconds, statistics.precedenceSignatureMilliseconds,
+						statistics.precedenceRuleSignatureMilliseconds, statistics.precedenceSignaturesReused
 					);
 			};
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
@@ -932,6 +935,15 @@ bool compileIncrementally(
 							  {"definition_parse_hits", statistics.definitionParseHits},
 							  {"definition_parse_misses", statistics.definitionParseMisses},
 							  {"body_resolution_reference_visits", context.bodyResolutionReferenceVisits},
+							  {"resolution_setup_ms", context.resolutionSetupMilliseconds},
+							  {"resolution_definition_ms", context.resolutionDefinitionMilliseconds},
+							  {"resolution_body_ms", context.resolutionBodyMilliseconds},
+							  {"resolution_precedence_ms", context.resolutionPrecedenceMilliseconds},
+							  {"resolution_rematch_ms", context.resolutionRematchMilliseconds},
+							  {"resolution_candidate_collection_ms", context.resolutionCandidateCollectionMilliseconds},
+							  {"resolution_candidate_sort_ms", context.resolutionCandidateSortMilliseconds},
+							  {"resolution_replay_setup_ms", context.resolutionReplaySetupMilliseconds},
+							  {"resolution_candidate_match_ms", context.resolutionCandidateMatchMilliseconds},
 							  {"precedence_graph_edges", context.patternPrecedenceGraphEdges},
 							  {"source_projections_reused", statistics.sourceProjectionWork.reused},
 							  {"source_projections_scanned", statistics.sourceProjectionWork.scanned},
@@ -949,6 +961,10 @@ bool compileIncrementally(
 							  {"projection_compatibility_ms", statistics.sourceProjectionWork.compatibilityMilliseconds},
 							  {"matcher_key_ms", statistics.matcherKeyMilliseconds},
 							  {"matcher_restore_ms", statistics.matcherRestoreMilliseconds},
+							  {"precedence_tree_signature_ms", statistics.precedenceTreeSignatureMilliseconds},
+							  {"precedence_signature_ms", statistics.precedenceSignatureMilliseconds},
+							  {"precedence_rule_signature_ms", statistics.precedenceRuleSignatureMilliseconds},
+							  {"precedence_signature_reused", statistics.precedenceSignaturesReused},
 							  {"cache_load_ms", statistics.cacheLoadMilliseconds},
 							  {"cache_restore_ms", statistics.cacheRestoreMilliseconds},
 							  {"cache_finalize_ms", statistics.cacheFinalizeMilliseconds},
