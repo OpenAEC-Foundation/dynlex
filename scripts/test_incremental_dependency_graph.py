@@ -1,36 +1,19 @@
 """Focused cross-file dependency graph cases for incremental native builds."""
 
 import json
+from test_incremental_program_cache import read_program
 
 
 def graph_for(cache, entry):
-    matches = []
-    for path in (cache / "native-v1").glob("program-*.entry"):
-        program = json.loads(path.read_text().split("\n", 2)[2])
-        if str(entry) in program["files"]:
-            matches.append(program["section_dependency_graph"])
-    assert len(matches) == 1, "expected one cached program for the dependency fixture"
-    return matches[0]
+    return read_program(cache, entry)["section_dependency_graph"]
 
 
 def projection_for(cache, entry):
-    matches = []
-    for path in (cache / "native-v1").glob("program-*.entry"):
-        program = json.loads(path.read_text().split("\n", 2)[2])
-        if str(entry) in program["files"]:
-            matches.append(program["all_function_projection"])
-    assert len(matches) == 1, "expected one cached program projection"
-    return matches[0]
+    return read_program(cache, entry)["all_function_projection"]
 
 
 def inactive_for(cache, entry):
-    matches = []
-    for path in (cache / "native-v1").glob("program-*.entry"):
-        program = json.loads(path.read_text().split("\n", 2)[2])
-        if str(entry) in program["files"]:
-            matches.append(program["inactive_projection"]["inactive"])
-    assert len(matches) == 1, "expected one cached inactive projection"
-    return matches[0]
+    return read_program(cache, entry)["inactive_projection"]["inactive"]
 
 
 def assert_reverse_edges(graph):

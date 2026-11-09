@@ -9,6 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 from test_incremental_dependency_graph import check_cross_file_typed_overload, check_deferred_match_key_replay, check_precedence_match_key_replay, check_folded_value_remains_active, check_frontend_warning_inference_reuse, check_generated_accessor_graph_edges, check_global_match_reuse_after_execution_edit, check_global_reader_after_top_level_edit, check_implicit_parameter_classification_cascade, check_inactive_edit_after_warning_wording, check_inactive_edit_with_unrelated_warning, check_inactive_projection_refresh, check_independent_body_resolution_order, check_independent_reference_delay, check_inference_warning_rechecked, check_known_pure_return_summary, check_leaf_dependency_cascade, check_local_match_projection_reuse, check_pointer_preinfer, check_reused_ir_dependency_graph_variants, check_runtime_pure_value_summary, check_top_level_projection_reuse
+from test_incremental_program_cache import check_program_payloads
 
 project = Path(sys.argv[1]).resolve()
 integration_mode = sys.argv[2:] == ["--integration"]
@@ -358,6 +359,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     check_runtime_pure_value_summary(root, build)
     check_global_match_reuse_after_execution_edit(root, build)
     check_top_level_projection_reuse(root, build)
+    check_program_payloads(root, build)
     check_known_pure_return_summary(root, build)
     check_folded_value_remains_active(root, build)
     check_local_match_projection_reuse(root, build)
@@ -392,14 +394,12 @@ function left times right:
     build()
     output.unlink()
     assert build()[2] == clean[2], "cache failed to recreate a deleted executable"
-
     main.write_text(source.replace('"alpha"))', '"gamma"))'))
     edited = build()
     assert not edited[0]["frontend_reused"]
     assert not edited[0]["type_inference_reused"], "called function edit kept stale inference"
     assert edited[0]["objects_built"] > 0, f"changed function did not rebuild its object: {edited[0]}"
     assert edited[1:] == build(False)[1:], "edited incremental build differs from clean build"
-
     outer_main = root / "outer_edit.dl"
     outer_leaf = root / "outer_leaf.dl"
     outer_leaf.write_text('to independent: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "function"))\n')

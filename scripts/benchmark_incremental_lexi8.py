@@ -83,6 +83,7 @@ for name, samples in results.items():
         "resolve_ms": round(statistics.median(sample[2]["resolve_ms"] for sample in samples), 1),
         "validate_target_ms": round(statistics.median(sample[2]["validate_target_ms"] for sample in samples), 1),
         "cache_load_ms": round(statistics.median(sample[2]["cache_load_ms"] for sample in samples), 1),
+        "cache_payload_load_ms": round(statistics.median(sample[2]["cache_payload_load_ms"] for sample in samples), 1),
         "projection_ms": round(statistics.median(sample[2]["projection_ms"] for sample in samples), 1),
         "projection_setup_ms": round(statistics.median(sample[2]["projection_setup_ms"] for sample in samples), 1),
         "projection_body_ms": round(statistics.median(sample[2]["projection_body_ms"] for sample in samples), 1),

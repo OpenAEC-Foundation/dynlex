@@ -49,6 +49,7 @@ struct BuildStatistics {
 	double precedenceSignatureMilliseconds = 0;
 	double precedenceRuleSignatureMilliseconds = 0;
 	double cacheLoadMilliseconds = 0;
+	double cachePayloadLoadMilliseconds = 0;
 	double cacheRestoreMilliseconds = 0;
 	double cacheFinalizeMilliseconds = 0;
 	double totalMilliseconds = 0;

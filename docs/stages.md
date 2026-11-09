@@ -782,6 +782,13 @@ The cache records structured warnings and notes, including source locations and
 configured message keys, variants and placeholders. Comment edits relocate their
 source locations without rebuilding the frontend. An edit confined to messages in an
 existing `config.dl` rerenders those diagnostics without recompiling.
+The program entry is a small manifest of observations, diagnostics, object keys,
+and content-addressed keys for the saved LLVM IR, function projection, dependency
+graph, and inference summaries. Unchanged and comment-only builds inspect the
+manifest without parsing these larger payloads; they load LLVM IR only if an object
+must be rebuilt, and load all semantic payloads for an executable source edit.
+An evicted payload invalidates the program entry, so the next build recompiles
+from source.
 Failed builds that reached section analysis or later store diagnostic records and
 failed pattern lookups separately from the last successful native result. An
 unchanged source or message-only configuration edit replays the errors without
@@ -810,8 +817,8 @@ Definition fingerprints use pattern content and order without absolute line numb
 inserting an executable line before unchanged definitions also keeps their matches.
 Matcher results live in a separate content-addressed cache entry with a compact index
 and individually encoded results. An unchanged or comment-only build reads only the
-smaller program entry containing source observations and LLVM IR, so it does not parse
-matcher results merely to relink the executable. An evicted matcher entry causes
+program manifest, so it does not parse matcher results merely to relink the executable.
+An evicted matcher entry causes
 matching to run normally on the next code edit.
 Successful matches are rebound to the new tree and expression objects. Failed matches
 restore their trie dependencies, so later definition insertions still retry them.

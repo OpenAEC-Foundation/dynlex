@@ -152,6 +152,8 @@ void writeEntry(const fs::path &path, std::string_view payload) {
 	}
 }
 
+#include "incrementalProgramCache.inl"
+
 Json observeFile(const std::string &path, lsp::SourceFile *file) {
 	if (!file)
 		return nullptr;
@@ -355,53 +357,7 @@ std::string renderModule(const llvm::Module &module) {
 
 #include "incrementalLinkedOutput.inl"
 
-void trimCache(const fs::path &directory) {
-	struct Entry {
-		fs::path path;
-		uintmax_t size;
-		fs::file_time_type time;
-	};
-	std::vector<Entry> entries;
-	uintmax_t size = 0;
-	for (const auto &file : fs::directory_iterator(directory)) {
-		if (file.path().extension() != ".entry")
-			continue;
-		std::string name = file.path().stem().string();
-		size_t prefixLength = name.starts_with("object-")	 ? 7
-							  : name.starts_with("program-") ? 8
-							  : name.starts_with("matcher-") ? 8
-							  : name.starts_with("parser-")	 ? 7
-							  : name.starts_with("errors-")	 ? 7
-															 : 0;
-		if (!prefixLength || name.size() != prefixLength + 64 ||
-			!std::all_of(name.begin() + prefixLength, name.end(), [](char character) {
-			return (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f');
-		}))
-			continue;
-		std::error_code error;
-		uintmax_t entrySize = file.file_size(error);
-		if (error == std::errc::no_such_file_or_directory)
-			continue;
-		if (error)
-			throw fs::filesystem_error("cannot inspect cache size", file.path(), error);
-		auto time = file.last_write_time(error);
-		if (error == std::errc::no_such_file_or_directory)
-			continue;
-		if (error)
-			throw fs::filesystem_error("cannot inspect cache age", file.path(), error);
-		entries.push_back({file.path(), entrySize, time});
-		size += entrySize;
-	}
-	std::sort(entries.begin(), entries.end(), [](const Entry &left, const Entry &right) {
-		return left.time == right.time ? left.path < right.path : left.time < right.time;
-	});
-	for (const Entry &entry : entries) {
-		if (size <= maximumCacheBytes)
-			break;
-		fs::remove(entry.path);
-		size -= entry.size;
-	}
-}
+#include "incrementalCacheTrim.inl"
 
 #include "incrementalNativeObjects.inl"
 
@@ -454,8 +410,8 @@ bool compileIncrementally(
 				previousParserKey = previousFailure->at("parser_key").get<std::string>();
 		}
 		if (!reuseFailedFrontend) {
-			if (auto cached = readEntry(programEntry)) {
-				previous = Json::parse(*cached);
+			if (auto cached = readProgramManifest(programEntry)) {
+				previous = std::move(*cached);
 				if (!previousFailure && !initializeSyntaxConfigs(context, context.options.inputPath))
 					return false;
 				reusePreviousFrontend =
@@ -495,6 +451,9 @@ bool compileIncrementally(
 				if (cachedLink) {
 					success = *cachedLink;
 				} else {
+					auto payloadStart = Clock::now();
+					hydrateProgramField(*previous, directory, "ir");
+					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					restoreCachedModule(context, *previous, programEntry);
 					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
 					if (success)
@@ -513,9 +472,14 @@ bool compileIncrementally(
 					recordSemanticSources(*previous, *recording, context);
 				}
 				if (updateEntry)
-					writeEntry(programEntry, previous->dump());
+					writeProgramEntry(programEntry, *previous, &*previous);
 			}
 		} else {
+			if (previous) {
+				auto payloadStart = Clock::now();
+				hydrateProgramEntry(*previous, directory);
+				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
+			}
 			auto restoreStart = Clock::now();
 			recording->observations = Json::object();
 			if (!previousMatcherKey.empty()) {
@@ -760,7 +724,7 @@ bool compileIncrementally(
 					recordSemanticSources(result, *recording, context);
 					result["linked_output"] = linkedOutputIdentity(context);
 					auto writeStart = Clock::now();
-					writeEntry(programEntry, result.dump());
+					writeProgramEntry(programEntry, std::move(result), &*previous);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 				}
 			} else if (compiled) {
@@ -877,7 +841,7 @@ bool compileIncrementally(
 					result["object_keys"] = statistics.objectKeys;
 					result["linked_output"] = linkedOutputIdentity(compiled);
 					auto writeStart = Clock::now();
-					writeEntry(programEntry, result.dump());
+					writeProgramEntry(programEntry, std::move(result), previous ? &*previous : nullptr);
 					statistics.cacheWriteMilliseconds = elapsedMilliseconds(writeStart);
 					return true;
 				});
@@ -966,6 +930,7 @@ bool compileIncrementally(
 							  {"precedence_rule_signature_ms", statistics.precedenceRuleSignatureMilliseconds},
 							  {"precedence_signature_reused", statistics.precedenceSignaturesReused},
 							  {"cache_load_ms", statistics.cacheLoadMilliseconds},
+							  {"cache_payload_load_ms", statistics.cachePayloadLoadMilliseconds},
 							  {"cache_restore_ms", statistics.cacheRestoreMilliseconds},
 							  {"cache_finalize_ms", statistics.cacheFinalizeMilliseconds},
 							  {"total_ms", statistics.totalMilliseconds},
