@@ -3,7 +3,7 @@
 #include "sourceFile.h"
 #include "stringFunctions.h"
 #include "syntaxConfig.h"
-#include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -12,10 +12,31 @@
 
 struct ParseContext;
 
+struct ConfiguredDiagnosticMessage {
+	std::string key;
+	std::string variant;
+	std::vector<std::pair<std::string, std::string>> placeholders;
+	bool internal = false;
+	std::string placeholderName;
+	std::vector<ConfiguredDiagnosticMessage> nestedPlaceholders;
+};
+
+ConfiguredDiagnosticMessage configuredDiagnosticMessage(
+	const ParseContext &context, Range sourceRange, std::string_view key, std::string_view variant,
+	std::vector<std::pair<std::string, std::string>> placeholders
+);
+std::string renderConfiguredDiagnosticMessage(const ParseContext &context, const ConfiguredDiagnosticMessage &message);
+
 struct RelatedInfo {
 	std::string message;
 	Range range;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredMessage = {};
 };
+
+RelatedInfo configuredRelatedInfo(
+	const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant, Range relatedRange,
+	std::vector<std::pair<std::string, std::string>> placeholders = {}
+);
 
 struct DiagnosticFix {
 	std::string title;
@@ -27,6 +48,7 @@ struct Diagnostic {
 	enum class Level { Info, Warning, Error };
 	Level level = Level::Error;
 	std::string message;
+	std::shared_ptr<const ConfiguredDiagnosticMessage> configuredMessage;
 	Range range;
 	std::vector<RelatedInfo> relatedInfo;
 	std::vector<DiagnosticFix> quickFixes;
@@ -48,13 +70,19 @@ struct Diagnostic {
 		std::vector<std::pair<std::string, std::string>> placeholders;
 		placeholders.reserve(sizeof...(Args) / 2);
 		appendPlaceholders(placeholders, std::forward<Args>(args)...);
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, range);
-		message = renderConfiguredMessage(syntax, key, variant, placeholders);
+		configuredMessage = std::make_shared<const ConfiguredDiagnosticMessage>(
+			configuredDiagnosticMessage(context, range, key, variant, std::move(placeholders))
+		);
+		message = renderConfiguredDiagnosticMessage(context, *configuredMessage);
 	}
 
 	static Diagnostic configParseError(std::string_view message, Range range);
 	std::string toString() const;
-	std::string toString(const std::function<void(std::string &, const Range &)> &appendRange) const;
+	void setConfiguredMessage(
+		const ParseContext &context, Range syntaxRange, std::string_view key, std::string_view variant,
+		std::vector<std::pair<std::string, std::string>> placeholders = {}
+	);
+	void setConfiguredPlaceholder(const ParseContext &context, std::string name, ConfiguredDiagnosticMessage replacement);
 
   private:
 	template <typename T> static std::string_view requireStringView(T &&value) {

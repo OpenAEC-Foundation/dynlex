@@ -26,8 +26,8 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     output = root / ("program.exe" if os.name == "nt" else "program")
     main.write_text(source)
 
-    def build(incremental=True, flags=(), success=True, entry=main):
-        arguments = [str(compiler), str(entry), *flags, "-o", str(output)]
+    def build(incremental=True, flags=(), success=True, entry=main, target=output):
+        arguments = [str(compiler), str(entry), *flags, "-o", str(target)]
         if incremental:
             arguments += ["--incremental", str(cache), "--incremental-stats"]
         result = subprocess.run(arguments, cwd=root, capture_output=True, text=True, timeout=120)
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
         diagnostics = "".join(line for line in lines if not line.startswith("incremental: "))
         runtime = None
         if success:
-            runtime = subprocess.run([str(output)], cwd=root, capture_output=True, timeout=10)
+            runtime = subprocess.run([str(target)], cwd=root, capture_output=True, timeout=10)
             if runtime.returncode:
                 raise AssertionError(f"execution failed: {runtime.stderr!r}")
         return stats, diagnostics, runtime.stdout if runtime else None
@@ -154,6 +154,52 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     moved_warning = build(entry=warning_main)
     assert moved_warning[0]["frontend_reused"], "shifted warning rebuilt the frontend"
     assert moved_warning[1:] == build(False, entry=warning_main)[1:]
+    config_warning = root / "config_warning"
+    config_warning.mkdir()
+    config_warning_main = config_warning / "main.dl"
+    config_warning_main.write_text('integer means: @intrinsic("type", "int")\n'
+                                   'value means: 1\n'
+                                   'to show {integer:value}: @intrinsic("discard", value)\n'
+                                   'show 2\n')
+    config_warning_file = config_warning / "config.dl"
+    config_warning_file.write_text('dynlex options:\n    messages:\n'
+                                   '        explicit parameter ambiguity: "First warning for {parameter}"\n'
+                                   '        explicit parameter ambiguity related parameter: "First related note"\n'
+                                   '        ambiguous single word reference:\n'
+                                   '            suggestion fallback: " First suggestion."\n')
+    first_config_warning = build(entry=config_warning_main)
+    assert "First warning for value" in first_config_warning[1]
+    assert "First related note" in first_config_warning[1]
+    assert "First suggestion." in first_config_warning[1]
+    linked_output_time = output.stat().st_mtime_ns
+    config_warning_file.write_text('dynlex options:\n    messages:\n'
+                                   '        explicit parameter ambiguity: "Second warning for {parameter}"\n'
+                                   '        explicit parameter ambiguity related parameter: "Second related note"\n'
+                                   '        ambiguous single word reference:\n'
+                                   '            suggestion fallback: " Second suggestion."\n')
+    second_config_warning = build(entry=config_warning_main)
+    assert second_config_warning[0]["frontend_reused"], "warning wording recompiled the frontend"
+    assert second_config_warning[0]["objects_built"] == 0, "warning wording rebuilt an object"
+    assert second_config_warning[0]["link_ms"] == 0, "warning wording relinked the executable"
+    assert output.stat().st_mtime_ns == linked_output_time, "warning wording rewrote the executable"
+    assert "Second warning for value" in second_config_warning[1]
+    assert "Second related note" in second_config_warning[1]
+    assert "Second suggestion." in second_config_warning[1]
+    assert second_config_warning[1:] == build(False, entry=config_warning_main)[1:]
+    alternate_output = root / ("alternate.exe" if os.name == "nt" else "alternate")
+    build(entry=config_warning_main, target=alternate_output)
+    alternate_link_time = alternate_output.stat().st_mtime_ns
+    config_warning_file.write_text(config_warning_file.read_text().replace("Second warning", "Third warning"))
+    third_config_warning = build(entry=config_warning_main, target=alternate_output)
+    assert third_config_warning[0]["frontend_reused"]
+    assert third_config_warning[0]["link_ms"] == 0, "warning wording relinked after output path changed"
+    assert alternate_output.stat().st_mtime_ns == alternate_link_time
+    assert "Third warning for value" in third_config_warning[1]
+    assert third_config_warning[1:] == build(False, entry=config_warning_main, target=alternate_output)[1:]
+    config_warning_main.write_text(config_warning_main.read_text().replace("show 2\n", "show 3\n"))
+    code_after_message_edit = build(entry=config_warning_main)
+    assert code_after_message_edit[0]["matcher_cache_hits"] > 0, "message edit invalidated unrelated pattern matches"
+    assert code_after_message_edit[1:] == build(False, entry=config_warning_main)[1:]
     critical.write_text(critical.read_text() + "alpha\n")
     main.write_text("import critical.dl\nalpha\n")
     build()
@@ -266,6 +312,18 @@ function left times right:
     assert outer_edit[0]["inference_instantiations_reused"] >= 1, "top-level execution edit re-inferred independent function"
     assert outer_edit[0]["functions_ir_reused"] >= 1, "top-level execution edit regenerated independent function IR"
     assert outer_edit[1:] == build(False, entry=outer_main)[1:], "top-level execution edit differs from clean build"
+
+    pure_main = root / "pure_void_edit.dl"
+    pure_source = ('to quiet: @intrinsic("discard", 1)\n'
+                   'to unrelated: @intrinsic("discard", 2)\n'
+                   'quiet\n'
+                   'unrelated\n')
+    pure_main.write_text(pure_source)
+    build(entry=pure_main)
+    pure_main.write_text(pure_source.replace('"discard", 2', '"discard", 3'))
+    pure_edit = build(entry=pure_main)
+    assert pure_edit[0]["inference_instantiations_reused"] >= 1, "unchanged pure void function was re-inferred"
+    assert pure_edit[1:] == build(False, entry=pure_main)[1:]
 
     scope_main = root / "scope_rule_edit.dl"
     scope_source = ('numbers are properties means: @intrinsic("number rule", properties)\n'

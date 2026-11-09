@@ -33,8 +33,9 @@ bool canPersistInferenceSummary(
 		   inferenceSummaryKey(key, classPaths).has_value() && instantiation.valid && !instantiation.inferring &&
 		   !instantiation.needsReinfer && instantiation.body &&
 		   inferenceTypeIdentity(instantiation.returnType, classPaths, visiting).has_value() &&
-		   instantiation.purity == InstantiationPurity::Impure && instantiation.argumentTypes == key.argumentTypes &&
-		   instantiation.parameterSeedTypesByName.empty() &&
+		   (instantiation.purity == InstantiationPurity::Impure ||
+			(instantiation.purity == InstantiationPurity::Pure && instantiation.returnType.kind == DataType::Kind::Void)) &&
+		   instantiation.argumentTypes == key.argumentTypes && instantiation.parameterSeedTypesByName.empty() &&
 		   std::ranges::all_of(
 			   instantiation.parameterOutputTypesByName,
 			   [&](const auto &entry) {
@@ -43,8 +44,7 @@ bool canPersistInferenceSummary(
 	}
 		   ) &&
 		   instantiation.constantParameterValues.empty() && instantiation.requiredCompileTimeParameters.empty() &&
-		   instantiation.pureReturnValuesByArguments.empty() &&
-		   !instantiation.memoryViolation;
+		   instantiation.pureReturnValuesByArguments.empty() && !instantiation.memoryViolation;
 }
 
 bool inferenceSummarySourceExcluded(const Section *section, const std::set<std::string> &excludedSources) {
@@ -83,10 +83,12 @@ Json captureInferenceSummaries(
 			summaries[path][*inferenceSummaryKey(key, classPaths)] = Json{
 				{"argument_types", std::move(argumentTypes)},
 				{"return_type", *inferenceTypeIdentity(instantiation.returnType, classPaths, visiting)},
+				{"purity", static_cast<int>(instantiation.purity)},
 				{"has_return_address_provenance", instantiation.hasReturnAddressProvenance},
 				{"return_provenance", std::move(*returnProvenance)},
 				{"return_storage_parameter", instantiation.returnPointerStorageParameterName
-					? Json(*instantiation.returnPointerStorageParameterName) : Json(nullptr)},
+												 ? Json(*instantiation.returnPointerStorageParameterName)
+												 : Json(nullptr)},
 				{"return_storage_ambiguous", instantiation.returnPointerStorageAmbiguous},
 				{"falls_through", instantiation.fallsThrough},
 				{"return_intrinsic", instantiation.hasReturnIntrinsic},
@@ -134,12 +136,13 @@ class IncrementalInferenceReuse {
 		if (!returnType)
 			return false;
 		instantiation.returnType = std::move(*returnType);
-		instantiation.purity = InstantiationPurity::Impure;
+		instantiation.purity = static_cast<InstantiationPurity>(summary.at("purity").get<int>());
 		instantiation.hasReturnAddressProvenance = summary.at("has_return_address_provenance").get<bool>();
 		instantiation.returnAddressProvenance = decodeAddressProvenance(section, summary.at("return_provenance"));
-		instantiation.returnPointerStorageParameterName = summary.at("return_storage_parameter").is_null()
-			? std::nullopt
-			: std::optional<std::string>{summary.at("return_storage_parameter").get<std::string>()};
+		instantiation.returnPointerStorageParameterName =
+			summary.at("return_storage_parameter").is_null()
+				? std::nullopt
+				: std::optional<std::string>{summary.at("return_storage_parameter").get<std::string>()};
 		instantiation.returnPointerStorageAmbiguous = summary.at("return_storage_ambiguous").get<bool>();
 		instantiation.fallsThrough = summary.at("falls_through").get<bool>();
 		instantiation.hasReturnIntrinsic = summary.at("return_intrinsic").get<bool>();

@@ -179,6 +179,8 @@ void recordSemanticSources(Json &result, RecordingFileSystem &files, const Parse
 	result["comment_prefixes"] =
 		Json{{"builtin", context.builtinSyntax.commentPrefix}, {"project", context.projectSyntax.commentPrefix}};
 	result["config_paths"] = Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath});
+	result["syntax_structure"] =
+		Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity});
 	for (auto &[path, observation] : result["files"].items()) {
 		if (observation.is_null() || fs::path(path).extension() != ".dl" || path == context.builtinSyntaxConfigPath ||
 			path == context.projectSyntaxConfigPath)
@@ -259,24 +261,30 @@ declarationDigest(const std::map<std::string, Section *> &sections, const std::u
 
 Json captureInactiveProjection(
 	const ParseContext &context, const Json *priorInactive = nullptr,
-	const std::set<std::string> *generatedFunctionPaths = nullptr
+	const std::set<std::string> *generatedFunctionPaths = nullptr,
+	const std::map<std::string, Section *> *knownSections = nullptr
 ) {
-	std::map<std::string, Section *> sections;
-	collectSections(context.mainSection, "root", sections);
-	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(sections);
+	std::map<std::string, Section *> collectedSections;
+	if (!knownSections) {
+		collectSections(context.mainSection, "root", collectedSections);
+		knownSections = &collectedSections;
+	}
+	Json inactive = priorInactive ? *priorInactive : inactiveFunctionSections(*knownSections);
 	if (generatedFunctionPaths) {
 		for (const std::string &path : *generatedFunctionPaths)
 			inactive.erase(path);
 	}
 	std::unordered_set<const Section *> selected;
 	for (const auto &[path, identity] : inactive.items()) {
-		auto section = sections.find(path);
-		if (section == sections.end() || sectionIdentity(*section->second) != identity)
+		auto section = knownSections->find(path);
+		if (section == knownSections->end() || sectionIdentity(*section->second) != identity)
 			return nullptr;
 		selected.insert(section->second);
 	}
 	return Json{
-		{"inactive", inactive}, {"declarations", declarationDigest(sections)}, {"sources", sourceProjection(context, selected)}
+		{"inactive", inactive},
+		{"declarations", declarationDigest(*knownSections)},
+		{"sources", sourceProjection(context, selected)}
 	};
 }
 
@@ -426,9 +434,12 @@ bool canReuseInactiveBodies(
 }
 
 bool observationsStillEquivalent(
-	const Json &previous, RecordingFileSystem &files, const ParseContext::Options &options, std::string &cachedDiagnostics
+	const Json &previous, RecordingFileSystem &files, const ParseContext &context, std::string &cachedDiagnostics,
+	bool &configOnlyChange
 ) {
 	std::vector<std::string> changedSources;
+	bool configChanged = false;
+	const Json &configPaths = previous.at("config_paths");
 	for (const auto &[path, observation] : previous.at("files").items()) {
 		Json current = observeFile(path, files.getFile(path));
 		Json rawObservation = observation;
@@ -436,6 +447,13 @@ bool observationsStillEquivalent(
 			rawObservation.erase("semantic");
 		if (current == rawObservation)
 			continue;
+		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>()) {
+			if (current.is_null() || observation.is_null() || current.at("canonical") != observation.at("canonical") ||
+				current.at("internal") != observation.at("internal"))
+				return false;
+			configChanged = true;
+			continue;
+		}
 		if (current.is_null() || observation.is_null() || fs::path(path).extension() != ".dl" ||
 			!previous.contains("comment_prefixes") || !observation.contains("semantic"))
 			return false;
@@ -443,17 +461,18 @@ bool observationsStillEquivalent(
 			return false;
 		changedSources.push_back(path);
 	}
-	if (changedSources.empty()) {
+	if (!configChanged && changedSources.empty()) {
 		cachedDiagnostics = previous.at("diagnostics").get<std::string>();
 		return true;
 	}
-	if (options.emitDebugInfo || options.traceExecution)
+	if (configPaths != Json::array({context.builtinSyntaxConfigPath, context.projectSyntaxConfigPath}) ||
+		previous.at("syntax_structure") !=
+			Json::array({context.builtinSyntax.nonMessageIdentity, context.projectSyntax.nonMessageIdentity}))
 		return false;
-	const Json &configPaths = previous.at("config_paths");
+	if (!changedSources.empty() && (context.options.emitDebugInfo || context.options.traceExecution))
+		return false;
 	const Json &prefixes = previous.at("comment_prefixes");
 	for (const std::string &path : changedSources) {
-		if (path == configPaths[0].get<std::string>() || path == configPaths[1].get<std::string>())
-			return false;
 		lsp::SourceFile *file = files.cachedFile(path);
 		if (!file)
 			throw std::runtime_error("recorded source disappeared: " + path);
@@ -462,11 +481,12 @@ bool observationsStillEquivalent(
 		if (semanticSourceDigest(file->content, prefix) != previous.at("files").at(path).at("semantic").get<std::string>())
 			return false;
 	}
-	std::optional<std::string> relocated =
-		relocateCachedDiagnostics(previous, files, std::set<std::string>(changedSources.begin(), changedSources.end()));
-	if (!relocated)
+	std::optional<std::string> rendered =
+		renderCachedDiagnostics(previous, files, context, std::set<std::string>(changedSources.begin(), changedSources.end()));
+	if (!rendered)
 		return false;
-	cachedDiagnostics = std::move(*relocated);
+	cachedDiagnostics = std::move(*rendered);
+	configOnlyChange = configChanged && changedSources.empty();
 	return true;
 }
 
@@ -507,6 +527,8 @@ std::string renderModule(const llvm::Module &module) {
 	module.print(output, nullptr);
 	return result;
 }
+
+#include "incrementalLinkedOutput.inl"
 
 void trimCache(const fs::path &directory) {
 	struct Entry {
@@ -617,7 +639,10 @@ std::optional<bool> linkCachedObjects(
 	}
 	statistics.reusedObjects = keys.size();
 	statistics.linkedCachedObjects = true;
-	return emitNativeExecutableWithObjects(context, paths, libraries);
+	auto linkStart = Clock::now();
+	bool linked = emitNativeExecutableWithObjects(context, paths, libraries);
+	statistics.linkMilliseconds = elapsedMilliseconds(linkStart);
+	return linked;
 }
 
 void restoreCachedModule(ParseContext &context, const Json &cached, const fs::path &entry) {
@@ -657,43 +682,57 @@ bool compileIncrementally(
 		bool success = false;
 		std::optional<Json> previous;
 		bool reusePreviousFrontend = false;
+		bool configOnlyChange = false;
 		std::string cachedDiagnostics;
 		std::string previousMatches;
 		std::string previousMatcherKey;
 		if (auto cached = readEntry(programEntry)) {
 			previous = Json::parse(*cached);
-			reusePreviousFrontend = observationsStillEquivalent(*previous, *recording, context.options, cachedDiagnostics);
+			if (!initializeSyntaxConfigs(context, context.options.inputPath))
+				return false;
+			reusePreviousFrontend =
+				observationsStillEquivalent(*previous, *recording, context, cachedDiagnostics, configOnlyChange);
 			if (!reusePreviousFrontend)
 				previousMatcherKey = previous->at("matcher_key").get<std::string>();
 		}
 		if (reusePreviousFrontend) {
 			statistics.reusedFrontend = true;
-			if (!initializeSyntaxConfigs(context, context.options.inputPath))
-				return false;
-			if (!previous->contains("comment_prefixes")) {
-				recordSemanticSources(*previous, *recording, context);
-				writeEntry(programEntry, previous->dump());
-			}
 			std::vector<std::string> objectKeys = previous->at("object_keys").get<std::vector<std::string>>();
-			context.llvmContext = new llvm::LLVMContext();
-			context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
-			std::string error;
-			context.targetMachine = createNativeTargetMachine(context, error);
-			if (!context.targetMachine)
-				throw std::runtime_error(error);
-			std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
-			context.requiredLibraries.insert(libraries.begin(), libraries.end());
 			std::cerr << cachedDiagnostics;
-			std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
-			if (cachedLink) {
-				success = *cachedLink;
+			if (configOnlyChange && linkedOutputUnchanged(context, *previous)) {
+				success = true;
 			} else {
-				restoreCachedModule(context, *previous, programEntry);
-				success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
-				if (success) {
-					(*previous)["object_keys"] = statistics.objectKeys;
-					writeEntry(programEntry, previous->dump());
+				context.llvmContext = new llvm::LLVMContext();
+				context.llvmModule = new llvm::Module("dynlex_cached_link", *context.llvmContext);
+				std::string error;
+				context.targetMachine = createNativeTargetMachine(context, error);
+				if (!context.targetMachine)
+					throw std::runtime_error(error);
+				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
+				context.requiredLibraries.insert(libraries.begin(), libraries.end());
+				std::optional<bool> cachedLink = linkCachedObjects(context, directory, objectKeys, libraries, statistics);
+				if (cachedLink) {
+					success = *cachedLink;
+				} else {
+					restoreCachedModule(context, *previous, programEntry);
+					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
+					if (success)
+						(*previous)["object_keys"] = statistics.objectKeys;
 				}
+			}
+			if (success) {
+				bool updateEntry = configOnlyChange;
+				if (!linkedOutputUnchanged(context, *previous)) {
+					(*previous)["linked_output"] = linkedOutputIdentity(context);
+					updateEntry = true;
+				}
+				if (configOnlyChange) {
+					(*previous)["files"] = recording->observations;
+					(*previous)["diagnostics"] = cachedDiagnostics;
+					recordSemanticSources(*previous, *recording, context);
+				}
+				if (updateEntry)
+					writeEntry(programEntry, previous->dump());
 			}
 		} else {
 			recording->observations = Json::object();
@@ -828,6 +867,7 @@ bool compileIncrementally(
 					result["matcher_key"] = saveMatcher();
 					result["object_keys"] = statistics.objectKeys;
 					recordSemanticSources(result, *recording, context);
+					result["linked_output"] = linkedOutputIdentity(context);
 					writeEntry(programEntry, result.dump());
 				}
 			} else if (compiled) {
@@ -854,14 +894,14 @@ bool compileIncrementally(
 					std::vector<std::string> libraries(compiled.requiredLibraries.begin(), compiled.requiredLibraries.end());
 					std::string diagnostics;
 					std::set<std::string> diagnosticSources;
-					Json diagnosticLocations = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
+					Json diagnosticRecords = captureCachedDiagnostics(compiled, diagnostics, diagnosticSources);
 					Json result{
 						{"files", recording->observations},
 						{"ir", renderModule(*compiled.llvmModule)},
 						{"module_id", compiled.llvmModule->getModuleIdentifier()},
 						{"libraries", libraries},
 						{"diagnostics", diagnostics},
-						{"diagnostic_locations", diagnosticLocations},
+						{"diagnostic_records", diagnosticRecords},
 						{"diagnostic_sources", diagnosticSources}
 					};
 					result["matcher_key"] = saveMatcher();
@@ -901,6 +941,7 @@ bool compileIncrementally(
 						!emitPartitions(compiled, directory, compilerIdentity, options, libraries, statistics))
 						return false;
 					result["object_keys"] = statistics.objectKeys;
+					result["linked_output"] = linkedOutputIdentity(compiled);
 					writeEntry(programEntry, result.dump());
 					return true;
 				});

@@ -4,7 +4,9 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace llvm {
 class Module;
@@ -39,6 +41,7 @@ class IncrementalIRReuse {
 	std::map<const Section *, std::string> sectionPaths;
 	std::unordered_set<const Section *> eligibleSections;
 	std::unordered_set<std::string> eligiblePaths;
+	std::unordered_map<std::string, std::vector<std::string>> previousNamesByPath;
 	std::unordered_set<std::string> replacementPaths;
 	std::unordered_set<std::string> reusedNames;
 };

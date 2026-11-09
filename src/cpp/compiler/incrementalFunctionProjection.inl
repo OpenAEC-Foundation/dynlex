@@ -30,7 +30,7 @@ Json captureAllFunctionProjection(const ParseContext &context, const Json *previ
 			}
 		}
 	}
-	Json projection = captureInactiveProjection(context, &selected);
+	Json projection = captureInactiveProjection(context, &selected, nullptr, &sections);
 	Json bodyDigests = Json::object();
 	for (const auto &[path, section] : sections) {
 		if (auto body = bodies.find(section); body != bodies.end())
@@ -47,12 +47,11 @@ Json captureAllFunctionProjection(const ParseContext &context, const Json *previ
 									 projection.at("sources") == prior->at("sources") &&
 									 projection.at("inactive") == prior->at("inactive");
 	bool stableGlobalFreeEnvironment = prior && projection.at("declarations") == prior->at("declarations") &&
-									 compatibleGlobalFreeProjection(*prior, projection);
+									   compatibleGlobalFreeProjection(*prior, projection);
 	for (const Section *section : reusable) {
 		const std::string &path = paths.at(section);
 		if ((stableMatchingEnvironment || (stableGlobalFreeEnvironment && hasNoGlobalAccess(section))) &&
-			prior->at("bodies").contains(path) &&
-			prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
+			prior->at("bodies").contains(path) && prior->at("bodies").at(path) == projection.at("bodies").at(path) &&
 			prior->at("function_declarations").at(path) == projection.at("function_declarations").at(path))
 			matches[path] = prior->at("matches").at(path);
 		else

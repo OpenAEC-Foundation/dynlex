@@ -21,6 +21,7 @@ struct SyntaxConfig {
 		const std::string *find(std::string_view key, std::string_view variant = "message") const;
 		void set(std::string key, std::string variant, std::string value);
 	} messages;
+	std::string nonMessageIdentity;
 
 	std::string importKeyword = "import";
 	std::string commentPrefix = "#";

@@ -167,14 +167,6 @@ std::string IncrementalMatcherCache::snapshot() const {
 	return result;
 }
 
-std::string IncrementalMatcherCache::sourceDigest(const lsp::SourceFile *source) {
-	requireCompilerInvariant(source != nullptr, "incremental matcher source is missing");
-	auto [it, inserted] = sourceDigests.try_emplace(source);
-	if (inserted)
-		it->second = digest(source->content);
-	return it->second;
-}
-
 std::string IncrementalMatcherCache::precedenceDigest() {
 	requireCompilerInvariant(
 		context.patternPrecedenceRevision != 0, "precedence match cache requires resolved syntax families"
@@ -365,22 +357,13 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 		}
 	}
 	fingerprint.boolean(false);
-	auto appendConfigDigest = [&](const std::string &path) {
+	auto appendConfigIdentity = [&](const std::string &path, const SyntaxConfig &syntax) {
 		fingerprint.boolean(!path.empty());
-		if (path.empty())
-			return;
-		auto cached = configDigests.find(path);
-		if (cached == configDigests.end()) {
-			lsp::SourceFile *config = context.fileSystem->getFile(path);
-			cached = configDigests.emplace(path, config ? Json(sourceDigest(config)) : Json(nullptr)).first;
-		}
-		fingerprint.boolean(!cached->second.is_null());
-		if (!cached->second.is_null())
-			fingerprint.string(cached->second.get_ref<const std::string &>());
+		fingerprint.string(syntax.nonMessageIdentity);
 	};
 	fingerprint.boolean(trackDependencies);
-	appendConfigDigest(context.builtinSyntaxConfigPath);
-	appendConfigDigest(context.projectSyntaxConfigPath);
+	appendConfigIdentity(context.builtinSyntaxConfigPath, context.builtinSyntax);
+	appendConfigIdentity(context.projectSyntaxConfigPath, context.projectSyntax);
 	std::string result = fingerprint.finish();
 	keyMilliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
 	return result;

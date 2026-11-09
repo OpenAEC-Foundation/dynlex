@@ -154,18 +154,15 @@ static void validateSection(ParseContext &context, Section *section) {
 		if (!problem)
 			continue;
 
-		const SyntaxConfig &syntax = syntaxConfigForRange(context, warnRef->range);
 		Diagnostic diag(
 			context, Diagnostic::Level::Warning, "variable usage warning",
 			isPatternArg ? "pattern argument assigned before read" : "variable read before assigned", warnRef->range, "name",
 			name
 		);
-		diag.relatedInfo.push_back(
-			{renderConfiguredMessage(
-				 syntax, "variable usage warning", isPatternArg ? "related argument definition" : "related assignment"
-			 ),
-			 defRef->range}
-		);
+		diag.relatedInfo.push_back(configuredRelatedInfo(
+			context, warnRef->range, "variable usage warning",
+			isPatternArg ? "related argument definition" : "related assignment", defRef->range
+		));
 		context.diagnostics.push_back(std::move(diag));
 	}
 

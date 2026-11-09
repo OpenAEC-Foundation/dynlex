@@ -67,6 +67,8 @@ IncrementalIRReuse::IncrementalIRReuse(
 		throw std::runtime_error("cached LLVM target differs from the current target");
 	for (const Section *section : this->eligibleSections)
 		eligiblePaths.insert(this->sectionPaths.at(section));
+	for (const auto &[name, owner] : previousFunctions.items())
+		previousNamesByPath[owner.get<std::string>()].push_back(name);
 }
 
 bool IncrementalIRReuse::reusableClosure(
@@ -110,19 +112,18 @@ bool IncrementalIRReuse::hasReusableIRForSection(const Section *section, bool al
 	if (!eligibleSections.contains(section))
 		return false;
 	const std::string &path = sectionPaths.at(section);
-	bool found = false;
-	for (const auto &[name, owner] : previousFunctions.items()) {
-		if (owner != path)
-			continue;
+	auto names = previousNamesByPath.find(path);
+	if (names == previousNamesByPath.end())
+		return false;
+	for (const std::string &name : names->second) {
 		const llvm::Function *function = previousModule->getFunction(name);
 		if (!function || function->isDeclaration())
 			return false;
 		std::unordered_set<std::string> closure;
 		if (!reusableClosure(*function, *currentModule, closure, allowUnmaterializedGlobals))
 			return false;
-		found = true;
 	}
-	return found;
+	return true;
 }
 
 bool IncrementalIRReuse::reuse(Section *section, Instantiation &, llvm::Function *function) {

@@ -248,7 +248,8 @@ static CompileTimeValue executePureInstantiationReturnValue(
 	const std::vector<std::pair<std::string, CompileTimeValue>> &argumentValues
 ) {
 	if (!section || instantiation.purity != InstantiationPurity::Pure || instantiation.inferring ||
-		instantiation.needsReinfer || !instantiation.valid || !instantiation.returnType.isDeduced())
+		instantiation.needsReinfer || !instantiation.valid || !instantiation.returnType.isDeduced() ||
+		instantiation.returnType.kind == DataType::Kind::Void)
 		return {};
 	std::vector<CompileTimeValue> argumentValueKey = compileTimeArgumentValueVector(argumentValues);
 	auto cachedIt = instantiation.pureReturnValuesByArguments.find(argumentValueKey);

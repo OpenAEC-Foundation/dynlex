@@ -13,10 +13,6 @@
 struct ParseContext;
 struct PatternReference;
 struct PatternTreeNode;
-namespace lsp {
-struct SourceFile;
-}
-
 // Caches pointer-free matcher results across native compiler invocations.
 // The key includes the trie mutation history, because a newly added overload can
 // change a match even when the call never used that overload before.
@@ -37,8 +33,6 @@ class IncrementalMatcherCache {
 	ParseContext &context;
 	std::unordered_map<std::string_view, std::string_view> previousEntries;
 	std::map<std::string, std::variant<std::string, std::string_view>> recorded;
-	std::unordered_map<const lsp::SourceFile *, std::string> sourceDigests;
-	std::unordered_map<std::string, Json> configDigests;
 	std::uint64_t cachedPrecedenceRevision = 0;
 	std::string cachedPrecedenceDigest;
 	size_t reusedCount = 0;
@@ -48,7 +42,6 @@ class IncrementalMatcherCache {
 
 	bool available(MatchOptions options);
 	std::string key(const PatternReference &reference, bool trackDependencies);
-	std::string sourceDigest(const lsp::SourceFile *source);
 	std::string precedenceDigest();
 	void appendNode(std::string &output, const PatternTreeNode *node) const;
 	PatternTreeNode *restoreNode(std::string_view input, size_t &position) const;

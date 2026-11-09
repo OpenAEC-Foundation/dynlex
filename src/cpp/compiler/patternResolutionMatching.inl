@@ -295,22 +295,28 @@ static bool resolveReferences(
 						context, Diagnostic::Level::Warning, "ambiguous single word reference", reference->range(), "token",
 						token, "suggestion", suggestionMessage
 					);
-					for (const Range &candidateRange : collectEnclosingParameterCandidateRanges(reference, token))
-						diag.relatedInfo.push_back(
-							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related parameter"),
-							 candidateRange}
+					if (suggestion.spelling.empty())
+						diag.setConfiguredPlaceholder(
+							context, "suggestion",
+							configuredDiagnosticMessage(
+								context, reference->range(), "ambiguous single word reference", "suggestion fallback", {}
+							)
 						);
+					for (const Range &candidateRange : collectEnclosingParameterCandidateRanges(reference, token))
+						diag.relatedInfo.push_back(configuredRelatedInfo(
+							context, reference->range(), "ambiguous single word reference", "related parameter", candidateRange
+						));
 					Range functionRange = firstMatchedDefinitionRange(match);
 					if (functionRange.line)
-						diag.relatedInfo.push_back(
-							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related matched pattern"),
-							 functionRange}
-						);
+						diag.relatedInfo.push_back(configuredRelatedInfo(
+							context, reference->range(), "ambiguous single word reference", "related matched pattern",
+							functionRange
+						));
 					if (suggestion.definition && suggestion.definition->range.line)
-						diag.relatedInfo.push_back(
-							{renderConfiguredMessage(syntax, "ambiguous single word reference", "related suggestion"),
-							 suggestion.definition->range}
-						);
+						diag.relatedInfo.push_back(configuredRelatedInfo(
+							context, reference->range(), "ambiguous single word reference", "related suggestion",
+							suggestion.definition->range
+						));
 					if (suggestion.isMultiWord && !suggestion.spelling.empty()) {
 						diag.quickFixes.push_back({
 							renderConfiguredMessage(

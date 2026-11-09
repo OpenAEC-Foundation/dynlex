@@ -453,6 +453,15 @@ bool emitNativeExecutable(ParseContext &context) {
 	return emitNativeExecutableWithObjects(context, {}, {context.requiredLibraries.begin(), context.requiredLibraries.end()});
 }
 
+std::string nativeExecutablePath(const ParseContext::Options &options) {
+	if (!options.outputPath.empty())
+		return options.outputPath;
+	std::string path = options.inputPath;
+	if (path.ends_with(".dl"))
+		path.resize(path.size() - 3);
+	return path;
+}
+
 bool emitNativeExecutableWithObjects(
 	ParseContext &context, const std::vector<std::string> &objectPaths, const std::vector<std::string> &libraries
 ) {
@@ -483,14 +492,7 @@ bool emitNativeExecutableWithObjects(
 	}
 
 	// Determine output path
-	std::string outputPath = context.options.outputPath;
-	if (outputPath.empty()) {
-		// Remove .dl extension if present
-		outputPath = context.options.inputPath;
-		if (outputPath.ends_with(".dl")) {
-			outputPath = outputPath.substr(0, outputPath.size() - 3);
-		}
-	}
+	std::string outputPath = nativeExecutablePath(context.options);
 
 	// Create object file path
 	std::string objectPath = outputPath + ".o";

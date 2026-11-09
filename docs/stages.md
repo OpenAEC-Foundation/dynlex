@@ -756,17 +756,18 @@ comparison uses each source file's configured comment prefix and retains line bo
 between executable text. Observations include source/config contents, canonical source
 identities and failed lookup candidates; a newly created higher-priority import or
 configuration therefore invalidates the result.
-The cache records files named by warning and note ranges. A comment edit in one of
-those files rebuilds diagnostics so source locations stay correct; comments in other
-files can reuse the frontend even when the program has warnings.
+The cache records structured warnings and notes, including source locations and
+configured message keys, variants and placeholders. Comment edits relocate their
+source locations without rebuilding the frontend. An edit confined to messages in an
+existing `config.dl` rerenders those diagnostics without recompiling.
 The compiler linker build ID (or executable content digest when the format has no
 build ID), effective compiler options and host CPU features identify the computation. Modification timestamps are never a correctness criterion.
 
 After an executable source edit, the frontend reconstructs sections and pattern trees.
 It reuses pointer-free matcher results from the previous build in both the initial
 resolution and precedence matching passes for unchanged references when the pattern-tree mutation history, the reference's
-source line and position mapping, relative lexical declaration visibility, and syntax
-configuration have the same fingerprints. Matcher keys cover wildcard patterns and
+source line and position mapping, relative lexical declaration visibility, and
+non-message syntax configuration have the same fingerprints. Matcher keys cover wildcard patterns and
 literal starts that could occur in the reference, in its own pattern tree and the
 function tree used for nested matches. Adding an unrelated pattern can therefore keep
 matches in unchanged calls, even when the added source line shifts their line numbers.
@@ -828,7 +829,9 @@ lines and trailing whitespace, so a comment-only build does not invalidate the
 next executable edit.
 
 For active edits, the native cache also persists inference summaries for impure
-functions with concrete runtime argument and return types, including class pointers.
+functions and pure functions returning `nothing`, with concrete runtime argument
+and return types, including class pointers. Pure functions returning values still
+require their inferred bodies for compile-time evaluation of new arguments.
 Summaries record return address provenance and storage-parameter relationships, plus
 writes, known constants, address provenance, and address escapes for global variables.
 Class type identities include the current instantiation's field types; a changed layout
@@ -855,19 +858,21 @@ into deterministic, independently linkable partitions. Local symbols receive a s
 program namespace before LLVM externalizes them. Each partition's complete IR and target
 configuration identify its object cache entry; code changes, changed declarations,
 inlined callees, globals and debug metadata are reflected in that identity. Unchanged
-objects are reused and the executable is always linked again, including current runtime
-libraries. This is native partition reuse, matcher query reuse, the unused-body
+objects are reused. A message-only configuration edit also skips linking when the
+existing executable matches the prior output. Other warm builds link again, including
+current runtime libraries. This is native partition reuse, matcher query reuse, the unused-body
 fast path, function IR reuse, and inference-summary reuse. The last two paths skip
 inference and code generation for eligible unchanged functions during active edits.
 The program cache records its ordered object keys. An unchanged or
 comment-only build links those cached objects directly without parsing or splitting
 the LLVM IR. If an object was evicted, the saved IR regenerates the missing partition
-before linking. The linker still runs so changes to native libraries are observed.
+before linking. The linker still runs on ordinary warm builds so changes to native
+libraries are observed.
 After an executable edit, a successful frontend and code generation pass whose
 LLVM IR is identical to the prior result also links the cached objects directly.
 This still validates the edited source and updates diagnostics and matcher data.
 
-Cache entries carry SHA-256 integrity checks and are published with atomic rename.
+Cache entries carry BLAKE3 integrity checks and are published with atomic rename.
 Invalid entries and I/O failures are explicit errors. Linking uses private temporary
 copies so cache eviction cannot remove linker inputs. Entries are limited to 256 MiB;
 the disk cache is trimmed to 512 MiB after a build. The LSP and other output modes retain

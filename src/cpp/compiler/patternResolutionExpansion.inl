@@ -64,8 +64,7 @@ static void expandMatch(Expression *rootExpression, Expression *expr, PatternMat
 	expr->selectedPatternPathIndex = std::nullopt;
 	std::vector<MatchedArgument> orderedArguments = match->orderedArguments;
 	std::stable_sort(
-		orderedArguments.begin(), orderedArguments.end(),
-		[](const MatchedArgument &left, const MatchedArgument &right) {
+		orderedArguments.begin(), orderedArguments.end(), [](const MatchedArgument &left, const MatchedArgument &right) {
 		return left.argumentIndex < right.argumentIndex;
 	}
 	);
@@ -258,19 +257,18 @@ static void emitExplicitDefinitionParameterAmbiguityWarnings(ParseContext &conte
 					parameterRange = Range(definition->range.line, start, start + static_cast<int>(element.text.size()));
 				}
 
-				const SyntaxConfig &syntax = syntaxConfigForRange(context, parameterRange);
 				Diagnostic warning(
 					context, Diagnostic::Level::Warning, "explicit parameter ambiguity", parameterRange, "parameter",
 					element.text
 				);
-				warning.relatedInfo.push_back(
-					{renderConfiguredMessage(syntax, "explicit parameter ambiguity related parameter"), parameterRange}
-				);
+				warning.relatedInfo.push_back(configuredRelatedInfo(
+					context, parameterRange, "explicit parameter ambiguity related parameter", "message", parameterRange
+				));
 				if (singleWordFunction->range.line) {
-					warning.relatedInfo.push_back(
-						{renderConfiguredMessage(syntax, "explicit parameter ambiguity related function"),
-						 singleWordFunction->range}
-					);
+					warning.relatedInfo.push_back(configuredRelatedInfo(
+						context, parameterRange, "explicit parameter ambiguity related function", "message",
+						singleWordFunction->range
+					));
 				}
 				context.diagnostics.push_back(std::move(warning));
 			});
