@@ -25,6 +25,9 @@ struct PatternReference {
 	PatternMatch *match{};
 	// Dependency key of the match currently attached to this reference.
 	std::string incrementalMatcherKey;
+	// Match key before precedence regrouping, for replay after definitions are indexed.
+	std::string initialMatcherKey;
+	std::string prevalidatedMatcherKey;
 	std::unique_ptr<MatcherKeyLiterals> matcherKeyLiterals;
 	// for extracting arguments
 	Expression *expression;

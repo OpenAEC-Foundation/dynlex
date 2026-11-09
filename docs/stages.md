@@ -816,6 +816,11 @@ candidate wait until definitions are indexed. They then resolve once against the
 completed tree, avoiding failed matches and later specificity retries. A
 single-word alternative can still promote an implicit parameter from its body,
 so early indexing alone does not make its references eligible to wait.
+For an unchanged ordinary function body, an edited build can replay the saved
+matcher key for those deferred references after checking the resolved declaration
+tree and source outside function bodies. The matcher still restores the result
+and its dependencies; changed bodies and changed matching environments compute
+their keys normally.
 An edit confined to the bodies of ordinary functions that had no inferred
 instantiation in the prior build can stop after pattern resolution and validation.
 The cache compares declarations and all source text outside those bodies. It

@@ -390,3 +390,22 @@ def check_global_reader_after_top_level_edit(root, build):
     assert changed_type[0]["inference_instantiations_reused"] == 0, \
         "global type change reused an old inference summary"
     assert changed_type[1:] == build(False, entry=typed)[1:]
+
+
+def check_deferred_match_key_replay(root, build):
+    main = root / "deferred_match_key_replay.dl"
+    source = ('integer means: @intrinsic("type", "int")\n'
+              'to first: @intrinsic("discard", @intrinsic("call", "libc", "puts", integer, "first"))\n'
+              'to caller: first\n'
+              'to independent: @intrinsic("discard", 3)\n'
+              'caller\n')
+    main.write_text(source)
+    build(entry=main)
+    main.write_text(source.replace('"discard", 3', '"discard", 4'))
+    edited = build(entry=main)
+    assert edited[0]["deferred_match_keys_replayed"] >= 1, \
+        "unchanged body matched after definitions were indexed instead of replaying its resolved reference"
+    assert edited[1:] == build(False, entry=main)[1:]
+    main.write_text(main.read_text().replace('to independent:', 'to first: @intrinsic("discard", 5)\nto independent:'))
+    changed_tree = build(entry=main, success=False)
+    assert changed_tree[1] == build(False, entry=main, success=False)[1]

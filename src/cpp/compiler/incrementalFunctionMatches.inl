@@ -94,6 +94,7 @@ ResolvedFunctionMatches resolvedFunctionMatches(
 				entry = Json{{"key", key ? Json(*key) : Json(nullptr)},
 							 {"shape", std::move(shape)}, {"identity", digest(identity.dump())}};
 			}
+			entry["initial_key"] = reference->initialMatcherKey.empty() ? Json(nullptr) : Json(reference->initialMatcherKey);
 			identities.push_back(entry.at("identity"));
 			entries.push_back(std::move(entry));
 		}

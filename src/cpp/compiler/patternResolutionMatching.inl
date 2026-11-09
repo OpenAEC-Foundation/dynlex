@@ -824,6 +824,8 @@ bool resolvePatterns(ParseContext &context) {
 			emitUnresolvedPatternDiagnostics();
 			return false;
 		}
+		if (context.prepareDeferredMatcherReplay)
+			context.prepareDeferredMatcherReplay(deferredBodyReferences);
 		for (int iteration = 0; iteration < context.options.maxResolutionIterations && !deferredBodyReferences.empty();
 			 iteration++) {
 			if (!resolveReferences(
@@ -863,6 +865,15 @@ bool resolvePatterns(ParseContext &context) {
 	while (true) {
 		if (!resolveReferencesAndDefinitions())
 			return false;
+		if (context.recordMatcherResult) {
+			const auto captureInitialKeys = [&](auto &&self, Section *section) -> void {
+				for (PatternReference *reference : section->patternReferences)
+					reference->initialMatcherKey = precedencePass == 0 ? reference->incrementalMatcherKey : "";
+				for (Section *child : section->children)
+					self(self, child);
+			};
+			captureInitialKeys(captureInitialKeys, context.mainSection);
+		}
 		if (precedencePass == 0 && !prepareDeferredSectionBodies(context))
 			return false;
 		if (!resolvePatternPrecedence(context))

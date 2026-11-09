@@ -345,6 +345,7 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 	return true;
 }
 
+#include "incrementalDeferredMatchReplay.inl"
 #include "incrementalInactiveFunctionProjection.inl"
 #include "incrementalObservationReuse.inl"
 
@@ -590,6 +591,10 @@ bool compileIncrementally(
 											  const MatchDependencies *dependencies) {
 				matcherCache.record(reference, options, match, dependencies);
 			};
+			context.prepareDeferredMatcherReplay = [&](const std::list<PatternReference *> &references) {
+				if (previous)
+					prepareDeferredMatchReplay(context, *previous, recording->observations, references);
+			};
 			statistics.cacheRestoreMilliseconds = elapsedMilliseconds(restoreStart);
 			auto saveMatcher = [&]() {
 				auto saveStart = Clock::now();
@@ -728,11 +733,13 @@ bool compileIncrementally(
 			context.reuseInferredInstantiation = {};
 			context.runIncrementalPreinference = {};
 			statistics.matcherCacheHits = matcherCache.hits();
+			statistics.deferredMatchKeysReplayed = matcherCache.deferredKeyReplays();
 			statistics.precedenceMatcherCacheHits = matcherCache.precedenceHits();
 			statistics.matcherKeyMilliseconds = matcherCache.keyTimeMilliseconds();
 			statistics.matcherRestoreMilliseconds = matcherCache.restoreTimeMilliseconds();
 			context.reuseMatcherResult = {};
 			context.recordMatcherResult = {};
+			context.prepareDeferredMatcherReplay = {};
 			if (reuseTypeInference) {
 				statistics.reusedTypeInference = true;
 				std::vector<std::string> libraries = previous->at("libraries").get<std::vector<std::string>>();
@@ -928,6 +935,7 @@ bool compileIncrementally(
 							  {"objects_reused", statistics.reusedObjects},
 							  {"objects_built", statistics.builtObjects},
 							  {"matcher_cache_hits", statistics.matcherCacheHits},
+							  {"deferred_match_keys_replayed", statistics.deferredMatchKeysReplayed},
 							  {"precedence_matcher_cache_hits", statistics.precedenceMatcherCacheHits},
 							  {"expression_parse_hits", statistics.expressionParseHits},
 							  {"expression_parse_misses", statistics.expressionParseMisses},

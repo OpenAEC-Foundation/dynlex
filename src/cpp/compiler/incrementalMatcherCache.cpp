@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdint>
 #include <stdexcept>
+#include <utility>
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
@@ -542,10 +543,18 @@ std::optional<PatternMatch *>
 IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options, MatchDependencies *dependencies) {
 	if (!available(options)) {
 		reference->incrementalMatcherKey.clear();
+		reference->prevalidatedMatcherKey.clear();
 		return std::nullopt;
 	}
-	std::string cacheKey = key(*reference, dependencies != nullptr);
+	bool prevalidated = !reference->prevalidatedMatcherKey.empty();
+	std::string cacheKey = prevalidated ? std::exchange(reference->prevalidatedMatcherKey, std::string{})
+										: key(*reference, dependencies != nullptr);
 	auto entry = previousEntries.find(cacheKey);
+	if (entry == previousEntries.end() && prevalidated) {
+		cacheKey = key(*reference, dependencies != nullptr);
+		entry = previousEntries.find(cacheKey);
+		prevalidated = false;
+	}
 	if (entry == previousEntries.end()) {
 		reference->incrementalMatcherKey.clear();
 		return std::nullopt;
@@ -569,6 +578,7 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 			throw std::runtime_error("trailing incremental matcher cache data");
 		recorded[cacheKey] = value;
 		reusedCount++;
+		prevalidatedCount += prevalidated;
 		if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
 			reusedPrecedenceCount++;
 		return static_cast<PatternMatch *>(nullptr);
@@ -583,6 +593,7 @@ IncrementalMatcherCache::reuse(PatternReference *reference, MatchOptions options
 	recorded[cacheKey] = value;
 	reference->incrementalMatcherKey = cacheKey;
 	reusedCount++;
+	prevalidatedCount += prevalidated;
 	if (context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence)
 		reusedPrecedenceCount++;
 	return new PatternMatch(std::move(match));
