@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Compare edited and clean native builds of the Geometry Dash game."""
+
+import json
+import os
+import shutil
+import statistics
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+project = Path(__file__).resolve().parent.parent
+compiler = project / "build" / ("dynlex.exe" if os.name == "nt" else "dynlex")
+game = Path("tests/games/geometry_dash")
+runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+cases = {
+    "comment_in_physics": (game / "physics.dl", "return 84", "return 84 # benchmark comment"),
+    "physics_constant": (game / "physics.dl", "return 84", "return 85"),
+    "top_level_seed": (game / "main.dl", "fill plan using seed 1337", "fill plan using seed 1338"),
+}
+
+
+def compile_program(root, incremental):
+    output = root / (("incremental" if incremental else "clean") + (".exe" if os.name == "nt" else ""))
+    command = [str(compiler), str(game / "main.dl"), "-o", str(output)]
+    if incremental:
+        command += ["--incremental", str(root / "cache"), "--incremental-stats"]
+    started = time.perf_counter()
+    result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=30)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    stat_lines = [line for line in result.stderr.splitlines() if line.startswith("incremental: ")]
+    stats = json.loads(stat_lines[0][len("incremental: "):]) if stat_lines else None
+    diagnostics = "".join(line for line in result.stderr.splitlines(keepends=True)
+                          if not line.startswith("incremental: "))
+    if result.returncode:
+        raise RuntimeError(f"compiler failed: {command}\n{diagnostics}")
+    return elapsed_ms, stats, diagnostics
+
+
+results = {name: [] for name in cases}
+with tempfile.TemporaryDirectory(prefix="dynlex-geometry-dash-benchmark-") as temporary:
+    for repetition in range(runs):
+        for name, (filename, before, after) in cases.items():
+            root = Path(temporary) / f"{name}-{repetition}"
+            shutil.copytree(project / "lib", root / "lib")
+            shutil.copytree(project / game, root / game)
+            compile_program(root, True)
+            changed = root / filename
+            original = changed.read_text()
+            if original.count(before) != 1:
+                raise RuntimeError(f"expected one edit site in {changed}")
+            changed.write_text(original.replace(before, after))
+            incremental_ms, stats, incremental_diagnostics = compile_program(root, True)
+            clean_ms, _, clean_diagnostics = compile_program(root, False)
+            if incremental_diagnostics != clean_diagnostics:
+                raise RuntimeError(f"incremental diagnostics differ from clean build: {name}")
+            results[name].append((incremental_ms, clean_ms, stats))
+            print(f"{name} run {repetition + 1}: incremental={incremental_ms:.1f} ms clean={clean_ms:.1f} ms", flush=True)
+
+for name, samples in results.items():
+    print(json.dumps({
+        "case": name,
+        "runs": len(samples),
+        "incremental_wall_ms": round(statistics.median(sample[0] for sample in samples), 1),
+        "clean_wall_ms": round(statistics.median(sample[1] for sample in samples), 1),
+        **{field: round(statistics.median(sample[2][field] for sample in samples), 1)
+           for field in ("frontend_ms", "resolve_ms", "projection_ms", "inference_ms",
+                         "snapshot_ms", "codegen_and_link_ms")},
+        "frontend_reused": all(sample[2]["frontend_reused"] for sample in samples),
+        "functions_ir_reused": round(statistics.median(sample[2]["functions_ir_reused"] for sample in samples)),
+    }, sort_keys=True))
