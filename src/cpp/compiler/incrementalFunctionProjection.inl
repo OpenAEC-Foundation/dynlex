@@ -45,6 +45,8 @@ Json captureAllFunctionProjection(
 		previous && previous->contains("all_function_projection") ? &previous->at("all_function_projection") : nullptr;
 	Json selected = Json::object();
 	Json declarations = Json::object();
+	Json allDeclarationEntries = Json::array();
+	Json ambientDeclarationEntries = Json::array();
 	Json matches = Json::object();
 	Json matchEntries = Json::object();
 	std::map<const Section *, std::string> paths;
@@ -58,9 +60,19 @@ Json captureAllFunctionProjection(
 				selectedSections.insert(section);
 			}
 		}
-		if (reusableCodegenSection(*section)) {
+		bool reusableSection = reusableCodegenSection(*section);
+		if (reusableSection)
 			reusable.insert(section);
-			declarations[path] = sectionDeclaration(*section);
+		if (reusableSection || !section->patternDefinitions.empty()) {
+			Json entry = sectionDeclaration(*section);
+			if (reusableSection)
+				declarations[path] = entry;
+			if (!section->patternDefinitions.empty()) {
+				entry["path"] = path;
+				allDeclarationEntries.push_back(entry);
+				if (!reusableSection)
+					ambientDeclarationEntries.push_back(std::move(entry));
+			}
 		}
 	}
 	if (projectionWork)
@@ -75,7 +87,7 @@ Json captureAllFunctionProjection(
 		{"final_matcher_tree", matcherTreeSignature(context)},
 		{"precedence_signature", matcherCache.precedenceSignature()},
 		{"inactive", std::move(selected)},
-		{"declarations", declarationDigest(sections)},
+		{"declarations", digest(allDeclarationEntries.dump())},
 		{"global_resolution", globalResolutionIdentity(*context.mainSection)},
 		{"sources", sourceProjection(
 						context, observations, selectedSections, false, false, false, prior ? &prior->at("sources") : nullptr,
@@ -87,7 +99,7 @@ Json captureAllFunctionProjection(
 	phaseStart = Clock::now();
 	projection["bodies"] = std::move(bodyDigests);
 	projection["function_declarations"] = std::move(declarations);
-	projection["ambient_declarations"] = declarationDigest(sections, reusable);
+	projection["ambient_declarations"] = digest(ambientDeclarationEntries.dump());
 	if (projectionWork)
 		projectionWork->declarationMilliseconds += elapsedMilliseconds(phaseStart);
 	phaseStart = Clock::now();
