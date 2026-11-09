@@ -362,35 +362,7 @@ bool functionDependenciesUnchanged(
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context);
 
-std::unordered_set<const Section *> eligibleCodegenSections(
-	const ParseContext &context, const Json &previous, const Json &currentObservations, const Json &currentProjection,
-	const std::unordered_set<const Section *> &interfaceStableChanges = {}
-) {
-	std::unordered_set<const Section *> eligible;
-	if (context.options.optimizationLevel || context.options.emitDebugInfo || context.options.traceExecution ||
-		!previous.contains("all_function_projection") || !previous.contains("function_sections") ||
-		!compatibleObservations(previous, currentObservations, context))
-		return eligible;
-	std::map<std::string, Section *> sections;
-	collectSections(context.mainSection, "root", sections);
-	const Json &priorProjection = previous.at("all_function_projection");
-	bool fullyCompatible = compatibleFunctionProjection(priorProjection, currentProjection);
-	bool globalFreeCompatible = compatibleGlobalFreeProjection(priorProjection, currentProjection);
-	if (!fullyCompatible && !globalFreeCompatible)
-		return eligible;
-	std::unordered_map<const Section *, bool> unchanged;
-	for (const auto &[path, section] : sections)
-		unchanged[section] =
-			(fullyCompatible || (section != context.mainSection && hasNoGlobalAccess(section))) &&
-			(!reusableCodegenSection(*section) || unchangedFunctionSource(path, priorProjection, currentProjection) ||
-			 interfaceStableChanges.contains(section));
-	std::unordered_map<Section *, bool> memo;
-	for (const auto &[_, section] : sections)
-		if (reusableCodegenSection(*section) && !interfaceStableChanges.contains(section) &&
-			functionDependenciesUnchanged(section, unchanged, memo, interfaceStableChanges))
-			eligible.insert(section);
-	return eligible;
-}
+#include "incrementalCodegenEligibility.inl"
 
 bool compatibleObservations(const Json &previous, const Json &current, const ParseContext &context) {
 	const Json &before = previous.at("files");
@@ -421,14 +393,15 @@ bool compatibleObservations(const Json &previous, const Json &current, const Par
 }
 
 bool canReuseInactiveBodies(
-	const Json &previous, const Json &observations, const ParseContext &context, Json &currentProjection
+	const Json &previous, const Json &observations, const ParseContext &context,
+	const std::map<std::string, Section *> &sections, Json &currentProjection
 ) {
 	if (!previous.contains("inactive_projection") || previous.at("diagnostics") != "" || context.options.emitDebugInfo ||
 		context.options.traceExecution || !context.diagnostics.empty() || !context.scopeRuleWarnings.empty() ||
 		!compatibleObservations(previous, observations, context))
 		return false;
 	const Json &priorProjection = previous.at("inactive_projection");
-	currentProjection = captureInactiveProjection(context, &priorProjection.at("inactive"));
+	currentProjection = captureInactiveProjection(context, &priorProjection.at("inactive"), nullptr, &sections);
 	return currentProjection.is_object() && currentProjection.at("declarations") == priorProjection.at("declarations") &&
 		   currentProjection.at("sources") == priorProjection.at("sources");
 }
@@ -757,20 +730,22 @@ bool compileIncrementally(
 			bool compiled = compileBeforeTypeInference(context.options.inputPath, context);
 			statistics.frontendMilliseconds = elapsedMilliseconds(stageStart);
 			stageStart = Clock::now();
+			std::map<std::string, Section *> sections;
+			if (compiled)
+				collectSections(context.mainSection, "root", sections);
 			Json resolvedFunctionProjection =
-				compiled ? captureAllFunctionProjection(context, previous ? &*previous : nullptr) : Json(nullptr);
+				compiled ? captureAllFunctionProjection(context, sections, previous ? &*previous : nullptr) : Json(nullptr);
 			statistics.projectionMilliseconds = elapsedMilliseconds(stageStart);
 			Json inactiveProjection;
 			bool reuseTypeInference =
-				compiled && previous && canReuseInactiveBodies(*previous, recording->observations, context, inactiveProjection);
+				compiled && previous &&
+				canReuseInactiveBodies(*previous, recording->observations, context, sections, inactiveProjection);
 			std::map<const Section *, std::string> sectionPaths;
+			for (const auto &[path, section] : sections)
+				sectionPaths.emplace(section, path);
 			std::unique_ptr<IncrementalIRReuse> functionReuse;
 			std::unique_ptr<IncrementalInferenceReuse> inferenceReuse;
 			if (compiled && !reuseTypeInference) {
-				std::map<std::string, Section *> sections;
-				collectSections(context.mainSection, "root", sections);
-				for (const auto &[path, section] : sections)
-					sectionPaths.emplace(section, path);
 				if (previous) {
 					IncrementalPreinferPlan plan = scalarArgumentIncrementalCandidates(
 						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
@@ -806,7 +781,7 @@ bool compileIncrementally(
 							first = end;
 						}
 						std::unordered_set<const Section *> eligible = eligibleCodegenSections(
-							inferred, *previous, recording->observations, resolvedFunctionProjection, stable
+							inferred, *previous, recording->observations, resolvedFunctionProjection, sections, stable
 						);
 						statistics.preinferenceMilliseconds = elapsedMilliseconds(preinferStart);
 						if (eligible.empty())
@@ -819,7 +794,7 @@ bool compileIncrementally(
 							previous->at("callable_functions"), sectionPaths, eligible, std::move(replacementPaths)
 						);
 						inferenceReuse = std::make_unique<IncrementalInferenceReuse>(
-							inferred, priorSummaries, previous->at("global_types"), *functionReuse, std::move(eligible)
+							priorSummaries, previous->at("global_types"), *functionReuse, sectionPaths, std::move(eligible)
 						);
 						inferred.reuseInferredInstantiation = [&](Section *section, const InstantiationKey &key,
 																  Instantiation &instantiation) {
@@ -918,7 +893,8 @@ bool compileIncrementally(
 					std::set<std::string> generatedFunctionPaths;
 					for (const auto &[_, path] : functionSections)
 						generatedFunctionPaths.insert(path);
-					result["inactive_projection"] = captureInactiveProjection(compiled, nullptr, &generatedFunctionPaths);
+					result["inactive_projection"] =
+						captureInactiveProjection(compiled, nullptr, &generatedFunctionPaths, &sections);
 					Json globalTypes = captureGlobalTypeProjection(sectionPaths).value_or(Json(nullptr));
 					result["global_types"] = globalTypes;
 					result["inference_summaries"] =

@@ -1,7 +1,6 @@
 #pragma once
 #include "patternElement.h"
 #include "sectionType.h"
-#include <array>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -21,7 +20,7 @@ struct PatternDefinitionOccurrence {
 };
 
 struct PatternTreeMutationState {
-	std::array<std::string, 256> literalDigests;
+	std::unordered_map<std::string, std::string, PatternLiteralHash, std::equal_to<>> literalDigests;
 	std::string wildcardDigest;
 };
 

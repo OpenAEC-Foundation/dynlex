@@ -10,13 +10,14 @@
 #include "llvm/Support/BLAKE3.h"
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <stdexcept>
 
 namespace {
 using Json = IncrementalMatcherCache::Json;
-constexpr std::string_view matcherCacheHeader = "DynLex matcher results v3\n";
+constexpr std::string_view matcherCacheHeader = "DynLex matcher results v4\n";
 
 void appendLength(std::string &output, std::uint64_t value) {
 	do {
@@ -248,23 +249,44 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 	auto started = std::chrono::steady_clock::now();
 	const Range &range = reference.range();
 	requireCompilerInvariant(range.line && range.line->sourceFile, "incremental matcher reference has no source");
-	std::array<bool, 256> possibleStartBytes{};
-	auto includeStartBytes = [&](std::string_view text) {
-		for (unsigned char byte : text)
-			possibleStartBytes[byte] = true;
+	std::vector<std::string_view> possibleStartLiterals;
+	auto includeStartLiterals = [&](std::string_view text) {
+		for (size_t runStart = 0; runStart < text.size();) {
+			auto category = [](unsigned char character) {
+				if (std::isalnum(character) || character == '_')
+					return 0;
+				return character == ' ' ? 1 : 2;
+			};
+			int runCategory = category(static_cast<unsigned char>(text[runStart]));
+			size_t runEnd = runStart + 1;
+			while (runEnd < text.size() && category(static_cast<unsigned char>(text[runEnd])) == runCategory)
+				runEnd++;
+			if (runCategory == 0) {
+				// Word elements are atomic; only Other elements can split during matching.
+				possibleStartLiterals.push_back(text.substr(runStart, runEnd - runStart));
+			} else {
+				for (size_t start = runStart; start < runEnd; start++)
+					for (size_t end = start + 1; end <= runEnd; end++)
+						possibleStartLiterals.push_back(text.substr(start, end - start));
+			}
+			runStart = runEnd;
+		}
 	};
-	includeStartBytes(range.line->fullText);
-	includeStartBytes(reference.pattern.text);
+	includeStartLiterals(range.line->fullText);
+	includeStartLiterals(reference.pattern.text);
 	std::vector<std::optional<std::string>> numericSpellings;
 	if (reference.expression) {
 		numericSpellings.reserve(reference.expression->arguments.size());
 		for (size_t index = 0; index < reference.expression->arguments.size(); index++) {
 			numericSpellings.push_back(numericPatternArgumentSpelling(&reference, index));
 			if (numericSpellings.back())
-				includeStartBytes(*numericSpellings.back());
+				includeStartLiterals(*numericSpellings.back());
 		}
 	}
-	size_t startByteCount = std::count(possibleStartBytes.begin(), possibleStartBytes.end(), true);
+	std::sort(possibleStartLiterals.begin(), possibleStartLiterals.end());
+	possibleStartLiterals.erase(
+		std::unique(possibleStartLiterals.begin(), possibleStartLiterals.end()), possibleStartLiterals.end()
+	);
 	Fingerprint fingerprint;
 	bool precedencePhase = context.compilationStage == ParseContext::CompilationStage::ResolvedPatternPrecedence;
 	fingerprint.boolean(precedencePhase);
@@ -272,12 +294,12 @@ std::string IncrementalMatcherCache::key(const PatternReference &reference, bool
 		fingerprint.string(precedenceDigest());
 	auto appendTreeState = [&](const PatternTreeNode *root) {
 		fingerprint.string(root->mutationState->wildcardDigest);
-		fingerprint.number(startByteCount);
-		for (size_t byte = 0; byte < possibleStartBytes.size(); byte++) {
-			if (!possibleStartBytes[byte])
+		for (std::string_view literal : possibleStartLiterals) {
+			auto found = root->mutationState->literalDigests.find(literal);
+			if (found == root->mutationState->literalDigests.end())
 				continue;
-			fingerprint.number(byte);
-			fingerprint.string(root->mutationState->literalDigests[byte]);
+			fingerprint.string(literal);
+			fingerprint.string(found->second);
 		}
 	};
 	const PatternTreeNode *root = context.patternTrees[static_cast<size_t>(reference.patternType)];

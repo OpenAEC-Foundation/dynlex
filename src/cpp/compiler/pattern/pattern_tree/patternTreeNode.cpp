@@ -54,13 +54,13 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 		}
 	}
 	std::string mutation = llvm::toHex(hash.final(), true);
-	std::array<bool, 256> affectedLiterals{};
+	std::unordered_set<std::string_view> affectedLiterals;
 	bool affectsWildcard = definition->indexedPaths.empty();
 	for (const auto &path : definition->indexedPaths) {
 		if (path.empty() || path.front().type == PatternElement::Type::Variable || path.front().text.empty())
 			affectsWildcard = true;
 		else
-			affectedLiterals[static_cast<unsigned char>(path.front().text.front())] = true;
+			affectedLiterals.insert(path.front().text);
 	}
 	auto advance = [&](std::string &state) {
 		llvm::SHA256 next;
@@ -70,9 +70,8 @@ static void recordTreeMutation(PatternTreeNode *root, const PatternDefinition *d
 	};
 	if (affectsWildcard)
 		advance(root->mutationState->wildcardDigest);
-	for (size_t index = 0; index < affectedLiterals.size(); index++)
-		if (affectedLiterals[index])
-			advance(root->mutationState->literalDigests[index]);
+	for (std::string_view literal : affectedLiterals)
+		advance(root->mutationState->literalDigests[std::string(literal)]);
 }
 
 static PatternTreeNode *addChild(PatternTreeNode *parent, const PatternElement &element, PatternDefinition *definition) {

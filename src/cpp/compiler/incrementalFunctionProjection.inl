@@ -1,6 +1,6 @@
-Json captureAllFunctionProjection(const ParseContext &context, const Json *previous = nullptr) {
-	std::map<std::string, Section *> sections;
-	collectSections(context.mainSection, "root", sections);
+Json captureAllFunctionProjection(
+	const ParseContext &context, const std::map<std::string, Section *> &sections, const Json *previous = nullptr
+) {
 	Json selected = Json::object();
 	Json declarations = Json::object();
 	Json matches = Json::object();

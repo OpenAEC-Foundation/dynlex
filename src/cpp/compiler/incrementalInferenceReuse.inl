@@ -105,14 +105,11 @@ Json captureInferenceSummaries(
 class IncrementalInferenceReuse {
   public:
 	IncrementalInferenceReuse(
-		const ParseContext &context, const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse &irReuse,
-		std::unordered_set<const Section *> eligible
+		const Json &summaries, const Json &priorGlobalTypes, const IncrementalIRReuse &irReuse,
+		const std::map<const Section *, std::string> &sectionPaths, std::unordered_set<const Section *> eligible
 	)
-		: summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse), eligible(std::move(eligible)) {
-		std::map<std::string, Section *> sections;
-		collectSections(context.mainSection, "root", sections);
-		for (const auto &[path, section] : sections)
-			sectionPaths.emplace(section, path);
+		: summaries(summaries), priorGlobalTypes(priorGlobalTypes), irReuse(irReuse), eligible(std::move(eligible)),
+		  sectionPaths(sectionPaths) {
 		classPaths = classIdentityPaths(sectionPaths);
 	}
 
@@ -181,7 +178,7 @@ class IncrementalInferenceReuse {
 	const Json &priorGlobalTypes;
 	const IncrementalIRReuse &irReuse;
 	std::unordered_set<const Section *> eligible;
-	std::map<const Section *, std::string> sectionPaths;
+	const std::map<const Section *, std::string> &sectionPaths;
 	ClassIdentityPaths classPaths;
 	size_t count = 0;
 };

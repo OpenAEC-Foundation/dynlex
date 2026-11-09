@@ -92,6 +92,13 @@ with tempfile.TemporaryDirectory(prefix="dynlex-incremental-test-") as temporary
     assert unrelated[1:] == build(False)[1:], "unrelated new pattern changed cached matches"
     main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
     build()
+    same_initial_definition = 'to apricot: @intrinsic("discard", 2)\n'
+    main.write_text(source.replace("alpha\nbeta\n", same_initial_definition + repeated_calls))
+    same_initial = build()
+    assert same_initial[0]["matcher_cache_hits"] >= 40, "unrelated same-initial pattern invalidated cached calls"
+    assert same_initial[1:] == build(False)[1:], "same-initial pattern changed cached matches"
+    main.write_text(source.replace("alpha\nbeta\n", repeated_calls))
+    build()
     main.write_text('@intrinsic("discard", 1)\n' + source.replace("alpha\nbeta\n", repeated_calls))
     shifted = build()
     assert shifted[0]["matcher_cache_hits"] >= 20, "line insertion invalidated unchanged definitions and calls"
@@ -324,6 +331,20 @@ function left times right:
     pure_edit = build(entry=pure_main)
     assert pure_edit[0]["inference_instantiations_reused"] >= 1, "unchanged pure void function was re-inferred"
     assert pure_edit[1:] == build(False, entry=pure_main)[1:]
+
+    implicit_main = root / "implicit_parameter_edit.dl"
+    implicit_source = ('to accept value: @intrinsic("discard", value)\n'
+                       'accept 1\n')
+    implicit_main.write_text(implicit_source)
+    build(entry=implicit_main)
+    implicit_main.write_text(implicit_source.replace('"discard", value', '"discard", 2'))
+    implicit_removed = build(entry=implicit_main, success=False)
+    assert implicit_removed[1] == build(False, entry=implicit_main, success=False)[1], \
+        "removing the last parameter use kept the old callable pattern"
+    implicit_main.write_text(implicit_source)
+    implicit_restored = build(entry=implicit_main)
+    assert implicit_restored[1:] == build(False, entry=implicit_main)[1:], \
+        "restoring a parameter use did not update its callers"
 
     scope_main = root / "scope_rule_edit.dl"
     scope_source = ('numbers are properties means: @intrinsic("number rule", properties)\n'
