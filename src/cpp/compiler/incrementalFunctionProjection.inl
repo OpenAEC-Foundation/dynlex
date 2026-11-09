@@ -69,9 +69,12 @@ Json captureAllFunctionProjection(
 				declarations[path] = entry;
 			if (!section->patternDefinitions.empty()) {
 				entry["path"] = path;
-				allDeclarationEntries.push_back(entry);
-				if (!reusableSection)
+				if (reusableSection)
+					allDeclarationEntries.push_back(std::move(entry));
+				else {
+					allDeclarationEntries.push_back(entry);
 					ambientDeclarationEntries.push_back(std::move(entry));
+				}
 			}
 		}
 	}
