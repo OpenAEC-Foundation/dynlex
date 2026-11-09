@@ -452,7 +452,7 @@ bool compileIncrementally(
 					success = *cachedLink;
 				} else {
 					auto payloadStart = Clock::now();
-					hydrateProgramField(*previous, directory, "ir");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
 					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					restoreCachedModule(context, *previous, programEntry);
 					success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
@@ -477,7 +477,8 @@ bool compileIncrementally(
 		} else {
 			if (previous) {
 				auto payloadStart = Clock::now();
-				hydrateProgramEntry(*previous, directory);
+				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "all_function_projection");
+				statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "section_dependency_graph");
 				statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 			}
 			auto restoreStart = Clock::now();
@@ -614,6 +615,10 @@ bool compileIncrementally(
 			std::unordered_set<const Section *> graphStable;
 			if (compiled && !reuseTypeInference) {
 				if (previous) {
+					auto payloadStart = Clock::now();
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "inference_summaries");
+					statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
+					statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 					IncrementalPreinferPlan plan = incrementalInferenceCandidates(
 						context, *previous, recording->observations, sectionPaths, resolvedFunctionProjection
 					);
@@ -705,6 +710,9 @@ bool compileIncrementally(
 						success = *cachedLink;
 						statistics.objectKeys = objectKeys;
 					} else {
+						auto payloadStart = Clock::now();
+						statistics.cachePayloadsLoaded += hydrateProgramField(*previous, directory, "ir");
+						statistics.cachePayloadLoadMilliseconds += elapsedMilliseconds(payloadStart);
 						restoreCachedModule(context, *previous, programEntry);
 						success = emitPartitions(context, directory, compilerIdentity, options, libraries, statistics);
 					}
@@ -931,6 +939,7 @@ bool compileIncrementally(
 							  {"precedence_signature_reused", statistics.precedenceSignaturesReused},
 							  {"cache_load_ms", statistics.cacheLoadMilliseconds},
 							  {"cache_payload_load_ms", statistics.cachePayloadLoadMilliseconds},
+							  {"cache_payloads_loaded", statistics.cachePayloadsLoaded},
 							  {"cache_restore_ms", statistics.cacheRestoreMilliseconds},
 							  {"cache_finalize_ms", statistics.cacheFinalizeMilliseconds},
 							  {"total_ms", statistics.totalMilliseconds},

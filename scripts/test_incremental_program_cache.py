@@ -44,6 +44,7 @@ def check_program_payloads(root, build):
     assert commented[1:] == build(False, entry=main)[1:]
     main.write_text("# comment\n" + source.replace('"first"', '"second"'))
     edited = build(entry=main)
+    assert edited[0]["cache_payloads_loaded"] == 4
     assert edited[1:] == build(False, entry=main)[1:]
     assert read_program(root / "cache", main)["ir"]
     updated = json.loads(manifest_path.read_bytes().split(b"\n", 2)[2])
@@ -53,3 +54,11 @@ def check_program_payloads(root, build):
     evicted = build(entry=main)
     assert not evicted[0]["frontend_reused"] and evicted[1:] == build(False, entry=main)[1:], \
         "missing dependency payload changed compilation"
+    unused_source = main.read_text() + 'to unused: @intrinsic("discard", 1)\n'
+    main.write_text(unused_source)
+    build(entry=main)
+    main.write_text(unused_source.replace('"discard", 1', '"discard", 2'))
+    unused = build(entry=main)
+    assert unused[0]["type_inference_reused"] and unused[0]["cache_payloads_loaded"] == 2, \
+        "unused edit loaded inference summaries or generated code"
+    assert unused[1:] == build(False, entry=main)[1:]

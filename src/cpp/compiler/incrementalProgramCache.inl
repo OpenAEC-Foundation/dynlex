@@ -24,9 +24,9 @@ std::optional<Json> readProgramManifest(const fs::path &path) {
 	return manifest;
 }
 
-void hydrateProgramField(Json &program, const fs::path &directory, const char *field) {
+bool hydrateProgramField(Json &program, const fs::path &directory, const char *field) {
 	if (program.contains(field))
-		return;
+		return false;
 	std::string key = program.at("payload_keys").at(field).get<std::string>();
 	fs::path path = programPayloadPath(directory, key);
 	auto payload = readEntry(path);
@@ -35,11 +35,7 @@ void hydrateProgramField(Json &program, const fs::path &directory, const char *f
 	if (digest(*payload) != key)
 		throw std::runtime_error("corrupt program payload: " + path.string());
 	program[field] = std::string_view(field) == "ir" ? Json(std::move(*payload)) : Json::parse(*payload);
-}
-
-void hydrateProgramEntry(Json &program, const fs::path &directory) {
-	for (const char *field : programPayloadFields)
-		hydrateProgramField(program, directory, field);
+	return true;
 }
 
 void writeProgramEntry(const fs::path &path, Json program, const Json *prior = nullptr) {

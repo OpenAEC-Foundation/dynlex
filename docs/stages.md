@@ -786,7 +786,10 @@ The program entry is a small manifest of observations, diagnostics, object keys,
 and content-addressed keys for the saved LLVM IR, function projection, dependency
 graph, and inference summaries. Unchanged and comment-only builds inspect the
 manifest without parsing these larger payloads; they load LLVM IR only if an object
-must be rebuilt, and load all semantic payloads for an executable source edit.
+must be rebuilt. Executable source edits first load the function projection and
+dependency graph. They load inference summaries and LLVM IR only if type inference
+must run again or an object must be rebuilt. `cache_payloads_loaded` reports the
+number of payloads read on a build.
 An evicted payload invalidates the program entry, so the next build recompiles
 from source.
 Failed builds that reached section analysis or later store diagnostic records and
